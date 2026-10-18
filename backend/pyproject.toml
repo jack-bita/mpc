@@ -1,0 +1,58 @@
+# pyproject.toml — the backend's Python project: its name, the Python it needs and its dependencies.
+#
+# uv reads this file and writes uv.lock, the exact version of every package. Change dependencies only
+# with `uv add` / `uv remove`, never by hand in uv.lock (ADR-0025): the lock file is
+# what makes Jack's laptop, CI and the server install the very same packages.
+# Every new dependency needs Jack's yes first, with the reason.
+#
+# `.python-version` beside this file pins Python 3.14 (03 §3: `uuid.uuid7()`). It holds only the version,
+# with no comment, because other tools read it too (CI's setup-python, pyenv) and may not skip one.
+
+[project]
+name = "mpc-backend"
+version = "0.1.0"
+description = "Backend of the MPC shop system: Django + DRF, the API and the posting services."
+requires-python = ">=3.14"
+dependencies = [
+    "django>=6.1.2,<6.2",
+    "djangorestframework>=3.18",
+    "psycopg[binary]>=3.3",
+]
+
+[dependency-groups]
+dev = [
+    "django-stubs[compatible-mypy]>=6.1.2",
+    "djangorestframework-stubs[compatible-mypy]>=3.18.1",
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "pytest-django>=4.14.0",
+    "ruff>=0.17.1",
+]
+
+# --- ruff: lint (find likely bugs) and format (one code style), in one fast tool.
+[tool.ruff]
+target-version = "py314"
+# Longer than ruff's 88: our code carries many why-comments, and 120 keeps them on one line.
+line-length = 120
+
+[tool.ruff.lint]
+# E/W pycodestyle · F pyflakes (unused or undefined names) · I import order · UP modern Python ·
+# B likely bugs (bugbear) · DJ Django pitfalls · SIM simpler code.
+select = ["E", "W", "F", "I", "UP", "B", "DJ", "SIM"]
+
+# --- mypy: checks the types, so a wrong argument is caught before it runs.
+[tool.mypy]
+# Strict from day one: it costs nothing on an empty project and is hard to switch on later.
+strict = true
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+
+[tool.django-stubs]
+# The plugin loads Django to learn the models; the test settings need no secrets to load.
+django_settings_module = "config.settings.test"
+
+# --- pytest: runs the tests. pytest-django finds manage.py next to this file, puts backend/ on the
+# import path, and loads the settings below, so `uv run pytest` needs nothing else.
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+# A typo in a marker name (@pytest.mark.djnago_db) is an error, not a silently skipped rule.
+addopts = "--strict-markers"
