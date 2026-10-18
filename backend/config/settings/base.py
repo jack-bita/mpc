@@ -34,7 +34,12 @@ def env(name: str, default: str | None = None) -> str:
 
 def env_list(name: str, default: str | None = None) -> list[str]:
     """Read a comma-separated environment variable, e.g. DJANGO_ALLOWED_HOSTS=demo.example,localhost."""
-    return [item.strip() for item in env(name, default).split(",") if item.strip()]
+    items = [item.strip() for item in env(name, default).split(",") if item.strip()]
+    # A required list of only commas is as good as missing: with no allowed hosts, prod would start
+    # and then refuse every request, instead of stopping at startup with a clear message.
+    if default is None and not items:
+        raise ImproperlyConfigured(f"The environment variable {name} has no values.")
+    return items
 
 
 # Off unless an environment turns it on: debug pages show code and settings to anyone who sees an error.
