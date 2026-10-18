@@ -1,0 +1,16 @@
+# pyproject.toml — the backend's Python project: its name, the Python it needs and its dependencies.
+#
+# uv reads this file and writes uv.lock, the exact version of every package. Change dependencies only
+# with `uv add` / `uv remove`, never by hand in uv.lock (ADR-0025): the lock file is
+# what makes Jack's laptop, CI and the server install the very same packages.
+# Every new dependency needs Jack's yes first, with the reason.
+
+[project]
+name = "mpc-backend"
+version = "0.1.0"
+description = "Backend of the MPC shop system: Django + DRF, the API and the posting services."
+requires-python = ">=3.14"
+dependencies = [
+    "django>=6.1.2,<6.2",
+    "djangorestframework>=3.18",
+]
