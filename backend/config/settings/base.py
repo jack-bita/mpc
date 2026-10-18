@@ -47,6 +47,20 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    # Our domain apps, in layer order (ADR-0015; see apps/__init__.py).
+    "apps.core",
+    "apps.shops",
+    "apps.people",
+    "apps.control",
+    "apps.catalog",
+    "apps.contacts",
+    "apps.inventory",
+    "apps.money",
+    "apps.sales",
+    "apps.services",
+    "apps.staffpay",
+    "apps.sync",
+    "apps.reports",
 ]
 
 MIDDLEWARE = [
