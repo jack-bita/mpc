@@ -256,10 +256,10 @@ Done in portion 6.
 ### REPO-1 · Repository and GitHub setup
 Done in **portion 6**, in chat — not with Claude Code.
 **Done when:**
-- [ ] A public GitHub repo with the layout of 03 §4, docs 01–04, the ADRs, `CLAUDE.md` and `.claude/` (unpacked from the portion 5 bundles), a README stub and `.editorconfig` **(v1.1)**.
-- [ ] `.gitignore` covers `.env` and `.env.*` (but not `.env.example`), `private/`, `CLAUDE.local.md`, `.claude/settings.local.json`, `__pycache__/`, `node_modules/`, `.next/` and `frontend/out/` **(v1.1)**.
-- [ ] Templates, labels, milestones and the issues for stages 0 and 1 exist (§4).
-- [ ] `main` is protected; secret scanning and push protection are on.
+- [x] A public GitHub repo with the layout of 03 §4, docs 01–04, the ADRs, `CLAUDE.md` and `.claude/` (unpacked from the portion 5 bundles), a README stub and `.editorconfig` **(v1.1)**.
+- [x] `.gitignore` covers `.env` and `.env.*` (but not `.env.example`), `private/`, `CLAUDE.local.md`, `.claude/settings.local.json`, `__pycache__/`, `node_modules/`, `.next/` and `frontend/out/` **(v1.1)**.
+- [x] Templates, labels, milestones and the issues for stages 0 and 1 exist (§4).
+- [x] `main` is protected; secret scanning and push protection are on.
 
 ### REPO-2 · Backend skeleton
 `M` · Claude-led · after REPO-1 · branch `chore/repo-2-backend-skeleton`
@@ -267,8 +267,8 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Build:** `backend/` with Python 3.14, Django 6.1 and DRF through uv; `config/settings/{base,dev,test,prod}.py` reading environment variables; the 13 empty apps of 03 §5.1 under `apps/`, each with a header saying what it owns; `GET /api/health/` → `{"status": "ok"}`; ruff, mypy + django-stubs, pytest + pytest-django.
 **⚠ Don't run `migrate` on any database until PPL-1 is merged** (BP5).
 **Done when:**
-- [ ] `uv run pytest`, `ruff check` and `mypy` pass; `manage.py check` is clean.
-- [ ] Every app says in one line what it owns.
+- [x] `uv run pytest`, `ruff check` and `mypy` pass; `manage.py check` is clean.
+- [x] Every app says in one line what it owns.
 **Tests:** `test_health_returns_ok`
 **Commits:** `chore(backend): uv project with Django 6.1` → `chore(backend): settings per environment` → `chore(backend): empty domain apps` → `chore(backend): ruff, mypy and pytest` → `feat(core): health endpoint`
 
