@@ -1,0 +1,3 @@
+# The "New issue" chooser. Blank issues stay allowed for quick notes; task issues
+# come from the build plan through scripts/github_sync.py, not from this chooser.
+blank_issues_enabled: true
