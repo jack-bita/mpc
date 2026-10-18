@@ -1,0 +1,19 @@
+"""config/settings/dev.py — settings for Jack's laptop. `manage.py` uses this file unless told otherwise.
+
+Debug pages are on, and every value has a safe local default, so a fresh clone runs with no `.env` at all.
+"""
+
+from .base import *  # noqa: F403 — start from the shared settings, then change what differs.
+from .base import env, env_list
+
+DEBUG = True
+
+# Only for this laptop: a key anyone can read signs nothing that matters. prod.py has no default.
+SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-only-not-a-secret")
+
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+
+# Emails (password resets, later) are printed in the terminal instead of being sent.
+MAILERS = {
+    "default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"},
+}
