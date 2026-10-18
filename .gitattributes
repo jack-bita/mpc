@@ -1,0 +1,27 @@
+# .gitattributes — how git stores line endings, and which files are binary or generated.
+
+# Every text file is stored with LF line endings.
+# Why: the repo is edited in WSL (Linux), but Windows tools write CRLF endings,
+# which break shell scripts and Python hooks and turn every line into a diff.
+# With this line, every machine checks out the same bytes.
+* text=auto eol=lf
+
+# Binary files: git never changes their bytes and never diffs them as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.xlsx binary
+*.woff2 binary
+
+# Generated files: GitHub folds them in pull request diffs and leaves them out
+# of the language bar, so reviews show only code a person wrote.
+# They are written by tools and never edited by hand (CLAUDE.md rule 8).
+frontend/src/api/schema.d.ts linguist-generated=true
+backend/uv.lock linguist-generated=true
+frontend/pnpm-lock.yaml linguist-generated=true
+CHANGELOG.md linguist-generated=true

@@ -1,0 +1,25 @@
+# .editorconfig — the same basic formatting in every editor.
+# VS Code reads it with the "EditorConfig for VS Code" extension.
+# It covers only the basics; the formatters (ruff for Python, Prettier for the
+# rest) take over in REPO-5 and decide everything else.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.py]
+indent_size = 4
+
+# make needs real tab characters at the start of a recipe line.
+[Makefile]
+indent_style = tab
+
+# In Markdown, two spaces at the end of a line mean "line break", so they stay.
+[*.md]
+trim_trailing_whitespace = false

@@ -1,0 +1,53 @@
+# .gitignore — what git must never track in this repo.
+#
+# Rule of thumb: secrets, real shop data, and anything a tool can rebuild.
+# The repo is public, so a mistake here can't be undone: once pushed, a file
+# stays in other people's copies even after we delete it.
+# (04 REPO-1; CLAUDE.md rule 10)
+
+# --- Secrets: every .env file except the example, which holds no real values.
+.env
+.env.*
+!.env.example
+
+# --- Real shop data: lives only on Jack's laptop (and its encrypted backup).
+# Everything inside private/ is ignored except its README, which explains the
+# folder to anyone who clones the repo. The leading "/" means "only the
+# private/ at the top of the repo".
+/private/*
+!/private/README.md
+
+# --- Claude Code: personal notes and machine-only settings.
+CLAUDE.local.md
+.claude/settings.local.json
+
+# --- Python: caches and virtual environments (uv rebuilds them).
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- Node and Next.js: dependencies and build output (pnpm and next rebuild them).
+node_modules/
+.next/
+frontend/out/
+coverage/
+*.tsbuildinfo
+.pnpm-store/
+
+# --- Logs, editors and operating systems.
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+*.swp
+# VS Code: personal settings stay out; a shared list of recommended
+# extensions may come in later.
+.vscode/*
+!.vscode/extensions.json
