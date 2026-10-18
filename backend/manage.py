@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """manage.py — the command line for the backend: `uv run python manage.py <command>`.
 
-It owns nothing but the choice of settings when none is given.
+It owns nothing but the choice of settings when none is given: dev. On a server, always set
+DJANGO_SETTINGS_MODULE=config.settings.prod, or commands here would quietly run with the dev settings.
 Never run `migrate` before PPL-1 is merged: the custom User must be the first migration (ADR-0012).
 """
 

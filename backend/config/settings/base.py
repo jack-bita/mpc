@@ -98,8 +98,8 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # PostgreSQL only — never SQLite, not even in tests: we rely on its exact decimals, constraints and
-# triggers (03 §9, §11). The defaults fit the local PostgreSQL that REPO-4 runs in Docker; prod.py
-# requires every value instead. Nothing connects in REPO-2, and no `migrate` before PPL-1 (ADR-0012).
+# triggers (03 §9, §11). The defaults are for a local PostgreSQL; REPO-4 runs one in Docker and sets its
+# password. prod.py requires every value instead. No `migrate` on any database before PPL-1 (ADR-0012).
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",

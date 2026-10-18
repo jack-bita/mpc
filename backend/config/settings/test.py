@@ -8,7 +8,7 @@ from .base import *  # noqa: F403 — start from the shared settings, then chang
 
 SECRET_KEY = "test-only-not-a-secret"
 
-# A deliberately weak, fast hasher: tests create many users, and real hashing (Argon2) is slow on purpose.
+# A deliberately weak, fast hasher: tests create many users, and real password hashing is slow on purpose.
 # Only tests use it; the other environments keep strong hashing.
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 

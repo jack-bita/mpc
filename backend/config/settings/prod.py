@@ -21,6 +21,8 @@ DATABASES["default"].update(
 
 # Caddy sits in front of Django and talks HTTPS with the browser (03 §13). It tells Django the original
 # request was HTTPS with this header; without it Django would think every request is plain HTTP.
+# Safe only because Caddy is the one way in, and Caddy always overwrites the header. Django's own port
+# must never be published: anyone who reached it directly could fake "https".
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Cookies only travel over HTTPS, so nobody on the shop's Wi-Fi can read a session (03 §10).
