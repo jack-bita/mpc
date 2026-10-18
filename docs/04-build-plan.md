@@ -270,7 +270,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 - [ ] `uv run pytest`, `ruff check` and `mypy` pass; `manage.py check` is clean.
 - [ ] Every app says in one line what it owns.
 **Tests:** `test_health_returns_ok`
-**Commits:** `chore(backend): uv project with Django 6.1` → `chore(backend): settings per environment` → `chore(backend): empty domain apps` → `feat(core): health endpoint` → `chore(backend): ruff, mypy and pytest`
+**Commits:** `chore(backend): uv project with Django 6.1` → `chore(backend): settings per environment` → `chore(backend): empty domain apps` → `chore(backend): ruff, mypy and pytest` → `feat(core): health endpoint`
 
 ### REPO-3 · Frontend skeleton
 `M` · Claude-led · after REPO-1 · branch `chore/repo-3-frontend-skeleton`
