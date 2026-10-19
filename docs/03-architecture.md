@@ -187,6 +187,7 @@ MPC/                          ← repo name follows the product name
 ├── frontend/
 │   ├── package.json, next.config.ts
 │   ├── src/                  ← app/, features/, offline/, api/, lib/, components/, i18n/
+│   ├── messages/             ← sw.json, en.json: every UI string (AD18)
 │   ├── public/               ← manifest, icons
 │   └── e2e/                  ← Playwright
 ├── shared/
@@ -520,7 +521,7 @@ frontend/src/
 ├── api/                      schema.d.ts (generated — never edited), client.ts
 ├── lib/                      decimal.ts, rounding.ts, units.ts, time.ts, ids.ts, format.ts, permissions.ts
 ├── components/ui/            shadcn components
-└── i18n/                     sw.json, en.json
+└── i18n/                     next-intl setup; the messages themselves are in frontend/messages/ (§4)
 ```
 
 - A static build can't pre-build pages for records that don't exist yet, so record pages use a query string (`/sales/view?id=…`).

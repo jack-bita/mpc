@@ -22,7 +22,7 @@ paths:
 
 - Money and quantities go through `src/lib/decimal.ts` (big.js); round only with `src/lib/rounding.ts`. Both pass `shared/test-vectors/`. No plain `number` arithmetic on money.
 - Money is shown with `Intl.NumberFormat('sw-TZ')`, TZS without decimals; stock as "26 mifuko + 35.5 kg".
-- No visible string literals: every string is a next-intl key in `src/i18n/sw.json` and `en.json`, Swahili first. API error codes map to translated messages.
+- No visible string literals: every string is a next-intl key in `messages/sw.json` and `en.json`, Swahili first. API error codes map to translated messages.
 
 ## Generated and vendored code
 
