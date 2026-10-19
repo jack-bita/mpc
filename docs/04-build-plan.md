@@ -277,8 +277,8 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Learn:** Next.js used as a static app (`output: 'export'`) and why the counter needs that (03 AD2).
 **Build:** `frontend/` with pnpm, Next.js 16 (static export, `images.unoptimized`), React 19, TypeScript strict, Tailwind v4, shadcn/ui, ESLint, Prettier, Vitest; a *Karibu* page; the scripts `dev`, `build`, `test`, `lint` and `typecheck` (`.claude/rules/frontend.md`) **(v1.1)**.
 **Done when:**
-- [ ] `pnpm build` writes plain files to `out/` that open with no Node server.
-- [ ] Lint, type check and one Vitest test pass.
+- [x] `pnpm build` writes plain files to `out/` that open with no Node server.
+- [x] Lint, type check and one Vitest test pass.
 **Commits:** `chore(frontend): next.js static export` → `chore(frontend): tailwind and shadcn` → `chore(frontend): lint, format and vitest`
 
 ### REPO-4 · Local development like production
