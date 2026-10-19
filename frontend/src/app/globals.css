@@ -22,8 +22,9 @@
 @custom-variant dark (&:is(.dark *));
 
 /* Turn each token into Tailwind classes: --color-primary makes bg-primary, text-primary…
-   "inline" makes a class read the token at runtime, so swapping :root or .dark retints
-   every screen without a rebuild. */
+   "inline" makes each class use var(--primary) itself, so the token is read on the element
+   that has the class: a class="dark" on any parent retints everything inside it. Without
+   "inline", --color-primary would be worked out once, at :root, and stay that colour. */
 @theme inline {
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);

@@ -37,4 +37,4 @@ paths:
 ## Tests and commands
 
 - Vitest + Testing Library + fake-indexeddb, next to the code (`*.test.ts(x)`); Playwright in `frontend/e2e/`, against the backend image — it can switch the browser offline.
-- Scripts (created in REPO-3 and UI-6): `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm gen:api`, `pnpm e2e`.
+- Scripts: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint` (ESLint with no warnings allowed, then a Prettier check), `pnpm format`, `pnpm typecheck` (REPO-3); `pnpm gen:api` (UI-2); `pnpm e2e` (UI-6).

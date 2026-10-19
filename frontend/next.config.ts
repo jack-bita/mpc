@@ -19,8 +19,9 @@ const nextConfig: NextConfig = {
   // no server, so images are served exactly as they sit in public/.
   images: { unoptimized: true },
 
-  // Write sale/index.html instead of sale.html. Every static server (Caddy in REPO-4,
-  // WhiteNoise in OPS-1) serves a folder's index.html with no extra rules.
+  // Write sale/index.html instead of sale.html, so a file server finds each page by its
+  // folder. Caddy's file_server (the `web` image, OPS-5) serves a folder's index.html by
+  // default; WhiteNoise (OPS-1) does too once WHITENOISE_INDEX_FILE = True.
   trailingSlash: true,
 };
 
