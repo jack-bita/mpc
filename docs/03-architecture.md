@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.1 · 18 Oct 2026 · Portion 3 of the planning pack
+**Version:** 1.2 · 19 Oct 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.2** (19 Oct 2026, REPO-3): the UI message files live in `frontend/messages/`, next to `src/`, as next-intl's guide places them; `src/i18n/` keeps only the next-intl setup (§4, §7.2). The Serwist build is proven in SPIKE-1, not in the first frontend task (§7.7). Each change is marked **(v1.2)**.
 
 **Changes in v1.1** (18 Oct 2026): applies the build plan's Appendix A (`04-build-plan.md`). The custom `User` and the clock-in come first in §16 (BP5, BP6); attendance events also allow the one-time void stamp (AD7, §5.6); role templates live in code and are copied by `create_shop` (§5.8, §9); release-please writes the changelog and tags, and the production deploy runs as a job of the release workflow (§12). Also: attendance is part of the one website and is built first (§1, §15 — BP7); the repo layout gains `.claude/`, the `Makefile`, `docs/spikes/`, `docs/writeups/` and a gitignored `private/` folder (§4); the code rules now live in `CLAUDE.md` (§17). Each change is marked **(v1.1)** below.
 
@@ -187,6 +189,7 @@ MPC/                          ← repo name follows the product name
 ├── frontend/
 │   ├── package.json, next.config.ts
 │   ├── src/                  ← app/, features/, offline/, api/, lib/, components/, i18n/
+│   ├── messages/             ← sw.json, en.json: every UI string (AD18) (v1.2)
 │   ├── public/               ← manifest, icons
 │   └── e2e/                  ← Playwright
 ├── shared/
@@ -520,7 +523,7 @@ frontend/src/
 ├── api/                      schema.d.ts (generated — never edited), client.ts
 ├── lib/                      decimal.ts, rounding.ts, units.ts, time.ts, ids.ts, format.ts, permissions.ts
 ├── components/ui/            shadcn components
-└── i18n/                     sw.json, en.json
+└── i18n/                     next-intl setup; the messages themselves are in frontend/messages/ (§4) (v1.2)
 ```
 
 - A static build can't pre-build pages for records that don't exist yet, so record pages use a query string (`/sales/view?id=…`).
@@ -555,7 +558,7 @@ frontend/src/
 
 - **Manifest:** names, icons, standalone display; counter devices start on the sale screen.
 - **Service worker (Serwist):** stores every file of the build; never stores `/api` responses (data lives in Dexie); shows the update prompt.
-- **Build:** Serwist runs after `next build`, over the exported files, so we don't depend on Next.js bundler plugins (Serwist's Turbopack support is still settling). Proven in the first frontend task.
+- **Build:** Serwist runs after `next build`, over the exported files, so we don't depend on Next.js bundler plugins (Serwist's Turbopack support is still settling). Proven in SPIKE-1 **(v1.2)**.
 
 ## 8. Numbers shared by device and server ✚
 

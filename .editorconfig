@@ -1,7 +1,7 @@
 # .editorconfig — the same basic formatting in every editor.
 # VS Code reads it with the "EditorConfig for VS Code" extension.
-# It covers only the basics; the formatters (ruff for Python, Prettier for the
-# rest) take over in REPO-5 and decide everything else.
+# It covers only the basics; the formatters (ruff for Python since REPO-2,
+# Prettier for the frontend since REPO-3) decide everything else.
 
 root = true
 

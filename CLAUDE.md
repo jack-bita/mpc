@@ -78,7 +78,7 @@ These protect money, history and each shop's privacy. If a task seems to need br
 8. **Generated files are never edited by hand:** `frontend/src/api/schema.d.ts` (`pnpm gen:api`), `CHANGELOG.md` (release-please), `uv.lock` and `pnpm-lock.yaml` (`uv add`, `pnpm add`). (ADR-0025)
 9. **Migrations** are read line by line, and once on `main` they are never edited — write a new one. No `migrate` on any database before PPL-1 is merged. (ADR-0012)
 10. **Real shop data never enters the repo:** no real names, phones, debts or prices in code, tests, seeds, docs or commits. Real sheets stay in `private/` (gitignored). Never read or print `.env`.
-11. **UI text** lives in `frontend/src/i18n/sw.json` and `en.json`; the API sends error codes, not sentences. (ADR-0032)
+11. **UI text** lives in `frontend/messages/sw.json` and `en.json`; the API sends error codes, not sentences. (ADR-0032)
 12. **A new dependency** needs Jack's yes first, with the reason; add it with `uv add` or `pnpm add`.
 
 ## Comments

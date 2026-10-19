@@ -22,7 +22,7 @@ paths:
 
 - Money and quantities go through `src/lib/decimal.ts` (big.js); round only with `src/lib/rounding.ts`. Both pass `shared/test-vectors/`. No plain `number` arithmetic on money.
 - Money is shown with `Intl.NumberFormat('sw-TZ')`, TZS without decimals; stock as "26 mifuko + 35.5 kg".
-- No visible string literals: every string is a next-intl key in `src/i18n/sw.json` and `en.json`, Swahili first. API error codes map to translated messages.
+- No visible string literals: every string is a next-intl key in `messages/sw.json` and `en.json`, Swahili first. API error codes map to translated messages.
 
 ## Generated and vendored code
 
@@ -37,4 +37,4 @@ paths:
 ## Tests and commands
 
 - Vitest + Testing Library + fake-indexeddb, next to the code (`*.test.ts(x)`); Playwright in `frontend/e2e/`, against the backend image — it can switch the browser offline.
-- Scripts (created in REPO-3 and UI-6): `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm gen:api`, `pnpm e2e`.
+- Scripts: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint` (ESLint with no warnings allowed, then a Prettier check), `pnpm format`, `pnpm typecheck` (REPO-3); `pnpm gen:api` (UI-2); `pnpm e2e` (UI-6).
