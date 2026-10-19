@@ -36,6 +36,9 @@ htmlcov/
 node_modules/
 .next/
 frontend/out/
+# Next.js writes next-env.d.ts itself, differently for `dev` and `build`;
+# `pnpm typecheck` runs `next typegen` first, so a fresh clone gets it back.
+frontend/next-env.d.ts
 coverage/
 *.tsbuildinfo
 .pnpm-store/
