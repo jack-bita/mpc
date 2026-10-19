@@ -20,6 +20,13 @@ export default defineConfig([
   // Last, so it wins: switch off every rule about layout. Prettier owns layout, and two
   // tools with opinions on spacing would only fight.
   prettier,
-  // Built or generated files: nobody writes them by hand, so nobody lints them.
-  globalIgnores([".next/**", "out/**", "next-env.d.ts", "src/api/schema.d.ts"]),
+  // Built or generated files: nobody writes them by hand, so nobody lints them. ESLint
+  // doesn't read .gitignore, so this list repeats .prettierignore's on purpose.
+  globalIgnores([
+    ".next/**",
+    "out/**",
+    "coverage/**",
+    "next-env.d.ts",
+    "src/api/schema.d.ts",
+  ]),
 ]);
