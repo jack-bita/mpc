@@ -1,0 +1,8 @@
+# pnpm-workspace.yaml — pnpm's settings for the frontend (one package, not a monorepo).
+#
+# pnpm runs no package's install script unless it is allowed here: install scripts are a
+# common way for a hijacked package to attack a machine. Each entry is a decision, with why.
+allowBuilds:
+  # Its script only downloads its native binary when that is missing; pnpm already installs
+  # the binary as a normal package (@unrs/resolver-binding-*), so the script is not needed.
+  unrs-resolver: false
