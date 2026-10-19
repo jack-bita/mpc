@@ -11,8 +11,9 @@ import sw from "../../messages/sw.json";
 
 export default function HomePage() {
   return (
-    <main>
-      <h1>{sw.home.title}</h1>
+    // min-h-svh: the full height of the phone's visible screen, browser bars excluded.
+    <main className="flex min-h-svh items-center justify-center p-4">
+      <h1 className="text-4xl font-semibold tracking-tight">{sw.home.title}</h1>
     </main>
   );
 }

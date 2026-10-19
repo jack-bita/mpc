@@ -11,6 +11,9 @@ import type { ReactNode } from "react";
 // direct import with next-intl, which also handles the English switch.
 import sw from "../../messages/sw.json";
 
+// The one global stylesheet: Tailwind and the design tokens, loaded once for every page.
+import "./globals.css";
+
 export const metadata: Metadata = {
   title: sw.app.title,
 };
