@@ -19,6 +19,31 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 
 Django 6.1 + Django REST Framework · PostgreSQL 18 · Next.js 16 as a static PWA · React 19 · TypeScript · Dexie (IndexedDB) · Docker Compose + Caddy
 
+## Run it locally
+
+The app and its API answer at one address, `http://localhost:8080`, as in production: Caddy sends `/api/` to Django and everything else to Next.js ([ADR-0017](docs/adr/0017-one-address-session-cookies-allauth.md)). PostgreSQL 18 and Caddy run in Docker; Django and Next.js run on your machine, so code changes reload at once.
+
+**You need:** Git, make, Docker with Compose v2 (on Windows: Docker Desktop with WSL integration turned on for your Linux distro), [uv](https://docs.astral.sh/uv/) (it installs Python 3.14 itself), and Node.js 24 or newer with pnpm.
+
+```bash
+git clone https://github.com/jack-bita/mpc.git
+cd mpc
+cp .env.example .env              # local settings, with safe development values
+(cd frontend && pnpm install)     # the frontend's packages
+make dev                          # PostgreSQL + Caddy in Docker, then Django and Next.js
+```
+
+Open <http://localhost:8080> to see *Karibu*, and <http://localhost:8080/api/health/> for `{"status":"ok"}`. The first `make dev` takes longer: Docker downloads two images and uv installs the backend's packages.
+
+**Stop:** Ctrl-C stops Django and Next.js; `make down` stops the containers and keeps the database.
+
+**Other commands:** run `make` to list them. `make check` runs everything CI runs; it must pass before every pull request.
+
+**If something goes wrong**
+- *`docker: command not found` inside WSL:* start Docker Desktop and wait for "Engine running"; then check Settings → Resources → WSL integration.
+- *`port is already allocated` for 5433:* another program holds that port. Set a free one as `DB_PORT` in `.env`.
+- *Django says "You have unapplied migrations… run migrate":* ignore it for now. The first migration comes with PPL-1, and `make migrate` refuses until then on purpose ([ADR-0012](docs/adr/0012-one-person-is-one-user.md)).
+
 ## How it is built
 
 Each task gets one issue, one branch and one pull request. CI runs on the pull request, and it is squash-merged into `main`. I build it with Claude Code as a pair programmer. I approve every commit, and every pull request ends with what I learned.
