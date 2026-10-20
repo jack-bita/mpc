@@ -1,7 +1,7 @@
 # Runbook — GitHub setup and sync
 
 **What:** how this repo's GitHub side is set up, and how it stays in step with the build plan.
-**When:** once in portion 6 (REPO-1); again at every stage review (04 §19); and when REPO-5 adds CI.
+**When:** once in portion 6 (REPO-1); again at every stage review (04 §19); and whenever a CI job is added or renamed (*The required checks*, below).
 **Tool:** `scripts/github_sync.py`. Its header lists every command.
 
 ## What lives where

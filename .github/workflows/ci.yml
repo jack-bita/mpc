@@ -2,8 +2,9 @@
 # It owns the CI jobs, one per half of `make check`:
 #   - backend:  `make check-backend`, with a PostgreSQL 18 service beside it
 #   - frontend: `make check-frontend`
-# The two run side by side, each on its own fresh machine. The list of checks lives in the Makefile, not here: this file only prepares a clean machine and
-# calls the same target a laptop runs, so the two can't drift apart (ops rule).
+# The two run side by side, each on its own fresh machine. The list of checks lives in the
+# Makefile, not here: this file only prepares a clean machine and calls the same target a laptop
+# runs, so the two can't drift apart (ops rule).
 #
 # Each job's name is also the name of its check on a pull request, and the ruleset requires those
 # names (.github/rulesets/main.json). Rename a job only together with the ruleset, or every merge

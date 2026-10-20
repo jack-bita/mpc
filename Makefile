@@ -11,11 +11,12 @@ MAKEFLAGS += --no-print-directory
 
 COMPOSE = docker compose -f compose.dev.yml
 # Backend commands read the root .env when it exists (seen from backend/, it is ../.env).
-# CI has no .env: there the settings' own defaults apply, so `make check` still runs.
+# CI has no .env: its workflow sets the DB_* variables itself (ci.yml), and every other setting
+# keeps its default, so `make check` runs there too.
 UV_RUN = uv run $(if $(wildcard .env),--env-file ../.env)
 
 help: ## list the commands
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  make %-13s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  make %-15s %s\n", $$1, $$2}'
 
 # --- Running the app
 

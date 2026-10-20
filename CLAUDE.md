@@ -46,6 +46,7 @@ Open these when a task needs them; don't read them all up front.
 - `make dev` — the local stack at http://localhost:8080 (Caddy in Docker → Django and Next.js on the host)
 - `make check` — everything CI runs; it must pass before any PR
 - `make test` · `make fmt` · `make migrate`
+- `make hooks` — once per clone: the git hooks that format and lint each commit and check its `Why:` line
 - One backend test: `cd backend && uv run --env-file ../.env pytest apps/sales/tests/test_services.py -k below_floor` (`.env` points Django at the Compose database)
 - Frontend: `cd frontend && pnpm test` · `pnpm gen:api` after any API change
 

@@ -6,7 +6,7 @@
 # Every new dependency needs Jack's yes first, with the reason.
 #
 # `.python-version` beside this file pins Python 3.14 (03 §3: `uuid.uuid7()`). It holds only the version,
-# with no comment, because other tools read it too (CI's setup-python, pyenv) and may not skip one.
+# with no comment, because other tools read it too (uv itself, on laptops and in CI; pyenv) and may not skip one.
 
 [project]
 name = "mpc-backend"

@@ -92,7 +92,9 @@ def problems(text: str, merging: bool = False) -> list[str]:
 
     found: list[str] = []
     if not SUBJECT.match(subject):
-        found.append(f"The first line must start with a type from the list, then `: ` and the subject. Got: {subject!r}")
+        found.append(
+            f"The first line must start with a type from the list, then `: ` and the subject. Got: {subject!r}"
+        )
     if len(lines) > 1 and lines[1]:
         found.append("The second line must be a blank line: it separates the subject from the reason.")
     if not any(WHY.match(line) for line in lines[1:]):
