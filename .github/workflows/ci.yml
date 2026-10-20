@@ -1,7 +1,8 @@
 # ci.yml: the checks every pull request must pass before it can merge into main (REPO-5, 03 §12).
 # It owns the CI jobs, one per half of `make check`:
 #   - backend:  `make check-backend`, with a PostgreSQL 18 service beside it
-# The list of checks lives in the Makefile, not here: this file only prepares a clean machine and
+#   - frontend: `make check-frontend`
+# The two run side by side, each on its own fresh machine. The list of checks lives in the Makefile, not here: this file only prepares a clean machine and
 # calls the same target a laptop runs, so the two can't drift apart (ops rule).
 #
 # Each job's name is also the name of its check on a pull request, and the ruleset requires those
@@ -92,3 +93,37 @@ jobs:
 
       - name: Run the backend checks
         run: make check-backend
+
+  frontend:
+    # Pinned, with a time limit, for the same reasons as the backend job.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # pnpm before Node: setup-node's pnpm cache asks pnpm where its package store is.
+      # No version here: it comes from "packageManager" in frontend/package.json, so the laptop
+      # and CI run the very same pnpm.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+
+      # Node 24, the oldest version package.json allows ("engines"). The pnpm store is saved
+      # between runs, keyed on pnpm-lock.yaml: a new lock starts a new cache.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # --frozen-lockfile: fail if pnpm-lock.yaml doesn't match package.json, instead of quietly
+      # writing a new one. CI must test exactly the packages the lock file names (ADR-0025).
+      - name: Install the frontend's packages
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the frontend checks
+        run: make check-frontend
