@@ -52,12 +52,16 @@ test: ## run the backend and frontend tests
 check: check-backend check-frontend ## run everything CI runs; it must pass before any PR
 
 # The Python half: CI's `backend` job.
+# - First, `uv sync --locked`: it fails when uv.lock no longer matches pyproject.toml, instead of
+#   quietly writing a new lock that nobody committed (ADR-0025). It also installs the packages,
+#   which is all CI needs before the checks.
 # - makemigrations --check fails when a model changed without a migration.
 # - pytest prints a coverage report here (pyproject.toml says what is measured), so CI shows it too.
 # - The guard's tests: the guard refuses the costly mistakes, so a broken guard must turn this red.
 # - The GitHub sync script's tests (docs/runbooks/github-setup.md). The guard and the script are
 #   not backend code, but they are Python, and the backend job is the one that has Python.
 check-backend: ## only the backend and the Python tools (CI's backend job)
+	cd backend && uv sync --locked
 	cd backend && $(UV_RUN) ruff format --check .
 	cd backend && $(UV_RUN) ruff check .
 	cd backend && $(UV_RUN) mypy .
@@ -68,7 +72,10 @@ check-backend: ## only the backend and the Python tools (CI's backend job)
 	python3 -m unittest discover -s scripts
 
 # The frontend half: CI's `frontend` job.
+# First, `pnpm install --frozen-lockfile`, for the same reason as `uv sync --locked` above: it fails
+# when pnpm-lock.yaml no longer matches package.json, instead of quietly writing a new one.
 check-frontend: ## only the frontend (CI's frontend job)
+	cd frontend && pnpm install --frozen-lockfile
 	cd frontend && pnpm lint
 	cd frontend && pnpm typecheck
 	cd frontend && pnpm test

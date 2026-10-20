@@ -85,12 +85,8 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
-      # --locked: fail if uv.lock doesn't match pyproject.toml, instead of quietly writing a new
-      # one. CI must test exactly the packages the lock file names (ADR-0025).
-      - name: Install the backend's packages
-        working-directory: backend
-        run: uv sync --locked
-
+      # The target's first line installs the packages with `uv sync --locked`, which fails if uv.lock
+      # doesn't match pyproject.toml (Makefile). So there is no install step here: one list, in make.
       - name: Run the backend checks
         run: make check-backend
 
@@ -119,11 +115,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      # --frozen-lockfile: fail if pnpm-lock.yaml doesn't match package.json, instead of quietly
-      # writing a new one. CI must test exactly the packages the lock file names (ADR-0025).
-      - name: Install the frontend's packages
-        working-directory: frontend
-        run: pnpm install --frozen-lockfile
-
+      # Installs first with `pnpm install --frozen-lockfile`, which fails if pnpm-lock.yaml doesn't
+      # match package.json (Makefile), then runs the checks.
       - name: Run the frontend checks
         run: make check-frontend
