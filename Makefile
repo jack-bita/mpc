@@ -82,7 +82,8 @@ fmt: ## format the code: ruff for Python, Prettier for the frontend
 	cd frontend && pnpm format
 
 # Once per clone. Writes small scripts into .git/hooks/ that start pre-commit, from backend's own
-# packages (uv.lock), before each commit. .pre-commit-config.yaml says what they check.
+# packages (uv.lock): one before each commit (the files), one after its message is written (the
+# `Why:` line). .pre-commit-config.yaml says what they check.
 hooks: ## install the git hooks that check each commit (once per clone)
 	cd backend && $(UV_RUN) pre-commit install
 
