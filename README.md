@@ -30,6 +30,7 @@ git clone https://github.com/jack-bita/mpc.git
 cd mpc
 cp .env.example .env              # local settings, with safe development values
 (cd frontend && pnpm install)     # the frontend's packages
+make hooks                        # git hooks: format and lint each commit, and check its message
 make dev                          # PostgreSQL + Caddy in Docker, then Django and Next.js
 ```
 

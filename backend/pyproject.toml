@@ -6,7 +6,7 @@
 # Every new dependency needs Jack's yes first, with the reason.
 #
 # `.python-version` beside this file pins Python 3.14 (03 §3: `uuid.uuid7()`). It holds only the version,
-# with no comment, because other tools read it too (CI's setup-python, pyenv) and may not skip one.
+# with no comment, because other tools read it too (uv itself, on laptops and in CI; pyenv) and may not skip one.
 
 [project]
 name = "mpc-backend"
@@ -24,10 +24,19 @@ dev = [
     "django-stubs[compatible-mypy]>=6.1.2",
     "djangorestframework-stubs[compatible-mypy]>=3.18.1",
     "mypy>=2.3.1",
+    "pre-commit>=4.7.0",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "pytest-django>=4.14.0",
     "ruff>=0.17.1",
 ]
+
+# --- uv itself: one version for every laptop and for CI, which reads this line too (ci.yml,
+# `version-file`). Before 1.0, a minor release of uv may change how it locks or installs, so a new
+# uv must never arrive on its own. uv refuses to run with another version and names this line.
+# Upgrade on purpose, as its own small task: install the new uv, change this line, run `make check`.
+[tool.uv]
+required-version = "==0.11.33"
 
 # --- ruff: lint (find likely bugs) and format (one code style), in one fast tool.
 [tool.ruff]
@@ -57,3 +66,19 @@ django_settings_module = "config.settings.test"
 DJANGO_SETTINGS_MODULE = "config.settings.test"
 # A typo in a marker name (@pytest.mark.djnago_db) is an error, not a silently skipped rule.
 addopts = "--strict-markers"
+
+# --- coverage: which lines the tests ran. `make check` (and so CI) prints the report (REPO-5);
+# plain `pytest` and `make test` skip it to stay fast. Turn it on with `pytest --cov`.
+[tool.coverage.run]
+# Measure our code only, not Django or the other installed packages.
+source = ["apps", "config"]
+# Branch coverage also counts each side of an `if`: a test that only takes the happy path shows up.
+branch = true
+# Tests and migrations would only make the number look better: they run by definition.
+omit = ["*/tests/*", "*/migrations/*"]
+
+[tool.coverage.report]
+# List the line numbers no test ran, and hide files that are fully covered, so the gaps stand out.
+# No `fail_under` yet: the ≥ 90% rule is for services and calculations (03 §11), and none exist so far.
+show_missing = true
+skip_covered = true

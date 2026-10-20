@@ -1,7 +1,7 @@
 # Runbook — GitHub setup and sync
 
 **What:** how this repo's GitHub side is set up, and how it stays in step with the build plan.
-**When:** once in portion 6 (REPO-1); again at every stage review (04 §19); and when REPO-5 adds CI.
+**When:** once in portion 6 (REPO-1); again at every stage review (04 §19); and whenever a CI job is added or renamed (*The required checks*, below).
 **Tool:** `scripts/github_sync.py`. Its header lists every command.
 
 ## What lives where
@@ -48,19 +48,15 @@ The steps run in this order: `settings` → `labels` → `milestones` → `issue
 2. Run `python3 scripts/github_sync.py --dry-run issues board --stage N`, then run it again without `--dry-run`.
 3. To update open issues whose cards changed, add `--refresh`. It copies each changed card into its issue and adds missing labels. It never removes a label you added by hand.
 
-## When REPO-5 adds CI
+## The required checks (since REPO-5)
 
-In the same pull request, add the CI checks to `.github/rulesets/main.json`, then run `protect`:
+REPO-5 added `.github/workflows/ci.yml` and, in the same pull request, the rule `required_status_checks` in `.github/rulesets/main.json`, applied with `protect`. A pull request can now merge only when both CI jobs, `backend` and `frontend`, are green.
 
-```json
-{ "type": "required_status_checks",
-  "parameters": { "strict_required_status_checks_policy": false,
-                  "required_status_checks": [ { "context": "backend" }, { "context": "frontend" } ] } }
-```
+- The `context` is the job's name as it appears on a pull request. **Rename a job in `ci.yml` only together with `main.json`**, then run `protect` again: a required check that never runs blocks every merge.
+- A new required check works the same way: add the job to `ci.yml`, see it run on a pull request once, then add its name to `main.json` and run `protect` in that same pull request.
+- `integration_id: 15368` is GitHub Actions. With it, only a CI job can turn the check green; a status with the same name sent by another app or a personal token doesn't count.
 
-The `context` is the job's name as it appears on a pull request. Until then, `main` is protected but needs no checks, because a required check that never runs would block every merge.
-
-`make check` also runs `python3 -m unittest discover -s scripts` (REPO-4), so a plan the script can't read turns the check red, and CI with it once REPO-5 runs it.
+`make check` also runs `python3 -m unittest discover -s scripts` (REPO-4), so a plan the script can't read turns the `backend` check red.
 
 ## What the protection does
 
@@ -70,6 +66,7 @@ The `context` is the job's name as it appears on a pull request. Until then, `ma
 | `non_fast_forward` | No force-push | History is never rewritten |
 | `deletion` | `main` can't be deleted | Protects everything else |
 | `required_linear_history` | No merge commits on `main` | Squash merges keep `main` a straight line |
+| `required_status_checks`: `backend`, `frontend` | A PR merges only when both CI jobs are green | A check that isn't required can be red and still merged (REPO-5). Not *strict*: the branch needn't hold the newest `main` first, which would mean an *Update branch* click and a fresh CI run before each merge, for one person working alone |
 | `bypass_actors: []` | The rules apply to admins too, Jack included | REPO-5: "a direct push to `main` is refused — your own included" |
 
 The merge settings match: squash only; the PR title becomes the commit title and the PR body its message, so *what and why* and *What I learned* stay in `git log`; merged branches are deleted; and the *Update branch* button merges `main` in.

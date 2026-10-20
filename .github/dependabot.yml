@@ -1,0 +1,111 @@
+# dependabot.yml: GitHub's Dependabot proposes version updates as pull requests (REPO-5, 03 §12).
+# It owns which package lists are watched and how often. Every version here is pinned (lock files,
+# image tags, action commits), so nothing moves on its own; this file is how they move on purpose,
+# one tested pull request at a time. CI runs on each one like on any other PR.
+#
+# GitHub reads this file only from `main`: after a change, check Insights → Dependency graph →
+# Dependabot to see that each entry ran.
+#
+# Same for every entry:
+# - Weekly, on Monday morning shop time, so updates arrive at the start of the week.
+# - Minor and patch updates come grouped in one PR per entry (Django has a group of its own, see the
+#   uv entry); a major version comes alone, because it may break things and is an upgrade task of
+#   its own (04 risks: "upgrades as their own tasks").
+# - A cooldown: a version must be 7 days old before it is proposed. A hijacked package is usually
+#   found and pulled within days, so most never reach a PR here.
+# - Titles like `build(deps): bump django from 6.1.2 to 6.1.3`: a conventional commit (04 §3.5),
+#   since the PR title becomes the squash commit on main.
+# - The `type:chore` label of 04 §4, so the PRs sort with the rest of the board.
+
+version: 2
+
+updates:
+  # The backend's Python packages: backend/pyproject.toml and backend/uv.lock.
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Dar_es_Salaam
+    cooldown:
+      default-days: 7
+    groups:
+      # Django and the packages that follow it (django-stubs, DRF and its stubs) move together, in a
+      # PR of their own: a Django minor version (6.1 → 6.2) is a feature release with deprecations,
+      # so that PR is the start of an upgrade task, not a quick merge. Listed first, because a
+      # package joins the first group that matches it.
+      django:
+        patterns: ["django*"]
+      python-minor-and-patch:
+        update-types: [minor, patch]
+        exclude-patterns: ["django*"]
+    commit-message:
+      prefix: build
+      include: scope
+    labels: ["type:chore"]
+
+  # The frontend's packages: frontend/package.json and frontend/pnpm-lock.yaml. Dependabot calls
+  # every JavaScript package manager "npm" and reads pnpm's lock file under that name.
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Dar_es_Salaam
+    cooldown:
+      default-days: 7
+    groups:
+      js-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # @types/node describes the Node we run, 24 ("engines" in package.json, CI's setup-node), not
+      # the newest Node. A new major would type-check calls that Node 24 doesn't have. It moves when
+      # Node moves, by hand.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: build
+      include: scope
+    labels: ["type:chore"]
+
+  # The actions in .github/workflows/: it updates both the pinned commit and its `# vX.Y.Z` comment.
+  # Not the postgres image inside ci.yml: no entry reads images there. When the docker-compose
+  # entry below bumps postgres, scripts/test_same_postgres.py turns that PR red until ci.yml's tag
+  # is changed to match, in the same PR.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Dar_es_Salaam
+    cooldown:
+      default-days: 7
+    groups:
+      actions-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: ci
+      include: scope
+    labels: ["type:chore"]
+
+  # The images in compose.dev.yml (postgres, caddy). The Dockerfiles of OPS-1 will need a
+  # `docker` entry of their own when they arrive.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Dar_es_Salaam
+    cooldown:
+      default-days: 7
+    groups:
+      images-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build
+      include: scope
+    labels: ["type:chore"]

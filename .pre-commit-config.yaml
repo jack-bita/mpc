@@ -1,0 +1,61 @@
+# .pre-commit-config.yaml: the checks git runs on this laptop for each commit (REPO-5): the staged
+# files before the commit, and its message after it is written (04 §3.5).
+# It owns the hooks; the rules they apply live in each tool's own config (backend/pyproject.toml,
+# frontend/prettier.config.mjs), so a hook and CI never judge the same file differently.
+#
+# Install once per clone: `make hooks`. pre-commit itself comes from backend's dev packages (uv.lock).
+# Each file hook sees only the staged files that match it. When a hook fixes a file, the commit stops:
+# look at the fix, `git add` it, and commit again. Never skip the hooks with --no-verify (04 §3.5).
+#
+# CI doesn't run this file: it runs the stricter `make check`, on every file. These hooks are the
+# fast, local first line; CI is the one that can't be skipped.
+
+# `make hooks` installs both moments git offers a hook here: before the commit (the files) and
+# after the message is written (the message).
+default_install_hook_types: [pre-commit, commit-msg]
+# A hook runs only before the commit unless it says otherwise; without this line, the file hooks
+# would also run on the message and print "Skipped" lines on every commit.
+default_stages: [pre-commit]
+
+repos:
+  # `local`: run tools already installed by the project, not copies pre-commit would download.
+  # The public ruff hook would install its own ruff, whose version can differ from uv.lock's,
+  # and then the hook and CI could disagree about the same line.
+  - repo: local
+    hooks:
+      # Lint first, then format, as in `make fmt`: a lint fix can leave code the formatter changes.
+      # --project backend: backend's ruff, while the file paths stay relative to the repo root.
+      # ruff finds backend/pyproject.toml from each file's own folder, so the rules are CI's.
+      # --force-exclude: a file ruff's settings exclude stays excluded when it is named directly.
+      - id: ruff-check
+        name: ruff check --fix (backend)
+        entry: uv run --project backend ruff check --fix --force-exclude
+        language: system
+        types: [python]
+        files: ^backend/
+
+      - id: ruff-format
+        name: ruff format (backend)
+        entry: uv run --project backend ruff format --force-exclude
+        language: system
+        types: [python]
+        files: ^backend/
+
+      # Prettier runs from inside frontend/, as `pnpm format` does, with the `frontend/` prefix
+      # taken off each path. From the repo root it would miss frontend/.prettierignore and could
+      # reformat pnpm-lock.yaml, a file only pnpm writes (ADR-0025).
+      # --ignore-unknown: skip staged files Prettier has no parser for (images, for example).
+      - id: prettier
+        name: prettier --write (frontend)
+        entry: bash -c 'cd frontend && exec node_modules/.bin/prettier --write --ignore-unknown "${@#frontend/}"' --
+        language: system
+        files: ^frontend/
+
+      # After the message is written: a conventional subject and a `Why:` line (04 §3.5).
+      # git passes the file holding the message; the script and its tests live in scripts/.
+      # python3, not uv: the check needs only the standard library, so it stays fast.
+      - id: commit-message
+        name: commit message (04 §3.5)
+        entry: python3 scripts/check_commit_message.py
+        language: system
+        stages: [commit-msg]
