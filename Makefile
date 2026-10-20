@@ -65,9 +65,11 @@ check: ## run everything CI runs; it must pass before any PR
 	python3 -m unittest discover -s .claude/hooks
 	python3 -m unittest discover -s scripts
 
+# Lint fixes first, then formatting: a lint fix can leave code the formatter would still change,
+# and `make check` would then fail its format check (ruff's own advice).
 fmt: ## format the code: ruff for Python, Prettier for the frontend
-	cd backend && $(UV_RUN) ruff format .
 	cd backend && $(UV_RUN) ruff check --fix .
+	cd backend && $(UV_RUN) ruff format .
 	cd frontend && pnpm format
 
 # --- The database
