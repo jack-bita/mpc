@@ -51,7 +51,8 @@ plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
 django_settings_module = "config.settings.test"
 
 # --- pytest: runs the tests. pytest-django finds manage.py next to this file, puts backend/ on the
-# import path, and loads the settings below, so `uv run pytest` needs nothing else.
+# import path, and loads the settings below. The database's port and password come from the root
+# .env: `uv run --env-file ../.env pytest`, or `make test`, which adds it for you.
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings.test"
 # A typo in a marker name (@pytest.mark.djnago_db) is an error, not a silently skipped rule.
