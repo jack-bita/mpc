@@ -22,10 +22,12 @@ on:
 permissions:
   contents: read
 
-# A new push to a pull request cancels its older run, which would only report on stale code.
-# Runs on main are never cancelled, so every merge gets its own result.
+# A new push to a pull request cancels its older run, which would only report on stale code: one
+# group per pull request. On main, each merge gets a group of its own, named by its commit, so no
+# run there is ever cancelled or replaced. (One shared group would not be enough: a group keeps one
+# running and one waiting run, and a newer waiting run replaces the older one.)
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
