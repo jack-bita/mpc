@@ -3,7 +3,7 @@
 # Run `make` alone to list the commands. Recipe lines start with a real tab (.editorconfig).
 
 # These names are jobs, not files: without this line, a file called `test` would stop `make test`.
-.PHONY: help dev dev-backend dev-frontend down test check check-backend check-frontend fmt migrate
+.PHONY: help dev dev-backend dev-frontend down test check check-backend check-frontend fmt hooks migrate
 # Plain `make` shows the list of commands instead of starting something.
 .DEFAULT_GOAL := help
 # `make dev` starts a second make; this hides its "Entering directory" lines.
@@ -80,6 +80,11 @@ fmt: ## format the code: ruff for Python, Prettier for the frontend
 	cd backend && $(UV_RUN) ruff check --fix .
 	cd backend && $(UV_RUN) ruff format .
 	cd frontend && pnpm format
+
+# Once per clone. Writes small scripts into .git/hooks/ that start pre-commit, from backend's own
+# packages (uv.lock), before each commit. .pre-commit-config.yaml says what they check.
+hooks: ## install the git hooks that check each commit (once per clone)
+	cd backend && $(UV_RUN) pre-commit install
 
 # --- The database
 
