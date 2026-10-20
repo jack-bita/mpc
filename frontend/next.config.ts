@@ -23,6 +23,10 @@ const nextConfig: NextConfig = {
   // folder. Caddy's file_server (the `web` image, OPS-5) serves a folder's index.html by
   // default; WhiteNoise (OPS-1) does too once WHITENOISE_INDEX_FILE = True.
   trailingSlash: true,
+
+  // Don't let `next dev` write an AGENTS.md file into frontend/. It does so when it detects
+  // certain coding tools, leaving an untracked file nobody asked for on every branch.
+  agentRules: false,
 };
 
 export default nextConfig;
