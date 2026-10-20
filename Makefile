@@ -91,8 +91,12 @@ fmt: ## format the code: ruff for Python, Prettier for the frontend
 # Once per clone. Writes small scripts into .git/hooks/ that start pre-commit, from backend's own
 # packages (uv.lock): one before each commit (the files), one after its message is written (the
 # `Why:` line). .pre-commit-config.yaml says what they check.
+# commit.cleanup=strip (in this clone's .git/config only): git then drops `#` lines from every
+# message, also from `git commit -m`, where it would otherwise keep them. The message check ignores
+# those lines, so without this it could pass a message that git stores differently.
 hooks: ## install the git hooks that check each commit (once per clone)
 	cd backend && $(UV_RUN) pre-commit install
+	git config commit.cleanup strip
 
 # --- The database
 

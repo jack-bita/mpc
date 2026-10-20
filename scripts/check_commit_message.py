@@ -60,6 +60,8 @@ def message_lines(text: str) -> list[str]:
     """The lines git will keep: without its comment lines, the scissors part, and blank edges.
 
     The hook sees the message before git cleans it up, so it does that cleanup itself first.
+    git drops `#` lines from an editor message by default, but keeps them in a `git commit -m` one;
+    `make hooks` sets commit.cleanup=strip, so git drops them every time and agrees with this.
     git's comment character is `#` unless core.commentChar changes it; this repo leaves the default.
     """
     lines: list[str] = []
