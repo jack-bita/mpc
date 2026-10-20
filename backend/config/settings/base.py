@@ -4,7 +4,7 @@ It owns the helpers that read environment variables and every setting that is th
 in tests and on the server. dev.py, test.py and prod.py start from this file and change only what differs.
 
 Secrets never live in this repo, which is public (03 §10). They come from environment variables:
-on a laptop from a gitignored `.env` file (`uv run --env-file .env …`, REPO-4), on the server from its
+on a laptop from the gitignored root `.env` (`uv run --env-file ../.env …`, REPO-4), on the server from its
 root-only `.env` through Docker (03 §13).
 """
 
@@ -98,8 +98,9 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # PostgreSQL only — never SQLite, not even in tests: we rely on its exact decimals, constraints and
-# triggers (03 §9, §11). The defaults are for a local PostgreSQL; REPO-4 runs one in Docker and sets its
-# password. prod.py requires every value instead. No `migrate` on any database before PPL-1 (ADR-0012).
+# triggers (03 §9, §11). The defaults are for a local PostgreSQL; on a laptop it runs in Docker
+# (compose.dev.yml) and the root `.env` gives its password and port. prod.py requires every value
+# instead. No `migrate` on any database before PPL-1 (ADR-0012).
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",

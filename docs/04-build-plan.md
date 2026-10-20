@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.1 · 18 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.2 · 20 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.2** (20 Oct 2026, REPO-4): OPS-5's Caddyfile also sends `/_allauth/` to Django, so password login works in production as it does locally (ADR-0017, 03 v1.3). Marked **(v1.2)**.
 
 **Changes in v1.1** (18 Oct 2026, portion 5): Claude Code makes every commit, but only after Jack says yes, and every commit message carries a `Why:` line (BP11, §3.3–§3.5, REPO-5 — confirmed with Jack); a task starts with `/start-task` and ends with `/finish-task` (§3.3); a changed decision is a new ADR that supersedes the old one (§3.2, §19); REPO-1, REPO-3 and REPO-4 gain the Claude Code setup, the script names and the guard tests; Appendix A is applied. Each change is marked **(v1.1)**.
 
@@ -791,7 +793,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 | ID | Task | Size | After | Done when |
 |---|---|---|---|---|
 | OPS-4 | Production server — Lineserve 2 GB, Dar es Salaam *(Jack-led)* | M | OPS-1 | SSH keys only, firewall (web and SSH), automatic security updates, Docker; `docs/runbooks/server-setup.md` |
-| OPS-5 | `compose.prod.yml`, the Caddyfile and the `web` image | M | OPS-4 | HTTPS on the real address; long cache for hashed files, none for pages and the service worker; `/api` to Django; security headers; CSP report-only; no container runs as root |
+| OPS-5 | `compose.prod.yml`, the Caddyfile and the `web` image | M | OPS-4 | HTTPS on the real address; long cache for hashed files, none for pages and the service worker; `/api` and `/_allauth/` to Django **(v1.2)**; security headers; CSP report-only; no container runs as root |
 | OPS-6 | `deploy-prod.yml` | M | OPS-5, REPO-7 | A release waits for approval, rehearses migrations on a scratch copy on the server, deploys and smoke-tests; it runs as a job of the release workflow, because a tag made with the default token starts no other workflow; secrets in a GitHub environment; `docs/runbooks/rotate-secrets.md` |
 | OPS-7 | Worker and scheduler | M | OPS-5 | The django-tasks-db worker and supercronic run; jobs ping a heartbeat; a job run twice does no harm; the first jobs prune old task rows and compact the change log monthly (03 §6.4) |
 | OPS-8 | Backups *(Jack-led)* | M | OPS-5 | Lineserve's server backups on; nightly encrypted `pg_dump` + photos with restic; 7 daily, 4 weekly and 12 monthly kept; the weekly USB copy script runs on the shop laptop; the password is held by the owner and Jack |

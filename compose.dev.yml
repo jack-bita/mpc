@@ -1,0 +1,72 @@
+# compose.dev.yml: the containers a laptop needs to run MPC like production (REPO-4, 03 §4).
+# It owns two services:
+#   - postgres: PostgreSQL 18, the only database (ADR-0023); tests never use SQLite (03 §11).
+#   - caddy: one front door at http://localhost:8080 for the app and the API, as in production (ADR-0017).
+# Django and Next.js are not containers here: they run on the laptop (`make dev`) so code changes
+# reload at once, and Caddy reaches them through host.docker.internal.
+# Settings come from the root `.env` (copied from `.env.example`); Compose reads that file by itself.
+#
+# Start: docker compose -f compose.dev.yml up -d --wait
+# Stop:  docker compose -f compose.dev.yml down       (keeps the database)
+#        docker compose -f compose.dev.yml down -v    (also DELETES the database volume)
+
+# A fixed project name keeps these containers and their volume apart from the demo and prod stacks.
+name: mpc-dev
+
+services:
+  postgres:
+    # Pinned, never `latest`, so every laptop gets the same PostgreSQL (ops rule). CI (REPO-5)
+    # doesn't read this file: its workflow must name the same tag.
+    image: postgres:18.6-alpine
+    # Start as `postgres`, never root (ops rule). The image is built to run this way.
+    user: postgres
+    environment:
+      # Read only on the very first start, to create the empty database and its owner.
+      # The defaults match backend/config/settings/base.py, so Django and the container agree.
+      POSTGRES_DB: "${DB_NAME:-mpc}"
+      POSTGRES_USER: "${DB_USER:-mpc}"
+      # `:?` stops Compose with this message rather than start a database with no password.
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?is missing - run: cp .env.example .env}"
+    ports:
+      # 127.0.0.1 only: no other computer on the network can reach the database.
+      # Required, not defaulted: Django's own default is 5432, so a missing DB_PORT would make the
+      # two disagree (.env.example says 5433, because a native PostgreSQL often holds 5432).
+      - "127.0.0.1:${DB_PORT:?is missing - run: cp .env.example .env}:5432"
+    volumes:
+      # The data lives in a named volume, so it survives restarts and `down`; only `down -v` deletes it.
+      # PostgreSQL 18 images keep their data under /var/lib/postgresql; the old .../data path breaks them.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # "Healthy" only once PostgreSQL accepts connections, so `up --wait` returns when Django can connect.
+      # -h 127.0.0.1 asks over TCP, the way Django connects. Without it, pg_isready uses the Unix
+      # socket, and on the very first start the image's setup server answers there before TCP is open.
+      # `$$` hands a plain `$` to the shell inside the container instead of Compose filling it in.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  caddy:
+    # Pinned like postgres (ops rule).
+    image: caddy:2.11.7-alpine
+    # Not root (ops rule). `nobody` can't write to the image's /data and /config folders,
+    # so Caddy's small working files go to /tmp; nothing in them needs to last.
+    user: nobody
+    environment:
+      XDG_DATA_HOME: /tmp/caddy/data
+      XDG_CONFIG_HOME: /tmp/caddy/config
+    ports:
+      # The one address of the whole app on this laptop. 8080, not 80: ports below 1024 need root.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # A bind mount: the repo's Caddyfile appears where Caddy looks for it; `:ro` = read-only.
+      # After editing it: docker compose -f compose.dev.yml restart caddy
+      - ./deploy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+    extra_hosts:
+      # Docker Desktop creates this name by itself; plain Docker on Linux needs this line.
+      # It points at the laptop, where Django (:8000) and Next.js (:3000) listen.
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  # Created by Compose on the first `up`, under the name mpc-dev_pgdata.
+  pgdata:

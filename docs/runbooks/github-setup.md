@@ -60,7 +60,7 @@ In the same pull request, add the CI checks to `.github/rulesets/main.json`, the
 
 The `context` is the job's name as it appears on a pull request. Until then, `main` is protected but needs no checks, because a required check that never runs would block every merge.
 
-REPO-4's `make check` should also run `python3 -m unittest discover -s scripts`, so a plan the script can't read turns CI red.
+`make check` also runs `python3 -m unittest discover -s scripts` (REPO-4), so a plan the script can't read turns the check red, and CI with it once REPO-5 runs it.
 
 ## What the protection does
 

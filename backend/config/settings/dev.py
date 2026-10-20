@@ -1,7 +1,8 @@
 """config/settings/dev.py — settings for Jack's laptop. `manage.py` uses this file unless told otherwise.
 
 Debug pages are on, and the values have safe local defaults: on a fresh clone with no `.env`, `manage.py check`
-and the tests already run. The local database and its password arrive with REPO-4.
+and the tests already run. The local database runs in Docker (`compose.dev.yml`); the root `.env` gives its
+password and port (REPO-4).
 """
 
 from .base import *  # noqa: F403 — start from the shared settings, then change what differs.
