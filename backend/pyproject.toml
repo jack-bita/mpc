@@ -31,6 +31,13 @@ dev = [
     "ruff>=0.17.1",
 ]
 
+# --- uv itself: one version for every laptop and for CI, which reads this line too (ci.yml,
+# `version-file`). Before 1.0, a minor release of uv may change how it locks or installs, so a new
+# uv must never arrive on its own. uv refuses to run with another version and names this line.
+# Upgrade on purpose, as its own small task: install the new uv, change this line, run `make check`.
+[tool.uv]
+required-version = "==0.11.33"
+
 # --- ruff: lint (find likely bugs) and format (one code style), in one fast tool.
 [tool.ruff]
 target-version = "py314"

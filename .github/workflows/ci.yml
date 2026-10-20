@@ -79,9 +79,12 @@ jobs:
           persist-credentials: false
 
       # uv installs the Python in backend/.python-version (3.14) and the packages in uv.lock.
+      # version-file: the uv version comes from `required-version` in pyproject.toml, so CI runs the
+      # laptop's uv, not whatever is newest today.
       # Its download cache is saved between runs, keyed on uv.lock: a new lock starts a new cache.
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
+          version-file: backend/pyproject.toml
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
