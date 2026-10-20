@@ -289,9 +289,9 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Build:** `compose.dev.yml` with PostgreSQL 18 and Caddy on `localhost:8080` (`/api/` and `/_allauth/` to Django on your machine, everything else to the Next.js dev server); a `Makefile` (`dev`, `test`, `check`, `fmt`, `migrate` — `check` also runs the guard's tests: `python3 -m unittest discover -s .claude/hooks` **(v1.1)**); `.env.example` with every setting; "Run it locally" in the README.
 **Watch out:** Caddy runs in Docker while Django and Next.js run on your machine, so Caddy reaches them through `host.docker.internal` (on Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]`). Still no `migrate` until PPL-1.
 **Done when:**
-- [ ] From a fresh clone, following the README, `localhost:8080` shows *Karibu* and `localhost:8080/api/health/` answers from the same address.
-- [ ] Django connects to the PostgreSQL in Compose.
-- [ ] `make check` runs the guard's tests too **(v1.1)**.
+- [x] From a fresh clone, following the README, `localhost:8080` shows *Karibu* and `localhost:8080/api/health/` answers from the same address.
+- [x] Django connects to the PostgreSQL in Compose.
+- [x] `make check` runs the guard's tests too **(v1.1)**.
 **Commits:** `chore(dev): postgres and caddy in compose` → `chore(dev): make commands` → `docs: run it locally`
 
 ### REPO-5 · CI and branch protection
