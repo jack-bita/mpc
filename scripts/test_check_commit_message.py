@@ -3,7 +3,8 @@ commit messages 04 §3.5 allows: `type(scope): subject`, a blank line, and a `Wh
 
 Three groups:
 - GoodMessageTest: messages that must pass, including the shapes git itself writes
-  (comment lines, the `git commit -v` diff, `Merge …` subjects from `git merge origin/main`).
+  (comment lines, the `git commit -v` diff, and, only during a real merge, the `Merge …`
+  subjects of `git merge origin/main`).
 - RefusedMessageTest: one test per way a message can break the rule.
 - MainTest: the hook's side: the exit code git reads, and the explanation printed.
 
@@ -54,10 +55,17 @@ class GoodMessageTest(unittest.TestCase):
     def test_a_message_with_windows_line_endings_passes(self) -> None:
         self.assert_passes(GOOD.replace("\n", "\r\n"))
 
-    def test_gits_own_merge_messages_pass(self) -> None:
+    def test_gits_own_merge_messages_pass_during_a_merge(self) -> None:
         # `git merge origin/main` (04 §3.4) writes these itself, with no type and no Why.
-        self.assert_passes("Merge remote-tracking branch 'origin/main' into ci/repo-5-ci\n")
-        self.assert_passes("Merge branch 'main' into feat/core-2-tenancy-guard\n")
+        for message in (
+            "Merge remote-tracking branch 'origin/main' into ci/repo-5-ci\n",
+            "Merge branch 'main' into feat/core-2-tenancy-guard\n",
+            "Merge branch 'main' of github.com:jack-bita/mpc into ci/repo-5-ci\n",  # the `git pull` shape
+            "Merge branches 'a' and 'b'\n",
+            "Merge tag 'v0.1.0'\n",
+            "Merge commit '5457c92'\n",
+        ):
+            self.assertEqual(ccm.problems(message, merging=True), [], message)
 
 
 class RefusedMessageTest(unittest.TestCase):
@@ -93,18 +101,26 @@ class RefusedMessageTest(unittest.TestCase):
 
     def test_a_merge_subject_git_did_not_write_is_refused(self) -> None:
         # Only git's own merge shapes skip the rule, so "Merge" can't be a way around it.
-        self.assert_refused("Merge the new screens\n", "type")
+        found = ccm.problems("Merge the new screens\n", merging=True)
+        self.assertIn("type", " ".join(found))
+
+    def test_a_typed_merge_subject_is_refused_when_git_is_not_merging(self) -> None:
+        # Typing git's wording by hand is no way around the rule either: no merge, no exception.
+        self.assert_refused("Merge branch 'x' and skip the reason\n", "type")
 
     def test_an_empty_message_is_refused(self) -> None:
         self.assert_refused("# only a comment\n\n", "empty")
 
 
 class MainTest(unittest.TestCase):
-    def run_main(self, message: str) -> tuple[int, str]:
-        # git hands the hook the path of a file holding the message (.git/COMMIT_EDITMSG).
+    def run_main(self, message: str, merging: bool = False) -> tuple[int, str]:
+        # git hands the hook the path of a file holding the message (.git/COMMIT_EDITMSG). The
+        # temporary folder plays the .git folder; during a merge, git keeps MERGE_HEAD there.
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "COMMIT_EDITMSG"
             path.write_text(message, encoding="utf-8")
+            if merging:
+                (Path(folder) / "MERGE_HEAD").write_text("5457c92\n", encoding="utf-8")
             err = io.StringIO()
             with redirect_stderr(err):
                 code = ccm.main([str(path)])
@@ -119,6 +135,11 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("04 §3.5", printed)
         self.assertIn("Why:", printed)
+
+    def test_a_merge_message_passes_only_while_git_is_merging(self) -> None:
+        merge = "Merge remote-tracking branch 'origin/main' into ci/repo-5-ci\n"
+        self.assertEqual(self.run_main(merge, merging=True), (0, ""))
+        self.assertEqual(self.run_main(merge, merging=False)[0], 1)
 
 
 if __name__ == "__main__":

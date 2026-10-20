@@ -34,8 +34,8 @@ TYPES = ("feat", "fix", "test", "refactor", "docs", "chore", "ci", "build", "per
 SUBJECT = re.compile(rf"^(?:{'|'.join(TYPES)})(?:\([a-z0-9][a-z0-9-]*\))?: \S")
 
 # The subjects git writes for a merge (`git merge origin/main`, 04 §3.4). They pass as they are:
-# a merge brings in commits that were each checked already. Only git's own shapes, so the word
-# "Merge" alone is no way around the rule.
+# a merge brings in commits that were each checked already. Two conditions, so neither is a way
+# around the rule: git's own wording, and git really merging (see `merging` in main()).
 GIT_MERGE = re.compile(r"^Merge (?:remote-tracking )?(?:branch|branches|tag|tags|commit|commits) '")
 
 # A `Why:` line with some text after it.
@@ -76,13 +76,16 @@ def message_lines(text: str) -> list[str]:
     return lines
 
 
-def problems(text: str) -> list[str]:
-    """Everything wrong with one commit message, in plain words. An empty list means it passes."""
+def problems(text: str, merging: bool = False) -> list[str]:
+    """Everything wrong with one commit message, in plain words. An empty list means it passes.
+
+    `merging` is True only while git is making a merge commit; then git's own merge subject passes.
+    """
     lines = message_lines(text)
     if not lines:
         return ["The message is empty."]
     subject = lines[0]
-    if GIT_MERGE.match(subject):
+    if merging and GIT_MERGE.match(subject):
         return []
 
     found: list[str] = []
@@ -99,8 +102,12 @@ def main(argv: list[str]) -> int:
     if len(argv) != 1:
         print("usage: check_commit_message.py <file holding the commit message>", file=sys.stderr)
         return 2
-    text = Path(argv[0]).read_text(encoding="utf-8")
-    found = problems(text)
+    message_file = Path(argv[0])
+    text = message_file.read_text(encoding="utf-8")
+    # While git makes a merge commit, it keeps MERGE_HEAD in its own folder, the one that also holds
+    # the message file (.git/COMMIT_EDITMSG or .git/MERGE_MSG; in a worktree, that worktree's folder).
+    merging = (message_file.parent / "MERGE_HEAD").exists()
+    found = problems(text, merging)
     if not found:
         return 0
     print("Commit refused: the message doesn't follow 04 §3.5.", file=sys.stderr)
