@@ -1,0 +1,33 @@
+# deploy/Caddyfile.dev: the local front door at http://localhost:8080 (REPO-4).
+# It owns one job: send each request to the right dev server on the laptop, so the app and the API
+# share one address as in production (ADR-0017):
+#   /api/* and /_allauth/*  -> Django   (runserver on :8000)
+#   everything else         -> Next.js  (next dev on :3000)
+# compose.dev.yml mounts this file read-only into the caddy container; after editing it, run
+#   docker compose -f compose.dev.yml restart caddy
+# The production rules will live beside it in deploy/Caddyfile (OPS-5).
+
+# Global options: settings for Caddy itself, not for one site.
+{
+	# Plain http on the laptop: no certificates to make or trust. Production keeps HTTPS on.
+	auto_https off
+	# Caddy's control API isn't needed: this file is the only way to change the rules.
+	admin off
+	# Don't save a copy of the running config; this file stays the single source of truth.
+	persist_config off
+}
+
+# Listen on port 8080 inside the container; compose.dev.yml publishes it as localhost:8080.
+:8080 {
+	# Every path Django owns must be listed here, or Next.js answers it with a 404.
+	# /_allauth/ is django-allauth's browser login API (ADR-0017). Add /admin/ and /static/ with PPL-1.
+	@django path /api/* /_allauth/*
+	handle @django {
+		reverse_proxy host.docker.internal:8000
+	}
+
+	# Everything else is the app: pages, scripts and Next's live-reload connection.
+	handle {
+		reverse_proxy host.docker.internal:3000
+	}
+}
