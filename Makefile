@@ -3,7 +3,7 @@
 # Run `make` alone to list the commands. Recipe lines start with a real tab (.editorconfig).
 
 # These names are jobs, not files: without this line, a file called `test` would stop `make test`.
-.PHONY: help dev dev-backend dev-frontend down test check fmt migrate
+.PHONY: help dev dev-backend dev-frontend down test check check-backend check-frontend fmt migrate
 # Plain `make` shows the list of commands instead of starting something.
 .DEFAULT_GOAL := help
 # `make dev` starts a second make; this hides its "Entering directory" lines.
@@ -46,24 +46,33 @@ test: ## run the backend and frontend tests
 	cd backend && $(UV_RUN) pytest
 	cd frontend && pnpm test
 
-# Exactly what CI runs (ops rule): CI (REPO-5) must run this same list. make stops at the first
-# failure, so the last lines printed say what to fix.
+# Exactly what CI runs (ops rule). CI's two jobs (.github/workflows/ci.yml) call the two halves
+# below, so the list lives only here and the laptop and CI can't drift apart. make stops at the
+# first failure, so the last lines printed say what to fix.
+check: check-backend check-frontend ## run everything CI runs; it must pass before any PR
+
+# The Python half: CI's `backend` job.
 # - makemigrations --check fails when a model changed without a migration.
+# - pytest prints a coverage report here (pyproject.toml says what is measured), so CI shows it too.
 # - The guard's tests: the guard refuses the costly mistakes, so a broken guard must turn this red.
-# - The GitHub sync script's tests (docs/runbooks/github-setup.md).
-check: ## run everything CI runs; it must pass before any PR
+# - The GitHub sync script's tests (docs/runbooks/github-setup.md). The guard and the script are
+#   not backend code, but they are Python, and the backend job is the one that has Python.
+check-backend: ## only the backend and the Python tools (CI's backend job)
 	cd backend && $(UV_RUN) ruff format --check .
 	cd backend && $(UV_RUN) ruff check .
 	cd backend && $(UV_RUN) mypy .
 	cd backend && $(UV_RUN) python manage.py check
 	cd backend && $(UV_RUN) python manage.py makemigrations --check --dry-run
-	cd backend && $(UV_RUN) pytest
+	cd backend && $(UV_RUN) pytest --cov
+	python3 -m unittest discover -s .claude/hooks
+	python3 -m unittest discover -s scripts
+
+# The frontend half: CI's `frontend` job.
+check-frontend: ## only the frontend (CI's frontend job)
 	cd frontend && pnpm lint
 	cd frontend && pnpm typecheck
 	cd frontend && pnpm test
 	cd frontend && pnpm build
-	python3 -m unittest discover -s .claude/hooks
-	python3 -m unittest discover -s scripts
 
 # Lint fixes first, then formatting: a lint fix can leave code the formatter would still change,
 # and `make check` would then fail its format check (ruff's own advice).

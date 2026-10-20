@@ -25,6 +25,7 @@ dev = [
     "djangorestframework-stubs[compatible-mypy]>=3.18.1",
     "mypy>=2.3.1",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "pytest-django>=4.14.0",
     "ruff>=0.17.1",
 ]
@@ -57,3 +58,19 @@ django_settings_module = "config.settings.test"
 DJANGO_SETTINGS_MODULE = "config.settings.test"
 # A typo in a marker name (@pytest.mark.djnago_db) is an error, not a silently skipped rule.
 addopts = "--strict-markers"
+
+# --- coverage: which lines the tests ran. `make check` (and so CI) prints the report (REPO-5);
+# plain `pytest` and `make test` skip it to stay fast. Turn it on with `pytest --cov`.
+[tool.coverage.run]
+# Measure our code only, not Django or the other installed packages.
+source = ["apps", "config"]
+# Branch coverage also counts each side of an `if`: a test that only takes the happy path shows up.
+branch = true
+# Tests and migrations would only make the number look better: they run by definition.
+omit = ["*/tests/*", "*/migrations/*"]
+
+[tool.coverage.report]
+# List the line numbers no test ran, and hide files that are fully covered, so the gaps stand out.
+# No `fail_under` yet: the ≥ 90% rule is for services and calculations (03 §11), and none exist so far.
+show_missing = true
+skip_covered = true

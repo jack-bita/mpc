@@ -1,0 +1,94 @@
+# ci.yml: the checks every pull request must pass before it can merge into main (REPO-5, 03 §12).
+# It owns the CI jobs, one per half of `make check`:
+#   - backend:  `make check-backend`, with a PostgreSQL 18 service beside it
+# The list of checks lives in the Makefile, not here: this file only prepares a clean machine and
+# calls the same target a laptop runs, so the two can't drift apart (ops rule).
+#
+# Each job's name is also the name of its check on a pull request, and the ruleset requires those
+# names (.github/rulesets/main.json). Rename a job only together with the ruleset, or every merge
+# waits for a check that never comes.
+
+name: CI
+
+on:
+  pull_request:
+  # main is checked too, after each merge. Two reasons: a red main shows at once, and GitHub lets
+  # pull requests read caches saved on main, but not caches saved by another pull request.
+  push:
+    branches: [main]
+
+# The default token can only read the repo: no job here writes anything to GitHub.
+permissions:
+  contents: read
+
+# A new push to a pull request cancels its older run, which would only report on stale code.
+# Runs on main are never cancelled, so every merge gets its own result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend:
+    # Pinned like the images (ops rule): `ubuntu-latest` moves to a new Ubuntu on GitHub's schedule.
+    runs-on: ubuntu-24.04
+    # A hung test would otherwise hold the runner for GitHub's default of 6 hours.
+    timeout-minutes: 15
+
+    # A service container: GitHub starts it before the first step and removes it after the last.
+    # Tests run on real PostgreSQL, never SQLite (03 §11).
+    services:
+      postgres:
+        # The same tag as compose.dev.yml, so CI tests on the PostgreSQL every laptop runs.
+        # Dependabot doesn't read this file's images: change both together.
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_DB: mpc
+          POSTGRES_USER: mpc
+          # Not a secret: this database lives only for this one job, holds only test data, and is
+          # reachable only from this runner. A real secret would come from GitHub secrets (ops rule).
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+        ports:
+          - 5432:5432
+        # --user: start as `postgres`, never root (ops rule), as in compose.dev.yml.
+        # --health-*: the steps wait until the container is healthy. pg_isready over TCP (-h), the
+        # way Django connects, for the same reason as in compose.dev.yml.
+        options: >-
+          --user postgres
+          --health-cmd "pg_isready -h 127.0.0.1 -U mpc -d mpc"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+
+    # The settings read these (config/settings/base.py). CI has no .env file; the Makefile only
+    # passes --env-file when one exists.
+    env:
+      DB_NAME: mpc
+      DB_USER: mpc
+      DB_PASSWORD: ci-only-not-a-secret
+      # 127.0.0.1, not localhost, as in .env.example: the port is published on IPv4.
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+
+    steps:
+      # Each action is pinned to the exact commit of a release, with the version in the comment.
+      # A tag like `v7` can be moved to other code; a commit can't. Dependabot updates both.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Don't leave the token in .git/config: no step here pushes, so none needs it.
+          persist-credentials: false
+
+      # uv installs the Python in backend/.python-version (3.14) and the packages in uv.lock.
+      # Its download cache is saved between runs, keyed on uv.lock: a new lock starts a new cache.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      # --locked: fail if uv.lock doesn't match pyproject.toml, instead of quietly writing a new
+      # one. CI must test exactly the packages the lock file names (ADR-0025).
+      - name: Install the backend's packages
+        working-directory: backend
+        run: uv sync --locked
+
+      - name: Run the backend checks
+        run: make check-backend
