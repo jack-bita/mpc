@@ -55,6 +55,19 @@ class GoodMessageTest(unittest.TestCase):
     def test_a_message_with_windows_line_endings_passes(self) -> None:
         self.assert_passes(GOOD.replace("\n", "\r\n"))
 
+    def test_blank_lines_before_the_subject_are_ignored(self) -> None:
+        # git strips them before it stores the message, so the subject is the first line with text.
+        self.assert_passes("\n\n" + GOOD)
+
+    def test_dependabots_titles_are_conventional_subjects(self) -> None:
+        # .github/dependabot.yml relies on these passing: its PR titles become squash commits on main.
+        for subject in (
+            "build(deps): bump django from 6.1.2 to 6.1.3",
+            "build(deps-dev): bump vitest from 5.0.5 to 5.0.6",
+            "ci(deps): bump actions/checkout from 7.0.1 to 7.0.2",
+        ):
+            self.assertTrue(ccm.SUBJECT.match(subject), subject)
+
     def test_gits_own_merge_messages_pass_during_a_merge(self) -> None:
         # `git merge origin/main` (04 §3.4) writes these itself, with no type and no Why.
         for message in (
@@ -92,6 +105,11 @@ class RefusedMessageTest(unittest.TestCase):
 
     def test_a_missing_space_after_the_colon_is_refused(self) -> None:
         self.assert_refused("ci:backend checks\n\nWhy: tested.\n", "type")
+
+    def test_an_upper_case_scope_is_refused(self) -> None:
+        # Scopes are app or area names, in lower case like 04 §3.5's examples, so `Core` and `core`
+        # never both appear in the changelog.
+        self.assert_refused("feat(Core): tenancy guard\n\nWhy: fail loudly.\n", "type")
 
     def test_an_empty_subject_after_the_type_is_refused(self) -> None:
         self.assert_refused("ci: \n\nWhy: tested.\n", "type")
@@ -135,6 +153,14 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("04 §3.5", printed)
         self.assertIn("Why:", printed)
+
+    def test_wrong_usage_exits_2_and_says_how(self) -> None:
+        # Exit 2, not 1: a broken hook setup, not a bad message. Either way git refuses the commit.
+        err = io.StringIO()
+        with redirect_stderr(err):
+            code = ccm.main([])
+        self.assertEqual(code, 2)
+        self.assertIn("usage", err.getvalue())
 
     def test_a_merge_message_passes_only_while_git_is_merging(self) -> None:
         merge = "Merge remote-tracking branch 'origin/main' into ci/repo-5-ci\n"
