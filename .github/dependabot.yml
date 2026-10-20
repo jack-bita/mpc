@@ -57,8 +57,9 @@ updates:
     labels: ["type:chore"]
 
   # The actions in .github/workflows/: it updates both the pinned commit and its `# vX.Y.Z` comment.
-  # Not the postgres image inside ci.yml: no entry reads images there, so it moves by hand,
-  # together with compose.dev.yml's (the comment in ci.yml says so).
+  # Not the postgres image inside ci.yml: no entry reads images there. When the docker-compose
+  # entry below bumps postgres, scripts/test_same_postgres.py turns that PR red until ci.yml's tag
+  # is changed to match, in the same PR.
   - package-ecosystem: github-actions
     directory: /
     schedule:
