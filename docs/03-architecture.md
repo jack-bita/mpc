@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.2 · 19 Oct 2026 · Portion 3 of the planning pack
+**Version:** 1.3 · 20 Oct 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.3** (20 Oct 2026, REPO-4): Caddy sends `/_allauth/` to Django as well as `/api`, on the laptop and in production, because django-allauth's browser login lives there (§5.10, ADR-0017); the local Caddy rules are in `deploy/Caddyfile.dev` (§4, §7.2, §13, §19). Each change is marked **(v1.3)**.
 
 **Changes in v1.2** (19 Oct 2026, REPO-3): the UI message files live in `frontend/messages/`, next to `src/`, as next-intl's guide places them; `src/i18n/` keeps only the next-intl setup (§4, §7.2). The Serwist build is proven in SPIKE-1, not in the first frontend task (§7.7). Each change is marked **(v1.2)**.
 
@@ -196,6 +198,7 @@ MPC/                          ← repo name follows the product name
 │   └── test-vectors/         ← JSON cases run by both pytest and Vitest (§8)
 ├── deploy/
 │   ├── Caddyfile
+│   ├── Caddyfile.dev         ← local: /api/ and /_allauth/ to Django, the rest to Next.js (v1.3)
 │   ├── compose.prod.yml, compose.demo.yml
 │   └── backup/
 ├── private/                  ← ✚ real shop sheets, on Jack's laptop only: gitignored, never committed (v1.1)
@@ -528,7 +531,7 @@ frontend/src/
 
 - A static build can't pre-build pages for records that don't exist yet, so record pages use a query string (`/sales/view?id=…`).
 - `next/image` runs with `unoptimized: true` (no image server in a static build).
-- **Local development mirrors production:** Caddy in Docker serves `localhost:8080`, sending `/api` to Django and everything else to the Next.js dev server, so cookies and paths behave exactly as in production.
+- **Local development mirrors production:** Caddy in Docker serves `localhost:8080`, sending `/api` and `/_allauth/` to Django and everything else to the Next.js dev server (`deploy/Caddyfile.dev`), so cookies and paths behave exactly as in production **(v1.3)**.
 
 ### 7.3 Screens and devices
 
@@ -632,7 +635,7 @@ Rules: tests run on real PostgreSQL, never SQLite. Every bug fix adds a test. Co
 
 | Container | Job |
 |---|---|
-| `caddy` | HTTPS certificates; the static app (long cache for hashed files, none for pages and the service worker); `/api` to Django; security headers; compression |
+| `caddy` | HTTPS certificates; the static app (long cache for hashed files, none for pages and the service worker); `/api` and `/_allauth/` to Django **(v1.3)**; security headers; compression |
 | `django` | gunicorn, 2–4 workers |
 | `worker` | background tasks |
 | `cron` | scheduled commands |
@@ -747,7 +750,7 @@ The working copy of these rules is `CLAUDE.md` at the repo root, with area rules
 | Tenancy, RLS | Keeping shops' data apart; a database feature that filters rows per shop |
 | VPS | A rented Linux server |
 | Docker Compose | Runs the server's parts (web, database, worker) together from one file |
-| Caddy | The web server in front: HTTPS, app files, passing `/api` to Django |
+| Caddy | The web server in front: HTTPS, app files, passing `/api` and `/_allauth/` to Django **(v1.3)** |
 | CI/CD | Automatic checks on every change; automatic deploys |
 | ADR | A short record of one big decision and why it was made |
 | Release-please | A tool that writes the changelog and version tags from PR titles |
