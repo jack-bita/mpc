@@ -15,7 +15,8 @@ name: mpc-dev
 
 services:
   postgres:
-    # Pinned, never `latest`: every laptop and CI get the same PostgreSQL (ops rule).
+    # Pinned, never `latest`, so every laptop gets the same PostgreSQL (ops rule). CI (REPO-5)
+    # doesn't read this file: its workflow must name the same tag.
     image: postgres:18.6-alpine
     # Start as `postgres`, never root (ops rule). The image is built to run this way.
     user: postgres
@@ -37,8 +38,10 @@ services:
       - pgdata:/var/lib/postgresql
     healthcheck:
       # "Healthy" only once PostgreSQL accepts connections, so `up --wait` returns when Django can connect.
+      # -h 127.0.0.1 asks over TCP, the way Django connects. Without it, pg_isready uses the Unix
+      # socket, and on the very first start the image's setup server answers there before TCP is open.
       # `$$` hands a plain `$` to the shell inside the container instead of Compose filling it in.
-      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 2s
       timeout: 5s
       retries: 30
