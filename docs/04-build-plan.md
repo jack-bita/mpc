@@ -299,10 +299,10 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Learn:** GitHub Actions jobs, service containers and caching; why `main` is protected even when you work alone.
 **Build:** `ci.yml` — a backend job (uv, ruff, mypy, `makemigrations --check`, pytest with a coverage report on a PostgreSQL 18 service) and a frontend job (pnpm, lint, types, Vitest, `pnpm build`); pre-commit hooks (ruff, Prettier) and a `commit-msg` hook that refuses a message without a conventional subject and a `Why:` line (§3.5) **(v1.1)**; Dependabot weekly for uv, pnpm, Actions and Docker; branch protection (§4), with no bypass for admins.
 **Done when:**
-- [ ] A PR shows two green checks; a lint error turns it red.
-- [ ] A direct push to `main` is refused — your own included.
-- [ ] A commit without a `Why:` line is refused on Jack's machine **(v1.1)**.
-**Commits:** `ci: backend checks` → `ci: frontend checks` → `chore: pre-commit hooks` → `chore: commit message check` → `ci: dependabot`
+- [x] A PR shows two green checks; a lint error turns it red.
+- [x] A direct push to `main` is refused — your own included.
+- [x] A commit without a `Why:` line is refused on Jack's machine **(v1.1)**.
+**Commits:** `ci: backend checks` → `ci: frontend checks` → `ci: require both checks on main` → `chore: pre-commit hooks` → `chore: commit message check` → `ci: dependabot`
 
 ### REPO-6 · Module boundaries in CI
 `S` · Jack-led · after REPO-5 · branch `ci/repo-6-import-linter`
@@ -345,7 +345,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### OPS-1 · The backend image
 `M` · Claude-led · after PPL-1, REPO-5 · branch `build/ops-1-backend-image`
 **Learn:** Docker images and multi-stage builds; why containers shouldn't run as root.
-**Build:** a multi-stage `Dockerfile`: build the frontend, copy `out/` in, Django serves it with WhiteNoise (the demo's setup, 03 §13); gunicorn; a non-root user; CI builds the image on every PR (03 §12).
+**Build:** a multi-stage `Dockerfile`: build the frontend, copy `out/` in, Django serves it with WhiteNoise (the demo's setup, 03 §13); gunicorn; a non-root user; CI builds the image on every PR (03 §12). Add a `docker` entry to `.github/dependabot.yml` for the new `Dockerfile` (REPO-5 watches only the compose images), and name the image job neither `backend` nor `frontend`: those are the required checks.
 **Done when:**
 - [ ] `docker run` of the image serves *Karibu* and `/api/health/` from one address.
 - [ ] The image builds in CI on every PR.
