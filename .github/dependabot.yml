@@ -30,8 +30,15 @@ updates:
     cooldown:
       default-days: 7
     groups:
+      # Django and the packages that follow it (django-stubs, DRF and its stubs) move together, in a
+      # PR of their own: a Django minor version (6.1 → 6.2) is a feature release with deprecations,
+      # so that PR is the start of an upgrade task, not a quick merge. Listed first, because a
+      # package joins the first group that matches it.
+      django:
+        patterns: ["django*"]
       python-minor-and-patch:
         update-types: [minor, patch]
+        exclude-patterns: ["django*"]
     commit-message:
       prefix: build
       include: scope
@@ -51,6 +58,12 @@ updates:
     groups:
       js-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # @types/node describes the Node we run, 24 ("engines" in package.json, CI's setup-node), not
+      # the newest Node. A new major would type-check calls that Node 24 doesn't have. It moves when
+      # Node moves, by hand.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: build
       include: scope
