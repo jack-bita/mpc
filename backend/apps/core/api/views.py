@@ -9,6 +9,9 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+# REPO-6 probe, removed in the next commit: core must not import sales, so CI must turn red.
+import apps.sales  # noqa: F401
+
 
 class HealthView(APIView):
     # Public, with no login (03 §5.10): the monitor and the smoke tests have no account.
