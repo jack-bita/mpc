@@ -4,9 +4,9 @@
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
 **Version:** 1.4 · 21 Oct 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
-**Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+**Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
 
-**Changes in v1.4** (21 Oct 2026, REPO-6): `control` moves from layer 2 to layer 0, beside `core`, because every app writes audit events and flags there; every app may import it, and it may import only `core`. ADR-0035 supersedes ADR-0015 (§0, §5.1). Each change is marked **(v1.4)**.
+**Changes in v1.4** (21 Oct 2026, REPO-6): `control` moves from layer 2 to layer 0, beside `core`, because every app writes audit events and flags there; every app may import it, and it may import only `core`. ADR-0035 supersedes ADR-0015 (the Status line, §0, §5.1). Each change is marked **(v1.4)**.
 
 **Changes in v1.3** (20 Oct 2026, REPO-4): Caddy sends `/_allauth/` to Django as well as `/api`, on the laptop and in production, because django-allauth's browser login lives there (§5.10, ADR-0017); the local Caddy rules are in `deploy/Caddyfile.dev` (§4, §7.2, §13, §19). Each change is marked **(v1.3)**.
 

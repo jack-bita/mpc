@@ -30,14 +30,15 @@ import-linter checks this on every pull request. Business logic lives only in se
 - **Good:** Clean boundaries keep the door open to split a module out later.
 - **Good:** Every app can write audit events and flags, and `control` stays free of domain code.
 - **Cost:** The boundaries hold only because CI checks them.
-- **Cost:** `control` can't import domain models. It points at them by name (`"people.User"`) or by a type code plus a UUID (03 §5.1).
+- **Cost:** `control` can't import any domain app, `shops` included. It points at rows by name (`"people.User"`) or by a type code plus a UUID (03 §5.1), and the caller passes in any value it needs, such as a setting.
 
 ## Alternatives considered
 
-- **Microservices**: network failures, many deploys and distributed debugging, with no gain for one developer and one shop.
-- **One big Django app**: no boundaries, so logic leaks everywhere and the code gets harder to change.
-- **Keep `control` on layer 2** (ADR-0015): `shops` and `people` could not write audit events or flags, which CTRL-2 needs.
-- **Give `control` a new layer 1 and move every layer above it up by one**: the same rule, but every app's layer number would change, for no gain.
+- **Microservices** — network failures, many deploys and distributed debugging, with no gain for one developer and one shop.
+- **One big Django app** — no boundaries, so logic leaks everywhere and the code gets harder to change.
+- **Keep `control` on layer 2** (ADR-0015) — `shops` and `people` could not write audit events or flags, which CTRL-2 needs.
+- **Keep `control` on layer 2 and add a `people` → `control` exception** — `shops`, on layer 1, would still be cut off, and 03 says every app writes here.
+- **Give `control` a new layer 1 and move every layer above it up by one** — the same rule, but every app's layer number would change, for no gain.
 
 ## Enforced by
 
