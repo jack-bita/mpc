@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
 
-**Changes in v1.3** (21 Oct 2026, REPO-6): `control` sits on layer 0, beside `core` (ADR-0035, 03 v1.4), so REPO-6 lists three exceptions; CORE-2 and PPL-3 gain a *Watch out* line on what the layer contract refuses. Marked **(v1.3)**.
+**Changes in v1.3** (21 Oct 2026, REPO-6): `control` sits on layer 0, beside `core` (ADR-0035, 03 v1.4), so REPO-6 lists three exceptions; CORE-2 and PPL-3 gain a *Watch out* line on what the layer contract refuses. After REPO-5, OPS-1 also adds a Dependabot entry for its `Dockerfile` and keeps its job name clear of the required checks. Marked **(v1.3)**.
 
 **Changes in v1.2** (20 Oct 2026, REPO-4): OPS-5's Caddyfile also sends `/_allauth/` to Django, so password login works in production as it does locally (ADR-0017, 03 v1.3). Marked **(v1.2)**.
 
@@ -311,7 +311,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Learn:** a layered architecture, turned into a test.
 **Build:** import-linter contracts for the layers in 03 §5.1, with the allowed exceptions (`control` → `core`, `inventory` → `money`, `services` → `sales`); every app may import `control`, which imports only `core` (ADR-0035) **(v1.3)**.
 **Done when:**
-- [ ] CI runs the contracts; a test commit where `core` imports `sales` goes red, then is removed.
+- [x] CI runs the contracts; a test commit where `core` imports `sales` goes red, then is removed.
 **Commits:** `ci(backend): layer contracts`
 
 ### REPO-7 · Changelog and version tags
@@ -347,7 +347,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### OPS-1 · The backend image
 `M` · Claude-led · after PPL-1, REPO-5 · branch `build/ops-1-backend-image`
 **Learn:** Docker images and multi-stage builds; why containers shouldn't run as root.
-**Build:** a multi-stage `Dockerfile`: build the frontend, copy `out/` in, Django serves it with WhiteNoise (the demo's setup, 03 §13); gunicorn; a non-root user; CI builds the image on every PR (03 §12). Add a `docker` entry to `.github/dependabot.yml` for the new `Dockerfile` (REPO-5 watches only the compose images), and name the image job neither `backend` nor `frontend`: those are the required checks.
+**Build:** a multi-stage `Dockerfile`: build the frontend, copy `out/` in, Django serves it with WhiteNoise (the demo's setup, 03 §13); gunicorn; a non-root user; CI builds the image on every PR (03 §12). Add a `docker` entry to `.github/dependabot.yml` for the new `Dockerfile` (REPO-5 watches only the compose images), and name the image job neither `backend` nor `frontend`: those are the required checks **(v1.3)**.
 **Done when:**
 - [ ] `docker run` of the image serves *Karibu* and `/api/health/` from one address.
 - [ ] The image builds in CI on every PR.
