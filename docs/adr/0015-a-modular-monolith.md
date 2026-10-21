@@ -1,12 +1,15 @@
 ---
-status: accepted
+status: superseded
 date: 2026-10-18
 source: "03-architecture.md §2 — AD1"
 standing: decided
 cost-to-change: high
+superseded-by: ADR-0035
 ---
 
 # ADR-0015 · A modular monolith
+
+> Superseded by [ADR-0035](0035-a-modular-monolith-with-control-beside-core.md) on 2026-10-21 (REPO-6): `control` moved from layer 2 to layer 0, beside `core`, because every app writes to it.
 
 ## Context
 

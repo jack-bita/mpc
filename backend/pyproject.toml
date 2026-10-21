@@ -23,6 +23,7 @@ dependencies = [
 dev = [
     "django-stubs[compatible-mypy]>=6.1.2",
     "djangorestframework-stubs[compatible-mypy]>=3.18.1",
+    "import-linter>=2.15",
     "mypy>=2.3.1",
     "pre-commit>=4.7.0",
     "pytest>=9.1.1",
@@ -82,3 +83,46 @@ omit = ["*/tests/*", "*/migrations/*"]
 # No `fail_under` yet: the ≥ 90% rule is for services and calculations (03 §11), and none exist so far.
 show_missing = true
 skip_covered = true
+
+# --- import-linter: turns the layers of 03 §5.1 into a check (ADR-0035). An app may import only
+# from the apps below it, so every dependency points down: a change in `sales` can't break `core`,
+# and two apps can never import each other in a circle. It reads the import lines without running
+# the code. `make check` (and so CI) runs it as `lint-imports`.
+[tool.importlinter]
+# The package whose imports are checked: the 13 apps. Their tests (apps/*/tests/) and imports under
+# `if TYPE_CHECKING:` count too: import-linter's defaults. So a test that needs a higher layer's rows
+# gets them from a fixture in backend/conftest.py, which is outside `apps`. Whether type-only imports
+# should count is decided in CORE-2 (`exclude_type_checking_imports`).
+root_package = "apps"
+
+[[tool.importlinter.contracts]]
+name = "Apps import only from lower layers (03 §5.1)"
+type = "layers"
+# The layers are the apps inside `apps`, so below, `core` means `apps.core`.
+containers = ["apps"]
+# Top to bottom, one line per layer of the table in 03 §5.1. `|` puts apps on the same layer;
+# they may not import each other either, apart from the exceptions in `ignore_imports`.
+layers = [
+    "sync | reports",              # 6
+    "sales | services | staffpay", # 5
+    "inventory | money",           # 4
+    "catalog | contacts",          # 3
+    "people",                      # 2
+    "shops",                       # 1
+    "core | control",              # 0
+]
+# Every app inside `apps` must have a layer above. A new app without one turns the check red,
+# so it can't skip the table.
+exhaustive = true
+# The three same-layer imports that 03 §5.1 allows. These take full names, unlike the layers.
+# `**` means any module inside the app, but not the app package itself: code goes in modules such
+# as models.py, never in an app's `__init__.py`.
+ignore_imports = [
+    "apps.control.** -> apps.core.**",     # every app writes to control, so it builds only on core
+    "apps.inventory.** -> apps.money.**",  # deliveries pay suppliers
+    "apps.services.** -> apps.sales.**",   # a job's bill is a sale
+]
+# By default, an ignore line that matches no import is an error, and no code uses these yet.
+# Turning that off is safe: a line that matches nothing can only make the check stricter.
+# Once code uses all three, delete this line: the default then reports a typo in an exception at once.
+unmatched_ignore_imports_alerting = "none"
