@@ -7,21 +7,21 @@ paths:
 
 <!-- Source: 03 §5, §9, §11. Loads when Claude reads or edits a file under backend/. -->
 
-## Apps and layers (ADR-0015)
+## Apps and layers (ADR-0035)
 
 An app imports only from lower layers; import-linter checks it in CI.
 
 | Layer | Apps |
 |---|---|
-| 0 | `core` |
+| 0 | `core`, `control` — `control` may import `core` |
 | 1 | `shops` |
-| 2 | `people`, `control` |
+| 2 | `people` |
 | 3 | `catalog`, `contacts` |
 | 4 | `inventory`, `money` — `inventory` may import `money` |
 | 5 | `sales`, `services`, `staffpay` — `services` may import `sales` |
 | 6 | `sync`, `reports` |
 
-`control` imports no domain app. A model may name a higher-layer model by string (`"sales.Sale"`) — that is not an import.
+Every app may import `control`; `control` imports only `core`. A model may name a higher-layer model by string (`"sales.Sale"`) — that is not an import.
 
 ## Inside an app
 

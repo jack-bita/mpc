@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.2 · 20 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.3 · 21 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.3** (21 Oct 2026, REPO-6): `control` sits on layer 0, beside `core` (ADR-0035, 03 v1.4), so REPO-6 lists three exceptions; CORE-2 and PPL-3 gain a *Watch out* line on what the layer contract refuses. Marked **(v1.3)**.
 
 **Changes in v1.2** (20 Oct 2026, REPO-4): OPS-5's Caddyfile also sends `/_allauth/` to Django, so password login works in production as it does locally (ADR-0017, 03 v1.3). Marked **(v1.2)**.
 
@@ -307,7 +309,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### REPO-6 · Module boundaries in CI
 `S` · Jack-led · after REPO-5 · branch `ci/repo-6-import-linter`
 **Learn:** a layered architecture, turned into a test.
-**Build:** import-linter contracts for the layers in 03 §5.1, with the allowed exceptions (`inventory` → `money`, `services` → `sales`; `control` imports no domain app).
+**Build:** import-linter contracts for the layers in 03 §5.1, with the allowed exceptions (`control` → `core`, `inventory` → `money`, `services` → `sales`); every app may import `control`, which imports only `core` (ADR-0035) **(v1.3)**.
 **Done when:**
 - [ ] CI runs the contracts; a test commit where `core` imports `sales` goes red, then is removed.
 **Commits:** `ci(backend): layer contracts`
@@ -408,6 +410,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Jack-led · after SHOP-1 · branch `feat/core-2-tenancy-guard`
 **Learn:** context variables; custom model managers; why "fail closed" beats "remember to filter" (03 §5.4).
 **Build:** a `current_shop` context variable with `shop_context(shop)` and `system_context()`; the `ShopScoped` abstract base (UUIDv7 id, `shop`, `created_at`; `created_by` comes in PPL-2, empty for rows the system makes) whose default manager filters by the current shop and raises when none is set; a separate unscoped manager for the superuser admin.
+**Watch out:** `core` is layer 0, so the layer contract refuses any import of `shops` from it, also in tests and in `if TYPE_CHECKING:` blocks (REPO-6, ADR-0035). Give the tests their shops through fixtures in `backend/conftest.py`, which is outside `apps`, and decide here whether type-only imports should count (`exclude_type_checking_imports` in `backend/pyproject.toml`) **(v1.3)**.
 **Done when:**
 - [ ] A scoped query with no current shop raises `NoShopSelected`.
 - [ ] Inside `shop_context(A)` only A's rows come back.
@@ -504,6 +507,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Jack-led · after PPL-2, SHOP-2 · branch `feat/ppl-3-permissions`
 **Learn:** role-based permissions, scoped by side (02 §5, rule X1).
 **Build:** the permission codes in `core`; `Role`, `RoleAssignment` (role + side, or all sides) and `PermissionGrant`; the role templates (Owner, Manager, Seller, Order writer, Cashier, Worker) kept in code and copied into each new shop by `create_shop` (Appendix A); `effective_permissions(staff, side)` and `require(staff, permission, side)`.
+**Watch out:** `create_shop` lives in `shops` (layer 1), which may not import `people` (layer 2): the layer contract refuses it (REPO-6, ADR-0035). Decide here how a new shop gets its roles, for example a `people` service that calls `create_shop` and then copies the templates **(v1.3)**.
 **Done when:**
 - [ ] A Worker can't `sale.bargain`; a Manager on all sides has the Manager permissions on both.
 - [ ] An extra grant on one side works only there.
