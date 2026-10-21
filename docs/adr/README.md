@@ -25,7 +25,7 @@ An ADR is a short record of one big decision: the context, what we chose, what i
 | [0012](0012-one-person-is-one-user.md) | One person is one user | D12 | decided | high |
 | [0013](0013-every-rule-is-a-dated-setting.md) | Every rule is a dated setting | D13 | decided | medium |
 | [0014](0014-practice-mode-is-a-separate-practice-shop.md) | Practice mode is a separate practice shop | D14 | decided | low |
-| [0015](0015-a-modular-monolith.md) | A modular monolith | AD1 | decided | high |
+| [0015](0015-a-modular-monolith.md) | A modular monolith · *superseded by [0035](0035-a-modular-monolith-with-control-beside-core.md)* | AD1 | decided | high |
 | [0016](0016-the-shop-app-is-a-static-pwa-built-with-next-js.md) | The shop app is a static PWA built with Next.js | AD2 | decided | medium |
 | [0017](0017-one-address-session-cookies-allauth.md) | One web address, session cookies, and django-allauth for passwords | AD3 | confirmed | medium |
 | [0018](0018-two-kinds-of-identity-devices-and-people.md) | Two kinds of identity: devices and people | AD4 | decided | high |
@@ -45,3 +45,4 @@ An ADR is a short record of one big decision: the context, what we chose, what i
 | [0032](0032-ui-text-lives-in-the-app-the-api-sends-codes.md) | UI text lives in the app; the API sends codes | AD18 | decided | low |
 | [0033](0033-one-website-attendance-first.md) | One website with everything, built one part after another: attendance first | BP7 | confirmed | medium |
 | [0034](0034-no-open-source-licence-yet.md) | No open-source licence yet | BP16 | default | low |
+| [0035](0035-a-modular-monolith-with-control-beside-core.md) | A modular monolith, with control beside core | AD1 (REPO-6) | confirmed | high |
