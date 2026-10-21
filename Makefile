@@ -57,7 +57,7 @@ check: check-backend check-frontend ## run everything CI runs; it must pass befo
 #   quietly writing a new lock that nobody committed (ADR-0025). It also installs the packages,
 #   which is all CI needs before the checks.
 # - lint-imports checks the layer contracts in pyproject.toml (ADR-0035): an import that climbs a
-#   layer fails here. It only reads the code, like ruff and mypy, so it runs with them, before the
+#   layer fails here. Like ruff and mypy it needs no database, so it runs with them, before the
 #   slower checks. --no-logo: no banner, so the last lines printed are the result.
 # - makemigrations --check fails when a model changed without a migration.
 # - pytest prints a coverage report here (pyproject.toml says what is measured), so CI shows it too.
