@@ -52,11 +52,11 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
-    # Our domain apps, in layer order (ADR-0015; see apps/__init__.py).
+    # Our domain apps, in layer order (ADR-0035; see apps/__init__.py).
     "apps.core",
+    "apps.control",
     "apps.shops",
     "apps.people",
-    "apps.control",
     "apps.catalog",
     "apps.contacts",
     "apps.inventory",

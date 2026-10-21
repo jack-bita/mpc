@@ -56,6 +56,9 @@ check: check-backend check-frontend ## run everything CI runs; it must pass befo
 # - First, `uv sync --locked`: it fails when uv.lock no longer matches pyproject.toml, instead of
 #   quietly writing a new lock that nobody committed (ADR-0025). It also installs the packages,
 #   which is all CI needs before the checks.
+# - lint-imports checks the layer contracts in pyproject.toml (ADR-0035): an import that climbs a
+#   layer fails here. It only reads the code, like ruff and mypy, so it runs with them, before the
+#   slower checks. --no-logo: no banner, so the last lines printed are the result.
 # - makemigrations --check fails when a model changed without a migration.
 # - pytest prints a coverage report here (pyproject.toml says what is measured), so CI shows it too.
 # - The guard's tests: the guard refuses the costly mistakes, so a broken guard must turn this red.
@@ -66,6 +69,7 @@ check-backend: ## only the backend and the Python tools (CI's backend job)
 	cd backend && $(UV_RUN) ruff format --check .
 	cd backend && $(UV_RUN) ruff check .
 	cd backend && $(UV_RUN) mypy .
+	cd backend && $(UV_RUN) lint-imports --no-logo
 	cd backend && $(UV_RUN) python manage.py check
 	cd backend && $(UV_RUN) python manage.py makemigrations --check --dry-run
 	cd backend && $(UV_RUN) pytest --cov
