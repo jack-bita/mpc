@@ -17,9 +17,9 @@ from apps.core.models import TimeStamped, UUIDModel
 
 @pytest.fixture
 def thing_model() -> Iterator[type[UUIDModel]]:
-    # A throwaway model built on both bases, as every real table will be. isolate_apps registers it in a
-    # temporary list of models that is thrown away after the test, so it never becomes a table and
-    # makemigrations never sees it: CORE-1 adds no tables.
+    # A throwaway model built on both bases, as every real table will be. isolate_apps keeps Thing out of
+    # Django's real list of models: it goes in a temporary list, thrown away after the test. So checks
+    # that look at every model (like CORE-2's "every model has a shop") never see it.
     with isolate_apps("apps.core"):
 
         class Thing(UUIDModel, TimeStamped):
@@ -38,8 +38,8 @@ def test_ids_are_uuid_version_7(thing_model: type[UUIDModel]) -> None:
 
 def test_ids_sort_by_creation_time(thing_model: type[UUIDModel]) -> None:
     # 1,000 in a row: many are made in the same millisecond, so this also checks the counter uuid7 keeps
-    # inside one millisecond, not only the clock. (Two server processes share no counter: their ids are
-    # in order only to the millisecond, which is still enough to keep the index fast.)
+    # inside one millisecond, not only the clock. (Two processes or threads share no counter: their ids
+    # are in order only to the millisecond, which is still enough to keep the index fast.)
     ids = [thing_model().id for _ in range(1000)]
 
     # PostgreSQL sorts uuids byte by byte, the same order Python uses, so this is the order the index

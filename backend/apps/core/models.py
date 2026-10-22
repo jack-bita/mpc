@@ -20,14 +20,15 @@ class UUIDModel(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid7)
 
     class Meta:
-        # No table for UUIDModel itself: the card's check that makemigrations finds nothing to do.
+        # No table for UUIDModel itself: it is a base for other models, not a table.
         abstract = True
 
 
 class TimeStamped(models.Model):
-    # When the server saved the row, in UTC (settings: USE_TZ). auto_now_add: Django fills it in on the
-    # first save and ignores any value passed in, so no one can set a false time. A device's own clock
-    # is not trusted: counter records keep it apart, in `client_time` (03 §5.3).
+    # When the server saved the row, in UTC (settings: USE_TZ). auto_now_add: on insert, Django sets the
+    # server's time and replaces any value passed in, so a device can't set it. (Code can still change it
+    # later, with update().) A device's own clock is not trusted: counter records keep it apart, in
+    # `client_time` (03 §5.3).
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
