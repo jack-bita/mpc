@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
 
-**Changes in v1.4** (22 Oct 2026, REPO-7): release-please runs with a token from the repo's own GitHub App, so its release PR runs CI like any other (03 v1.5). REPO-7's *Build* line says so, and OPS-6 gives the deploy its new reason for being a job of the release workflow. Marked **(v1.4)**.
+**Changes in v1.4** (22 Oct 2026, REPO-7): release-please runs with a token from the repo's own GitHub App, so its release PR runs CI like any other (03 v1.5). REPO-7's *Build* line says so, and OPS-6 gives the deploy its new reason for being a job of the release workflow. OPS-1's note on job names also lists `pr-title`, the third required check. Marked **(v1.4)**.
 
 **Changes in v1.3** (21 Oct 2026, REPO-6): `control` sits on layer 0, beside `core` (ADR-0035, 03 v1.4), so REPO-6 lists three exceptions; CORE-2 and PPL-3 gain a *Watch out* line on what the layer contract refuses. After REPO-5, OPS-1 also adds a Dependabot entry for its `Dockerfile` and keeps its job name clear of the required checks. Marked **(v1.3)**.
 
@@ -321,9 +321,9 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Learn:** semantic versioning; how a changelog is written from commit messages (BP11).
 **Build:** a CI check that PR titles follow the commit format (§3.5); release-please reading the squash-merged titles, starting at `v0.1.0`. It runs with a token from the repo's own GitHub App, so the release PR gets its required checks **(v1.4)**.
 **Done when:**
-- [ ] A PR titled "update stuff" fails the title check.
+- [x] A PR titled "update stuff" fails the title check.
 - [ ] After a `feat:` merge, release-please opens a release PR; merging it writes `CHANGELOG.md` and tags `v0.1.0`.
-**Commits:** `ci: check pull request titles` → `ci: release-please`
+**Commits:** `ci: check pull request titles` → `ci: require the title check on main` → `ci: release-please` → `docs: release-please runs with an app token` → `docs: correct what release-please reads from a pull request` → `test: more pull request title shapes`
 
 ### CORE-1 · Base model classes
 `S` · Jack-led · after REPO-2 · branch `feat/core-1-base-models`
@@ -349,7 +349,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### OPS-1 · The backend image
 `M` · Claude-led · after PPL-1, REPO-5 · branch `build/ops-1-backend-image`
 **Learn:** Docker images and multi-stage builds; why containers shouldn't run as root.
-**Build:** a multi-stage `Dockerfile`: build the frontend, copy `out/` in, Django serves it with WhiteNoise (the demo's setup, 03 §13); gunicorn; a non-root user; CI builds the image on every PR (03 §12). Add a `docker` entry to `.github/dependabot.yml` for the new `Dockerfile` (REPO-5 watches only the compose images), and name the image job neither `backend` nor `frontend`: those are the required checks **(v1.3)**.
+**Build:** a multi-stage `Dockerfile`: build the frontend, copy `out/` in, Django serves it with WhiteNoise (the demo's setup, 03 §13); gunicorn; a non-root user; CI builds the image on every PR (03 §12). Add a `docker` entry to `.github/dependabot.yml` for the new `Dockerfile` (REPO-5 watches only the compose images), and name the image job none of `backend`, `frontend` and `pr-title`: those are the required checks **(v1.3, v1.4)**.
 **Done when:**
 - [ ] `docker run` of the image serves *Karibu* and `/api/health/` from one address.
 - [ ] The image builds in CI on every PR.
