@@ -50,9 +50,11 @@ The steps run in this order: `settings` → `labels` → `milestones` → `issue
 
 ## The required checks (since REPO-5)
 
-REPO-5 added `.github/workflows/ci.yml` and, in the same pull request, the rule `required_status_checks` in `.github/rulesets/main.json`, applied with `protect`. A pull request can now merge only when both CI jobs, `backend` and `frontend`, are green.
+REPO-5 added `.github/workflows/ci.yml` and, in the same pull request, the rule `required_status_checks` in `.github/rulesets/main.json`, applied with `protect`. A pull request could then merge only when both CI jobs, `backend` and `frontend`, were green.
 
-- The `context` is the job's name as it appears on a pull request. **Rename a job in `ci.yml` only together with `main.json`**, then run `protect` again: a required check that never runs blocks every merge.
+REPO-7 added a third, `pr-title`, from `.github/workflows/pr-title.yml`: the PR title becomes the squash commit on `main` and a changelog line, so a title that breaks 04 §3.5 must block the merge too. A pull request now merges only when `backend`, `frontend` and `pr-title` are green.
+
+- The `context` is the job's name as it appears on a pull request. **Rename a job in `ci.yml` or `pr-title.yml` only together with `main.json`**, then run `protect` again: a required check that never runs blocks every merge.
 - A new required check works the same way: add the job to `ci.yml`, see it run on a pull request once, then add its name to `main.json` and run `protect` in that same pull request.
 - `integration_id: 15368` is GitHub Actions. With it, only a CI job can turn the check green; a status with the same name sent by another app or a personal token doesn't count.
 
@@ -66,7 +68,7 @@ REPO-5 added `.github/workflows/ci.yml` and, in the same pull request, the rule 
 | `non_fast_forward` | No force-push | History is never rewritten |
 | `deletion` | `main` can't be deleted | Protects everything else |
 | `required_linear_history` | No merge commits on `main` | Squash merges keep `main` a straight line |
-| `required_status_checks`: `backend`, `frontend` | A PR merges only when both CI jobs are green | A check that isn't required can be red and still merged (REPO-5). Not *strict*: the branch needn't hold the newest `main` first, which would mean an *Update branch* click and a fresh CI run before each merge, for one person working alone |
+| `required_status_checks`: `backend`, `frontend`, `pr-title` | A PR merges only when both CI jobs and the title check are green | A check that isn't required can be red and still merged (REPO-5); a bad title would land on `main` and in the changelog (REPO-7). Not *strict*: the branch needn't hold the newest `main` first, which would mean an *Update branch* click and a fresh CI run before each merge, for one person working alone |
 | `bypass_actors: []` | The rules apply to admins too, Jack included | REPO-5: "a direct push to `main` is refused — your own included" |
 
 The merge settings match: squash only; the PR title becomes the commit title and the PR body its message, so *what and why* and *What I learned* stay in `git log`; merged branches are deleted; and the *Update branch* button merges `main` in.
