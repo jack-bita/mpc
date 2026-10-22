@@ -13,6 +13,8 @@
 | Merge settings and security features | `MERGE_SETTINGS` in the script | `github_sync.py settings` |
 | The project board: fields, columns, cards | the script; the columns of 04 §4 | `github_sync.py board` |
 | Issue and pull request templates | `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` | GitHub reads them by itself |
+| Release settings | `release-please-config.json`; the current version in `.release-please-manifest.json` | `.github/workflows/release.yml`, after each merge to `main` (*Releases*, below) |
+| The release app and its key | GitHub only: the app's page and the `release` environment | Jack, by hand, once (*Releases*, below) |
 
 The plan is the source of truth, and GitHub tracks the status (04 BP12). Change a card in 04 first, then refresh its issue. Never change the issue first.
 
@@ -72,6 +74,45 @@ REPO-7 added a third, `pr-title`, from `.github/workflows/pr-title.yml`: the PR 
 | `bypass_actors: []` | The rules apply to admins too, Jack included | REPO-5: "a direct push to `main` is refused — your own included" |
 
 The merge settings match: squash only; the PR title becomes the commit title and the PR body its message, so *what and why* and *What I learned* stay in `git log`; merged branches are deleted; and the *Update branch* button merges `main` in.
+
+## Releases (since REPO-7)
+
+release-please writes `CHANGELOG.md` and the version tags from the squash-merged PR titles (04 BP11). `.github/workflows/release.yml` runs it after every merge to `main`; its header explains the settings in `release-please-config.json`.
+
+### How a release happens
+
+1. A PR whose title starts with `feat` or `fix` merges. release-please opens a release PR, `chore(main): release 0.x.y`, or updates the one already open. Its body lists the changelog lines it will add. A `chore`, `ci`, `docs`, `build`, `test` or `refactor` merge opens nothing, because users see no change.
+2. CI runs on the release PR like on any other, because the release app opened it.
+3. Merge it when you want the release; it can collect several features first. release-please then tags `v0.x.y` and publishes a GitHub release. `CHANGELOG.md` and `.release-please-manifest.json` change only through that PR, never by hand (ADR-0025).
+
+**Versions:** `v0.x` until the first go-live, `v1.0.0` at it (04 BP11). Before 1.0, a `feat` raises the middle number (0.1.0 → 0.2.0) and a `fix` the last one (0.2.0 → 0.2.1).
+
+The PR body becomes the squash commit's body, and release-please reads two things there:
+- `Release-As: 1.0.0` on a line of its own sets the next version. Use it once, in the PR that goes live.
+- Lines shaped like a commit subject (`feat: …`, `fix(core): …`) at the very bottom of the body become extra changelog entries. The PR template ends with **Hours:**, so this only happens on purpose.
+
+### The release app (once)
+
+release-please can't use GitHub's default token: a PR opened with it starts no workflow, so the release PR would wait forever for its required checks (`release.yml` explains). It uses a GitHub App instead: a small bot account of your own, allowed to touch only this repo. Its key lives on GitHub only, never on the laptop or in the repo.
+
+1. GitHub → your picture → **Settings** → **Developer settings** → **GitHub Apps** → **New GitHub App**:
+   - **GitHub App name:** `<your-username>-mpc-release` (names are unique across GitHub). It shows as the author of release PRs.
+   - **Homepage URL:** the repo's address.
+   - **Webhook:** untick **Active**. The app does nothing by itself; only the workflow uses it.
+   - **Repository permissions:** **Contents**, **Issues** and **Pull requests**, each *Read and write*. *Metadata: Read-only* is added by itself. Nothing else.
+   - **Where can this GitHub App be installed?** *Only on this account*.
+   - **Create GitHub App**.
+2. On the app's page, copy the **Client ID**. Then, under **Private keys**, click **Generate a private key**: a `.pem` file downloads.
+3. Left menu → **Install App** → your account → **Only select repositories** → `mpc` → **Install**.
+4. The repo → **Settings** → **Environments** → **New environment**, named `release`:
+   - **Deployment branches and tags:** *Selected branches and tags* → add the rule `main`. Only workflows on `main` can then read this environment's secret.
+   - **Environment variables** → `RELEASE_APP_CLIENT_ID` = the Client ID.
+   - **Environment secrets** → `RELEASE_APP_PRIVATE_KEY` = the whole `.pem` file, from `-----BEGIN` to the last `-----`.
+5. Delete the `.pem` file from your computer. GitHub holds the copy it needs, and a new key can be made at any time.
+
+**Check:** after the next merge to `main`, Actions → *Release* is green. Before the first `feat` or `fix`, its log says it found nothing to release. Each run also shows on the repo page as a deployment to `release`: that is how GitHub marks a job that used an environment.
+
+**If the key leaks:** on the app's page, generate a new private key, put it in the secret, then delete the old key. The old key stops working at once.
 
 ## Troubleshooting
 
