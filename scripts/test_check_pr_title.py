@@ -52,6 +52,8 @@ class TitleTest(unittest.TestCase):
         # .github/dependabot.yml gives its PRs these titles, and each becomes a squash commit.
         self.assert_passes("build(deps): bump django from 6.1.2 to 6.1.3")
         self.assert_passes("ci(deps): bump actions/checkout from 7.0.1 to 7.0.2")
+        # Most of its PRs come grouped (the `groups` there), and a group PR is titled like this.
+        self.assert_passes("build(deps): bump the python-minor-and-patch group across 1 directory with 3 updates")
 
     def test_githubs_default_title_is_refused(self) -> None:
         # For a PR with several commits, GitHub suggests a title made from the branch name.
@@ -67,7 +69,8 @@ class TitleTest(unittest.TestCase):
             "ci: ",  # no subject
             "",
         ):
-            self.assert_refused(title)
+            with self.subTest(title=title):  # a failure names the title that slipped through
+                self.assert_refused(title)
 
 
 class SameRuleTest(unittest.TestCase):
@@ -99,6 +102,13 @@ class MainTest(unittest.TestCase):
     def test_wrong_usage_exits_2_and_says_how(self) -> None:
         # Exit 2, not 1: a broken workflow step, not a bad title.
         code, printed = self.run_main([])
+        self.assertEqual(code, 2)
+        self.assertIn("usage", printed)
+
+    def test_a_title_split_into_words_exits_2(self) -> None:
+        # What the script would get if the quotes around "$PR_TITLE" in pr-title.yml were lost:
+        # the shell splits the title into words. The check must turn red, never judge one word.
+        code, printed = self.run_main(["ci:", "check", "pull", "request", "titles"])
         self.assertEqual(code, 2)
         self.assertIn("usage", printed)
 
