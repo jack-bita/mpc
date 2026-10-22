@@ -57,7 +57,7 @@ REPO-5 added `.github/workflows/ci.yml` and, in the same pull request, the rule 
 REPO-7 added a third, `pr-title`, from `.github/workflows/pr-title.yml`: the PR title becomes the squash commit on `main` and a changelog line, so a title that breaks 04 §3.5 must block the merge too. A pull request now merges only when `backend`, `frontend` and `pr-title` are green.
 
 - The `context` is the job's name as it appears on a pull request. **Rename a job in `ci.yml` or `pr-title.yml` only together with `main.json`**, then run `protect` again: a required check that never runs blocks every merge.
-- A new required check works the same way: add the job to `ci.yml`, see it run on a pull request once, then add its name to `main.json` and run `protect` in that same pull request.
+- A new required check works the same way: add the job to a workflow (`ci.yml`, or a file of its own like `pr-title.yml`), see it run on a pull request once, then add its name to `main.json` and run `protect` in that same pull request.
 - `integration_id: 15368` is GitHub Actions. With it, only a CI job can turn the check green; a status with the same name sent by another app or a personal token doesn't count.
 
 `make check` also runs `python3 -m unittest discover -s scripts` (REPO-4), so a plan the script can't read turns the `backend` check red.
@@ -75,25 +75,28 @@ REPO-7 added a third, `pr-title`, from `.github/workflows/pr-title.yml`: the PR 
 
 The merge settings match: squash only; the PR title becomes the commit title and the PR body its message, so *what and why* and *What I learned* stay in `git log`; merged branches are deleted; and the *Update branch* button merges `main` in.
 
+Merge with the title as it is. GitHub's merge box lets you edit the commit title, and an edited title lands on `main` without the `pr-title` check. `gh pr merge --squash` (04 §3.4) takes the PR title unchanged.
+
 ## Releases (since REPO-7)
 
 release-please writes `CHANGELOG.md` and the version tags from the squash-merged PR titles (04 BP11). `.github/workflows/release.yml` runs it after every merge to `main`; its header explains the settings in `release-please-config.json`.
 
 ### How a release happens
 
-1. A PR whose title starts with `feat` or `fix` merges. release-please opens a release PR, `chore(main): release 0.x.y`, or updates the one already open. Its body lists the changelog lines it will add. A `chore`, `ci`, `docs`, `build`, `test` or `refactor` merge opens nothing, because users see no change.
+1. A PR whose title starts with `feat`, `fix` or `perf` merges. release-please opens a release PR, `chore(main): release 0.x.y`, or updates the one already open. Its body lists the changelog lines it will add. A `chore`, `ci`, `docs`, `build`, `test` or `refactor` merge opens nothing, because users see no change.
 2. CI runs on the release PR like on any other, because the release app opened it.
-3. Merge it when you want the release; it can collect several features first. release-please then tags `v0.x.y` and publishes a GitHub release. `CHANGELOG.md` and `.release-please-manifest.json` change only through that PR, never by hand (ADR-0025).
+3. Merge it when you want the release; it can collect several features first. release-please then tags `v0.x.y` and publishes a GitHub release. `CHANGELOG.md` changes only through that PR, never by hand (ADR-0025); `.release-please-manifest.json`, which holds the last released version, is updated in the same PR.
 
-**Versions:** `v0.x` until the first go-live, `v1.0.0` at it (04 BP11). Before 1.0, a `feat` raises the middle number (0.1.0 → 0.2.0) and a `fix` the last one (0.2.0 → 0.2.1).
+**Versions:** `v0.x` until the first go-live, `v1.0.0` at it (04 BP11). Before 1.0, a `feat` raises the middle number (0.1.0 → 0.2.0), and a `fix` or a `perf` the last one (0.2.0 → 0.2.1).
 
-The PR body becomes the squash commit's body, and release-please reads two things there:
-- `Release-As: 1.0.0` on a line of its own sets the next version. Use it once, in the PR that goes live.
-- Lines shaped like a commit subject (`feat: …`, `fix(core): …`) at the very bottom of the body become extra changelog entries. The PR template ends with **Hours:**, so this only happens on purpose.
+The PR body becomes the squash commit's body, and release-please reads it too:
+- **A paragraph that starts like a commit subject** (`feat: …`, `fix(core): …`), anywhere in the body, becomes an extra changelog line. To mention a subject, put it in backticks or in the middle of a sentence.
+- **`Release-As: 1.0.0`** sets the next version, but only as the body's last paragraph: a blank line, then that line, at the very end. Anywhere else it is read as plain text, and the release stays 0.x. Use it once, in the PR that goes live.
+- **To fix a changelog line after the merge,** edit the merged PR's body and add a block from `BEGIN_COMMIT_OVERRIDE` to `END_COMMIT_OVERRIDE` holding the right subject. The next release-please run uses it instead of the title.
 
 ### The release app (once)
 
-release-please can't use GitHub's default token: a PR opened with it starts no workflow, so the release PR would wait forever for its required checks (`release.yml` explains). It uses a GitHub App instead: a small bot account of your own, allowed to touch only this repo. Its key lives on GitHub only, never on the laptop or in the repo.
+release-please can't use GitHub's default token: a PR opened with it starts no workflow, so the release PR would get its required checks only if someone closed and reopened it by hand, after every update (`release.yml` explains). It uses a GitHub App instead: a small bot account of your own, allowed to touch only this repo. Its key lives on GitHub only, never on the laptop or in the repo.
 
 1. GitHub → your picture → **Settings** → **Developer settings** → **GitHub Apps** → **New GitHub App**:
    - **GitHub App name:** `<your-username>-mpc-release` (names are unique across GitHub). It shows as the author of release PRs.

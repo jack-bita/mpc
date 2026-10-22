@@ -3,14 +3,15 @@
 #
 # How a release happens:
 #   1. A pull request is squash-merged: its title is the new commit on main (pr-title.yml).
-#   2. This workflow runs. release-please reads the commits since the last tag. A `feat` or a `fix`
-#      among them opens a release PR, `chore(main): release 0.x.y`, or updates the open one: the
-#      next version, and the changelog lines it will add. The other types (chore, ci, docs…) don't
-#      change what a user sees, so they open nothing.
+#   2. This workflow runs. release-please reads the commits since the last tag. A `feat`, `fix` or
+#      `perf` among them opens a release PR, `chore(main): release 0.x.y`, or updates the open
+#      one: the next version, and the changelog lines it will add. The other types (chore, ci,
+#      docs…) don't change what a user sees, so they open nothing.
 #   3. Merging the release PR runs this workflow again: release-please finds its own merged PR,
-#      tags `v0.x.y` on that commit and publishes a GitHub release. CHANGELOG.md and
-#      .release-please-manifest.json reach main only through that PR, written by release-please,
-#      never by hand (ADR-0025).
+#      tags `v0.x.y` on that commit and publishes a GitHub release. CHANGELOG.md (never edited by
+#      hand, ADR-0025) and .release-please-manifest.json (the last released version) reach main
+#      in that PR.
+#   The PR body becomes the commit's body, and release-please reads it too: the runbook says how.
 #
 # The settings live in release-please-config.json, explained here because JSON can't hold comments:
 # - release-type simple: one version for the whole repo, kept in the manifest and the tags. It
@@ -23,9 +24,10 @@
 #
 # The key: release-please runs with a short-lived token from this repo's own GitHub App, not with
 # the default GITHUB_TOKEN. A pull request opened with the default token starts no workflow (GitHub's
-# guard against loops), so the release PR would never get its required checks (backend, frontend,
-# pr-title), and the ruleset, which no one can bypass, would block its merge forever. The app's pull
-# requests run CI like anyone's. Setting up the app: docs/runbooks/github-setup.md, "Releases".
+# guard against loops), so the release PR would get its required checks (backend, frontend,
+# pr-title) only if someone closed and reopened it by hand, after every update; until then the
+# ruleset, which no one can bypass, blocks its merge. The app's pull requests run CI like anyone's.
+# Setting up the app: docs/runbooks/github-setup.md, "Releases".
 
 name: Release
 
@@ -78,3 +80,5 @@ jobs:
   # OPS-6 adds the production deploy as a job here: `needs: release-please`, running only when the
   # step above reports `release_created`. A job in this workflow, not a workflow of its own, so the
   # deploy follows the release in one run, in a fixed order (03 §12).
+  # When it lands, move `concurrency` from the top of this file onto the release-please job: a deploy
+  # waiting for approval would otherwise hold the queue, and no release PR could be updated meanwhile.
