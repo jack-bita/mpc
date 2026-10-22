@@ -10,6 +10,7 @@ from collections.abc import Iterator
 
 import pytest
 from django.test.utils import isolate_apps
+from rest_framework import serializers
 
 from apps.core.models import TimeStamped, UUIDModel
 
@@ -45,3 +46,14 @@ def test_ids_sort_by_creation_time(thing_model: type[UUIDModel]) -> None:
     # sees: each new id goes at its end (ADR-0007).
     assert sorted(ids) == ids
     assert len(set(ids)) == len(ids)  # and no two are the same
+
+
+def test_serializers_keep_the_id_a_client_sends(thing_model: type[UUIDModel]) -> None:
+    # ADR-0007: a phone makes the id and sends it, so sending the same sale twice can't save it twice.
+    # DRF makes a field with editable=False read-only and throws away what the client sent.
+    class ThingSerializer(serializers.ModelSerializer[UUIDModel]):
+        class Meta:
+            model = thing_model
+            fields = ["id"]
+
+    assert ThingSerializer().fields["id"].read_only is False

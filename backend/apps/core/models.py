@@ -15,7 +15,9 @@ class UUIDModel(models.Model):
     # not at a random place in it, and devices can make ids offline with no server to ask.
     # Python makes the id, not the database: the server knows a sale's id before it saves the sale,
     # so it can link the lines to it. A device sends its own id instead, and Django keeps that one.
-    id = models.UUIDField(primary_key=True, default=uuid.uuid7, editable=False)
+    # No editable=False: DRF would make `id` read-only and throw away the id a device sends, so a sale
+    # sent twice would be saved twice. Admin pages list `id` in readonly_fields instead.
+    id = models.UUIDField(primary_key=True, default=uuid.uuid7)
 
     class Meta:
         # No table for UUIDModel itself: the card's check that makemigrations finds nothing to do.
