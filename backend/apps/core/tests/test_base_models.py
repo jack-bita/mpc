@@ -1,0 +1,59 @@
+"""apps/core/tests/test_base_models.py — tests for the abstract base models in apps/core/models.py.
+
+They pin down the two promises every table's id makes (ADR-0007): it is a UUID of version 7, and an id
+made later sorts later. No database is needed: Django runs `default=uuid.uuid7` when the object is built
+in Python, before any save.
+"""
+
+import uuid
+from collections.abc import Iterator
+
+import pytest
+from django.test.utils import isolate_apps
+from rest_framework import serializers
+
+from apps.core.models import TimeStamped, UUIDModel
+
+
+@pytest.fixture
+def thing_model() -> Iterator[type[UUIDModel]]:
+    # A throwaway model built on both bases, as every real table will be. isolate_apps keeps Thing out of
+    # Django's real list of models: it goes in a temporary list, thrown away after the test. So checks
+    # that look at every model (like CORE-2's "every model has a shop") never see it.
+    with isolate_apps("apps.core"):
+
+        class Thing(UUIDModel, TimeStamped):
+            pass
+
+        yield Thing
+
+
+def test_ids_are_uuid_version_7(thing_model: type[UUIDModel]) -> None:
+    thing = thing_model()
+
+    # The id exists before any save: the server knows a sale's id before it writes the sale's lines.
+    assert isinstance(thing.id, uuid.UUID)
+    assert thing.id.version == 7
+
+
+def test_ids_sort_by_creation_time(thing_model: type[UUIDModel]) -> None:
+    # 1,000 in a row: many are made in the same millisecond, so this also checks the counter uuid7 keeps
+    # inside one millisecond, not only the clock. (Two processes or threads share no counter: their ids
+    # are in order only to the millisecond, which is still enough to keep the index fast.)
+    ids = [thing_model().id for _ in range(1000)]
+
+    # PostgreSQL sorts uuids byte by byte, the same order Python uses, so this is the order the index
+    # sees: each new id goes at its end (ADR-0007).
+    assert sorted(ids) == ids
+    assert len(set(ids)) == len(ids)  # and no two are the same
+
+
+def test_serializers_keep_the_id_a_client_sends(thing_model: type[UUIDModel]) -> None:
+    # ADR-0007: a phone makes the id and sends it, so sending the same sale twice can't save it twice.
+    # DRF makes a field with editable=False read-only and throws away what the client sent.
+    class ThingSerializer(serializers.ModelSerializer[UUIDModel]):
+        class Meta:
+            model = thing_model
+            fields = ["id"]
+
+    assert ThingSerializer().fields["id"].read_only is False
