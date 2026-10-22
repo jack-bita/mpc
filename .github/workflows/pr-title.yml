@@ -1,0 +1,56 @@
+# pr-title.yml: checks that every pull request's title follows the commit format (REPO-7, 03 §12).
+# It owns one job, `pr-title`. A pull request is squash-merged, so its title becomes the one commit
+# on main and a line of the changelog (04 BP11): "update stuff" must fail here, before the merge.
+# The rule itself lives in scripts/check_pr_title.py, which takes it from the commit hook, so the
+# laptop and GitHub judge a subject the same way.
+#
+# A workflow of its own, not a job in ci.yml: editing a title re-runs this small check alone, not
+# the whole backend and frontend suite (03 §12).
+# `make check` runs the script's tests, but not the check itself: a laptop has no PR title.
+#
+# The job's name is also the name of its check on a pull request, and the ruleset requires it
+# (.github/rulesets/main.json). Rename the job only together with the ruleset, as in ci.yml.
+
+name: PR title
+
+on:
+  pull_request:
+    # opened, reopened: a new pull request. edited: its title changed (or its body, see below).
+    # synchronize: a new push. A required check belongs to one commit, the pull request's newest.
+    # Without this type, a push would leave the newest commit with no title check, and the merge
+    # would wait for one that never comes.
+    types: [opened, edited, reopened, synchronize]
+
+# The default token can only read the repo: the check writes nothing to GitHub.
+permissions:
+  contents: read
+
+# One group per pull request: a newer edit or push cancels the older run, which would only judge
+# a title that is already gone.
+concurrency:
+  group: pr-title-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title:
+    # Pinned, with a time limit, for the same reasons as in ci.yml.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # No `if:` to skip edits of the body only. A skipped required check counts as passed, so a
+    # body edit after a red title would turn the check green. The check takes seconds: it always runs.
+
+    steps:
+      # The script comes from the repo. Like ci.yml, this runs the pull request's own copy, so a
+      # change to the rule shows in the diff under review, as any other change does.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The title goes in through an environment variable, never as ${{ }} inside `run:`. GitHub
+      # pastes ${{ }} into the shell line before the shell reads it, so a title holding a quote and
+      # a command would run that command. An environment variable reaches the shell as plain data.
+      # python3 comes with the runner; the script needs only the standard library.
+      - name: Check the title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python3 scripts/check_pr_title.py "$PR_TITLE"

@@ -15,8 +15,9 @@ non-zero exit makes git refuse the commit, and git keeps the message in .git/COM
 so nothing typed is lost.
 
 pre-commit installs it (.pre-commit-config.yaml, `make hooks`). Only the squash commit of a
-pull request reaches `main`, and REPO-7 checks those titles on GitHub; this hook covers the
-commits on the laptop. Tests: scripts/test_check_commit_message.py.
+pull request reaches `main`, and its title is checked on GitHub by check_pr_title.py, which
+imports SUBJECT and TYPES from here: one rule for both. This hook covers the commits on the
+laptop. Tests: scripts/test_check_commit_message.py.
 Standard library only, and Python 3.10+, like the other scripts here.
 """
 

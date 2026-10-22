@@ -1,0 +1,84 @@
+# release.yml: writes the changelog and the version tags from the squash-merged PR titles
+# (REPO-7, 03 §12, 04 BP11). It owns the release job; OPS-6 adds the production deploy here.
+#
+# How a release happens:
+#   1. A pull request is squash-merged: its title is the new commit on main (pr-title.yml).
+#   2. This workflow runs. release-please reads the commits since the last tag. A `feat`, `fix` or
+#      `perf` among them opens a release PR, `chore(main): release 0.x.y`, or updates the open
+#      one: the next version, and the changelog lines it will add. The other types (chore, ci,
+#      docs…) don't change what a user sees, so they open nothing.
+#   3. Merging the release PR runs this workflow again: release-please finds its own merged PR,
+#      tags `v0.x.y` on that commit and publishes a GitHub release. CHANGELOG.md (never edited by
+#      hand, ADR-0025) and .release-please-manifest.json (the last released version) reach main
+#      in that PR.
+#   The PR body becomes the commit's body, and release-please reads it too: the runbook says how.
+#
+# The settings live in release-please-config.json, explained here because JSON can't hold comments:
+# - release-type simple: one version for the whole repo, kept in the manifest and the tags. It
+#   writes no package file: bumping backend/pyproject.toml would leave uv.lock stale, and
+#   `uv sync --locked` would turn CI red on every release PR.
+# - initial-version 0.1.0, with the empty manifest `{}`: the first release is v0.1.0 (04 BP11).
+# - bump-minor-pre-major: before 1.0, a breaking change raises only the middle number, so v1.0.0
+#   comes only on purpose, at the first go-live (docs/runbooks/github-setup.md, "Releases").
+# - include-component-in-tag false: tags read `v0.1.0`, not `<name>-v0.1.0`.
+#
+# The key: release-please runs with a short-lived token from this repo's own GitHub App, not with
+# the default GITHUB_TOKEN. A pull request opened with the default token starts no workflow (GitHub's
+# guard against loops), so the release PR would get its required checks (backend, frontend,
+# pr-title) only if someone closed and reopened it by hand, after every update; until then the
+# ruleset, which no one can bypass, blocks its merge. The app's pull requests run CI like anyone's.
+# Setting up the app: docs/runbooks/github-setup.md, "Releases".
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# The default token gets no permission at all: every step here uses the app's token instead.
+permissions: {}
+
+# One release run at a time, never cancelled, so two quick merges can't race to tag twice. If a
+# third merge arrives while one run works and one waits, the newer waiting run replaces the older
+# one; that loses nothing, because release-please always reads all of main.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    # Pinned, with a time limit, for the same reasons as in ci.yml.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # The app's key is an environment secret (ops rule). The `release` environment admits only
+    # workflows running on main, so a pull request's workflow can never read the key.
+    environment: release
+
+    steps:
+      # A token for this run only: it works on this repo only, lasts an hour at most, and is
+      # revoked when the job ends. It gets only what release-please needs (its README): contents
+      # for the release branch, the tag and the GitHub release; pull requests for the release PR;
+      # issues for the `autorelease:` labels it puts on that PR.
+      # Each action is pinned to the exact commit of a release, as in ci.yml; Dependabot updates both.
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        id: app-token
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+
+      # No checkout: release-please reads and writes the repo through GitHub's API.
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # OPS-6 adds the production deploy as a job here: `needs: release-please`, running only when the
+  # step above reports `release_created`. A job in this workflow, not a workflow of its own, so the
+  # deploy follows the release in one run, in a fixed order (03 §12).
+  # When it lands, move `concurrency` from the top of this file onto the release-please job: a deploy
+  # waiting for approval would otherwise hold the queue, and no release PR could be updated meanwhile.
