@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.4 · 22 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.5 · 22 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.5** (22 Oct 2026, CORE-1): PPL-1 gains a *Watch out* line on the admin's `id`: CORE-1 keeps the id editable on purpose, so DRF keeps the id a client sends (ADR-0007). Marked **(v1.5)**.
 
 **Changes in v1.4** (22 Oct 2026, REPO-7): release-please runs with a token from the repo's own GitHub App, so its release PR runs CI like any other (03 v1.5). REPO-7's *Build* line says so, and OPS-6 gives the deploy its new reason for being a job of the release workflow. OPS-1's note on job names also lists `pr-title`, the third required check. Marked **(v1.4)**.
 
@@ -322,7 +324,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Build:** a CI check that PR titles follow the commit format (§3.5); release-please reading the squash-merged titles, starting at `v0.1.0`. It runs with a token from the repo's own GitHub App, so the release PR gets its required checks **(v1.4)**.
 **Done when:**
 - [x] A PR titled "update stuff" fails the title check.
-- [ ] After a `feat:` merge, release-please opens a release PR; merging it writes `CHANGELOG.md` and tags `v0.1.0`.
+- [x] After a `feat:` merge, release-please opens a release PR; merging it writes `CHANGELOG.md` and tags `v0.1.0`.
 **Commits:** `ci: check pull request titles` → `ci: require the title check on main` → `ci: release-please` → `docs: release-please runs with an app token` → `docs: correct what release-please reads from a pull request` → `test: more pull request title shapes`
 
 ### CORE-1 · Base model classes
@@ -330,15 +332,16 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Learn:** abstract models; UUIDv7 and why time-ordered IDs keep indexes fast.
 **Build:** in `core`: `UUIDModel` (primary key from `uuid.uuid7()`) and `TimeStamped` (`created_at`). Abstract only: no tables.
 **Done when:**
-- [ ] A model built on them gets version-7 ids that sort by creation time.
-- [ ] `makemigrations --check` finds nothing to do.
-**Tests:** `test_ids_are_uuid_version_7` · `test_ids_sort_by_creation_time`
-**Commits:** `test(core): uuid7 primary keys` → `feat(core): abstract base models`
+- [x] A model built on them gets version-7 ids that sort by creation time.
+- [x] `makemigrations --check` finds nothing to do.
+**Tests:** `test_ids_are_uuid_version_7` · `test_ids_sort_by_creation_time` · `test_serializers_keep_the_id_a_client_sends`
+**Commits:** `test(core): uuid7 primary keys` → `feat(core): abstract base models` → `fix(core): keep the id a client sends` → `docs(core): true comments on the base models`
 
 ### PPL-1 · Custom User — the first migration
 `M` · Jack-led · after CORE-1, REPO-4 · branch `feat/ppl-1-custom-user`
 **Learn:** why the user model must be swapped before the first migration; user managers without usernames; phone numbers in international form.
 **Build:** `people.User` (02 §5): UUIDv7 id, `full_name`, `phone` (optional, unique, stored as `+255…`), `email` (optional, unique whatever the letter case), password optional (PIN-only staff have none), `language`; no username; a manager with `create_user` and `create_superuser` (by email); `AUTH_USER_MODEL = "people.User"`; the admin; a phone normaliser in `core` (the `phonenumbers` library ✚, default region TZ).
+**Watch out:** list `id` in the admin's `readonly_fields`. CORE-1 keeps the id editable on purpose: with `editable=False`, DRF would drop the id a client sends (ADR-0007). An id changed in the admin would save a copy of the row **(v1.5)**.
 **Done when:**
 - [ ] On an empty database, `make migrate` creates `people.User` before `admin`, and `createsuperuser` works by email.
 - [ ] `0712 345 678` is stored as `+255712345678`.
