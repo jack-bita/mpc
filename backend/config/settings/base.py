@@ -68,6 +68,10 @@ INSTALLED_APPS = [
     "apps.reports",
 ]
 
+# The custom User (apps/people/models.py) replaces Django's own. Set before the first migration and
+# never changed: Django can't swap its user model afterwards (ADR-0012).
+AUTH_USER_MODEL = "people.User"
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
