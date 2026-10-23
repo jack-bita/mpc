@@ -14,7 +14,7 @@ from io import StringIO
 import pytest
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 
 from apps.people.models import User
 
@@ -101,11 +101,12 @@ def test_many_people_without_phone_or_email() -> None:
     assert User.objects.filter(phone__isnull=True, email__isnull=True).count() == 2
 
 
-def test_superuser_needs_email() -> None:
+@pytest.mark.parametrize("email", [None, ""])
+def test_superuser_needs_email(email: str | None) -> None:
     # The superuser logs in to the Django admin by email (ADR-0012), so one without an email could
     # never log in. Refuse it when it is made, not when someone first tries to log in.
-    with pytest.raises(ValueError):
-        User.objects.create_superuser(full_name="Admin Demo", email=None, password=PASSWORD)
+    with pytest.raises(ValueError, match="email"):
+        User.objects.create_superuser(full_name="Admin Demo", email=email, password=PASSWORD)
 
 
 def test_createsuperuser_by_email(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -128,13 +129,31 @@ def test_createsuperuser_by_email(monkeypatch: pytest.MonkeyPatch) -> None:
     assert admin.check_password(PASSWORD)
 
 
-def test_database_refuses_raw_phone_and_email() -> None:
+@pytest.mark.parametrize(
+    "fields",
+    [
+        # Not a phone at all: a real phone would be cleaned by its field on the way in.
+        pytest.param({"phone": "12345"}, id="phone_e164"),
+        pytest.param({"email": "Asha@Example.com"}, id="email_lower_case"),
+        pytest.param({"email": ""}, id="email_not_blank"),
+        pytest.param({"language": "fr"}, id="language_known"),
+        pytest.param({"is_superuser": True}, id="superuser_has_email"),
+    ],
+)
+def test_database_refuses_a_row_that_breaks_a_rule(fields: dict[str, object]) -> None:
     # The database is the last guard (03 §5.6): code that skips create_user and saves a User directly
-    # still can't store a phone or an email in another shape. `transaction.atomic()` keeps each refused
-    # insert inside its own savepoint, so the test can go on after the first one fails.
-    # A real phone would be cleaned by its field on the way in, so this one is not a phone at all.
-    with pytest.raises(IntegrityError), transaction.atomic():
-        User(full_name="Juma Demo", phone="12345").save()
+    # still can't store a row that breaks one of the five rules in User.Meta. One run per rule.
+    with pytest.raises(IntegrityError):
+        User(full_name="Juma Demo", **fields).save()
 
-    with pytest.raises(IntegrityError), transaction.atomic():
-        User(full_name="Asha Demo", email="Asha@Example.com").save()
+
+def test_broken_rule_comes_back_as_a_code() -> None:
+    # The way a form checks a person (full_clean): a rule that spans two fields comes back under
+    # `__all__`, with its code, which the screens translate (ADR-0032).
+    superuser = User(full_name="Admin Demo", is_superuser=True)
+    superuser.set_unusable_password()
+
+    with pytest.raises(ValidationError) as refused:
+        superuser.full_clean()
+
+    assert [error.code for error in refused.value.error_dict["__all__"]] == ["user.superuser_needs_email"]

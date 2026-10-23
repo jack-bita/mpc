@@ -98,21 +98,39 @@ class User(UUIDModel, TimeStamped, AbstractBaseUser, PermissionsMixin):
     class Meta:
         # The database is the last guard (03 §5.6): even code that skips create_user and saves a User
         # directly can't store a row that breaks these. create_user checks the same rules first
-        # (full_clean), so a person gets a clear message instead of a database error.
+        # (full_clean), so a person gets a clear message instead of a database error. Each rule carries a
+        # code, which full_clean passes on to forms and the API: the screens translate codes, the server
+        # sends no sentences (ADR-0032).
         constraints = [
             # Emails are stored in lower case, so `unique` on email is unique whatever the letter case.
-            models.CheckConstraint(condition=models.Q(email=Lower("email")), name="people_user_email_lower_case"),
-            # A missing email is NULL, never "": two "" would clash on `unique`.
-            models.CheckConstraint(condition=~models.Q(email=""), name="people_user_email_not_blank"),
-            # Only the normalised form: +, a country code that never starts with 0, 7 to 15 digits in all.
             models.CheckConstraint(
-                condition=models.Q(phone__regex=r"^\+[1-9][0-9]{6,14}$"), name="people_user_phone_e164"
+                condition=models.Q(email=Lower("email")),
+                name="people_user_email_lower_case",
+                violation_error_code="user.email_not_lower_case",
             ),
-            models.CheckConstraint(condition=models.Q(language__in=Language.values), name="people_user_language_known"),
+            # A missing email is NULL, never "": two "" would clash on `unique`.
+            models.CheckConstraint(
+                condition=~models.Q(email=""),
+                name="people_user_email_not_blank",
+                violation_error_code="user.email_blank",
+            ),
+            # Only the normalised form: +, a country code that never starts with 0, 7 to 15 digits in all.
+            # Same code as the phone cleaner's (apps/core/phones.py): to a person it is the same mistake.
+            models.CheckConstraint(
+                condition=models.Q(phone__regex=r"^\+[1-9][0-9]{6,14}$"),
+                name="people_user_phone_e164",
+                violation_error_code="phone.invalid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(language__in=Language.values),
+                name="people_user_language_known",
+                violation_error_code="user.language_unknown",
+            ),
             # The superuser logs in to the admin by email, so one without an email could never log in.
             models.CheckConstraint(
                 condition=models.Q(is_superuser=False) | models.Q(email__isnull=False),
                 name="people_user_superuser_has_email",
+                violation_error_code="user.superuser_needs_email",
             ),
         ]
 
