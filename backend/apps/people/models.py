@@ -11,12 +11,11 @@ from typing import Any
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
-from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Lower
 
+from apps.core.fields import PhoneField
 from apps.core.models import TimeStamped, UUIDModel
-from apps.core.phones import normalise_phone
 
 
 # Outside User so that User.Meta can read its values: a nested class can't see the names of the class
@@ -78,8 +77,8 @@ class User(UUIDModel, TimeStamped, AbstractBaseUser, PermissionsMixin):
     full_name = models.CharField(max_length=150)
     # Optional, so a worker without a phone can still be added. A missing phone is NULL, never "":
     # PostgreSQL never counts two NULLs as the same value, so `unique` only compares real numbers.
-    # Stored in E.164 (`+255712345678`, apps/core/phones.py), which is at most 16 characters.
-    phone = models.CharField(max_length=16, unique=True, null=True, blank=True)
+    # PhoneField stores E.164 (`+255712345678`) and cleans what was typed first (apps/core/fields.py).
+    phone = PhoneField(unique=True, null=True, blank=True)
     # Optional for the same reason: most people at the shop have none. Stored in lower case.
     email = models.EmailField(unique=True, null=True, blank=True)
     # The screens follow the logged-in person's language (03 §7.4). Swahili first.
@@ -123,17 +122,10 @@ class User(UUIDModel, TimeStamped, AbstractBaseUser, PermissionsMixin):
 
     def clean(self) -> None:
         # One door for every new or changed person: the admin's form and create_user both run this
-        # (through full_clean) before saving, so both store email and phone the same way.
+        # (through full_clean) before saving, so both store email and phone the same way. The phone is
+        # already cleaned by its own field, which full_clean runs first.
         super().clean()
         # A blank form field sends "", which becomes NULL: many people without an email or a phone
         # must not clash on `unique` (see the fields above).
         self.email = (self.email or "").strip().lower() or None
-        phone = (self.phone or "").strip()
-        if not phone:
-            self.phone = None
-            return
-        try:
-            self.phone = normalise_phone(phone)
-        except ValidationError as error:
-            # Named after the field, so the admin shows the message next to the phone box.
-            raise ValidationError({"phone": error}) from None
+        self.phone = self.phone or None

@@ -43,6 +43,32 @@ def test_phone_unique() -> None:
     assert "phone" in refused.value.message_dict
 
 
+def test_phone_typed_with_brackets_is_accepted() -> None:
+    # 18 characters as typed, longer than the 16-character column: the field cleans it before Django
+    # checks the length (apps/core/fields.py), so a number copied from a message isn't refused.
+    user = User.objects.create_user(full_name="Juma Demo", phone="(+255) 712 345 678")
+
+    user.refresh_from_db()
+    assert user.phone == "+255712345678"
+
+
+def test_phone_saved_directly_is_still_normalised() -> None:
+    # Code that skips create_user (a quick `create()` in a service or a seed) still stores the one
+    # shape, and a search in any shape finds the person: the field cleans on every save and lookup.
+    User.objects.create(full_name="Juma Demo", phone="0712 345 678")
+
+    assert User.objects.get(phone="0712-345-678").phone == "+255712345678"
+
+
+def test_invalid_phone_refused_on_the_phone_field() -> None:
+    with pytest.raises(ValidationError) as refused:
+        User.objects.create_user(full_name="Juma Demo", phone="12345")
+
+    # Under the field's name, so a form shows it next to the phone box, and as a code, not a sentence,
+    # so the screens can say it in Swahili or English (ADR-0032).
+    assert refused.value.error_dict["phone"][0].code == "phone.invalid"
+
+
 def test_email_unique_ignoring_case() -> None:
     User.objects.create_user(full_name="Asha Demo", email="asha@example.com")
 
@@ -106,8 +132,9 @@ def test_database_refuses_raw_phone_and_email() -> None:
     # The database is the last guard (03 §5.6): code that skips create_user and saves a User directly
     # still can't store a phone or an email in another shape. `transaction.atomic()` keeps each refused
     # insert inside its own savepoint, so the test can go on after the first one fails.
+    # A real phone would be cleaned by its field on the way in, so this one is not a phone at all.
     with pytest.raises(IntegrityError), transaction.atomic():
-        User(full_name="Juma Demo", phone="0712 345 678").save()
+        User(full_name="Juma Demo", phone="12345").save()
 
     with pytest.raises(IntegrityError), transaction.atomic():
         User(full_name="Asha Demo", email="Asha@Example.com").save()

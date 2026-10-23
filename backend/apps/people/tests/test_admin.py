@@ -26,13 +26,20 @@ def superuser_client(client: Client) -> Client:
     return client
 
 
-def test_admin_adds_a_worker_with_phone_only(superuser_client: Client) -> None:
+@pytest.mark.parametrize(
+    "typed",
+    [
+        "0712 345 678",
+        "(+255) 712 345 678",  # longer than the column: the form's box must still take it
+    ],
+)
+def test_admin_adds_a_worker_with_phone_only(superuser_client: Client, typed: str) -> None:
     # What the owner will do most: a worker with a name and a phone, no email and no password (02 §5).
     response = superuser_client.post(
         f"{USERS}add/",
         {
             "full_name": "Juma Demo",
-            "phone": "0712 345 678",
+            "phone": typed,
             "email": "",
             "language": "sw",
             "usable_password": "false",  # Django's switch for "no password-based login"
