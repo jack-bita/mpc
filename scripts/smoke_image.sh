@@ -7,7 +7,9 @@
 #   3. GET / shows "Karibu": the static app, served by WhiteNoise in the same container (03 §13);
 #   4. that page can't be put inside another site's frame (X-Frame-Options: DENY);
 #   5. /static/ serves the admin's files, gathered by collectstatic when the image was built;
-#   6. the container is removed afterwards, whether the checks passed or not.
+#   6. the page is checked again on every visit (max-age=0), so a deploy reaches the browser at once;
+#   7. a file under /_next/static/, named after its content, is cached for good (immutable);
+#   8. the container is removed afterwards, whether the checks passed or not.
 # A "smoke test": the quickest check that the thing starts and answers at all, before anything deeper.
 #
 # Usage:  bash scripts/smoke_image.sh mpc-backend:check [version]
@@ -85,3 +87,18 @@ echo "ok: / can't be framed (X-Frame-Options: DENY)"
 # its styles. One of its files stands for all of them.
 get --output /dev/null "$base/static/admin/css/base.css" || fail "/static/ doesn't serve the admin's files"
 echo "ok: /static/ serves the admin's files"
+
+# 6. The cache rules in prod.py. The page keeps its name across deploys, so the browser must ask again
+# every time; a longer max-age would keep showing the old page after a deploy.
+[[ "${page,,}" == *"cache-control: max-age=0, public"* ]] || fail "/ may be kept by the browser (want Cache-Control: max-age=0)"
+echo "ok: / is checked again on every visit (max-age=0)"
+
+# 7. The first /_next/static/ file the page loads stands for all of them. [^"\] stops the match at the
+# quote that ends the address (or a backslash, where the address sits inside escaped text).
+asset_pattern='/_next/static/[^"\]+'
+[[ "$page" =~ $asset_pattern ]] || fail "/ loads nothing from /_next/static/"
+asset="${BASH_REMATCH[0]}"
+# --head: only the headers, which is all this check reads.
+headers="$(get --head "$base$asset")" || fail "$asset did not answer"
+[[ "${headers,,}" == *"immutable"* ]] || fail "$asset is not cached for good (no immutable in Cache-Control)"
+echo "ok: $asset is cached for good (immutable)"

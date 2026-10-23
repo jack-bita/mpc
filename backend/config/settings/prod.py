@@ -60,6 +60,27 @@ WHITENOISE_ROOT = BASE_DIR.parent / "frontend" / "out"
 # WhiteNoise also redirects /sale to /sale/.
 WHITENOISE_INDEX_FILE = True
 
+# --- How long a browser may keep each file: the same rules Caddy follows on the real server (03 §13).
+# Every file outside /_next/static/ keeps its name from one deploy to the next: the pages, the admin's
+# files, later the service worker (SPIKE-1). For those, max-age=0: the browser asks each time whether the
+# file changed, and WhiteNoise answers a tiny "304 Not Modified" when it didn't, so a deploy reaches every
+# browser at once. WhiteNoise's own default, 60 seconds for every file, was right for neither kind.
+WHITENOISE_MAX_AGE = 0
+
+
+def _is_named_after_content(path: str, url: str) -> bool:
+    """True for the files under /_next/static/: Next.js names each one after its content
+    (chunks/08u9db1j9gey7.js), so new content always gets a new name and an old name never changes.
+    WhiteNoise sends these with a ten-year cache and `immutable`: the browser never asks for them again,
+    and a revisit on a slow shop connection downloads none of them twice. Called once per file, at startup."""
+    return url.startswith("/_next/static/")
+
+
+WHITENOISE_IMMUTABLE_FILE_TEST = _is_named_after_content
+
+# No compression in Django: on the demo, Render's proxy compresses every answer (Brotli or gzip); on the
+# real server, Caddy does (03 §13). Compressing here as well would only spend the small server's time.
+
 
 def _deny_framing(headers: Headers, path: str, url: str) -> None:
     """Forbid other sites to show our files inside a frame: the header XFrameOptionsMiddleware gives
