@@ -32,6 +32,11 @@ def test_foreign_number_keeps_its_country() -> None:
     assert normalise_phone("+254 712 345 678") == "+254712345678"
 
 
+def test_region_is_the_default_country() -> None:
+    # A shop in another country passes its own region, and a local number then gets that country's code.
+    assert normalise_phone("0712 345 678", region="KE") == "+254712345678"
+
+
 @pytest.mark.parametrize(
     "typed",
     [
@@ -39,6 +44,8 @@ def test_foreign_number_keeps_its_country() -> None:
         "07123456789",  # one digit too many
         "abc",
         "",
+        # Tanzania dials abroad with 000, not 00, so 00255 is not read as a country code (see phones.py).
+        "00255 712 345 678",
     ],
 )
 def test_nonsense_is_refused(typed: str) -> None:

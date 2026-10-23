@@ -14,6 +14,7 @@ def normalise_phone(raw: str, region: str = "TZ") -> str:
 
     `region` is the country assumed when a number is typed without its code (`0712…`); a number that
     names its country (`+254…`) keeps it. TZ is MPC's country; a shop elsewhere would pass its own.
+    `00255…` is refused, not read as +255: Tanzania dials abroad with 000, not 00. Type `+255…` or `0…`.
     """
     try:
         number = phonenumbers.parse(raw, region)
