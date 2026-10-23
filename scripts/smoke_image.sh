@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# smoke_image.sh — proves that a backend image serves the API and the app from one address, never as root (OPS-1).
+#
+# It owns one check, which `make check-image` runs after building the image, and so CI's `image` job too:
+#   1. the image doesn't run as root (ops rule, 03 §13);
+#   2. started as a container, GET /api/health/ answers {"status":"ok"};
+#   3. GET / shows "Karibu": the static app, served by WhiteNoise in the same container (03 §13);
+#   4. that page can't be put inside another site's frame (X-Frame-Options: DENY);
+#   5. /static/ serves the admin's files, gathered by collectstatic when the image was built;
+#   6. the container is removed afterwards, whether the checks passed or not.
+# A "smoke test": the quickest check that the thing starts and answers at all, before anything deeper.
+#
+# Usage:  bash scripts/smoke_image.sh mpc-backend:check
+
+set -euo pipefail
+
+image="${1:?usage: bash scripts/smoke_image.sh <image>}"
+# $$ is this script's process number: two runs at once (two terminals) get two containers.
+name="mpc-image-smoke-$$"
+
+# Always remove the container: after a failed check, or Ctrl-C, too, so none is left running.
+trap 'docker rm --force "$name" >/dev/null 2>&1 || true' EXIT
+
+fail() {
+  echo "FAIL: $1" >&2
+  # The container's own log usually says why: a missing setting, a Python error. Check 1 runs before
+  # the container exists, so there may be no log to show yet.
+  if docker container inspect "$name" >/dev/null 2>&1; then
+    docker logs "$name" >&2 2>&1
+  fi
+  exit 1
+}
+
+# 1. `id -u` prints the number of the user the image runs as; 0 is root.
+uid="$(docker run --rm --entrypoint id "$image" -u)"
+[[ "$uid" != 0 ]] || fail "the image runs as root"
+echo "ok: runs as uid $uid, not root"
+
+# prod.py demands every variable, so the container gets throwaway values. No real database or secret
+# is needed: the health check never touches the database (apps/core/api/views.py), and nothing here is
+# signed. Checks that need the database come with OPS-2, which runs the migrations on start.
+# 127.0.0.1::8000 — no port number on the laptop's side, so Docker picks a free one: this can never
+# clash with `make dev` (8000, 8080, 3000) or with a container someone left running.
+docker run --detach --name "$name" --publish 127.0.0.1::8000 \
+  --env DJANGO_SECRET_KEY=smoke-test-only \
+  --env DJANGO_ALLOWED_HOSTS=127.0.0.1 \
+  --env DB_NAME=unused --env DB_USER=unused --env DB_PASSWORD=unused --env DB_HOST=unused \
+  "$image" >/dev/null
+# `docker port` says which one it picked, as 127.0.0.1:<port>.
+base="http://$(docker port "$name" 8000/tcp | head -n 1)"
+
+# Every request gives up after 5 seconds (--max-time): one that hangs would otherwise wait for
+# gunicorn's 30-second worker timeout, again on every retry, until CI's time limit cut the job
+# without a FAIL line or the container's log.
+# --fail: an error status (a 400 or a 500) fails the check too, instead of printing an error page.
+get() {
+  curl --silent --show-error --fail --max-time 5 "$@"
+}
+
+# 2. gunicorn needs a moment to start. Until it listens, a request is refused or cut off;
+# --retry-all-errors retries those too: up to 30 times, one second apart.
+echo "waiting for gunicorn; a 'Connection reset' or 'refused' line below is a retry, not a failure"
+health="$(get --retry 30 --retry-delay 1 --retry-all-errors "$base/api/health/")" ||
+  fail "/api/health/ did not answer"
+[[ "$health" == '{"status":"ok"}' ]] || fail "/api/health/ answered: $health"
+echo "ok: /api/health/ answers $health"
+
+# 3. The word is the home page's title in frontend/messages/sw.json (home.title). Change it there,
+# change it here. --include: one answer holds the headers and the page, for this check and the next.
+page="$(get --include "$base/")" || fail "/ did not answer"
+[[ "$page" == *Karibu* ]] || fail "/ doesn't show Karibu"
+echo "ok: / shows Karibu"
+
+# 4. Clickjacking: another site shows our page inside an invisible frame and tricks a user into
+# clicking on it. This header tells the browser to refuse any frame. ${page,,} is the answer in lower
+# case, because header names may come in any case.
+[[ "${page,,}" == *"x-frame-options: deny"* ]] || fail "/ can be framed by another site (no X-Frame-Options: DENY)"
+echo "ok: / can't be framed (X-Frame-Options: DENY)"
+
+# 5. A broken collectstatic or STATIC_ROOT would still pass checks 2-4, and leave the admin without
+# its styles. One of its files stands for all of them.
+get --output /dev/null "$base/static/admin/css/base.css" || fail "/static/ doesn't serve the admin's files"
+echo "ok: /static/ serves the admin's files"

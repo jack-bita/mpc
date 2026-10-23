@@ -3,7 +3,7 @@
 # Run `make` alone to list the commands. Recipe lines start with a real tab (.editorconfig).
 
 # These names are jobs, not files: without this line, a file called `test` would stop `make test`.
-.PHONY: help dev dev-backend dev-frontend down test check check-backend check-frontend fmt hooks migrate
+.PHONY: help dev dev-backend dev-frontend down test check check-backend check-frontend check-image fmt hooks migrate
 # Plain `make` shows the list of commands instead of starting something.
 .DEFAULT_GOAL := help
 # `make dev` starts a second make; this hides its "Entering directory" lines.
@@ -47,10 +47,10 @@ test: ## run the backend and frontend tests
 	cd backend && $(UV_RUN) pytest
 	cd frontend && pnpm test
 
-# Exactly what CI runs (ops rule). CI's two jobs (.github/workflows/ci.yml) call the two halves
+# Exactly what CI runs (ops rule). CI's three jobs (.github/workflows/ci.yml) call the three parts
 # below, so the list lives only here and the laptop and CI can't drift apart. make stops at the
 # first failure, so the last lines printed say what to fix.
-check: check-backend check-frontend ## run everything CI runs; it must pass before any PR
+check: check-backend check-frontend check-image ## run everything CI runs; it must pass before any PR
 
 # The Python half: CI's `backend` job.
 # - First, `uv sync --locked`: it fails when uv.lock no longer matches pyproject.toml, instead of
@@ -85,6 +85,15 @@ check-frontend: ## only the frontend (CI's frontend job)
 	cd frontend && pnpm typecheck
 	cd frontend && pnpm test
 	cd frontend && pnpm build
+
+# The image part: CI's `image` job (OPS-1). It builds the backend image from the repo root (the
+# build context, backend/Dockerfile), then scripts/smoke_image.sh starts it and checks that it serves
+# the API and the app from one address, never as root. Needs Docker, as the database already does.
+# The first build takes minutes. Later ones reuse the slow install layers until a package list
+# changes; a code change still re-runs `pnpm build` and collectstatic, in seconds.
+check-image: ## only the backend image: build it, start it, check it (CI's image job)
+	docker build --file backend/Dockerfile --tag mpc-backend:check .
+	bash scripts/smoke_image.sh mpc-backend:check
 
 # Lint fixes first, then formatting: a lint fix can leave code the formatter would still change,
 # and `make check` would then fail its format check (ruff's own advice).

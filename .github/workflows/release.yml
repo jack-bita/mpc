@@ -25,7 +25,7 @@
 # The key: release-please runs with a short-lived token from this repo's own GitHub App, not with
 # the default GITHUB_TOKEN. A pull request opened with the default token starts no workflow (GitHub's
 # guard against loops), so the release PR would get its required checks (backend, frontend,
-# pr-title) only if someone closed and reopened it by hand, after every update; until then the
+# pr-title, image) only if someone closed and reopened it by hand, after every update; until then the
 # ruleset, which no one can bypass, blocks its merge. The app's pull requests run CI like anyone's.
 # Setting up the app: docs/runbooks/github-setup.md, "Releases".
 

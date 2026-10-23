@@ -7,6 +7,7 @@
 #
 # `.python-version` beside this file pins Python 3.14 (03 §3: `uuid.uuid7()`). It holds only the version,
 # with no comment, because other tools read it too (uv itself, on laptops and in CI; pyenv) and may not skip one.
+# backend/Dockerfile's python image is the same 3.14: the two move together.
 
 [project]
 name = "mpc-backend"
@@ -17,8 +18,10 @@ dependencies = [
     "django>=6.1.2,<6.2",
     "django-stubs-ext>=6.1.2",
     "djangorestframework>=3.18",
+    "gunicorn>=26.2.0",
     "phonenumbers>=9.0.41",
     "psycopg[binary]>=3.3",
+    "whitenoise>=6.12.0",
 ]
 
 [dependency-groups]
@@ -37,7 +40,8 @@ dev = [
 # --- uv itself: one version for every laptop and for CI, which reads this line too (ci.yml,
 # `version-file`). Before 1.0, a minor release of uv may change how it locks or installs, so a new
 # uv must never arrive on its own. uv refuses to run with another version and names this line.
-# Upgrade on purpose, as its own small task: install the new uv, change this line, run `make check`.
+# Upgrade on purpose, as its own small task: install the new uv, change this line and the uv image
+# tag in backend/Dockerfile, run `make check`.
 [tool.uv]
 required-version = "==0.11.33"
 

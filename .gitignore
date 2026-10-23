@@ -3,7 +3,7 @@
 # Rule of thumb: secrets, real shop data, and anything a tool can rebuild.
 # The repo is public, so a mistake here can't be undone: once pushed, a file
 # stays in other people's copies even after we delete it.
-# (04 REPO-1; CLAUDE.md rule 10)
+# (04 REPO-1; 03 §10; ADR-0028)
 
 # --- Secrets: every .env file except the example, which holds no real values.
 .env
@@ -32,6 +32,8 @@ __pycache__/
 .coverage
 .coverage.*
 htmlcov/
+# collectstatic's output: the image builds it (backend/Dockerfile, OPS-1).
+backend/staticfiles/
 
 # --- Node and Next.js: dependencies and build output (pnpm and next rebuild them).
 node_modules/

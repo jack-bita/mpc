@@ -62,7 +62,7 @@ updates:
     ignore:
       # @types/node describes the Node we run, 24 ("engines" in package.json, CI's setup-node), not
       # the newest Node. A new major would type-check calls that Node 24 doesn't have. It moves when
-      # Node moves, by hand.
+      # Node moves, by hand, with the node image in backend/Dockerfile.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
     commit-message:
@@ -91,8 +91,8 @@ updates:
       include: scope
     labels: ["type:chore"]
 
-  # The images in compose.dev.yml (postgres, caddy). The Dockerfiles of OPS-1 will need a
-  # `docker` entry of their own when they arrive.
+  # The images in compose.dev.yml (postgres, caddy). Those of backend/Dockerfile have their own
+  # `docker` entry, below.
   - package-ecosystem: docker-compose
     directory: /
     schedule:
@@ -105,6 +105,39 @@ updates:
     groups:
       images-minor-and-patch:
         update-types: [minor, patch]
+    commit-message:
+      prefix: build
+      include: scope
+    labels: ["type:chore"]
+
+  # The images in backend/Dockerfile (OPS-1): node and python, as FROM lines. Both python lines move
+  # together in one PR, as they must (the Dockerfile says why). CI's `image` job builds and checks the
+  # image on each PR, so a base image that breaks it shows red there.
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Dar_es_Salaam
+    cooldown:
+      default-days: 7
+    groups:
+      backend-image-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # uv's image must equal `required-version` in backend/pyproject.toml, and uv moves on purpose,
+      # as its own small task (the comment there). A PR here would only fail the build until then.
+      # `*` matches the name with or without its registry, ghcr.io.
+      - dependency-name: "*astral-sh/uv"
+      # Node moves with "engines" in frontend/package.json and CI's setup-node, by hand, as
+      # @types/node does in the npm entry above.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      # Python 3.14 → 3.15 counts as a minor version here, but it is an upgrade task: it moves with
+      # backend/.python-version, by hand. Patches (3.14.7 → 3.14.8) still come.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     commit-message:
       prefix: build
       include: scope

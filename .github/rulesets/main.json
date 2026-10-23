@@ -32,7 +32,8 @@
         "required_status_checks": [
           { "context": "backend", "integration_id": 15368 },
           { "context": "frontend", "integration_id": 15368 },
-          { "context": "pr-title", "integration_id": 15368 }
+          { "context": "pr-title", "integration_id": 15368 },
+          { "context": "image", "integration_id": 15368 }
         ]
       }
     }
