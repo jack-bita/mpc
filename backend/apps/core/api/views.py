@@ -1,5 +1,5 @@
 """apps/core/api/views.py — core's API views. Today only the health check:
-GET /api/health/ → {"status": "ok", "version": "<the git commit this process runs>"}.
+GET /api/health/ → {"status": "ok", "version": "<the deployed git commit, or "dev">"}.
 
 The outside uptime monitor calls it every minute, and the deploy smoke tests call it after each deploy
 (03 §5.17, §12). An answer means the backend process is up and serving requests.

@@ -34,7 +34,8 @@ services:
     # No healthCheckPath: Render's own checker may call with a host name Django doesn't allow and fail a
     # good deploy. Render then waits for the port to open (gunicorn opens it after the migrations), and the
     # real check is the deploy's smoke test, which waits for this commit's version on /api/health/.
-    # PORT and WEB_CONCURRENCY keep the image's defaults; Render sets PORT itself and gunicorn reads it.
+    # Render sets PORT itself (10000), which replaces the image's 8000; gunicorn reads it. WEB_CONCURRENCY
+    # keeps the image's default: two workers, which fit the free plan's 512 MB.
     envVars:
       # Signs sessions and CSRF tokens. Render makes a random 256-bit value once and keeps it.
       - key: DJANGO_SECRET_KEY

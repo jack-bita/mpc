@@ -144,7 +144,8 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
-# The version this process runs: the git commit its image was built from (backend/Dockerfile sets it),
-# "dev" anywhere else. The health check shows it, so after a deploy the smoke test can tell whether the
-# new version is answering or the old one still is (OPS-2).
+# The version this process runs. A deploy builds the image with its git commit as the version
+# (backend/Dockerfile, `make check-image APP_VERSION=<commit>`); every other build, and a laptop, say "dev".
+# The health check shows it, so after a deploy the smoke test can tell whether the new version is
+# answering or the old one still is (OPS-2).
 APP_VERSION = env("APP_VERSION", "dev")

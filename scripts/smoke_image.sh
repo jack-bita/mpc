@@ -43,7 +43,8 @@ echo "ok: runs as uid $uid, not root"
 
 # prod.py demands every variable, so the container gets throwaway values. No real database or secret
 # is needed: the health check never touches the database (apps/core/api/views.py), and nothing here is
-# signed. Checks that need the database come with OPS-2, which runs the migrations on start.
+# signed. The database is checked on the demo instead: backend/start-demo.sh runs the migrations before
+# gunicorn starts, so a demo that answers has reached its database (OPS-2).
 # 127.0.0.1::8000 — no port number on the laptop's side, so Docker picks a free one: this can never
 # clash with `make dev` (8000, 8080, 3000) or with a container someone left running.
 docker run --detach --name "$name" --publish 127.0.0.1::8000 \

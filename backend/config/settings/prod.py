@@ -25,9 +25,11 @@ DATABASES["default"].update(
 # A proxy sits in front of Django and talks HTTPS with the browser: Caddy on the real server (03 §13),
 # Render's proxy on the demo (render.yaml). It tells Django the original request was HTTPS with this
 # header; without it Django would think every request is plain HTTP.
-# Safe only because in each place the proxy is the one way in, and it always overwrites the header with
-# its own value: Caddy by default, Render's proxy as Render's support states. Django's own port must never
-# be reachable from outside: anyone who reached it directly could fake "https".
+# Safe only because in each place the proxy is the one way in, and no plain HTTP gets past it: Caddy
+# overwrites the header itself; Render's proxy redirects every http:// request to https:// before it
+# reaches Django, which scripts/smoke_demo.sh checks after each deploy. So every request Django sees came
+# over HTTPS, and a header a client forges can't make plain HTTP pass for HTTPS. Django's own port must
+# never be reachable from outside: anyone who reached it directly could fake "https".
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Cookies only travel over HTTPS, so nobody on the shop's Wi-Fi can read a session (03 §10).
@@ -75,6 +77,9 @@ WHITENOISE_MAX_AGE = 0
 def _is_named_after_content(path: str, url: str) -> bool:
     """True for the files under /_next/static/: Next.js names each one after its content
     (chunks/08u9db1j9gey7.js), so new content always gets a new name and an old name never changes.
+    The few that aren't (the build manifest) sit in a folder named after the build id, which Next.js makes
+    new and random on every build, so they never change under one name either. Never give next.config.ts
+    a fixed `generateBuildId`: those files would then change under a name browsers keep for good.
     WhiteNoise sends these with a ten-year cache and `immutable`: the browser never asks for them again,
     and a revisit on a slow shop connection downloads none of them twice. Called once per file, at startup."""
     return url.startswith("/_next/static/")
@@ -82,8 +87,9 @@ def _is_named_after_content(path: str, url: str) -> bool:
 
 WHITENOISE_IMMUTABLE_FILE_TEST = _is_named_after_content
 
-# No compression in Django: on the demo, Render's proxy compresses every answer (Brotli or gzip); on the
-# real server, Caddy does (03 §13). Compressing here as well would only spend the small server's time.
+# No compression in Django: on the real server Caddy compresses (03 §13); on the demo, Render says its
+# proxy compresses answers with Brotli or gzip when the browser asks for it, which docs/runbooks/demo.md
+# checks after the first deploy. Compressing here as well would only spend the small server's time.
 
 
 def _deny_framing(headers: Headers, path: str, url: str) -> None:

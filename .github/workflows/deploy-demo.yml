@@ -6,10 +6,12 @@
 #     wait until the demo answers with this commit's version and shows Karibu over HTTPS
 #     (scripts/smoke_demo.sh). A demo that doesn't come up turns this workflow red.
 # The demo itself is described in render.yaml. What a person sets up once (the Render account, the
-# `demo` environment with the hook and the address) is in docs/runbooks/demo.md.
+# `demo` environment with the hook and the address) is in docs/runbooks/demo.md. The nightly redeploy
+# that resets the fake data (03 §12) comes with DATA-1's seed: until then there is no data to reset.
 #
 # No job here is named `backend`, `frontend`, `pr-title` or `image`: those are the required checks
-# (ci.yml), and a second job with one of those names would make the ruleset ambiguous (04 OPS-1).
+# (ci.yml and pr-title.yml), and a second job with one of those names would make the ruleset ambiguous
+# (04 OPS-1).
 
 name: Deploy demo
 
