@@ -115,7 +115,8 @@ jobs:
         with:
           package_json_file: frontend/package.json
 
-      # Node 24, the oldest version package.json allows ("engines"). The pnpm store is saved
+      # Node 24, the oldest version package.json allows ("engines"), and the major of the node
+      # image in backend/Dockerfile: the three move together, by hand. The pnpm store is saved
       # between runs, keyed on pnpm-lock.yaml: a new lock starts a new cache.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

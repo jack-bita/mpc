@@ -62,7 +62,7 @@ updates:
     ignore:
       # @types/node describes the Node we run, 24 ("engines" in package.json, CI's setup-node), not
       # the newest Node. A new major would type-check calls that Node 24 doesn't have. It moves when
-      # Node moves, by hand.
+      # Node moves, by hand, with the node image in backend/Dockerfile.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
     commit-message:

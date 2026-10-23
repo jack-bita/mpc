@@ -38,7 +38,7 @@ RUN pnpm build
 # pyproject.toml: uv refuses to run as any other version, so a mismatch stops this build at once.
 FROM ghcr.io/astral-sh/uv:0.11.33 AS uv
 
-FROM python:3.14.7-slim-trixie AS python
+FROM python:3.14.7-slim-trixie AS venv
 COPY --from=uv /uv /usr/local/bin/uv
 # UV_PYTHON_DOWNLOADS=0: use this image's Python, never download another; the venv points at it.
 # UV_COMPILE_BYTECODE=1: compile the packages to .pyc now, so the app starts faster and never needs to
@@ -57,7 +57,8 @@ RUN uv sync --locked --no-dev
 FROM python:3.14.7-slim-trixie
 
 # PYTHONUNBUFFERED: logs come out at once, so `docker logs` shows them as they happen.
-# PYTHONDONTWRITEBYTECODE: don't try to write .pyc files at run time; stage 2 compiled them.
+# PYTHONDONTWRITEBYTECODE: don't try to write .pyc files at run time: the `app` user couldn't, and
+# they are compiled at build time instead (the packages in stage 2, our own code below).
 # PATH: the venv first, so `gunicorn` and `python` are the venv's.
 # DJANGO_SETTINGS_MODULE: prod settings for every command, `manage.py migrate` too (OPS-2); manage.py on
 # its own would pick the dev settings. Every secret still comes from the environment at run time (prod.py).
@@ -74,7 +75,7 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app/backend
 # Everything below is copied as root and stays owned by root: the `app` user can read it, never change it.
 # Least often changed first, so a code change reuses the layers above it.
-COPY --from=python /app/backend/.venv ./.venv
+COPY --from=venv /app/backend/.venv ./.venv
 # The same place relative to backend/ as in the repo, so prod.py's WHITENOISE_ROOT is true in both.
 COPY --from=frontend /app/frontend/out /app/frontend/out
 COPY backend/ ./
@@ -86,6 +87,11 @@ COPY backend/ ./
 RUN DJANGO_SECRET_KEY=collectstatic-only DJANGO_ALLOWED_HOSTS=localhost \
     DB_NAME=unused DB_USER=unused DB_PASSWORD=unused DB_HOST=unused \
     python manage.py collectstatic --noinput
+
+# Compile our own code to .pyc too: UV_COMPILE_BYTECODE in stage 2 compiled only the packages.
+# Without this, every worker compiles apps/ and config/ again at each start and can't keep the result
+# (the code is read-only for `app`), which slows the demo's first answer after Render wakes it (OPS-2).
+RUN python -m compileall -q apps config
 
 USER app
 

@@ -89,7 +89,8 @@ check-frontend: ## only the frontend (CI's frontend job)
 # The image part: CI's `image` job (OPS-1). It builds the backend image from the repo root (the
 # build context, backend/Dockerfile), then scripts/smoke_image.sh starts it and checks that it serves
 # the API and the app from one address, never as root. Needs Docker, as the database already does.
-# The first build takes minutes; later ones reuse the cached layers until a package list changes.
+# The first build takes minutes. Later ones reuse the slow install layers until a package list
+# changes; a code change still re-runs `pnpm build` and collectstatic, in seconds.
 check-image: ## only the backend image: build it, start it, check it (CI's image job)
 	docker build --file backend/Dockerfile --tag mpc-backend:check .
 	bash scripts/smoke_image.sh mpc-backend:check
