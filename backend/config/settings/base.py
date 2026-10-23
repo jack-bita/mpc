@@ -11,7 +11,12 @@ root-only `.env` through Docker (03 §13).
 import os
 from pathlib import Path
 
+import django_stubs_ext
 from django.core.exceptions import ImproperlyConfigured
+
+# Lets Django's classes take a type in brackets (`UserAdmin[User]`) at run time, as mypy's strict mode
+# asks for (django-stubs' own advice). It changes nothing else.
+django_stubs_ext.monkeypatch()
 
 # backend/ — the folder that holds manage.py.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -46,6 +51,7 @@ def env_list(name: str, default: str | None = None) -> list[str]:
 DEBUG = False
 
 INSTALLED_APPS = [
+    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -67,6 +73,10 @@ INSTALLED_APPS = [
     "apps.sync",
     "apps.reports",
 ]
+
+# The custom User (apps/people/models.py) replaces Django's own. Set before the first migration and
+# never changed: Django can't swap its user model afterwards (ADR-0012).
+AUTH_USER_MODEL = "people.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

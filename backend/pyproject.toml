@@ -15,7 +15,9 @@ description = "Backend of the MPC shop system: Django + DRF, the API and the pos
 requires-python = ">=3.14"
 dependencies = [
     "django>=6.1.2,<6.2",
+    "django-stubs-ext>=6.1.2",
     "djangorestframework>=3.18",
+    "phonenumbers>=9.0.41",
     "psycopg[binary]>=3.3",
 ]
 
@@ -49,6 +51,11 @@ line-length = 120
 # E/W pycodestyle · F pyflakes (unused or undefined names) · I import order · UP modern Python ·
 # B likely bugs (bugbear) · DJ Django pitfalls · SIM simpler code.
 select = ["E", "W", "F", "I", "UP", "B", "DJ", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Django writes the migrations, and its own help texts are long single strings that can't be split.
+# Every other rule, and the formatter, still apply to them.
+"*/migrations/*" = ["E501"]
 
 # --- mypy: checks the types, so a wrong argument is caught before it runs.
 [tool.mypy]
