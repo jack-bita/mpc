@@ -452,6 +452,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "django" },
+    { name = "django-stubs-ext" },
     { name = "djangorestframework" },
     { name = "phonenumbers" },
     { name = "psycopg", extra = ["binary"] },
@@ -473,6 +474,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "django", specifier = ">=6.1.2,<6.2" },
+    { name = "django-stubs-ext", specifier = ">=6.1.2" },
     { name = "djangorestframework", specifier = ">=3.18" },
     { name = "phonenumbers", specifier = ">=9.0.41" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3" },

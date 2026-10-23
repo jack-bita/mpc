@@ -15,6 +15,7 @@ description = "Backend of the MPC shop system: Django + DRF, the API and the pos
 requires-python = ">=3.14"
 dependencies = [
     "django>=6.1.2,<6.2",
+    "django-stubs-ext>=6.1.2",
     "djangorestframework>=3.18",
     "phonenumbers>=9.0.41",
     "psycopg[binary]>=3.3",
