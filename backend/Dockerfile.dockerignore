@@ -1,0 +1,39 @@
+# backend/Dockerfile.dockerignore — what `docker build` may see of the repo when it builds backend/Dockerfile (OPS-1).
+#
+# Docker reads an ignore file named after the Dockerfile, next to it, instead of the root .dockerignore.
+# So this list belongs to this one image; OPS-5's `web` image can have its own. Paths are relative to the
+# build context, the repo root, as in the Dockerfile's COPY lines.
+#
+# An allowlist at every level: everything is shut out, then only what the build uses is let back in, by
+# name. A local build sends untracked files too, not only what git tracks: a .env with secrets, a sheet
+# with real shop data, an editor's settings. They all stay out unless someone names them here on purpose
+# (03 §10, ADR-0028). An image gets pushed to a registry (OPS-2): whatever goes in can be pulled out again.
+
+# Shut out everything...
+*
+
+# ...then let in what the Python stages copy: the code and the package lists.
+!backend/apps
+!backend/config
+!backend/manage.py
+!backend/pyproject.toml
+!backend/uv.lock
+!backend/.python-version
+
+# ...and what `pnpm build` reads: the sources, the texts, the public files, the package lists and the
+# build settings. Lint, format and test settings stay out: the build doesn't use them.
+!frontend/src
+!frontend/messages
+!frontend/public
+!frontend/package.json
+!frontend/pnpm-lock.yaml
+!frontend/pnpm-workspace.yaml
+!frontend/next.config.ts
+!frontend/tsconfig.json
+!frontend/postcss.config.mjs
+
+# Inside the folders let in above, shut out again what Python leaves behind, and any .env.
+**/__pycache__
+**/*.py[cod]
+**/.env
+**/.env.*

@@ -8,7 +8,8 @@
 #
 # Build it from the repo root, which is the build context, because it needs frontend/ as well:
 #   docker build -f backend/Dockerfile -t mpc-backend:check .
-# The root .dockerignore decides what the build can see: backend/ and frontend/, never .env or private/.
+# Dockerfile.dockerignore, beside this file, decides what the build can see: only the files it names,
+# never .env or private/.
 #
 # Three stages; only the last one is the image we ship. The first two hold the build tools (Node, pnpm,
 # uv), which stay behind: a smaller image, with fewer programs an attacker could use.
