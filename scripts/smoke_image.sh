@@ -3,18 +3,23 @@
 #
 # It owns one check, which `make check-image` runs after building the image, and so CI's `image` job too:
 #   1. the image doesn't run as root (ops rule, 03 §13);
-#   2. started as a container, GET /api/health/ answers {"status":"ok"};
+#   2. started as a container, GET /api/health/ answers "ok" with the version the image was built with;
 #   3. GET / shows "Karibu": the static app, served by WhiteNoise in the same container (03 §13);
 #   4. that page can't be put inside another site's frame (X-Frame-Options: DENY);
 #   5. /static/ serves the admin's files, gathered by collectstatic when the image was built;
-#   6. the container is removed afterwards, whether the checks passed or not.
+#   6. the page is checked again on every visit (max-age=0), so a deploy reaches the browser at once;
+#   7. a file under /_next/static/, named after its content, is cached for good (immutable);
+#   8. the container is removed afterwards, whether the checks passed or not.
 # A "smoke test": the quickest check that the thing starts and answers at all, before anything deeper.
 #
-# Usage:  bash scripts/smoke_image.sh mpc-backend:check
+# Usage:  bash scripts/smoke_image.sh mpc-backend:check [version]
 
 set -euo pipefail
 
-image="${1:?usage: bash scripts/smoke_image.sh <image>}"
+image="${1:?usage: bash scripts/smoke_image.sh <image> [version]}"
+# The version the image was built with (APP_VERSION in backend/Dockerfile). The Makefile passes the same
+# value to the build and to this check; "dev" when none is given, as in a plain build.
+version="${2:-dev}"
 # $$ is this script's process number: two runs at once (two terminals) get two containers.
 name="mpc-image-smoke-$$"
 
@@ -38,7 +43,8 @@ echo "ok: runs as uid $uid, not root"
 
 # prod.py demands every variable, so the container gets throwaway values. No real database or secret
 # is needed: the health check never touches the database (apps/core/api/views.py), and nothing here is
-# signed. Checks that need the database come with OPS-2, which runs the migrations on start.
+# signed. The database is checked on the demo instead: backend/start-demo.sh runs the migrations before
+# gunicorn starts, so a demo that answers has reached its database (OPS-2).
 # 127.0.0.1::8000 — no port number on the laptop's side, so Docker picks a free one: this can never
 # clash with `make dev` (8000, 8080, 3000) or with a container someone left running.
 docker run --detach --name "$name" --publish 127.0.0.1::8000 \
@@ -62,7 +68,8 @@ get() {
 echo "waiting for gunicorn; a 'Connection reset' or 'refused' line below is a retry, not a failure"
 health="$(get --retry 30 --retry-delay 1 --retry-all-errors "$base/api/health/")" ||
   fail "/api/health/ did not answer"
-[[ "$health" == '{"status":"ok"}' ]] || fail "/api/health/ answered: $health"
+# The whole answer, the version included: a build that lost APP_VERSION would answer "dev" and fail here.
+[[ "$health" == "{\"status\":\"ok\",\"version\":\"$version\"}" ]] || fail "/api/health/ answered: $health"
 echo "ok: /api/health/ answers $health"
 
 # 3. The word is the home page's title in frontend/messages/sw.json (home.title). Change it there,
@@ -81,3 +88,18 @@ echo "ok: / can't be framed (X-Frame-Options: DENY)"
 # its styles. One of its files stands for all of them.
 get --output /dev/null "$base/static/admin/css/base.css" || fail "/static/ doesn't serve the admin's files"
 echo "ok: /static/ serves the admin's files"
+
+# 6. The cache rules in prod.py. The page keeps its name across deploys, so the browser must ask again
+# every time; a longer max-age would keep showing the old page after a deploy.
+[[ "${page,,}" == *"cache-control: max-age=0, public"* ]] || fail "/ may be kept by the browser (want Cache-Control: max-age=0)"
+echo "ok: / is checked again on every visit (max-age=0)"
+
+# 7. The first /_next/static/ file the page loads stands for all of them. [^"\] stops the match at the
+# quote that ends the address (or a backslash, where the address sits inside escaped text).
+asset_pattern='/_next/static/[^"\]+'
+[[ "$page" =~ $asset_pattern ]] || fail "/ loads nothing from /_next/static/"
+asset="${BASH_REMATCH[0]}"
+# --head: only the headers, which is all this check reads.
+headers="$(get --head "$base$asset")" || fail "$asset did not answer"
+[[ "${headers,,}" == *"immutable"* ]] || fail "$asset is not cached for good (no immutable in Cache-Control)"
+echo "ok: $asset is cached for good (immutable)"

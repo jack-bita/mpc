@@ -93,6 +93,17 @@ RUN DJANGO_SECRET_KEY=collectstatic-only DJANGO_ALLOWED_HOSTS=localhost \
 # (the code is read-only for `app`), which slows the demo's first answer after Render wakes it (OPS-2).
 RUN python -m compileall -q apps config
 
+# The git commit this image is built from. The deploy passes it (`make check-image APP_VERSION=<commit>`);
+# any other build gets "dev". The health check shows it, so the demo's smoke test can tell the new image
+# from the old one still answering (OPS-2). Placed late on purpose: it changes with every commit, and a
+# changed line rebuilds every step after it, so here only these small lines are redone, never the installs.
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
+# Labels: facts about the image, which registries read. `source` links the package on GitHub Container
+# Registry to this repo, so the repo page lists it; `revision` is the commit, the same value as APP_VERSION.
+LABEL org.opencontainers.image.source="https://github.com/jack-bita/mpc" \
+      org.opencontainers.image.revision="$APP_VERSION"
+
 USER app
 
 # gunicorn reads both by itself: PORT is the port it listens on, on every address (0.0.0.0:$PORT), and
@@ -106,4 +117,6 @@ EXPOSE 8000
 # --no-control-socket: gunicorn 25.1+ opens a socket through which its `gunicornc` tool can change the
 # workers or stop the server. We never use it, and anything that can steer the server is one more thing
 # to protect. (By default it lives in ~/.gunicorn/, and the `app` user has no home on purpose.)
+# The demo starts through backend/start-demo.sh instead, which runs the migrations, then this same
+# command (OPS-2): change both together.
 CMD ["gunicorn", "--no-control-socket", "config.wsgi"]

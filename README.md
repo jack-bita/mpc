@@ -4,6 +4,8 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 
 **Status:** in development. The planning is done; the code starts with stage 0 of the build plan.
 
+**Demo:** <https://mabatinipumba-demo.onrender.com>, with fake data only. Every merge to `main` updates it. It sleeps when nobody uses it, so the first visit takes about a minute.
+
 ## Start here
 
 | Read | For |
@@ -34,7 +36,7 @@ make hooks                        # git hooks: format and lint each commit, and 
 make dev                          # PostgreSQL + Caddy in Docker, then Django and Next.js
 ```
 
-Open <http://localhost:8080> to see *Karibu*, and <http://localhost:8080/api/health/> for `{"status":"ok"}`. The first `make dev` takes longer: Docker downloads two images and uv installs the backend's packages.
+Open <http://localhost:8080> to see *Karibu*, and <http://localhost:8080/api/health/> for `{"status":"ok","version":"dev"}`. The first `make dev` takes longer: Docker downloads two images and uv installs the backend's packages.
 
 **Stop:** Ctrl-C stops Django and Next.js; `make down` stops the containers and keeps the database.
 

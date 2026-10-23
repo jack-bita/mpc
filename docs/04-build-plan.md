@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.7 · 23 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.8 · 23 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.8** (23 Oct 2026, OPS-2): DATA-1 gains a *Watch out* line from PPL-1's review. Django's `/admin/login/` has no rate limit yet. The demo goes public with OPS-2, but it has no accounts, and the free plan has no shell to make one, so there is nothing to guess. DATA-1's seed makes the first account with a password, so the limit, or keeping that account out of the admin, comes with it. Marked **(v1.8)**.
 
 **Changes in v1.7** (23 Oct 2026, OPS-1): the image job becomes the fourth required check on `main`, Jack's decision while planning OPS-1. From OPS-2 on, every merge to `main` deploys the demo, so an image that doesn't build or serve must block the merge, not break the demo after it. OPS-1's *Build* line and *Done when* say so. OPS-2 also gains a *Watch out* line from OPS-1's review: on the demo, Render's proxy is the way in, not Caddy, and the image's cache and compression settings are still open. Marked **(v1.7)**.
 
@@ -621,6 +623,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### DATA-1 · Demo seed, first version
 `S` · Claude-led · after PPL-3, OPS-2 · branch `feat/data-1-demo-seed`
 **Build:** `manage.py seed_demo`: a demo shop with sides D and F, staff with made-up Swahili names, roles and PINs, and a manager with a password; each demo deploy — and a nightly scheduled redeploy — resets and reseeds it (03 §12); development and E2E tests use it too.
+**Watch out:** the manager is the demo's first account with a password, and `/admin/login/` has no rate limit yet (PPL-1 review), so anyone could try passwords there without end. Before the seed runs on the demo, limit the login attempts, or keep that manager out of the admin (`is_staff` off) **(v1.8)**.
 **Done when:**
 - [ ] The seed builds the same shop every time (fixed random seed).
 - [ ] It refuses to run against a shop that isn't a demo.
