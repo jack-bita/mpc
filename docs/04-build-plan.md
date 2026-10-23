@@ -345,9 +345,9 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Build:** `people.User` (02 §5): UUIDv7 id, `full_name`, `phone` (optional, unique, stored as `+255…`), `email` (optional, unique whatever the letter case), password optional (PIN-only staff have none), `language`; no username; a manager with `create_user` and `create_superuser` (by email); `AUTH_USER_MODEL = "people.User"`; the admin; a phone normaliser in `core` (the `phonenumbers` library ✚, default region TZ).
 **Watch out:** list `id` in the admin's `readonly_fields`. CORE-1 keeps the id editable on purpose: with `editable=False`, DRF would drop the id a client sends (ADR-0007). An id changed in the admin would save a copy of the row **(v1.5)**.
 **Done when:**
-- [ ] On an empty database, `make migrate` creates `people.User` before `admin`, and `createsuperuser` works by email.
-- [ ] `0712 345 678` is stored as `+255712345678`.
-- [ ] Two users can't share a phone, or an email in any letter case; a user can exist without a password.
+- [x] On an empty database, `make migrate` creates `people.User` before `admin`, and `createsuperuser` works by email.
+- [x] `0712 345 678` is stored as `+255712345678`.
+- [x] Two users can't share a phone, or an email in any letter case; a user can exist without a password.
 **Tests:** `test_phone_stored_as_plus255` · `test_email_unique_ignoring_case` · `test_user_without_password` · `test_superuser_needs_email`
 **Commits:** `test(people): user rules` → `feat(core): phone normaliser` → `feat(people): custom User model` → `feat(people): user manager and admin`
 
