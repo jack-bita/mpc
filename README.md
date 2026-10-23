@@ -4,6 +4,8 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 
 **Status:** in development. The planning is done; the code starts with stage 0 of the build plan.
 
+**Demo:** <https://mabatinipumba-demo.onrender.com>, with fake data only. Every merge to `main` updates it. It sleeps when nobody uses it, so the first visit takes about a minute.
+
 ## Start here
 
 | Read | For |

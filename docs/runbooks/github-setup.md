@@ -15,6 +15,7 @@
 | Issue and pull request templates | `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` | GitHub reads them by itself |
 | Release settings | `release-please-config.json`; the current version in `.release-please-manifest.json` | `.github/workflows/release.yml`, after each merge to `main` (*Releases*, below) |
 | The release app and its key | GitHub only: the app's page and the `release` environment | Jack, by hand, once (*Releases*, below) |
+| The demo's deploy hook and address | GitHub only: the `demo` environment | Jack, by hand, once ([demo.md](demo.md), *First setup*) |
 
 The plan is the source of truth, and GitHub tracks the status (04 BP12). Change a card in 04 first, then refresh its issue. Never change the issue first.
 
