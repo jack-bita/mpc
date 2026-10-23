@@ -2,7 +2,11 @@
 
 **What:** the public demo at <https://mabatinipumba-demo.onrender.com>: the same code as the real shop, with fake data only (ADR-0029). Every merge to `main` updates it with no manual step (OPS-2).
 **When:** the first setup once, after OPS-2 merges; the database every 30 days; and whenever a deploy turns red.
-**Files:** `render.yaml` (the demo on Render), `.github/workflows/deploy-demo.yml` (the deploy), `scripts/smoke_demo.sh` (the check after it). Each file's header explains it.
+**Files:** `render.yaml` (the demo on Render), `backend/start-demo.sh` (how the demo starts), `.github/workflows/deploy-demo.yml` (the deploy), `scripts/smoke_demo.sh` (the check after it). Each file's header explains it.
+
+Two words used below:
+- **Blueprint:** Render's name for a `render.yaml` file in a repo. Render reads it and creates, or changes, the services and databases it describes.
+- **Digest:** the fingerprint of an image's content, `sha256:…`. A tag such as `:main` can later point at another image; a digest always names the same one.
 
 ## What lives where
 
@@ -20,11 +24,11 @@ No secret is in the repo. The deploy hook is the only one GitHub holds.
 
 1. A pull request is squash-merged into `main`. *Deploy demo* starts in the repo's **Actions** tab.
 2. **`publish`** builds the image and checks it (`make check-image`, the same as CI), with the merge's commit as its version. It pushes the image to GitHub Container Registry as `:main` and `:<commit>`, then reads its digest.
-3. **`deploy`** calls Render's deploy hook with that digest. Render pulls exactly that image and starts it. The start command runs `migrate` first, then gunicorn. Render keeps the old version running until the new one is up.
+3. **`deploy`** calls Render's deploy hook with that digest. Render pulls exactly that image and starts it with `backend/start-demo.sh`, which runs `migrate` first, then gunicorn. Render keeps the old version running until the new one is up.
 4. **`deploy`** then runs `scripts/smoke_demo.sh`. It asks `/api/health/` every 10 seconds until the answer carries the merge's commit (up to 15 minutes). Then it checks that `/` shows *Karibu* over HTTPS, and that `http://` is redirected to `https://`.
 5. Green: the demo runs the merge. Red: see *Troubleshooting*.
 
-One deploy runs at a time. A merge that arrives meanwhile waits for it.
+One deploy runs at a time. A merge that arrives meanwhile waits for it. If a third merge arrives too, it takes the waiting one's place, and the skipped run shows as cancelled. Nothing is lost: the demo only needs the newest `main`.
 
 ## First setup (once, after OPS-2 merges)
 
@@ -32,13 +36,14 @@ One deploy runs at a time. A merge that arrives meanwhile waits for it.
 2. **Make the image public**, so Render can pull it without a password. GitHub → your picture → **Your packages** → `mpc-backend` → **Package settings** → **Danger Zone** → **Change visibility** → **Public**. The image holds only code that is public already; `backend/Dockerfile.dockerignore` keeps `.env` and `private/` out of it.
 3. **A Render account**, free: <https://render.com> → **Sign up** with GitHub. When Render asks for access to GitHub, choose **Only select repositories** → `mpc`.
 4. **The Blueprint.** Render → **New** → **Blueprint** → the `mpc` repo, branch `main`. Render reads `render.yaml` and lists `mabatinipumba-demo` (a web service) and `mabatinipumba-demo-db` (a database). It asks for one value: `DJANGO_ALLOWED_HOSTS` = `mabatinipumba-demo.onrender.com`. Apply. Render creates the database, then the service, pulls the image, runs the migrations and starts it.
-5. **Check the address** on the service's page. If Render added letters to the name (the name was taken), put that host in the service's **Environment** → `DJANGO_ALLOWED_HOSTS`, and use that address in step 7 too.
+   - *Not yet seen on Render:* that the free plan takes an image-backed service and PostgreSQL 18. If Render refuses a line of `render.yaml`, write down its exact message, and fix the file in a small pull request before going on.
+5. **Check the address** on the service's page. If Render added letters to the name (the name was taken), put that host in the service's **Environment** → `DJANGO_ALLOWED_HOSTS`, and use that address in step 7 too. Then also change the address in the README and in this runbook, in a small pull request.
 6. **Copy the deploy hook:** the service → **Settings** → **Deploy Hook** → copy. It is a secret: whoever has it can start deploys. Paste it only into GitHub, in the next step.
-7. **The `demo` environment on GitHub:** the repo → **Settings** → **Environments** → **New environment**, named `demo`:
+7. **The `demo` environment on GitHub:** the repo → **Settings** → **Environments** → `demo`. The first run already created it, empty and with no rules, because GitHub creates any environment a job names. Open it and set:
    - **Deployment branches and tags:** *Selected branches and tags* → add the rule `main`. Only workflows on `main` can then read its secret.
    - **Environment secrets** → `RENDER_DEPLOY_HOOK_URL` = the hook.
    - **Environment variables** → `DEMO_URL` = `https://mabatinipumba-demo.onrender.com` (no `/` at the end).
-8. **Run the deploy again:** Actions → the red *Deploy demo* run → **Re-run failed jobs**. `deploy` turns green.
+8. **Run the deploy again:** Actions → the **newest** red *Deploy demo* run → **Re-run failed jobs**. `deploy` turns green. Only the newest: an older run would deploy its older image, and its smoke test would still pass, so the demo would quietly go back in time.
 
 **Check:** open <https://mabatinipumba-demo.onrender.com/api/health/>; the `version` is the merge's commit. The repo page shows a deployment to `demo` with the address. The next merge to `main` updates the demo with nobody touching anything.
 
@@ -73,4 +78,5 @@ Render's free PostgreSQL expires 30 days after it is created, and Render deletes
   - A migration error: the new version never started, and the old one still runs. Fix the migration in a new pull request.
   - `DisallowedHost` / `Invalid HTTP_HOST header`: `DJANGO_ALLOWED_HOSTS` doesn't hold the demo's host (step 5). A line about `localhost:10000` is Render's own port check and does no harm.
   - Database connection errors: the free database expired (*Every 30 days*).
+- **The demo shows an older commit than `main`:** an older run was re-run after a newer one. Re-run the newest *Deploy demo* run, or merge again.
 - **The hook leaked:** the service → **Settings** → **Deploy Hook** → regenerate, then put the new one into the `demo` environment's secret. The old one stops working at once.
