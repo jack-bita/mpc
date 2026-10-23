@@ -1,0 +1,84 @@
+# render.yaml — the public demo on Render's free plan, written as a Render Blueprint (OPS-2, ADR-0029).
+#
+# It owns the demo's setup: one web service running the backend image, and one PostgreSQL database
+# holding fake data only. Render reads this file when the Blueprint is created, and again each time it
+# changes on main. The steps only a person can do (the account, the first sync, the deploy hook, the
+# database every 30 days) are in docs/runbooks/demo.md.
+#
+# Nothing secret is written here: the repo is public. The secret key is made by Render, the database
+# password goes from the database to the service inside Render, and DJANGO_ALLOWED_HOSTS is typed in
+# when the Blueprint is created.
+#
+# The image is not built here. .github/workflows/deploy-demo.yml builds and checks it, pushes it to
+# GitHub Container Registry, then calls the service's deploy hook with the exact image (its digest).
+
+services:
+  - type: web
+    # Jack's choice. The address becomes https://mabatinipumba-demo.onrender.com; if another Render user
+    # already holds that name, Render adds a few letters (then fix DJANGO_ALLOWED_HOSTS and DEMO_URL).
+    name: mabatinipumba-demo
+    # A ready image from a registry, not a build from this repo. Public, so Render needs no credentials.
+    runtime: image
+    image:
+      # The tag only says which image the service starts from. Each deploy names the exact image with
+      # its digest (deploy-demo.yml); `main` always points at the latest one, for a manual redeploy.
+      url: ghcr.io/jack-bita/mpc-backend:main
+    plan: free
+    # Render's region closest to Tanzania. The database must be in the same one: the service reaches it
+    # over Render's private network, which only joins services of one region.
+    region: frankfurt
+    # Migrations first, then the image's own command (backend/Dockerfile's CMD). Why here, on every start:
+    # the free plan has no pre-deploy command, and the demo's database is new every 30 days. The image's
+    # CMD stays migration-free on purpose: on the real server, migrations are their own step, rehearsed on
+    # a scratch copy before the deploy (OPS-6). If a migration fails, the new version never starts and
+    # Render keeps the old one running; the deploy's smoke test then turns red.
+    # `exec`: gunicorn replaces the shell, so it is the process Render stops on the next deploy.
+    dockerCommand: sh -c "python manage.py migrate --noinput && exec gunicorn --no-control-socket config.wsgi"
+    # No healthCheckPath: Render's own checker may call with a host name Django doesn't allow and fail a
+    # good deploy. Render then waits for the port to open (gunicorn opens it after the migrations), and the
+    # real check is the deploy's smoke test, which waits for this commit's version on /api/health/.
+    # PORT and WEB_CONCURRENCY keep the image's defaults; Render sets PORT itself and gunicorn reads it.
+    envVars:
+      # Signs sessions and CSRF tokens. Render makes a random 256-bit value once and keeps it.
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      # The address the demo answers to, typed in when the Blueprint is created: mabatinipumba-demo.onrender.com,
+      # or the name Render gave instead. Not written here, so a name with extra letters needs no commit.
+      - key: DJANGO_ALLOWED_HOSTS
+        sync: false
+      # The database's details, filled in by Render from the database below; prod.py requires each one.
+      # When the database is re-created every 30 days, they follow it by themselves.
+      - key: DB_HOST
+        fromDatabase:
+          name: mabatinipumba-demo-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: mabatinipumba-demo-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: mabatinipumba-demo-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: mabatinipumba-demo-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: mabatinipumba-demo-db
+          property: password
+
+databases:
+  # Free: 1 GB, one per Render workspace, and it expires 30 days after it is created (then it is deleted
+  # 14 days later). Fake data only (ADR-0029); the runbook says how to re-create it.
+  - name: mabatinipumba-demo-db
+    plan: free
+    region: frankfurt
+    # The same major version as CI and compose.dev.yml, so the demo runs on the PostgreSQL the tests use.
+    postgresMajorVersion: "18"
+    databaseName: mpc_demo
+    user: mpc_demo
+    # An empty list: no address on the internet may connect, only services inside Render's private
+    # network. Left out, Render would open the database to the whole internet, guarded by its password alone.
+    ipAllowList: []

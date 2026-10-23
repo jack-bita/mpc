@@ -1,7 +1,8 @@
 """config/settings/prod.py — settings for the real shop server and the demo. wsgi.py, asgi.py and the image use it.
 
 Every secret is required here, with no default: if one is missing, Django refuses to start and names it.
-The values come from the server's root-only `.env`, passed in by Docker (03 §13, ADR-0027).
+On the real server the values come from its root-only `.env`, passed in by Docker (03 §13, ADR-0027);
+on the demo, from Render (render.yaml).
 """
 
 from wsgiref.headers import Headers
@@ -21,10 +22,12 @@ DATABASES["default"].update(
     PORT=env("DB_PORT", "5432"),
 )
 
-# Caddy sits in front of Django and talks HTTPS with the browser (03 §13). It tells Django the original
-# request was HTTPS with this header; without it Django would think every request is plain HTTP.
-# Safe only because Caddy is the one way in, and Caddy always overwrites the header. Django's own port
-# must never be published: anyone who reached it directly could fake "https".
+# A proxy sits in front of Django and talks HTTPS with the browser: Caddy on the real server (03 §13),
+# Render's proxy on the demo (render.yaml). It tells Django the original request was HTTPS with this
+# header; without it Django would think every request is plain HTTP.
+# Safe only because in each place the proxy is the one way in, and it always overwrites the header with
+# its own value: Caddy by default, Render's proxy as Render's support states. Django's own port must never
+# be reachable from outside: anyone who reached it directly could fake "https".
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Cookies only travel over HTTPS, so nobody on the shop's Wi-Fi can read a session (03 §10).
@@ -32,7 +35,8 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 
 # `check --deploy` still warns about the HTTPS redirect (security.W008) and HSTS (security.W004).
-# Both are left to Caddy, which owns HTTPS and the strict headers (03 §10); the deploy cards set it up.
+# Both are left to the proxy: on the real server Caddy owns HTTPS and the strict headers (03 §10, OPS-5);
+# on the demo, Render's proxy redirects every plain HTTP request to HTTPS before it reaches Django.
 
 # --- Files. In the image, Django serves them itself through WhiteNoise, so one container answers
 # everything from one address: the demo's setup (03 §13, OPS-1). Only here, not in base.py: on a laptop
