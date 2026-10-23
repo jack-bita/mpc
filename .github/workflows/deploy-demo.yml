@@ -1,0 +1,125 @@
+# deploy-demo.yml: every merge to main updates the public demo, then checks it (OPS-2, 03 §12, ADR-0029).
+# It owns the demo's deploy, in two jobs:
+#   - publish: build and check the backend image (the same `make check-image` as CI, with this commit as
+#     the version it carries), then push it to GitHub Container Registry, ghcr.io/jack-bita/mpc-backend.
+#   - deploy:  ask Render to run exactly that image (its digest) through the service's deploy hook, then
+#     wait until the demo answers with this commit's version and shows Karibu over HTTPS
+#     (scripts/smoke_demo.sh). A demo that doesn't come up turns this workflow red.
+# The demo itself is described in render.yaml. What a person sets up once (the Render account, the
+# `demo` environment with the hook and the address) is in docs/runbooks/demo.md.
+#
+# No job here is named `backend`, `frontend`, `pr-title` or `image`: those are the required checks
+# (ci.yml), and a second job with one of those names would make the ruleset ambiguous (04 OPS-1).
+
+name: Deploy demo
+
+on:
+  push:
+    branches: [main]
+
+# The default token gets nothing here; each job asks for only what it needs.
+permissions: {}
+
+# One deploy at a time, never cancelled half-way: a cancelled run could leave Render deploying with no
+# smoke test after it. A merge that arrives meanwhile waits; if a newer one arrives too, it takes the
+# older one's place in the queue, which loses nothing: the demo only needs the latest main.
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Pinned, with a time limit, for the same reasons as in ci.yml. The image build takes a few
+    # minutes: no layer cache is kept between runs.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      # Read the code, and push the image to this repo's packages on GitHub Container Registry.
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+
+    steps:
+      # Pinned to a release's commit, as in ci.yml; Dependabot updates both.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # CI already passed on the pull request, but main may have moved since; this proves the very image
+      # we push. Its version is this commit, which the smoke test waits for after the deploy.
+      - name: Build and check the image
+        run: make check-image APP_VERSION=${{ github.sha }}
+
+      - name: Push the image to GitHub Container Registry
+        id: push
+        env:
+          # This run's own token: it works for this repo only and expires when the job ends, so no
+          # long-lived password is stored anywhere.
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          # Registry names must be lower case; ${VAR,,} lowers it.
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/mpc-backend"
+          # --password-stdin: the token goes in through a pipe, never on the command line, where the
+          # process list could show it.
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          # Two names for the same image: the commit, to find any version later, and `main`, the one
+          # render.yaml starts from.
+          docker tag mpc-backend:check "$image:$GITHUB_SHA"
+          docker tag mpc-backend:check "$image:main"
+          docker push "$image:$GITHUB_SHA"
+          docker push "$image:main"
+          # Ask the registry for the digest of what it now holds. A tag can later point at another image;
+          # the digest names this one for good, so Render runs exactly what was checked above.
+          digest="$(docker buildx imagetools inspect "$image:$GITHUB_SHA" --format '{{.Manifest.Digest}}')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no digest for $image:$GITHUB_SHA (got: $digest)"; exit 1; }
+          echo "pushed $image@$digest"
+          echo "image=$image@$digest" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-24.04
+    # The smoke test waits up to 15 minutes; the rest takes about one.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    # The hook is an environment secret (ops rule). The `demo` environment admits only workflows running
+    # on main, so a pull request's workflow can never read it. GitHub also links each run to the demo's
+    # address on the repo page, under Deployments.
+    environment:
+      name: demo
+      url: ${{ vars.DEMO_URL }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Before the first setup, both are missing: say so plainly instead of failing on an empty address.
+      - name: Check that the demo is set up
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          DEMO_URL: ${{ vars.DEMO_URL }}
+        run: |
+          if [[ -z "$DEPLOY_HOOK" || -z "$DEMO_URL" ]]; then
+            echo "::error::The demo environment needs RENDER_DEPLOY_HOOK_URL and DEMO_URL: docs/runbooks/demo.md, First setup."
+            exit 1
+          fi
+
+      # The hook answers at once, with the new deploy's id; the deploy itself takes minutes, which is why
+      # the next step waits for the version. --get with --data-urlencode adds imgURL to the hook's address,
+      # with its `@` and `:` written safely. curl never prints the address, and GitHub hides the secret
+      # in the log anyway.
+      - name: Ask Render to deploy this image
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          IMAGE: ${{ needs.publish.outputs.image }}
+        run: |
+          curl --silent --show-error --fail --max-time 30 --get --data-urlencode "imgURL=$IMAGE" "$DEPLOY_HOOK"
+          echo
+          echo "Render is deploying $IMAGE"
+
+      - name: Wait for this commit on the demo, then check it
+        env:
+          DEMO_URL: ${{ vars.DEMO_URL }}
+        run: bash scripts/smoke_demo.sh "$DEMO_URL" "$GITHUB_SHA"

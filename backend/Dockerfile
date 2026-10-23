@@ -99,6 +99,10 @@ RUN python -m compileall -q apps config
 # changed line rebuilds every step after it, so here only these small lines are redone, never the installs.
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
+# Labels: facts about the image, which registries read. `source` links the package on GitHub Container
+# Registry to this repo, so the repo page lists it; `revision` is the commit, the same value as APP_VERSION.
+LABEL org.opencontainers.image.source="https://github.com/jack-bita/mpc" \
+      org.opencontainers.image.revision="$APP_VERSION"
 
 USER app
 
