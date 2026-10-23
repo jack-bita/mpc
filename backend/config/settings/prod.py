@@ -4,6 +4,8 @@ Every secret is required here, with no default: if one is missing, Django refuse
 The values come from the server's root-only `.env`, passed in by Docker (03 §13, ADR-0027).
 """
 
+from wsgiref.headers import Headers
+
 from .base import *  # noqa: F403 — start from the shared settings, then change what differs.
 from .base import BASE_DIR, DATABASES, MIDDLEWARE, env, env_list
 
@@ -34,10 +36,11 @@ CSRF_COOKIE_SECURE = True
 
 # --- Files. In the image, Django serves them itself through WhiteNoise, so one container answers
 # everything from one address: the demo's setup (03 §13, OPS-1). Only here, not in base.py: on a laptop
-# runserver and Caddy serve the files, and the tests serve none.
-# WhiteNoise answers a request for a file before Django's URL routing. It goes right after
-# SecurityMiddleware, so the security headers cover files too. A new list, not an insert: base's list
-# is the same object in every settings module.
+# runserver serves the admin's files and Next.js (behind Caddy) the app's, and the tests serve none.
+# WhiteNoise answers a request for a file before Django's URL routing, and before the middleware below
+# it. It goes right after SecurityMiddleware, so SecurityMiddleware's headers (nosniff, Referrer-Policy)
+# cover files too; XFrameOptionsMiddleware never sees them, hence _deny_framing below.
+# A new list, not an insert: base's list is the same object in every settings module.
 _after_security = MIDDLEWARE.index("django.middleware.security.SecurityMiddleware") + 1
 MIDDLEWARE = [
     *MIDDLEWARE[:_after_security],
@@ -56,3 +59,14 @@ WHITENOISE_ROOT = BASE_DIR.parent / "frontend" / "out"
 # /sale/ is served from out/sale/index.html: next.config.ts writes one folder per page (trailingSlash).
 # WhiteNoise also redirects /sale to /sale/.
 WHITENOISE_INDEX_FILE = True
+
+
+def _deny_framing(headers: Headers, path: str, url: str) -> None:
+    """Forbid other sites to show our files inside a frame: the header XFrameOptionsMiddleware gives
+    every other response. Without it, a site could lay an app page in an invisible frame over its own
+    and trick a user into clicking on it (clickjacking) — on login and PIN pages too, once they exist.
+    WhiteNoise calls this once per file, at startup."""
+    headers["X-Frame-Options"] = "DENY"
+
+
+WHITENOISE_ADD_HEADERS_FUNCTION = _deny_framing

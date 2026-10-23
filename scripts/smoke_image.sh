@@ -5,7 +5,8 @@
 #   1. the image doesn't run as root (ops rule, 03 §13);
 #   2. started as a container on 127.0.0.1:8001, GET /api/health/ answers {"status":"ok"};
 #   3. GET / shows "Karibu": the static app, served by WhiteNoise in the same container (03 §13);
-#   4. the container is removed afterwards, whether the checks passed or not.
+#   4. that page can't be put inside another site's frame (X-Frame-Options: DENY);
+#   5. the container is removed afterwards, whether the checks passed or not.
 # A "smoke test": the quickest check that the thing starts and answers at all, before anything deeper.
 #
 # Usage:  bash scripts/smoke_image.sh mpc-backend:check
@@ -52,7 +53,13 @@ health="$(curl --silent --show-error --fail --retry 30 --retry-delay 1 --retry-a
 echo "ok: /api/health/ answers $health"
 
 # 3. The word is the home page's title in frontend/messages/sw.json (home.title). Change it there,
-# change it here.
-page="$(curl --silent --show-error --fail "$base/")" || fail "/ did not answer"
+# change it here. --include: one answer holds the headers and the page, for this check and the next.
+page="$(curl --silent --show-error --fail --include "$base/")" || fail "/ did not answer"
 [[ "$page" == *Karibu* ]] || fail "/ doesn't show Karibu"
 echo "ok: / shows Karibu"
+
+# 4. Clickjacking: another site shows our page inside an invisible frame and tricks a user into
+# clicking on it. This header tells the browser to refuse any frame. ${page,,} is the answer in lower
+# case, because header names may come in any case.
+[[ "${page,,}" == *"x-frame-options: deny"* ]] || fail "/ can be framed by another site (no X-Frame-Options: DENY)"
+echo "ok: / can't be framed (X-Frame-Options: DENY)"
