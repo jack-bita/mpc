@@ -93,6 +93,13 @@ RUN DJANGO_SECRET_KEY=collectstatic-only DJANGO_ALLOWED_HOSTS=localhost \
 # (the code is read-only for `app`), which slows the demo's first answer after Render wakes it (OPS-2).
 RUN python -m compileall -q apps config
 
+# The git commit this image is built from. The deploy passes it (`make check-image APP_VERSION=<commit>`);
+# any other build gets "dev". The health check shows it, so the demo's smoke test can tell the new image
+# from the old one still answering (OPS-2). Placed late on purpose: it changes with every commit, and a
+# changed line rebuilds every step after it, so here only these small lines are redone, never the installs.
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
+
 USER app
 
 # gunicorn reads both by itself: PORT is the port it listens on, on every address (0.0.0.0:$PORT), and

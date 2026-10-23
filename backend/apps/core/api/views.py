@@ -1,9 +1,11 @@
-"""apps/core/api/views.py — core's API views. Today only the health check: GET /api/health/ → {"status": "ok"}.
+"""apps/core/api/views.py — core's API views. Today only the health check:
+GET /api/health/ → {"status": "ok", "version": "<the git commit this process runs>"}.
 
 The outside uptime monitor calls it every minute, and the deploy smoke tests call it after each deploy
 (03 §5.17, §12). An answer means the backend process is up and serving requests.
 """
 
+from django.conf import settings
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -18,4 +20,7 @@ class HealthView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
-        return Response({"status": "ok"})
+        # During a deploy the old version keeps answering "ok" until the new one takes over, so "ok"
+        # alone can't prove a deploy worked. The demo's smoke test waits until this version equals the
+        # commit it just deployed (OPS-2). A commit id is no secret: the repo is public.
+        return Response({"status": "ok", "version": settings.APP_VERSION})

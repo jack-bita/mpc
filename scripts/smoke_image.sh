@@ -3,18 +3,21 @@
 #
 # It owns one check, which `make check-image` runs after building the image, and so CI's `image` job too:
 #   1. the image doesn't run as root (ops rule, 03 §13);
-#   2. started as a container, GET /api/health/ answers {"status":"ok"};
+#   2. started as a container, GET /api/health/ answers "ok" with the version the image was built with;
 #   3. GET / shows "Karibu": the static app, served by WhiteNoise in the same container (03 §13);
 #   4. that page can't be put inside another site's frame (X-Frame-Options: DENY);
 #   5. /static/ serves the admin's files, gathered by collectstatic when the image was built;
 #   6. the container is removed afterwards, whether the checks passed or not.
 # A "smoke test": the quickest check that the thing starts and answers at all, before anything deeper.
 #
-# Usage:  bash scripts/smoke_image.sh mpc-backend:check
+# Usage:  bash scripts/smoke_image.sh mpc-backend:check [version]
 
 set -euo pipefail
 
-image="${1:?usage: bash scripts/smoke_image.sh <image>}"
+image="${1:?usage: bash scripts/smoke_image.sh <image> [version]}"
+# The version the image was built with (APP_VERSION in backend/Dockerfile). The Makefile passes the same
+# value to the build and to this check; "dev" when none is given, as in a plain build.
+version="${2:-dev}"
 # $$ is this script's process number: two runs at once (two terminals) get two containers.
 name="mpc-image-smoke-$$"
 
@@ -62,7 +65,8 @@ get() {
 echo "waiting for gunicorn; a 'Connection reset' or 'refused' line below is a retry, not a failure"
 health="$(get --retry 30 --retry-delay 1 --retry-all-errors "$base/api/health/")" ||
   fail "/api/health/ did not answer"
-[[ "$health" == '{"status":"ok"}' ]] || fail "/api/health/ answered: $health"
+# The whole answer, the version included: a build that lost APP_VERSION would answer "dev" and fail here.
+[[ "$health" == "{\"status\":\"ok\",\"version\":\"$version\"}" ]] || fail "/api/health/ answered: $health"
 echo "ok: /api/health/ answers $health"
 
 # 3. The word is the home page's title in frontend/messages/sw.json (home.title). Change it there,

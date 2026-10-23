@@ -143,3 +143,8 @@ TIME_ZONE = "UTC"
 USE_TZ = True
 
 STATIC_URL = "static/"
+
+# The version this process runs: the git commit its image was built from (backend/Dockerfile sets it),
+# "dev" anywhere else. The health check shows it, so after a deploy the smoke test can tell whether the
+# new version is answering or the old one still is (OPS-2).
+APP_VERSION = env("APP_VERSION", "dev")

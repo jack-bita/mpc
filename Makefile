@@ -91,9 +91,13 @@ check-frontend: ## only the frontend (CI's frontend job)
 # the API and the app from one address, never as root. Needs Docker, as the database already does.
 # The first build takes minutes. Later ones reuse the slow install layers until a package list
 # changes; a code change still re-runs `pnpm build` and collectstatic, in seconds.
+# APP_VERSION is the version the image carries and /api/health/ shows (backend/Dockerfile). The same value
+# goes to the build and to the check. "dev" by default; the demo's deploy passes the commit (OPS-2):
+#   make check-image APP_VERSION=<commit>
+APP_VERSION ?= dev
 check-image: ## only the backend image: build it, start it, check it (CI's image job)
-	docker build --file backend/Dockerfile --tag mpc-backend:check .
-	bash scripts/smoke_image.sh mpc-backend:check
+	docker build --file backend/Dockerfile --build-arg APP_VERSION=$(APP_VERSION) --tag mpc-backend:check .
+	bash scripts/smoke_image.sh mpc-backend:check $(APP_VERSION)
 
 # Lint fixes first, then formatting: a lint fix can leave code the formatter would still change,
 # and `make check` would then fail its format check (ruff's own advice).
