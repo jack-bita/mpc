@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.5 · 22 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.6 · 23 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.6** (23 Oct 2026, PPL-1): two decisions by Jack, made while planning PPL-1. PPL-1 asks an email only of the superuser, because most of the shop's people have a phone but no email, so AUTH-3 gains a *Decide first* line on logins and lost passwords without email. Each group gets its own web address on one server: parking lot item 11, to become an ADR with OWN-3. Marked **(v1.6)**.
 
 **Changes in v1.5** (22 Oct 2026, CORE-1): PPL-1 gains a *Watch out* line on the admin's `id`: CORE-1 keeps the id editable on purpose, so DRF keeps the id a client sends (ADR-0007). Marked **(v1.5)**.
 
@@ -542,6 +544,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### AUTH-3 · Passwords for the owner and managers
 `M` · Claude-led · after PPL-1, CORE-6 · branch `feat/auth-3-allauth`
 **Check first:** the installed django-allauth supports login by phone with no username (03 AD3).
+**Decide first:** PPL-1 asks an email only of the superuser: most of the shop's people have a phone but no email (Jack, 23 Oct). Before building, choose how the owner and managers log in and get back a lost password without email (an SMS code, a first password the owner sets face to face, or the owner registering their phone as a device, then a PIN), and record it as a new ADR that supersedes 02 §5's email rule and ADR-0017's resets by email **(v1.6)**.
 **Build:** django-allauth headless, browser client: login by email or phone + password, logout, password reset by email (printed to the console in dev), sign-up closed, login rate limits; sessions stored in PostgreSQL.
 **Done when:**
 - [ ] A manager logs in by email or by phone and gets a session that DRF accepts.
@@ -1099,6 +1102,7 @@ The project is also the portfolio, so showing it is part of the plan.
 8. Licence review before R3 or a first outside contributor (BP16).
 9. A short demo video for each release.
 10. Practice mode before R2, if new Drugs staff need it (the demo covers it until then).
+11. Four web addresses, one server: `admin.<domain>` (Jack), `owner.<domain>` (the owner), `staff.<domain>` (managers and workers), `<domain>` (customers, R3) — Jack, 23 Oct. Written as an ADR with OWN-3, before OPS-5's Caddyfile **(v1.6)**.
 
 ## Appendix A — Changes to the other docs
 
