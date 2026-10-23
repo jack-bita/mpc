@@ -27,8 +27,8 @@ class Language(models.TextChoices):
 
 
 class UserManager(BaseUserManager["User"]):
-    # Also written into the migrations, so a future data migration can call create_user.
-    use_in_migrations = True
+    # Not written into the migrations (no `use_in_migrations`): inside a migration, User is a bare copy
+    # without set_password or full_clean, so this manager couldn't run there, and 0001 would import it forever.
 
     def create_user(
         self,
@@ -46,8 +46,9 @@ class UserManager(BaseUserManager["User"]):
             # The password column is never empty: Django stores "!" and random characters, which no
             # typed password can match. A PIN-only worker can't be logged in to with a password.
             user.set_unusable_password()
-        # The same rules as the admin's form, before anything is written: clean() above, every field,
-        # `unique` and the database rules. A broken rule is a ValidationError naming the field.
+        # The same rules as the admin's form, before anything is written: every field, clean() below,
+        # `unique` and the database rules. A broken rule is a ValidationError, under the field's name when
+        # it belongs to one field (a database rule that spans fields comes under `__all__`).
         user.full_clean()
         user.save(using=self._db)
         return user
