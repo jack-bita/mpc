@@ -1,14 +1,15 @@
 # ci.yml: the checks every pull request must pass before it can merge into main (REPO-5, 03 §12).
-# It owns the CI jobs, one per half of `make check`:
+# It owns the CI jobs, one per part of `make check`:
 #   - backend:  `make check-backend`, with a PostgreSQL 18 service beside it
 #   - frontend: `make check-frontend`
-# The two run side by side, each on its own fresh machine. The list of checks lives in the
+#   - image:    `make check-image`: build the backend image, start it, check that it serves (OPS-1)
+# The three run side by side, each on its own fresh machine. The list of checks lives in the
 # Makefile, not here: this file only prepares a clean machine and calls the same target a laptop
 # runs, so the two can't drift apart (ops rule).
 #
-# Each job's name is also the name of its check on a pull request, and the ruleset requires those
-# names (.github/rulesets/main.json). Rename a job only together with the ruleset, or every merge
-# waits for a check that never comes.
+# Each job's name is also the name of its check on a pull request, and the ruleset requires the
+# backend and frontend checks by those names (.github/rulesets/main.json). Rename a required job
+# only together with the ruleset, or every merge waits for a check that never comes.
 
 name: CI
 
@@ -126,3 +127,22 @@ jobs:
       # match package.json (Makefile), then runs the checks.
       - name: Run the frontend checks
         run: make check-frontend
+
+  # Named `image`, none of `backend`, `frontend` and `pr-title`: those are required checks, and a
+  # second job with one of their names would make the rule ambiguous (04 OPS-1).
+  image:
+    # Pinned, with a time limit, for the same reasons as the backend job. Each run builds from
+    # scratch (no layer cache is kept between runs): the base images and every package are
+    # downloaded again, a few minutes on GitHub's network.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # GitHub's Ubuntu machines come with Docker and curl, so nothing to set up: the job calls the
+      # same target a laptop runs.
+      - name: Build and check the backend image
+        run: make check-image
