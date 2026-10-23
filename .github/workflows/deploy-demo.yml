@@ -108,14 +108,15 @@ jobs:
 
       # The hook answers at once, with the new deploy's id; the deploy itself takes minutes, which is why
       # the next step waits for the version. --get with --data-urlencode adds imgURL to the hook's address,
-      # with its `@` and `:` written safely. curl never prints the address, and GitHub hides the secret
-      # in the log anyway.
+      # with its `@` and `:` written safely. --fail-with-body: an error still fails the step, and Render's
+      # own reason is printed (an image name that doesn't match render.yaml, for one). curl never prints
+      # the address, and GitHub hides the secret in the log anyway.
       - name: Ask Render to deploy this image
         env:
           DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
           IMAGE: ${{ needs.publish.outputs.image }}
         run: |
-          curl --silent --show-error --fail --max-time 30 --get --data-urlencode "imgURL=$IMAGE" "$DEPLOY_HOOK"
+          curl --silent --show-error --fail-with-body --max-time 30 --get --data-urlencode "imgURL=$IMAGE" "$DEPLOY_HOOK"
           echo
           echo "Render is deploying $IMAGE"
 

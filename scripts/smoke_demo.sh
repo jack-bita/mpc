@@ -43,15 +43,18 @@ get() {
 expected="{\"status\":\"ok\",\"version\":\"$version\"}"
 deadline=$((SECONDS + wait_for))
 while true; do
-  health="$(get "$base/api/health/" 2>/dev/null || true)"
+  # When the request fails, keep curl's own reason (2>&1), such as "returned error: 404" while the
+  # service doesn't exist or "returned error: 502" while it starts, so the log says why, not only "nothing".
+  reason=""
+  health="$(get "$base/api/health/" 2>&1)" || { reason="$health"; health=""; }
   [[ "$health" == "$expected" ]] && break
   # The first 120 characters are enough to see which version answers; a loading page would be long.
   answer="${health:0:120}"
   if (( SECONDS >= deadline )); then
     echo "Render's log for the service usually says why: a failed migration, a missing setting." >&2
-    fail "after ${wait_for}s, /api/health/ still answers: ${answer:-nothing}"
+    fail "after ${wait_for}s, /api/health/ still answers: ${answer:-nothing}${reason:+ ($reason)}"
   fi
-  echo "waiting for version $version; /api/health/ answers: ${answer:-nothing yet}"
+  echo "waiting for version $version; /api/health/ answers: ${answer:-nothing yet}${reason:+ ($reason)}"
   sleep 10
 done
 echo "ok: /api/health/ answers $health"
