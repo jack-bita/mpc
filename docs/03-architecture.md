@@ -191,7 +191,7 @@ MPC/                          ← repo name follows the product name
 │   ├── apps/                 ← core, shops, people, control, catalog, contacts,
 │   │                            inventory, money, sales, services, staffpay, sync, reports
 │   ├── tests/                ← cross-app tests: tenancy sweep, E1–E10, sync
-│   └── scripts/              ← seed the demo shop, smoke tests
+│   └── scripts/              ← seed the demo shop
 ├── frontend/
 │   ├── package.json, next.config.ts
 │   ├── src/                  ← app/, features/, offline/, api/, lib/, components/, i18n/
@@ -205,6 +205,7 @@ MPC/                          ← repo name follows the product name
 │   ├── Caddyfile.dev         ← local: /api/ and /_allauth/ to Django, the rest to Next.js (v1.3)
 │   ├── compose.prod.yml, compose.demo.yml
 │   └── backup/
+├── scripts/                  ← repo tools: commit and PR-title checks, GitHub sync, the image smoke test
 ├── private/                  ← ✚ real shop sheets, on Jack's laptop only: gitignored, never committed (v1.1)
 └── .github/workflows/        ← ci.yml, pr-title.yml, release.yml, deploy-prod.yml, deploy-demo.yml (v1.1)
 ```
