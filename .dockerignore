@@ -1,0 +1,31 @@
+# .dockerignore — what `docker build` may see of the repo, the build context of backend/Dockerfile (OPS-1).
+#
+# An allowlist: everything is shut out, then only what the image needs is let back in. So a new file at
+# the root stays out by default — a .env with secrets, a sheet in private/ with real shop data (ops rule,
+# CLAUDE.md rule 10). An image gets pushed to a registry (OPS-2): whatever goes in can be pulled out again.
+
+# Shut out everything...
+*
+# ...then let in the two folders the Dockerfile copies from.
+!backend
+!frontend
+
+# Inside them, shut out again what is secret, and what the build makes for itself.
+**/.env
+**/.env.*
+**/__pycache__
+**/*.py[cod]
+backend/.venv
+backend/staticfiles
+backend/.pytest_cache
+backend/.mypy_cache
+backend/.ruff_cache
+backend/.import_linter_cache
+backend/.coverage
+backend/htmlcov
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/coverage
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts

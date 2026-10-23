@@ -186,7 +186,7 @@ MPC/                          ← repo name follows the product name
 │   ├── spikes/               ← results of the week-one experiments (v1.1)
 │   └── writeups/             ← portfolio write-ups (v1.1)
 ├── backend/
-│   ├── pyproject.toml, uv.lock, manage.py
+│   ├── pyproject.toml, uv.lock, manage.py, Dockerfile
 │   ├── config/               ← settings/{base,dev,test,prod}.py, urls.py, wsgi.py, asgi.py
 │   ├── apps/                 ← core, shops, people, control, catalog, contacts,
 │   │                            inventory, money, sales, services, staffpay, sync, reports

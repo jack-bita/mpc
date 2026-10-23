@@ -32,6 +32,8 @@ __pycache__/
 .coverage
 .coverage.*
 htmlcov/
+# collectstatic's output: the image builds it (backend/Dockerfile, OPS-1).
+backend/staticfiles/
 
 # --- Node and Next.js: dependencies and build output (pnpm and next rebuild them).
 node_modules/
