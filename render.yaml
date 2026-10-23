@@ -27,13 +27,10 @@ services:
     # Render's region closest to Tanzania. The database must be in the same one: the service reaches it
     # over Render's private network, which only joins services of one region.
     region: frankfurt
-    # Migrations first, then the image's own command (backend/Dockerfile's CMD). Why here, on every start:
-    # the free plan has no pre-deploy command, and the demo's database is new every 30 days. The image's
-    # CMD stays migration-free on purpose: on the real server, migrations are their own step, rehearsed on
-    # a scratch copy before the deploy (OPS-6). If a migration fails, the new version never starts and
-    # Render keeps the old one running; the deploy's smoke test then turns red.
-    # `exec`: gunicorn replaces the shell, so it is the process Render stops on the next deploy.
-    dockerCommand: sh -c "python manage.py migrate --noinput && exec gunicorn --no-control-socket config.wsgi"
+    # The migrations first, then gunicorn: backend/start-demo.sh, inside the image, explains why. It
+    # replaces the image's CMD, which stays migration-free for the real server (OPS-6). Two plain words on
+    # purpose: Render may split this line at its spaces without honouring quotes.
+    dockerCommand: sh start-demo.sh
     # No healthCheckPath: Render's own checker may call with a host name Django doesn't allow and fail a
     # good deploy. Render then waits for the port to open (gunicorn opens it after the migrations), and the
     # real check is the deploy's smoke test, which waits for this commit's version on /api/health/.

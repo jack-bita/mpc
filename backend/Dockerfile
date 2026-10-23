@@ -117,4 +117,6 @@ EXPOSE 8000
 # --no-control-socket: gunicorn 25.1+ opens a socket through which its `gunicornc` tool can change the
 # workers or stop the server. We never use it, and anything that can steer the server is one more thing
 # to protect. (By default it lives in ~/.gunicorn/, and the `app` user has no home on purpose.)
+# The demo starts through backend/start-demo.sh instead, which runs the migrations, then this same
+# command (OPS-2): change both together.
 CMD ["gunicorn", "--no-control-socket", "config.wsgi"]

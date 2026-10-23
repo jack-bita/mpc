@@ -16,6 +16,7 @@
 !backend/apps
 !backend/config
 !backend/manage.py
+!backend/start-demo.sh
 !backend/pyproject.toml
 !backend/uv.lock
 !backend/.python-version
