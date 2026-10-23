@@ -61,7 +61,7 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       # A bind mount: the repo's Caddyfile appears where Caddy looks for it; `:ro` = read-only.
-      # After editing it: docker compose -f compose.dev.yml restart caddy
+      # After editing it: docker compose -f compose.dev.yml up -d --force-recreate caddy (see the Caddyfile).
       - ./deploy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
     extra_hosts:
       # Docker Desktop creates this name by itself; plain Docker on Linux needs this line.

@@ -1,10 +1,12 @@
 # deploy/Caddyfile.dev: the local front door at http://localhost:8080 (REPO-4).
 # It owns one job: send each request to the right dev server on the laptop, so the app and the API
 # share one address as in production (ADR-0017):
-#   /api/* and /_allauth/*  -> Django   (runserver on :8000)
-#   everything else         -> Next.js  (next dev on :3000)
+#   /api/*, /_allauth/*, /admin/* and /static/*  -> Django   (runserver on :8000)
+#   everything else                              -> Next.js  (next dev on :3000)
 # compose.dev.yml mounts this file read-only into the caddy container; after editing it, run
-#   docker compose -f compose.dev.yml restart caddy
+#   docker compose -f compose.dev.yml up -d --force-recreate caddy
+# not `restart`: an editor that saves by writing a new file leaves the mount pointing at the old one,
+# which is gone, and `restart` then fails with "no such file or directory".
 # The production rules will live beside it in deploy/Caddyfile (OPS-5).
 
 # Global options: settings for Caddy itself, not for one site.
@@ -20,8 +22,9 @@
 # Listen on port 8080 inside the container; compose.dev.yml publishes it as localhost:8080.
 :8080 {
 	# Every path Django owns must be listed here, or Next.js answers it with a 404.
-	# /_allauth/ is django-allauth's browser login API (ADR-0017). Add /admin/ and /static/ with PPL-1.
-	@django path /api/* /_allauth/*
+	# /_allauth/ is django-allauth's browser login API (ADR-0017). /admin/ is the Django admin (PPL-1),
+	# and /static/ holds its styles and scripts; Next.js keeps its own files under /_next/.
+	@django path /api/* /_allauth/* /admin/* /static/*
 	handle @django {
 		reverse_proxy host.docker.internal:8000
 	}
