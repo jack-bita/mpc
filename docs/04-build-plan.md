@@ -358,9 +358,9 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Learn:** Docker images and multi-stage builds; why containers shouldn't run as root.
 **Build:** a multi-stage `Dockerfile`: build the frontend, copy `out/` in, Django serves it with WhiteNoise (the demo's setup, 03 §13); gunicorn; a non-root user; CI builds the image on every PR (03 §12). Add a `docker` entry to `.github/dependabot.yml` for the new `Dockerfile` (REPO-5 watches only the compose images), and name the image job none of `backend`, `frontend` and `pr-title`: those are the required checks **(v1.3, v1.4)**. Then make the image job the fourth required check (`.github/rulesets/main.json`, applied with `protect`): every merge will deploy the demo (OPS-2), so a broken image must block the merge **(v1.7)**.
 **Done when:**
-- [ ] `docker run` of the image serves *Karibu* and `/api/health/` from one address.
-- [ ] The image builds in CI on every PR.
-- [ ] A PR whose image check is red can't merge **(v1.7)**.
+- [x] `docker run` of the image serves *Karibu* and `/api/health/` from one address.
+- [x] The image builds in CI on every PR.
+- [x] A PR whose image check is red can't merge **(v1.7)**.
 **Commits:** `build: backend image with the static app` → `ci: build the image on pull requests` → `ci: dependabot watches the backend image` → `ci: require the image check on main` **(v1.7)**
 
 ### OPS-2 · The demo deploys itself
