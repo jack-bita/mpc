@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/jack-bita/mpc/compare/v0.1.0...v0.2.0) (2026-10-24)
+
+
+### Features
+
+* **people:** custom user model, the first migration ([#80](https://github.com/jack-bita/mpc/issues/80)) ([eea2b52](https://github.com/jack-bita/mpc/commit/eea2b520c6da1d10800a7513bcb8f1d0fc9d7450))
+
 ## 0.1.0 (2026-10-22)
 
 
