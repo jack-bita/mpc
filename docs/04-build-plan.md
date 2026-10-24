@@ -372,7 +372,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Watch out:** on the demo, Render's proxy is the way in, not Caddy. `prod.py` trusts `X-Forwarded-Proto` because "Caddy is the one way in": check that Render's proxy also overwrites that header, and make the comment true. The image serves every file with a 60-second cache and no compression; long caching for the hashed `_next/static/` files (`WHITENOISE_IMMUTABLE_FILE_TEST`) and compressed admin files are still open **(v1.7)**.
 **Done when:**
 - [ ] A merge to `main` updates the demo with no manual step; a failing smoke test turns the workflow red.
-- [ ] The demo shows *Karibu* over HTTPS.
+- [x] The demo shows *Karibu* over HTTPS.
 **Commits:** `ci: deploy the demo on merge` → `docs: demo runbook and link`
 
 ### SPIKE-1 · Offline on the real shop devices
