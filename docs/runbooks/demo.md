@@ -33,10 +33,10 @@ One deploy runs at a time. A merge that arrives meanwhile waits for it. If a thi
 ## First setup (once, after OPS-2 merges)
 
 1. **The first run is red, on purpose.** After the merge, *Deploy demo* runs: `publish` is green and the image is on GitHub; `deploy` stops at *Check that the demo is set up*, because the steps below aren't done yet.
-2. **Make the image public**, so Render can pull it without a password. GitHub → your picture → **Your packages** → `mpc-backend` → **Package settings** → **Danger Zone** → **Change visibility** → **Public**. The image holds only code that is public already; `backend/Dockerfile.dockerignore` keeps `.env` and `private/` out of it.
-3. **A Render account**, free: <https://render.com> → **Sign up** with GitHub. When Render asks for access to GitHub, choose **Only select repositories** → `mpc`.
+2. **Check that the image is public**, so Render can pull it without a password: <https://github.com/users/jack-bita/packages/container/mpc-backend/settings> → **Danger Zone** shows its visibility. On the first setup (24 Oct 2026) it was public already: GitHub linked the package to this public repo when the workflow pushed it. If it says private: **Change visibility** → **Public**. The image holds only code that is public already; `backend/Dockerfile.dockerignore` keeps `.env` and `private/` out of it.
+3. **A Render account**, free: <https://render.com> → **Sign up**, with GitHub or by email. Use a workspace with no other free database: Render allows one per workspace. When Render asks for access to GitHub (at sign-up, or in step 4 after an email sign-up), choose **Only select repositories** → `mpc`.
 4. **The Blueprint.** Render → **New** → **Blueprint** → the `mpc` repo, branch `main`. Render reads `render.yaml` and lists `mabatinipumba-demo` (a web service) and `mabatinipumba-demo-db` (a database). It asks for one value: `DJANGO_ALLOWED_HOSTS` = `mabatinipumba-demo.onrender.com`. Apply. Render creates the database, then the service, pulls the image, runs the migrations and starts it.
-   - *Not yet seen on Render:* that the free plan takes an image-backed service and PostgreSQL 18. If Render refuses a line of `render.yaml`, write down its exact message, and fix the file in a small pull request before going on.
+   - On the first setup (24 Oct 2026) the free plan took both as written: the image-backed service and PostgreSQL 18. If Render ever refuses a line of `render.yaml`, write down its exact message, and fix the file in a small pull request before going on.
 5. **Check the address** on the service's page. If Render added letters to the name (the name was taken), put that host in the service's **Environment** → `DJANGO_ALLOWED_HOSTS`, and use that address in step 7 too. Then also change the address in the README and in this runbook, in a small pull request.
 6. **Copy the deploy hook:** the service → **Settings** → **Deploy Hook** → copy. It is a secret: whoever has it can start deploys. Paste it only into GitHub, in the next step.
 7. **The `demo` environment on GitHub:** the repo → **Settings** → **Environments** → `demo`. The first run already created it, empty and with no rules, because GitHub creates any environment a job names. Open it and set:
@@ -47,9 +47,15 @@ One deploy runs at a time. A merge that arrives meanwhile waits for it. If a thi
 
 **Check:** open <https://mabatinipumba-demo.onrender.com/api/health/>; the `version` is the merge's commit. The repo page shows a deployment to `demo` with the address. The next merge to `main` updates the demo with nobody touching anything.
 
-**Check once, after the first green deploy** (the open points of OPS-2's *Watch out*):
-- Render compresses the answers: `curl -sI -H 'Accept-Encoding: br, gzip' https://mabatinipumba-demo.onrender.com/` shows a `content-encoding` line.
-- The app's own files are kept for good: open the page, find a `/_next/static/…` file in its source, and `curl -sI` it: `cache-control` ends in `immutable`. The page itself says `max-age=0`.
+**Check once, after the first green deploy** (the open points of OPS-2's *Watch out*). Both passed on the first setup, 24 Oct 2026; run them again after a change to the caching or to Render's settings:
+
+```bash
+curl -s -o /dev/null -D - -H 'Accept-Encoding: br, gzip' https://mabatinipumba-demo.onrender.com/ | grep -iE 'content-encoding|cache-control'
+curl -sI "https://mabatinipumba-demo.onrender.com$(curl -s https://mabatinipumba-demo.onrender.com/ | grep -o '/_next/static/[^"]*' | head -n 1)" | grep -i cache-control
+```
+
+- The first shows `content-encoding: br`: Render's proxy compresses the answers, so Django doesn't. It also shows `cache-control: max-age=0, public`: the page is checked again on every visit.
+- The second shows `cache-control: max-age=315360000, public, immutable`: a file named after its content is kept for good.
 
 ## Every 30 days: the free database
 

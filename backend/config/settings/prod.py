@@ -87,9 +87,9 @@ def _is_named_after_content(path: str, url: str) -> bool:
 
 WHITENOISE_IMMUTABLE_FILE_TEST = _is_named_after_content
 
-# No compression in Django: on the real server Caddy compresses (03 §13); on the demo, Render says its
-# proxy compresses answers with Brotli or gzip when the browser asks for it, which docs/runbooks/demo.md
-# checks after the first deploy. Compressing here as well would only spend the small server's time.
+# No compression in Django: on the real server Caddy compresses (03 §13); on the demo, Render's proxy
+# compresses answers when the browser asks for it (`content-encoding: br` on the first deploy, checked with
+# docs/runbooks/demo.md). Compressing here as well would only spend the small server's time.
 
 
 def _deny_framing(headers: Headers, path: str, url: str) -> None:
