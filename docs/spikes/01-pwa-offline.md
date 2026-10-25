@@ -1,7 +1,7 @@
 # Spike 01 — Offline on the real shop devices
 
-**Card:** SPIKE-1 (04, v1.9) · **Tested:** 25 Oct 2026, on the demo, version `243fe32`
-**Status:** boxes 1, 2, 3 and 5 are answered here. Box 4, the update prompt, is checked on the deploy of the pull request that brings this report; the card-tick pull request adds its result below.
+**Card:** SPIKE-1 (04) · **Tested:** 25 Oct 2026, on the demo, versions `243fe32` and `9c836a7`
+**Status:** all five *Done when* boxes are answered here. Box 4, the update prompt, was checked on the deploy of the pull request that brought this report (#88).
 
 Words used below (the first three are also in the 03 glossary, §19):
 - **Service worker:** a small script the browser keeps for a website and starts when it is needed. It saves the app's files on the device and answers from them when there is no internet (03 §7.7, `frontend/src/sw.ts`).
@@ -15,7 +15,7 @@ Does the static app install, open with no internet and keep its data on the shop
 
 ## The answer
 
-**Yes, on both devices tested.** Installed from Chrome, the app opens in airplane mode, and its saved rows survive closing the browser and restarting the device. On the demo address, Chrome granted persistent storage.
+**Yes, on both devices tested.** Installed from Chrome, the app opens in airplane mode, and its saved rows survive closing the browser and restarting the device. On the demo address, Chrome granted persistent storage. A new deploy showed the update bar, and a tap switched to the new version.
 
 ## How it was tested
 
@@ -51,10 +51,19 @@ Chrome reports Windows 11 as "Windows 15.0.0": in its numbering, 13 and up means
 | It installs as an app and opens in airplane mode | ✓ | ✓ |
 | A Dexie row survives closing the browser and restarting the device | ✓ two rows | ✓ two rows |
 | Persistent storage is granted, or the reason it isn't is written down | ✓ granted | ✓ granted |
-| A new deploy shows an update prompt and switches | after this report's deploy | after this report's deploy |
+| A new deploy shows an update prompt and switches | ✓ `243fe32` → `9c836a7` | ✓ `243fe32` → `9c836a7` |
 
 - An address with a query string, `/spike/?test=1`, also opened offline on both.
 - Storage: the page showed "2.3 / 10,242.3 MB" on both devices. That is the 2.3 MB the app used plus exactly 10,240 MB (10 GB). The same figure on two different devices means Chrome reports a fixed allowance, not each device's real free space. So we know at least 10 GB was free; the real limit isn't shown. (The page counted 1,024 × 1,024 bytes as one MB.)
+
+## The update (box 4)
+
+Pull request #88 removed the `/spike/` page and brought this report. Its merge deployed version `9c836a7` to the demo. Then, on each device, with internet on:
+1. Open the installed app. It showed the old version, *Toleo 243fe32*.
+2. Within seconds, the bar *Toleo jipya liko tayari* appeared, with **Sasisha**.
+3. Tap **Sasisha**. The page reloaded and showed *Toleo 9c836a7*.
+
+Nothing reloaded by itself before the tap. The phone and the laptop passed alike.
 
 ## What we learned
 
