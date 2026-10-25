@@ -32,15 +32,15 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 
 ## Stack
 
-- **Backend:** Python 3.14, Django 6.1, Django REST Framework, django-allauth, PostgreSQL 18
-- **Frontend:** Next.js 16 as a static PWA, React 19, TypeScript, Tailwind CSS + shadcn/ui, Serwist (the service worker), Dexie (IndexedDB)
+- **Backend:** Python 3.14, Django 6.1, Django REST Framework, django-allauth (coming), PostgreSQL 18
+- **Frontend:** Next.js 16 as a static PWA, React 19, TypeScript, Tailwind CSS + shadcn/ui, Serwist (the service worker), Dexie (IndexedDB, coming)
 - **Running it:** Docker Compose + Caddy; GitHub Actions for CI and the demo's deploy; the demo on Render
 
 ## Run it locally
 
-The app and its API answer at one address, `http://localhost:8080`, as in production: Caddy sends `/api/` to Django and everything else to Next.js ([ADR-0017](docs/adr/0017-one-address-session-cookies-allauth.md)). PostgreSQL 18 and Caddy run in Docker; Django and Next.js run on your machine, so code changes reload at once.
+The app and its API answer at one address, `http://localhost:8080`, as in production: Caddy sends `/api/`, `/admin/`, `/_allauth/` and `/static/` to Django and everything else to Next.js ([ADR-0017](docs/adr/0017-one-address-session-cookies-allauth.md)). PostgreSQL 18 and Caddy run in Docker; Django and Next.js run on your machine, so code changes reload at once.
 
-**You need:** Git, make, Docker with Compose v2 (on Windows: Docker Desktop with WSL integration turned on for your Linux distro), [uv](https://docs.astral.sh/uv/) (it installs Python 3.14 itself), and Node.js 24 or newer with pnpm.
+**You need:** Git, make, Docker with Compose v2 (on Windows: Docker Desktop with WSL integration turned on for your Linux distro), [uv](https://docs.astral.sh/uv/) 0.11.33 exactly (any other version refuses to run here; it installs Python 3.14 itself), and Node.js 24 or newer with pnpm.
 
 ```bash
 git clone https://github.com/jack-bita/mpc.git
@@ -53,7 +53,7 @@ make dev                          # PostgreSQL + Caddy in Docker, then Django an
 
 Open <http://localhost:8080> to see *Karibu*, and <http://localhost:8080/api/health/> for `{"status":"ok","version":"dev"}`. The first `make dev` takes longer: Docker downloads two images and uv installs the backend's packages.
 
-**The database tables:** while `make dev` runs, open a second terminal in the repo and run `make migrate`. It creates the tables the first time, and adds new ones whenever a pull brings a new migration.
+**The database tables:** while `make dev` runs, open a second terminal in the repo and run `make migrate`. It creates the tables the first time, and applies each new migration a pull brings.
 
 **Stop:** Ctrl-C stops Django and Next.js; `make down` stops the containers and keeps the database.
 
