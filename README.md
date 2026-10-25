@@ -53,6 +53,8 @@ make dev                          # PostgreSQL + Caddy in Docker, then Django an
 
 Open <http://localhost:8080> to see *Karibu*, and <http://localhost:8080/api/health/> for `{"status":"ok","version":"dev"}`. The first `make dev` takes longer: Docker downloads two images and uv installs the backend's packages.
 
+**The database tables:** while `make dev` runs, open a second terminal in the repo and run `make migrate`. It creates the tables the first time, and adds new ones whenever a pull brings a new migration.
+
 **Stop:** Ctrl-C stops Django and Next.js; `make down` stops the containers and keeps the database.
 
 **Other commands:** run `make` to list them. `make check` runs everything CI runs; it must pass before every pull request.
@@ -60,7 +62,6 @@ Open <http://localhost:8080> to see *Karibu*, and <http://localhost:8080/api/hea
 **If something goes wrong**
 - *`docker: command not found` inside WSL:* start Docker Desktop and wait for "Engine running"; then check Settings → Resources → WSL integration.
 - *`port is already allocated` for 5433:* another program holds that port. Set a free one as `DB_PORT` in `.env`.
-- *Django says "You have unapplied migrations… run migrate":* ignore it for now. The first migration comes with PPL-1, and `make migrate` refuses until then on purpose ([ADR-0012](docs/adr/0012-one-person-is-one-user.md)).
 
 ## How it is built
 
