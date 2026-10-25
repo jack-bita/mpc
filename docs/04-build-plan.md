@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.9 · 25 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.10 · 25 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.10** (25 Oct 2026, SPIKE-1): SPIKE-1's findings (`docs/spikes/01-pwa-offline.md`) reach the cards that build on them. SYNC-13 starts from the update bar SPIKE-1 built, adds regular update checks, and gains a *Watch out* line; SYNC-12 and SYNC-6 gain one each. The parking lot gains the workers' iPhone question, for Jack to decide, and what SPIKE-1 left untested. Marked **(v1.10)**.
 
 **Changes in v1.9** (25 Oct 2026, SPIKE-1): two decisions by Jack, made while planning SPIKE-1. The card ships in two PRs: the demo deploys only from `main`, so the device tests need the spike's code there first, and the second PR's deploy tests the update prompt. The card also gains the *Learn* line its drill starts from. Marked **(v1.9)**.
 
@@ -382,7 +384,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Learn:** what makes a website installable as an app; how a service worker keeps the app's files and gets a new version; storage inside the browser, and why the browser may delete it **(v1.9)**.
 **Question:** does the static app install, open with no internet and keep its data on the shop's own laptop and phone?
 **Build:** manifest and icons; the Serwist service worker built after `next build` over `out/`; a throwaway `/spike` page that writes and reads a Dexie row and shows the result of `navigator.storage.persist()`; a visible version number.
-**Watch out:** the demo deploys only from `main` (OPS-2), so the device tests need the spike's code merged first. The card ships in two PRs: the first brings the Serwist setup and the `/spike` page to the demo; after the device tests, the second removes the page and adds the report, and its deploy is the new deploy the update box needs. The shop's devices change, so the spike tests the laptops and the phone the shop uses at the time, and the report names them (OWN-2) **(v1.9)**.
+**Watch out:** the demo deploys only from `main` (OPS-2), so the device tests need the spike's code merged first. The card ships in two PRs: the first brings the Serwist setup and the `/spike` page to the demo; after the device tests, the second removes the page and adds the report, and its deploy is the new deploy the update box needs. The shop's devices change, so the spike tests the laptops and the phone the shop uses at the time, and the report names them (OWN-2) **(v1.9)**. Jack tested one laptop and the phone; what was left untested is in the parking lot (§20) **(v1.10)**.
 **Done when** (from the demo address, on the shop laptop and one Android phone):
 - [ ] It installs as an app and opens in airplane mode.
 - [ ] A Dexie row survives closing the browser and restarting the device.
@@ -708,6 +710,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Jack-led · after UI-1 · branch `feat/sync-6-dexie`
 **Learn:** IndexedDB, Dexie and database versions inside the browser (03 §6.1).
 **Build:** `offline/db.ts`: one database per shop with the stores `meta`, the reference stores, `pin_checks`, documents, `outbox`, `pending_effects` and `sent_archive`; typed tables; version 1; Vitest with fake-indexeddb.
+**Watch out:** `dexie` and `dexie-react-hooks` (03 §3) are new dependencies again. SPIKE-1 added Dexie for its test page and removed it with the page, so both need Jack's yes before `pnpm add` **(v1.10)**.
 **Done when:**
 - [ ] Two shops in one browser get two separate databases.
 - [ ] A version bump runs its upgrade.
@@ -768,6 +771,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### SYNC-12 · Keeping offline data safe
 `M` · Claude-led · after SYNC-8 · branch `feat/sync-12-data-safety`
 **Build:** ask for persistent storage and show its state; install guidance; a warning before logout or clearing data while records are unsent; export unsent records to a file and import them on another device of the same shop (03 §6.7).
+**Watch out:** on `localhost`, Chrome refused persistent storage even to the installed app, and granted it on the demo address (SPIKE-1's report). So the *not persistent* state shows in development and in the end-to-end tests (UI-6); only the demo or a real device proves the granted state **(v1.10)**.
 **Done when:**
 - [ ] The warning stops an accidental logout with unsent records.
 - [ ] An exported file, imported on another device, posts each record once.
@@ -775,11 +779,13 @@ Done in **portion 6**, in chat — not with Claude Code.
 
 ### SYNC-13 · Safe app updates
 `M` · Claude-led · after SYNC-8, SPIKE-1 · branch `feat/sync-13-updates`
-**Build:** the *Toleo jipya* prompt, switching only when no counter screen is busy; the order: send the outbox → update → upgrade the device database; documents carry `schema_version`, and the server accepts the current and the previous one; `min_app_version` from pull makes an old app send its outbox, then update (03 §6.8).
+**Build:** the *Toleo jipya* bar SPIKE-1 built (`frontend/src/components/update-prompt.tsx`) switches only when no counter screen is busy; the app checks for a new version regularly, because the browser checks only when a page loads *(default: every hour, and when the network comes back)* **(v1.10)**; the order: send the outbox → update → upgrade the device database; documents carry `schema_version`, and the server accepts the current and the previous one; `min_app_version` from pull makes an old app send its outbox, then update (03 §6.8).
+**Watch out:** from SPIKE-1's report. A waiting version also takes over, with no bar, when every window of the app is closed. After a switch, an old tab is served by the new service worker, which has deleted the old version's code, so a tab that needs code it never loaded fails until it reloads **(v1.10)**.
 **Done when:**
 - [ ] An update never interrupts a busy counter screen.
 - [ ] An app below `min_app_version` sends its outbox, then updates.
-**Commits:** `feat(frontend): update prompt` → `feat(sync): schema versions` → `feat(frontend): minimum app version`
+- [ ] A counter left open all day still gets the *Toleo jipya* bar after a deploy, with no reload **(v1.10)**.
+**Commits:** `feat(frontend): updates wait for a quiet counter` → `feat(frontend): regular update checks` → `feat(sync): schema versions` → `feat(frontend): minimum app version` **(v1.10)**
 
 ### SYNC-14 · Outage log and sync health page
 `M` · Claude-led · after SYNC-5, SYNC-8 · branch `feat/sync-14-sync-health`
@@ -1114,6 +1120,8 @@ The project is also the portfolio, so showing it is part of the plan.
 9. A short demo video for each release.
 10. Practice mode before R2, if new Drugs staff need it (the demo covers it until then).
 11. Four web addresses, one server: `admin.<domain>` (Jack), `owner.<domain>` (the owner), `staff.<domain>` (managers and workers), `<domain>` (customers, R3) — Jack, 23 Oct. Written as an ADR with OWN-3, before OPS-5's Caddyfile **(v1.6)**.
+12. Workers' own iPhones: does the app need them, or only the shop's devices? On an iPhone every browser is Safari inside: it may delete a site's data after some days without use, hides installing in the Share menu, and has no Background Sync (03 §7.3, SPIKE-1's report). Until Jack decides, iPhones are for the owner's office screens, online **(v1.10)**.
+13. Not tested by SPIKE-1: a second laptop, and Edge offline. Both are checked when the shop's devices are paired and installed before go-live (§16) **(v1.10)**.
 
 ## Appendix A — Changes to the other docs
 

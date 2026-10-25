@@ -566,7 +566,7 @@ frontend/src/
 
 - **Manifest:** names, icons, standalone display; counter devices start on the sale screen.
 - **Service worker (Serwist):** stores every file of the build; never stores `/api` responses (data lives in Dexie); shows the update prompt.
-- **Build:** Serwist runs after `next build`, over the exported files, so we don't depend on Next.js bundler plugins (Serwist's Turbopack support is still settling). Proven in SPIKE-1 **(v1.2)**.
+- **Build:** Serwist runs after `next build`, over the exported files, so we don't depend on Next.js bundler plugins (Serwist's Turbopack support is still settling). Proven in SPIKE-1 ([the report](spikes/01-pwa-offline.md)) **(v1.2)**.
 
 ## 8. Numbers shared by device and server ✚
 
