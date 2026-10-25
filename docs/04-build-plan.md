@@ -375,7 +375,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Build:** `deploy-demo.yml`: merge to `main` → push the image to GitHub Container Registry → Render deploy hook → smoke test `/api/health/`; a free Render web service with free PostgreSQL (fake data only); migrations run when the service starts; `docs/runbooks/demo.md`, including re-creating the free database every 30 days (03 AD15).
 **Watch out:** on the demo, Render's proxy is the way in, not Caddy. `prod.py` trusts `X-Forwarded-Proto` because "Caddy is the one way in": check that Render's proxy also overwrites that header, and make the comment true. The image serves every file with a 60-second cache and no compression; long caching for the hashed `_next/static/` files (`WHITENOISE_IMMUTABLE_FILE_TEST`) and compressed admin files are still open **(v1.7)**.
 **Done when:**
-- [ ] A merge to `main` updates the demo with no manual step; a failing smoke test turns the workflow red.
+- [x] A merge to `main` updates the demo with no manual step; a failing smoke test turns the workflow red.
 - [x] The demo shows *Karibu* over HTTPS.
 **Commits:** `ci: deploy the demo on merge` → `docs: demo runbook and link`
 
@@ -386,11 +386,11 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Build:** manifest and icons; the Serwist service worker built after `next build` over `out/`; a throwaway `/spike` page that writes and reads a Dexie row and shows the result of `navigator.storage.persist()`; a visible version number.
 **Watch out:** the demo deploys only from `main` (OPS-2), so the device tests need the spike's code merged first. The card ships in two PRs: the first brings the Serwist setup and the `/spike` page to the demo; after the device tests, the second removes the page and adds the report, and its deploy is the new deploy the update box needs. The shop's devices change, so the spike tests the laptops and the phone the shop uses at the time, and the report names them (OWN-2) **(v1.9)**. Jack tested one laptop and the phone; what was left untested is in the parking lot (§20) **(v1.10)**.
 **Done when** (from the demo address, on the shop laptop and one Android phone):
-- [ ] It installs as an app and opens in airplane mode.
-- [ ] A Dexie row survives closing the browser and restarting the device.
-- [ ] Persistent storage is granted, or the reason it isn't is written down.
-- [ ] A new deploy shows an update prompt and switches.
-- [ ] Results, device models and Chrome versions are in `docs/spikes/01-pwa-offline.md`. The Serwist setup stays; the `/spike` page is removed.
+- [x] It installs as an app and opens in airplane mode.
+- [x] A Dexie row survives closing the browser and restarting the device.
+- [x] Persistent storage is granted, or the reason it isn't is written down.
+- [x] A new deploy shows an update prompt and switches.
+- [x] Results, device models and Chrome versions are in `docs/spikes/01-pwa-offline.md`. The Serwist setup stays; the `/spike` page is removed.
 **Commits:** the first PR: `docs: spike-1 card gets a learn line and two pull requests` → `feat(frontend): manifest and icons` → `feat(frontend): serwist service worker` → `feat(frontend): update prompt` → `feat(frontend): visible app version` → `feat(frontend): spike page for offline storage`; the second PR: `chore(frontend): remove the spike page` → `docs(spikes): offline results` **(v1.9)**
 
 ### SPIKE-2 · A slip from Chrome on the shop printer
