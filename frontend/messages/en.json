@@ -22,6 +22,7 @@
     "persist": "Ask for persistent storage",
     "rows": "Saved rows",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "error": "Error"
   }
 }

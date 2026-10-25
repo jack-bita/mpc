@@ -22,6 +22,7 @@
     "persist": "Omba hifadhi ya kudumu",
     "rows": "Mistari iliyohifadhiwa",
     "yes": "Ndiyo",
-    "no": "Hapana"
+    "no": "Hapana",
+    "error": "Hitilafu"
   }
 }

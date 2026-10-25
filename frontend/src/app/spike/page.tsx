@@ -100,12 +100,27 @@ async function readState(): Promise<SpikeState> {
 export default function SpikePage() {
   // null until the browser has answered for the first time.
   const [state, setState] = useState<SpikeState | null>(null);
+  // The browser's own words when it refuses something, shown on screen: a phone has no console to
+  // read them in, and the spike report needs the reason (04 SPIKE-1, box 3).
+  const [error, setError] = useState<string | null>(null);
 
-  // Reads every fact again. useCallback keeps it the same function on every redraw, so the effect
-  // below doesn't start over each time the page redraws.
-  const refresh = useCallback(async () => {
-    setState(await readState());
+  // Runs one step of the page. If the browser refuses, its words are kept instead of lost.
+  // useCallback keeps each function the same on every redraw, so the effect below doesn't start over
+  // each time the page redraws.
+  const attempt = useCallback(async (step: () => Promise<void>) => {
+    try {
+      await step();
+      setError(null);
+    } catch (problem) {
+      setError(String(problem));
+    }
   }, []);
+
+  // Reads every fact again, through attempt.
+  const refresh = useCallback(
+    () => attempt(async () => setState(await readState())),
+    [attempt],
+  );
 
   useEffect(() => {
     // Read once when the page opens, and again whenever the device goes online or offline.
@@ -120,19 +135,22 @@ export default function SpikePage() {
     };
   }, [refresh]);
 
+  // The buttons run through attempt themselves, so these read the facts directly, not through
+  // refresh: a second attempt inside the first would clear the error the first one needs to show.
+
   /** Hifadhi mstari: one more row, with the time now. */
   async function saveRow() {
     await db.rows.add({
       id: crypto.randomUUID(),
       savedAt: new Date().toISOString(),
     });
-    await refresh();
+    setState(await readState());
   }
 
   /** Omba hifadhi ya kudumu: Chrome answers by itself, with no popup (lesson 3); the page then shows it. */
   async function askPersist() {
     await navigator.storage.persist();
-    await refresh();
+    setState(await readState());
   }
 
   const yesNo = (value: boolean) => (value ? sw.spike.yes : sw.spike.no);
@@ -140,6 +158,13 @@ export default function SpikePage() {
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-6 p-4">
       <h1 className="text-2xl font-semibold">{sw.spike.title}</h1>
+
+      {/* What the browser refused, in its own words. Those words come from the browser, in English. */}
+      {error && (
+        <p role="alert" className="break-words text-sm text-destructive">
+          {`${sw.spike.error}: ${error}`}
+        </p>
+      )}
 
       {/* The facts, as label and value. Until the browser answers, only the version shows. */}
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
@@ -165,14 +190,14 @@ export default function SpikePage() {
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => void saveRow()}
+          onClick={() => void attempt(saveRow)}
           className="min-h-12 rounded-md bg-primary px-5 font-semibold text-primary-foreground"
         >
           {sw.spike.save}
         </button>
         <button
           type="button"
-          onClick={() => void askPersist()}
+          onClick={() => void attempt(askPersist)}
           className="min-h-12 rounded-md border px-5 font-semibold"
         >
           {sw.spike.persist}
