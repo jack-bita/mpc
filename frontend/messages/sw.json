@@ -9,5 +9,19 @@
   "update": {
     "ready": "Toleo jipya liko tayari",
     "apply": "Sasisha"
+  },
+  "spike": {
+    "title": "Majaribio ya offline",
+    "version": "Toleo",
+    "device": "Kifaa",
+    "online": "Mtandao",
+    "worker": "Service worker",
+    "persisted": "Hifadhi ya kudumu",
+    "storage": "Nafasi iliyotumika",
+    "save": "Hifadhi mstari",
+    "persist": "Omba hifadhi ya kudumu",
+    "rows": "Mistari iliyohifadhiwa",
+    "yes": "Ndiyo",
+    "no": "Hapana"
   }
 }
