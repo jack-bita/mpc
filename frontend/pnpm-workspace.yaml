@@ -6,3 +6,6 @@ allowBuilds:
   # Its script only downloads its native binary when that is missing; pnpm already installs
   # the binary as a normal package (@unrs/resolver-binding-*), so the script is not needed.
   unrs-resolver: false
+  # Its script only checks for its native program; pnpm already installs that program as a
+  # normal package (@esbuild/<platform>), and esbuild runs without the script (SPIKE-1).
+  esbuild: false

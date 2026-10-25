@@ -18,8 +18,10 @@
 # --- Stage 1: build the shop app into plain files, frontend/out/ (ADR-0016).
 # Node 24: the version package.json's "engines" and CI's frontend job use.
 FROM node:24.21.0-trixie-slim AS frontend
-# Next.js would otherwise send anonymous usage data from every build.
-ENV NEXT_TELEMETRY_DISABLED=1
+# Next.js would otherwise send anonymous usage data from every build. The Serwist CLI (`serwist build`,
+# part of `pnpm build`) would otherwise ask the npm registry whether a newer version exists (SPIKE-1).
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NO_UPDATE_NOTIFIER=1
 # pnpm comes through corepack, which ships with Node 24: it reads "packageManager" in package.json, so the
 # build runs the very same pnpm as the laptop and CI. No download prompt: nobody is there to answer it.
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0

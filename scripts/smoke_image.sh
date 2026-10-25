@@ -10,7 +10,9 @@
 #   6. the page is checked again on every visit (max-age=0), so a deploy reaches the browser at once;
 #   7. a file under /_next/static/, named after its content, is cached for good (immutable);
 #   8. the app's manifest is served as a manifest, so Chrome can offer to install the app (SPIKE-1);
-#   9. the container is removed afterwards, whether the checks passed or not.
+#   9. the service worker is served as JavaScript, checked again on every visit, with the app's files in
+#      its list (SPIKE-1);
+#  10. the container is removed afterwards, whether the checks passed or not.
 # A "smoke test": the quickest check that the thing starts and answers at all, before anything deeper.
 #
 # Usage:  bash scripts/smoke_image.sh mpc-backend:check [version]
@@ -111,3 +113,15 @@ headers="$(get --head "$base/manifest.webmanifest")" || fail "/manifest.webmanif
 [[ "${headers,,}" == *"content-type: application/manifest+json"* ]] ||
   fail "/manifest.webmanifest is not served as application/manifest+json"
 echo "ok: /manifest.webmanifest is served as a manifest"
+
+# 9. The service worker (frontend/src/sw.ts, made into out/sw.js by `serwist build` after `next build`).
+# - JavaScript: a browser refuses to install a worker served as any other type.
+# - max-age=0: a new sw.js must reach the browser at once, or the update prompt never comes (03 §6.8).
+# - Its list of files names index.html, so `serwist build` found the app in out/. The list sits in the
+#   minified code as url:"index.html"; the bare word alone would also match Serwist's own code.
+sw="$(get --include "$base/sw.js")" || fail "/sw.js did not answer"
+[[ "${sw,,}" == *"content-type: text/javascript"* ]] || fail "/sw.js is not served as JavaScript"
+[[ "${sw,,}" == *"cache-control: max-age=0, public"* ]] ||
+  fail "/sw.js may be kept by the browser (want Cache-Control: max-age=0)"
+[[ "$sw" == *'url:"index.html"'* ]] || fail "/sw.js doesn't list index.html among the files it keeps"
+echo "ok: /sw.js is served as JavaScript, checked on every visit, and keeps index.html"

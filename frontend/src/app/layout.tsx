@@ -11,6 +11,9 @@ import type { ReactNode } from "react";
 // direct import with next-intl, which also handles the English switch.
 import sw from "../../messages/sw.json";
 
+// The service worker keeps the app's files on the device, so every page opens offline (SPIKE-1).
+import { ServiceWorker } from "@/components/service-worker";
+
 // The one global stylesheet: Tailwind and the design tokens, loaded once for every page.
 import "./globals.css";
 
@@ -22,7 +25,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     // lang="sw": the app is Swahili first, so screen readers and spell checkers use Swahili.
     <html lang="sw">
-      <body>{children}</body>
+      <body>
+        {children}
+        <ServiceWorker />
+      </body>
     </html>
   );
 }

@@ -30,6 +30,7 @@
 !frontend/pnpm-lock.yaml
 !frontend/pnpm-workspace.yaml
 !frontend/next.config.ts
+!frontend/serwist.config.mjs
 !frontend/tsconfig.json
 !frontend/postcss.config.mjs
 

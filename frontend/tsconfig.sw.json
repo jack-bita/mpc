@@ -1,0 +1,20 @@
+// tsconfig.sw.json — how TypeScript checks the service worker, src/sw.ts (`pnpm typecheck`, SPIKE-1).
+//
+// The worker runs in the background, where there is no page: no `window`, no `document`. Its global is
+// `self`, a ServiceWorkerGlobalScope. So it gets the "webworker" types instead of tsconfig.json's "dom"
+// types; with both at once, TypeScript would accept page code that can't run in a worker, and the
+// other way round. esbuild compiles it (serwist.config.mjs); TypeScript only checks it.
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["esnext", "webworker"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "files": ["src/sw.ts"]
+}
