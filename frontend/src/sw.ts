@@ -17,6 +17,13 @@ const serwist = new Serwist({
   // The list of the app's files, each with its fingerprint. When the worker installs, it downloads
   // them all into the cache (lesson 2).
   precacheEntries: self.__SW_MANIFEST,
+  // Find a file in the cache whatever follows the "?" in its address. Next.js asks for a page's data
+  // as /page/index.txt?_rsc=…, and record pages will carry their id the same way (/sales/view/?id=…,
+  // ADR-0016), but the cache keeps each file once, under its address without the "?". Safe because no
+  // file of the build changes with what follows the "?", and /api answers are never cached.
+  precacheOptions: {
+    ignoreURLParametersMatching: [/.*/],
+  },
   // A new version waits until someone taps Toleo jipya: the app must never reload in the middle of a
   // sale (03 §6.7). The update prompt sends SKIP_WAITING instead (below).
   skipWaiting: false,
