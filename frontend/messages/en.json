@@ -9,20 +9,5 @@
   "update": {
     "ready": "A new version is ready",
     "apply": "Update"
-  },
-  "spike": {
-    "title": "Offline tests",
-    "version": "Version",
-    "device": "Device",
-    "online": "Online",
-    "worker": "Service worker",
-    "persisted": "Persistent storage",
-    "storage": "Storage used",
-    "save": "Save a row",
-    "persist": "Ask for persistent storage",
-    "rows": "Saved rows",
-    "yes": "Yes",
-    "no": "No",
-    "error": "Error"
   }
 }
