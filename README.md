@@ -1,8 +1,18 @@
 # MPC — a shop system for agro-vet and farm-supply shops
 
+[![CI](https://github.com/jack-bita/mpc/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jack-bita/mpc/actions/workflows/ci.yml?query=branch%3Amain)
+
+## The problem
+
+- Small agro-vet shops in Tanzania keep sales, debts (*madeni*) and stock in paper books, and many cash sales leave no record at all.
+- At closing the drawers often don't match, nobody can say where a difference came from, and staff hours and pay are counted by hand.
+- Ready-made shop apps need English, a subscription and steady internet, but the internet and the power often go out.
+
+## What it does
+
 An offline-first, Swahili-first system for the counter and the office: staff attendance and pay, selling, payments (cash, bank, Lipa Namba), credit (*madeni*) and stock. It is built first for **MPC — Mabatini Pumba Center**, a family agro-vet shop in Usa River, Arusha, Tanzania, and designed from day one for other shops too.
 
-**Status:** in development. The planning is done; the code starts with stage 0 of the build plan.
+**Status:** in development. Working today: CI on every pull request, a demo that updates itself on every merge, and an app that installs on a laptop or phone and opens with no internet. The [build plan](docs/04-build-plan.md) ticks each task when it merges.
 
 **Demo:** <https://mabatinipumba-demo.onrender.com>, with fake data only. Every merge to `main` updates it. It sleeps when nobody uses it, so the first visit takes about a minute.
 
@@ -15,11 +25,16 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 | [Architecture](docs/03-architecture.md) | How it is built |
 | [Build plan](docs/04-build-plan.md) | Every task, in order |
 | [Decisions](docs/adr/README.md) | One short record for each big decision |
+| [Spike reports](docs/spikes/) | Experiments run before building, with their results |
+| [Runbooks](docs/runbooks/) | Step-by-step jobs, such as setting up the demo |
+| [Changelog](CHANGELOG.md) | What changed in each release |
 | [CLAUDE.md](CLAUDE.md) | How the code is written |
 
 ## Stack
 
-Django 6.1 + Django REST Framework · PostgreSQL 18 · Next.js 16 as a static PWA · React 19 · TypeScript · Dexie (IndexedDB) · Docker Compose + Caddy
+- **Backend:** Python 3.14, Django 6.1, Django REST Framework, django-allauth, PostgreSQL 18
+- **Frontend:** Next.js 16 as a static PWA, React 19, TypeScript, Tailwind CSS + shadcn/ui, Serwist (the service worker), Dexie (IndexedDB)
+- **Running it:** Docker Compose + Caddy; GitHub Actions for CI and the demo's deploy; the demo on Render
 
 ## Run it locally
 
