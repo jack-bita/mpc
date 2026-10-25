@@ -3,7 +3,8 @@
     "title": "MPC"
   },
   "home": {
-    "title": "Welcome"
+    "title": "Welcome",
+    "version": "Version"
   },
   "update": {
     "ready": "A new version is ready",

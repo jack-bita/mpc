@@ -12,7 +12,8 @@
 #   8. the app's manifest is served as a manifest, so Chrome can offer to install the app (SPIKE-1);
 #   9. the service worker is served as JavaScript, checked again on every visit, with the app's files in
 #      its list (SPIKE-1);
-#  10. the container is removed afterwards, whether the checks passed or not.
+#  10. the page shows the version the image was built with, so a device's version can be checked (SPIKE-1);
+#  11. the container is removed afterwards, whether the checks passed or not.
 # A "smoke test": the quickest check that the thing starts and answers at all, before anything deeper.
 #
 # Usage:  bash scripts/smoke_image.sh mpc-backend:check [version]
@@ -125,3 +126,11 @@ sw="$(get --include "$base/sw.js")" || fail "/sw.js did not answer"
   fail "/sw.js may be kept by the browser (want Cache-Control: max-age=0)"
 [[ "$sw" == *'url:"index.html"'* ]] || fail "/sw.js doesn't list index.html among the files it keeps"
 echo "ok: /sw.js is served as JavaScript, checked on every visit, and keeps index.html"
+
+# 10. The version on the page (frontend/src/lib/version.ts): the commit, cut to 7 characters as GitHub
+# shows it. The word is home.version in frontend/messages/sw.json: change it there, change it here. With
+# the default "dev" a build that lost APP_VERSION would still pass; the demo's deploy passes the commit
+# (deploy-demo.yml), so there this check tells.
+short="${version:0:7}"
+[[ "$page" == *"Toleo $short"* ]] || fail "/ doesn't show the version it was built with (want: Toleo $short)"
+echo "ok: / shows Toleo $short"

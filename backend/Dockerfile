@@ -33,7 +33,12 @@ COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml 
 # --frozen-lockfile: fail if pnpm-lock.yaml doesn't match package.json, as `make check` does.
 RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
-RUN pnpm build
+# The git commit this image is built from, as in stage 3 below: each stage must name the build arguments
+# it uses. The app shows it on screen (frontend/src/lib/version.ts), so a device's version can be compared
+# with /api/health/'s after an update (SPIKE-1). Next.js writes NEXT_PUBLIC_ variables into the code.
+# After the install, so a new commit never redoes it; it does redo `pnpm build`, which a deploy runs anyway.
+ARG APP_VERSION=dev
+RUN NEXT_PUBLIC_APP_VERSION=$APP_VERSION pnpm build
 
 # --- Stage 2: install the Python packages into a virtual environment, backend/.venv.
 # uv's own image, only to copy its one binary out of it. The tag must equal `required-version` in
