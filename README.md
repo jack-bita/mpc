@@ -5,16 +5,16 @@
 ## The problem
 
 - Small agro-vet shops in Tanzania keep sales, debts (*madeni*) and stock in paper books, and many cash sales leave no record at all.
-- At closing the drawers often don't match, nobody can say where a difference came from, and staff hours and pay are counted by hand.
-- Ready-made shop apps need English, a subscription and steady internet, but the internet and the power often go out.
+- At closing, the drawers often don't match, and nobody can say where a difference came from. Staff hours and pay are counted by hand.
+- Ready-made shop apps need English and a subscription. Many also need steady internet, but the internet and the power often go out.
 
 ## What it does
 
-An offline-first, Swahili-first system for the counter and the office: staff attendance and pay, selling, payments (cash, bank, Lipa Namba), credit (*madeni*) and stock. It is built first for **MPC — Mabatini Pumba Center**, a family agro-vet shop in Usa River, Arusha, Tanzania, and designed from day one for other shops too.
+An offline-first, Swahili-first system for the counter and the office: staff attendance and pay, selling, payments (cash, bank, Lipa Namba mobile money), credit (*madeni*) and stock. It is built first for **MPC — Mabatini Pumba Center**, a family agro-vet shop in Usa River, Arusha, Tanzania, and designed from day one for other shops too.
 
-**Status:** in development. Working today: CI on every pull request, a demo that updates itself on every merge, and an app that installs on a laptop or phone and opens with no internet. The [build plan](docs/04-build-plan.md) ticks each task when it merges.
+**Status:** in development. Working today: CI (automatic checks) on every pull request, a demo that updates itself on every merge, and an app that installs on a laptop or phone and opens with no internet. The [build plan](docs/04-build-plan.md) ticks each task when it merges.
 
-**Demo:** <https://mabatinipumba-demo.onrender.com>, with fake data only. Every merge to `main` updates it. It sleeps when nobody uses it, so the first visit takes about a minute.
+**Demo:** <https://mabatinipumba-demo.onrender.com>, with fake data only. It sleeps when nobody uses it, so the first visit takes about a minute.
 
 ## Start here
 
@@ -33,7 +33,7 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 ## Stack
 
 - **Backend:** Python 3.14, Django 6.1, Django REST Framework, django-allauth (coming), PostgreSQL 18
-- **Frontend:** Next.js 16 as a static PWA, React 19, TypeScript, Tailwind CSS + shadcn/ui, Serwist (the service worker), Dexie (IndexedDB, coming)
+- **Frontend:** Next.js 16 as a static PWA (plain files that install like an app), React 19, TypeScript, Tailwind CSS + shadcn/ui, Serwist (the service worker), Dexie (IndexedDB, coming)
 - **Running it:** Docker Compose + Caddy; GitHub Actions for CI and the demo's deploy; the demo on Render
 
 ## Run it locally
