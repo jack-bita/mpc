@@ -4,6 +4,9 @@
 // Most options are the ones Next.js expects (it rewrites this file if a required one is
 // missing). Ours on top: strict mode, and noUncheckedIndexedAccess.
 //
+// It checks the pages, which run in a window. The service worker, src/sw.ts, runs where there is no
+// page and no window, so tsconfig.sw.json checks it with the worker's types instead (SPIKE-1).
+//
 // TypeScript 6.0, not 7: typescript-eslint (inside eslint-config-next) supports only
 // TypeScript below 6.1 for now.
 {
@@ -38,5 +41,5 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "out"]
+  "exclude": ["node_modules", "out", "src/sw.ts"]
 }

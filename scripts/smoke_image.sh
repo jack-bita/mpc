@@ -9,7 +9,11 @@
 #   5. /static/ serves the admin's files, gathered by collectstatic when the image was built;
 #   6. the page is checked again on every visit (max-age=0), so a deploy reaches the browser at once;
 #   7. a file under /_next/static/, named after its content, is cached for good (immutable);
-#   8. the container is removed afterwards, whether the checks passed or not.
+#   8. the app's manifest is served as a manifest, so Chrome can offer to install the app (SPIKE-1);
+#   9. the service worker is served as JavaScript, checked again on every visit, with the app's files in
+#      its list (SPIKE-1);
+#  10. the page shows the version the image was built with, so a device's version can be checked (SPIKE-1);
+#  11. the container is removed afterwards, whether the checks passed or not.
 # A "smoke test": the quickest check that the thing starts and answers at all, before anything deeper.
 #
 # Usage:  bash scripts/smoke_image.sh mpc-backend:check [version]
@@ -103,3 +107,31 @@ asset="${BASH_REMATCH[0]}"
 headers="$(get --head "$base$asset")" || fail "$asset did not answer"
 [[ "${headers,,}" == *"immutable"* ]] || fail "$asset is not cached for good (no immutable in Cache-Control)"
 echo "ok: $asset is cached for good (immutable)"
+
+# 8. The manifest (frontend/src/app/manifest.ts). WhiteNoise has no type for the .webmanifest ending by
+# itself; prod.py's WHITENOISE_MIMETYPES gives it one. Without it the file goes out as unknown bytes.
+headers="$(get --head "$base/manifest.webmanifest")" || fail "/manifest.webmanifest did not answer"
+[[ "${headers,,}" == *"content-type: application/manifest+json"* ]] ||
+  fail "/manifest.webmanifest is not served as application/manifest+json"
+echo "ok: /manifest.webmanifest is served as a manifest"
+
+# 9. The service worker (frontend/src/sw.ts, made into out/sw.js by `serwist build` after `next build`).
+# - JavaScript: a browser refuses to install a worker served as any other type.
+# - max-age=0: a new sw.js must reach the browser at once, or the update prompt comes late (03 §6.8).
+#   Chrome checks a worker past its cache anyway, but caps that at 24 hours.
+# - Its list of files names index.html, so `serwist build` found the app in out/. The list sits in the
+#   minified code as url:"index.html"; the bare word alone would also match Serwist's own code.
+sw="$(get --include "$base/sw.js")" || fail "/sw.js did not answer"
+[[ "${sw,,}" == *"content-type: text/javascript"* ]] || fail "/sw.js is not served as JavaScript"
+[[ "${sw,,}" == *"cache-control: max-age=0, public"* ]] ||
+  fail "/sw.js may be kept by the browser (want Cache-Control: max-age=0)"
+[[ "$sw" == *'url:"index.html"'* ]] || fail "/sw.js doesn't list index.html among the files it keeps"
+echo "ok: /sw.js is served as JavaScript, checked on every visit, and keeps index.html"
+
+# 10. The version on the page (frontend/src/lib/version.ts): the commit, cut to 7 characters as GitHub
+# shows it. The word is home.version in frontend/messages/sw.json: change it there, change it here. With
+# the default "dev" a build that lost APP_VERSION would still pass; the demo's deploy passes the commit
+# (deploy-demo.yml), so there this check tells.
+short="${version:0:7}"
+[[ "$page" == *"Toleo $short"* ]] || fail "/ doesn't show the version it was built with (want: Toleo $short)"
+echo "ok: / shows Toleo $short"

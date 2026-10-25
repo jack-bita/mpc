@@ -1,4 +1,4 @@
-// page.test.tsx — the home page greets the user in Swahili.
+// page.test.tsx — the home page greets the user in Swahili and shows the app's version.
 //
 // The first Vitest test: it proves the test setup works end to end (TypeScript and JSX,
 // the JSON message files, jsdom, Testing Library). Later cards (REPO-4, OPS-1) check for
@@ -17,5 +17,12 @@ describe("HomePage", () => {
     // in messages/sw.json fails here too.
     const heading = screen.getByRole("heading", { level: 1 });
     expect(heading.textContent).toBe("Karibu");
+  });
+
+  it("shows the version this device runs", () => {
+    render(<HomePage />);
+
+    // Tests get no NEXT_PUBLIC_APP_VERSION, like any build outside the image: "dev" (src/lib/version.ts).
+    expect(screen.getByText("Toleo dev")).toBeTruthy();
   });
 });

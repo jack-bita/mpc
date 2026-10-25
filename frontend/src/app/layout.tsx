@@ -11,6 +11,10 @@ import type { ReactNode } from "react";
 // direct import with next-intl, which also handles the English switch.
 import sw from "../../messages/sw.json";
 
+// Starts the service worker, which keeps the app's files on the device so every page opens offline,
+// and shows the Toleo jipya bar when a new version is ready (SPIKE-1).
+import { UpdatePrompt } from "@/components/update-prompt";
+
 // The one global stylesheet: Tailwind and the design tokens, loaded once for every page.
 import "./globals.css";
 
@@ -22,7 +26,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     // lang="sw": the app is Swahili first, so screen readers and spell checkers use Swahili.
     <html lang="sw">
-      <body>{children}</body>
+      <body>
+        {children}
+        <UpdatePrompt />
+      </body>
     </html>
   );
 }

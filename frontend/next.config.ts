@@ -3,7 +3,7 @@
 // The app is built into plain files (HTML, JS, CSS) in out/, and no Node server runs in
 // production (ADR-0016, 03 AD2). Why: the counter must open with no internet, and a page
 // rendered on a server can't open when the server is out of reach. A service worker
-// (SPIKE-1) will keep these files on each shop device.
+// (src/sw.ts, SPIKE-1) keeps these files on each shop device.
 //
 // What a static build costs us (03 §7.2):
 // - every page is a client component; no server actions, middleware or route handlers;

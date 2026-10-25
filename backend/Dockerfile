@@ -18,8 +18,10 @@
 # --- Stage 1: build the shop app into plain files, frontend/out/ (ADR-0016).
 # Node 24: the version package.json's "engines" and CI's frontend job use.
 FROM node:24.21.0-trixie-slim AS frontend
-# Next.js would otherwise send anonymous usage data from every build.
-ENV NEXT_TELEMETRY_DISABLED=1
+# Next.js would otherwise send anonymous usage data from every build. The Serwist CLI (`serwist build`,
+# part of `pnpm build`) would otherwise ask the npm registry whether a newer version exists (SPIKE-1).
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NO_UPDATE_NOTIFIER=1
 # pnpm comes through corepack, which ships with Node 24: it reads "packageManager" in package.json, so the
 # build runs the very same pnpm as the laptop and CI. No download prompt: nobody is there to answer it.
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -31,7 +33,12 @@ COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml 
 # --frozen-lockfile: fail if pnpm-lock.yaml doesn't match package.json, as `make check` does.
 RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
-RUN pnpm build
+# The git commit this image is built from, as in stage 3 below: each stage must name the build arguments
+# it uses. The app shows it on screen (frontend/src/lib/version.ts), so a device's version can be compared
+# with /api/health/'s after an update (SPIKE-1). Next.js writes NEXT_PUBLIC_ variables into the code.
+# After the install, so a new commit never redoes it; it does redo `pnpm build`, which a deploy runs anyway.
+ARG APP_VERSION=dev
+RUN NEXT_PUBLIC_APP_VERSION=$APP_VERSION pnpm build
 
 # --- Stage 2: install the Python packages into a virtual environment, backend/.venv.
 # uv's own image, only to copy its one binary out of it. The tag must equal `required-version` in
