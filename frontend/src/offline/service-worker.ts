@@ -42,8 +42,10 @@ export async function registerServiceWorker(
   const offer = (worker: ServiceWorker) => {
     if (!navigator.serviceWorker.controller) return;
     onUpdateReady(() => {
-      // Another tab may have switched already: the new version runs, so only this page is old.
-      if (worker.state === "activated") {
+      // Past "installed", the new version is taking over or has taken over already: another tab
+      // switched first. The browser announced it (controllerchange) as the version began taking over,
+      // so waiting for that announcement now would wait forever. Only this page is old: reload it.
+      if (worker.state !== "installed") {
         reload();
         return;
       }

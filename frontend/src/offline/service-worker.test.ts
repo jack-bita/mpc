@@ -137,19 +137,49 @@ describe("registerServiceWorker", () => {
     expect(reload).toHaveBeenCalledOnce();
   });
 
-  it("on apply, reloads at once when another tab has switched already", async () => {
-    const { registration } = fakeServiceWorkers();
-    const reload = vi.fn();
+  // "activating" matters most: the browser announces the new version (controllerchange) as it starts
+  // taking over, so a tab that waited for the announcement from then on would wait forever.
+  it.each(["activating", "activated"] as const)(
+    "on apply, reloads at once when another tab has switched already (%s)",
+    async (state) => {
+      const { registration } = fakeServiceWorkers();
+      const reload = vi.fn();
+      const onUpdateReady = vi.fn();
+      await registerServiceWorker(onUpdateReady, reload);
+      const worker = registration.findUpdate();
+      worker.become("installed");
+      const apply = onUpdateReady.mock.calls[0]![0] as () => void;
+
+      worker.become(state);
+      apply();
+
+      expect(reload).toHaveBeenCalledOnce();
+      expect(worker.postMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it("offers nothing when a version waits but none runs this page", async () => {
+    // After a hard reload (Shift+F5) the browser runs the page with no service worker at all.
+    const registration = new FakeRegistration();
+    registration.waiting = new FakeWorker();
+    registration.waiting.state = "installed";
+    fakeServiceWorkers({ controlled: false, registration });
     const onUpdateReady = vi.fn();
-    await registerServiceWorker(onUpdateReady, reload);
-    const worker = registration.findUpdate();
-    worker.become("installed");
-    const apply = onUpdateReady.mock.calls[0]![0] as () => void;
 
-    worker.become("activated");
-    apply();
+    await registerServiceWorker(onUpdateReady);
 
-    expect(reload).toHaveBeenCalledOnce();
-    expect(worker.postMessage).not.toHaveBeenCalled();
+    expect(onUpdateReady).not.toHaveBeenCalled();
+  });
+
+  it("logs a failed registration and carries on", async () => {
+    const { container } = fakeServiceWorkers();
+    container.register.mockRejectedValue(new TypeError("bad script type"));
+    // Silence the expected log line, and check it was written.
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(registerServiceWorker(vi.fn())).resolves.toBeUndefined();
+
+    expect(log).toHaveBeenCalledOnce();
+    log.mockRestore();
   });
 });
