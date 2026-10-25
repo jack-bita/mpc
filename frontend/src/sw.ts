@@ -24,20 +24,15 @@ const serwist = new Serwist({
   precacheOptions: {
     ignoreURLParametersMatching: [/.*/],
   },
-  // A new version waits until someone taps Toleo jipya: the app must never reload in the middle of a
-  // sale (03 §6.7). The update prompt sends SKIP_WAITING instead (below).
+  // A new version waits until someone taps Sasisha, or until every window of the app is closed: the
+  // app must never reload in the middle of a sale (03 §6.7). With skipWaiting false, Serwist itself
+  // listens for the update bar's SKIP_WAITING message, and then stops waiting.
   skipWaiting: false,
   // The very first time, take charge of the open page at once, so it works offline with no reload.
   // A later version still waits, because of skipWaiting above.
   clientsClaim: true,
   // No runtimeCaching: only the build's own files are kept. Answers from /api never are, because the
   // shop's data lives in Dexie (03 §7.7).
-});
-
-// The update prompt sends this message when someone taps Toleo jipya: the waiting version stops
-// waiting and takes over.
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") void self.skipWaiting();
 });
 
 // Start listening for the browser's events: install (download the files into the cache), activate

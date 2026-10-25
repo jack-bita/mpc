@@ -56,7 +56,7 @@ export async function registerServiceWorker(
         () => reload(),
         { once: true },
       );
-      // sw.ts listens for this message and stops waiting.
+      // Serwist, in sw.ts, listens for this message and stops waiting.
       worker.postMessage({ type: "SKIP_WAITING" });
     });
   };
