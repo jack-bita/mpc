@@ -1,4 +1,4 @@
-// service-worker.tsx — starts the service worker from every page, and shows the Toleo jipya bar when a
+// update-prompt.tsx — starts the service worker from every page, and shows the Toleo jipya bar when a
 // new version is ready (SPIKE-1, 03 §6.8). layout.tsx renders it once, on every page.
 //
 // A client component: registering runs in the browser, after the page has loaded, never during the
@@ -16,7 +16,7 @@ import {
 // Screen text comes from the message files (ADR-0032). UI-1 swaps this import for next-intl.
 import sw from "../../messages/sw.json";
 
-export function ServiceWorker() {
+export function UpdatePrompt() {
   // null while there is no new version; the switch function once one is ready.
   const [apply, setApply] = useState<ApplyUpdate | null>(null);
 

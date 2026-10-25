@@ -11,8 +11,9 @@ import type { ReactNode } from "react";
 // direct import with next-intl, which also handles the English switch.
 import sw from "../../messages/sw.json";
 
-// The service worker keeps the app's files on the device, so every page opens offline (SPIKE-1).
-import { ServiceWorker } from "@/components/service-worker";
+// Starts the service worker, which keeps the app's files on the device so every page opens offline,
+// and shows the Toleo jipya bar when a new version is ready (SPIKE-1).
+import { UpdatePrompt } from "@/components/update-prompt";
 
 // The one global stylesheet: Tailwind and the design tokens, loaded once for every page.
 import "./globals.css";
@@ -27,7 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="sw">
       <body>
         {children}
-        <ServiceWorker />
+        <UpdatePrompt />
       </body>
     </html>
   );

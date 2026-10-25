@@ -1,4 +1,4 @@
-// service-worker.test.tsx — the Toleo jipya bar shows only when a new version is ready, and its button
+// update-prompt.test.tsx — the Toleo jipya bar shows only when a new version is ready, and its button
 // switches to it (SPIKE-1, 03 §6.8).
 //
 // The real registration is swapped for a fake (vi.mock), so these tests check only what the bar shows
@@ -11,7 +11,7 @@ import {
   registerServiceWorker,
 } from "@/offline/service-worker";
 
-import { ServiceWorker } from "./service-worker";
+import { UpdatePrompt } from "./update-prompt";
 
 vi.mock("@/offline/service-worker", () => ({ registerServiceWorker: vi.fn() }));
 
@@ -26,16 +26,16 @@ beforeEach(() => {
   vi.mocked(registerServiceWorker).mockClear();
 });
 
-describe("ServiceWorker", () => {
+describe("UpdatePrompt", () => {
   it("shows nothing while there is no new version", () => {
-    render(<ServiceWorker />);
+    render(<UpdatePrompt />);
 
     expect(registerServiceWorker).toHaveBeenCalledOnce();
     expect(screen.queryByRole("button")).toBeNull();
   });
 
   it("shows the bar once a new version is ready", () => {
-    render(<ServiceWorker />);
+    render(<UpdatePrompt />);
     newVersionReady(vi.fn());
 
     // The words themselves, not the message keys: a wrong translation fails here too.
@@ -44,7 +44,7 @@ describe("ServiceWorker", () => {
   });
 
   it("switches to the new version when Sasisha is tapped", () => {
-    render(<ServiceWorker />);
+    render(<UpdatePrompt />);
     const apply = vi.fn();
     newVersionReady(apply);
 
