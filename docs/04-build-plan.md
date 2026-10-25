@@ -406,9 +406,9 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### FOLIO-1 · README, first version
 `S` · Claude-led · after OPS-2 · branch `docs/folio-1-readme`
 **Done when:**
-- [ ] The README states the problem in three lines, the status ("in development"), the stack, links to the docs, the demo link and the CI badge.
-- [ ] It holds no real shop data.
-**Commits:** `docs: readme first version`
+- [x] The README states the problem in three lines, the status ("in development"), the stack, links to the docs, the demo link and the CI badge.
+- [x] It holds no real shop data.
+**Commits:** `docs: readme first version` → `docs: readme runs migrate now that ppl-1 is merged` → `docs: readme matches the repo today` → `docs: readme in shorter sentences, with terms explained`
 
 ## 6. Stage 1 — Foundation
 
