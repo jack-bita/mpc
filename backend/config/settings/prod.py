@@ -66,6 +66,12 @@ WHITENOISE_ROOT = BASE_DIR.parent / "frontend" / "out"
 # WhiteNoise also redirects /sale to /sale/.
 WHITENOISE_INDEX_FILE = True
 
+# The app's manifest (frontend/src/app/manifest.ts), which Chrome reads before it offers to install the
+# app (SPIKE-1). WhiteNoise's own list of file types has no .webmanifest, so without this line the manifest
+# would go out as "application/octet-stream" (unknown bytes). Caddy on the real server (OPS-5) needs the
+# same type: check it there.
+WHITENOISE_MIMETYPES = {".webmanifest": "application/manifest+json"}
+
 # --- How long a browser may keep each file: the same rules Caddy follows on the real server (03 §13).
 # Every file outside /_next/static/ keeps its name from one deploy to the next: the pages, the admin's
 # files, later the service worker (SPIKE-1). For those, max-age=0: the browser asks each time whether the
