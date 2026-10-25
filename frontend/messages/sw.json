@@ -4,5 +4,9 @@
   },
   "home": {
     "title": "Karibu"
+  },
+  "update": {
+    "ready": "Toleo jipya liko tayari",
+    "apply": "Sasisha"
   }
 }

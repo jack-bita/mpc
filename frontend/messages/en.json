@@ -4,5 +4,9 @@
   },
   "home": {
     "title": "Welcome"
+  },
+  "update": {
+    "ready": "A new version is ready",
+    "apply": "Update"
   }
 }
