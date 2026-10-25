@@ -15,7 +15,7 @@ declare const self: ServiceWorkerGlobalScope & {
 
 const serwist = new Serwist({
   // The list of the app's files, each with its fingerprint. When the worker installs, it downloads
-  // them all into the cache (lesson 2).
+  // them all into the cache (03 §7.7).
   precacheEntries: self.__SW_MANIFEST,
   // Find a file in the cache whatever follows the "?" in its address. Next.js asks for a page's data
   // as /page/index.txt?_rsc=…, and record pages will carry their id the same way (/sales/view/?id=…,

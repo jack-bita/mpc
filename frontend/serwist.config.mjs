@@ -4,10 +4,10 @@
 // we depend on no Next.js bundler plugin: Serwist's support for Turbopack, Next.js's bundler, is still
 // settling (03 §7.7, v1.2). `serwist build` then:
 //   1. lists every file in out/, each with a fingerprint of its content (its "revision");
-//   2. writes that list into src/sw.ts in place of self.__SW_MANIFEST;
-//   3. bundles the worker and the `serwist` package into one plain file with esbuild, minified.
+//   2. bundles src/sw.ts and the `serwist` package into one plain, minified file with esbuild,
+//      writing that list where src/sw.ts says self.__SW_MANIFEST. src/sw.ts itself never changes.
 // A deploy that changes any file changes its fingerprint, so sw.js changes too: that is how the browser
-// learns that a new version exists (lesson 2, the update prompt).
+// learns that a new version exists (03 §6.8, the update prompt).
 
 /** @type {import("@serwist/cli").BuildOptions} */
 const config = {

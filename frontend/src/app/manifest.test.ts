@@ -4,7 +4,8 @@
 // Chrome looks for, and that every icon the manifest names really exists in public/.
 //
 // It runs in plain Node, not in jsdom's fake browser (vitest.config.mts): it needs no page, and it
-// reads files on disk, for which import.meta.url must be a file:// address, as only Node gives it.
+// reads files on disk. Under jsdom, Vite turns new URL(…, import.meta.url) into a web address,
+// which fileURLToPath can't read; in Node it stays a file:// address.
 // @vitest-environment node
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";

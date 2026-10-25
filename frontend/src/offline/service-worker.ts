@@ -2,9 +2,11 @@
 // says when a new version is waiting (SPIKE-1, 03 §6.8, §7.7).
 //
 // Registering asks the browser to install /sw.js and keep it for this site. From then on the browser
-// checks /sw.js for a new version by itself: whenever the app opens with internet, and about once a day.
+// checks /sw.js for a new version by itself each time a page of the app loads with internet. It sets
+// no timer: an app left open all day sees a deploy only after a reload (SYNC-13 adds regular checks).
 // A new version downloads in the background, then waits (sw.ts: skipWaiting false) until someone taps
-// Toleo jipya: the app must never reload in the middle of a sale (03 §6.7).
+// Sasisha on the Toleo jipya bar, or until every window of the app is closed: the app must never
+// reload in the middle of a sale (03 §6.7).
 
 /** Switches to the waiting version: the new worker takes over, then the page reloads from it. */
 export type ApplyUpdate = () => void;
@@ -25,8 +27,9 @@ export async function registerServiceWorker(
   // browser may not. The app then still works online, only not offline.
   if (!("serviceWorker" in navigator)) return;
 
-  // scope "/": the worker looks after every page of the app. A failed registration (no internet on the
-  // very first visit, say) is only logged: the browser tries again on the next page load.
+  // scope "/": the worker looks after every page of the app. A failed registration (sw.js missing or
+  // of the wrong type, the connection dropping, service workers switched off) is only logged: this
+  // function runs again on the next page load and tries again.
   let registration: ServiceWorkerRegistration;
   try {
     registration = await navigator.serviceWorker.register("/sw.js", {

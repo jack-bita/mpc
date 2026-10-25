@@ -147,7 +147,7 @@ export default function SpikePage() {
     setState(await readState());
   }
 
-  /** Omba hifadhi ya kudumu: Chrome answers by itself, with no popup (lesson 3); the page then shows it. */
+  /** Omba hifadhi ya kudumu: Chrome answers by itself, with no popup (03 §6.7); the page then shows it. */
   async function askPersist() {
     await navigator.storage.persist();
     setState(await readState());

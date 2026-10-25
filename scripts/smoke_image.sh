@@ -117,7 +117,8 @@ echo "ok: /manifest.webmanifest is served as a manifest"
 
 # 9. The service worker (frontend/src/sw.ts, made into out/sw.js by `serwist build` after `next build`).
 # - JavaScript: a browser refuses to install a worker served as any other type.
-# - max-age=0: a new sw.js must reach the browser at once, or the update prompt never comes (03 §6.8).
+# - max-age=0: a new sw.js must reach the browser at once, or the update prompt comes late (03 §6.8).
+#   Chrome checks a worker past its cache anyway, but caps that at 24 hours.
 # - Its list of files names index.html, so `serwist build` found the app in out/. The list sits in the
 #   minified code as url:"index.html"; the bare word alone would also match Serwist's own code.
 sw="$(get --include "$base/sw.js")" || fail "/sw.js did not answer"

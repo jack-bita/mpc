@@ -74,7 +74,7 @@ WHITENOISE_MIMETYPES = {".webmanifest": "application/manifest+json"}
 
 # --- How long a browser may keep each file: the same rules Caddy follows on the real server (03 §13).
 # Every file outside /_next/static/ keeps its name from one deploy to the next: the pages, the admin's
-# files, later the service worker (SPIKE-1). For those, max-age=0: the browser asks each time whether the
+# files, the service worker (SPIKE-1). For those, max-age=0: the browser asks each time whether the
 # file changed, and WhiteNoise answers a tiny "304 Not Modified" when it didn't, so a deploy reaches every
 # browser at once. WhiteNoise's own default, 60 seconds for every file, was right for neither kind.
 WHITENOISE_MAX_AGE = 0
