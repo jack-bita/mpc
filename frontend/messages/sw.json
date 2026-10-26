@@ -9,5 +9,17 @@
   "update": {
     "ready": "Toleo jipya liko tayari",
     "apply": "Sasisha"
+  },
+  "slip": {
+    "saleNumber": "Namba ya mauzo",
+    "date": "Tarehe",
+    "time": "Saa",
+    "item": "Bidhaa",
+    "quantity": "Idadi",
+    "unitPrice": "@",
+    "price": "Bei",
+    "total": "Jumla",
+    "thanks": "Asante, karibu tena",
+    "print": "Chapisha"
   }
 }
