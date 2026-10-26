@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.10 · 25 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.11 · 26 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.11** (26 Oct 2026, SPIKE-2): decisions by Jack, made while planning SPIKE-2. The card gains the *Learn* line its drill starts from, and a *Tests* line. Its page size, `size: 80mm auto`, is not valid CSS, so Chrome would drop it: the page measures the slip and sets the height itself. The card ships in two PRs, as SPIKE-1 did, because the demo deploys only from `main`. OWN-1 is answered: an Epson receipt printer on USB, with 80 mm paper. The QR code is left out of the spike, because the shop doesn't use QR codes yet; whether R2's slips carry one becomes parking-lot item 14. Marked **(v1.11)**.
 
 **Changes in v1.10** (25 Oct 2026, SPIKE-1): SPIKE-1's findings (`docs/spikes/01-pwa-offline.md`) reach the cards that build on them. SYNC-13 starts from the update bar SPIKE-1 built, adds regular update checks, and gains a *Watch out* line; SYNC-12 and SYNC-6 gain one each. The parking lot gains the workers' iPhone question, for Jack to decide, and what SPIKE-1 left untested. Marked **(v1.10)**.
 
@@ -394,14 +396,17 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Commits:** the first PR: `docs: spike-1 card gets a learn line and two pull requests` → `feat(frontend): manifest and icons` → `feat(frontend): serwist service worker` → `feat(frontend): update prompt` → `feat(frontend): visible app version` → `feat(frontend): spike page for offline storage`; the second PR: `chore(frontend): remove the spike page` → `docs(spikes): offline results` **(v1.9)**
 
 ### SPIKE-2 · A slip from Chrome on the shop printer
-`S` · Jack-led · after OPS-2 · needs OWN-1 · branch `spike/spike-2-printing`
+`S` · Jack-led · after OPS-2 · needs OWN-1 · branch `spike/spike-2-printing`, then `spike/spike-2-results` **(v1.11)**
+**Learn:** CSS for paper: print styles, `@page` and sizes in millimetres; how Chrome sends a page to the printer's driver; printing with no print window (kiosk printing) **(v1.11)**.
 **Question:** can Chrome print a readable slip on the shop's printer in one click?
-**Build:** a print page sized for the printer (`@page { size: 80mm auto; margin: 0 }`, or 58 mm) with Swahili text, a bold total and a QR code, opened from the demo address on the printer laptop; normal printing first, then Chrome kiosk printing (`--kiosk-printing`).
+**Build:** a print page for 80 mm paper (OWN-1: an Epson receipt printer on USB) with Swahili text and a bold total, opened from the demo address on the printer laptop; normal printing first, then Chrome kiosk printing (`--kiosk-printing`) **(v1.11)**.
+**Watch out:** CSS can't size a page "as long as the slip": `size: 80mm auto` is not valid CSS, so Chrome drops the whole line. The page measures the slip and sets `@page { size: 80mm <height>; margin: 0 }` itself; whether the driver's own roll-paper size works better is part of the answer. The demo deploys only from `main` (OPS-2), so the card ships in two PRs, as SPIKE-1 did: the first brings the page to the demo; after the printer test, the second removes it and adds the report. The shop's printer and laptop can change, so the report names the ones tested. The QR code is left out: the shop doesn't use one yet (§20, item 14) **(v1.11)**.
 **Done when:**
 - [ ] A readable slip prints in one click.
 - [ ] Model, driver, paper width, working margins and a photo are in `docs/spikes/02-printing.md`.
 - [ ] If it fails, the fallback is written down (WhatsApp receipts move into R1; a fix is needed before R2's slips).
-**Commits:** `feat(frontend): slip print page` → `docs(spikes): printing results`
+**Tests:** `the slip's words are in Swahili` · `the total is bold` · `the button prints` · `the page is as tall as the slip` **(v1.11)**
+**Commits:** the first PR: `docs: spike-2 card gets a learn line and a valid page size` → `test(frontend): what a printed slip shows` → `feat(frontend): slip print page`; the second PR: `chore(frontend): remove the slip print page` → `docs(spikes): printing results` **(v1.11)**
 
 ### FOLIO-1 · README, first version
 `S` · Claude-led · after OPS-2 · branch `docs/folio-1-readme`
@@ -991,7 +996,7 @@ Shipped in the weeks after the Drugs go-live, one normal deploy at a time (BP8).
 
 Cards are written at the stage 7 review, with their own epic codes. Epics in a likely order:
 
-- **FLOW — Writer → cashier → loader:** sales waiting for payment; the writer's screen; the cashier's queue (pull every 3 s while open); slips printed only after payment, with a QR code (M6); handover per line and *collect later*; *collected by* name and phone; cashier-only selling when the network is down (03 AD16).
+- **FLOW — Writer → cashier → loader:** sales waiting for payment; the writer's screen; the cashier's queue (pull every 3 s while open); slips printed only after payment (M6), with a QR code if the shop wants one (§20, item 14) **(v1.11)**; handover per line and *collect later*; *collected by* name and phone; cashier-only selling when the network is down (03 AD16).
 - **BILL — One customer, both sides:** bills grouping one sale per side; a notification to the other side; the inter-side amount and `side_transfer`; `test_e6_mixed_bill_foods_holds_15000_for_drugs`.
 - **PHONE — Phone orders:** the caller's number brings up debts, the last sale and formulas.
 - **SVC, FORM, EXCH — Services, jobs, formulas, exchange:** services priced per kg; the job list and its statuses; the customer's goods kept apart from shop stock; formulas with versions and "same as last time"; `test_e7_exchange_maize`.
@@ -1122,6 +1127,7 @@ The project is also the portfolio, so showing it is part of the plan.
 11. Four web addresses, one server: `admin.<domain>` (Jack), `owner.<domain>` (the owner), `staff.<domain>` (managers and workers), `<domain>` (customers, R3) — Jack, 23 Oct. Written as an ADR with OWN-3, before OPS-5's Caddyfile **(v1.6)**.
 12. Workers' own iPhones: does the app need them, or only the shop's devices? On an iPhone every browser is Safari inside: it may delete a site's data after some days without use, hides installing in the Share menu, and has no Background Sync (03 §7.3, SPIKE-1's report). Until Jack decides, iPhones are for the owner's office screens, online **(v1.10)**.
 13. Not tested by SPIKE-1: a second laptop, and Edge offline. Both are checked when the shop's devices are paired and installed before go-live (§16) **(v1.10)**.
+14. QR codes on the Foods side slips (03 §7.5 ✚): does the shop want workers to scan a paid slip instead of reading its number? The shop doesn't use QR codes today, so SPIKE-2 left the QR code out (Jack, 26 Oct). Decided when R2 is planned; if yes, check first that the shop's printer prints one a phone can read **(v1.11)**.
 
 ## Appendix A — Changes to the other docs
 

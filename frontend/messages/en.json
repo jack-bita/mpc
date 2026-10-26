@@ -9,5 +9,17 @@
   "update": {
     "ready": "A new version is ready",
     "apply": "Update"
+  },
+  "slip": {
+    "saleNumber": "Sale number",
+    "date": "Date",
+    "time": "Time",
+    "item": "Item",
+    "quantity": "Quantity",
+    "unitPrice": "@",
+    "price": "Price",
+    "total": "Total",
+    "thanks": "Thank you, welcome again",
+    "print": "Print"
   }
 }
