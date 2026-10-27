@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.6 · 27 Oct 2026 · Portion 2 of the planning pack
+**Version:** 1.7 · 27 Oct 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -17,6 +17,8 @@
 **Changes in v1.5** (27 Oct 2026, SHOP-2): §4 records the side and account rules SHOP-2 built: a side's letter is one capital, unique within its shop, and a new side starts switched off; one default stock location per side; a payment account's sides are kept as link rows, each with its shop; a cash drawer has no provider and no number, and the other kinds have both. §14 gives a payment account's status: `active` ⇄ `archived`. Marked **(v1.5)**.
 
 **Changes in v1.6** (27 Oct 2026, CORE-3): a payment has no `status` column (§10). It is void once its void stamp is filled, and valid until then. CORE-3's trigger lets a void change the stamp and nothing else (03 §5.6), so a separate status could never be set (Jack, while building CORE-3). Marked **(v1.6)**.
+
+**Changes in v1.7** (27 Oct 2026, CORE-4): a setting and a price have no `set_by` column (§4, §6). Who set a value is the row's `created_by`, which every shop row has (§1): two columns for one fact could one day disagree (Jack, while planning CORE-4). §4 also says each setting key has a scope, as ADR-0013 does. Marked **(v1.7)**.
 
 ---
 
@@ -170,7 +172,7 @@ A full diagram for GitHub is in Appendix A.
 - `status`: `active` | `archived` (§14) **(v1.5)**
 
 **Setting** [R1] ✚ → Shop (optional Side) — one dated rule value (D13).
-- `key` (from a fixed list in code, each with a type and a default), `value`, `effective_from`, `set_by`, `note`
+- `key` (from a fixed list in code, each with a type, a default and a scope: one value for the whole shop, or one a side may override **(v1.7)**), `value`, `effective_from`, `note`. Who set it is the row's `created_by` (§1) **(v1.7)**.
 - In force on a date = the latest row with `effective_from` ≤ that date. A side row beats a shop row.
 - Examples: `attendance.on_time_until` 07:35 · `attendance.late_fine` 1,000 · `cash.tolerance` · `count.tolerance_pct` · `expiry.alert_days` 90 · `stock.block_negative` false · `money.rounding_step` 1
 
@@ -223,7 +225,7 @@ A full diagram for GitHub is in Appendix A.
 - `name`, `factor` (base units in one: 50, 1, 0.1), `is_weighed` (decimal quantities), `barcode`, `is_default`, `status`
 
 **Price** [R1] → SellingUnit — a dated price row.
-- `retail`, `jumla` (empty = none), `floor` (empty = no bargaining), `effective_from` (can be in the future), `set_by`, `note`
+- `retail`, `jumla` (empty = none), `floor` (empty = no bargaining), `effective_from` (can be in the future), `note`. Who set it is the row's `created_by` (§1) **(v1.7)**.
 - Current price = the latest row with `effective_from` ≤ now.
 
 **ProductCost** [R1] → Product — a dated buying price per base unit.

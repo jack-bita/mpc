@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.17 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.18 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.18** (27 Oct 2026, CORE-4): CORE-4's `Setting` has no `set_by` column. Who set a value is the row's `created_by`, which every shop row has had since PPL-2 (Jack, while planning CORE-4; 02 v1.7). The two tolerances default to 0 until the owner agrees values (02 §20, item 2). The card names a test for its last *Done when* line and the extra tests its plan added, and splits its last commit in two: the dated rows, then the lookup. Marked **(v1.18)**.
 
 **Changes in v1.17** (27 Oct 2026, CORE-3's tick): CORE-7's *Watch out* says which tables really lose the shop guard: an abstract base with a fresh `Meta`, or a table with managers of its own. A table that only writes a fresh `Meta` keeps it, as CORE-3's review showed and `core/models.py` now says. Marked **(v1.17)**.
 
@@ -489,12 +491,12 @@ Done in **portion 6**, in chat — not with Claude Code.
 
 ### CORE-4 · Dated settings
 `M` · Claude-led · after CORE-3, SHOP-2 · branch `feat/core-4-settings`
-**Build:** the settings registry in `core` (key, type, default, scope, description — 02 D13); `shops.Setting` rows (key, value, `effective_from`, optional side, `set_by`, note), insert-only; `get_setting(key, shop, side=None, on=date)`; the keys R1 and R1b need — e.g. `attendance.on_time_until` 07:35, `attendance.late_fine` 1,000, `money.rounding_step` 1, `cash.tolerance`, `count.tolerance_pct`, `expiry.alert_days` 90, `stock.block_negative` off, `session.idle_minutes` 15.
+**Build:** the settings registry in `core` (key, type, default, scope, description — 02 D13); `shops.Setting` rows (key, value, `effective_from`, optional side, note), insert-only; who set a value is the row's `created_by`, which every shop row has had since PPL-2, so there is no `set_by` column **(v1.18)**; `get_setting(key, shop, side=None, on=date)`; the keys R1 and R1b need — e.g. `attendance.on_time_until` 07:35, `attendance.late_fine` 1,000, `money.rounding_step` 1, `cash.tolerance` 0, `count.tolerance_pct` 0, `expiry.alert_days` 90, `stock.block_negative` off, `session.idle_minutes` 15. The two tolerances are 0 *(default)* until the owner agrees values (02 §20, item 2): every difference is flagged, and a new row changes them with no deploy **(v1.18)**.
 **Done when:**
 - [ ] With no rows, the default comes back; the latest row on or before the date wins; a side row beats a shop row; tomorrow's row is ignored today.
 - [ ] A value of the wrong type is refused; rows can't be edited.
-**Tests:** `test_default_when_no_rows` · `test_latest_row_on_or_before_date_wins` · `test_side_row_beats_shop_row` · `test_future_row_ignored_until_its_day` · `test_setting_type_checked`
-**Commits:** `test(core): setting rules` → `feat(core): settings registry` → `feat(shops): dated Setting rows`
+**Tests:** `test_default_when_no_rows` · `test_latest_row_on_or_before_date_wins` · `test_side_row_beats_shop_row` · `test_future_row_ignored_until_its_day` · `test_setting_type_checked` · `test_setting_rows_cannot_be_edited` · `test_same_day_fix_wins` · `test_setting_key_checked` · `test_get_setting_refuses_wrong_arguments` · `test_every_default_is_a_valid_value` · `test_value_kinds_read_and_write_text` **(v1.18)**
+**Commits:** `docs: created_by records who set a setting or a price` → `test(core): setting rules` → `feat(core): settings registry` → `feat(shops): dated Setting rows` → `feat(shops): get_setting reads the rule in force` **(v1.18)**
 
 ### CORE-5 · Exact money and quantities
 `M` · Jack-led · after REPO-2 · branch `feat/core-5-numbers`
