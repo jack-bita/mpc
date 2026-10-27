@@ -18,9 +18,10 @@ table exists yet, and the guard must be proven before the first one (PPL-2) buil
 
 import pytest
 from django.db.models import Model
-from tests.probe.models import Note
 
+from apps.core.models import ShopScopedManager
 from apps.core.tenancy import NoShopSelected, shop_context, system_context
+from tests.probe.models import Note
 
 pytestmark = pytest.mark.django_db
 
@@ -69,3 +70,10 @@ def test_admin_manager_reads_all_shops() -> None:
     texts = sorted(Note.all_shops.values_list("text", flat=True))
 
     assert texts == ["Customer A", "Customer B", "Customer C"]
+
+
+def test_default_manager_is_the_guarded_one() -> None:
+    # Django, the admin's forms and DRF read a table through its default manager, not through the name
+    # `objects`. `all_shops` is declared first, so without Meta's default_manager_name it would be the
+    # default, and all of them would read every shop's rows with no guard.
+    assert isinstance(Note._default_manager, ShopScopedManager)
