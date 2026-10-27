@@ -69,6 +69,18 @@ def test_admin_kind_and_status_fixed_on_edit(superuser_client: Client) -> None:
     assert shop.status == "active"
 
 
+def test_admin_currency_fixed_on_edit(superuser_client: Client) -> None:
+    shop = Shop.objects.create(name=NAME, code=CODE)
+
+    response = superuser_client.post(f"{SHOPS}{shop.pk}/change/", form_data(currency="KES"))
+
+    assert response.status_code == 302
+    shop.refresh_from_db()
+    # A sale stores only the number, and the shop gives it its currency: TZS turned into KES would make
+    # every old 1,000 shillings read as 1,000 Kenyan shillings (Jack, 27 Oct 2026).
+    assert shop.currency == "TZS"
+
+
 def test_admin_cannot_delete_a_shop(superuser_client: Client) -> None:
     shop = Shop.objects.create(name=NAME, code=CODE)
 

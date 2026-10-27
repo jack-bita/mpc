@@ -39,7 +39,8 @@ class Shop(UUIDModel, TimeStamped):
     # Times are stored in UTC and shown in the shop's own time, and its business dates are worked out
     # in this zone (02 §1). 64 characters hold the longest name in the tz database.
     timezone = models.CharField(max_length=64, default="Africa/Dar_es_Salaam")
-    # An ISO 4217 code. Money is an exact 2-place decimal in this currency (ADR-0024).
+    # An ISO 4217 code. Money is an exact 2-place decimal in this currency (ADR-0024). Fixed once the shop
+    # exists: amounts don't carry their own currency, so a change would relabel them all (the admin).
     currency = models.CharField(max_length=3, default="TZS")
     # The shop's own language. Each person's screens follow their own choice (User.language, 03 §7.4);
     # 02 §4 names this one, and the cards that read it decide where it applies.
