@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
 
-**Changes in v1.14** (27 Oct 2026, PPL-2): two decisions by Jack, made while planning PPL-2. A staff member's photo is optional, and it arrives with PPL-4, which already waits for the file storage a photo needs (CTRL-3); with no photo, UI-4's staff picker shows the full name in large letters with the nickname under it (02 v1.4). PPL-2 builds no admin page: a staff admin page is its own task, in the parking lot (§20, item 15). Marked **(v1.14)**.
+**Changes in v1.14** (27 Oct 2026, PPL-2): two decisions by Jack, made while planning PPL-2. A staff member's photo is optional, and it arrives with PPL-4, which already waits for the file storage a photo needs (CTRL-3); with no photo, UI-4's staff picker shows the full name in large letters with the nickname under it (02 v1.4). PPL-2 builds no admin page: a staff admin page is its own task, in the parking lot (§20, item 15). From PPL-2's review, for later cards: `created_by` reaches SHOP-2's and CTRL-1's tables; PPL-3 also covers people who have left; AUTH-4 sets Argon2's cost on purpose; PPL-4 waits for CTRL-2, so a suspension's reason is stored. Marked **(v1.14)**.
 
 **Changes in v1.13** (27 Oct 2026, CORE-2): the card's last *Done when* line names the admin's own manager, `all_shops`, beside `system_context()`. The card builds both, and both read every shop, so a line naming only one was not true. What the guard means for later cards is in their new *Watch out* lines: PPL-2 (writes and admin pages need a current shop; the test-only table follows `ShopScoped`), CORE-6 and SYNC-4 (an id already taken in another shop), CORE-7 (sweep the guard itself). Marked **(v1.13)**.
 
@@ -463,6 +463,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### SHOP-2 · Sides, stock locations and cash drawers
 `M` · Claude-led · after PPL-2 · branch `feat/shop-2-sides`
 **Build:** `Side` (name, one-letter code unique per shop, `sale_flow`, `is_live` off by default), `StockLocation` (one hidden default per side), `PaymentAccount` (kind, name, provider, number, sides, status); service `create_shop(name, code, sides)` → the shop, its sides, one default location and one cash drawer per side, in one transaction.
+**Watch out:** `ShopScoped` now carries `created_by`, a link to `people.StaffMember` (PPL-2), so these tables' migrations depend on `people`'s. `shops` is layer 1 and may not import `people`, not even as a type (`exclude_type_checking_imports` is off): `create_shop` sets `created_by_id`, or a `people` service does the write, as PPL-3 already asks for the roles **(v1.14)**.
 **Done when:**
 - [ ] `create_shop` with sides D and F makes 2 sides, 2 hidden locations and 2 cash drawers — or nothing at all if any step fails.
 - [ ] Side codes are unique within a shop; a new side starts switched off.
@@ -521,6 +522,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### CTRL-1 · Flags
 `S` · Claude-led · after CORE-2 · branch `feat/ctrl-1-flags`
 **Build:** `control.Flag` (02 §13): kind from a code list, subject (type code + UUID), expected, actual, difference, people, side, status (open → explained → resolved | dismissed), notes; `raise_flag()` and `resolve_flag()` services.
+**Watch out:** `Flag` is `ShopScoped`, so it carries `created_by`, a link to `people.StaffMember` (PPL-2), and its migration depends on `people`'s. `control` is layer 0 and may not import `people`, not even as a type, so its services take staff members' ids **(v1.14)**.
 **Done when:**
 - [ ] Unknown kinds are refused; the status only moves forward; a flag's subject loads from its type code and UUID.
 **Tests:** `test_raise_flag_records_subject_and_people` · `test_flag_status_only_moves_forward`
@@ -544,7 +546,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Done when:**
 - [ ] A Worker can't `sale.bargain`; a Manager on all sides has the Manager permissions on both.
 - [ ] An extra grant on one side works only there.
-- [ ] A suspended member has no permissions.
+- [ ] A suspended member, or one who has left, has no permissions **(v1.14)**.
 **Tests:** `test_worker_cannot_bargain` · `test_all_sides_role_covers_both_sides` · `test_grant_limited_to_its_side` · `test_suspended_member_has_no_permissions`
 **Commits:** `test(people): permission rules` → `feat(core): permission codes` → `feat(people): roles, assignments and grants` → `feat(shops): role templates in create_shop`
 
@@ -582,6 +584,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Jack-led · after AUTH-2, PPL-3 · branch `feat/auth-4-pin-login`
 **Learn:** one session per person on a shared device; lockouts that double.
 **Build:** `POST /api/auth/pin-login` (device key + staff + PIN → a session for that person on that device; idle lock from settings; five wrong PINs lock that person on that device for a minute, doubling each time); `POST /api/auth/logout`; `GET /api/auth/me` (user, staff, shop, device, home side, permissions per side).
+**Watch out:** PINs are hashed with Django's `Argon2PasswordHasher` at its default cost, about 100 MiB of memory per check (`apps/people/pins.py`): set the cost on purpose for the demo's 512 MB and two workers, and re-hash old PINs when it changes (`must_update`). `pin_matches` answers at once for a person with no PIN but takes about 0.1 s otherwise, so the timing shows who has one; and a malformed hash raises. Refuse people who have left as well as suspended ones (PPL-2) **(v1.14)**.
 **Done when:**
 - [ ] A PIN works only on an active device of the same shop; a suspended person is refused.
 - [ ] The lockout doubles; logging out ends the session at once.
@@ -859,7 +862,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 | SHOP-3 | Settings screen | M | CORE-4, UI-2 | One screen for every registry key: the value in force, its history, and a new value from a chosen date (`settings.manage`); each side's on/off switch (`is_live`) |
 | ATT-2 | Attendance rules and holidays | S | SHOP-3 | The answers from OWN-7 as dated settings; holiday dates; Sundays off; an `attendance.enabled` switch, off until the go-live (BP7) |
 | CTRL-3 | Attachments | M | SYNC-8 | `Attachment`: files upload later (Wi-Fi first where the browser can tell); served only through Django after a permission and shop check; a hook for retention rules |
-| PPL-4 | Staff screens *(Jack-led)* | M | UI-2, PPL-3, CTRL-3 | The first office screen: add a worker (photo, optional **(v1.14)**; job title; roles per side); set or reset a PIN online; suspend; mark as left |
+| PPL-4 | Staff screens *(Jack-led)* | M | UI-2, PPL-3, CTRL-2, CTRL-3 | The first office screen: add a worker (photo, optional **(v1.14)**; job title; roles per side); set or reset a PIN online; suspend; mark as left; the reasons go to CTRL-2's audit trail **(v1.14)** |
 | ATT-3 | Clock-in photo *(Jack-led)* | M | CTRL-3, SYNC-11 | Camera capture, compressed on the device (1,600 px, ~150 KB, location removed); the photo travels with the event |
 | ATT-4 | Attendance day calculation *(Jack-led)* | M | ATT-1, ATT-2 | `AttendanceDay`: events + the rules of that day → on time, late, half, absent, off or needs review, with the fine and the rules used; every row of spec §8.1 is a named test, e.g. `test_arrives_0750_full_day_minus_fine` |
 | ATT-5 | Attendance month view | M | ATT-4 | A month grid per worker and a *needs review* list |

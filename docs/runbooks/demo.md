@@ -20,6 +20,8 @@ Two words used below:
 
 No secret is in the repo. The deploy hook is the only one GitHub holds. Never regenerate `PIN_PEPPER` on Render: every PIN on the demo would stop working, and each person would need a new one.
 
+**A new variable in `render.yaml`** (PPL-2 added `PIN_PEPPER`) reaches the service when Render syncs the Blueprint after the merge, usually before the new image is built. After such a merge, check that the service's **Environment** page lists it, and that the *Deploy demo* run is green.
+
 ## How a deploy happens
 
 1. A pull request is squash-merged into `main`. *Deploy demo* starts in the repo's **Actions** tab.
@@ -84,5 +86,6 @@ Render's free PostgreSQL expires 30 days after it is created, and Render deletes
   - A migration error: the new version never started, and the old one still runs. Fix the migration in a new pull request.
   - `DisallowedHost` / `Invalid HTTP_HOST header`: `DJANGO_ALLOWED_HOSTS` doesn't hold the demo's host (step 5). A line about `localhost:10000` is Render's own port check and does no harm.
   - Database connection errors: the free database expired (*Every 30 days*).
+- **The new version stops at start with `The environment variable PIN_PEPPER is not set`** (or another variable `render.yaml` names): the deploy reached Render before the Blueprint sync added it. The old version keeps running. Render → **Blueprints** → the demo's Blueprint → **Manual Sync**; check the service's **Environment** page lists the variable; then re-run the newest *Deploy demo* run.
 - **The demo shows an older commit than `main`:** an older run was re-run after a newer one. Re-run the newest *Deploy demo* run, or merge again.
 - **The hook leaked:** the service → **Settings** → **Deploy Hook** → regenerate, then put the new one into the `demo` environment's secret. The old one stops working at once.

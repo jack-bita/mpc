@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.6 · 27 Oct 2026 · Portion 3 of the planning pack
+**Version:** 1.7 · 27 Oct 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.7** (27 Oct 2026, PPL-2): a PIN may not be 1234 or four of a kind (0000, 1111…), as PPL-2 built it (§5.9, 02 v1.4). Marked **(v1.7)**.
 
 **Changes in v1.6** (27 Oct 2026, SHOP-1): the tenancy sweep allows the `Shop` itself to have no `shop`, because it is the tenant (§5.4, 02 v1.3). Marked **(v1.6)**.
 
@@ -335,7 +337,7 @@ Confirming a one-screen sale:
 - **Online:** device key + staff PIN → a Django session for that person on that device. Idle lock after 15 minutes *(default, a setting)*. Quick switch = another PIN.
 - **Offline verifier, made on the device** ✚: the first time a person logs in online on a device, the device stores its own check value for their PIN (PBKDF2 through the browser's WebCrypto, with a per-device salt). PIN hashes never travel from the server. Until a person's first online login on a device, they need the internet to log in there. When a PIN changes, devices drop the old check value.
 - **Offline:** the device checks the PIN against that value and starts a local session. Five wrong PINs lock that person on that device for a minute, doubling each time.
-- PINs: 4 digits *(default)*, no 0000 or 1234, changed only online. On the server they are hashed with Argon2 plus a server secret, so a stolen database alone doesn't reveal them.
+- PINs: 4 digits *(default)*, not 1234 and not four of a kind (0000, 1111…) **(v1.7)**, changed only online. On the server they are hashed with Argon2 plus a server secret, so a stolen database alone doesn't reveal them.
 - **Honest limit:** a 4-digit PIN check stored on a stolen device can be guessed by someone with the skills. That is accepted: PINs only work on registered devices, and the answer to a stolen device is blocking it. PINs stop coworkers using each other's names; they don't stop thieves.
 
 **Owner and managers on their own phones** — django-allauth, headless, browser client:
