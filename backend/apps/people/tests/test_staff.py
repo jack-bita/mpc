@@ -17,8 +17,7 @@ through the guarded `objects`, so every test works inside `shop_context(shop)`, 
 `by=None` means the change was made by the system or the superuser, who is nobody's staff.
 """
 
-from datetime import date, timedelta
-from zoneinfo import ZoneInfo
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -115,14 +114,16 @@ def test_nickname_free_in_another_shop_and_after_leaving(
     assert second.display_name == "Asha"
 
 
-def test_new_staff_starts_active_today(asha: User, shop_a: Shop) -> None:
+def test_new_staff_starts_active_today(asha: User, shop_a: Shop, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The clock says 22:30 UTC on 1 March: in Arusha (UTC+3) it is already 01:30 on 2 March. The start
+    # date is the shop's date (02 §1: business dates are in shop time), so 2 March; the server's UTC
+    # date would say 1 March. At this hour the two differ, so the test can tell them apart.
+    monkeypatch.setattr(timezone, "now", lambda: datetime(2026, 3, 1, 22, 30, tzinfo=UTC))
     with shop_context(shop_a):
         staff = add_staff(shop=shop_a, user=asha, display_name="Asha", job_title="Seller", by=None)
         staff.refresh_from_db()
 
-    # Today in the shop's own time zone, not the server's UTC: at 01:00 in Arusha it is still yesterday
-    # in UTC (02 §1: business dates are in shop time).
-    assert staff.started_on == timezone.localdate(timezone=ZoneInfo(shop_a.timezone))
+    assert staff.started_on == date(2026, 3, 2)
     assert staff.status == StaffStatus.ACTIVE
     assert staff.left_on is None
     # No PIN yet: set_pin gives one (test_pins.py).
