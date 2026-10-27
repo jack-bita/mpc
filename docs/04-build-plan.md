@@ -454,9 +454,9 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Build:** `StaffMember` (02 §5): user, display name, job title, `started_on`, `left_on`, `status` (active ⇄ suspended → left), PIN hash, `pin_changed_at` (the optional photo comes with PPL-4 **(v1.14)**); `created_by` added to `ShopScoped` now that staff exist; services `add_staff`, `set_pin` (4 digits; no 0000, 1234 or four of a kind; Argon2 + server pepper), `suspend`, `unsuspend`, `mark_left`.
 **Watch out:** `StaffMember` is the first real `ShopScoped` table (CORE-2). Only `save()` works with no current shop: `create()`, `get_or_create()`, `update()` and `full_clean()` read through the guarded `objects`, so services and tests run inside `shop_context(shop)`. The guard doesn't stop a row being written for another shop, so the services check it (T1). `created_by` on `ShopScoped` also changes the test-only `probe.Note` table: make its next migration with the test settings, or `make check` stays red **(v1.13)**. No admin page here: a staff admin page is its own task (§20, item 15) **(v1.14)**.
 **Done when:**
-- [ ] One user can be staff in two shops.
-- [ ] A weak PIN is refused; a stored PIN can't be checked without the server secret.
-- [ ] A person who has left can't be given a PIN.
+- [x] One user can be staff in two shops.
+- [x] A weak PIN is refused; a stored PIN can't be checked without the server secret.
+- [x] A person who has left can't be given a PIN.
 **Tests:** `test_one_user_staff_in_two_shops` · `test_weak_pin_refused` · `test_pin_check_needs_pepper` · `test_left_staff_cannot_get_pin`
 **Commits:** `test(people): staff rules` → `feat(people): StaffMember model` → `feat(people): PIN hashing with pepper` → `feat(core): created_by on shop records`
 
