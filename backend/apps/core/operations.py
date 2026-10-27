@@ -17,6 +17,12 @@ a RunPython fix updates rows: on a ledger with rows, both are refused. A migrati
 one lifts the trigger on purpose, in a reviewed step (ALTER TABLE … DISABLE TRIGGER append_only, the
 change, then ENABLE TRIGGER), never quietly.
 
+The SQL strings below are frozen once they are on main. Every ledger's migration calls them, so an
+edit would change those migrations from the outside (rule 9): a fresh database would get the new rule,
+a live one would keep the old, and the next ledger's migration would swap it on every table at once. A
+change is a new rule: a new function name (core_append_only_v2), new strings, new migrations. A test
+pins each string by its fingerprint (test_trigger_sql_never_changes_once_on_main).
+
 This file owns the SQL of those rules and the operations a migration lists to add them.
 """
 

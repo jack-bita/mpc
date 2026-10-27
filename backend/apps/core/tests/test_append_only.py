@@ -19,6 +19,7 @@ void stamp once. The shop and the staff member come from backend/conftest.py and
 models: `core` may not name `Shop` or `StaffMember`, not even for types (ADR-0035).
 """
 
+import hashlib
 from decimal import Decimal
 
 import pytest
@@ -28,6 +29,7 @@ from django.db.migrations.state import ProjectState
 from django.db.models import Model
 from django.utils import timezone
 
+from apps.core import operations
 from apps.core.operations import AppendOnlyTrigger
 from apps.core.tenancy import shop_context
 from tests.probe.models import Entry, VoidableEntry
@@ -149,3 +151,28 @@ def test_void_cannot_change_other_columns(shop_a: Model, voidable: VoidableEntry
     voidable.refresh_from_db()
     assert voidable.amount == FIFTY_THOUSAND
     assert voidable.voided_at is None
+
+
+# The fingerprint (SHA-256) of each SQL string the trigger operations run. Change one letter of a
+# string and its fingerprint changes completely, so the test below notices any edit.
+PINNED_SQL = {
+    "APPEND_ONLY_FUNCTION": "0340ac298b44023d9aca838e0de8d56f287eb45b7a70e37a7c3196b7c598dd7e",
+    "CREATE_APPEND_ONLY_TRIGGER": "a3d6154b2c9eabb5c75cc98a47e67d3941c0c445a5728e5b6e09b9f96b6bc818",
+    "DROP_APPEND_ONLY_TRIGGER": "9fc2b3c6c9d2738a79f3d5104fe852869bf8fa0b76ca2108cb0aa0cb34b5159a",
+    "VOID_STAMP_FUNCTION": "a5ce63eaa0496fd4a6f2de0e07f95702980b3c6c97ec253cea52df80baaaf7ae",
+    "CREATE_VOID_STAMP_TRIGGER": "1db289f729890b6a1f85504395c3c58be25365611ed8edd44dfbe299405b50d1",
+}
+
+
+@pytest.mark.parametrize(("name", "fingerprint"), PINNED_SQL.items())
+def test_trigger_sql_never_changes_once_on_main(name: str, fingerprint: str) -> None:
+    # Rule 9: a migration on main is never edited. Every ledger's migration calls these strings, so
+    # editing one would edit those migrations from the outside: a fresh database (CI, a new shop) would
+    # get the new rule, a live one would keep the old, and the next ledger's migration would swap it on
+    # every table at once. A change is a new rule instead: a new function name (core_append_only_v2),
+    # new strings and new migrations, while these stay, pinned (apps/core/operations.py says so too).
+    sql = getattr(operations, name)
+    assert hashlib.sha256(sql.encode()).hexdigest() == fingerprint, (
+        f"{name} was edited. Migrations on main run it, so don't edit it: write a new rule "
+        "(a new function name and new migrations) instead (rule 9, ADR-0021)."
+    )
