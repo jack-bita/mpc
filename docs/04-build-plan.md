@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.15 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.16 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.16** (27 Oct 2026, CORE-3): the card builds an `AppendOnly` base model, not a mixin, as the plan Jack approved says; 03 §5.3 already calls it a base. From CORE-3's review, for the cards that build void tables: a *Watch out* on CORE-3 lists the two rules each void table adds itself (a complete stamp, in its own shop), how a void is written, and why the trigger's SQL never changes once on `main`; MONEY-1, CASH-2 and ATT-1 point to it. Marked **(v1.16)**.
 
 **Changes in v1.15** (27 Oct 2026, SHOP-2): one decision by Jack, made at SHOP-2's review. The admin's *Add shop* page keeps saving a bare shop, with no sides; making it use `create_shop` is a later task, in the parking lot (§20, item 16). SHOP-2's *Watch out* records the answer it chose: `create_shop` takes no "who". From SHOP-2's review, for later cards: DATA-1 adds a `kind` argument to `create_shop`; CORE-6 also turns a taken shop code into a code of our own; CORE-7 sweeps many-to-many links and the tables Django makes for them; a cash drawer serves exactly one side, which MONEY-2 checks (§20, item 17). Marked **(v1.15)**.
 
@@ -475,12 +477,13 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### CORE-3 · Append-only tables, enforced by PostgreSQL
 `M` · Jack-led · after CORE-2 · branch `feat/core-3-append-only`
 **Learn:** database triggers; why the database is the last line of defence (03 AD7, 02 T2).
-**Build:** a migration operation that adds a trigger refusing UPDATE and DELETE on a table; a variant that allows filling the void stamp (`voided_at`, `voided_by`, `void_reason`, `void_approval`) once and nothing else; a model mixin that refuses the same in Python with a clear message.
+**Build:** a migration operation that adds a trigger refusing UPDATE and DELETE on a table; a variant that allows filling the void stamp (`voided_at`, `voided_by`, `void_reason`, `void_approval`) once and nothing else; an `AppendOnly` base model, built on `ShopScoped`, that refuses the same in Python with a clear message. A base, not a mixin: a mixin can be listed in the wrong place, and then it never runs or drops the shop guard **(v1.16)**.
+**Watch out** (for the cards that build void tables: MONEY-1, CASH-2, ATT-1) **(v1.16)**: `VoidStampTrigger` names the stamp's columns, so a void table uses exactly `voided_at`, `voided_by`, `void_reason` and `void_approval`. The trigger only checks that `voided_at` is filled once and that nothing else changes, so each table adds two rules of its own: a check constraint that a filled stamp is complete (a reason, and who: T3), and a check that `voided_by` and `void_approval` belong to the row's shop (T1). The void service fills the stamp with one guarded `update()` (`filter(pk=…, voided_at__isnull=True)`), never `save()`, which `AppendOnly` refuses. If it updates 0 rows, the row was already voided (a retry, or someone else first), so it returns the stored result (03 §5.5). The trigger's SQL is frozen once on `main`: a change is a new rule (`core_void_stamp_only_v2`) with new migrations. A later migration that must update ledger rows lifts the trigger on purpose, in a reviewed step.
 **Done when:**
 - [ ] On a test table, `UPDATE` and `DELETE` fail in the database itself, not only in Django.
 - [ ] On a void table, the stamp can be filled once; a second change fails; changing any other column fails.
 **Tests:** `test_append_only_update_fails_in_database` · `test_append_only_delete_fails` · `test_void_stamp_set_once` · `test_void_cannot_change_other_columns`
-**Commits:** `test(core): append-only rules` → `feat(core): append-only trigger operation` → `feat(core): void-stamp variant` → `feat(core): append-only model mixin`
+**Commits:** `test(core): append-only rules` → `feat(core): append-only trigger operation` → `feat(core): void-stamp variant` → `feat(core): append-only base model` **(v1.16)**
 
 ### CORE-4 · Dated settings
 `M` · Claude-led · after CORE-3, SHOP-2 · branch `feat/core-4-settings`
@@ -718,6 +721,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Jack-led · after SYNC-5, PPL-2 · branch `feat/att-1-clock-events`
 **Learn:** device clocks can't be trusted, so we keep evidence instead (02 §12).
 **Build:** `staffpay.AttendanceEvent` (append-only, with the one-time void stamp — Appendix A): kind (in, out), device, photo (added in ATT-3), `client_time`, `trusted_time`, `time_check` (server, device_ok, unverified), `entered_by` + reason; the handler for the clock document; the time check from the evidence (`device_seq` order, the last server time the device saw, its clock error at sync); an `unverified_time` flag.
+**Watch out:** the void stamp as CORE-3's *Watch out* says: a complete stamp, in the event's own shop, filled by one guarded `update()` **(v1.16)**.
 **Done when:**
 - [ ] An online clock-in gets the server's time.
 - [ ] An offline one keeps the device time and is `device_ok` when the evidence agrees.
@@ -898,7 +902,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 | CAT-7 | Search on the device *(Jack-led)* | M | CAT-6, SYNC-7 | MiniSearch over names, other names, tags and synonyms, brand and shelf; Swahili normalising; this side's products and frequent items rank higher; 5,000 products answer in under 50 ms |
 | STK-1 | Stock ledger, balances and batches *(Jack-led)* | M | CAT-2, CORE-3 | `Batch` (lot and expiry, unique per product); `StockMovement` (append-only) and `StockBalance` (location × product × batch) updated in the same transaction; `test_e1_stock_in_kg_sold_by_bag_and_kg`; a Hypothesis test: the balance always equals the sum (S1, S2) |
 | STK-2 | Stock on the device | S | STK-1, SYNC-7 | Stock balances and batches in bootstrap and pull; shown in selling units ("26 mifuko + 35.5 kg") |
-| MONEY-1 | Cash payment | S | SHOP-2 | `Payment` (cash only); the drawer session link comes with CASH-1 |
+| MONEY-1 | Cash payment | S | SHOP-2 | `Payment` (cash only); the drawer session link comes with CASH-1; the void stamp as CORE-3's *Watch out* says **(v1.16)** |
 | SALE-1 | Sale calculations *(Jack-led)* | M | CORE-5 | Line totals, discounts, paid and credit as pure functions in Python and TypeScript; E2's numbers become a shared vector |
 | SALE-2 | Sale document and posting | M | SALE-1, STK-1, MONEY-1, SYNC-4 | `Sale`, `SaleLine` and `PaymentAllocation` with copied values (T4); `post_sale()` writes lines, stock, payment, allocation and changes in one transaction; idempotent; `unit_cost` filled by the server; a `total_mismatch` flag when device and server disagree |
 | SALE-3 | Sale screen, first version | M | CAT-7, STK-2, SYNC-8 | Search → add a line (selling unit, quantity) → total → cash; keyboard first on laptops, big targets on phones |
@@ -936,7 +940,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 | ID | Task | Size | After | Done when |
 |---|---|---|---|---|
 | CASH-1 | Open the drawer | M | MONEY-1, SYNC-8 | `DrawerSession` opened offline too; one open session per drawer (M9); two openings → `drawer_conflict` flag; cash payments link to the open session |
-| CASH-2 | Money in and out | M | CASH-1 | `MoneyMovement` documents, offline too: expenses (categories), advances (name the worker), withdrawals, float, supplier payments and refunds, each with a reason and a name (M10) |
+| CASH-2 | Money in and out | M | CASH-1 | `MoneyMovement` documents, offline too: expenses (categories), advances (name the worker), withdrawals, float, supplier payments and refunds, each with a reason and a name (M10); the void stamp as CORE-3's *Watch out* says **(v1.16)** |
 | CASH-3 | Blind count and expected cash *(Jack-led)* | M | CASH-2, SHOP-3 | The expected cash stays hidden until the count is submitted (M7); E4 as a shared vector; `test_e4_cash_up_expected_163000`; a `cash_difference` flag beyond the tolerance; `e2e/blind-cash-up.spec.ts` |
 
 **Customers and credit**

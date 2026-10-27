@@ -152,8 +152,9 @@ class AppendOnlyTrigger(Operation):
 #   and a later update could then count as the first void.
 # - RETURN NEW: every check passed, so the change is written. (The plain rule never says yes, so it
 #   has no RETURN.)
-# Whether a filled stamp is complete (a reason, who) is not this rule's job: each real table adds its
-# own check constraint for that, with its card.
+# Whether a filled stamp is complete (a reason, who), and whether `voided_by` and `void_approval`
+# belong to the row's shop, is not this rule's job: each void table adds those rules itself. CORE-3's
+# *Watch out* in the build plan (04) lists them, and MONEY-1, CASH-2 and ATT-1 point to it.
 VOID_STAMP_FUNCTION = """
 CREATE OR REPLACE FUNCTION core_void_stamp_only() RETURNS trigger
 LANGUAGE plpgsql AS $$
