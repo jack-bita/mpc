@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.12 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.13 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.13** (27 Oct 2026, CORE-2): the card's last *Done when* line names the admin's own manager, `all_shops`, beside `system_context()`. The card builds both, and both read every shop, so a line naming only one was not true. Marked **(v1.13)**.
 
 **Changes in v1.12** (27 Oct 2026, SHOP-1): CORE-7's allowed list names the `Shop`: it is the tenant, so it has no `shop`, and the sweep must pass with no change to the test (02 v1.3, 03 v1.6). Marked **(v1.12)**.
 
@@ -440,7 +442,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Done when:**
 - [ ] A scoped query with no current shop raises `NoShopSelected`.
 - [ ] Inside `shop_context(A)` only A's rows come back.
-- [ ] Reading across shops works only inside `system_context()`, which is easy to search for in the code.
+- [ ] Reading across shops works only inside `system_context()` or through the admin's own `all_shops` manager; both are easy to search for in the code **(v1.13)**.
 **Tests:** `test_query_without_shop_raises` · `test_shop_context_filters_rows` · `test_system_context_reads_all_shops`
 **Commits:** `test(core): tenancy guard` → `feat(core): current shop context` → `feat(core): ShopScoped base and manager`
 
