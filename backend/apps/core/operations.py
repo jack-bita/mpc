@@ -7,6 +7,10 @@ would go straight past them. So each ledger's migration puts a trigger on its ta
 PostgreSQL that runs before every change, however it is sent, and refuses it. The database is the last
 line of defence (03 §5.6).
 
+Two rules, one operation each. AppendOnlyTrigger refuses every UPDATE and DELETE. VoidStampTrigger is
+for payments, money movements and attendance events: it allows one change, filling the void stamp
+once, and then refuses everything, as the other does.
+
 This file owns the SQL of those rules and the operations a migration lists to add them.
 """
 
@@ -103,3 +107,82 @@ class AppendOnlyTrigger(Operation):
         # changes the model. quote_name puts it in double quotes, so it is always a safe SQL name.
         model = state.apps.get_model(app_label, self.model_name)
         return schema_editor.quote_name(model._meta.db_table)
+
+
+# The void rule, for payments, money movements and attendance events (T2, 03 §5.6). They may change
+# once: the void stamp (`voided_at`, `voided_by`, `void_reason`, `void_approval`) is filled, and the row
+# is then frozen. A trigger runs it before each UPDATE or DELETE of a row, and it checks in order:
+# - A DELETE is refused, with the plain rule's message: a voidable row is voided, never deleted (T3).
+#   It is checked first because a DELETE has no NEW row to look at.
+# - OLD is the row as it is in the table, NEW the row as the UPDATE wants it. A row whose stamp is
+#   already filled refuses every change: who voided it, when and why stay as they were written.
+# - Everything outside the stamp must stay equal. Each row becomes one JSON object (to_jsonb), the
+#   stamp's keys come out (`- stamp`), and what is left is compared. The stamp names the database's
+#   columns: a link gets `_id` (voided_by → voided_by_id). A key a table lacks is skipped, as
+#   `void_approval_id` is on the probe table, until the Approval table comes (R1). IS DISTINCT FROM
+#   gives a plain yes or no even when a value is empty (NULL), where <> would give "unknown".
+#   This check comes before the next one, so a change to another column alone gets this message,
+#   the clearer one.
+# - The change must fill `voided_at`. Half a stamp (a reason with no time) would leave the row open,
+#   and a later update could then count as the first void.
+# - RETURN NEW: every check passed, so the change is written. (The plain rule never says yes, so it
+#   has no RETURN.)
+# Whether a filled stamp is complete (a reason, who) is not this rule's job: each real table adds its
+# own check constraint for that, with its card.
+VOID_STAMP_FUNCTION = """
+CREATE OR REPLACE FUNCTION core_void_stamp_only() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    stamp text[] := ARRAY['voided_at', 'voided_by_id', 'void_reason', 'void_approval_id'];
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION '% on % refused: rows are append-only (ADR-0021)', TG_OP, TG_TABLE_NAME
+            USING ERRCODE = 'restrict_violation';
+    END IF;
+    IF OLD.voided_at IS NOT NULL THEN
+        RAISE EXCEPTION 'UPDATE on % refused: the row is already voided (ADR-0021)', TG_TABLE_NAME
+            USING ERRCODE = 'restrict_violation';
+    END IF;
+    IF to_jsonb(NEW) - stamp IS DISTINCT FROM to_jsonb(OLD) - stamp THEN
+        RAISE EXCEPTION 'UPDATE on % refused: only the void stamp may change (ADR-0021)', TG_TABLE_NAME
+            USING ERRCODE = 'restrict_violation';
+    END IF;
+    IF NEW.voided_at IS NULL THEN
+        RAISE EXCEPTION 'UPDATE on % refused: a void must fill voided_at (ADR-0021)', TG_TABLE_NAME
+            USING ERRCODE = 'restrict_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+"""
+
+# Puts the void rule on one table. The same name as the plain rule's trigger: every ledger has one
+# trigger called `append_only`, and only the rule it calls differs. So DROP_APPEND_ONLY_TRIGGER takes
+# this one off too.
+CREATE_VOID_STAMP_TRIGGER = """
+CREATE TRIGGER append_only
+    BEFORE UPDATE OR DELETE ON {table}
+    FOR EACH ROW EXECUTE FUNCTION core_void_stamp_only();
+"""
+
+
+class VoidStampTrigger(AppendOnlyTrigger):
+    # The step for payments, money movements and attendance events: VoidStampTrigger("payment"). The
+    # same as AppendOnlyTrigger, except for the rule it writes. Undoing it is the parent's
+    # database_backwards: the trigger has the same name, so the same DROP takes it off.
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        # The parent's steps with the void rule: write it, then put it on the table. params=None for
+        # the same reason as above: the rule's messages hold % signs.
+        table = self._table(app_label, schema_editor, to_state)
+        schema_editor.execute(VOID_STAMP_FUNCTION, params=None)
+        schema_editor.execute(CREATE_VOID_STAMP_TRIGGER.format(table=table), params=None)
+
+    def describe(self) -> str:
+        return f"Void-stamp trigger on {self.model_name}"
