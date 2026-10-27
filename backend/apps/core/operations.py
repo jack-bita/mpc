@@ -1,15 +1,21 @@
 """apps/core/operations.py — migration operations that make PostgreSQL refuse edits to ledgers (ADR-0021).
 
-A ledger keeps history (T2): stock movements, balance entries, payments, attendance events, the change
-log, dated prices and settings. Its rows are written once and never changed or deleted; a mistake is
-fixed with a new row. The services only ever insert, but a bug, a bulk update() or SQL typed by hand
-would go straight past them. So each ledger's migration puts a trigger on its table: a rule stored in
-PostgreSQL that runs before every change, however it is sent, and refuses it. The database is the last
-line of defence (03 §5.6).
+A ledger keeps history (T2). The ledgers are listed in 03 §5.6: stock movements, balance entries,
+allocations, payments, money movements, attendance events, audit events, the change log, and the dated
+rules (prices, product costs, settings, pay rates). Their rows are written once and never changed or
+deleted; a mistake is fixed with a new row. The services only ever insert, but a bug, a bulk update()
+or SQL typed by hand would go straight past them. So each ledger's migration puts a trigger on its
+table: a rule stored in PostgreSQL that runs before every change, however it is sent, and refuses it.
+The database is the last line of defence (03 §5.6).
 
 Two rules, one operation each. AppendOnlyTrigger refuses every UPDATE and DELETE. VoidStampTrigger is
 for payments, money movements and attendance events: it allows one change, filling the void stamp
 once, and then refuses everything, as the other does.
+
+Later migrations meet the trigger too. Django fills a column that becomes NOT NULL with an UPDATE, and
+a RunPython fix updates rows: on a ledger with rows, both are refused. A migration that truly needs
+one lifts the trigger on purpose, in a reviewed step (ALTER TABLE … DISABLE TRIGGER append_only, the
+change, then ENABLE TRIGGER), never quietly.
 
 This file owns the SQL of those rules and the operations a migration lists to add them.
 """
@@ -25,8 +31,11 @@ from django.db.migrations.state import ProjectState
 #   running it again only writes the same rule again.
 # - Each % in the message is filled with the next value: TG_OP is the command (UPDATE or DELETE) and
 #   TG_TABLE_NAME the table, so the message says what was refused, and where.
-# - ERRCODE 'restrict_violation' is PostgreSQL's code for a broken rule, as a unique index or a foreign
-#   key reports one, so Django raises IntegrityError: the data broke a rule, the database is not broken.
+# - ERRCODE 'restrict_violation' (23001) is in PostgreSQL's class 23, "integrity constraint violation",
+#   with a unique index's code (23505) and a foreign key's (23503). Django turns the whole class into
+#   IntegrityError: the data broke a rule, the database is not broken. So code that catches
+#   IntegrityError for one of them (an id already taken, CORE-6) must check the code, or it would
+#   hide this refusal too.
 APPEND_ONLY_FUNCTION = """
 CREATE OR REPLACE FUNCTION core_append_only() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -41,9 +50,13 @@ $$;
 # - The name `append_only` only has to be unique per table, so every ledger's trigger can share it.
 # - BEFORE: it runs before the change is written, so a refused change never touches the table.
 # - UPDATE OR DELETE: INSERT is not listed, so new rows are still written. TRUNCATE (emptying the
-#   whole table at once) is not refused either: tests and `manage.py flush` empty tables that way, and
-#   only the table's owner can run it, never the app's queries.
-# - FOR EACH ROW: the rule runs for every row a command touches, so a bulk update() is refused too.
+#   whole table at once) is not refused either: tests and `manage.py flush` empty tables that way.
+#   Today only care stops it: the app connects as the database user that owns the tables, the same
+#   one that runs the migrations. Before shop #2 the app gets a database user of its own (03 §5.4);
+#   that user won't own the tables, so it can't TRUNCATE them unless it is given the right.
+# - FOR EACH ROW: the rule runs once for each row the command touches, with that row's OLD and NEW.
+#   The void rule needs them; the plain one is built the same way. A command that touches no row runs
+#   no rule, so an update() that matches nothing passes, harmlessly.
 CREATE_APPEND_ONLY_TRIGGER = """
 CREATE TRIGGER append_only
     BEFORE UPDATE OR DELETE ON {table}
@@ -119,10 +132,11 @@ class AppendOnlyTrigger(Operation):
 # - Everything outside the stamp must stay equal. Each row becomes one JSON object (to_jsonb), the
 #   stamp's keys come out (`- stamp`), and what is left is compared. The stamp names the database's
 #   columns: a link gets `_id` (voided_by → voided_by_id). A key a table lacks is skipped, as
-#   `void_approval_id` is on the probe table, until the Approval table comes (R1). IS DISTINCT FROM
-#   gives a plain yes or no even when a value is empty (NULL), where <> would give "unknown".
-#   This check comes before the next one, so a change to another column alone gets this message,
-#   the clearer one.
+#   `void_approval_id` is on the probe table, until the Approval table comes (R1). Both sides are
+#   whole JSON objects, never empty, so <> would answer the same; IS DISTINCT FROM is the safe habit
+#   in SQL, because it still gives a plain yes or no when a value is empty (NULL), where <> gives
+#   "unknown". This check comes before the next one, so a change to another column alone gets this
+#   message, the clearer one.
 # - The change must fill `voided_at`. Half a stamp (a reason with no time) would leave the row open,
 #   and a later update could then count as the first void.
 # - RETURN NEW: every check passed, so the change is written. (The plain rule never says yes, so it

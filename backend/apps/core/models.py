@@ -108,9 +108,13 @@ class ShopScoped(UUIDModel, TimeStamped):
         abstract = True
         # The default manager is the one Django, the admin's forms and DRF read through. Without this
         # line it would be the first one declared: `all_shops`, with no guard, or a manager a table adds
-        # of its own. This keeps `objects` the default for every table that keeps this Meta: one with no
-        # Meta of its own, or one whose Meta builds on ShopScoped.Meta. A table that writes a fresh Meta,
-        # or replaces `objects`, loses the guard: CORE-7's sweep is to catch that.
+        # of its own. This keeps `objects` the default for every table built on ShopScoped: one with no
+        # Meta of its own, one whose Meta builds on ShopScoped.Meta, and even one that writes a fresh
+        # Meta, because Django then takes the name from the table's first parent. The guard is lost in
+        # two ways: an abstract base built on ShopScoped that writes a fresh Meta (its tables get
+        # `all_shops`; AppendOnly builds its Meta on this one for that reason), and a table that declares
+        # managers of its own: its own `objects`, or any manager beside a fresh Meta. CORE-7's sweep is
+        # to catch both.
         default_manager_name = "objects"
 
 
@@ -122,14 +126,16 @@ class AppendOnlyError(Exception):
 
 
 class AppendOnly(ShopScoped):
-    # The base of every ledger table (03 §5.3): stock movements, balance entries, payments, attendance
-    # events, the change log, dated prices and settings. A ledger is ShopScoped plus this: its rows are
-    # written once, and never changed or deleted (T2). Its migration adds the trigger that refuses the
-    # same in PostgreSQL (apps/core/operations.py), whatever sends the change; this class only stops the
-    # commonest mistake earlier, with a clear message, before the database is asked.
-    # A base built on ShopScoped, not a mixin listed beside it: a mixin listed after ShopScoped would
-    # never run (Django's own save() comes first), and one listed before it with a Meta of its own would
-    # drop the shop guard (CORE-1). A ledger is simply `class StockMovement(AppendOnly)`.
+    # The base of every ledger table (03 §5.3; the list is 03 §5.6): stock movements, balance entries,
+    # allocations, payments, money movements, attendance events, audit events, the change log, and the
+    # dated rules: prices, product costs, settings and pay rates. A ledger is ShopScoped plus this: its
+    # rows are written once, and never changed or deleted (T2). Its migration adds the trigger that
+    # refuses the same in PostgreSQL (apps/core/operations.py), whatever sends the change; this class
+    # only stops the commonest mistake earlier, with a clear message, before the database is asked.
+    # A base built on ShopScoped, not a mixin listed beside it, because a mixin can be listed wrong: a
+    # plain Python mixin listed after ShopScoped never runs (Django's own save() comes first), and a
+    # model mixin listed before it, with a Meta of its own, drops the shop guard (CORE-1). A base can't
+    # be listed wrong: a ledger is simply `class StockMovement(AppendOnly)`.
 
     class Meta(ShopScoped.Meta):
         # abstract: a base, not a table. Without it, Django would make a real `core_appendonly` table and
@@ -143,6 +149,9 @@ class AppendOnly(ShopScoped):
         # Django's save(), with the same arguments; saving an old row again would rewrite it.
         # To void a row (payments, money movements, attendance events), a service fills the stamp with
         # one update() on a query, which skips save(): the trigger checks that change.
+        # A fix is a new row. One copied from a loaded row (`row.pk = None`) still has `adding` False
+        # and is refused here: set `row._state.adding = True` too, as Django's docs say for copying any
+        # row, or build the new row fresh, which reads more clearly.
         if not self._state.adding:
             raise AppendOnlyError(f"{type(self).__name__} rows are append-only: write a new row instead (ADR-0021).")
         super().save(*args, **kwargs)
