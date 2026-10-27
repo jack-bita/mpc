@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.4 · 27 Oct 2026 · Portion 2 of the planning pack
+**Version:** 1.5 · 27 Oct 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -13,6 +13,8 @@
 **Changes in v1.3** (27 Oct 2026, SHOP-1): two decisions by Jack, made while building SHOP-1. A shop's code is 2–10 capital letters, the short form people already say (`MPC`), and its currency is fixed once the shop exists, because amounts don't carry their own currency. A shop's kind is fixed too, and a practice shop copies only a live shop (ADR-0014). The `Shop` itself is the one shop table without a `shop`: it is the tenant (§1, T1). Marked **(v1.3)**.
 
 **Changes in v1.4** (27 Oct 2026, PPL-2): a staff member's photo is optional (Jack, while planning PPL-2). On the PIN login screen, a person with no photo shows their full name in large letters, with their nickname under it, in the photo's place. §5 also records the staff rules PPL-2 built: a job left is final and a returning worker gets a new one, one current job per person per shop, nicknames unique among current staff, a leaving date never in the future, and the PIN rules; §1 says `created_by` is empty for rows the system makes. Marked **(v1.4)** below.
+
+**Changes in v1.5** (27 Oct 2026, SHOP-2): §4 records the side and account rules SHOP-2 built: a side's letter is one capital, unique within its shop, and a new side starts switched off; one default stock location per side; a payment account's sides are kept as link rows, each with its shop; a cash drawer has no provider and no number, and the other kinds have both. §14 gives a payment account's status: `active` ⇄ `archived`. Marked **(v1.5)**.
 
 ---
 
@@ -148,18 +150,22 @@ A full diagram for GitHub is in Appendix A.
 
 **Side** [R1] → Shop (D1)
 - `name`, `code` (one letter used in numbers: D, F)
+- `code`: one capital letter, unique within the shop — two sides with one letter would print the same numbers **(v1.5)**
 - `sale_flow`: `one_screen` | `writer_cashier_loader`
-- `is_live` — each side is switched on in settings (spec §11)
+- `is_live` — each side is switched on in settings (spec §11); a new side starts switched off **(v1.5)**
 - [Later] `branch` → Branch, for a second site
 
 **StockLocation** [R1] ✚ → Side (D2)
-- `name`, `is_default`. R1: one per side, automatic, hidden.
+- `name`, `is_default`. R1: one per side, automatic, hidden. At most one default per side **(v1.5)**.
 
 `Device` moved to module `people` (§5) in v1.1: it is access control.
 
 **PaymentAccount** [R1] → Shop — where money lands.
 - `kind`: `cash_drawer` | `mobile_money` | `bank`; `name`, `provider`, `number`, `sides`, `status`
 - MPC: one cash drawer per side; one Lipa Namba shared by both sides (each payment still records its side); bank accounts.
+- `sides` is kept as one link row per side (`PaymentAccountSide`), each with its shop like every record (T1) **(v1.5)**.
+- A cash drawer has no `provider` and no `number`; a Lipa Namba or a bank account has both **(v1.5)**.
+- `status`: `active` | `archived` (§14) **(v1.5)**
 
 **Setting** [R1] ✚ → Shop (optional Side) — one dated rule value (D13).
 - `key` (from a fixed list in code, each with a type and a default), `value`, `effective_from`, `set_by`, `note`
@@ -463,7 +469,7 @@ stateDiagram-v2
 - **Job** [R2]: `waiting` → `in_progress` → `ready` → `collected`; `cancelled` before ready (the customer's goods go back).
 - **PayRun** [R1b]: `draft` → `approved` → `paid`.
 - **Flag:** `open` → `explained` → `resolved` | `dismissed`.
-- **StaffMember:** `active` ⇄ `suspended` → `left`. **Product, Contact:** `active` ⇄ `archived`. **Device:** `pending` → `active` ⇄ `blocked`.
+- **StaffMember:** `active` ⇄ `suspended` → `left`. **Product, Contact:** `active` ⇄ `archived`. **PaymentAccount:** `active` ⇄ `archived` **(v1.5)**. **Device:** `pending` → `active` ⇄ `blocked`.
 
 ## 15. Calculations
 
