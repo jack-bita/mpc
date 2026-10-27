@@ -6,6 +6,8 @@ without touching real money. Each test names one rule the Shop table must keep; 
 last guard for each of them (03 §5.6).
 """
 
+from typing import Any
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -127,6 +129,19 @@ def test_timezone_must_be_real() -> None:
 
     # Under the field's name, so the form shows it beside the box, and as a code (ADR-0032).
     assert refused.value.error_dict["timezone"][0].code == "shop.timezone_unknown"
+
+
+@pytest.mark.parametrize(("timezone", "code"), [(None, "null"), ("", "blank")])
+def test_missing_timezone_is_reported_not_a_crash(timezone: Any, code: str) -> None:
+    # `Any`: None is a value the field's type doesn't allow, which is the point of this test.
+    # full_clean runs clean() even after a field has failed its own check, so clean() must not trip over
+    # a missing value. The field reports it once, under its name: no crash, and no second error.
+    shop = Shop(name=NAME, code=CODE, timezone=timezone)
+
+    with pytest.raises(ValidationError) as refused:
+        shop.full_clean()
+
+    assert [error.code for error in refused.value.error_dict["timezone"]] == [code]
 
 
 @pytest.mark.parametrize(

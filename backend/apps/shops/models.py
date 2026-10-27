@@ -133,6 +133,10 @@ class Shop(UUIDModel, TimeStamped):
         # The database has no list of timezones, so this check lives here. ZoneInfo looks the name up in
         # the tz database (the system's own, on Linux): an unknown name raises ZoneInfoNotFoundError, and
         # a string that can't be a zone name at all (a path such as "../x") raises ValueError.
+        # full_clean runs clean() even after the field's own check has failed, so a missing timezone
+        # (None or "") is left to that check: it reports it once, and ZoneInfo(None) would crash.
+        if not self.timezone:
+            return
         try:
             ZoneInfo(self.timezone)
         except ZoneInfoNotFoundError, ValueError:
