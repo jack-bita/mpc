@@ -211,10 +211,16 @@ class Side(ShopScoped):
         return f"{self.name} ({self.code})"
 
     def clean(self) -> None:
-        # full_clean runs this before the rules above: "d" typed in a form is stored as "D". Spaces never
-        # get this far: Django's forms and DRF trim them first.
+        # full_clean runs this after each field's own checks and before the rules above.
+        # - The code: "d" is stored as "D". A letter with spaces around it (" d") never gets here: it has
+        #   already failed the field's one-character length, with Django's own `max_length` code. Forms
+        #   and DRF trim spaces before that; code that calls full_clean itself, like create_shop, doesn't.
+        # - The name: trimmed, so a name of only spaces becomes "" and the not-blank rule refuses it
+        #   (side.name_blank), instead of an empty-looking side on every screen. The location and the
+        #   drawer create_shop names after the side get the trimmed name too.
         super().clean()
         self.code = (self.code or "").upper()
+        self.name = (self.name or "").strip()
 
 
 class StockLocation(ShopScoped):

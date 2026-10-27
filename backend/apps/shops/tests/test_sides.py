@@ -74,6 +74,18 @@ def test_side_code_stored_as_a_capital(shop_a: Shop) -> None:
     assert side.code == "D"
 
 
+def test_side_name_of_only_spaces_refused(shop_a: Shop) -> None:
+    # A form trims spaces before the model sees them, but code that calls full_clean itself, like
+    # create_shop, gets no form. Trimmed by the model, a name of only spaces is "", and the not-blank rule
+    # refuses it with its code, instead of storing a side that looks empty on every screen.
+    with shop_context(shop_a):
+        side = Side(shop=shop_a, code="D", name="   ")
+        with pytest.raises(ValidationError) as refused:
+            side.full_clean()
+
+    assert [error.code for error in refused.value.error_dict["__all__"]] == ["side.name_blank"]
+
+
 @pytest.mark.parametrize(
     ("fields", "rule"),
     [
