@@ -20,6 +20,8 @@ models: `core` may not name `Shop` or `StaffMember`, not even for types (ADR-003
 """
 
 import hashlib
+import uuid
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -30,7 +32,7 @@ from django.db.models import Model
 from django.utils import timezone
 
 from apps.core import operations
-from apps.core.operations import AppendOnlyTrigger
+from apps.core.operations import AppendOnlyTrigger, VoidStampTrigger
 from apps.core.tenancy import shop_context
 from tests.probe.models import Entry, VoidableEntry
 
@@ -78,33 +80,45 @@ def test_append_only_update_fails_in_database(entry: Entry) -> None:
     assert entry.amount == FIFTY_THOUSAND
 
 
-def test_trigger_removed_when_migrated_back(entry: Entry) -> None:
+@pytest.mark.parametrize(
+    ("operation", "fixture"),
+    [(AppendOnlyTrigger("entry"), "entry"), (VoidStampTrigger("voidableentry"), "voidable")],
+    ids=["plain", "void"],
+)
+def test_trigger_removed_when_migrated_back(
+    operation: AppendOnlyTrigger, fixture: str, request: pytest.FixtureRequest
+) -> None:
     # Undoing the migration must take the trigger off, or stepping a database back (`migrate probe
-    # 0003`) would leave a rule behind that no migration knows about. The probe's 0004 put it on; here
-    # the same step runs backwards. In PostgreSQL even this change to the table sits inside the test's
-    # transaction, so the rollback at the end of the test puts the trigger back for the next test.
+    # 0003`) would leave a rule behind that no migration knows about. The probe's 0004 and 0005 put the
+    # two triggers on; here the same steps run backwards. The void one has no undo of its own: it
+    # relies on its parent's, which this proves. In PostgreSQL even this change to the table sits
+    # inside the test's transaction, so the rollback at the end of the test puts the trigger back.
+    row = request.getfixturevalue(fixture)
     state = ProjectState.from_apps(apps)
     with connection.schema_editor() as editor:
-        AppendOnlyTrigger("entry").database_backwards("probe", editor, state, state)
+        operation.database_backwards("probe", editor, state, state)
 
-    # The same plain SQL the first test sends now goes through.
+    # The plain SQL the first test sends now goes through.
     with connection.cursor() as cursor:
-        cursor.execute(f"UPDATE {Entry._meta.db_table} SET amount = %s WHERE id = %s", [FIVE_THOUSAND, entry.pk])
-    entry.refresh_from_db()
-    assert entry.amount == FIVE_THOUSAND
+        cursor.execute(f"UPDATE {type(row)._meta.db_table} SET amount = %s WHERE id = %s", [FIVE_THOUSAND, row.pk])
+    row.refresh_from_db()
+    assert row.amount == FIVE_THOUSAND
 
 
-def test_append_only_delete_fails(shop_a: Model, entry: Entry, voidable: VoidableEntry) -> None:
+def test_append_only_delete_fails(shop_a: Model, entry: Entry) -> None:
     # A bulk delete is one DELETE command: no row's own delete() runs, so Python can't refuse it.
-    # Both kinds of ledger refuse it: a voidable row is voided, never deleted (T3).
-    with shop_context(shop_a):
-        with pytest.raises(IntegrityError, match="append-only"), transaction.atomic():
-            Entry.objects.filter(pk=entry.pk).delete()
-        with pytest.raises(IntegrityError, match="append-only"), transaction.atomic():
-            VoidableEntry.objects.filter(pk=voidable.pk).delete()
+    with shop_context(shop_a), pytest.raises(IntegrityError, match="append-only"), transaction.atomic():
+        Entry.objects.filter(pk=entry.pk).delete()
 
-    # Both rows are still there: refresh_from_db() raises DoesNotExist for a row that is gone.
+    # Still there: refresh_from_db() raises DoesNotExist for a row that is gone.
     entry.refresh_from_db()
+
+
+def test_void_delete_fails(shop_a: Model, voidable: VoidableEntry) -> None:
+    # A voidable row is voided, never deleted (T3): the void rule refuses a DELETE as the plain one does.
+    with shop_context(shop_a), pytest.raises(IntegrityError, match="append-only"), transaction.atomic():
+        VoidableEntry.objects.filter(pk=voidable.pk).delete()
+
     voidable.refresh_from_db()
 
 
@@ -138,18 +152,29 @@ def test_void_must_fill_voided_at(shop_a: Model, voidable: VoidableEntry) -> Non
     assert voidable.void_reason == ""
 
 
-def test_void_cannot_change_other_columns(shop_a: Model, voidable: VoidableEntry) -> None:
+@pytest.mark.parametrize("column", ["amount", "shop", "created_at", "id"])
+def test_void_cannot_change_other_columns(column: str, shop_a: Model, shop_b: Model, voidable: VoidableEntry) -> None:
+    # Every column outside the stamp, not only the money: `shop` is the tenancy case (a void must never
+    # move a row to another shop, T1), and `id` and `created_at` say which row it is and when it came.
+    change = {
+        "amount": FIVE_THOUSAND,
+        "shop": shop_b,
+        "created_at": timezone.now() - timedelta(days=1),
+        "id": uuid.uuid7(),
+    }[column]
     with shop_context(shop_a):
         rows = VoidableEntry.objects.filter(pk=voidable.pk)
         # Another column on its own.
         with pytest.raises(IntegrityError, match="only the void stamp may change"), transaction.atomic():
-            rows.update(amount=FIVE_THOUSAND)
+            rows.update(**{column: change})
         # Another column hidden inside a real void: the whole change is refused, the stamp too.
         with pytest.raises(IntegrityError, match="only the void stamp may change"), transaction.atomic():
-            rows.update(voided_at=timezone.now(), void_reason="Entered twice", amount=FIVE_THOUSAND)
+            rows.update(voided_at=timezone.now(), void_reason="Entered twice", **{column: change})
 
+    # Found by its old id, so the id didn't change either.
     voidable.refresh_from_db()
     assert voidable.amount == FIFTY_THOUSAND
+    assert voidable.shop_id == shop_a.pk
     assert voidable.voided_at is None
 
 
