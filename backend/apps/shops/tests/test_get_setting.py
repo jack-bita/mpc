@@ -107,6 +107,20 @@ def test_side_row_beats_shop_row(shop_a: Shop, dawa: Side, vyakula: Side) -> Non
         assert get_setting(CASH_TOLERANCE, shop_a, vyakula, on=NOV_3) == Decimal("3000.00")
 
 
+def test_shop_wide_rule_ignores_side_rows(shop_a: Shop, dawa: Side) -> None:
+    # The late fine is one value for the whole shop. Setting.clean() refuses a side row for it, but code
+    # that saves without full_clean (a seed, a data migration, a bulk_create) skips that check, and the
+    # database can't hold it: the list of keys lives in code. So the lookup itself never asks for one.
+    with shop_context(shop_a):
+        Setting.objects.create(shop=shop_a, side=dawa, key=LATE_FINE.key, value="9999.00", effective_from=JAN_1)
+        assert get_setting(LATE_FINE, shop_a, dawa, on=NOV_3) == Decimal("1000.00")  # the default
+
+    add_row(shop_a, LATE_FINE, "1500", JAN_1)
+
+    with shop_context(shop_a):
+        assert get_setting(LATE_FINE, shop_a, dawa, on=NOV_3) == Decimal("1500.00")  # the shop's row
+
+
 def test_same_day_fix_wins(shop_a: Shop) -> None:
     # The owner types 15,000 instead of 1,500. Rows are never edited (ADR-0013), so the fix is one more
     # row for the same day, and the row written last wins.

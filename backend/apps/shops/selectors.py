@@ -10,7 +10,7 @@ list of rules in core (apps/core/settings_registry.py): a new shop works with ev
 
 from datetime import date, datetime
 
-from apps.core.settings_registry import SettingKey
+from apps.core.settings_registry import Scope, SettingKey
 from apps.core.tenancy import ALL_SHOPS, current_shop
 from apps.shops.models import Setting, Shop, Side
 
@@ -45,9 +45,10 @@ def get_setting[T](key: SettingKey[T], shop: Shop, side: Side | None = None, *, 
     rows = Setting.objects.filter(shop=shop, key=key.key, effective_from__lte=on).order_by(
         "-effective_from", "-created_at", "-id"
     )
-    # A side's own row beats the shop's row, even an older one (02 §4). A key with one value for the whole
-    # shop has no side rows (Setting.clean() refuses them), so it goes straight to the shop's row.
-    row = rows.filter(side=side).first() if side is not None else None
+    # A side's own row beats the shop's row, even an older one (02 §4). Only for a key whose scope allows
+    # side rows: Setting.clean() refuses them for a shop-wide key, but code that saves without full_clean
+    # skips that check, and the database can't hold it. So a shop-wide key goes straight to the shop's row.
+    row = rows.filter(side=side).first() if side is not None and key.scope is Scope.SIDE else None
     if row is None:
         row = rows.filter(side__isnull=True).first()
     if row is None:
