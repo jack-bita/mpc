@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.14 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.15 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.15** (27 Oct 2026, SHOP-2): one decision by Jack, made at SHOP-2's review. The admin's *Add shop* page keeps saving a bare shop, with no sides; making it use `create_shop` is a later task, in the parking lot (§20, item 16). SHOP-2's *Watch out* records the answer it chose: `create_shop` takes no "who". From SHOP-2's review, for later cards: DATA-1 adds a `kind` argument to `create_shop`; CORE-6 also turns a taken shop code into a code of our own; CORE-7 sweeps many-to-many links and the tables Django makes for them; a cash drawer serves exactly one side, which MONEY-2 checks (§20, item 17). Marked **(v1.15)**.
 
 **Changes in v1.14** (27 Oct 2026, PPL-2): two decisions by Jack, made while planning PPL-2. A staff member's photo is optional, and it arrives with PPL-4, which already waits for the file storage a photo needs (CTRL-3); with no photo, UI-4's staff picker shows the full name in large letters with the nickname under it (02 v1.4). PPL-2 builds no admin page: a staff admin page is its own task, in the parking lot (§20, item 15). From PPL-2's review, for later cards: `created_by` reaches SHOP-2's and CTRL-1's tables; PPL-3 also covers people who have left; AUTH-4 sets Argon2's cost on purpose; PPL-4 waits for CTRL-2, so a suspension's reason is stored. Marked **(v1.14)**.
 
@@ -463,10 +465,10 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### SHOP-2 · Sides, stock locations and cash drawers
 `M` · Claude-led · after PPL-2 · branch `feat/shop-2-sides`
 **Build:** `Side` (name, one-letter code unique per shop, `sale_flow`, `is_live` off by default), `StockLocation` (one hidden default per side), `PaymentAccount` (kind, name, provider, number, sides, status); service `create_shop(name, code, sides)` → the shop, its sides, one default location and one cash drawer per side, in one transaction.
-**Watch out:** `ShopScoped` now carries `created_by`, a link to `people.StaffMember` (PPL-2), so these tables' migrations depend on `people`'s. `shops` is layer 1 and may not import `people`, not even as a type (`exclude_type_checking_imports` is off): `create_shop` sets `created_by_id`, or a `people` service does the write, as PPL-3 already asks for the roles **(v1.14)**.
+**Watch out:** `ShopScoped` now carries `created_by`, a link to `people.StaffMember` (PPL-2), so these tables' migrations depend on `people`'s. `shops` is layer 1 and may not import `people`, not even as a type (`exclude_type_checking_imports` is off): `create_shop` sets `created_by_id`, or a `people` service does the write, as PPL-3 already asks for the roles **(v1.14)**. Settled in SHOP-2: `create_shop` takes no "who". A brand-new shop has no staff yet, so every row it makes has `created_by` empty, like any row the system makes (02 §1) **(v1.15)**.
 **Done when:**
-- [ ] `create_shop` with sides D and F makes 2 sides, 2 hidden locations and 2 cash drawers — or nothing at all if any step fails.
-- [ ] Side codes are unique within a shop; a new side starts switched off.
+- [x] `create_shop` with sides D and F makes 2 sides, 2 hidden locations and 2 cash drawers — or nothing at all if any step fails.
+- [x] Side codes are unique within a shop; a new side starts switched off.
 **Tests:** `test_create_shop_makes_location_and_drawer_per_side` · `test_create_shop_all_or_nothing` · `test_side_code_unique_within_shop` · `test_side_starts_switched_off`
 **Commits:** `test(shops): create_shop` → `feat(shops): Side, StockLocation and PaymentAccount` → `feat(shops): create_shop service`
 
@@ -503,7 +505,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### CORE-6 · API conventions
 `M` · Claude-led · after SHOP-2 · branch `feat/core-6-api`
 **Build:** domain errors with codes and one exception handler (`{"code", "message", "fields", "params"}` — 03 §5.10); base views (tenancy and a per-side permission hook); idempotent creates (the client sends the UUID); the `Editable` base with `version` (stale → `409 version_conflict`); cursor pagination; drf-spectacular at `/api/schema/` and `/api/docs/` (public on the demo, staff only in production).
-**Watch out:** the guard checks the shop when a read is built (CORE-2). So the base view sets the current shop after DRF has authenticated the visit, around the whole view, and builds its rows in `get_queryset()`: `queryset = Side.objects.all()` in a class body raises as the module loads. DRF's unique check on `id` reads through the guarded manager, so it sees the current shop only: an id already taken in another shop passes it and fails at the insert (`IntegrityError`, a 500). Request code may not read across shops, so decide here how that failure becomes a clean refusal that reveals nothing (03 §5.4) **(v1.13)**.
+**Watch out:** the guard checks the shop when a read is built (CORE-2). So the base view sets the current shop after DRF has authenticated the visit, around the whole view, and builds its rows in `get_queryset()`: `queryset = Side.objects.all()` in a class body raises as the module loads. DRF's unique check on `id` reads through the guarded manager, so it sees the current shop only: an id already taken in another shop passes it and fails at the insert (`IntegrityError`, a 500). Request code may not read across shops, so decide here how that failure becomes a clean refusal that reveals nothing (03 §5.4) **(v1.13)**. A shop code that is already taken still comes back with Django's generic `unique` code, not one of ours: `Shop.code`'s `unique=True` (SHOP-1) gives no way to name it. Give it a `shop.code_taken` code with the others **(v1.15)**.
 **Done when:**
 - [ ] The Side endpoints show every behaviour above in tests.
 - [ ] The schema builds with no warnings.
@@ -513,7 +515,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### CORE-7 · The tenancy sweep
 `M` · Claude-led · after CORE-6 · branch `test/core-7-tenancy-sweep`
 **Build:** one test module that finds every model and every list and detail route of our apps by itself: every model has `shop` (outside an allowed list: `User`, `Unit`, `Shop` **(v1.12)** and the infrastructure tables); every foreign key uses `PROTECT` (T3); every route called as shop B returns none of shop A's rows (03 §5.4).
-**Watch out:** sweep the guard itself too (CORE-2). Every `ShopScoped` table's default manager and its `objects` must be a `ShopScopedManager`: a table that writes a fresh `Meta`, or replaces `objects`, drops the guard with no error. Also check that `all_shops` appears only in `admin.py` files, and `system_context(` only in jobs, management commands and the seed; today only a search finds them **(v1.13)**.
+**Watch out:** sweep the guard itself too (CORE-2). Every `ShopScoped` table's default manager and its `objects` must be a `ShopScopedManager`: a table that writes a fresh `Meta`, or replaces `objects`, drops the guard with no error. Also check that `all_shops` appears only in `admin.py` files, and `system_context(` only in jobs, management commands and the seed; today only a search finds them **(v1.13)**. Tests may use `system_context(` too: `test_create_shop_all_or_nothing` (SHOP-2) counts every shop's rows after a failed `create_shop`. A many-to-many field, such as `PaymentAccount.sides` (SHOP-2), has no `on_delete` of its own: skip it, and check its link table's foreign keys instead. List the models with `get_models(include_auto_created=True)`, so a link table Django makes by itself, with no `shop` and with CASCADE, turns CI red **(v1.15)**.
 **Done when:**
 - [ ] A new model without `shop`, a foreign key that cascades, or a route that leaks turns CI red — with no change to the test.
 **Tests:** `test_every_model_has_shop` · `test_every_foreign_key_protects` · `test_no_route_leaks_across_shops`
@@ -646,7 +648,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### DATA-1 · Demo seed, first version
 `S` · Claude-led · after PPL-3, OPS-2 · branch `feat/data-1-demo-seed`
 **Build:** `manage.py seed_demo`: a demo shop with sides D and F, staff with made-up Swahili names, roles and PINs, and a manager with a password; each demo deploy — and a nightly scheduled redeploy — resets and reseeds it (03 §12); development and E2E tests use it too.
-**Watch out:** the manager is the demo's first account with a password, and `/admin/login/` has no rate limit yet (PPL-1 review), so anyone could try passwords there without end. Before the seed runs on the demo, limit the login attempts, or keep that manager out of the admin (`is_staff` off) **(v1.8)**.
+**Watch out:** the manager is the demo's first account with a password, and `/admin/login/` has no rate limit yet (PPL-1 review), so anyone could try passwords there without end. Before the seed runs on the demo, limit the login attempts, or keep that manager out of the admin (`is_staff` off) **(v1.8)**. Make the shop with `create_shop` (SHOP-2), which today makes only live shops: add a `kind` argument, so the shop the seed makes is a demo one. A live one would be refused by the seed itself at its next run, since it refuses a shop that isn't a demo **(v1.15)**.
 **Done when:**
 - [ ] The seed builds the same shop every time (fixed random seed).
 - [ ] It refuses to run against a shop that isn't a demo.
@@ -1142,6 +1144,8 @@ The project is also the portfolio, so showing it is part of the plan.
 13. Not tested by SPIKE-1: a second laptop, and Edge offline. Both are checked when the shop's devices are paired and installed before go-live (§16) **(v1.10)**.
 14. QR codes on the Foods side slips (03 §7.5 ✚): does the shop want workers to scan a paid slip instead of reading its number? The shop doesn't use QR codes today, so SPIKE-2 left the QR code out (Jack, 26 Oct). Decided when R2 is planned; if yes, check first that the shop's printer prints one a phone can read **(v1.11)**.
 15. An admin page for staff members, as its own task (Jack, 27 Oct). The first admin page of a shop table lists its rows through `all_shops`, but its add and change pages fill and check their form through `objects` (drop-downs, unique checks), so they raise `NoShopSelected` (CORE-2). It needs one admin base in `core` that runs those pages inside the row's own `shop_context`, with the shop picked first on an add page **(v1.14)**.
+16. The admin's *Add shop* page through `create_shop` (Jack, 27 Oct). Today it saves the Shop row alone: no sides, stock locations or cash drawers, so a shop added there can't work (SHOP-2). It needs the sides on the add form, or a management command instead. No shop exists yet, so none is missing its sides **(v1.15)**.
+17. A cash drawer serves exactly one side (ADR-0001), while a Lipa Namba may serve several. The database can't hold this: the link table has no `kind`. `create_shop` makes one drawer per side; the service that adds accounts (MONEY-2) checks it **(v1.15)**.
 
 ## Appendix A — Changes to the other docs
 
