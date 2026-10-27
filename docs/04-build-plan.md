@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
 
-**Changes in v1.13** (27 Oct 2026, CORE-2): the card's last *Done when* line names the admin's own manager, `all_shops`, beside `system_context()`. The card builds both, and both read every shop, so a line naming only one was not true. Marked **(v1.13)**.
+**Changes in v1.13** (27 Oct 2026, CORE-2): the card's last *Done when* line names the admin's own manager, `all_shops`, beside `system_context()`. The card builds both, and both read every shop, so a line naming only one was not true. What the guard means for later cards is in their new *Watch out* lines: PPL-2 (writes and admin pages need a current shop; the test-only table follows `ShopScoped`), CORE-6 and SYNC-4 (an id already taken in another shop), CORE-7 (sweep the guard itself). Marked **(v1.13)**.
 
 **Changes in v1.12** (27 Oct 2026, SHOP-1): CORE-7's allowed list names the `Shop`: it is the tenant, so it has no `shop`, and the sweep must pass with no change to the test (02 v1.3, 03 v1.6). Marked **(v1.12)**.
 
@@ -450,6 +450,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Jack-led · after CORE-2 · branch `feat/ppl-2-staff`
 **Learn:** a membership versus a user (02 D12); hashing with a server secret (a "pepper"); Argon2.
 **Build:** `StaffMember` (02 §5): user, display name, photo, job title, `started_on`, `left_on`, `status` (active ⇄ suspended → left), PIN hash, `pin_changed_at`; `created_by` added to `ShopScoped` now that staff exist; services `add_staff`, `set_pin` (4 digits; no 0000, 1234 or four of a kind; Argon2 + server pepper), `suspend`, `unsuspend`, `mark_left`.
+**Watch out:** `StaffMember` is the first real `ShopScoped` table (CORE-2). Only `save()` works with no current shop: `create()`, `get_or_create()`, `update()` and `full_clean()` read through the guarded `objects`, so services and tests run inside `shop_context(shop)`. The guard doesn't stop a row being written for another shop, so the services check it (T1). `created_by` on `ShopScoped` also changes the test-only `probe.Note` table: make its next migration with the test settings, or `make check` stays red. The first admin page of a shop table lists rows through `all_shops`, but its add and change pages fill and check their form through `objects` (drop-downs, unique checks), so they raise `NoShopSelected`: give them one admin base in `core` that runs them inside the row's own `shop_context`, with the shop picked first on an add page **(v1.13)**.
 **Done when:**
 - [ ] One user can be staff in two shops.
 - [ ] A weak PIN is refused; a stored PIN can't be checked without the server secret.
@@ -499,6 +500,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### CORE-6 · API conventions
 `M` · Claude-led · after SHOP-2 · branch `feat/core-6-api`
 **Build:** domain errors with codes and one exception handler (`{"code", "message", "fields", "params"}` — 03 §5.10); base views (tenancy and a per-side permission hook); idempotent creates (the client sends the UUID); the `Editable` base with `version` (stale → `409 version_conflict`); cursor pagination; drf-spectacular at `/api/schema/` and `/api/docs/` (public on the demo, staff only in production).
+**Watch out:** the guard checks the shop when a read is built (CORE-2). So the base view sets the current shop after DRF has authenticated the visit, around the whole view, and builds its rows in `get_queryset()`: `queryset = Side.objects.all()` in a class body raises as the module loads. DRF's unique check on `id` reads through the guarded manager, so it sees the current shop only: an id already taken in another shop passes it and fails at the insert (`IntegrityError`, a 500). Request code may not read across shops, so decide here how that failure becomes a clean refusal that reveals nothing (03 §5.4) **(v1.13)**.
 **Done when:**
 - [ ] The Side endpoints show every behaviour above in tests.
 - [ ] The schema builds with no warnings.
@@ -508,6 +510,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### CORE-7 · The tenancy sweep
 `M` · Claude-led · after CORE-6 · branch `test/core-7-tenancy-sweep`
 **Build:** one test module that finds every model and every list and detail route of our apps by itself: every model has `shop` (outside an allowed list: `User`, `Unit`, `Shop` **(v1.12)** and the infrastructure tables); every foreign key uses `PROTECT` (T3); every route called as shop B returns none of shop A's rows (03 §5.4).
+**Watch out:** sweep the guard itself too (CORE-2). Every `ShopScoped` table's default manager and its `objects` must be a `ShopScopedManager`: a table that writes a fresh `Meta`, or replaces `objects`, drops the guard with no error. Also check that `all_shops` appears only in `admin.py` files, and `system_context(` only in jobs, management commands and the seed; today only a search finds them **(v1.13)**.
 **Done when:**
 - [ ] A new model without `shop`, a foreign key that cascades, or a route that leaks turns CI red — with no change to the test.
 **Tests:** `test_every_model_has_shop` · `test_every_foreign_key_protects` · `test_no_route_leaks_across_shops`
@@ -686,6 +689,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Jack-led · after SYNC-1, CTRL-1, AUTH-2 · branch `feat/sync-4-push`
 **Learn:** idempotency; one document = one transaction (03 §5.5, §6.3).
 **Build:** the `CounterRecord` base (device, `device_seq`, `client_time`, `received_at`); `POST /api/sync/v1/push` (up to 100 documents); a document-type registry (type + schema version → handler and the permission it needs); posting in `device_seq` order, each document in its own transaction, recording the person and the device (X3); answers `accepted` (with `posted_seq` and flags), `duplicate` (the stored answer), `invalid` (plus a flag) and `retry` (stop here); a UUID that exists in another shop → `invalid`, revealing nothing.
+**Watch out:** inside the push's shop context, a lookup by id sees the current shop only (CORE-2), so a UUID from another shop looks new until the insert fails on the primary key. Request code may not read across shops, so that failure, caught for the one document, is what becomes `invalid`; follow what CORE-6 decided **(v1.13)**.
 **Done when:**
 - [ ] The same batch sent twice posts once and gets the same answers.
 - [ ] Documents post in device order, even when sent out of order.
