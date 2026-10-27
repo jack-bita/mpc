@@ -130,13 +130,18 @@ class AppendOnlyTrigger(Operation):
 # - OLD is the row as it is in the table, NEW the row as the UPDATE wants it. A row whose stamp is
 #   already filled refuses every change: who voided it, when and why stay as they were written.
 # - Everything outside the stamp must stay equal. Each row becomes one JSON object (to_jsonb), the
-#   stamp's keys come out (`- stamp`), and what is left is compared. The stamp names the database's
+#   stamp's keys come out (`- skipped`), and what is left is compared. The stamp names the database's
 #   columns: a link gets `_id` (voided_by → voided_by_id). A key a table lacks is skipped, as
 #   `void_approval_id` is on the probe table, until the Approval table comes (R1). Both sides are
 #   whole JSON objects, never empty, so <> would answer the same; IS DISTINCT FROM is the safe habit
 #   in SQL, because it still gives a plain yes or no when a value is empty (NULL), where <> gives
 #   "unknown". This check comes before the next one, so a change to another column alone gets this
 #   message, the clearer one.
+# - Generated columns are left out of the comparison too (`skipped`). PostgreSQL computes a stored one,
+#   such as a payment's applied total (02 §10), only after the BEFORE triggers have run, so NEW would
+#   show it empty and every void would look like a change. Leaving it out is safe: it is computed from
+#   other columns, and those are compared. `pg_attribute` is PostgreSQL's own list of every table's
+#   columns; TG_RELID is the table this trigger runs on; `attgenerated` is empty for a normal column.
 # - The change must fill `voided_at`. Half a stamp (a reason with no time) would leave the row open,
 #   and a later update could then count as the first void.
 # - RETURN NEW: every check passed, so the change is written. (The plain rule never says yes, so it
@@ -148,6 +153,7 @@ CREATE OR REPLACE FUNCTION core_void_stamp_only() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
     stamp text[] := ARRAY['voided_at', 'voided_by_id', 'void_reason', 'void_approval_id'];
+    skipped text[];
 BEGIN
     IF TG_OP = 'DELETE' THEN
         RAISE EXCEPTION '% on % refused: rows are append-only (ADR-0021)', TG_OP, TG_TABLE_NAME
@@ -157,7 +163,11 @@ BEGIN
         RAISE EXCEPTION 'UPDATE on % refused: the row is already voided (ADR-0021)', TG_TABLE_NAME
             USING ERRCODE = 'restrict_violation';
     END IF;
-    IF to_jsonb(NEW) - stamp IS DISTINCT FROM to_jsonb(OLD) - stamp THEN
+    skipped := stamp || ARRAY(
+        SELECT attname::text FROM pg_attribute
+        WHERE attrelid = TG_RELID AND attgenerated <> ''
+    );
+    IF to_jsonb(NEW) - skipped IS DISTINCT FROM to_jsonb(OLD) - skipped THEN
         RAISE EXCEPTION 'UPDATE on % refused: only the void stamp may change (ADR-0021)', TG_TABLE_NAME
             USING ERRCODE = 'restrict_violation';
     END IF;

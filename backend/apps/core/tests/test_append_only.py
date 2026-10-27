@@ -109,7 +109,8 @@ def test_append_only_delete_fails(shop_a: Model, entry: Entry, voidable: Voidabl
 def test_void_stamp_set_once(shop_a: Model, staff_a: Model, voidable: VoidableEntry) -> None:
     with shop_context(shop_a):
         rows = VoidableEntry.objects.filter(pk=voidable.pk)
-        # The first void fills the stamp: who, when, why. Allowed.
+        # The first void fills the stamp: who, when, why. Allowed, even though the table has a stored
+        # generated column (`applied_total`, as a payment will), which the rule must leave out.
         rows.update(voided_at=timezone.now(), voided_by=staff_a, void_reason="Entered twice")
         # A second change to the stamp would rewrite who voided it, or why. Refused.
         with pytest.raises(IntegrityError, match="already voided"), transaction.atomic():

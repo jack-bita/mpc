@@ -12,6 +12,8 @@ adds the plain trigger. VoidableEntry stands for a payment, which may be voided 
 its migration adds the void-stamp trigger (03 §5.6).
 """
 
+from decimal import Decimal
+
 from django.db import models
 
 from apps.core.models import AppendOnly, ShopScoped
@@ -34,6 +36,15 @@ class Entry(AppendOnly):
 
 class VoidableEntry(AppendOnly):
     amount = models.DecimalField(max_digits=14, decimal_places=2)
+    cash_change_given = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    # A column PostgreSQL computes and stores itself, like a payment's applied total (02 §10). The void
+    # rule must still let such a row be voided: PostgreSQL fills the column only after the trigger has
+    # run, so the rule skips generated columns when it compares the row before and after.
+    applied_total = models.GeneratedField(
+        expression=models.F("amount") - models.F("cash_change_given"),
+        output_field=models.DecimalField(max_digits=14, decimal_places=2),
+        db_persist=True,
+    )
     # The void stamp (03 §5.6): empty while the row counts, filled once when it is voided. The fourth
     # part, `void_approval`, links to an Approval row; that table comes in R1, so the probe goes without.
     voided_at = models.DateTimeField(null=True, blank=True)
