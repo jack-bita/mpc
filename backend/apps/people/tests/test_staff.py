@@ -17,7 +17,7 @@ through the guarded `objects`, so every test works inside `shop_context(shop)`, 
 `by=None` means the change was made by the system or the superuser, who is nobody's staff.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -31,8 +31,8 @@ from apps.shops.models import Shop
 
 pytestmark = pytest.mark.django_db
 
-# Fake data only: the repo is public (03 §10).
-START = date(2026, 11, 3)
+# Fake data only: the repo is public (03 §10). Dates in the past: a leaving date can't be in the future.
+START = date(2026, 3, 2)
 
 
 @pytest.fixture
@@ -80,8 +80,8 @@ def test_rehired_after_leaving_gets_a_new_row(asha: User, shop_a: Shop) -> None:
     # Her first job is never reopened: its history stays as it was, and the new job has its own start.
     with shop_context(shop_a):
         first = add_staff(shop=shop_a, user=asha, display_name="Asha", started_on=START, by=None)
-        mark_left(first, left_on=date(2026, 12, 15), by=None, reason="Moved to another town")
-        second = add_staff(shop=shop_a, user=asha, display_name="Asha", started_on=date(2027, 3, 1), by=None)
+        mark_left(first, left_on=date(2026, 6, 15), by=None, reason="Moved to another town")
+        second = add_staff(shop=shop_a, user=asha, display_name="Asha", started_on=date(2026, 9, 1), by=None)
 
         statuses = {row.pk: row.status for row in StaffMember.objects.filter(user=asha)}
 
@@ -169,11 +169,24 @@ def test_left_on_not_before_started_on(asha: User, shop_a: Shop) -> None:
     with shop_context(shop_a):
         staff = add_staff(shop=shop_a, user=asha, display_name="Asha", started_on=START, by=None)
         with pytest.raises(ValidationError) as refused:
-            mark_left(staff, left_on=date(2026, 11, 2), by=None, reason="Typed the wrong date")
+            mark_left(staff, left_on=date(2026, 3, 1), by=None, reason="Typed the wrong date")
         staff.refresh_from_db()
 
     assert [error.code for error in refused.value.error_dict["__all__"]] == ["staff.left_before_start"]
     # Refused means nothing changed.
+    assert staff.status == StaffStatus.ACTIVE
+
+
+def test_left_on_not_in_the_future(asha: User, shop_a: Shop) -> None:
+    # Jack, 27 Oct: a person is marked as left on their last day or after. `left` takes effect at once,
+    # so a date ahead would stop their PIN before they really leave.
+    with shop_context(shop_a):
+        staff = add_staff(shop=shop_a, user=asha, display_name="Asha", by=None)
+        with pytest.raises(ValidationError) as refused:
+            mark_left(staff, left_on=staff.started_on + timedelta(days=1), by=None, reason="Leaves tomorrow")
+        staff.refresh_from_db()
+
+    assert refused.value.code == "staff.left_in_future"
     assert staff.status == StaffStatus.ACTIVE
 
 

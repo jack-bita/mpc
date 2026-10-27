@@ -39,6 +39,12 @@ def _check_shop(shop_id: uuid.UUID, by: StaffMember | None) -> None:
         raise ValidationError("The person acting belongs to another shop.", code="staff.other_shop")
 
 
+def _shop_today(shop: Shop) -> date:
+    # Today in the shop's own time zone (02 §1), not the server's UTC: at 01:00 in Arusha, UTC is still
+    # on yesterday.
+    return timezone.localdate(timezone=ZoneInfo(shop.timezone))
+
+
 def add_staff(
     *,
     shop: Shop,
@@ -51,8 +57,7 @@ def add_staff(
     """Give a person a job at a shop. `by`: who adds them; None for the system or the superuser."""
     _check_shop(shop.pk, by)
     if started_on is None:
-        # Today in the shop's own time zone (02 §1), not the server's UTC.
-        started_on = timezone.localdate(timezone=ZoneInfo(shop.timezone))
+        started_on = _shop_today(shop)
     staff = StaffMember(
         shop=shop,
         user=user,
@@ -116,6 +121,10 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
     """Record that a person left on `left_on`. Final: if they come back, add_staff gives them a new job."""
     _check_shop(staff.shop_id, by)
     _check_reason(reason)
+    # On their last day or after, never ahead (Jack, 27 Oct): `left` takes effect at once, so "leaves on
+    # Friday" typed on Monday would stop their PIN four days early.
+    if left_on > _shop_today(staff.shop):
+        raise ValidationError("A leaving date can't be in the future.", code="staff.left_in_future")
     with transaction.atomic():
         staff = _locked(staff)
         if staff.status == StaffStatus.LEFT:
