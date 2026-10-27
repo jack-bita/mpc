@@ -7,7 +7,10 @@ fake shop, ADR-0029) or practice (a copy where new workers learn, ADR-0014).
 A Side is a section of one shop (ADR-0001): MPC has Drugs and Foods. Each side keeps its stock in
 StockLocations (ADR-0002) and takes money into PaymentAccounts: its own cash drawer, and a Lipa Namba or a
 bank account it may share with the other side (PaymentAccountSide links them). apps/shops/services.py
-makes a new shop with all of these at once (create_shop). Dated settings join this file in CORE-4.
+makes a new shop with all of these at once (create_shop).
+
+A Setting is one dated value of one of the shop's rules, such as the late fine from 1 Nov (ADR-0013):
+a change is a new row, and get_setting (apps/shops/selectors.py) reads the row in force on a day.
 """
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -16,7 +19,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.languages import Language
-from apps.core.models import ShopScoped, TimeStamped, UUIDModel
+from apps.core.models import AppendOnly, ShopScoped, TimeStamped, UUIDModel
+from apps.core.settings_registry import KEY_SHAPE, REGISTRY, Scope
 
 
 # Outside Shop so that Shop.Meta can read their values: a nested class can't see the names of the class
@@ -353,3 +357,83 @@ class PaymentAccountSide(ShopScoped):
                 violation_error_message="This account already serves this side.",
             ),
         ]
+
+
+class Setting(AppendOnly):
+    # One dated value of one rule (02 §4, D13): "from 1 Nov, the late fine is 1,500". A change is a new
+    # row and the old row stays, so a record made in October still matches the rule of its day
+    # (ADR-0013). AppendOnly (CORE-3) refuses a second save() and any delete() in Python, and the trigger
+    # in this table's migration refuses the same in PostgreSQL (ADR-0021). Who set the value is the row's
+    # `created_by`, so there is no `set_by` of its own (02 v1.7).
+
+    # Empty: the whole shop's value. A side: that side's own value, which beats the shop's (02 §4), for
+    # keys whose scope allows it (clean() below). T1: the side belongs to the row's shop; the service
+    # that writes settings (SHOP-3) checks it, as services do for StockLocation.side. PROTECT: nothing is
+    # deleted (rule 7). related_name="+": settings are read through get_setting. db_index=False: indexes
+    # lead with `shop` (03 §9), and get_setting's reads use the lookup index in Meta. A side's own index
+    # would serve only PROTECT's search for a side's rows before deleting the side, and nothing is deleted.
+    side = models.ForeignKey(Side, on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False)
+    # A key from the list in core (apps/core/settings_registry.py), such as "attendance.late_fine".
+    key = models.CharField(max_length=60)
+    # Text, because the keys hold different kinds of value; each in its kind's one stored form ("1000.00",
+    # "07:35", "true"), which the key's kind reads back as a Decimal, a time, and so on.
+    value = models.CharField(max_length=100)
+    # The shop's day the value starts on: a business date, not a moment (02 §1). It may be in the future:
+    # devices get the row early and switch on that day, even offline (03 §5.8).
+    effective_from = models.DateField()
+    # Why the value changed, in the owner's own words.
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2).
+        constraints = [
+            # The list of keys lives in code, where the database can't see it, but a key's shape it can
+            # check: the same pattern the list's own keys follow.
+            models.CheckConstraint(
+                condition=models.Q(key__regex=KEY_SHAPE),
+                name="shops_setting_key_shape",
+                violation_error_code="setting.key_invalid",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(value=""),
+                name="shops_setting_value_not_blank",
+                violation_error_code="setting.value_blank",
+            ),
+        ]
+        indexes = [
+            # get_setting's question: this shop's rows of this key, for one side or for the whole shop,
+            # newest day first. Leads with `shop`, as every index does (03 §9).
+            models.Index(fields=["shop", "key", "side", "effective_from"], name="shops_setting_lookup"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.key} = {self.value} from {self.effective_from}"
+
+    def clean(self) -> None:
+        # full_clean runs this after each field's own checks and before the rules in Meta. Each refusal
+        # carries a code the screens translate (ADR-0032).
+        super().clean()
+        # full_clean runs clean() even after a field's own check has failed. An empty key is left to that
+        # check, which reports it once; with no key, there is nothing else to check.
+        if not self.key:
+            return
+        setting_key = REGISTRY.get(self.key)
+        if setting_key is None:
+            # A typo, or a key a later card hasn't added yet: no code would ever read the row. Nothing
+            # else can be checked without the key's kind and scope.
+            raise ValidationError({"key": ValidationError("Unknown setting.", code="setting.key_unknown")})
+        errors: dict[str, ValidationError] = {}
+        if self.side_id is not None and setting_key.scope is Scope.SHOP:
+            errors["side"] = ValidationError(
+                "This setting has one value for the whole shop.", code="setting.side_not_allowed"
+            )
+        # full_clean runs clean() even after the field's own check has failed, so an empty value is left
+        # to that check: it reports it once.
+        if self.value:
+            try:
+                # Stored in the kind's one form: "1500" becomes "1500.00".
+                self.value = setting_key.kind.to_text(setting_key.kind.parse(self.value))
+            except ValueError:
+                errors["value"] = ValidationError("Not a valid value for this setting.", code="setting.value_invalid")
+        if errors:
+            raise ValidationError(errors)
