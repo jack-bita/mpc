@@ -107,6 +107,17 @@ def test_side_row_beats_shop_row(shop_a: Shop, dawa: Side, vyakula: Side) -> Non
         assert get_setting(CASH_TOLERANCE, shop_a, vyakula, on=NOV_3) == Decimal("3000.00")
 
 
+def test_future_side_row_waits_for_its_day(shop_a: Shop, dawa: Side) -> None:
+    # Dawa gets its own tolerance from 1 Nov. Until that day the shop's row still answers for Dawa: a
+    # side's row beats the shop's only once it has started.
+    add_row(shop_a, CASH_TOLERANCE, "2000", JAN_1)
+    add_row(shop_a, CASH_TOLERANCE, "500", NOV_1, side=dawa)
+
+    with shop_context(shop_a):
+        assert get_setting(CASH_TOLERANCE, shop_a, dawa, on=OCT_31) == Decimal("2000.00")
+        assert get_setting(CASH_TOLERANCE, shop_a, dawa, on=NOV_1) == Decimal("500.00")
+
+
 def test_shop_wide_rule_ignores_side_rows(shop_a: Shop, dawa: Side) -> None:
     # The late fine is one value for the whole shop. Setting.clean() refuses a side row for it, but code
     # that saves without full_clean (a seed, a data migration, a bulk_create) skips that check, and the
