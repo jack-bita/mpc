@@ -426,7 +426,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `S` · Claude-led · after PPL-1 · branch `feat/shop-1-shop`
 **Build:** `shops.Shop` (02 §4): name, code, timezone (Africa/Dar_es_Salaam), currency (TZS), default language (sw), `kind` (live, demo, practice), `practice_of`, `status`; the admin.
 **Done when:**
-- [ ] `kind` and `status` accept only their values (database check constraints); the code is unique.
+- [x] `kind` and `status` accept only their values (database check constraints); the code is unique.
 **Tests:** `test_shop_kind_must_be_known` · `test_shop_code_unique`
 **Commits:** `test(shops): shop rules` → `feat(shops): Shop model`
 
