@@ -15,6 +15,7 @@ version = "0.1.0"
 description = "Backend of the MPC shop system: Django + DRF, the API and the posting services."
 requires-python = ">=3.14"
 dependencies = [
+    "argon2-cffi>=25.1.0",
     "django>=6.1.2,<6.2",
     "django-stubs-ext>=6.1.2",
     "djangorestframework>=3.18",

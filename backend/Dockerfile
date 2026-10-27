@@ -88,10 +88,10 @@ COPY --from=frontend /app/frontend/out /app/frontend/out
 COPY backend/ ./
 
 # Gather the admin's styles and scripts into STATIC_ROOT, where WhiteNoise serves them (prod.py).
-# collectstatic only reads settings: it opens no database and signs nothing. But prod.py demands every
-# variable and stops Django when one is missing (on purpose), so this one command gets throwaway values.
-# They exist only while this line runs; they are not part of the image's environment.
-RUN DJANGO_SECRET_KEY=collectstatic-only DJANGO_ALLOWED_HOSTS=localhost \
+# collectstatic only reads settings: it opens no database, signs nothing and hashes no PIN. But prod.py
+# demands every variable and stops Django when one is missing (on purpose), so this one command gets
+# throwaway values. They exist only while this line runs; they are not part of the image's environment.
+RUN DJANGO_SECRET_KEY=collectstatic-only DJANGO_ALLOWED_HOSTS=localhost PIN_PEPPER=unused \
     DB_NAME=unused DB_USER=unused DB_PASSWORD=unused DB_HOST=unused \
     python manage.py collectstatic --noinput
 

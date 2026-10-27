@@ -1,10 +1,10 @@
 """apps/core/models.py — the abstract base models every table builds on, and the tenancy guard on reads.
 
 UUIDModel gives a table its `id` (UUIDv7, ADR-0007); TimeStamped gives it `created_at`. ShopScoped builds
-on both and adds the shop a row belongs to, with a default manager that shows only the current shop's
-rows (ADR-0022; the current shop lives in apps/core/tenancy.py). All three are abstract: they make no
-table of their own, they only pass their columns on to the models that inherit them. PPL-1's User builds
-on the first two, and every shop's table builds on ShopScoped.
+on both and adds the shop a row belongs to and the staff member who made it, with a default manager that
+shows only the current shop's rows (ADR-0022; the current shop lives in apps/core/tenancy.py). All three
+are abstract: they make no table of their own, they only pass their columns on to the models that inherit
+them. PPL-1's User builds on the first two, and every shop's table builds on ShopScoped.
 """
 
 import uuid
@@ -58,13 +58,27 @@ class ShopScopedManager[M: models.Model](models.Manager[M]):
 
 class ShopScoped(UUIDModel, TimeStamped):
     # The base of every shop's table (03 §5.3): `id` and `created_at` from the two bases, plus the shop
-    # each row belongs to and the guard on reads. `created_by` joins in PPL-2, once staff exist.
+    # each row belongs to, who made it, and the guard on reads.
 
     # T1: every row belongs to one shop. Named as "shops.Shop", not imported: `core` is layer 0 and may
     # not import `shops` (ADR-0035), and a name is not an import (03 §5.1).
     # PROTECT: nothing is deleted (T3), so a shop that has rows can't vanish from under them.
     # related_name="+": no `shop.note_set`. A shop's rows are read through their own guarded `objects`.
     shop = models.ForeignKey("shops.Shop", on_delete=models.PROTECT, related_name="+")
+    # Who made the row (02 §1): the staff member acting. Empty for rows the system makes: a nightly
+    # job, the demo seed, the superuser, who is nobody's staff. Named, not imported: `core` is layer 0
+    # (ADR-0035). PROTECT: nothing is deleted (rule 7). editable=False: the services set it from who is
+    # acting; no form or API field takes it. db_index=False: indexes lead with `shop`, and nothing is
+    # deleted, so PROTECT never has to search this column.
+    created_by = models.ForeignKey(
+        "people.StaffMember",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        editable=False,
+        db_index=False,
+    )
 
     # Every shop's rows, with no guard: for the superuser's admin pages only. A page answers a visit, and
     # system_context() is for system jobs only (03 §5.4), so the admin gets its own way in, with a name

@@ -13,6 +13,9 @@ DEBUG = True
 # Only for this laptop: a key anyone can read signs nothing that matters. prod.py has no default.
 SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-only-not-a-secret")
 
+# The secret mixed into every PIN before hashing (prod.py explains it). Laptop PINs protect nothing real.
+PIN_PEPPER = env("PIN_PEPPER", "dev-only-not-a-secret")
+
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
 # Emails (password resets, later) are printed in the terminal instead of being sent.

@@ -5,9 +5,9 @@
 # changes on main. The steps only a person can do (the account, the first sync, the deploy hook, the
 # database every 30 days) are in docs/runbooks/demo.md.
 #
-# Nothing secret is written here: the repo is public. The secret key is made by Render, the database
-# password goes from the database to the service inside Render, and DJANGO_ALLOWED_HOSTS is typed in
-# when the Blueprint is created.
+# Nothing secret is written here: the repo is public. The secret key and the PIN pepper are made by
+# Render, the database password goes from the database to the service inside Render, and
+# DJANGO_ALLOWED_HOSTS is typed in when the Blueprint is created.
 #
 # The image is not built here. .github/workflows/deploy-demo.yml builds and checks it, pushes it to
 # GitHub Container Registry, then calls the service's deploy hook with the exact image (its digest).
@@ -39,6 +39,10 @@ services:
     envVars:
       # Signs sessions and CSRF tokens. Render makes a random 256-bit value once and keeps it.
       - key: DJANGO_SECRET_KEY
+        generateValue: true
+      # Mixed into every PIN before hashing (prod.py, 03 §5.9). Made by Render once, like the key above, and
+      # never regenerated: a new value makes every PIN on the demo stop working.
+      - key: PIN_PEPPER
         generateValue: true
       # The address the demo answers to, typed in when the Blueprint is created: mabatinipumba-demo.onrender.com,
       # or the name Render gave instead. Not written here, so a name with extra letters needs no commit.

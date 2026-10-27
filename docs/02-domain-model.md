@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.3 · 27 Oct 2026 · Portion 2 of the planning pack
+**Version:** 1.4 · 27 Oct 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -11,6 +11,8 @@
 **Changes in v1.2** (18 Oct 2026): T2 now lists attendance events among the records that can only be voided, as §12 already described (`04-build-plan.md` Appendix A #3), and names allocations among the append-only rows, as 03 §5.6 does; §2 points to the ADRs. Each change is marked **(v1.2)** below.
 
 **Changes in v1.3** (27 Oct 2026, SHOP-1): two decisions by Jack, made while building SHOP-1. A shop's code is 2–10 capital letters, the short form people already say (`MPC`), and its currency is fixed once the shop exists, because amounts don't carry their own currency. A shop's kind is fixed too, and a practice shop copies only a live shop (ADR-0014). The `Shop` itself is the one shop table without a `shop`: it is the tenant (§1, T1). Marked **(v1.3)**.
+
+**Changes in v1.4** (27 Oct 2026, PPL-2): a staff member's photo is optional (Jack, while planning PPL-2). On the PIN login screen, a person with no photo shows their full name in large letters, with their nickname under it, in the photo's place. §5 also records the staff rules PPL-2 built: a job left is final and a returning worker gets a new one, one current job per person per shop, nicknames unique among current staff, a leaving date never in the future, and the PIN rules; §1 says `created_by` is empty for rows the system makes. Marked **(v1.4)** below.
 
 ---
 
@@ -45,7 +47,7 @@ Every entity, except the global ones (`User`, `Unit`) and the `Shop` itself, has
 |---|---|
 | `id` | UUIDv7 (time-ordered, so database indexes stay fast). Made on the device for counter records, on the server otherwise. |
 | `shop` | The tenant. |
-| `created_at`, `created_by` | When, and who (a `StaffMember`). |
+| `created_at`, `created_by` | When, and who (a `StaffMember`; empty for rows the system makes **(v1.4)**). |
 | `updated_at`, `updated_by`, `version` | For office records that can be edited. An edit sends the `version` it read, so two people editing at once can't overwrite each other. ✚ |
 
 Records made at the counter also have `device`, `device_seq` (a counter per device: a gap means a missing record, and a time that runs backwards against it means a changed clock ✚), `client_time` (the device clock, not trusted) and `received_at` (server time).
@@ -170,8 +172,11 @@ A full diagram for GitHub is in Appendix A.
 - `full_name`, `phone` (optional, unique, +255…), `email` (optional; required for password users, who reset their password by email through django-allauth **(v1.1)**), `password` (optional: only for people who log in from their own phone), `language`
 
 **StaffMember** [R1] → Shop, User — a person's job at one shop.
-- `display_name`, `photo`, `pin` (hashed), `job_title`, `started_on`, `left_on`
-- `status`: `active` ⇄ `suspended` → `left`. Never deleted.
+- `display_name`, `photo` (optional: without one, the PIN login screen shows the full name in large letters with the nickname under it) **(v1.4)**, `pin` (hashed), `job_title`, `started_on`, `left_on`
+- `status`: `active` ⇄ `suspended` → `left`. Never deleted. `left` is final: a person who comes back gets a new `StaffMember`, so the old one keeps its history **(v1.4)**.
+- One current job (not `left`) per person per shop. Nicknames are unique among a shop's current staff, whatever the letter case: the login screen and receipts show them **(v1.4)**.
+- `left_on` is set exactly when the status is `left`: never before `started_on`, and never after the shop's today, because leaving takes effect at once **(v1.4)**.
+- PIN: 4 digits, not 1234 and not four of a kind, hashed with Argon2 plus a server secret (03 §5.9). `pin_changed_at` tells devices to drop their offline check. A person who has left gets none **(v1.4)**.
 
 **Role** [R1] → Shop — a named bundle of permissions. Copied from templates (Owner, Manager, Seller, Order writer, Cashier, Worker — spec §6); the owner can edit them.
 

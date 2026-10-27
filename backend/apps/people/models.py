@@ -1,9 +1,10 @@
-"""apps/people/models.py — the people tables. For now one: User, a human across every shop (02 §5).
+"""apps/people/models.py — the people tables: User, a human across every shop, and StaffMember, their job
+at one shop (02 §5).
 
-A User is the person, not the job: the same person can work at MPC and in the demo shop, and their job
-at each shop (StaffMember, PPL-2) holds the nickname, the PIN and the roles. So User keeps only what
-belongs to the person. It is global, one of the few tables without a `shop` (ADR-0022).
-This table is the project's first migration on purpose: Django fixes its user table at the first
+A User is the person, not the job: the same person can work at MPC and in its practice shop, and their
+job at each shop (StaffMember) holds the nickname, the status and the PIN; the roles join it in PPL-3.
+So User keeps only what belongs to the person. It is global, one of the few tables without a `shop`
+(ADR-0022). User is the project's first migration on purpose: Django fixes its user table at the first
 `migrate` and can't swap it afterwards (ADR-0012, 04 BP5).
 """
 
@@ -16,7 +17,7 @@ from django.db.models.functions import Lower
 
 from apps.core.fields import PhoneField
 from apps.core.languages import Language
-from apps.core.models import TimeStamped, UUIDModel
+from apps.core.models import ShopScoped, TimeStamped, UUIDModel
 
 
 class UserManager(BaseUserManager["User"]):
@@ -141,3 +142,97 @@ class User(UUIDModel, TimeStamped, AbstractBaseUser, PermissionsMixin):
         # must not clash on `unique` (see the fields above).
         self.email = (self.email or "").strip().lower() or None
         self.phone = self.phone or None
+
+
+class StaffStatus(models.TextChoices):
+    # 02 §5: active ⇄ suspended → left. Outside StaffMember so that its Meta can read the values.
+    ACTIVE = "active", "Active"
+    SUSPENDED = "suspended", "Suspended"
+    LEFT = "left", "Left"
+
+
+class StaffMember(ShopScoped):
+    # A person's job at one shop (02 §5, D12). ShopScoped (CORE-2) gives `id`, `shop`, `created_at`,
+    # `created_by` and the guard on reads.
+
+    # PROTECT: nothing is deleted (rule 7). related_name="+": no `user.staffmember_set`; a person's
+    # jobs are read through StaffMember.objects, which shows only the current shop's. Django's own index
+    # on `user` stays, unlike `created_by`'s: finding a person's jobs (at login, AUTH-3 and AUTH-4)
+    # starts from the person, not from a shop.
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    # What the shop calls them, on the login screen and receipts: "Asha".
+    display_name = models.CharField(max_length=40)
+    # The owner's own words ("Muuzaji"). What they may do comes from roles (PPL-3), not from this.
+    job_title = models.CharField(max_length=60, blank=True)
+    # Shop dates (02 §1), not UTC times.
+    started_on = models.DateField()
+    left_on = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=StaffStatus, default=StaffStatus.ACTIVE)
+    # The PIN's Argon2 hash, never the PIN; "" = no PIN yet. editable=False: no form shows it,
+    # only set_pin writes it, and it never leaves the server (03 §5.9).
+    pin_hash = models.CharField(max_length=128, blank=True, default="", editable=False)
+    # Devices compare this with their own copy and drop an old offline PIN check (03 §5.9).
+    pin_changed_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta(ShopScoped.Meta):
+        # Builds on ShopScoped.Meta, so `objects`, with the guard, stays the default manager (CORE-2).
+        # The database is the last guard (03 §5.6); the services check the same rules first (full_clean),
+        # so a person gets a code, not a database error (ADR-0032).
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=StaffStatus.values),
+                name="people_staffmember_status_known",
+                violation_error_code="staff.status_unknown",
+            ),
+            # A leaving date exactly when the person has left: never on a current job, never missing on a past one.
+            models.CheckConstraint(
+                condition=models.Q(status=StaffStatus.LEFT, left_on__isnull=False)
+                | (~models.Q(status=StaffStatus.LEFT) & models.Q(left_on__isnull=True)),
+                name="people_staffmember_left_on_when_left",
+                violation_error_code="staff.left_on_mismatch",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(left_on__isnull=True) | models.Q(left_on__gte=models.F("started_on")),
+                name="people_staffmember_left_after_start",
+                violation_error_code="staff.left_before_start",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(display_name=""),
+                name="people_staffmember_display_name_not_blank",
+                violation_error_code="staff.display_name_blank",
+            ),
+            # set_pin writes the hash and its time together: a PIN with no time would never reach the
+            # devices' "PIN changed" check.
+            models.CheckConstraint(
+                condition=(models.Q(pin_hash="") & models.Q(pin_changed_at__isnull=True))
+                | (~models.Q(pin_hash="") & models.Q(pin_changed_at__isnull=False)),
+                name="people_staffmember_pin_hash_with_time",
+                violation_error_code="staff.pin_without_time",
+            ),
+            # One current job per person per shop. Rows of people who left don't count, so a worker who
+            # comes back gets a new row and the old one keeps its history. Leads with `shop`, as every
+            # index does.
+            models.UniqueConstraint(
+                fields=["shop", "user"],
+                condition=~models.Q(status=StaffStatus.LEFT),
+                name="people_staffmember_one_current_job",
+                violation_error_code="staff.already_member",
+            ),
+            # The login screen and receipts name staff by nickname: unique among current staff of a
+            # shop, in any letter case.
+            models.UniqueConstraint(
+                "shop",
+                Lower("display_name"),
+                condition=~models.Q(status=StaffStatus.LEFT),
+                name="people_staffmember_nickname_unique",
+                violation_error_code="staff.display_name_taken",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.display_name
+
+    def clean(self) -> None:
+        # full_clean runs this before the rules above: " Asha " and "Asha" are one nickname on screen.
+        super().clean()
+        self.display_name = (self.display_name or "").strip()
