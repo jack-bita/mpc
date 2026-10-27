@@ -1,13 +1,17 @@
-"""apps/core/models.py — the abstract base models every table builds on, and the tenancy guard on reads.
+"""apps/core/models.py — the abstract base models every table builds on, the tenancy guard on reads, and
+the append-only guard on ledgers.
 
 UUIDModel gives a table its `id` (UUIDv7, ADR-0007); TimeStamped gives it `created_at`. ShopScoped builds
 on both and adds the shop a row belongs to and the staff member who made it, with a default manager that
-shows only the current shop's rows (ADR-0022; the current shop lives in apps/core/tenancy.py). All three
-are abstract: they make no table of their own, they only pass their columns on to the models that inherit
-them. PPL-1's User builds on the first two, and every shop's table builds on ShopScoped.
+shows only the current shop's rows (ADR-0022; the current shop lives in apps/core/tenancy.py). AppendOnly
+builds on ShopScoped for ledgers: it refuses, in Python, to save a row again or to delete one, and
+PostgreSQL's trigger backs it up (apps/core/operations.py, ADR-0021). All four are abstract: they make no
+table of their own, they only pass their columns on to the models that inherit them. PPL-1's User builds
+on the first two, every shop's table builds on ShopScoped, and every ledger on AppendOnly.
 """
 
 import uuid
+from typing import Any, NoReturn
 
 from django.db import models
 
@@ -108,3 +112,44 @@ class ShopScoped(UUIDModel, TimeStamped):
         # Meta of its own, or one whose Meta builds on ShopScoped.Meta. A table that writes a fresh Meta,
         # or replaces `objects`, loses the guard: CORE-7's sweep is to catch that.
         default_manager_name = "objects"
+
+
+class AppendOnlyError(Exception):
+    # A bug, not a user's mistake: the code tried to change or delete a ledger row. Like NoShopSelected,
+    # it becomes a server error and a log line, never a message on a screen, so it carries no error code
+    # (ADR-0032).
+    pass
+
+
+class AppendOnly(ShopScoped):
+    # The base of every ledger table (03 §5.3): stock movements, balance entries, payments, attendance
+    # events, the change log, dated prices and settings. A ledger is ShopScoped plus this: its rows are
+    # written once, and never changed or deleted (T2). Its migration adds the trigger that refuses the
+    # same in PostgreSQL (apps/core/operations.py), whatever sends the change; this class only stops the
+    # commonest mistake earlier, with a clear message, before the database is asked.
+    # A base built on ShopScoped, not a mixin listed beside it: a mixin listed after ShopScoped would
+    # never run (Django's own save() comes first), and one listed before it with a Meta of its own would
+    # drop the shop guard (CORE-1). A ledger is simply `class StockMovement(AppendOnly)`.
+
+    class Meta(ShopScoped.Meta):
+        # abstract: a base, not a table. Without it, Django would make a real `core_appendonly` table and
+        # join every ledger to it. Built on ShopScoped.Meta, so a ledger keeps `default_manager_name`:
+        # the shop guard stays its default manager (ADR-0022).
+        abstract = True
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # `_state.adding` is Django's own flag on every row object: True for a new one that was never
+        # saved, False once it is saved or when it was read from the database. A new row goes on to
+        # Django's save(), with the same arguments; saving an old row again would rewrite it.
+        # To void a row (payments, money movements, attendance events), a service fills the stamp with
+        # one update() on a query, which skips save(): the trigger checks that change.
+        if not self._state.adding:
+            raise AppendOnlyError(f"{type(self).__name__} rows are append-only: write a new row instead (ADR-0021).")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: Any, **kwargs: Any) -> NoReturn:
+        # Always refused, so there is nothing to check. NoReturn: this never returns normally, it always
+        # raises. A bulk delete() on a query skips this method; the trigger refuses that one.
+        raise AppendOnlyError(
+            f"{type(self).__name__} rows are never deleted: fix a mistake with a new row (T3, ADR-0021)."
+        )

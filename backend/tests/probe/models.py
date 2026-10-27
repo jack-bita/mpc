@@ -6,13 +6,15 @@ table (`id`, `shop`, `created_at`, `created_by` and the guard on reads). The ten
 the rows it may.
 
 Entry and VoidableEntry are ledgers in miniature, for the append-only tests
-(apps/core/tests/test_append_only.py, ADR-0021): Entry stands for a stock movement, never changed once
-written; VoidableEntry stands for a payment, which may be voided once and is then frozen (03 §5.6).
+(apps/core/tests/test_append_only.py and test_append_only_model.py, ADR-0021). Both build on AppendOnly,
+as every real ledger will. Entry stands for a stock movement, never changed once written: its migration
+adds the plain trigger. VoidableEntry stands for a payment, which may be voided once and is then frozen:
+its migration adds the void-stamp trigger (03 §5.6).
 """
 
 from django.db import models
 
-from apps.core.models import ShopScoped
+from apps.core.models import AppendOnly, ShopScoped
 
 
 class Note(ShopScoped):
@@ -22,7 +24,7 @@ class Note(ShopScoped):
         return self.text
 
 
-class Entry(ShopScoped):
+class Entry(AppendOnly):
     # Money as a Decimal with 2 places, as a real ledger keeps it (ADR-0024).
     amount = models.DecimalField(max_digits=14, decimal_places=2)
 
@@ -30,7 +32,7 @@ class Entry(ShopScoped):
         return str(self.amount)
 
 
-class VoidableEntry(ShopScoped):
+class VoidableEntry(AppendOnly):
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     # The void stamp (03 §5.6): empty while the row counts, filled once when it is voided. The fourth
     # part, `void_approval`, links to an Approval row; that table comes in R1, so the probe goes without.
