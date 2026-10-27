@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.13 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.14 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.14** (27 Oct 2026, PPL-2): two decisions by Jack, made while planning PPL-2. A staff member's photo is optional, and it arrives with PPL-4, which already waits for the file storage a photo needs (CTRL-3); with no photo, UI-4's staff picker shows the full name in large letters with the nickname under it (02 v1.4). PPL-2 builds no admin page: a staff admin page is its own task, in the parking lot (§20, item 15). Marked **(v1.14)**.
 
 **Changes in v1.13** (27 Oct 2026, CORE-2): the card's last *Done when* line names the admin's own manager, `all_shops`, beside `system_context()`. The card builds both, and both read every shop, so a line naming only one was not true. What the guard means for later cards is in their new *Watch out* lines: PPL-2 (writes and admin pages need a current shop; the test-only table follows `ShopScoped`), CORE-6 and SYNC-4 (an id already taken in another shop), CORE-7 (sweep the guard itself). Marked **(v1.13)**.
 
@@ -449,8 +451,8 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### PPL-2 · Staff members and PINs
 `M` · Jack-led · after CORE-2 · branch `feat/ppl-2-staff`
 **Learn:** a membership versus a user (02 D12); hashing with a server secret (a "pepper"); Argon2.
-**Build:** `StaffMember` (02 §5): user, display name, photo, job title, `started_on`, `left_on`, `status` (active ⇄ suspended → left), PIN hash, `pin_changed_at`; `created_by` added to `ShopScoped` now that staff exist; services `add_staff`, `set_pin` (4 digits; no 0000, 1234 or four of a kind; Argon2 + server pepper), `suspend`, `unsuspend`, `mark_left`.
-**Watch out:** `StaffMember` is the first real `ShopScoped` table (CORE-2). Only `save()` works with no current shop: `create()`, `get_or_create()`, `update()` and `full_clean()` read through the guarded `objects`, so services and tests run inside `shop_context(shop)`. The guard doesn't stop a row being written for another shop, so the services check it (T1). `created_by` on `ShopScoped` also changes the test-only `probe.Note` table: make its next migration with the test settings, or `make check` stays red. The first admin page of a shop table lists rows through `all_shops`, but its add and change pages fill and check their form through `objects` (drop-downs, unique checks), so they raise `NoShopSelected`: give them one admin base in `core` that runs them inside the row's own `shop_context`, with the shop picked first on an add page **(v1.13)**.
+**Build:** `StaffMember` (02 §5): user, display name, job title, `started_on`, `left_on`, `status` (active ⇄ suspended → left), PIN hash, `pin_changed_at` (the optional photo comes with PPL-4 **(v1.14)**); `created_by` added to `ShopScoped` now that staff exist; services `add_staff`, `set_pin` (4 digits; no 0000, 1234 or four of a kind; Argon2 + server pepper), `suspend`, `unsuspend`, `mark_left`.
+**Watch out:** `StaffMember` is the first real `ShopScoped` table (CORE-2). Only `save()` works with no current shop: `create()`, `get_or_create()`, `update()` and `full_clean()` read through the guarded `objects`, so services and tests run inside `shop_context(shop)`. The guard doesn't stop a row being written for another shop, so the services check it (T1). `created_by` on `ShopScoped` also changes the test-only `probe.Note` table: make its next migration with the test settings, or `make check` stays red **(v1.13)**. No admin page here: a staff admin page is its own task (§20, item 15) **(v1.14)**.
 **Done when:**
 - [ ] One user can be staff in two shops.
 - [ ] A weak PIN is refused; a stored PIN can't be checked without the server secret.
@@ -616,7 +618,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### UI-4 · PIN login screen
 `M` · Jack-led · after AUTH-4, UI-3 · branch `feat/ui-4-pin-login`
 **Learn:** React state for a PIN pad; component tests with Testing Library.
-**Build:** a staff picker with photos and a big PIN pad; quick switch; idle lock; logout.
+**Build:** a staff picker (each person's photo; with no photo, their full name in large letters with the nickname under it **(v1.14)**) and a big PIN pad; quick switch; idle lock; logout.
 **Done when:**
 - [ ] By hand, between two browsers: pair → PIN login → idle lock → log in again → log out.
 - [ ] Component tests cover a wrong PIN, the lockout message and quick switch.
@@ -857,7 +859,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 | SHOP-3 | Settings screen | M | CORE-4, UI-2 | One screen for every registry key: the value in force, its history, and a new value from a chosen date (`settings.manage`); each side's on/off switch (`is_live`) |
 | ATT-2 | Attendance rules and holidays | S | SHOP-3 | The answers from OWN-7 as dated settings; holiday dates; Sundays off; an `attendance.enabled` switch, off until the go-live (BP7) |
 | CTRL-3 | Attachments | M | SYNC-8 | `Attachment`: files upload later (Wi-Fi first where the browser can tell); served only through Django after a permission and shop check; a hook for retention rules |
-| PPL-4 | Staff screens *(Jack-led)* | M | UI-2, PPL-3, CTRL-3 | The first office screen: add a worker (photo, job title, roles per side); set or reset a PIN online; suspend; mark as left |
+| PPL-4 | Staff screens *(Jack-led)* | M | UI-2, PPL-3, CTRL-3 | The first office screen: add a worker (photo, optional **(v1.14)**; job title; roles per side); set or reset a PIN online; suspend; mark as left |
 | ATT-3 | Clock-in photo *(Jack-led)* | M | CTRL-3, SYNC-11 | Camera capture, compressed on the device (1,600 px, ~150 KB, location removed); the photo travels with the event |
 | ATT-4 | Attendance day calculation *(Jack-led)* | M | ATT-1, ATT-2 | `AttendanceDay`: events + the rules of that day → on time, late, half, absent, off or needs review, with the fine and the rules used; every row of spec §8.1 is a named test, e.g. `test_arrives_0750_full_day_minus_fine` |
 | ATT-5 | Attendance month view | M | ATT-4 | A month grid per worker and a *needs review* list |
@@ -1136,6 +1138,7 @@ The project is also the portfolio, so showing it is part of the plan.
 12. Workers' own iPhones: does the app need them, or only the shop's devices? On an iPhone every browser is Safari inside: it may delete a site's data after some days without use, hides installing in the Share menu, and has no Background Sync (03 §7.3, SPIKE-1's report). Until Jack decides, iPhones are for the owner's office screens, online **(v1.10)**.
 13. Not tested by SPIKE-1: a second laptop, and Edge offline. Both are checked when the shop's devices are paired and installed before go-live (§16) **(v1.10)**.
 14. QR codes on the Foods side slips (03 §7.5 ✚): does the shop want workers to scan a paid slip instead of reading its number? The shop doesn't use QR codes today, so SPIKE-2 left the QR code out (Jack, 26 Oct). Decided when R2 is planned; if yes, check first that the shop's printer prints one a phone can read **(v1.11)**.
+15. An admin page for staff members, as its own task (Jack, 27 Oct). The first admin page of a shop table lists its rows through `all_shops`, but its add and change pages fill and check their form through `objects` (drop-downs, unique checks), so they raise `NoShopSelected` (CORE-2). It needs one admin base in `core` that runs those pages inside the row's own `shop_context`, with the shop picked first on an add page **(v1.14)**.
 
 ## Appendix A — Changes to the other docs
 
