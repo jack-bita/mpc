@@ -10,7 +10,9 @@ fixture here may build on any app and still serve the tests of every app.
 import pytest
 from django.test import Client
 
-from apps.people.models import User
+from apps.core.tenancy import shop_context
+from apps.people.models import StaffMember, User
+from apps.people.services import add_staff
 from apps.shops.models import Shop
 
 # Fake data only: the repo is public (03 §10).
@@ -28,6 +30,16 @@ def shop_a() -> Shop:
 @pytest.fixture
 def shop_b() -> Shop:
     return Shop.objects.create(name="Duka Jingine", code="JINGINE")
+
+
+@pytest.fixture
+def staff_a(shop_a: Shop) -> StaffMember:
+    # A fake staff member at shop A, for tests that record who did something (a void stamp's
+    # `voided_by`). Made the way the app makes one: create_user, then the people service, inside the
+    # shop, because the service's checks read through the guard (PPL-2).
+    user = User.objects.create_user(full_name="Staff Demo")
+    with shop_context(shop_a):
+        return add_staff(shop=shop_a, user=user, display_name="Staff A", by=None)
 
 
 @pytest.fixture
