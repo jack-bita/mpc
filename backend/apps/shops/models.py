@@ -1,9 +1,13 @@
-"""apps/shops/models.py — the shops tables. For now one: Shop, one business, the tenant (02 §4).
+"""apps/shops/models.py — the shops tables: a shop, its sides, where their stock sits and where money lands (02 §4).
 
-Every shop table will point at a Shop, and the tenancy guard (CORE-2) keeps each shop's rows apart
-(ADR-0022). A shop is live (a real business, like MPC), demo (the public demo's fake shop, ADR-0029)
-or practice (a copy where new workers learn, ADR-0014). Sides, stock locations and payment accounts
-join this file in SHOP-2, dated settings in CORE-4.
+Shop is one business, the tenant: every shop table points at one, and the tenancy guard (CORE-2) keeps
+each shop's rows apart (ADR-0022). A shop is live (a real business, like MPC), demo (the public demo's
+fake shop, ADR-0029) or practice (a copy where new workers learn, ADR-0014).
+
+A Side is a section of one shop (ADR-0001): MPC has Drugs and Foods. Each side keeps its stock in
+StockLocations (ADR-0002) and takes money into PaymentAccounts: its own cash drawer, and a Lipa Namba or a
+bank account it may share with the other side (PaymentAccountSide links them). apps/shops/services.py
+makes a new shop with all of these at once (create_shop). Dated settings join this file in CORE-4.
 """
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -12,7 +16,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.languages import Language
-from apps.core.models import TimeStamped, UUIDModel
+from apps.core.models import ShopScoped, TimeStamped, UUIDModel
 
 
 # Outside Shop so that Shop.Meta can read their values: a nested class can't see the names of the class
@@ -145,3 +149,196 @@ class Shop(UUIDModel, TimeStamped):
             raise ValidationError(
                 {"timezone": ValidationError("Unknown timezone.", code="shop.timezone_unknown")}
             ) from None
+
+
+class SaleFlow(models.TextChoices):
+    # 02 §4: how a side sells. One screen: one seller writes the sale, takes the money and hands the
+    # goods over. Writer, cashier, loader: three people, one step each, as on MPC's busy Foods side
+    # (spec §3).
+    ONE_SCREEN = "one_screen", "One screen"
+    WRITER_CASHIER_LOADER = "writer_cashier_loader", "Writer, cashier, loader"
+
+
+class Side(ShopScoped):
+    # A section of one shop (ADR-0001, 02 §4): its own stock, drawer, staff roles and debts, sharing the
+    # shop's products, prices and customers. ShopScoped (CORE-2) gives `id`, `shop`, `created_at`,
+    # `created_by` and the guard on reads.
+
+    # The owner's own word for it: "Dawa".
+    name = models.CharField(max_length=40)
+    # One capital letter. It starts every human number made on the side's devices, like D2-0457 (D7), so a
+    # printed slip names its side. Its shape and its uniqueness within the shop are rules in Meta.
+    code = models.CharField(max_length=1)
+    sale_flow = models.CharField(max_length=24, choices=SaleFlow, default=SaleFlow.ONE_SCREEN)
+    # Off until the owner agrees to start using the side (ADR-0033), so a new side never reaches the
+    # counters by surprise. The switch comes with the settings screen (SHOP-3).
+    is_live = models.BooleanField(default=False)
+
+    class Meta(ShopScoped.Meta):
+        # Builds on ShopScoped.Meta, so `objects`, with the guard, stays the default manager (CORE-2).
+        # The database is the last guard (03 §5.6); full_clean checks the same rules first, so a person
+        # gets a code, not a database error (ADR-0032).
+        constraints = [
+            # Capital letters only, so the unique rule below also ignores letter case: "d" can never
+            # sit beside "D".
+            models.CheckConstraint(
+                condition=models.Q(code__regex=r"^[A-Z]$"),
+                name="shops_side_code_one_capital_letter",
+                violation_error_code="side.code_invalid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(sale_flow__in=SaleFlow.values),
+                name="shops_side_sale_flow_known",
+                violation_error_code="side.sale_flow_unknown",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(name=""),
+                name="shops_side_name_not_blank",
+                violation_error_code="side.name_blank",
+            ),
+            # Two sides with one letter would print the same numbers. Leads with `shop`, as every index
+            # does. The message is there for the code's sake: on a unique rule over fields, Django
+            # replaces the code with its own generic one unless the rule has its own message too.
+            models.UniqueConstraint(
+                fields=["shop", "code"],
+                name="shops_side_code_unique",
+                violation_error_code="side.code_taken",
+                violation_error_message="Another side of this shop has this letter.",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.code})"
+
+    def clean(self) -> None:
+        # full_clean runs this before the rules above: "d" typed in a form is stored as "D". Spaces never
+        # get this far: Django's forms and DRF trim them first.
+        super().clean()
+        self.code = (self.code or "").upper()
+
+
+class StockLocation(ShopScoped):
+    # A place where a side's stock sits (ADR-0002, 02 §4). Every stock movement will name one (STK-1), so
+    # store rooms (Later) and transfers between sides (R2) need no change to the stock ledger. R1 has one
+    # per side, the default, made with the side by create_shop; the screens never show it.
+
+    # T1: the side belongs to the same shop as the location. The database can't compare two rows' shops,
+    # so the services check it. PROTECT: nothing is deleted (rule 7). related_name="+": no
+    # `side.stocklocation_set`; locations are read through their own guarded `objects`. db_index=False:
+    # indexes lead with `shop`, and the unique rule below already indexes (shop, side) for the default
+    # locations, the only ones R1 has.
+    side = models.ForeignKey(Side, on_delete=models.PROTECT, related_name="+", db_index=False)
+    name = models.CharField(max_length=60)
+    # The location a side's stock goes to when nobody picks one, which in R1 is always.
+    is_default = models.BooleanField(default=False)
+
+    class Meta(ShopScoped.Meta):
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(name=""),
+                name="shops_stocklocation_name_not_blank",
+                violation_error_code="location.name_blank",
+            ),
+            # One default per side: two would leave "where does this side's stock go?" with two answers.
+            # A partial unique index: only the default rows are compared, so a side can still have other
+            # locations.
+            models.UniqueConstraint(
+                fields=["shop", "side"],
+                condition=models.Q(is_default=True),
+                name="shops_stocklocation_one_default_per_side",
+                violation_error_code="location.default_taken",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class PaymentAccountKind(models.TextChoices):
+    CASH_DRAWER = "cash_drawer", "Cash drawer"
+    # A Lipa Namba: customers pay from their phone into the shop's number.
+    MOBILE_MONEY = "mobile_money", "Mobile money"
+    BANK = "bank", "Bank"
+
+
+class PaymentAccountStatus(models.TextChoices):
+    # As for products and contacts (02 §14): an account the shop stops using is archived, never deleted
+    # (rule 7). Archiving needs who, when and why, which only the audit trail (CTRL-2) records, so
+    # nothing changes the status yet.
+    ACTIVE = "active", "Active"
+    ARCHIVED = "archived", "Archived"
+
+
+class PaymentAccount(ShopScoped):
+    # Where money lands (02 §4): a side's cash drawer, a Lipa Namba, a bank account. Every payment and
+    # money movement will name one (MONEY-1, CASH-1), so what each account holds is a sum over its rows.
+
+    kind = models.CharField(max_length=12, choices=PaymentAccountKind)
+    # The shop's own name for it. create_shop names a drawer after its side ("Dawa"), and the screens add
+    # the translated kind ("Droo"): the server makes up no words (ADR-0032).
+    name = models.CharField(max_length=60)
+    # Who runs it: the network for a Lipa Namba ("M-Pesa"), the bank for an account. "" for a drawer.
+    provider = models.CharField(max_length=40, blank=True)
+    # The Lipa Namba or the bank account number, as a customer reads it. Text, not a number: it can start
+    # with 0. "" for a drawer. A real shop's numbers never enter the repo (rule 10).
+    number = models.CharField(max_length=30, blank=True)
+    status = models.CharField(max_length=10, choices=PaymentAccountStatus, default=PaymentAccountStatus.ACTIVE)
+    # The sides that take money into it: a drawer serves its own side, and MPC's one Lipa Namba serves
+    # both (each payment still records its side). Through our own link table, not Django's automatic one:
+    # that one would have no `shop` (T1), and its links would vanish with the account or the side
+    # (CASCADE, against rule 7). related_name="+": a side's accounts are read through the links.
+    sides = models.ManyToManyField(Side, through="PaymentAccountSide", related_name="+")
+
+    class Meta(ShopScoped.Meta):
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(kind__in=PaymentAccountKind.values),
+                name="shops_paymentaccount_kind_known",
+                violation_error_code="payment_account.kind_unknown",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=PaymentAccountStatus.values),
+                name="shops_paymentaccount_status_known",
+                violation_error_code="payment_account.status_unknown",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(name=""),
+                name="shops_paymentaccount_name_not_blank",
+                violation_error_code="payment_account.name_blank",
+            ),
+            # A drawer is a box under the counter: no provider, no number. A Lipa Namba or a bank account
+            # is nothing without both: a customer can't pay into it, and the owner can't check its
+            # statement against the system's total (MONEY-5).
+            models.CheckConstraint(
+                condition=models.Q(kind=PaymentAccountKind.CASH_DRAWER, provider="", number="")
+                | (~models.Q(kind=PaymentAccountKind.CASH_DRAWER) & ~models.Q(provider="") & ~models.Q(number="")),
+                name="shops_paymentaccount_details_match_kind",
+                violation_error_code="payment_account.details_mismatch",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class PaymentAccountSide(ShopScoped):
+    # One link: this account takes money for this side (02 §4). The table behind PaymentAccount.sides,
+    # with a `shop` like every shop row (T1). A link is written as a row of this table, with its shop,
+    # never through `account.sides.add()`, which knows nothing of the shop.
+
+    # T1: the account and the side belong to the link's shop; the services check it. PROTECT: nothing is
+    # deleted (rule 7). db_index=False: the unique rule below indexes (shop, account, side).
+    account = models.ForeignKey(PaymentAccount, on_delete=models.PROTECT, related_name="+", db_index=False)
+    side = models.ForeignKey(Side, on_delete=models.PROTECT, related_name="+", db_index=False)
+
+    class Meta(ShopScoped.Meta):
+        constraints = [
+            # Linked once: a second link to the same side would count that side twice in any total built
+            # from the links. The message is there for the code's sake, as on Side's letter.
+            models.UniqueConstraint(
+                fields=["shop", "account", "side"],
+                name="shops_paymentaccountside_once",
+                violation_error_code="payment_account.side_taken",
+                violation_error_message="This account already serves this side.",
+            ),
+        ]

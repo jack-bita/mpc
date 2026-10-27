@@ -32,7 +32,11 @@ LIPA_NAMBA = {"kind": "mobile_money", "name": "Lipa Namba", "provider": "M-Pesa"
 
 def test_side_code_unique_within_shop(shop_a: Shop, shop_b: Shop) -> None:
     # The side's letter starts every human number made on its devices, like D2-0457 (D7). Two sides with
-    # the same letter would print the same numbers, so a shop can't have two D's.
+    # the same letter would print the same numbers, so a shop can't have two D's. Another shop has its
+    # own D: the letter is unique within a shop only.
+    with shop_context(shop_b):
+        Side.objects.create(shop=shop_b, **DAWA)
+
     with shop_context(shop_a):
         Side.objects.create(shop=shop_a, **DAWA)
         second = Side(shop=shop_a, code="D", name="Dawa Nyingine")
@@ -40,13 +44,10 @@ def test_side_code_unique_within_shop(shop_a: Shop, shop_b: Shop) -> None:
         with pytest.raises(ValidationError) as refused:
             second.full_clean()
         assert [error.code for error in refused.value.error_dict["__all__"]] == ["side.code_taken"]
-        # And code that skips full_clean meets the database's own rule.
+        # And code that skips full_clean meets the database's own rule. Last: after a refused write,
+        # PostgreSQL runs no more queries in this test's transaction.
         with pytest.raises(IntegrityError, match="shops_side_code_unique"):
             second.save()
-
-    # The letter is unique within a shop only: another shop has its own D.
-    with shop_context(shop_b):
-        Side.objects.create(shop=shop_b, **DAWA)
 
 
 def test_side_starts_switched_off(shop_a: Shop) -> None:
