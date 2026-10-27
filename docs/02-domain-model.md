@@ -10,7 +10,7 @@
 
 **Changes in v1.2** (18 Oct 2026): T2 now lists attendance events among the records that can only be voided, as §12 already described (`04-build-plan.md` Appendix A #3), and names allocations among the append-only rows, as 03 §5.6 does; §2 points to the ADRs. Each change is marked **(v1.2)** below.
 
-**Changes in v1.3** (27 Oct 2026, SHOP-1): two decisions by Jack, made while building SHOP-1. A shop's code is 2–10 capital letters, the short form people already say (`MPC`), and its currency is fixed once the shop exists, because amounts don't carry their own currency. A shop's kind is fixed too, and a practice shop copies only a live shop (ADR-0014). Marked **(v1.3)** in §4.
+**Changes in v1.3** (27 Oct 2026, SHOP-1): two decisions by Jack, made while building SHOP-1. A shop's code is 2–10 capital letters, the short form people already say (`MPC`), and its currency is fixed once the shop exists, because amounts don't carry their own currency. A shop's kind is fixed too, and a practice shop copies only a live shop (ADR-0014). The `Shop` itself is the one shop table without a `shop`: it is the tenant (§1, T1). Marked **(v1.3)**.
 
 ---
 
@@ -39,7 +39,7 @@
 
 ### Common fields
 
-Every entity, except the global ones (`User`, `Unit`), has:
+Every entity, except the global ones (`User`, `Unit`) and the `Shop` itself, has **(v1.3)**:
 
 | Field | Meaning |
 |---|---|
@@ -481,7 +481,7 @@ stateDiagram-v2
 These become database constraints and automated tests.
 
 **Tenancy and history**
-- **T1** Every record (except `User` and `Unit`) has a shop, and only points at records of the same shop.
+- **T1** Every record (except `User`, `Unit` and the `Shop` itself **(v1.3)**) has a shop, and only points at records of the same shop.
 - **T2** Stock movements, balance entries, allocations, attendance events and audit events are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
 - **T3** Nothing is deleted: cancel, void, suspend, archive — always with who, when and why.
 - **T4** Copied values (price, floor, factor, cost, rate, rules, formula version) never change once the record is confirmed.

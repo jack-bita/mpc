@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.5 · 22 Oct 2026 · Portion 3 of the planning pack
+**Version:** 1.6 · 27 Oct 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.6** (27 Oct 2026, SHOP-1): the tenancy sweep allows the `Shop` itself to have no `shop`, because it is the tenant (§5.4, 02 v1.3). Marked **(v1.6)**.
 
 **Changes in v1.5** (22 Oct 2026, REPO-7): release-please runs with a short-lived token from the repo's own GitHub App, because a pull request opened with the default `GITHUB_TOKEN` starts no workflow, so the release PR would never get its required checks on its own. The deploy stays a job of the release workflow, now for its own reason: the release and the deploy follow each other in one run, in a fixed order (§12). Marked **(v1.5)**.
 
@@ -268,7 +270,7 @@ apps/sales/
 - **One base API view** gets its queryset through that manager and checks permissions per side.
 - **Writes check links.** Services check that every record they link to belongs to the same shop (T1).
 - **IDs from devices.** If a document's UUID already exists in *another* shop, the server rejects it and reveals nothing about the other record ✚.
-- **Sweep tests:** every model except `User`, `Unit` and the infrastructure tables has `shop`; every list and detail endpoint, called as shop B, never returns shop A's rows.
+- **Sweep tests:** every model except `User`, `Unit`, the `Shop` itself **(v1.6)** and the infrastructure tables has `shop`; every list and detail endpoint, called as shop B, never returns shop A's rows.
 - **Later (before shop #2):** RLS policies on every table (the app connects as a database role that can't bypass them) and composite "same shop" foreign keys.
 
 ### 5.5 Posting: documents in, ledgers out
