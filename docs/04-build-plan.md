@@ -440,9 +440,9 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Build:** a `current_shop` context variable with `shop_context(shop)` and `system_context()`; the `ShopScoped` abstract base (UUIDv7 id, `shop`, `created_at`; `created_by` comes in PPL-2, empty for rows the system makes) whose default manager filters by the current shop and raises when none is set; a separate unscoped manager for the superuser admin.
 **Watch out:** `core` is layer 0, so the layer contract refuses any import of `shops` from it, also in tests and in `if TYPE_CHECKING:` blocks (REPO-6, ADR-0035). Give the tests their shops through fixtures in `backend/conftest.py`, which is outside `apps`, and decide here whether type-only imports should count (`exclude_type_checking_imports` in `backend/pyproject.toml`) **(v1.3)**.
 **Done when:**
-- [ ] A scoped query with no current shop raises `NoShopSelected`.
-- [ ] Inside `shop_context(A)` only A's rows come back.
-- [ ] Reading across shops works only inside `system_context()` or through the admin's own `all_shops` manager; both are easy to search for in the code **(v1.13)**.
+- [x] A scoped query with no current shop raises `NoShopSelected`.
+- [x] Inside `shop_context(A)` only A's rows come back.
+- [x] Reading across shops works only inside `system_context()` or through the admin's own `all_shops` manager; both are easy to search for in the code **(v1.13)**.
 **Tests:** `test_query_without_shop_raises` · `test_shop_context_filters_rows` · `test_system_context_reads_all_shops`
 **Commits:** `test(core): tenancy guard` → `feat(core): current shop context` → `feat(core): ShopScoped base and manager`
 
