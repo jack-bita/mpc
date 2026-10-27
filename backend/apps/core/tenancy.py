@@ -4,7 +4,8 @@ Many shops keep their rows side by side in the same tables. Each visit to the se
 for one shop, and this file holds that shop for the length of the visit: `shop_context(shop)` sets it,
 `system_context()` opens every shop for a system job, and `current_shop()` reads it. Every ShopScoped
 table's default manager (apps/core/models.py) calls `current_shop()`, so a read that names no shop stops
-with NoShopSelected instead of returning every shop's rows.
+with NoShopSelected instead of returning every shop's rows. Code handed another shop, or another shop's
+row, than the one open raises ShopMismatch.
 """
 
 import enum
@@ -19,6 +20,14 @@ from django.db import models
 class NoShopSelected(Exception):
     # A bug, not a user's mistake: the code read a shop's table without saying which shop. It becomes a
     # server error and a log line, never a message on a screen, so it carries no error code (ADR-0032).
+    pass
+
+
+class ShopMismatch(Exception):
+    # A bug too: the code was handed a shop, or a row of a shop, other than the one open, such as a side
+    # of shop B while shop A is open. Its own class, not a ValueError: code that catches ValueError for
+    # bad input (a setting kind's parse(), apps/core/settings_registry.py) must never swallow a tenancy
+    # bug. Like NoShopSelected, it becomes a server error and a log line, with no error code (ADR-0032).
     pass
 
 

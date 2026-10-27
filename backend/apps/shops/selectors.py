@@ -11,7 +11,7 @@ list of rules in core (apps/core/settings_registry.py): a new shop works with ev
 from datetime import date, datetime
 
 from apps.core.settings_registry import Scope, SettingKey
-from apps.core.tenancy import ALL_SHOPS, current_shop
+from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.shops.models import Setting, Shop, Side
 
 
@@ -28,10 +28,10 @@ def get_setting[T](key: SettingKey[T], shop: Shop, side: Side | None = None, *, 
     # so fail closed instead (ADR-0022). A system job, in system_context(), may read any shop.
     opened = current_shop()
     if opened is not ALL_SHOPS and opened != shop.pk:
-        raise ValueError("get_setting was given a shop that is not the one open.")
+        raise ShopMismatch("get_setting was given a shop that is not the one open.")
     # T1: a side of another shop would mix two shops' rules.
     if side is not None and side.shop_id != shop.pk:
-        raise ValueError("get_setting was given a side of another shop.")
+        raise ShopMismatch("get_setting was given a side of another shop.")
     # In Python a datetime is a kind of date, so mypy lets one through; but it is a moment, not the
     # shop's day. In UTC, 22:00 on 31 Oct is already 1 Nov in Tanzania.
     if isinstance(on, datetime):

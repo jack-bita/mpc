@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 
 from apps.core.settings_registry import CASH_TOLERANCE, LATE_FINE, ON_TIME_UNTIL, SettingKey
-from apps.core.tenancy import NoShopSelected, shop_context, system_context
+from apps.core.tenancy import NoShopSelected, ShopMismatch, shop_context, system_context
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import get_setting
 
@@ -167,10 +167,10 @@ def test_get_setting_refuses_wrong_arguments(shop_a: Shop, shop_b: Shop) -> None
     with shop_context(shop_a):
         # Another shop than the one open: the guard would show none of its rows, and the default would
         # come back without a word. Fail closed instead (ADR-0022).
-        with pytest.raises(ValueError, match="not the one open"):
+        with pytest.raises(ShopMismatch, match="not the one open"):
             get_setting(LATE_FINE, shop_b, on=NOV_3)
         # A side of another shop: it would mix two shops' rules (T1).
-        with pytest.raises(ValueError, match="another shop"):
+        with pytest.raises(ShopMismatch, match="another shop"):
             get_setting(CASH_TOLERANCE, shop_a, side_of_b, on=NOV_3)
         # A date and time, such as timezone.now(), instead of the shop's business date (02 §1). In UTC,
         # 22:00 on 31 Oct is already 1 Nov in Tanzania, so the day would be wrong for the last hours of
