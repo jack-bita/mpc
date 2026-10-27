@@ -44,7 +44,18 @@ class ValueKind[T](ABC):
     def parse(self, text: str) -> T: ...
 
     @abstractmethod
-    def to_text(self, value: T) -> str: ...
+    def _write(self, value: T) -> str: ...
+
+    def to_text(self, value: T) -> str:
+        # Each kind writes its own form (_write); this checks that the text reads back as the very same
+        # value. Otherwise money written with two places would round a third one away, half to even
+        # (1.005 → "1.00"), past the one shared rounding function (ADR-0024), and a value parse() refuses
+        # (a negative amount, a time with seconds) would be stored all the same. A service or a seed may
+        # call this directly, without parse() first.
+        text = self._write(value)
+        if self.parse(text) != value:
+            raise ValueError(f"{value!r} can't be stored as {text!r} without changing it.")
+        return text
 
 
 def _amount(text: str) -> Decimal:
@@ -72,9 +83,9 @@ class Money(ValueKind[Decimal]):
             raise ValueError(f"{text!r} is below {self.minimum}.")
         return value
 
-    def to_text(self, value: Decimal) -> str:
-        # Always two places: "1000" and "1000.0" are both stored as "1000.00". A value parse() made has at
-        # most two, so this only adds zeros and never rounds: rounding has one shared function (ADR-0024).
+    def _write(self, value: Decimal) -> str:
+        # Always two places: "1000" and "1000.0" are both stored as "1000.00". It only adds zeros:
+        # to_text() refuses a value this would round.
         return f"{value:.2f}"
 
 
@@ -88,7 +99,7 @@ class Percent(ValueKind[Decimal]):
             raise ValueError(f"{text!r} is above 100.")
         return value
 
-    def to_text(self, value: Decimal) -> str:
+    def _write(self, value: Decimal) -> str:
         return f"{value:.2f}"
 
 
@@ -105,7 +116,7 @@ class Whole(ValueKind[int]):
             raise ValueError(f"{text!r} is below {self.minimum}.")
         return value
 
-    def to_text(self, value: int) -> str:
+    def _write(self, value: int) -> str:
         return str(value)
 
 
@@ -120,7 +131,7 @@ class TimeOfDay(ValueKind[time]):
             raise ValueError(f"{text!r} is not a time written as HH:MM.")
         return time(int(match[1]), int(match[2]))
 
-    def to_text(self, value: time) -> str:
+    def _write(self, value: time) -> str:
         return value.strftime("%H:%M")
 
 
@@ -135,7 +146,7 @@ class YesNo(ValueKind[bool]):
             return False
         raise ValueError(f"{text!r} is not true or false.")
 
-    def to_text(self, value: bool) -> str:
+    def _write(self, value: bool) -> str:
         return "true" if value else "false"
 
 

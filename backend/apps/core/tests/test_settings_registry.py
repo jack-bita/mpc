@@ -112,3 +112,22 @@ def test_value_kinds_refuse_bad_text(kind: ValueKind[Any], text: str) -> None:
     # would stop every attendance day that needs it.
     with pytest.raises(ValueError):
         kind.parse(text)
+
+
+@pytest.mark.parametrize(
+    ("kind", "value"),
+    [
+        # Written with two places, the third would be rounded away, half to even (1.005 → "1.00"): not
+        # the one shared rounding function (ADR-0024).
+        pytest.param(Money(), Decimal("1.005"), id="money_three_places"),
+        pytest.param(Percent(), Decimal("2.125"), id="percent_three_places"),
+        # A value parse() refuses can't be written either, or it would be stored all the same.
+        pytest.param(Money(), Decimal("-500"), id="money_below_zero"),
+        pytest.param(Money(), Decimal("Infinity"), id="money_infinite"),
+        pytest.param(TimeOfDay(), time(7, 35, 30), id="time_with_seconds"),
+    ],
+)
+def test_to_text_refuses_a_value_it_would_change(kind: ValueKind[Any], value: object) -> None:
+    # A service or a seed may write a value with to_text() directly, without parse() first.
+    with pytest.raises(ValueError):
+        kind.to_text(value)
