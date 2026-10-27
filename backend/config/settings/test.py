@@ -9,7 +9,8 @@ from .base import *  # noqa: F403 — start from the shared settings, then chang
 SECRET_KEY = "test-only-not-a-secret"
 
 # A test-only app (backend/tests/probe/) whose tables let `core` test its base models before any real
-# table builds on them. Only these settings install it, so no other database ever gets its tables.
+# table builds on them. Only these settings install it, and they are for pytest, which builds its own
+# test database: the dev and production settings never install it.
 INSTALLED_APPS = [*INSTALLED_APPS, "tests.probe"]  # noqa: F405 — defined in .base, through the * above.
 
 # A deliberately weak, fast hasher: tests create many users, and real password hashing is slow on purpose.

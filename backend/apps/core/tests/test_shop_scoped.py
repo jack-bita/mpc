@@ -29,8 +29,8 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def notes(shop_a: Model, shop_b: Model) -> None:
     # The rows from the table above. save() goes through Django's plain base manager, not the guarded
-    # `objects`, so writing needs no current shop: the guard is on reads, and services check every row
-    # they write (T1). `shop_id`: these shops are typed as plain models, see test_shop_context.py.
+    # `objects`, so it needs no current shop (Note.objects.create() would: it goes through `objects`).
+    # `shop_id`: these shops are typed as plain models, see test_shop_context.py.
     for shop, text in [(shop_a, "Customer A"), (shop_b, "Customer B"), (shop_a, "Customer C")]:
         Note(shop_id=shop.pk, text=text).save()
 
@@ -64,9 +64,8 @@ def test_system_context_reads_all_shops() -> None:
 
 @pytest.mark.usefixtures("notes")
 def test_admin_manager_reads_all_shops() -> None:
-    # The superuser's admin pages list every shop's rows. They can't use system_context(): it is for
-    # system jobs only (03 §5.4), and the admin builds its list in one step but reads it later, while
-    # drawing the page. So the admin has its own manager, with a name as easy to search for.
+    # The superuser's admin pages list every shop's rows. A page answers a visit, and system_context() is
+    # for system jobs only (03 §5.4), so the admin has its own manager, with a name as easy to search for.
     texts = sorted(Note.all_shops.values_list("text", flat=True))
 
     assert texts == ["Customer A", "Customer B", "Customer C"]

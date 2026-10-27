@@ -44,9 +44,11 @@ class ShopScopedManager[M: models.Model](models.Manager[M]):
 
     def get_queryset(self) -> models.QuerySet[M]:
         # Django starts every read from `objects` here: all(), filter(), get(), count()... So the shop is
-        # checked when a read is built, before it reaches the database. Reaching the manager alone
-        # (`Note.objects`) asks nothing yet, so code loaded before any visit, such as an API field given
-        # the manager, still loads.
+        # checked when a read is built, before it reaches the database. A built read keeps its filter:
+        # built inside shop_context(A) and run after the block, it still returns A's rows, so a built read
+        # is never kept from one visit to the next. Reaching the manager alone (`Note.objects`) asks
+        # nothing yet, so a module that only names the manager, such as an API field given it, still
+        # loads; `Note.objects.all()` at the top of a module would raise as the module loads.
         shop = current_shop()  # raises NoShopSelected when no shop was chosen
         rows = super().get_queryset()
         if shop is ALL_SHOPS:
@@ -64,22 +66,31 @@ class ShopScoped(UUIDModel, TimeStamped):
     # related_name="+": no `shop.note_set`. A shop's rows are read through their own guarded `objects`.
     shop = models.ForeignKey("shops.Shop", on_delete=models.PROTECT, related_name="+")
 
-    # Every shop's rows, with no guard: for the superuser's admin pages only. The admin builds its list
-    # in one step and reads it later, while drawing the page, so a `with` block can't cover it.
-    # `grep all_shops` finds every use.
+    # Every shop's rows, with no guard: for the superuser's admin pages only. A page answers a visit, and
+    # system_context() is for system jobs only (03 §5.4), so the admin gets its own way in, with a name
+    # as easy to search for: `grep all_shops` finds every use. It covers the admin's list only: an add or
+    # change page also checks and fills its form through `objects`, so that page still needs a shop.
     all_shops = models.Manager()
-    # The guarded manager: what our code, the admin's forms and DRF use to read a table. Declared second
-    # (ruff's Django style check reads `models.Manager()` above as a field, and fields come first), but
-    # still the default: Meta's default_manager_name says so.
-    # Django's base manager, which save(), refresh_from_db() and `row.shop` use, stays the plain one:
-    # writing a row or following a link needs no current shop. The guard is on reads; services check
-    # every row they write (T1). Not used in migrations: those run as system jobs, with no visit.
+    # The guarded manager. Django, the admin's forms and DRF read through it too, as the default manager
+    # (Meta below). Declared second (ruff's Django style check reads `models.Manager()` above as a field,
+    # and fields come first), but still the default.
+    # Writes: save() goes through Django's plain base manager, so it needs no current shop; create(),
+    # get_or_create(), update() and full_clean() go through `objects`, so they do. And inside
+    # shop_context(A), nothing stops a row being written for shop B: the guard is on reads, and services
+    # must check every row they write (T1).
+    # Links: following one shop table's link to another (`line.sale`) also goes through the plain base
+    # manager, with no guard. Only T1, checked when the link is written, keeps both rows in one shop,
+    # until row-level security comes (ADR-0022).
+    # Migrations get a plain manager instead: this one keeps Django's use_in_migrations=False, because a
+    # migration runs as a system job, with no visit.
     objects = ShopScopedManager()
 
     class Meta(UUIDModel.Meta, TimeStamped.Meta):
         # Both bases' Meta, so ShopScoped keeps any option either gains later (CORE-1).
         abstract = True
         # The default manager is the one Django, the admin's forms and DRF read through. Without this
-        # line it would be the first one declared, `all_shops`, with no guard; and a table that added a
-        # manager of its own would make that one the default. Named here, it is always `objects`.
+        # line it would be the first one declared: `all_shops`, with no guard, or a manager a table adds
+        # of its own. This keeps `objects` the default for every table that keeps this Meta: one with no
+        # Meta of its own, or one whose Meta builds on ShopScoped.Meta. A table that writes a fresh Meta,
+        # or replaces `objects`, loses the guard: CORE-7's sweep is to catch that.
         default_manager_name = "objects"

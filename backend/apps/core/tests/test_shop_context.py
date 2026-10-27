@@ -40,8 +40,9 @@ def test_shop_context_is_cleared_even_after_an_error(shop_a: Model) -> None:
 
 
 def test_inner_context_wins_and_the_outer_comes_back(shop_a: Model, shop_b: Model) -> None:
-    # Code that must work for another shop for a moment says so with its own block. When that block
-    # ends, the shop from before is back: not "no shop", and not the inner one.
+    # A system job that works through the shops one at a time, inside a wider block, names each shop with
+    # its own block. When that block ends, the shop from before is back: not "no shop", and not the inner
+    # one. (A visit never does this: it works for one shop only, 03 §5.4.)
     with shop_context(shop_a):
         with shop_context(shop_b):
             assert current_shop() == shop_b.pk
