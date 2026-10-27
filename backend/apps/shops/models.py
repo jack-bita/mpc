@@ -50,8 +50,16 @@ class Shop(UUIDModel, TimeStamped):
     kind = models.CharField(max_length=10, choices=ShopKind, default=ShopKind.LIVE)
     # Only a practice shop names the shop it copies (ADR-0014); NULL for every other shop. PROTECT:
     # nothing is deleted (rule 7), so a shop with practice copies can't vanish from under them.
+    # limit_choices_to: the shop it copies is a live one, never the demo or another copy. The database
+    # can't check another row's kind, so this is Django's check: every form (full_clean) refuses another
+    # kind, and the admin's drop-down lists live shops only. Code that saves without full_clean skips it.
     practice_of = models.ForeignKey(
-        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="practice_shops"
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="practice_shops",
+        limit_choices_to={"kind": ShopKind.LIVE},
     )
     # Suspended = switched off, with nothing deleted (rule 7). A suspension needs who, when and why,
     # which only the audit trail (CTRL-2) can record, so for now nothing changes it: the admin shows it
@@ -105,8 +113,7 @@ class Shop(UUIDModel, TimeStamped):
                 violation_error_code="shop.practice_of_not_practice",
             ),
             # Never itself, which would pass both rules above. That it names a *live* shop needs a look at
-            # another row, which a check constraint can't take: the service that makes practice shops (R2)
-            # checks that.
+            # another row, which a check constraint can't take: `practice_of`'s limit_choices_to does that.
             models.CheckConstraint(
                 condition=~models.Q(practice_of=models.F("id")),
                 name="shops_shop_not_practice_of_itself",

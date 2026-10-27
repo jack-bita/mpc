@@ -44,6 +44,7 @@ class Migration(migrations.Migration):
                     "practice_of",
                     models.ForeignKey(
                         blank=True,
+                        limit_choices_to={"kind": "live"},
                         null=True,
                         on_delete=django.db.models.deletion.PROTECT,
                         related_name="practice_shops",

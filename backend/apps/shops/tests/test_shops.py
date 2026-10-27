@@ -78,6 +78,24 @@ def test_practice_shop_points_at_its_live_shop() -> None:
     assert list(live.practice_shops.all()) == [practice]
 
 
+@pytest.mark.parametrize("kind", ["demo", "practice"])
+def test_practice_shop_copies_only_a_live_shop(kind: str) -> None:
+    # ADR-0014: practice is a copy of the live shop, where new workers learn the real products. A copy
+    # of the demo shop, or of another practice copy, would teach them a shop that doesn't exist. The
+    # database can't see another row's kind, so the field's own check does it, in every form (full_clean).
+    live = Shop.objects.create(name=NAME, code=CODE)
+    other = Shop.objects.create(
+        name="Duka Jingine", code="JINGINE", kind=kind, practice_of=live if kind == "practice" else None
+    )
+    copy = Shop(name="Duka la Mazoezi", code="MAZOEZI", kind="practice", practice_of=other)
+
+    with pytest.raises(ValidationError) as refused:
+        copy.full_clean()
+
+    # Under the field's name, so the admin shows it beside the drop-down.
+    assert "practice_of" in refused.value.error_dict
+
+
 def test_only_a_practice_shop_points_at_another_shop() -> None:
     # The other half of the rule: a live or demo shop is nobody's copy. One that named another shop
     # would look like practice to any code that follows `practice_of`.
