@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
 
-**Changes in v1.18** (27 Oct 2026, CORE-4): CORE-4's `Setting` has no `set_by` column. Who set a value is the row's `created_by`, which every shop row has had since PPL-2 (Jack, while planning CORE-4; 02 v1.7). The two tolerances default to 0 until the owner agrees values (02 §20, item 2). The card names a test for its last *Done when* line and the extra tests its plan added, and splits its last commit in two: the dated rows, then the lookup. Marked **(v1.18)**.
+**Changes in v1.18** (27 Oct 2026, CORE-4): CORE-4's `Setting` has no `set_by` column. Who set a value is the row's `created_by`, which every shop row has had since PPL-2 (Jack, while planning CORE-4; 02 v1.7). The two tolerances default to 0 until the owner agrees values (02 §20, item 2). The card names a test for its last *Done when* line and the extra tests its plan added, and splits its last commit in two: the dated rows, then the lookup. From CORE-4's review, for later cards: SHOP-3's row says what its write service checks and two choices it makes (backdated values; a side going back to the shop's value); CAT-2's row names the clash between one price row per date (03 §9) and a same-day fix. Marked **(v1.18)**.
 
 **Changes in v1.17** (27 Oct 2026, CORE-3's tick): CORE-7's *Watch out* says which tables really lose the shop guard: an abstract base with a fresh `Meta`, or a table with managers of its own. A table that only writes a fresh `Meta` keeps it, as CORE-3's review showed and `core/models.py` now says. Marked **(v1.17)**.
 
@@ -869,7 +869,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 
 | ID | Task | Size | After | Done when |
 |---|---|---|---|---|
-| SHOP-3 | Settings screen | M | CORE-4, UI-2 | One screen for every registry key: the value in force, its history, and a new value from a chosen date (`settings.manage`); each side's on/off switch (`is_live`) |
+| SHOP-3 | Settings screen | M | CORE-4, UI-2 | One screen for every registry key: the value in force, its history, and a new value from a chosen date (`settings.manage`); each side's on/off switch (`is_live`). Its write service runs `full_clean` before saving (the checks live in `Setting.clean()`, which `objects.create` skips) and checks the side's shop (T1). Decide whether a value may start before the shop's today: a backdated row changes what past days answer, so a draft pay run would change. Decide how a side goes back to the shop's value: a side row beats even a newer shop row (CORE-4) **(v1.18)** |
 | ATT-2 | Attendance rules and holidays | S | SHOP-3 | The answers from OWN-7 as dated settings; holiday dates; Sundays off; an `attendance.enabled` switch, off until the go-live (BP7) |
 | CTRL-3 | Attachments | M | SYNC-8 | `Attachment`: files upload later (Wi-Fi first where the browser can tell); served only through Django after a permission and shop check; a hook for retention rules |
 | PPL-4 | Staff screens *(Jack-led)* | M | UI-2, PPL-3, CTRL-2, CTRL-3 | The first office screen: add a worker (photo, optional **(v1.14)**; job title; roles per side); set or reset a PIN online; suspend; mark as left; the reasons go to CTRL-2's audit trail **(v1.14)** |
@@ -898,7 +898,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 | ID | Task | Size | After | Done when |
 |---|---|---|---|---|
 | CAT-1 | Units, products, tags, product sides | M | CORE-6, SHOP-2 | `Unit` seeded (kg, L, pcs, m); `Product` with other names, tags, a barcodes field, `tracks_batches`, `prescription_only`, archive with a reason; `Tag` with synonyms; `ProductSide` with shelf label and reorder level |
-| CAT-2 | Selling units, prices and buying prices | M | CAT-1 | `SellingUnit`: factor above zero, frozen once used (P1); `Price`: dated, insert-only rows, future dates allowed; floor ≤ jumla ≤ retail (P2); `ProductCost` visible only with `cost.view` |
+| CAT-2 | Selling units, prices and buying prices | M | CAT-1 | `SellingUnit`: factor above zero, frozen once used (P1); `Price`: dated, insert-only rows, future dates allowed; floor ≤ jumla ≤ retail (P2); `ProductCost` visible only with `cost.view`. 03 §9's "one dated row per selling unit and date" stops a same-day price typo being fixed with a new row, the way a setting is fixed (CORE-4, `test_same_day_fix_wins`): decide which rule wins **(v1.18)** |
 | CAT-3 | Product list with server search | M | CAT-2, UI-2 | `pg_trgm` + `unaccent` search by name, other names and tags |
 | CAT-4 | Add and edit a product | M | CAT-3 | One form for a product with its selling units and prices, done in under a minute; archive |
 | CAT-5 | Price changes | M | CAT-4 | Change prices with `price.change`, today or a future date; full history; buying prices entered with `cost.view` |

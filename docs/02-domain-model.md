@@ -18,7 +18,7 @@
 
 **Changes in v1.6** (27 Oct 2026, CORE-3): a payment has no `status` column (§10). It is void once its void stamp is filled, and valid until then. CORE-3's trigger lets a void change the stamp and nothing else (03 §5.6), so a separate status could never be set (Jack, while building CORE-3). Marked **(v1.6)**.
 
-**Changes in v1.7** (27 Oct 2026, CORE-4): a setting and a price have no `set_by` column (§4, §6). Who set a value is the row's `created_by`, which every shop row has (§1): two columns for one fact could one day disagree (Jack, while planning CORE-4). §4 also says each setting key has a scope, as ADR-0013 does. Marked **(v1.7)**.
+**Changes in v1.7** (27 Oct 2026, CORE-4): a setting and a price have no `set_by` column (§4, §6). Who set a value is the row's `created_by`, which every shop row has (§1): two columns for one fact could one day disagree (Jack, while planning CORE-4). §4 also says each setting key has a scope, as ADR-0013 does. From CORE-4's review, §4 says which row wins on one date, and that a side's row beats even an older shop row, so devices can pick the same row offline. Marked **(v1.7)**.
 
 ---
 
@@ -173,7 +173,7 @@ A full diagram for GitHub is in Appendix A.
 
 **Setting** [R1] ✚ → Shop (optional Side) — one dated rule value (D13).
 - `key` (from a fixed list in code, each with a type, a default and a scope: one value for the whole shop, or one a side may override **(v1.7)**), `value`, `effective_from`, `note`. Who set it is the row's `created_by` (§1) **(v1.7)**.
-- In force on a date = the latest row with `effective_from` ≤ that date. A side row beats a shop row.
+- In force on a date = the latest row with `effective_from` ≤ that date. On one date, the row written last wins (`created_at`, then `id`), so a mistake is fixed with a new row **(v1.7)**. A side row beats a shop row, even an older one, and only for a key a side may override **(v1.7)**. Devices need each row's `created_at` to pick the same row offline **(v1.7)**.
 - Examples: `attendance.on_time_until` 07:35 · `attendance.late_fine` 1,000 · `cash.tolerance` · `count.tolerance_pct` · `expiry.alert_days` 90 · `stock.block_negative` false · `money.rounding_step` 1
 
 ## 5. People & access — module `people`
