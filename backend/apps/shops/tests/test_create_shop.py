@@ -51,17 +51,19 @@ def test_create_shop_makes_location_and_drawer_per_side() -> None:
 
     side_code = {side.id: side.code for side in sides}
     drawer_name = {drawer.id: drawer.name for drawer in drawers}
-    assert sorted((side.code, side.name, side.sale_flow) for side in sides) == [
-        ("D", "Dawa", SaleFlow.ONE_SCREEN),
-        ("F", "Vyakula", SaleFlow.WRITER_CASHIER_LOADER),
+    # Each side switched off (is_live False) until the owner agrees to use it (ADR-0033): create_shop is
+    # the one way sides are made, so the rule is checked here as well as on the table's default.
+    assert sorted((side.code, side.name, side.sale_flow, side.is_live) for side in sides) == [
+        ("D", "Dawa", SaleFlow.ONE_SCREEN, False),
+        ("F", "Vyakula", SaleFlow.WRITER_CASHIER_LOADER, False),
     ]
     # One default location per side, named after it.
     assert sorted((side_code[loc.side_id], loc.name, loc.is_default) for loc in locations) == [
         ("D", "Dawa", True),
         ("F", "Vyakula", True),
     ]
-    # One cash drawer per side, linked to that side only, named after it.
-    assert len(drawers) == 2
+    # One cash drawer per side, ready to take money, linked to that side only, named after it.
+    assert [drawer.status for drawer in drawers] == ["active", "active"]
     assert sorted((side_code[link.side_id], drawer_name[link.account_id]) for link in links) == [
         ("D", "Dawa"),
         ("F", "Vyakula"),
