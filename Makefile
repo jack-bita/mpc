@@ -59,7 +59,9 @@ check: check-backend check-frontend check-image ## run everything CI runs; it mu
 # - lint-imports checks the layer contracts in pyproject.toml (ADR-0035): an import that climbs a
 #   layer fails here. Like ruff and mypy it needs no database, so it runs with them, before the
 #   slower checks. --no-logo: no banner, so the last lines printed are the result.
-# - makemigrations --check fails when a model changed without a migration.
+# - makemigrations --check fails when a model changed without a migration. It runs with the test
+#   settings: they install every app the dev settings do, plus the test-only probe app (CORE-2),
+#   whose tables build on ShopScoped, so their migrations must follow when ShopScoped changes.
 # - pytest prints a coverage report here (pyproject.toml says what is measured), so CI shows it too.
 # - The guard's tests: the guard refuses the costly mistakes, so a broken guard must turn this red.
 # - The GitHub sync script's tests (docs/runbooks/github-setup.md). The guard and the script are
@@ -71,7 +73,7 @@ check-backend: ## only the backend and the Python tools (CI's backend job)
 	cd backend && $(UV_RUN) mypy .
 	cd backend && $(UV_RUN) lint-imports --no-logo
 	cd backend && $(UV_RUN) python manage.py check
-	cd backend && $(UV_RUN) python manage.py makemigrations --check --dry-run
+	cd backend && $(UV_RUN) python manage.py makemigrations --check --dry-run --settings=config.settings.test
 	cd backend && $(UV_RUN) pytest --cov
 	python3 -m unittest discover -s .claude/hooks
 	python3 -m unittest discover -s scripts
