@@ -1,9 +1,12 @@
 """apps/shops/admin.py — the Django admin page for shops: the creator's back room.
 
-Only the superuser opens it, to add MPC and the demo shop before any office screen exists (02 §4). It
-owns the add and edit forms for a Shop and the page's rules: the id is shown but never typed in, a
-shop's kind and currency are fixed once it exists, its status waits for the audit trail, and nothing
-is deleted.
+Only the superuser opens it, to look after shops before any office screen exists (02 §4). It owns the
+add and edit forms for a Shop and the page's rules: the id is shown but never typed in, a shop's kind
+and currency are fixed once it exists, its status waits for the audit trail, and nothing is deleted.
+
+Its add page saves the Shop row alone: no sides, stock locations or cash drawers. A shop that can work
+is made by create_shop (apps/shops/services.py, SHOP-2); making the admin use it is a later task (Jack,
+27 Oct 2026). No shop exists yet, so none is missing its sides.
 """
 
 from django.contrib import admin

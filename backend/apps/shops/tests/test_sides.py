@@ -11,8 +11,8 @@ drawer, a Lipa Namba or a bank account, each serving one or more sides.
                                                                     ─┘
 
 All four tables are ShopScoped (CORE-2): their rows are read and checked through the guarded `objects`,
-so every test works inside `shop_context(shop)`, as a visit will. Each test names one rule; the database
-is the last guard for each of them (03 §5.6).
+so every test works inside `shop_context(shop)`, as a visit will. Each test names one rule; most rules
+are the database's own too, the last guard (03 §5.6).
 """
 
 import pytest

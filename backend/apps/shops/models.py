@@ -228,8 +228,10 @@ class StockLocation(ShopScoped):
     # store rooms (Later) and transfers between sides (R2) need no change to the stock ledger. R1 has one
     # per side, the default, made with the side by create_shop; the screens never show it.
 
-    # T1: the side belongs to the same shop as the location. The database can't compare two rows' shops,
-    # so the services check it. PROTECT: nothing is deleted (rule 7). related_name="+": no
+    # T1: the side belongs to the same shop as the location. PostgreSQL could hold this with a foreign key
+    # over two columns, (shop, side) → the side's (shop, id), but Django can't declare one, so the
+    # services check it (a later hardening, with row-level security, ADR-0022). PROTECT: nothing is
+    # deleted (rule 7). related_name="+": no
     # `side.stocklocation_set`; locations are read through their own guarded `objects`. db_index=False:
     # indexes lead with `shop`, and the unique rule below already indexes (shop, side) for the default
     # locations, the only ones R1 has.
@@ -330,10 +332,13 @@ class PaymentAccount(ShopScoped):
 class PaymentAccountSide(ShopScoped):
     # One link: this account takes money for this side (02 §4). The table behind PaymentAccount.sides,
     # with a `shop` like every shop row (T1). A link is written as a row of this table, with its shop,
-    # never through `account.sides.add()`, which knows nothing of the shop.
+    # never through `account.sides.add()`, which knows nothing of the shop (it fails: `shop` is empty).
+    # `account.sides` is for reading only: its `remove()`, `clear()` and `set()` delete link rows with no
+    # who, when or why (rule 7), and PROTECT doesn't stop them.
 
-    # T1: the account and the side belong to the link's shop; the services check it. PROTECT: nothing is
-    # deleted (rule 7). db_index=False: the unique rule below indexes (shop, account, side).
+    # T1: the account and the side belong to the link's shop; the services check it, as on
+    # StockLocation.side. PROTECT: nothing is deleted (rule 7). db_index=False: the unique rule below
+    # indexes (shop, account, side).
     account = models.ForeignKey(PaymentAccount, on_delete=models.PROTECT, related_name="+", db_index=False)
     side = models.ForeignKey(Side, on_delete=models.PROTECT, related_name="+", db_index=False)
 
