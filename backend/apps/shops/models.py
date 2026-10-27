@@ -369,8 +369,9 @@ class Setting(AppendOnly):
     # Empty: the whole shop's value. A side: that side's own value, which beats the shop's (02 §4), for
     # keys whose scope allows it (clean() below). T1: the side belongs to the row's shop; the service
     # that writes settings (SHOP-3) checks it, as services do for StockLocation.side. PROTECT: nothing is
-    # deleted (rule 7). related_name="+": settings are read through get_setting. db_index=False: the
-    # lookup index in Meta covers the side.
+    # deleted (rule 7). related_name="+": settings are read through get_setting. db_index=False: indexes
+    # lead with `shop` (03 §9), and get_setting's reads use the lookup index in Meta. A side's own index
+    # would serve only PROTECT's search for a side's rows before deleting the side, and nothing is deleted.
     side = models.ForeignKey(Side, on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False)
     # A key from the list in core (apps/core/settings_registry.py), such as "attendance.late_fine".
     key = models.CharField(max_length=60)
