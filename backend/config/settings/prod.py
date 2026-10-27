@@ -12,6 +12,11 @@ from .base import BASE_DIR, DATABASES, MIDDLEWARE, env, env_list
 
 SECRET_KEY = env("DJANGO_SECRET_KEY")
 
+# Mixed into every PIN before hashing (apps/people/pins.py, 03 §5.9), so a copy of the database alone
+# reveals no PIN. Its own secret, not SECRET_KEY: that key may be changed one day, and a changed
+# pepper makes every PIN stop working. If it is ever lost, only the PINs go: each person gets a new one.
+PIN_PEPPER = env("PIN_PEPPER")
+
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 
 DATABASES["default"].update(

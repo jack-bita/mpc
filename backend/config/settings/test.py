@@ -8,6 +8,10 @@ from .base import *  # noqa: F403 — start from the shared settings, then chang
 
 SECRET_KEY = "test-only-not-a-secret"
 
+# The secret mixed into every PIN before hashing (prod.py explains it). The PIN tests change it to show
+# that a stored PIN can't be checked without the right one.
+PIN_PEPPER = "test-only-not-a-secret"
+
 # A test-only app (backend/tests/probe/) whose tables let `core` test its base models before any real
 # table builds on them. Only these settings install it, and they are for pytest, which builds its own
 # test database: the dev and production settings never install it.

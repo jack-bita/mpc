@@ -53,6 +53,7 @@ echo "ok: runs as uid $uid, not root"
 # clash with `make dev` (8000, 8080, 3000) or with a container someone left running.
 docker run --detach --name "$name" --publish 127.0.0.1::8000 \
   --env DJANGO_SECRET_KEY=smoke-test-only \
+  --env PIN_PEPPER=smoke-test-only \
   --env DJANGO_ALLOWED_HOSTS=127.0.0.1 \
   --env DB_NAME=unused --env DB_USER=unused --env DB_PASSWORD=unused --env DB_HOST=unused \
   "$image" >/dev/null

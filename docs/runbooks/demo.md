@@ -14,11 +14,11 @@ Two words used below:
 |---|---|---|
 | The web service and the database on Render | `render.yaml` | Render, when the Blueprint is created and each time the file changes on `main` |
 | The backend image | `backend/Dockerfile` | `deploy-demo.yml`, job `publish`, to `ghcr.io/jack-bita/mpc-backend` |
-| The secret key, the database's details | Render | Render, by itself (`generateValue`, `fromDatabase` in `render.yaml`) |
+| The secret key, the PIN pepper, the database's details | Render | Render, by itself (`generateValue`, `fromDatabase` in `render.yaml`) |
 | `DJANGO_ALLOWED_HOSTS` | Render: the service's *Environment* page | Jack, once, when the Blueprint is created |
 | The deploy hook and the demo's address | GitHub: the `demo` environment | Jack, by hand, once (*First setup*, below) |
 
-No secret is in the repo. The deploy hook is the only one GitHub holds.
+No secret is in the repo. The deploy hook is the only one GitHub holds. Never regenerate `PIN_PEPPER` on Render: every PIN on the demo would stop working, and each person would need a new one.
 
 ## How a deploy happens
 

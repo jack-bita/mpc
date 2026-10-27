@@ -1,9 +1,10 @@
 """apps/people/services.py — every write to the people tables, one function per action (ADR-0015).
 
 For now a staff member's working life at one shop (02 §5): they are added, suspended, brought back and
-marked as left; their PIN joins in the next step. Each action runs in one transaction, checks that every
-row it links to belongs to the same shop (T1), and refuses a broken rule with a ValidationError that
-carries a code (ADR-0032); CORE-6's error handler will turn it into the API's error shape.
+marked as left, and given a PIN (set_pin; apps/people/pins.py hashes it). Each action runs in one
+transaction, checks that every row it links to belongs to the same shop (T1), and refuses a broken rule
+with a ValidationError that carries a code (ADR-0032); CORE-6's error handler will turn it into the
+API's error shape.
 
 Callers open shop_context(shop) first: full_clean and the unique checks read through the guarded
 `objects` (CORE-2).
@@ -18,6 +19,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.people.models import StaffMember, StaffStatus, User
+from apps.people.pins import check_pin_strength, hash_pin
 from apps.shops.models import Shop
 
 
@@ -107,4 +109,23 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
         # The rules in Meta refuse a leaving date before the start date (staff.left_before_start).
         staff.full_clean()
         staff.save(update_fields=["status", "left_on"])
+    return staff
+
+
+def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMember:
+    """Give a person a new PIN, online only (03 §5.9). Devices see the new `pin_changed_at` at their next
+    sync and drop their old offline check."""
+    _check_same_shop(staff.shop_id, by)
+    check_pin_strength(pin)
+    # Hashed before the lock: Argon2 is slow on purpose, and the row stays locked only for the short
+    # write below.
+    pin_hash = hash_pin(pin)
+    with transaction.atomic():
+        staff = _locked(staff)
+        if staff.status == StaffStatus.LEFT:
+            raise ValidationError("A person who has left can't be given a PIN.", code="staff.left")
+        staff.pin_hash = pin_hash
+        staff.pin_changed_at = timezone.now()
+        staff.full_clean()
+        staff.save(update_fields=["pin_hash", "pin_changed_at"])
     return staff
