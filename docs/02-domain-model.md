@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.5 · 27 Oct 2026 · Portion 2 of the planning pack
+**Version:** 1.6 · 27 Oct 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -15,6 +15,8 @@
 **Changes in v1.4** (27 Oct 2026, PPL-2): a staff member's photo is optional (Jack, while planning PPL-2). On the PIN login screen, a person with no photo shows their full name in large letters, with their nickname under it, in the photo's place. §5 also records the staff rules PPL-2 built: a job left is final and a returning worker gets a new one, one current job per person per shop, nicknames unique among current staff, a leaving date never in the future, and the PIN rules; §1 says `created_by` is empty for rows the system makes. Marked **(v1.4)** below.
 
 **Changes in v1.5** (27 Oct 2026, SHOP-2): §4 records the side and account rules SHOP-2 built: a side's letter is one capital, unique within its shop, and a new side starts switched off; one default stock location per side; a payment account's sides are kept as link rows, each with its shop; a cash drawer has no provider and no number, and the other kinds have both. §14 gives a payment account's status: `active` ⇄ `archived`. Marked **(v1.5)**.
+
+**Changes in v1.6** (27 Oct 2026, CORE-3): a payment has no `status` column (§10). It is void once its void stamp is filled, and valid until then. CORE-3's trigger lets a void change the stamp and nothing else (03 §5.6), so a separate status could never be set (Jack, while building CORE-3). Marked **(v1.6)**.
 
 ---
 
@@ -358,7 +360,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - `method`: `cash` | `mobile_money` | `bank` | `returned_goods` (no account)
 - `amount` (what landed in the account), `cash_change_given` (cash out of the drawer when a mobile-money or bank payment was too big)
 - `transaction_code` (required for mobile money and bank; stored in capitals, no spaces), `payer`, `payer_name`, `payer_phone`, `received_by`, `received_at`, `drawer_session` (for cash, or cash change)
-- `status`: `valid` | `void` (reason, approval; voiding reverses everything the payment did)
+- Void: the one-time void stamp — `voided_at`, `voided_by`, `void_reason`, `void_approval` (03 §5.6). A payment is valid until `voided_at` is filled, and void after it. There is no separate status column: the database lets a void change the stamp and nothing else, so a status could never be set. Voiding reverses everything the payment did **(v1.6)**.
 - `duplicate_of` → Payment ✚ — an offline payment whose transaction code was already used is stored, linked to the first payment, and flagged **(v1.1)**
 - Applied to sales (PaymentAllocation) and/or debts (repayment entries). Applied total = `amount` − `cash_change_given`.
 
