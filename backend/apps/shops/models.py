@@ -412,6 +412,10 @@ class Setting(AppendOnly):
         # full_clean runs this after each field's own checks and before the rules in Meta. Each refusal
         # carries a code the screens translate (ADR-0032).
         super().clean()
+        # full_clean runs clean() even after a field's own check has failed. An empty key is left to that
+        # check, which reports it once; with no key, there is nothing else to check.
+        if not self.key:
+            return
         setting_key = REGISTRY.get(self.key)
         if setting_key is None:
             # A typo, or a key a later card hasn't added yet: no code would ever read the row. Nothing

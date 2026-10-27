@@ -99,6 +99,17 @@ def test_empty_value_reported_once(shop_a: Shop) -> None:
     assert codes(refused, "value") == ["blank"]
 
 
+def test_empty_key_reported_once(shop_a: Shop) -> None:
+    # The same for an empty key: the field's own check reports it (`blank`), and clean() doesn't add
+    # "unknown setting" for the same mistake.
+    with shop_context(shop_a):
+        row = new_row(shop_a, "", "1000")
+        with pytest.raises(ValidationError) as refused:
+            row.full_clean()
+
+    assert codes(refused, "key") == ["blank"]
+
+
 def test_setting_key_checked(shop_a: Shop, dawa: Side) -> None:
     with shop_context(shop_a):
         # A name that is not in the list, such as a typo: no code would ever read its row.
