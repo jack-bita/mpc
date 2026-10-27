@@ -2,7 +2,7 @@
 
 The admin is the creator's back room (`admin.<domain>` later): the superuser sees and fixes people there
 before any office screen exists. These tests drive it like a browser would, through Django's test client,
-logged in as a fake superuser.
+logged in as a fake superuser (the `superuser` and `superuser_client` fixtures, in backend/conftest.py).
 """
 
 import pytest
@@ -14,20 +14,9 @@ from apps.people.models import User
 pytestmark = pytest.mark.django_db
 
 USERS = "/admin/people/user/"
+# The password the `superuser` fixture is made with (backend/conftest.py). If the two ever differ, the
+# login test below fails, so they can't drift apart unnoticed.
 PASSWORD = "a-long-test-password"
-
-
-@pytest.fixture
-def superuser() -> User:
-    # Our own fixture, not pytest-django's `admin_user`: that one calls create_superuser without a
-    # full name, which our User requires.
-    return User.objects.create_superuser(full_name="Admin Demo", email="admin@example.com", password=PASSWORD)
-
-
-@pytest.fixture
-def superuser_client(client: Client, superuser: User) -> Client:
-    client.force_login(superuser)
-    return client
 
 
 def test_admin_login_ignores_email_case(client: Client, superuser: User) -> None:

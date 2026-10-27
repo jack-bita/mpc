@@ -15,14 +15,8 @@ from django.db import models
 from django.db.models.functions import Lower
 
 from apps.core.fields import PhoneField
+from apps.core.languages import Language
 from apps.core.models import TimeStamped, UUIDModel
-
-
-# Outside User so that User.Meta can read its values: a nested class can't see the names of the class
-# around it. One list, used by the field and by the database rule below.
-class Language(models.TextChoices):
-    SWAHILI = "sw", "Kiswahili"
-    ENGLISH = "en", "English"
 
 
 class UserManager(BaseUserManager["User"]):
