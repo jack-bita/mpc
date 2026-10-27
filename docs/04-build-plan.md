@@ -493,8 +493,8 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Claude-led · after CORE-3, SHOP-2 · branch `feat/core-4-settings`
 **Build:** the settings registry in `core` (key, type, default, scope, description — 02 D13); `shops.Setting` rows (key, value, `effective_from`, optional side, note), insert-only; who set a value is the row's `created_by`, which every shop row has had since PPL-2, so there is no `set_by` column **(v1.18)**; `get_setting(key, shop, side=None, on=date)`; the keys R1 and R1b need — e.g. `attendance.on_time_until` 07:35, `attendance.late_fine` 1,000, `money.rounding_step` 1, `cash.tolerance` 0, `count.tolerance_pct` 0, `expiry.alert_days` 90, `stock.block_negative` off, `session.idle_minutes` 15. The two tolerances are 0 *(default)* until the owner agrees values (02 §20, item 2): every difference is flagged, and a new row changes them with no deploy **(v1.18)**.
 **Done when:**
-- [ ] With no rows, the default comes back; the latest row on or before the date wins; a side row beats a shop row; tomorrow's row is ignored today.
-- [ ] A value of the wrong type is refused; rows can't be edited.
+- [x] With no rows, the default comes back; the latest row on or before the date wins; a side row beats a shop row; tomorrow's row is ignored today.
+- [x] A value of the wrong type is refused; rows can't be edited.
 **Tests:** `test_default_when_no_rows` · `test_latest_row_on_or_before_date_wins` · `test_side_row_beats_shop_row` · `test_future_row_ignored_until_its_day` · `test_setting_type_checked` · `test_setting_rows_cannot_be_edited` · `test_same_day_fix_wins` · `test_setting_key_checked` · `test_get_setting_refuses_wrong_arguments` · `test_every_default_is_a_valid_value` · `test_value_kinds_read_and_write_text` **(v1.18)**
 **Commits:** `docs: created_by records who set a setting or a price` → `test(core): setting rules` → `feat(core): settings registry` → `feat(shops): dated Setting rows` → `feat(shops): get_setting reads the rule in force` **(v1.18)**
 
