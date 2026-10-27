@@ -152,11 +152,13 @@ class StaffStatus(models.TextChoices):
 
 
 class StaffMember(ShopScoped):
-    # A person's job at one shop (02 §5, D12). ShopScoped (CORE-2) gives `id`, `shop`, `created_at`
-    # and the guard on reads.
+    # A person's job at one shop (02 §5, D12). ShopScoped (CORE-2) gives `id`, `shop`, `created_at`,
+    # `created_by` and the guard on reads.
 
     # PROTECT: nothing is deleted (rule 7). related_name="+": no `user.staffmember_set`; a person's
-    # jobs are read through StaffMember.objects, which shows only the current shop's.
+    # jobs are read through StaffMember.objects, which shows only the current shop's. Django's own index
+    # on `user` stays, unlike `created_by`'s: finding a person's jobs (at login, AUTH-3 and AUTH-4)
+    # starts from the person, not from a shop.
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
     # What the shop calls them, on the login screen and receipts: "Asha".
     display_name = models.CharField(max_length=40)

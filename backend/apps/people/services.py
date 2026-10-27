@@ -18,14 +18,23 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenancy import ALL_SHOPS, current_shop
 from apps.people.models import StaffMember, StaffStatus, User
 from apps.people.pins import check_pin_strength, hash_pin
 from apps.shops.models import Shop
 
 
-def _check_same_shop(shop_id: uuid.UUID, by: StaffMember | None) -> None:
-    # T1: a row of shop A only points at rows of shop A. The guard watches reads, not writes (CORE-2),
-    # so a manager of shop B named here would get past it.
+def _check_shop(shop_id: uuid.UUID, by: StaffMember | None) -> None:
+    # T1: an action works inside one shop, on that shop's rows only. The guard watches reads, not writes
+    # (CORE-2), so both checks are the services' own.
+    # 1. The shop acted on is the one this visit opened (shop_context). Without this, code inside shop
+    #    A's visit could write into shop B, and full_clean's unique checks would read A's rows, so a
+    #    clash in B would end as a database error. A system job, under system_context(), has every shop
+    #    open. No shop open at all raises NoShopSelected.
+    open_shop = current_shop()
+    if open_shop is not ALL_SHOPS and open_shop != shop_id:
+        raise ValidationError("This shop is not the one open.", code="staff.other_shop")
+    # 2. The person acting belongs to that shop too: a manager of shop B named here would get past the guard.
     if by is not None and by.shop_id != shop_id:
         raise ValidationError("The person acting belongs to another shop.", code="staff.other_shop")
 
@@ -40,7 +49,7 @@ def add_staff(
     by: StaffMember | None,
 ) -> StaffMember:
     """Give a person a job at a shop. `by`: who adds them; None for the system or the superuser."""
-    _check_same_shop(shop.pk, by)
+    _check_shop(shop.pk, by)
     if started_on is None:
         # Today in the shop's own time zone (02 §1), not the server's UTC.
         started_on = timezone.localdate(timezone=ZoneInfo(shop.timezone))
@@ -77,7 +86,7 @@ def _locked(staff: StaffMember) -> StaffMember:
 
 def suspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> StaffMember:
     """Stop an active person working for a while. Their PIN stops working (AUTH-4)."""
-    _check_same_shop(staff.shop_id, by)
+    _check_shop(staff.shop_id, by)
     _check_reason(reason)
     with transaction.atomic():
         staff = _locked(staff)
@@ -91,7 +100,7 @@ def suspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Staff
 
 def unsuspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> StaffMember:
     """Let a suspended person work again."""
-    _check_same_shop(staff.shop_id, by)
+    _check_shop(staff.shop_id, by)
     _check_reason(reason)
     with transaction.atomic():
         staff = _locked(staff)
@@ -105,7 +114,7 @@ def unsuspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Sta
 
 def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reason: str) -> StaffMember:
     """Record that a person left on `left_on`. Final: if they come back, add_staff gives them a new job."""
-    _check_same_shop(staff.shop_id, by)
+    _check_shop(staff.shop_id, by)
     _check_reason(reason)
     with transaction.atomic():
         staff = _locked(staff)
@@ -122,7 +131,7 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
 def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMember:
     """Give a person a new PIN, online only (03 §5.9). Devices see the new `pin_changed_at` at their next
     sync and drop their old offline check."""
-    _check_same_shop(staff.shop_id, by)
+    _check_shop(staff.shop_id, by)
     check_pin_strength(pin)
     # Hashed before the lock: Argon2 is slow on purpose, and the row stays locked only for the short
     # write below.

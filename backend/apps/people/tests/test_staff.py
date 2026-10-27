@@ -26,7 +26,7 @@ from django.utils import timezone
 
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, StaffStatus, User
-from apps.people.services import add_staff, mark_left, suspend, unsuspend
+from apps.people.services import add_staff, mark_left, set_pin, suspend, unsuspend
 from apps.shops.models import Shop
 
 pytestmark = pytest.mark.django_db
@@ -193,6 +193,29 @@ def test_staff_of_another_shop_refused(asha: User, juma: User, other_asha: User,
 
     assert suspending.value.code == adding.value.code == "staff.other_shop"
     assert staff.status == StaffStatus.ACTIVE
+
+
+def test_action_outside_the_open_shop_refused(asha: User, juma: User, shop_a: Shop, shop_b: Shop) -> None:
+    # T1: a visit works for one shop. Inside shop A's visit, code can't add a job in shop B or change shop
+    # B's staff, not even as the system (by=None).
+    with shop_context(shop_b):
+        staff_b = add_staff(shop=shop_b, user=juma, display_name="Juma", by=None)
+
+    with shop_context(shop_a):
+        with pytest.raises(ValidationError) as adding:
+            add_staff(shop=shop_b, user=asha, display_name="Asha", by=None)
+        with pytest.raises(ValidationError) as suspending:
+            suspend(staff_b, by=None, reason="Late")
+        with pytest.raises(ValidationError) as giving_pin:
+            set_pin(staff_b, "4829", by=None)
+
+    assert adding.value.code == suspending.value.code == giving_pin.value.code == "staff.other_shop"
+    # Nothing changed in shop B.
+    with shop_context(shop_b):
+        staff_b.refresh_from_db()
+        assert not StaffMember.objects.filter(user=asha).exists()
+    assert staff_b.status == StaffStatus.ACTIVE
+    assert staff_b.pin_hash == ""
 
 
 def test_added_by_names_who_added_them(asha: User, juma: User, shop_a: Shop) -> None:
