@@ -1,9 +1,10 @@
 """backend/conftest.py — test fixtures that every app's tests can use.
 
 pytest reads this file before any test under backend/ and offers its fixtures to all of them, by name.
-It sits outside `apps` on purpose: import-linter checks every module inside `apps`, tests included
-(ADR-0035), so the tests of a lower app (shops) may not import a higher one (people). This file is not
-part of any app, so a fixture here may build on any app and still serve the tests of every app.
+It sits outside `apps` on purpose: the layer contract (ADR-0035) is checked on every module inside
+`apps`, tests included, as the import-linter comment in backend/pyproject.toml explains. So the tests of
+a lower app (shops) may not import a higher one (people). This file is not part of any app, so a
+fixture here may build on any app and still serve the tests of every app.
 """
 
 import pytest

@@ -11,8 +11,9 @@ from django.http import HttpRequest
 
 from apps.shops.models import Shop
 
-# What the add page asks for. Status is shown, not asked: every new shop starts active.
-ADD_FIELDS = ("name", "code", "timezone", "currency", "default_language", "kind", "practice_of", "status")
+# The shop's fields, in the order both pages show them. Some are shown but can't be typed in (status
+# always, more once the shop exists): get_readonly_fields below says which, and why.
+SHOP_FIELDS = ("name", "code", "timezone", "currency", "default_language", "kind", "practice_of", "status")
 
 
 @admin.register(Shop)
@@ -26,8 +27,8 @@ class ShopAdmin(admin.ModelAdmin[Shop]):
         # The edit page also shows the id and when the shop was made. The add page doesn't: its id would
         # be a fresh one made for the empty form, not the one the saved shop gets.
         if obj is None:
-            return ADD_FIELDS
-        return ("id", *ADD_FIELDS, "created_at")
+            return SHOP_FIELDS
+        return ("id", *SHOP_FIELDS, "created_at")
 
     def get_readonly_fields(self, request: HttpRequest, obj: Shop | None = None) -> tuple[str, ...]:
         # Status, always: a suspension needs who, when and why, which only the audit trail (CTRL-2) can

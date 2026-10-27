@@ -47,6 +47,8 @@ class Shop(UUIDModel, TimeStamped):
     default_language = models.CharField(max_length=2, choices=Language, default=Language.SWAHILI)
     # Set when the shop is made, and never changed: a live shop turned into a demo one would be open to
     # the demo's fake data and resets (ADR-0029), so the admin shows it read-only once the shop exists.
+    # Only the admin guards this today; the database doesn't. A shop made with the wrong kind is put
+    # right by the superuser, from the Django shell.
     kind = models.CharField(max_length=10, choices=ShopKind, default=ShopKind.LIVE)
     # Only a practice shop names the shop it copies (ADR-0014); NULL for every other shop. PROTECT:
     # nothing is deleted (rule 7), so a shop with practice copies can't vanish from under them.
