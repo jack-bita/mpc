@@ -11,9 +11,23 @@ import pytest
 from django.test import Client
 
 from apps.people.models import User
+from apps.shops.models import Shop
 
 # Fake data only: the repo is public (03 §10).
 SUPERUSER_PASSWORD = "a-long-test-password"
+
+
+@pytest.fixture
+def shop_a() -> Shop:
+    # Two fake shops for the tenancy tests: their rows sit side by side in one table, and each shop must
+    # see only its own (ADR-0022). They live here, not in apps/core/tests: `core` is layer 0 and may not
+    # import `shops`, not even in its tests (ADR-0035).
+    return Shop.objects.create(name="Duka la Mfano", code="MFANO")
+
+
+@pytest.fixture
+def shop_b() -> Shop:
+    return Shop.objects.create(name="Duka Jingine", code="JINGINE")
 
 
 @pytest.fixture

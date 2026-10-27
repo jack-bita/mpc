@@ -19,7 +19,7 @@ from apps.core.models import TimeStamped, UUIDModel
 def thing_model() -> Iterator[type[UUIDModel]]:
     # A throwaway model built on both bases, as every real table will be. isolate_apps keeps Thing out of
     # Django's real list of models: it goes in a temporary list, thrown away after the test. So checks
-    # that look at every model (like CORE-2's "every model has a shop") never see it.
+    # that look at every model (like CORE-7's "every model has a shop") never see it.
     with isolate_apps("apps.core"):
 
         class Thing(UUIDModel, TimeStamped):

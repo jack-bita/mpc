@@ -102,8 +102,10 @@ skip_covered = true
 [tool.importlinter]
 # The package whose imports are checked: the 13 apps. Their tests (apps/*/tests/) and imports under
 # `if TYPE_CHECKING:` count too: import-linter's defaults. So a test that needs a higher layer's rows
-# gets them from a fixture in backend/conftest.py, which is outside `apps`. Whether type-only imports
-# should count is decided in CORE-2 (`exclude_type_checking_imports`).
+# gets them from a fixture in backend/conftest.py, which is outside `apps`. Type-only imports keep
+# counting (decided in CORE-2, so `exclude_type_checking_imports` stays off): a type that names another
+# app's model ties the two apps together just as an import does. The tenancy guard needs none: it keeps
+# the shop's id, not the Shop row.
 root_package = "apps"
 
 [[tool.importlinter.contracts]]

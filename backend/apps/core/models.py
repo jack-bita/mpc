@@ -1,13 +1,17 @@
-"""apps/core/models.py — the abstract base models every table builds on.
+"""apps/core/models.py — the abstract base models every table builds on, and the tenancy guard on reads.
 
-UUIDModel gives a table its `id` (UUIDv7, ADR-0007); TimeStamped gives it `created_at`. Both are abstract:
-they make no table of their own, they only pass their columns on to the models that inherit them.
-PPL-1's User and CORE-2's ShopScoped build on them, and every shop's table builds on ShopScoped.
+UUIDModel gives a table its `id` (UUIDv7, ADR-0007); TimeStamped gives it `created_at`. ShopScoped builds
+on both and adds the shop a row belongs to, with a default manager that shows only the current shop's
+rows (ADR-0022; the current shop lives in apps/core/tenancy.py). All three are abstract: they make no
+table of their own, they only pass their columns on to the models that inherit them. PPL-1's User builds
+on the first two, and every shop's table builds on ShopScoped.
 """
 
 import uuid
 
 from django.db import models
+
+from apps.core.tenancy import ALL_SHOPS, current_shop
 
 
 class UUIDModel(models.Model):
@@ -33,3 +37,60 @@ class TimeStamped(models.Model):
 
     class Meta:
         abstract = True
+
+
+class ShopScopedManager[M: models.Model](models.Manager[M]):
+    # The guard (ADR-0022, 03 §5.4): `objects` on every ShopScoped table.
+
+    def get_queryset(self) -> models.QuerySet[M]:
+        # Django starts every read from `objects` here: all(), filter(), get(), count()... So the shop is
+        # checked when a read is built, before it reaches the database. A built read keeps its filter:
+        # built inside shop_context(A) and run after the block, it still returns A's rows, so a built read
+        # is never kept from one visit to the next. Reaching the manager alone (`Note.objects`) asks
+        # nothing yet, so a module that only names the manager, such as an API field given it, still
+        # loads; `Note.objects.all()` at the top of a module would raise as the module loads.
+        shop = current_shop()  # raises NoShopSelected when no shop was chosen
+        rows = super().get_queryset()
+        if shop is ALL_SHOPS:
+            return rows  # system_context(): every shop's rows
+        return rows.filter(shop_id=shop)
+
+
+class ShopScoped(UUIDModel, TimeStamped):
+    # The base of every shop's table (03 §5.3): `id` and `created_at` from the two bases, plus the shop
+    # each row belongs to and the guard on reads. `created_by` joins in PPL-2, once staff exist.
+
+    # T1: every row belongs to one shop. Named as "shops.Shop", not imported: `core` is layer 0 and may
+    # not import `shops` (ADR-0035), and a name is not an import (03 §5.1).
+    # PROTECT: nothing is deleted (T3), so a shop that has rows can't vanish from under them.
+    # related_name="+": no `shop.note_set`. A shop's rows are read through their own guarded `objects`.
+    shop = models.ForeignKey("shops.Shop", on_delete=models.PROTECT, related_name="+")
+
+    # Every shop's rows, with no guard: for the superuser's admin pages only. A page answers a visit, and
+    # system_context() is for system jobs only (03 §5.4), so the admin gets its own way in, with a name
+    # as easy to search for: `grep all_shops` finds every use. It covers the admin's list only: an add or
+    # change page also checks and fills its form through `objects`, so that page still needs a shop.
+    all_shops = models.Manager()
+    # The guarded manager. Django, the admin's forms and DRF read through it too, as the default manager
+    # (Meta below). Declared second (ruff's Django style check reads `models.Manager()` above as a field,
+    # and fields come first), but still the default.
+    # Writes: save() goes through Django's plain base manager, so it needs no current shop; create(),
+    # get_or_create(), update() and full_clean() go through `objects`, so they do. And inside
+    # shop_context(A), nothing stops a row being written for shop B: the guard is on reads, and services
+    # must check every row they write (T1).
+    # Links: following one shop table's link to another (`line.sale`) also goes through the plain base
+    # manager, with no guard. Only T1, checked when the link is written, keeps both rows in one shop,
+    # until row-level security comes (ADR-0022).
+    # Migrations get a plain manager instead: this one keeps Django's use_in_migrations=False, because a
+    # migration runs as a system job, with no visit.
+    objects = ShopScopedManager()
+
+    class Meta(UUIDModel.Meta, TimeStamped.Meta):
+        # Both bases' Meta, so ShopScoped keeps any option either gains later (CORE-1).
+        abstract = True
+        # The default manager is the one Django, the admin's forms and DRF read through. Without this
+        # line it would be the first one declared: `all_shops`, with no guard, or a manager a table adds
+        # of its own. This keeps `objects` the default for every table that keeps this Meta: one with no
+        # Meta of its own, or one whose Meta builds on ShopScoped.Meta. A table that writes a fresh Meta,
+        # or replaces `objects`, loses the guard: CORE-7's sweep is to catch that.
+        default_manager_name = "objects"
