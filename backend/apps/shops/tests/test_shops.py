@@ -39,14 +39,14 @@ def test_shop_kind_must_be_known() -> None:
     # Live, demo or practice and nothing else (ADR-0014): the demo seed refuses to touch a live shop
     # (ADR-0029), so code that asks "what kind is this?" must never meet a kind it doesn't know.
     # The database refuses one, even from code that skips every form.
-    with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError, match="shops_shop_kind_known"):
         Shop.objects.create(name=NAME, code=CODE, kind="training")
 
 
 def test_shop_status_must_be_known() -> None:
     # Active or suspended and nothing else: a third status that no check knows about could let a
     # suspended shop work as if it were active.
-    with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError, match="shops_shop_status_known"):
         Shop.objects.create(name=NAME, code=CODE, status="closed")
 
 
@@ -54,7 +54,8 @@ def test_shop_code_unique() -> None:
     Shop.objects.create(name=NAME, code=CODE)
 
     # The code is how people tell shops apart (MPC, DEMO), so it must point at one shop only.
-    with pytest.raises(IntegrityError):
+    # PostgreSQL names the unique rule itself: <table>_<column>_key.
+    with pytest.raises(IntegrityError, match="shops_shop_code_key"):
         Shop.objects.create(name="Duka Jingine", code=CODE)
 
 
@@ -103,7 +104,7 @@ def test_only_a_practice_shop_points_at_another_shop() -> None:
     # would look like practice to any code that follows `practice_of`.
     live = Shop.objects.create(name=NAME, code=CODE)
 
-    with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError, match="shops_shop_only_practice_names_a_shop"):
         Shop.objects.create(name="Duka Jingine", code="JINGINE", practice_of=live)
 
 
@@ -114,7 +115,7 @@ def test_shop_cannot_practise_on_itself() -> None:
     shop = Shop(name=NAME, code=CODE, kind="practice")
     shop.practice_of_id = shop.id
 
-    with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError, match="shops_shop_not_practice_of_itself"):
         shop.save()
 
 
@@ -145,22 +146,24 @@ def test_missing_timezone_is_reported_not_a_crash(timezone: Any, code: str) -> N
 
 
 @pytest.mark.parametrize(
-    "fields",
+    ("fields", "rule"),
     [
         # Code that saves directly skips the cleaning in full_clean, so these reach the database as typed.
-        pytest.param({"code": "mfano"}, id="code_small_letters"),
-        pytest.param({"code": "MPC2"}, id="code_with_a_digit"),
-        pytest.param({"code": "M"}, id="code_one_letter"),
-        pytest.param({"code": "MF NO"}, id="code_with_a_space"),
-        pytest.param({"currency": "tzs"}, id="currency_three_capitals"),
-        pytest.param({"default_language": "fr"}, id="language_known"),
-        pytest.param({"kind": "practice"}, id="practice_shop_names_its_shop"),
+        pytest.param({"code": "mfano"}, "shops_shop_code_capital_letters", id="code_small_letters"),
+        pytest.param({"code": "MPC2"}, "shops_shop_code_capital_letters", id="code_with_a_digit"),
+        pytest.param({"code": "M"}, "shops_shop_code_capital_letters", id="code_one_letter"),
+        pytest.param({"code": "MF NO"}, "shops_shop_code_capital_letters", id="code_with_a_space"),
+        pytest.param({"currency": "tzs"}, "shops_shop_currency_three_capitals", id="currency_three_capitals"),
+        pytest.param({"default_language": "fr"}, "shops_shop_language_known", id="language_known"),
+        pytest.param({"kind": "practice"}, "shops_shop_practice_names_its_shop", id="practice_shop_names_its_shop"),
     ],
 )
-def test_database_refuses_a_row_that_breaks_a_rule(fields: dict[str, object]) -> None:
+def test_database_refuses_a_row_that_breaks_a_rule(fields: dict[str, object], rule: str) -> None:
     # The database is the last guard (03 §5.6): code that skips the admin's form and saves a Shop
-    # directly still can't store one that breaks a rule in Shop.Meta. One run per rule.
-    with pytest.raises(IntegrityError):
+    # directly still can't store one that breaks a rule in Shop.Meta. One run per rule. Eight rules
+    # guard this table, so each run names the rule it expects: a refusal by another rule would hide
+    # a broken one.
+    with pytest.raises(IntegrityError, match=rule):
         Shop.objects.create(**{"name": NAME, "code": CODE, **fields})
 
 

@@ -34,13 +34,14 @@ def form_data(**changes: str) -> dict[str, str]:
 
 
 def test_admin_adds_a_shop(superuser_client: Client) -> None:
-    # Typed in small letters: the form cleans it the same way as everywhere else (Shop.clean).
-    response = superuser_client.post(f"{SHOPS}add/", form_data(code="mfano"))
+    # Typed in small letters: the form cleans it the same way as everywhere else (Shop.clean). And a
+    # status sent with it, as a changed page or a hand-made request could send it.
+    response = superuser_client.post(f"{SHOPS}add/", form_data(code="mfano", status="suspended"))
 
     assert response.status_code == 302  # saved, and sent on to the next page
     shop = Shop.objects.get()
     assert shop.code == "MFANO"
-    assert shop.status == "active"  # every new shop starts active; the page doesn't ask
+    assert shop.status == "active"  # every new shop starts active; the page doesn't take a status
 
 
 def test_admin_shows_id_read_only(superuser_client: Client) -> None:
@@ -57,15 +58,21 @@ def test_admin_shows_id_read_only(superuser_client: Client) -> None:
 
 def test_admin_kind_and_status_fixed_on_edit(superuser_client: Client) -> None:
     shop = Shop.objects.create(name=NAME, code=CODE)
+    other = Shop.objects.create(name="Duka Jingine", code="JINGINE")
 
-    # A form sent with a new kind and status, as a changed page or a hand-made request could send it.
-    response = superuser_client.post(f"{SHOPS}{shop.pk}/change/", form_data(kind="demo", status="suspended"))
+    # A form sent with a new kind, practice_of and status, as a changed page or a hand-made request
+    # could send it.
+    response = superuser_client.post(
+        f"{SHOPS}{shop.pk}/change/", form_data(kind="demo", practice_of=str(other.pk), status="suspended")
+    )
 
     assert response.status_code == 302  # the rest of the form is saved...
     shop.refresh_from_db()
-    # ...but a live shop never becomes a demo one, open to the demo's fake data (ADR-0029), and a
-    # suspension waits for the audit trail, which records who, when and why (rule 7, CTRL-2).
+    # ...but a live shop never becomes a demo one, open to the demo's fake data (ADR-0029), nor
+    # anyone's practice copy; and a suspension waits for the audit trail, which records who, when and
+    # why (rule 7, CTRL-2).
     assert shop.kind == "live"
+    assert shop.practice_of is None
     assert shop.status == "active"
 
 
