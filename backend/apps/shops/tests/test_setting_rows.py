@@ -88,6 +88,17 @@ def test_setting_type_checked(shop_a: Shop, key: str, value: str) -> None:
     assert codes(refused, "value") == ["setting.value_invalid"]
 
 
+def test_empty_value_reported_once(shop_a: Shop) -> None:
+    # An empty value fails the field's own check, with Django's code `blank`. full_clean runs clean() even
+    # so, and clean() leaves an empty value alone: one refusal, not two for the same mistake.
+    with shop_context(shop_a):
+        row = new_row(shop_a, LATE_FINE.key, "")
+        with pytest.raises(ValidationError) as refused:
+            row.full_clean()
+
+    assert codes(refused, "value") == ["blank"]
+
+
 def test_setting_key_checked(shop_a: Shop, dawa: Side) -> None:
     with shop_context(shop_a):
         # A name that is not in the list, such as a typo: no code would ever read its row.
