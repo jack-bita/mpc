@@ -44,7 +44,14 @@ def add_staff(
     if started_on is None:
         # Today in the shop's own time zone (02 §1), not the server's UTC.
         started_on = timezone.localdate(timezone=ZoneInfo(shop.timezone))
-    staff = StaffMember(shop=shop, user=user, display_name=display_name, job_title=job_title, started_on=started_on)
+    staff = StaffMember(
+        shop=shop,
+        user=user,
+        display_name=display_name,
+        job_title=job_title,
+        started_on=started_on,
+        created_by=by,
+    )
     with transaction.atomic():
         # Every field, clean() and the rules in Meta, before anything is written: a clash comes back
         # as a code. Two adds at the very same moment can both pass this; the database's unique

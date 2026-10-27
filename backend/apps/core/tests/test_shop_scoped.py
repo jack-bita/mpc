@@ -12,8 +12,9 @@ NoShopSelected: a forgotten shop is a loud error, not a quiet leak of every shop
 shop takes a name anyone can search for: `system_context()` for system jobs, `all_shops` for the
 superuser's admin pages.
 
-The table is `probe.Note`, a test-only table built on ShopScoped (backend/tests/probe/): no real shop
-table exists yet, and the guard must be proven before the first one (PPL-2) builds on it.
+The table is `probe.Note`, a test-only table built on ShopScoped (backend/tests/probe/): the guard was
+proven on it before the first real shop table (StaffMember, PPL-2) built on it, and core may not import
+a higher app's table to test with (ADR-0035).
 """
 
 import pytest

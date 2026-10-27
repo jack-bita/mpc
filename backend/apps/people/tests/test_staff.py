@@ -195,6 +195,19 @@ def test_staff_of_another_shop_refused(asha: User, juma: User, other_asha: User,
     assert staff.status == StaffStatus.ACTIVE
 
 
+def test_added_by_names_who_added_them(asha: User, juma: User, shop_a: Shop) -> None:
+    # 02 §1: every shop record says who made it. The owner, the shop's first staff member, is added by
+    # the system (by=None), so nobody is named; then the owner adds Asha, and her row names the owner.
+    with shop_context(shop_a):
+        owner = add_staff(shop=shop_a, user=juma, display_name="Juma", by=None)
+        staff = add_staff(shop=shop_a, user=asha, display_name="Asha", by=owner)
+        owner.refresh_from_db()
+        staff.refresh_from_db()
+
+    assert owner.created_by is None
+    assert staff.created_by == owner
+
+
 @pytest.mark.parametrize("reason", ["", "   "])
 def test_reason_required(asha: User, shop_a: Shop, reason: str) -> None:
     # Rule 7: suspending someone or marking them as left is always done with who, when and why.
