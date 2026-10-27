@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.11 · 26 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.12 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.12** (27 Oct 2026, SHOP-1): CORE-7's allowed list names the `Shop`: it is the tenant, so it has no `shop`, and the sweep must pass with no change to the test (02 v1.3, 03 v1.6). Marked **(v1.12)**.
 
 **Changes in v1.11** (26 Oct 2026, SPIKE-2): decisions by Jack, made while planning SPIKE-2. The card gains the *Learn* line its drill starts from, and a *Tests* line. Its page size, `size: 80mm auto`, is not valid CSS, so Chrome would drop it: the page measures the slip and sets the height itself. The card ships in two PRs, as SPIKE-1 did, because the demo deploys only from `main`. OWN-1 is answered: an Epson receipt printer on USB, with 80 mm paper. The QR code is left out of the spike, because the shop doesn't use QR codes yet; whether R2's slips carry one becomes parking-lot item 14. Marked **(v1.11)**.
 
@@ -426,7 +428,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `S` · Claude-led · after PPL-1 · branch `feat/shop-1-shop`
 **Build:** `shops.Shop` (02 §4): name, code, timezone (Africa/Dar_es_Salaam), currency (TZS), default language (sw), `kind` (live, demo, practice), `practice_of`, `status`; the admin.
 **Done when:**
-- [ ] `kind` and `status` accept only their values (database check constraints); the code is unique.
+- [x] `kind` and `status` accept only their values (database check constraints); the code is unique.
 **Tests:** `test_shop_kind_must_be_known` · `test_shop_code_unique`
 **Commits:** `test(shops): shop rules` → `feat(shops): Shop model`
 
@@ -503,7 +505,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 
 ### CORE-7 · The tenancy sweep
 `M` · Claude-led · after CORE-6 · branch `test/core-7-tenancy-sweep`
-**Build:** one test module that finds every model and every list and detail route of our apps by itself: every model has `shop` (outside an allowed list: `User`, `Unit` and the infrastructure tables); every foreign key uses `PROTECT` (T3); every route called as shop B returns none of shop A's rows (03 §5.4).
+**Build:** one test module that finds every model and every list and detail route of our apps by itself: every model has `shop` (outside an allowed list: `User`, `Unit`, `Shop` **(v1.12)** and the infrastructure tables); every foreign key uses `PROTECT` (T3); every route called as shop B returns none of shop A's rows (03 §5.4).
 **Done when:**
 - [ ] A new model without `shop`, a foreign key that cascades, or a route that leaks turns CI red — with no change to the test.
 **Tests:** `test_every_model_has_shop` · `test_every_foreign_key_protects` · `test_no_route_leaks_across_shops`
