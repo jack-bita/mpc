@@ -2,13 +2,15 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.2 · 18 Oct 2026 · Portion 2 of the planning pack
+**Version:** 1.3 · 27 Oct 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
 **Changes in v1.1** (18 Oct 2026): applies the changes made by the architecture (`03-architecture.md`, Appendix B). `Device` moves to `people` and gains `DeviceOutage`; `PaymentAllocation` moves to `sales`; new `ContactBalance` cache; a document is one action; payments get `duplicate_of`; opening the drawer works offline; the server fills `unit_cost`; generic links are a type code + UUID; devices get future-dated prices and settings but no PIN hashes; dated-rule rows are insert-only; new Flag kinds; password users need an email; `Sale.paper_receipt_no`; the Foods hand-off is decided. Each change is marked **(v1.1)** below.
 
 **Changes in v1.2** (18 Oct 2026): T2 now lists attendance events among the records that can only be voided, as §12 already described (`04-build-plan.md` Appendix A #3), and names allocations among the append-only rows, as 03 §5.6 does; §2 points to the ADRs. Each change is marked **(v1.2)** below.
+
+**Changes in v1.3** (27 Oct 2026, SHOP-1): two decisions by Jack, made while building SHOP-1. A shop's code is 2–10 capital letters, the short form people already say (`MPC`), and its currency is fixed once the shop exists, because amounts don't carry their own currency. A shop's kind is fixed too, and a practice shop copies only a live shop (ADR-0014). Marked **(v1.3)** in §4.
 
 ---
 
@@ -137,7 +139,9 @@ A full diagram for GitHub is in Appendix A.
 
 **Shop** [R1] — one business (the tenant).
 - `name`, `code`, `timezone`, `currency` (TZS), `default_language` (sw)
-- `kind`: `live` | `demo` | `practice` ✚; `practice_of` → Shop
+- `code`: 2–10 capital letters, unique — the short form people already say, like `MPC` (confirmed) **(v1.3)**
+- `currency` is fixed once the shop exists: amounts don't carry their own currency, so a change would relabel every one of them (confirmed) **(v1.3)**
+- `kind`: `live` | `demo` | `practice` ✚, fixed once the shop exists **(v1.3)**; `practice_of` → a live Shop (ADR-0014) **(v1.3)**
 - `status`: `active` | `suspended`
 
 **Side** [R1] → Shop (D1)
