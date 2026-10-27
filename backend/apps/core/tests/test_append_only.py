@@ -9,9 +9,10 @@ when, why), and is then frozen:
     50,000   10:42       Staff A     Entered twice   voided: allowed, once
      5,000   ...                                     any other change: refused
 
-PostgreSQL refuses these changes itself, with a trigger on each table, so they fail however they are
-sent: Django's save(), a bulk update(), or SQL typed by hand. These tests send them as plain SQL or as
-bulk update() and delete() calls: the paths no Python check sees, so only the database can stop them.
+PostgreSQL refuses these changes itself, with a trigger on each table (apps/core/operations.py), so they
+fail however they are sent: Django's save(), a bulk update(), or SQL typed by hand. These tests send
+them as plain SQL or as bulk update() and delete() calls: the paths no Python check sees, so only the
+database can stop them.
 
 The tables are test-only (backend/tests/probe/): Entry refuses every change, VoidableEntry allows the
 void stamp once. The shop and the staff member come from backend/conftest.py and are typed as plain
@@ -21,10 +22,13 @@ models: `core` may not name `Shop` or `StaffMember`, not even for types (ADR-003
 from decimal import Decimal
 
 import pytest
+from django.apps import apps
 from django.db import IntegrityError, connection, transaction
+from django.db.migrations.state import ProjectState
 from django.db.models import Model
 from django.utils import timezone
 
+from apps.core.operations import AppendOnlyTrigger
 from apps.core.tenancy import shop_context
 from tests.probe.models import Entry, VoidableEntry
 
@@ -70,6 +74,22 @@ def test_append_only_update_fails_in_database(entry: Entry) -> None:
     # refresh_from_db() reads through Django's plain base manager, so it needs no current shop.
     entry.refresh_from_db()
     assert entry.amount == FIFTY_THOUSAND
+
+
+def test_trigger_removed_when_migrated_back(entry: Entry) -> None:
+    # Undoing the migration must take the trigger off, or stepping a database back (`migrate probe
+    # 0003`) would leave a rule behind that no migration knows about. The probe's 0004 put it on; here
+    # the same step runs backwards. In PostgreSQL even this change to the table sits inside the test's
+    # transaction, so the rollback at the end of the test puts the trigger back for the next test.
+    state = ProjectState.from_apps(apps)
+    with connection.schema_editor() as editor:
+        AppendOnlyTrigger("entry").database_backwards("probe", editor, state, state)
+
+    # The same plain SQL the first test sends now goes through.
+    with connection.cursor() as cursor:
+        cursor.execute(f"UPDATE {Entry._meta.db_table} SET amount = %s WHERE id = %s", [FIVE_THOUSAND, entry.pk])
+    entry.refresh_from_db()
+    assert entry.amount == FIVE_THOUSAND
 
 
 def test_append_only_delete_fails(shop_a: Model, entry: Entry, voidable: VoidableEntry) -> None:
