@@ -56,10 +56,12 @@ def test_each_key_listed_once() -> None:
         pytest.param(Money(), "1000", Decimal("1000"), "1000.00", id="money_whole_shillings"),
         pytest.param(Money(), "1500.5", Decimal("1500.5"), "1500.50", id="money_one_place"),
         pytest.param(Money(), "0", Decimal("0"), "0.00", id="money_zero"),
+        # The largest amount a numeric(14,2) column holds (03 §9).
+        pytest.param(Money(), "999999999999.99", Decimal("999999999999.99"), "999999999999.99", id="money_largest"),
         pytest.param(Percent(), "2.5", Decimal("2.5"), "2.50", id="percent"),
         pytest.param(Percent(), "100", Decimal("100"), "100.00", id="percent_all"),
-        pytest.param(Whole(), "90", 90, "90", id="whole"),
-        pytest.param(Whole(), "090", 90, "90", id="whole_leading_zero"),
+        pytest.param(Whole(maximum=1000), "90", 90, "90", id="whole"),
+        pytest.param(Whole(maximum=1000), "090", 90, "90", id="whole_leading_zero"),
         pytest.param(TimeOfDay(), "07:35", time(7, 35), "07:35", id="time"),
         pytest.param(TimeOfDay(), "23:59", time(23, 59), "23:59", id="time_last_minute"),
         pytest.param(YesNo(), "true", True, "true", id="yes"),
@@ -92,12 +94,17 @@ def test_value_kinds_read_and_write_text(kind: ValueKind[Any], text: str, value:
         pytest.param(Money(), "١٠٠", id="money_other_script_digits"),
         pytest.param(Money(), "", id="money_empty"),
         pytest.param(Money(minimum=Decimal("1")), "0", id="money_below_its_minimum"),
+        # 13 digits before the point: too big for any amount column (numeric(14,2), 03 §9).
+        pytest.param(Money(), "1000000000000", id="money_thirteen_digits"),
         pytest.param(Percent(), "100.01", id="percent_above_100"),
         # Whole: plain digits only. Python's int() reads "+15" and "1_000" as numbers.
-        pytest.param(Whole(), "15.5", id="whole_with_a_fraction"),
-        pytest.param(Whole(), "+15", id="whole_with_a_sign"),
-        pytest.param(Whole(), "1_000", id="whole_with_an_underscore"),
-        pytest.param(Whole(minimum=1), "0", id="whole_below_its_minimum"),
+        pytest.param(Whole(maximum=1000), "15.5", id="whole_with_a_fraction"),
+        pytest.param(Whole(maximum=1000), "+15", id="whole_with_a_sign"),
+        pytest.param(Whole(maximum=1000), "1_000", id="whole_with_an_underscore"),
+        pytest.param(Whole(minimum=1, maximum=1000), "0", id="whole_below_its_minimum"),
+        # A mistyped 999999999999 days would crash the card that adds it to a date.
+        pytest.param(Whole(maximum=1000), "1001", id="whole_above_its_maximum"),
+        pytest.param(Whole(maximum=1000), "999999999999", id="whole_far_above_its_maximum"),
         # TimeOfDay: hours and minutes, two digits each, as a browser's time box sends them.
         pytest.param(TimeOfDay(), "25:00", id="time_past_midnight"),
         pytest.param(TimeOfDay(), "7:35", id="time_one_digit_hour"),

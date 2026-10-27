@@ -12,6 +12,10 @@ owns the list. Each key has:
 `core` is layer 0 and knows nothing of shops (ADR-0035): Setting.clean() (apps/shops/models.py) checks a
 row against this list, and get_setting (apps/shops/selectors.py) reads the rows. A new rule is a new entry
 here, with all four (03 §5.8); each later card adds the keys it reads.
+
+Once a key has rows, its kind and its limits never get stricter. get_setting reads old rows too (a day in
+March, for a pay run), so a row that no longer parses would break every read of its days. A stricter rule
+is a new key, with rows of its own. Looser is safe: every old row still parses.
 """
 
 import re
@@ -29,7 +33,9 @@ KEY_SHAPE = r"^[a-z_]+(\.[a-z_]+)+$"
 # What typed text must look like, checked before Python reads it as a number or a time. [0-9], not \d:
 # in Python \d also matches digits from other scripts ("١٠٠" is 100), and int() and Decimal() read them.
 # Used with fullmatch(), so the whole text must match, not just its start.
-_AMOUNT = re.compile(r"[0-9]+(\.[0-9]{1,2})?")
+# At most 12 digits before the point: every amount column is numeric(14,2) (03 §9), so a later card that
+# copies a rule's value onto a record (T4) can always store it.
+_AMOUNT = re.compile(r"[0-9]{1,12}(\.[0-9]{1,2})?")
 _DIGITS = re.compile(r"[0-9]+")
 _HOURS_MINUTES = re.compile(r"([01][0-9]|2[0-3]):([0-5][0-9])")
 
@@ -103,9 +109,14 @@ class Percent(ValueKind[Decimal]):
         return f"{value:.2f}"
 
 
-@dataclass(frozen=True)
+# kw_only: Whole(maximum=1440) names each limit, and `maximum` can be required although `minimum` has a
+# default (in a plain dataclass, a field with no default can't follow one with a default).
+@dataclass(frozen=True, kw_only=True)
 class Whole(ValueKind[int]):
     # A count of days or minutes, in plain digits: int() alone would also read "+15", " 15" and "1_000".
+    # Every key names its own maximum: a mistyped 999999999999 days would pass today and crash the card
+    # that adds it to a date (OverflowError), so it is refused when it is typed.
+    maximum: int
     minimum: int = 0
 
     def parse(self, text: str) -> int:
@@ -114,6 +125,8 @@ class Whole(ValueKind[int]):
         value = int(text)
         if value < self.minimum:
             raise ValueError(f"{text!r} is below {self.minimum}.")
+        if value > self.maximum:
+            raise ValueError(f"{text!r} is above {self.maximum}.")
         return value
 
     def _write(self, value: int) -> str:
@@ -194,10 +207,11 @@ ROUNDING_STEP = SettingKey(
     scope=Scope.SHOP,
     description="Line totals are rounded half-up to a multiple of this (03 §8).",
 )
-# At least 1: an idle lock of 0 minutes would lock a counter screen at once.
+# At least 1: an idle lock of 0 minutes would lock a counter screen at once. At most 1,440, one day: a
+# longer one is no lock at all on a shared counter device.
 IDLE_MINUTES = SettingKey(
     key="session.idle_minutes",
-    kind=Whole(minimum=1),
+    kind=Whole(minimum=1, maximum=1440),
     default=15,
     scope=Scope.SHOP,
     description="Minutes without use before a counter screen locks (03 §5.9).",
@@ -219,9 +233,10 @@ COUNT_TOLERANCE_PCT = SettingKey(
     scope=Scope.SIDE,
     description="A stock count may be off by this percent before a Flag is raised.",
 )
+# At most 3,650 days, ten years: an alert further ahead would flag every batch on the shelf.
 EXPIRY_ALERT_DAYS = SettingKey(
     key="expiry.alert_days",
-    kind=Whole(),
+    kind=Whole(maximum=3650),
     default=90,
     scope=Scope.SIDE,
     description="A batch shows an expiry alert this many days before it expires (02 §15, item 12).",
