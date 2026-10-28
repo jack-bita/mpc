@@ -347,25 +347,49 @@ def texts_of(table: type[models.Model], shop: Shop) -> set[str]:
     return {str(value) for row in rows_of(table, shop).values_list(*fields) for value in row if value not in (None, "")}
 
 
-def marks_of(shop_a: Shop, shop_b: Shop) -> set[bytes]:
-    # What would give shop A away in an answer to shop B (03 §5.4): the id of each of A's rows, and of A itself;
-    # and each text or amount that A's rows hold and no row of B holds: a side's name ("Vyakula") today, a
+@dataclass(frozen=True)
+class Marks:
+    # What would give shop A away in an answer to shop B (03 §5.4).
+    # The id of each of A's rows, and of A itself.
+    ids: frozenset[str]
+    # Each text or amount that A's rows hold and no row of B holds: a side's name ("Vyakula") today, a
     # customer's name or a debt's amount later. A leak with no ids, like a report of names and totals, still
-    # shows those. A text is looked for as JSON writes it, quotes and all ("Vyakula"), so a short one matches
-    # only a whole value: "F", A's side letter, never the F of "Fanta". An amount is a text in JSON too
-    # (ADR-0024). The two shops' data must give A values of its own (backend/tests/conftest.py).
+    # shows those. An amount is a text in JSON too (ADR-0024).
+    texts: frozenset[str]
+
+
+def marks_of(shop_a: Shop, shop_b: Shop) -> Marks:
+    # The two shops' data must give A values of its own (backend/tests/conftest.py).
     tables = shop_tables()
     ids = {str(pk) for table in tables for pk in rows_of(table, shop_a).values_list("pk", flat=True)}
     only_a = {text for table in tables for text in texts_of(table, shop_a)}
     only_a -= {text for table in tables for text in texts_of(table, shop_b)}
-    # ensure_ascii=False: the API writes a letter such as "é" as itself, not as "é" (DRF's UNICODE_JSON).
-    return {row_id.encode() for row_id in ids} | {json.dumps(text, ensure_ascii=False).encode() for text in only_a}
+    return Marks(frozenset(ids), frozenset(only_a))
 
 
-def shown(response: HttpResponse, marks: set[bytes]) -> list[str]:
+def is_json(response: HttpResponse) -> bool:
+    return response.headers.get("Content-Type", "").startswith("application/json")
+
+
+def shown(response: HttpResponse, marks: Marks) -> list[str]:
     # Any of shop A's marks anywhere in the answer: in a row of the route's own table, in a row of another table
-    # nested in it, or in a link. Looked for in the answer's bytes, as they were sent.
-    leaked = sorted(mark.decode() for mark in marks if mark in response.content)
+    # nested in it, or in a link. Looked for in the answer's bytes as they were sent, so an answer of any kind
+    # can be read: JSON, a CSV download, a PDF.
+    # - An id, as it is: long and unique, it can't turn up by chance.
+    # - A text, in a JSON answer: as JSON writes it, quotes and all ("Vyakula"), so a short one matches only a
+    #   whole value: "F", A's side letter, never the F of "Fanta". ensure_ascii=False: the API writes a letter
+    #   such as é as itself, not as an escape code (DRF's UNICODE_JSON setting).
+    # - A text, in any other answer: as it is, since a CSV writes its texts with no quotes, but only when it is
+    #   long enough, 4 characters or more, not to turn up by chance. So in a CSV, a side's letter goes unseen;
+    #   its id and its name don't.
+    in_json = is_json(response)
+    needles = list(marks.ids)
+    for text in marks.texts:
+        if in_json:
+            needles.append(json.dumps(text, ensure_ascii=False))
+        elif len(text) >= 4:
+            needles.append(text)
+    leaked = sorted(needle for needle in needles if needle.encode() in response.content)
     return [f"shows what only shop A has: {', '.join(leaked)}"] if leaked else []
 
 
@@ -410,8 +434,9 @@ def route_problems(client: APIClient, shop_a: Shop, shop_b: Shop) -> dict[str, l
                     found.append(f"answered {response.status_code}, not 200")
                     break
                 found += shown(response, marks)
-                # The next page's address, from the cursor pages (apps/core/api/pagination.py); None on the last.
-                body = response.json()
+                # The next page's address, from the cursor pages (apps/core/api/pagination.py); None on the last,
+                # and on an answer that is not JSON, such as a CSV download, which comes whole.
+                body = response.json() if is_json(response) else None
                 url = body.get("next") if isinstance(body, dict) else None
         if found:
             problems[route.name or "(no name)"] = found
@@ -730,6 +755,21 @@ def test_route_check_finds_a_leak_that_shows_no_ids(
     problems = route_problems(staff_client_b, shop_a, shop_b)
 
     assert problems["leaky-note-text-list"] == ['shows what only shop A has: "Note of shop A"']
+
+
+@pytest.mark.django_db
+def test_route_check_reads_answers_that_are_not_json(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
+) -> None:
+    # The probe's leaky export answers in CSV, as a report's download would: no JSON to read, and no quotes
+    # around its texts. Shop A's text, as it is, gives it away.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="Note of shop A").save()
+    Note(shop=shop_b, text="Note of shop B").save()
+
+    problems = route_problems(staff_client_b, shop_a, shop_b)
+
+    assert problems["leaky-note-export"] == ["shows what only shop A has: Note of shop A"]
 
 
 def test_side_check_finds_routes_that_misname_the_side() -> None:
