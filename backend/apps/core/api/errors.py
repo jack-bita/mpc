@@ -21,6 +21,10 @@ It shapes three kinds of refusal: Django's ValidationError, which the services a
 §5.2); a VersionConflict, an edit made on an old copy (apps/core/editing.py); and DRF's own (not found,
 not logged in, a serializer's checks, a throttle). Anything else is a bug, left to Django, which answers
 500 and logs it.
+
+Two answers never reach a view, so DRF never sees them: an address no route matches, and a crash. Django
+answers those through not_found_page() and server_error_page() (config/urls.py), which give the same shape
+under /api/, so the app reads every answer from /api/ the same way.
 """
 
 import uuid
@@ -32,7 +36,9 @@ from typing import Any
 
 from django.core.exceptions import NON_FIELD_ERRORS
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.functional import Promise
+from django.views import defaults
 from rest_framework import exceptions
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
@@ -170,3 +176,25 @@ def _json_safe(params: Mapping[str, Any]) -> dict[str, Any]:
             # A datetime is a date too. ISO 8601, as everywhere in the API (03 §5.10).
             safe[key] = value.isoformat()
     return safe
+
+
+def not_found_page(request: HttpRequest, exception: Exception) -> HttpResponse:
+    """Django's answer for an address no route matches (handler404 in config/urls.py). Under /api/, the one
+    error shape; anywhere else, Django's own page, for a person's browser."""
+    if _is_api(request):
+        return JsonResponse(_shape([_Problem(None, "not_found", "No route at this address.")]), status=404)
+    return defaults.page_not_found(request, exception)
+
+
+def server_error_page(request: HttpRequest) -> HttpResponse:
+    """Django's answer for a crash (handler500 in config/urls.py), called after Django has logged it with its
+    traceback (03 §5.17). Under /api/, the one error shape, with nothing of the bug in it; anywhere else,
+    Django's own page."""
+    if _is_api(request):
+        return JsonResponse(_shape([_Problem(None, "server_error", "Server error.")]), status=500)
+    return defaults.server_error(request)
+
+
+def _is_api(request: HttpRequest) -> bool:
+    # Every route the app calls lives under /api/ (03 §5.10).
+    return request.path.startswith("/api/")

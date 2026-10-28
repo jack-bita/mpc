@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 from django.core.exceptions import ValidationError
 from django.http import Http404
+from django.test import Client
 from rest_framework import exceptions, serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -27,6 +28,7 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 from rest_framework.views import APIView
 
+from apps.core.api.views import HealthView
 from apps.core.editing import VersionConflict
 
 
@@ -180,3 +182,38 @@ def test_unexpected_error_left_to_django() -> None:
 
     with pytest.raises(RuntimeError, match="a bug"):
         _refusal(bug)
+
+
+def test_unknown_api_address_answers_in_the_error_shape(client: Client) -> None:
+    # A mistyped route never reaches a view, so DRF's handler never sees it: Django answers alone. Under
+    # /api/ it still answers in the one shape, so the app reads it like any refusal.
+    response = client.get("/api/v1/no-such-route/")
+
+    assert response.status_code == 404
+    assert response.json() == {"code": "not_found", "message": "No route at this address.", "fields": {}, "params": {}}
+
+
+def test_unknown_page_outside_the_api_keeps_djangos_page(client: Client) -> None:
+    # Outside /api/ nobody reads JSON: a person's browser gets Django's own page.
+    response = client.get("/no-such-page/")
+
+    assert response.status_code == 404
+    assert response["Content-Type"].startswith("text/html")
+
+
+def test_crash_answers_in_the_error_shape_and_is_logged(
+    client: Client, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A bug in a view (here, the health check made to crash). The app gets the one shape, with no detail of
+    # the bug in it; the details go to the log, with the traceback, as before (03 §5.17).
+    def crash(view: HealthView, request: Request) -> Response:
+        raise RuntimeError("a bug")
+
+    monkeypatch.setattr(HealthView, "get", crash)
+    client.raise_request_exception = False  # answer as a server does, instead of raising into the test
+
+    response = client.get("/api/health/")
+
+    assert response.status_code == 500
+    assert response.json() == {"code": "server_error", "message": "Server error.", "fields": {}, "params": {}}
+    assert any(record.exc_info and "a bug" in str(record.exc_info[1]) for record in caplog.records)
