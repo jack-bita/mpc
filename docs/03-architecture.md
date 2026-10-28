@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
 
-**Changes in v1.8** (28 Oct 2026, CORE-6): login names a visit's shop, and the base API view opens it around the whole visit (§5.4). The API's conventions as CORE-6 built them: what the error shape means, creates sent twice, edits, pages, and the docs for the superuser only in production (§5.10). Marked **(v1.8)**.
+**Changes in v1.8** (28 Oct 2026, CORE-6): login names who acts and the visit's shop, and the base API view opens it around the whole visit; office routes need a staff member (§5.4). The API's conventions as CORE-6 built them: what the error shape means, creates sent twice, edits, pages, and the docs closed in production (§5.10). Marked **(v1.8)**.
 
 **Changes in v1.7** (27 Oct 2026, PPL-2): a PIN may not be 1234 or four of a kind (0000, 1111…), as PPL-2 built it (§5.9, 02 v1.4). Marked **(v1.7)**.
 
@@ -269,7 +269,7 @@ apps/sales/
 
 ### 5.4 Tenancy (AD8)
 
-- **Set once per request.** Login (device key or staff session) names the shop: it leaves the person acting, a device or a staff member, in `request.auth`. Right after login, the base API view opens that shop in the context variable, keeps it open for the whole visit, and closes it however the visit ends **(v1.8)**.
+- **Set once per request.** Login (device key or staff session) names who acts and the shop: it leaves an Actor in `request.auth`, with a `shop_id` and a `staff_id`: a staff member, or a device alone, which is no person (its `staff_id` is None). Right after login, the base API view opens that shop in the context variable, keeps it open for the whole visit, and closes it however the visit ends. Office routes need a staff member, the one recorded as who made or changed a row **(v1.8)**.
 - **Fail closed.** The default manager filters every query by the current shop, and raises an error if no shop is set. System jobs use an explicit `system_context()`, named in code; the Django admin uses a separate manager, for superusers only.
 - **One base API view** gets its queryset through that manager and checks permissions per side.
 - **Writes check links.** Services check that every record they link to belongs to the same shop (T1).
@@ -361,14 +361,14 @@ Confirming a one-screen sale:
 | `/api/auth/…` | PIN login, logout, me (our own) | Device key |
 | `/api/devices/pairing/…` | Device registration | Device + manager |
 | `/api/health/` | Uptime check | Public |
-| `/api/schema/`, `/api/docs/` | The OpenAPI description, and its docs page | Public on the demo; only the superuser in production **(v1.8)** |
+| `/api/schema/`, `/api/docs/` | The OpenAPI description, and its docs page | Open on the demo and on a laptop; closed in production, where the page would run a CDN's code beside the superuser's login **(v1.8)** |
 
 Conventions:
 - JSON with snake_case names (the generated TypeScript types use the same names — no translation layer).
 - Money and quantities as strings (`"65000.00"`, `"12.500"`); times in ISO 8601 UTC; `business_date` as `YYYY-MM-DD` in shop time; IDs as UUIDv7 strings.
-- **Creates are idempotent:** the client sends the new record's UUID, so a retry can't make a duplicate. A retry gets the stored row, with the same `201`; an id already used in another shop is refused as `id.taken` **(v1.8)**.
+- **Creates are idempotent:** the client sends the new record's UUID, so a retry can't make a duplicate. The UUID must be a UUIDv7 (`id.not_uuid7`). A retry gets the stored row as it is now, with the same `201`, whatever else it carries; an id already used in another shop is refused as `id.taken` **(v1.8)**.
 - **Edits** (`PATCH`) send the `version` they read; stale → `409 version_conflict`. No `PUT`, which could send old values back for fields the person never touched, and no `DELETE`: nothing is deleted **(v1.8)**.
-- **One error shape:** `{"code": "sale.below_floor", "message": "…", "fields": {…}, "params": {…}}`. `code` is the first problem with the whole request, or `invalid` when only fields are wrong; `fields` maps each wrong field to its codes (`lines.1.quantity` inside a list); `params` holds what the message needs; `message` is English, for developers and logs. A bug stays a 500, so it is logged **(v1.8)**.
+- **One error shape:** `{"code": "sale.below_floor", "message": "…", "fields": {…}, "params": {…}}`. `code` is the first problem with the whole request, or `invalid` when only fields are wrong; `fields` maps each wrong field to its codes (`lines.1.quantity` inside a list); `params` holds what the message needs; `message` is English, for developers and logs. A bug stays a 500, so it is logged. Under `/api/`, an address no route matches answers `not_found` and a crash `server_error`, in the same shape **(v1.8)**.
 - Cursor pagination for long lists, newest first, 50 rows a page *(default)* **(v1.8)**; throttling on login, PIN and pairing.
 - Breaking changes get `v2` routes beside `v1` while devices update.
 
