@@ -3,15 +3,16 @@
 
 Each route is built to pass the sweep, or to break one of its checks in one way:
 
-- NoteViewSet is built the way every office route is (apps/core/api/base.py), so it shows and edits each
-  visit's own shop's notes only.
+- NoteViewSet is built the way every office route is (apps/core/api/base.py), so it shows, edits, makes and
+  voids each visit's own shop's notes only.
 - LeakyNoteViewSet makes the mistake the sweep is there to catch: it reads its rows past the guard, so every
-  shop's notes show, in its list, its detail route, its edits, its CSV export and its search, which needs a
-  query parameter. LeakyNoteTextViewSet leaks the same way but shows no ids, only the texts, as a report of
-  names and totals would.
+  shop's notes show, in its list, its detail route, its edits, its void, the note a create hands back, its
+  CSV export and its search, which needs a query parameter. LeakyNoteTextViewSet leaks the same way but shows
+  no ids, only the texts, as a report of names and totals would.
 - NoteFormFirstViewSet checks an edit's form before it looks for the row: the same 400 for every row.
 - NoteMakerViewSet only makes notes, and names a side link a note doesn't have.
 - NoteByTextViewSet finds a note by its text, a key each shop has its own of.
+- NoteBulkViewSet takes a DELETE on its whole list, which the sweep has no request for.
 - ClosedNoteViewSet's list refuses everyone; EndlessNoteViewSet's list has a broken cursor, whose next page
   is always itself.
 - note_count is a plain view, built on no ShopViewSet, so the sweep could never call it as a shop: it must
@@ -30,7 +31,8 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.core.api.base import ShopViewSet
+from apps.core.api.base import CreateOnceMixin, ShopViewSet
+from apps.core.api.ids import uuid7_only
 from tests.probe.models import Note
 
 
@@ -40,14 +42,36 @@ class NoteSerializer(serializers.ModelSerializer[Note]):
         fields = ["id", "text"]
 
 
-class NoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, ShopViewSet[Note]):
-    # Read and edited (PUT, PATCH): DRF's edit looks its row up first, through the same guard as a read, so
-    # another shop's note is "not found" whatever is sent.
+class NoteCreateSerializer(serializers.ModelSerializer[Note]):
+    # What a create sends, as for a side (apps/shops/api/serializers.py): the id the app made, required.
+    class Meta:
+        model = Note
+        fields = ["id", "text"]
+        extra_kwargs = {"id": {"required": True, "validators": [uuid7_only]}}
+
+
+class NoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, CreateOnceMixin[Note]):
+    # Read, edited (PUT, PATCH), made once (POST, CreateOnceMixin: a repeat gets the stored note back) and
+    # voided (POST on one note). DRF's edit, the void and a create's look for a repeat all read through the
+    # same guard as a read, so another shop's note is "not found" whatever is sent.
     model = Note
     # A note belongs to the whole shop, not to a side.
     side_field = None
     # Typed as any note serializer, so that LeakyNoteTextViewSet below may swap in its own.
     serializer_class: type[serializers.ModelSerializer[Note]] = NoteSerializer
+    create_serializer_class = NoteCreateSerializer
+
+    def create_row(self, data: dict[str, Any]) -> Note:
+        note = Note(id=data["id"], shop_id=self.actor.shop_id, text=data["text"])
+        note.save()
+        return note
+
+    @action(detail=True, methods=["post"])
+    def void(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # A change to one note sent as a POST, the way voids and cancels will be: nothing is deleted or
+        # replaced (rule 7, 03 §5.10). It finds its note through the route's own rows, as a payment's void will,
+        # by whatever names the note in the address (`pk`, or `text` on NoteByTextViewSet).
+        return Response(self.get_serializer(self.get_object()).data)
 
 
 class LeakyNoteViewSet(NoteViewSet):
@@ -90,6 +114,14 @@ class NoteByTextViewSet(NoteViewSet):
     # A row found by a key of each shop's own, as a side could be by its letter: two shops may each have a
     # note with the same text.
     lookup_field = "text"
+
+
+class NoteBulkViewSet(NoteViewSet):
+    @action(detail=False, methods=["delete"])
+    def clear(self, request: Request) -> Response:
+        # A change sent to a whole list, which the sweep has no request for: it must say so, not pass it by.
+        # It changes nothing here; the sweep never sends it.
+        return Response(status=204)
 
 
 class ClosedNoteViewSet(NoteViewSet):

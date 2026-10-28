@@ -24,8 +24,9 @@ And it walks the address list for every route of the office API, the routes buil
 (apps/core/api/base.py):
 
 - called by a staff member of shop B, no route shows or touches any row of shop A: a list shows none of
-  them, and a detail route answers about each one, to a read and to an edit alike, exactly as about an id
-  no shop has (03 §5.4). Both shops are filled in backend/tests/conftest.py;
+  them, a create sent an id of A's hands nothing of A's back, and a detail route answers about each one, to
+  a read, an edit, a POST (a void) and a delete alike, exactly as about an id no shop has (03 §5.4). Both
+  shops are filled in backend/tests/conftest.py;
 - each route names where its table keeps a row's side (`side_field`), for the per-side hooks (PPL-3);
 - no route under api/ escapes the sweep by being built on something else.
 
@@ -403,6 +404,36 @@ def send(client: APIClient, method: str, url: str, params: Mapping[str, str] | N
     return change(url, {}, format="json")
 
 
+def page_problems(client: APIClient, url: str, params: Mapping[str, str] | None, marks: Marks) -> list[str]:
+    # A list, read as shop B, page after page: each page must answer 200 and show none of A's marks.
+    found: list[str] = []
+    # The route's own parameters go with the first page only: DRF builds the next page's address from the one
+    # it answered, so that address carries them already.
+    next_url: str | None = url
+    pages = 0
+    while next_url:
+        pages += 1
+        if pages > MAX_PAGES:
+            found.append(f"more than {MAX_PAGES} pages: does its cursor ever end?")
+            break
+        response = client.get(next_url, params)
+        params = None
+        if response.status_code == 400:
+            # The usual answer of a route that needs a parameter it wasn't given.
+            where = "give them in sweep_queries (backend/tests/conftest.py)"
+            found.append(f"answered 400, not 200: if it needs query parameters, {where}")
+            break
+        if response.status_code != 200:
+            found.append(f"answered {response.status_code}, not 200")
+            break
+        found += shown(response, marks)
+        # The next page's address, from the cursor pages (apps/core/api/pagination.py); None on the last, and on
+        # an answer that is not JSON, such as a CSV download, which comes whole.
+        body = response.json() if is_json(response) else None
+        next_url = body.get("next") if isinstance(body, dict) else None
+    return found
+
+
 def answer(response: HttpResponse, key: str) -> tuple[int, bytes]:
     # What an answer tells the one who asked: its status and its body, with the key that was asked for taken
     # out, so that an answer that only repeats the key ("No note 0199… here") reads the same for every key.
@@ -430,19 +461,31 @@ def route_problems(
     names = Counter(address.name for address in addresses() if address.name)
     problems: dict[str, list[str]] = {}
     for route in shop_routes():
-        # What the sweep sends: a read (GET) to any route, and to a detail route each edit it takes as well. An
-        # edit goes empty: an edit that finds no row answers the same whatever came with it, and one that checks
-        # what was sent first refuses an empty one alike for every row. A delete goes last, so that a leaky one
-        # can't hide what the edits before it would show. A route that only makes rows (POST) has nothing of
-        # A's to ask for: CORE-6 already refuses an id another shop has (`id.taken`).
-        writes = ("patch", "put", "delete") if route.takes_row else ()
-        sends = [method for method in ("get", *writes) if method in route.methods]
-        if not sends:
-            continue
+        # What the sweep sends:
+        # - to a detail route, each request it takes, about each of A's rows: a read (GET), an edit (PATCH,
+        #   PUT), a POST, which is how a void or a cancel will come, since nothing is deleted or replaced (03
+        #   §5.10), and a DELETE, last, so that a leaky one can't hide what the requests before it would show.
+        #   A change goes empty: one that finds no row answers the same whatever came with it, and one that
+        #   checks what was sent first refuses an empty one alike for every row;
+        # - to a list, a read (GET), and a create (POST) sent nothing but the id of one of A's rows: a create
+        #   hands back the row it made before for an id it is sent again (CORE-6), so a leaky one hands A's.
+        # A route may take a request the sweep has none of, such as a DELETE on a whole list: it says so, rather
+        # than pass the route by.
+        if route.takes_row:
+            sends = [method for method in ("get", "patch", "put", "post", "delete") if method in route.methods]
+        else:
+            sends = [method for method in ("get", "post") if method in route.methods]
         found: list[str] = []
+        # HEAD is a GET with no body: DRF answers it with the GET's action, adding it to the route's actions at
+        # its first GET, and the sweep's GET covers it.
+        unsent = ", ".join(method.upper() for method in sorted(route.methods - set(sends) - {"head"}))
+        if unsent:
+            found.append(f"answers {unsent}, which the sweep doesn't send here: teach it, in a reviewed change")
         table = route.view.model
         rows = [str(value) for value in rows_of(table, shop_a).values_list(route.view.lookup_field, flat=True)]
-        if route.name is None or route.takes - {route.lookup}:
+        if not sends:
+            pass  # nothing the sweep can send: only what is reported above
+        elif route.name is None or route.takes - {route.lookup}:
             # Every route DRF's routers make has a name and takes at most the row's id. A route nested under
             # another row would need that row too, which the sweep can't guess.
             found.append("no address the sweep can build: it needs a name, and no part but the row's id")
@@ -456,14 +499,15 @@ def route_problems(
         elif route.takes_row:
             # The keys shop B's own rows have. A route may find a row by a key of each shop's own instead of its
             # id, as a side could be found by its letter: then shop B, asking for A's "D", rightly gets its own
-            # side D. Only a read is sent for such a key, and only A's marks are looked for in the answer: an
-            # edit would change B's own row. A leaky route that crashes on such a key, having found both shops'
+            # side D. Only a read is sent for such a key, and only A's marks are looked for in the answer: a
+            # change would change B's own row. A leaky route that crashes on such a key, having found both shops'
             # rows, still turns CI red: the test client raises the crash in the test.
             b_keys = {str(value) for value in rows_of(table, shop_b).values_list(route.view.lookup_field, flat=True)}
             for row in rows:
                 row_url = reverse(route.name, kwargs={route.lookup: row})
                 if row in b_keys:
-                    found += shown(client.get(row_url, queries.get(route.name)), marks)
+                    if "get" in sends:
+                        found += shown(client.get(row_url, queries.get(route.name)), marks)
                     continue
                 for method in sends:
                     response = send(client, method, row_url, queries.get(route.name))
@@ -484,31 +528,15 @@ def route_problems(
                         )
                     found += shown(response, marks)
         else:
-            url: str | None = reverse(route.name)
-            # The route's own parameters go with the first page only: DRF builds the next page's address from
-            # the one it answered, so that address carries them already.
-            sent = queries.get(route.name)
-            pages = 0
-            while url:
-                pages += 1
-                if pages > MAX_PAGES:
-                    found.append(f"more than {MAX_PAGES} pages: does its cursor ever end?")
-                    break
-                response = client.get(url, sent)
-                sent = None
-                if response.status_code == 400:
-                    # The usual answer of a route that needs a parameter it wasn't given.
-                    where = "give them in sweep_queries (backend/tests/conftest.py)"
-                    found.append(f"answered 400, not 200: if it needs query parameters, {where}")
-                    break
-                if response.status_code != 200:
-                    found.append(f"answered {response.status_code}, not 200")
-                    break
-                found += shown(response, marks)
-                # The next page's address, from the cursor pages (apps/core/api/pagination.py); None on the last,
-                # and on an answer that is not JSON, such as a CSV download, which comes whole.
-                body = response.json() if is_json(response) else None
-                url = body.get("next") if isinstance(body, dict) else None
+            if "get" in sends:
+                found += page_problems(client, reverse(route.name), queries.get(route.name), marks)
+            if "post" in sends:
+                # A create sent nothing but an id of A's must hand nothing of A's back. Its status is not asked:
+                # a create that needs no more than an id may make a row for an id no shop has, and refuse A's
+                # with `id.taken` (CORE-6), which reveals nothing about A's row.
+                for row_id in rows_of(table, shop_a).values_list("pk", flat=True):
+                    response = client.post(reverse(route.name), {"id": str(row_id)}, format="json")
+                    found += [f"POST with shop A's id {row_id}: {problem}" for problem in shown(response, marks)]
         if found:
             problems[route.name or "(no name)"] = found
     return problems
@@ -882,7 +910,8 @@ def test_route_check_finds_a_leak_that_shows_no_ids(
 
     problems = route_problems(staff_client_b, shop_a, shop_b)
 
-    assert problems["leaky-note-text-list"] == ['shows what only shop A has: "Note of shop A"']
+    # Its list's read shows A's text with no id. (Its create, sent A's id, hands the note back too.)
+    assert 'shows what only shop A has: "Note of shop A"' in problems["leaky-note-text-list"]
 
 
 @pytest.mark.django_db
@@ -965,6 +994,29 @@ def test_route_check_takes_an_edit_that_checks_what_was_sent_first(
     problems = route_problems(staff_client_b, shop_a, shop_b)
 
     assert "note-form-first-detail" not in problems
+
+
+@pytest.mark.django_db
+def test_route_check_sends_posts_too(settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient) -> None:
+    # A void or a cancel will be a POST on one row, since nothing is deleted or replaced (03 §5.10), and a create
+    # hands back the row it made before for an id it is sent again (CORE-6). The probe's leaky void acts on shop
+    # A's note, and its leaky create hands that note to shop B, who sent nothing but its id.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    note = Note(shop=shop_a, text="Note of shop A")
+    note.save()
+
+    problems = route_problems(staff_client_b, shop_a, shop_b)
+
+    assert f"shop A's row {note.pk}: POST answered 200, but 404 for an id no shop has" in problems["leaky-note-void"]
+    assert any(
+        found.startswith(f"POST with shop A's id {note.pk}: shows what") for found in problems["leaky-note-list"]
+    )
+    # The guarded routes give nothing away: the void finds no note, and the create, sent an id alone, makes none.
+    assert not problems.keys() & {"note-void", "note-list"}
+    # A request the sweep has none of, such as a DELETE sent to a whole list, is reported, not passed by.
+    assert problems["note-bulk-clear"] == [
+        "answers DELETE, which the sweep doesn't send here: teach it, in a reviewed change"
+    ]
 
 
 @pytest.mark.django_db

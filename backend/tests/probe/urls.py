@@ -10,6 +10,7 @@ from tests.probe.api import (
     EndlessNoteViewSet,
     LeakyNoteTextViewSet,
     LeakyNoteViewSet,
+    NoteBulkViewSet,
     NoteByTextViewSet,
     NoteFormFirstViewSet,
     NoteMakerViewSet,
@@ -24,6 +25,7 @@ router.register("leaky-note-texts", LeakyNoteTextViewSet, basename="leaky-note-t
 router.register("notes-by-text", NoteByTextViewSet, basename="note-by-text")
 router.register("notes-form-first", NoteFormFirstViewSet, basename="note-form-first")
 router.register("note-makers", NoteMakerViewSet, basename="note-maker")
+router.register("notes-in-bulk", NoteBulkViewSet, basename="note-bulk")
 router.register("closed-notes", ClosedNoteViewSet, basename="closed-note")
 router.register("endless-notes", EndlessNoteViewSet, basename="endless-note")
 
