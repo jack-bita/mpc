@@ -12,9 +12,13 @@ apps (the ones under backend/apps/) and checks each one, with no list of tables 
 - it keeps the guard: every manager it has, except the admin's `all_shops`, refuses to build a read while no
   shop is open (CORE-2).
 
-It also reads our code, as test_no_floats.py does, for the only two doors that open every shop at once:
-`all_shops`, for the superuser's admin pages, and `system_context()`, for system jobs (03 §5.4). Each must
-stay in its own place, and tests may use both. Until now only a search by hand found them.
+It also reads our code, as test_no_floats.py does, for the named ways to read every shop at once: the two
+doors, `all_shops` for the superuser's admin pages and `system_context()` for system jobs (03 §5.4), and
+Django's plain base manager, `_base_manager`. Each must stay in its own place; tests may use all three.
+Until now only a search by hand found them. Raw SQL (`.raw()`, `connection.cursor()`) and a query built by
+hand (`models.QuerySet(Side)`) read past the guard too, but a scan by name can't tell them from harmless
+code, such as a sync cursor or a type: review watches for them, and row-level security, before a second
+real shop, closes every way past the guard (ADR-0022).
 
 And it walks the address list for every route of the office API, the routes built on ShopViewSet
 (apps/core/api/base.py):
@@ -226,18 +230,30 @@ def in_tests(path: Path) -> bool:
     return "tests" in path.relative_to(BACKEND).parts[:-1] or path.name in {"tests.py", "conftest.py"}
 
 
+def in_module(path: Path, name: str) -> bool:
+    # A module of an app, written as one file (admin.py) or as a package of files (admin/).
+    return path.name == f"{name}.py" or name in path.relative_to(BACKEND).parts[:-1]
+
+
 def may_use_all_shops(path: Path) -> bool:
     # The superuser's admin pages. A page answers a visit, and system_context() is for system jobs only, so
     # the admin has its own door, for its lists (apps/core/models.py).
-    return path.name == "admin.py" or in_tests(path)
+    return in_module(path, "admin") or in_tests(path)
 
 
 def may_use_system_context(path: Path) -> bool:
     # System jobs, which answer no visit: management commands (the nightly checks the scheduler runs, and
-    # the demo seed, DATA-1) and background tasks (tasks.py, 03 §5.11). Never code that answers a visit, the
+    # the demo seed, DATA-1) and background tasks (tasks, 03 §5.11). Never code that answers a visit, the
     # admin's pages included: a visit works for one shop (03 §5.4).
     folders = path.relative_to(BACKEND).parts[:-1]
-    return folders[-2:] == ("management", "commands") or path.name == "tasks.py" or in_tests(path)
+    return folders[-2:] == ("management", "commands") or in_module(path, "tasks") or in_tests(path)
+
+
+def may_use_base_manager(path: Path) -> bool:
+    # Django's plain base manager reads every shop with no name to give it away, so app code never reads
+    # through it by hand: following a link (`location.side`) and save() use it already, the way Django
+    # means (apps/core/models.py). Tests may, to look past the guard on purpose.
+    return in_tests(path)
 
 
 def uses_of(name: str, source: str) -> list[int]:
@@ -738,6 +754,7 @@ def test_guard_check_finds_tables_that_lose_the_guard() -> None:
         # Under another name, the import still gives it away.
         ("system_context", "from apps.core.tenancy import system_context as open_all"),
         ("system_context", "from apps.core import tenancy\nopen_all = tenancy.system_context"),
+        ("_base_manager", "sides = Side._base_manager.filter(code='D')"),
     ],
 )
 def test_door_check_finds_every_use(name: str, code: str) -> None:
@@ -762,9 +779,16 @@ def test_doors_are_allowed_only_in_their_places() -> None:
     assert not may_use_system_context(APPS / "shops" / "services.py")
     # An admin page answers a visit too: it has its own door, and never needs this one.
     assert not may_use_system_context(APPS / "shops" / "admin.py")
-    # Tests may use both.
+    # A module may be a package of files too.
+    assert may_use_all_shops(APPS / "shops" / "admin" / "sides.py")
+    assert may_use_system_context(APPS / "control" / "tasks" / "nightly.py")
+    # Django's plain base manager: tests only, not even the admin.
+    assert not may_use_base_manager(APPS / "shops" / "selectors.py")
+    assert not may_use_base_manager(APPS / "shops" / "admin.py")
+    # Tests may use all three.
     assert may_use_all_shops(APPS / "core" / "tests" / "test_shop_scoped.py")
     assert may_use_system_context(APPS / "shops" / "tests" / "test_create_shop.py")
+    assert may_use_base_manager(APPS / "core" / "tests" / "test_shop_scoped.py")
 
 
 def test_door_check_reads_our_code() -> None:
@@ -1027,6 +1051,10 @@ def test_all_shops_only_in_admin() -> None:
 
 def test_system_context_only_in_system_code() -> None:
     assert misplaced_uses("system_context", may_use_system_context) == {}
+
+
+def test_base_manager_only_in_tests() -> None:
+    assert misplaced_uses("_base_manager", may_use_base_manager) == {}
 
 
 @pytest.mark.django_db
