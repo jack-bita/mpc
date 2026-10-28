@@ -17,9 +17,10 @@ Every refusal the API sends has four keys:
   sends no sentences for the screen.
 
 DRF calls handle_error() for every exception a view raises (REST_FRAMEWORK in config/settings/base.py).
-It shapes two kinds of refusal: Django's ValidationError, which the services and full_clean raise (03
-§5.2), and DRF's own (not found, not logged in, a serializer's checks, a throttle). Anything else is a
-bug, left to Django, which answers 500 and logs it.
+It shapes three kinds of refusal: Django's ValidationError, which the services and full_clean raise (03
+§5.2); a VersionConflict, an edit made on an old copy (apps/core/editing.py); and DRF's own (not found,
+not logged in, a serializer's checks, a throttle). Anything else is a bug, left to Django, which answers
+500 and logs it.
 """
 
 import uuid
@@ -36,6 +37,8 @@ from rest_framework import exceptions
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
 from rest_framework.views import exception_handler, set_rollback
+
+from apps.core.editing import VersionConflict
 
 # The code when only input fields are wrong: the code beside each field says what is wrong with it.
 INVALID = "invalid"
@@ -60,6 +63,11 @@ def handle_error(exc: Exception, context: dict[str, Any]) -> Response | None:
         # undone, so a refused request leaves nothing half written.
         set_rollback()
         return Response(_shape(_problems_from_django(exc)), status=400)
+    if isinstance(exc, VersionConflict):
+        # 409 Conflict: the request is fine, but it was made on an old copy of the row. The app reloads the
+        # row and lets the person try again.
+        set_rollback()
+        return Response(_shape([_Problem(None, "version_conflict", str(exc))]), status=409)
 
     # DRF's own handler first. It turns Django's Http404 and PermissionDenied into DRF's refusals, picks the
     # status, keeps the WWW-Authenticate and Retry-After headers, and returns None for anything else.

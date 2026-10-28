@@ -7,10 +7,12 @@ the conventions every office route follows (apps/core/api/, CORE-6).
 
 Each visit works for the one shop its login names, and sees that shop's rows only (ADR-0022). The logins
 themselves come with AUTH-2, AUTH-3 and AUTH-4: here the client from backend/conftest.py skips them and puts
-the staff member straight into `request.auth`, as those logins will.
+the staff member straight into `request.auth`, as those logins will. The staff member is typed Any:
+`shops` may not name `people`'s StaffMember, not even in its tests (ADR-0035).
 """
 
 import uuid
+from typing import Any
 
 import pytest
 from django.db import IntegrityError
@@ -115,7 +117,8 @@ def test_side_permission_hook_checks_each_side(
     staff_client_a: APIClient, sides_a: dict[str, Side], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # PPL-3 fills the hook in with real permissions. Until then, a stand-in that refuses Vyakula (F)
-    # proves that each row the route hands out passes through the hook, with that row's own side.
+    # proves that each row the route hands out, to read or to change, passes through the hook, with that
+    # row's own side.
     vyakula = sides_a["F"].pk
 
     def only_dawa(view: SideViewSet, request: Request, side_id: uuid.UUID | None) -> None:
@@ -128,6 +131,9 @@ def test_side_permission_hook_checks_each_side(
     refused = staff_client_a.get(f"{SIDES}{vyakula}/")
     assert refused.status_code == 403
     assert refused.json()["code"] == "permission_denied"
+    edit = staff_client_a.patch(f"{SIDES}{vyakula}/", {"name": "Chakula", "version": 1})
+    assert edit.status_code == 403
+    assert sides_a["F"].name == "Vyakula"
 
 
 def test_create_twice_with_same_uuid_makes_one_row(staff_client_a: APIClient, shop_a: Shop) -> None:
@@ -243,3 +249,54 @@ def test_create_passes_the_side_permission_hook(
     assert response.status_code == 403
     with shop_context(shop_a):
         assert not Side.objects.exists()
+
+
+def test_stale_version_gets_409(staff_client_a: APIClient, sides_a: dict[str, Side]) -> None:
+    # The owner and a manager both open Dawa: each screen holds version 1. The owner saves first, so Dawa
+    # moves to version 2. The manager's edit was made on the old copy: it is refused, instead of silently
+    # undoing the owner's change, and the manager's app reloads Dawa (02 §1).
+    dawa = f"{SIDES}{sides_a['D'].pk}/"
+
+    owner = staff_client_a.patch(dawa, {"name": "Dawa za Mifugo", "version": 1})
+    manager = staff_client_a.patch(dawa, {"name": "Dawa za Kuku", "version": 1})
+
+    assert owner.status_code == 200
+    assert owner.json()["version"] == 2
+    assert manager.status_code == 409
+    assert manager.json()["code"] == "version_conflict"
+    # The owner's name stays.
+    assert staff_client_a.get(dawa).json()["name"] == "Dawa za Mifugo"
+
+
+def test_edit_bumps_the_version_and_records_who(
+    staff_client_a: APIClient, staff_a: Any, shop_a: Shop, sides_a: dict[str, Side]
+) -> None:
+    # Made at version 1, with no edit yet: `updated_at` and `updated_by` stay empty until the first edit,
+    # because the creation is already in `created_at` and `created_by`.
+    assert sides_a["D"].version == 1
+    assert sides_a["D"].updated_at is None
+
+    staff_client_a.patch(f"{SIDES}{sides_a['D'].pk}/", {"name": "Dawa za Mifugo", "version": 1})
+
+    with shop_context(shop_a):
+        dawa = Side.objects.get(pk=sides_a["D"].pk)
+    assert dawa.version == 2
+    assert dawa.updated_by_id == staff_a.pk
+    assert dawa.updated_at is not None
+
+
+def test_edit_keeps_the_side_letter(staff_client_a: APIClient, sides_a: dict[str, Side]) -> None:
+    # Only the name can be changed. The letter starts every number printed on the side's receipts (D7),
+    # so a letter sent with an edit is ignored, and Dawa stays D.
+    response = staff_client_a.patch(f"{SIDES}{sides_a['D'].pk}/", {"name": "Dawa za Mifugo", "code": "X", "version": 1})
+
+    assert response.status_code == 200
+    assert response.json()["code"] == "D"
+
+
+def test_edit_needs_the_version_read(staff_client_a: APIClient, sides_a: dict[str, Side]) -> None:
+    # Without the version it read, an edit can't be told apart from one made on an old copy.
+    response = staff_client_a.patch(f"{SIDES}{sides_a['D'].pk}/", {"name": "Dawa za Mifugo"})
+
+    assert response.status_code == 400
+    assert response.json()["fields"] == {"version": ["required"]}

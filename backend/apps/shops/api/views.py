@@ -1,7 +1,8 @@
 """apps/shops/api/views.py — the shops routes, under /api/v1/shops/ (03 §5.10).
 
 Thin: each one reads through the guard of the visit's shop (ShopViewSet, apps/core/api/base.py) and
-writes through a service (ADR-0015). For now a shop's sides: the list, one side, and adding one.
+writes through a service (ADR-0015). For now a shop's sides: the list, one side, adding one, and
+renaming one.
 """
 
 import uuid
@@ -9,17 +10,19 @@ from typing import Any
 
 from rest_framework import mixins
 
-from apps.core.api.base import CreateOnceMixin
-from apps.shops.api.serializers import SideCreateSerializer, SideSerializer
+from apps.core.api.base import CreateOnceMixin, EditMixin
+from apps.shops.api.serializers import SideCreateSerializer, SideEditSerializer, SideSerializer
 from apps.shops.models import SaleFlow, Shop, Side
-from apps.shops.services import add_side
+from apps.shops.services import add_side, rename_side
 
 
-class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMixin[Side]):
-    # GET sides/ lists the visit's shop's sides, in pages; GET sides/{id}/ reads one; POST sides/ adds one.
+class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMixin[Side], EditMixin[Side]):
+    # GET sides/ lists the visit's shop's sides, in pages; GET sides/{id}/ reads one; POST sides/ adds one;
+    # PATCH sides/{id}/ renames one.
     model = Side
     serializer_class = SideSerializer
     create_serializer_class = SideCreateSerializer
+    edit_serializer_class = SideEditSerializer
 
     def side_of(self, row: Side) -> uuid.UUID:
         # A side is its own side: whoever may act on Dawa may see Dawa.
@@ -37,3 +40,6 @@ class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMi
             sale_flow=data.get("sale_flow", SaleFlow.ONE_SCREEN),
             by=self.actor,
         )
+
+    def edit_row(self, row: Side, data: dict[str, Any]) -> Side:
+        return rename_side(row, version=data["version"], name=data["name"], by=self.actor)

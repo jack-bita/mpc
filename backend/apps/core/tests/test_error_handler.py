@@ -27,6 +27,8 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 from rest_framework.views import APIView
 
+from apps.core.editing import VersionConflict
+
 
 def _refusal(refuse: Callable[[], None]) -> tuple[Response, dict[str, Any]]:
     # A throwaway view whose GET calls `refuse`, called once. Returns its answer, and the JSON body the
@@ -90,6 +92,11 @@ def _not_logged_in() -> None:
     raise exceptions.NotAuthenticated
 
 
+def _edited_meanwhile() -> None:
+    # Someone else saved the row after this person read it (apps/core/editing.py).
+    raise VersionConflict
+
+
 @pytest.mark.parametrize(
     ("refuse", "status", "code", "fields", "params"),
     [
@@ -103,6 +110,8 @@ def _not_logged_in() -> None:
         # 403, not 401: DRF answers 401 only when a login method can name itself in a WWW-Authenticate
         # header, and the app's session login has no such name.
         pytest.param(_not_logged_in, 403, "not_authenticated", {}, {}, id="not logged in"),
+        # 409 Conflict: not a wrong input, but an edit made on an old copy. The app reloads the row.
+        pytest.param(_edited_meanwhile, 409, "version_conflict", {}, {}, id="edited meanwhile"),
     ],
 )
 def test_error_shape(

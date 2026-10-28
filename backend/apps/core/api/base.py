@@ -14,6 +14,8 @@ An office route builds on ShopViewSet: `class SideViewSet(ShopViewSet[Side])`.
 - The per-side check: check_side_permission(), called for every row the view hands out. PPL-3 fills it in.
 - Creates: a route that makes rows adds CreateOnceMixin. The client sends the new row's id (ADR-0007), so
   the same request sent twice makes one row, and an id already used in another shop is refused.
+- Edits: a route that changes rows adds EditMixin. The client sends the `version` it read, so an edit made
+  on an old copy is refused (409 version_conflict) instead of undoing someone else's.
 
 Long lists come in pages through CursorPage (apps/core/api/pagination.py), the default for every list.
 """
@@ -31,7 +33,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from apps.core.models import ShopScoped
+from apps.core.models import Editable, ShopScoped
 from apps.core.tenancy import Actor, shop_context
 
 
@@ -151,6 +153,31 @@ class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
         except ValueError:
             return None  # no id, or not an id at all: the input check says so, beside the field
         return self.get_queryset().filter(pk=row_id).first()
+
+
+class EditMixin[M: Editable](ShopViewSet[M]):
+    """PATCH: change a row, unless someone else changed it since the client read it (02 §1, 03 §5.10).
+
+    The client sends the changed fields and the `version` it read. A route that edits builds on this,
+    names what an edit sends (`edit_serializer_class`, with `version`), and writes edit_row(), which calls
+    its service; the service changes the row inside editing() (apps/core/editing.py), which refuses a stale
+    version. Only PATCH: a full replace (PUT) would have to send every field, and could send old values back
+    for the fields this person never touched."""
+
+    # What an edit sends: the fields that may change, and the `version` the client read.
+    edit_serializer_class: type[serializers.BaseSerializer[Any]]
+
+    def edit_row(self, row: M, data: dict[str, Any]) -> M:
+        """Change the row from the checked input, through the route's service. Each route writes its own."""
+        raise NotImplementedError
+
+    def partial_update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # This shop's row, through the per-side check, as for a read (get_object). Another shop's row is
+        # not found, as for a read.
+        row = self.get_object()
+        sent = self.edit_serializer_class(data=request.data, context=self.get_serializer_context())
+        sent.is_valid(raise_exception=True)
+        return Response(self.get_serializer(self.edit_row(row, sent.validated_data)).data)
 
 
 def _id_taken(error: IntegrityError, model: type[models.Model]) -> bool:

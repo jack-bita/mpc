@@ -1,13 +1,16 @@
-"""apps/core/models.py — the abstract base models every table builds on, the tenancy guard on reads, and
-the append-only guard on ledgers.
+"""apps/core/models.py — the abstract base models every table builds on, the tenancy guard on reads, the
+version that keeps two edits apart, and the append-only guard on ledgers.
 
 UUIDModel gives a table its `id` (UUIDv7, ADR-0007); TimeStamped gives it `created_at`. ShopScoped builds
 on both and adds the shop a row belongs to and the staff member who made it, with a default manager that
-shows only the current shop's rows (ADR-0022; the current shop lives in apps/core/tenancy.py). AppendOnly
-builds on ShopScoped for ledgers: it refuses, in Python, to save a row again or to delete one, and
-PostgreSQL's trigger backs it up (apps/core/operations.py, ADR-0021). All four are abstract: they make no
-table of their own, they only pass their columns on to the models that inherit them. PPL-1's User builds
-on the first two, every shop's table builds on ShopScoped, and every ledger on AppendOnly.
+shows only the current shop's rows (ADR-0022; the current shop lives in apps/core/tenancy.py). Editable
+builds on ShopScoped for the office records people change: it adds when and by whom a row was last
+edited, and its version, so that two people editing at once can't overwrite each other
+(apps/core/editing.py). AppendOnly builds on ShopScoped for ledgers: it refuses, in Python, to save a row
+again or to delete one, and PostgreSQL's trigger backs it up (apps/core/operations.py, ADR-0021). All five
+are abstract: they make no table of their own, they only pass their columns on to the models that
+inherit them. PPL-1's User builds on the first two, every shop's table on ShopScoped, every office record
+people edit on Editable, and every ledger on AppendOnly.
 """
 
 import uuid
@@ -116,6 +119,36 @@ class ShopScoped(UUIDModel, TimeStamped):
         # managers of its own: its own `objects`, or any manager beside a fresh Meta. CORE-7's sweep is
         # to catch both.
         default_manager_name = "objects"
+
+
+class Editable(ShopScoped):
+    # The base of every office record people change (02 §1, 03 §5.3): a side's name now, products, prices
+    # and contacts later. ShopScoped plus what makes an edit safe when two people edit the same row at once.
+    # Only apps/core/editing.py writes these three columns: editable=False keeps them out of every form and
+    # every API field.
+
+    # When the last edit was saved, by the server's clock, and who made it. Empty until the first edit: the
+    # creation is already in `created_at` and `created_by`. Named, not imported: `core` is layer 0
+    # (ADR-0035). PROTECT, no index of its own: as for `created_by` above.
+    updated_at = models.DateTimeField(null=True, blank=True, editable=False)
+    updated_by = models.ForeignKey(
+        "people.StaffMember",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        editable=False,
+        db_index=False,
+    )
+    # 1 when the row is made, and 1 more at each edit. A screen reads the row with its version and sends the
+    # version back with its edit: if the row has moved on since, someone else saved in between, and the
+    # edit is refused instead of undoing theirs (409 version_conflict).
+    version = models.PositiveIntegerField(default=1, editable=False)
+
+    class Meta(ShopScoped.Meta):
+        # abstract: a base, not a table. Built on ShopScoped.Meta, so an editable table keeps the shop
+        # guard as its default manager (ADR-0022), as AppendOnly's tables do.
+        abstract = True
 
 
 class AppendOnlyError(Exception):

@@ -1,11 +1,12 @@
 """apps/shops/services.py — every write to the shops tables, one function per action (ADR-0015).
 
-Two actions so far. create_shop makes a new shop with all it needs before it can work: its sides
+Three actions so far. create_shop makes a new shop with all it needs before it can work: its sides
 (ADR-0001). add_side adds one side to a shop, with what a side always comes with: a default stock
 location (ADR-0002) and a cash drawer. create_shop uses it for each of its sides, so a side is made the
-same way whichever action makes it. Each action runs in one transaction and refuses a broken rule with a
-ValidationError that carries a code (ADR-0032), which the API's error handler (apps/core/api/errors.py)
-turns into its error shape.
+same way whichever action makes it. rename_side gives a side a new name, unless someone else changed the
+side since it was read (apps/core/editing.py). Each action runs in one transaction and refuses a broken
+rule with a ValidationError that carries a code (ADR-0032), which the API's error handler
+(apps/core/api/errors.py) turns into its error shape.
 
 `shops` is layer 1 and may not import `people`, not even as a type (ADR-0035). Who acts is an Actor
 (apps/core/tenancy.py): anything with a `pk` and a `shop_id`, which a staff member has. create_shop needs
@@ -21,6 +22,7 @@ from dataclasses import dataclass
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 
+from apps.core.editing import editing
 from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop, shop_context
 from apps.shops.models import (
     PaymentAccount,
@@ -96,6 +98,17 @@ def add_side(
         )
         _saved(PaymentAccountSide(shop=shop, account=drawer, side=side, created_by_id=created_by_id))
     return side
+
+
+def rename_side(side: Side, *, version: int, name: str, by: Actor | None) -> Side:
+    """Give a side a new name, unless someone else changed the side since `version` was read (02 §1).
+    `by`: who renames it; None for the system or the superuser. Only the name: the letter starts every
+    number printed on the side's receipts (D7), so it never changes."""
+    # editing() checks the shop (T1), locks the side, refuses a stale version, then checks the new name
+    # (full_clean trims it, and refuses a name of only spaces) and saves it with the next version.
+    with editing(side, version=version, by=by) as fresh:
+        fresh.name = name
+    return fresh
 
 
 def _check_shop(shop: Shop, by: Actor | None) -> None:
