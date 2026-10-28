@@ -445,8 +445,17 @@ def route_problems(
             found.append(f"shop A has no {table._meta.label} rows to look for: add some in backend/tests/conftest.py")
         elif route.takes_row:
             edit = {"patch": client.patch, "put": client.put, "delete": client.delete}
+            # The keys shop B's own rows have. A route may find a row by a key of each shop's own instead of its
+            # id, as a side could be found by its letter: then shop B, asking for A's "D", rightly gets its own
+            # side D. Only a read is sent for such a key, and only A's marks are looked for in the answer: an
+            # edit would change B's own row. A leaky route that crashes on such a key, having found both shops'
+            # rows, still turns CI red: the test client raises the crash in the test.
+            b_keys = {str(value) for value in rows_of(table, shop_b).values_list(route.view.lookup_field, flat=True)}
             for row in rows:
                 row_url = reverse(route.name, kwargs={route.lookup: row})
+                if row in b_keys:
+                    found += shown(client.get(row_url, queries.get(route.name)), marks)
+                    continue
                 for method in sends:
                     if method == "get":
                         response = client.get(row_url, queries.get(route.name))
@@ -851,6 +860,23 @@ def test_route_check_tries_edits_of_shop_a_rows(
     assert f"shop A's row {note.pk}: PATCH answered 200, not 404" in problems["leaky-note-detail"]
     assert f"shop A's row {note.pk}: PUT answered 400, not 404" in problems["leaky-note-detail"]
     assert "note-detail" not in problems
+
+
+@pytest.mark.django_db
+def test_route_check_lets_a_shared_key_answer_with_shop_b_row(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
+) -> None:
+    # The probe's notes-by-text route finds a note by its text, a key of each shop's own. Both shops have a
+    # note "Shared": asked for it, shop B rightly gets its own, a 200 that gives nothing of A's away. Shop A's
+    # other note is "not found", as it must be.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="Shared").save()
+    Note(shop=shop_a, text="Note of shop A").save()
+    Note(shop=shop_b, text="Shared").save()
+
+    problems = route_problems(staff_client_b, shop_a, shop_b)
+
+    assert "note-by-text-detail" not in problems
 
 
 @pytest.mark.django_db

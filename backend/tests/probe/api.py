@@ -6,7 +6,8 @@ own shop's notes. LeakyNoteViewSet makes the mistake the sweep is there to catch
 guard, so every shop's notes show: in its list, its detail route, its CSV export and its search, which needs
 a query parameter. LeakyNoteTextViewSet
 leaks the same way but shows no ids, only the texts, as a report of names and totals would.
-EndlessNoteViewSet's list has a broken cursor, whose next page is always itself. note_count is a
+NoteByTextViewSet finds a note by its text, a key each shop has its own of. EndlessNoteViewSet's list has a
+broken cursor, whose next page is always itself. note_count is a
 plain view, built on no ShopViewSet, so the sweep could never call it as a shop: it must refuse such a
 route. tests/probe/urls.py mounts them, and only the sweep's tests use that address list.
 """
@@ -59,6 +60,12 @@ class LeakyNoteViewSet(NoteViewSet):
         if not text:
             raise serializers.ValidationError({"text": "Required."})
         return Response(NoteSerializer(self.get_queryset().filter(text__contains=text), many=True).data)
+
+
+class NoteByTextViewSet(NoteViewSet):
+    # A row found by a key of each shop's own, as a side could be by its letter: two shops may each have a
+    # note with the same text.
+    lookup_field = "text"
 
 
 class EndlessNoteViewSet(NoteViewSet):

@@ -5,12 +5,20 @@ address list could be. A test switches to it through the ROOT_URLCONF setting; c
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from tests.probe.api import EndlessNoteViewSet, LeakyNoteTextViewSet, LeakyNoteViewSet, NoteViewSet, note_count
+from tests.probe.api import (
+    EndlessNoteViewSet,
+    LeakyNoteTextViewSet,
+    LeakyNoteViewSet,
+    NoteByTextViewSet,
+    NoteViewSet,
+    note_count,
+)
 
 router = SimpleRouter()
 router.register("notes", NoteViewSet, basename="note")
 router.register("leaky-notes", LeakyNoteViewSet, basename="leaky-note")
 router.register("leaky-note-texts", LeakyNoteTextViewSet, basename="leaky-note-text")
+router.register("notes-by-text", NoteByTextViewSet, basename="note-by-text")
 router.register("endless-notes", EndlessNoteViewSet, basename="endless-note")
 
 # Two apps whose routers happen to pick one name. config/urls.py mounts each app with no namespace, so their
