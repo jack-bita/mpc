@@ -286,6 +286,23 @@ def test_create_needs_the_client_uuid(staff_client_a: APIClient) -> None:
     assert response.json()["fields"] == {"id": ["required"]}
 
 
+@pytest.mark.parametrize(
+    "made_elsewhere",
+    [
+        pytest.param(uuid.uuid4(), id="random v4"),
+        # The id a careless client sends for every new row: each would come back as the first one's repeat.
+        pytest.param(uuid.UUID(int=0), id="all zeros"),
+    ],
+)
+def test_create_needs_a_uuid7(staff_client_a: APIClient, made_elsewhere: uuid.UUID) -> None:
+    # Ids are UUIDv7, made on the device (ADR-0007): they carry the time they were made, so each new one is
+    # its own. Any other UUID is refused, before it can be taken for a repeat of another row.
+    response = staff_client_a.post(SIDES, {**new_side(), "id": str(made_elsewhere)})
+
+    assert response.status_code == 400
+    assert response.json()["fields"] == {"id": ["id.not_uuid7"]}
+
+
 def test_uuid_of_another_shop_refused_revealing_nothing(staff_client_a: APIClient, shop_a: Shop, side_b: Side) -> None:
     # Shop B's side already has this id. Shop A's visit can't see it, so the id looks free until the insert
     # fails on the primary key. That becomes a refusal of the id, and says nothing more: not the other

@@ -7,6 +7,7 @@ and takes what a create sends and what an edit sends with others (SideCreateSeri
 
 from rest_framework import serializers
 
+from apps.core.api.ids import uuid7_only
 from apps.shops.models import Side
 
 
@@ -26,11 +27,12 @@ class SideCreateSerializer(serializers.ModelSerializer[Side]):
         model = Side
         fields = ["id", "code", "name", "sale_flow"]
         extra_kwargs = {
-            # Required: without its own id, a phone's retry would look like a new side. No unique check of
-            # the id here: the route looks the id up itself, first and again after any refusal, and answers
-            # a repeat with the stored side (CreateOnceMixin, apps/core/api/base.py). DRF's check would only
-            # add a query, and refuse a repeat before the route could look.
-            "id": {"required": True, "validators": []},
+            # Required, and a UUIDv7: without an id of its own, a phone's retry would look like a new side
+            # (apps/core/api/ids.py). No unique check of the id here: the route looks the id up itself, first
+            # and again after any refusal, and answers a repeat with the stored side (CreateOnceMixin,
+            # apps/core/api/base.py). DRF's check would only add a query, and refuse a repeat before the
+            # route could look.
+            "id": {"required": True, "validators": [uuid7_only]},
         }
 
 
