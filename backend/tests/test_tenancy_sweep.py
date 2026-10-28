@@ -422,15 +422,17 @@ def leaks(reply: Reply, marks: Marks) -> list[str]:
     # of answer can be read: JSON, a CSV download, a download sent in pieces.
     # - An id, as it is: long and unique, it can't turn up by chance.
     # - A text, in a JSON answer: as JSON writes it, quotes and all ("Vyakula"), so a short one matches only a
-    #   whole value: "F", A's side letter, never the F of "Fanta". ensure_ascii=False: the API writes a letter
-    #   such as é as itself, not as an escape code (DRF's UNICODE_JSON setting).
+    #   whole value: "F", A's side letter, never the F of "Fanta". The cost: a name inside a longer text, such
+    #   as a label "Mbegu (MFANO)", is not found; the row's id, if the answer shows it, still is. Both ways of
+    #   writing a letter such as é are looked for: as itself, as DRF writes it (its UNICODE_JSON setting), and
+    #   as an escape code (\u00e9), as Django's own JsonResponse does.
     # - A text, in any other answer: as it is, since a CSV writes its texts with no quotes, but only when it is
     #   long enough, 4 characters or more, not to turn up by chance. So in a CSV, a side's letter goes unseen;
     #   its id and its name don't.
     needles = list(marks.ids)
     for text in marks.texts:
         if reply.is_json:
-            needles.append(json.dumps(text, ensure_ascii=False))
+            needles += {json.dumps(text, ensure_ascii=False), json.dumps(text)}
         elif len(text) >= 4:
             needles.append(text)
     return sorted(needle for needle in needles if needle.encode() in reply.body)
@@ -1096,6 +1098,21 @@ def test_route_check_reads_answers_that_are_not_json(
     problems = route_problems(staff_client_a, staff_client_b, shop_a, shop_b)
 
     assert problems["leaky-note-export"] == ["shows what only shop A has: Note of shop A"]
+
+
+@pytest.mark.django_db
+def test_route_check_reads_json_written_with_escape_codes(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_a: APIClient, staff_client_b: APIClient
+) -> None:
+    # The probe's leaky plain-JSON route answers through Django's JsonResponse, which writes the é of shop A's
+    # note as an escape code. The sweep reads a text in either form.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="Café of shop A").save()
+    Note(shop=shop_b, text="Note of shop B").save()
+
+    problems = route_problems(staff_client_a, staff_client_b, shop_a, shop_b)
+
+    assert problems["leaky-note-plain"] == ['shows what only shop A has: "Caf\\u00e9 of shop A"']
 
 
 @pytest.mark.django_db

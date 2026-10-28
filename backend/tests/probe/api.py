@@ -7,8 +7,9 @@ Each route is built to pass the sweep, or to break one of its checks in one way:
   voids each visit's own shop's notes only, and sends them as a download in pieces too.
 - LeakyNoteViewSet makes the mistake the sweep is there to catch: it reads its rows past the guard, so every
   shop's notes show, in its list, its detail route, its edits, its void, the note a create hands back, its
-  download, its CSV export and its search, which needs a query parameter. LeakyNoteTextViewSet leaks the
-  same way but shows no ids, only the texts, as a report of names and totals would.
+  download, its CSV export, its search, which needs a query parameter, and its plain JSON.
+  LeakyNoteTextViewSet leaks the same way but shows no ids, only the texts, as a report of names and
+  totals would.
 - NoteFormFirstViewSet checks an edit's form before it looks for the row: the same 400 for every row.
 - NoteMakerViewSet only makes notes, and names a side link a note doesn't have.
 - NoteByTextViewSet finds a note by its text, a key each shop has its own of.
@@ -103,6 +104,12 @@ class LeakyNoteViewSet(NoteViewSet):
         if not text:
             raise serializers.ValidationError({"text": "Required."})
         return Response(NoteSerializer(self.get_queryset().filter(text__contains=text), many=True).data)
+
+    @action(detail=False)
+    def plain(self, request: Request) -> JsonResponse:
+        # The same leak through Django's own JsonResponse, not DRF's: it writes a letter such as é as an escape
+        # code (\u00e9), not as itself, as DRF does.
+        return JsonResponse({"texts": [note.text for note in self.get_queryset()]})
 
 
 class NoteFormFirstViewSet(NoteViewSet):
