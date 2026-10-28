@@ -148,6 +148,21 @@ STATIC_URL = "static/"
 REST_FRAMEWORK = {
     # Every refusal leaves in the API's one error shape, with a code the app translates (ADR-0032).
     "EXCEPTION_HANDLER": "apps.core.api.errors.handle_error",
+    # How the app logs in: Django's session cookie (03 §5.9, ADR-0017); the device key joins it in AUTH-2.
+    # DRF's default also accepts a password sent with every request (Basic), which nothing here uses.
+    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
+    # Closed unless a view says otherwise: a route open to everyone, like the health check, says so itself.
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    # JSON only, in and out (03 §5.10). DRF's browsable HTML pages would also build a form for each route,
+    # after the view has returned and closed the visit's shop (apps/core/api/base.py), so they would fail.
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    # Every list comes in pages, by cursor (apps/core/api/pagination.py). 50 rows *(default)*: a few phone
+    # screens, light enough for a slow connection at the shop.
+    "DEFAULT_PAGINATION_CLASS": "apps.core.api.pagination.CursorPage",
+    "PAGE_SIZE": 50,
+    # The test client sends JSON, as the app does.
+    "TEST_REQUEST_DEFAULT_FORMAT": "json",
 }
 
 # The version this process runs. A deploy builds the image with its git commit as the version

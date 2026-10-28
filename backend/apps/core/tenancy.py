@@ -60,10 +60,11 @@ def current_shop() -> uuid.UUID | AllShops:
 
 
 @contextmanager
-def shop_context(shop: models.Model) -> Iterator[None]:
+def shop_context(shop: models.Model | uuid.UUID) -> Iterator[None]:
     # Opens a shop for the code inside the `with` block. `shop` is a Shop row, typed as any model
-    # because `core` may not name `Shop` (ADR-0035).
-    token = _current_shop.set(shop.pk)
+    # because `core` may not name `Shop` (ADR-0035), or a shop's id: a visit knows its shop only by the
+    # id the person acting carries (apps/core/api/base.py), and loading the row would cost a query.
+    token = _current_shop.set(shop if isinstance(shop, uuid.UUID) else shop.pk)
     try:
         yield
     finally:

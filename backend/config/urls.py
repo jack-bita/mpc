@@ -8,8 +8,11 @@ from django.contrib import admin
 from django.urls import URLPattern, URLResolver, include, path
 
 urlpatterns: list[URLPattern | URLResolver] = [
-    # /api/health/ — the uptime check (03 §5.10). Office routes will sit beside it under /api/v1/<app>/.
+    # /api/health/ — the uptime check (03 §5.10).
     path("api/", include("apps.core.api.urls")),
+    # The office routes, one prefix per app (03 §5.10). A change that would break old devices gets v2
+    # routes beside these, until every device has updated.
+    path("api/v1/shops/", include("apps.shops.api.urls")),
     # Only the superuser can log in here (PPL-1, apps/people/admin.py).
     path("admin/", admin.site.urls),
 ]
