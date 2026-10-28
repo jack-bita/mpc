@@ -94,6 +94,11 @@ NOT_SHOP_ROUTES: set[type] = {
     SpectacularSwaggerView,
 }
 
+# The most pages of one list the route sweep reads. A list that goes on longer has a cursor that never ends,
+# and the sweep says so instead of hanging CI. The sweep's shops hold a few rows of each table, so each of
+# their lists fits on its first page of 50 (REST_FRAMEWORK's PAGE_SIZE).
+MAX_PAGES = 20
+
 
 def our_tables() -> list[type[models.Model]]:
     # Every table of our apps, as Django lists them. include_auto_created: also the link table Django makes
@@ -437,7 +442,12 @@ def route_problems(
             # The route's own parameters go with the first page only: DRF builds the next page's address from
             # the one it answered, so that address carries them already.
             sent = queries.get(route.name)
+            pages = 0
             while url:
+                pages += 1
+                if pages > MAX_PAGES:
+                    found.append(f"more than {MAX_PAGES} pages: does its cursor ever end?")
+                    break
                 response = client.get(url, sent)
                 sent = None
                 if response.status_code == 400:
@@ -805,6 +815,24 @@ def test_route_check_sends_the_parameters_a_route_needs(
     ]
     # Given the parameter, the route answers, and its leak shows.
     assert given["leaky-note-search"][0].startswith('shows what only shop A has: "Note of shop A"')
+
+
+@pytest.mark.django_db
+def test_route_check_reads_every_page_and_stops(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
+) -> None:
+    # Shop A's note is the oldest, and a full page of shop B's notes comes after it, so on the leaky list,
+    # newest first, A's note is on the second page only.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="Note of shop A").save()
+    for number in range(settings.REST_FRAMEWORK["PAGE_SIZE"]):
+        Note(shop=shop_b, text=f"Note {number} of shop B").save()
+
+    problems = route_problems(staff_client_b, shop_a, shop_b)
+
+    assert problems["leaky-note-list"][0].startswith('shows what only shop A has: "Note of shop A"')
+    # The probe's endless list names itself as its next page, again and again: the sweep stops, and says so.
+    assert problems["endless-note-list"] == [f"more than {MAX_PAGES} pages: does its cursor ever end?"]
 
 
 def test_side_check_finds_routes_that_misname_the_side() -> None:

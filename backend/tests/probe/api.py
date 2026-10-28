@@ -5,10 +5,13 @@ NoteViewSet is built the way every office route is (apps/core/api/base.py), so i
 own shop's notes. LeakyNoteViewSet makes the mistake the sweep is there to catch: it reads its rows past the
 guard, so every shop's notes show: in its list, its detail route, its CSV export and its search, which needs
 a query parameter. LeakyNoteTextViewSet
-leaks the same way but shows no ids, only the texts, as a report of names and totals would. note_count is a
+leaks the same way but shows no ids, only the texts, as a report of names and totals would.
+EndlessNoteViewSet's list has a broken cursor, whose next page is always itself. note_count is a
 plain view, built on no ShopViewSet, so the sweep could never call it as a shop: it must refuse such a
 route. tests/probe/urls.py mounts them, and only the sweep's tests use that address list.
 """
+
+from typing import Any
 
 from django.db import models
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -54,6 +57,13 @@ class LeakyNoteViewSet(NoteViewSet):
         if not text:
             raise serializers.ValidationError({"text": "Required."})
         return Response(NoteSerializer(self.get_queryset().filter(text__contains=text), many=True).data)
+
+
+class EndlessNoteViewSet(NoteViewSet):
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # A broken cursor: every page names itself as the next one, so a sweep that followed pages with no
+        # limit would never end.
+        return Response({"next": request.build_absolute_uri(), "previous": None, "results": []})
 
 
 class NoteTextSerializer(serializers.ModelSerializer[Note]):
