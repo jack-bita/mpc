@@ -18,6 +18,9 @@ PIN_PEPPER = env("PIN_PEPPER", "dev-only-not-a-secret")
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
+# On a laptop, the API's docs page opens without a login (base.py, API_DOCS_PUBLIC).
+API_DOCS_PUBLIC = True
+
 # Emails (password resets, later) are printed in the terminal instead of being sent.
 MAILERS = {
     "default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"},

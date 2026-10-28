@@ -5,11 +5,22 @@ The outside uptime monitor calls it every minute, and the deploy smoke tests cal
 (03 §5.17, §12). An answer means the backend process is up and serving requests.
 """
 
+from typing import Any
+
 from django.conf import settings
+from drf_spectacular.utils import extend_schema
+from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+
+class HealthSerializer(serializers.Serializer[Any]):
+    # What the health check answers, for the API's description only (apps/core/api/schema.py): a plain view
+    # has no serializer that drf-spectacular could read the answer from.
+    status = serializers.CharField()
+    version = serializers.CharField()
 
 
 class HealthView(APIView):
@@ -19,6 +30,7 @@ class HealthView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
+    @extend_schema(responses=HealthSerializer)
     def get(self, request: Request) -> Response:
         # During a deploy the old version keeps answering "ok" until the new one takes over, so "ok"
         # alone can't prove a deploy worked. The demo's smoke test waits until this version equals the

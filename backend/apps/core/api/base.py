@@ -69,6 +69,11 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         self.actor = cast(Actor, request.auth)
 
     def get_queryset(self) -> models.QuerySet[M]:
+        if getattr(self, "swagger_fake_view", False):
+            # drf-spectacular is describing the route (apps/core/api/schema.py), with no visit, so with no
+            # shop. It only needs the table, to tell the type of the id in the address. An empty query, built
+            # without the guard, can return no row.
+            return models.QuerySet(self.model).none()
         # Built on each visit, inside the visit's shop. The default manager is the guarded `objects`, which
         # ShopScoped makes the default of every shop's table (CORE-2); CORE-7's sweep checks they all keep it.
         # cast: mypy reads the manager of `type[M]` as ShopScoped's, though the rows are this route's table's.

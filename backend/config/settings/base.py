@@ -58,6 +58,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    # Writes the API's OpenAPI description from the routes (ADR-0025, apps/core/api/schema.py).
+    "drf_spectacular",
     # Our domain apps, in layer order (ADR-0035; see apps/__init__.py).
     "apps.core",
     "apps.control",
@@ -163,7 +165,38 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 50,
     # The test client sends JSON, as the app does.
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
+    # How drf-spectacular describes each route: drf-spectacular's own way, plus what our creates and edits
+    # take (apps/core/api/schema.py).
+    "DEFAULT_SCHEMA_CLASS": "apps.core.api.schema.RouteSchema",
 }
+
+# --- The API's description, /api/schema/, and its docs page, /api/docs/ (03 §5.10, ADR-0025).
+SPECTACULAR_SETTINGS = {
+    "TITLE": "MPC API",
+    "DESCRIPTION": (
+        "The routes of the MPC shop system. Every refusal has one shape: "
+        '{"code", "message", "fields", "params"}; the app translates the code.'
+    ),
+    # The description's own version, not the deploy's commit: CI will compare the app's generated types with
+    # the description (UI-2), and a version that changed with every commit would never match.
+    "VERSION": "1",
+    # The description doesn't list its own route.
+    "SERVE_INCLUDE_SCHEMA": False,
+    # Separate shapes for what a route takes and what it answers (SideCreateRequest beside Side), so a field
+    # the server fills, like `created_at`, is never one the app's types make it send.
+    "COMPONENT_SPLIT_REQUEST": True,
+    # An edit's fields keep their own "required": every edit sends the `version` it read. Otherwise
+    # drf-spectacular marks every field of a PATCH optional.
+    "COMPONENT_SPLIT_PATCH": False,
+    # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
+    # our address can't change under us. In production the superuser is logged in while it runs.
+    "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0",
+    "SWAGGER_UI_FAVICON_HREF": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0/favicon-32x32.png",
+}
+
+# Who may read the description and the docs page (apps/core/api/schema.py). False: only the superuser, the
+# real server's rule. Off unless an environment turns it on: dev.py does, and the demo does (prod.py).
+API_DOCS_PUBLIC = False
 
 # The version this process runs. A deploy builds the image with its git commit as the version
 # (backend/Dockerfile, `make check-image APP_VERSION=<commit>`); every other build, and a laptop, say "dev".
