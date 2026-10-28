@@ -82,3 +82,14 @@ def test_schema_says_what_each_route_takes(tmp_path: Path) -> None:
     assert side["get"]["parameters"][0]["schema"] == {"type": "string", "format": "uuid"}
     # And a side can be read and changed, never replaced whole (PUT) or deleted: nothing is deleted (T3).
     assert set(side) == {"get", "patch"}
+
+
+def test_docs_group_routes_by_app(tmp_path: Path) -> None:
+    # The docs page groups routes by their first part after /api/ and the version: "shops" says whose
+    # routes they are, where "v1" said nothing. The same part names each route in the app's generated client
+    # (UI-2): shops_sides_list, not v1_shops_sides_list.
+    schema = _schema(tmp_path)
+
+    assert schema["paths"]["/api/v1/shops/sides/"]["get"]["tags"] == ["shops"]
+    assert schema["paths"]["/api/v1/shops/sides/"]["get"]["operationId"] == "shops_sides_list"
+    assert schema["paths"]["/api/health/"]["get"]["tags"] == ["health"]

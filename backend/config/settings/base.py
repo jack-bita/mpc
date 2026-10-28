@@ -182,6 +182,10 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1",
     # The description doesn't list its own route.
     "SERVE_INCLUDE_SCHEMA": False,
+    # What is left out before a route's first part is read: /api/, and the version. The docs page then
+    # groups routes by app ("shops", not "v1"), and the app's generated client names them so
+    # (shops_sides_list).
+    "SCHEMA_PATH_PREFIX": r"/api(/v[0-9]+)?",
     # Separate shapes for what a route takes and what it answers (SideCreateRequest beside Side), so a field
     # the server fills, like `created_at`, is never one the app's types make it send.
     "COMPONENT_SPLIT_REQUEST": True,
