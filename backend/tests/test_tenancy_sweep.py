@@ -335,11 +335,14 @@ def shop_tables() -> list[type[models.Model]]:
 
 
 def rows_of(table: type[models.Model], shop: Shop) -> models.QuerySet[Any]:
-    # A shop's rows of one table, read past the guard on purpose, through Django's plain base manager with a
-    # filter by shop: the guard is what is being checked, so it must not decide what counts as shop A's.
+    # A shop's rows of one table, read past the guard on purpose, with a filter by shop: the guard is what is
+    # being checked, so it must not decide what counts as shop A's. A query of its own, built on no manager of
+    # the table's: even Django's base manager, plain by default, could be made a guarded one by a table's Meta
+    # (base_manager_name), and the sweep, which opens no shop, would then crash.
+    rows: models.QuerySet[Any] = models.QuerySet(table)
     if table is Shop:
-        return table._base_manager.filter(pk=shop.pk)
-    return table._base_manager.filter(shop_id=shop.pk)
+        return rows.filter(pk=shop.pk)
+    return rows.filter(shop_id=shop.pk)
 
 
 def texts_of(table: type[models.Model], shop: Shop) -> set[str]:
@@ -739,6 +742,21 @@ def test_route_sweep_finds_the_side_routes() -> None:
     routes = {(route.name, route.takes_row) for route in shop_routes()}
 
     assert {("side-list", False), ("side-detail", True)} <= routes
+
+
+@pytest.mark.django_db
+def test_sweep_reads_shop_a_rows_past_every_manager(monkeypatch: pytest.MonkeyPatch, shop_a: Shop) -> None:
+    # The sweep finds shop A's rows with no shop open, through no manager of the table's: the guard is what it
+    # checks, so no manager may decide what counts as A's. Even a table whose plain base manager was made the
+    # guarded one (Meta.base_manager_name = "objects") is read. Note is made such a table for this test only:
+    # monkeypatch puts its options back afterwards, the cached base manager too.
+    Note(shop=shop_a, text="Note of shop A").save()
+    monkeypatch.setattr(Note._meta, "base_manager_name", "objects")
+    monkeypatch.delitem(Note._meta.__dict__, "base_manager", raising=False)
+    with pytest.raises(NoShopSelected):
+        Note._base_manager.all()
+
+    assert [note.text for note in rows_of(Note, shop_a)] == ["Note of shop A"]
 
 
 @pytest.mark.django_db
