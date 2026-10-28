@@ -13,6 +13,7 @@ Each route is built to pass the sweep, or to break one of its checks in one way:
 - NoteMakerViewSet only makes notes, and names a side link a note doesn't have.
 - NoteByTextViewSet finds a note by its text, a key each shop has its own of.
 - NoteBulkViewSet takes a DELETE on its whole list, which the sweep has no request for.
+- NoteReportViewSet answers a PDF, which the sweep can't read.
 - ClosedNoteViewSet's list refuses everyone; EndlessNoteViewSet's list has a broken cursor, whose next page
   is always itself.
 - note_count is a plain view, built on no ShopViewSet, so the sweep could never call it as a shop: it must
@@ -130,6 +131,14 @@ class NoteBulkViewSet(NoteViewSet):
         # A change sent to a whole list, which the sweep has no request for: it must say so, not pass it by.
         # It changes nothing here; the sweep never sends it.
         return Response(status=204)
+
+
+class NoteReportViewSet(NoteViewSet):
+    @action(detail=False)
+    def pdf(self, request: Request) -> HttpResponse:
+        # The notes as a PDF, as a report may come: a PDF squeezes its text, so no search of its bytes finds the
+        # notes in it. This one is a stand-in, the start of a PDF file and no more: only its kind matters here.
+        return HttpResponse(b"%PDF-1.7\n", content_type="application/pdf")
 
 
 class ClosedNoteViewSet(NoteViewSet):

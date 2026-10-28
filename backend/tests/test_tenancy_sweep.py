@@ -65,11 +65,12 @@ from apps.core.models import ShopScoped, ShopScopedManager, UUIDModel
 from apps.core.tenancy import NoShopSelected, shop_context
 from apps.shops.models import PaymentAccount, Shop, Side, StockLocation
 from tests.probe.models import Note
-from tests.sweep_lists import INFRASTRUCTURE, NO_SHOP, NOT_SHOP_ROUTES
+from tests.sweep_lists import INFRASTRUCTURE, NO_SHOP, NOT_SHOP_ROUTES, OWN_LEAK_TESTS
 
 BACKEND = Path(__file__).resolve().parents[1]
 APPS = BACKEND / "apps"
 CONFIG = BACKEND / "config"
+TESTS = BACKEND / "tests"
 
 # The most pages of one list the route sweep reads. A list that goes on longer has a cursor that never ends,
 # and the sweep says so instead of hanging CI. The sweep's shops hold a few rows of each table, so each of
@@ -379,8 +380,21 @@ class Reply:
     body: bytes
 
     @property
+    def kind(self) -> str:
+        # The kind alone, without what follows it: "application/json" of "application/json; charset=utf-8".
+        return self.content_type.split(";")[0].strip().lower()
+
+    @property
     def is_json(self) -> bool:
-        return self.content_type.startswith("application/json")
+        # JSON, or a kind built on it, such as "application/problem+json".
+        return self.kind == "application/json" or self.kind.endswith("+json")
+
+    @property
+    def readable(self) -> bool:
+        # What a search of the bytes can see into: JSON, text (a CSV, a page), and an empty answer. A PDF, an
+        # Excel sheet or a ZIP squeezes its text (compression), and a picture holds none, so a search would find
+        # nothing in them, shop A's rows or not.
+        return not self.body or self.is_json or self.kind.startswith("text/")
 
 
 def read(response: HttpResponseBase) -> Reply:
@@ -392,7 +406,8 @@ def read(response: HttpResponseBase) -> Reply:
 def shown(reply: Reply, marks: Marks) -> list[str]:
     # Any of shop A's marks anywhere in the answer: in a row of the route's own table, in a row of another table
     # nested in it, or in a link. Looked for in the answer's bytes as they were sent, so an answer of more than
-    # one kind can be read: JSON, a CSV download, a download sent in pieces.
+    # one kind can be read: JSON, a CSV download, a download sent in pieces. One the sweep can't read, such as a
+    # PDF, is reported instead: a search of it would pass whatever it holds.
     # - An id, as it is: long and unique, it can't turn up by chance.
     # - A text, in a JSON answer: as JSON writes it, quotes and all ("Vyakula"), so a short one matches only a
     #   whole value: "F", A's side letter, never the F of "Fanta". ensure_ascii=False: the API writes a letter
@@ -400,6 +415,9 @@ def shown(reply: Reply, marks: Marks) -> list[str]:
     # - A text, in any other answer: as it is, since a CSV writes its texts with no quotes, but only when it is
     #   long enough, 4 characters or more, not to turn up by chance. So in a CSV, a side's letter goes unseen;
     #   its id and its name don't.
+    if not reply.readable:
+        where = "give the route a leak test of its own, and name it in OWN_LEAK_TESTS (backend/tests/sweep_lists.py)"
+        return [f"answers {reply.kind}, which the sweep can't read: {where}"]
     needles = list(marks.ids)
     for text in marks.texts:
         if reply.is_json:
@@ -475,6 +493,11 @@ def route_problems(
     names = Counter(address.name for address in addresses() if address.name)
     problems: dict[str, list[str]] = {}
     for route in shop_routes():
+        if route.name in OWN_LEAK_TESTS:
+            # A route whose answers the sweep can't read, such as a PDF: its own test proves it shows nothing of
+            # another shop's (backend/tests/sweep_lists.py), and test_every_route_left_to_its_own_test_has_one
+            # checks that the test exists.
+            continue
         # What the sweep sends:
         # - to a detail route, each request it takes, about each of A's rows: a read (GET), an edit (PATCH,
         #   PUT), a POST, which is how a void or a cancel will come, since nothing is deleted or replaced (03
@@ -552,7 +575,31 @@ def route_problems(
                     reply = read(client.post(reverse(route.name), {"id": str(row_id)}, format="json"))
                     found += [f"POST with shop A's id {row_id}: {problem}" for problem in shown(reply, marks)]
         if found:
-            problems[route.name or "(no name)"] = found
+            # Each problem once: a detail route's rows can give the same one several times.
+            problems[route.name or "(no name)"] = list(dict.fromkeys(found))
+    return problems
+
+
+def names_of_tests() -> set[str]:
+    # The name of every test function in our tests: the apps' tests/ folders and backend/tests/.
+    names = set()
+    for path in [*APPS.rglob("test_*.py"), *TESTS.rglob("test_*.py")]:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        names |= {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    return {name for name in names if name.startswith("test_")}
+
+
+def own_leak_test_problems() -> list[str]:
+    # A route left to a leak test of its own (OWN_LEAK_TESTS) must still exist, and so must its test: a stale
+    # name on either side would leave a route that nothing checks.
+    routes = {route.name for route in shop_routes()}
+    tests = names_of_tests()
+    problems = []
+    for route_name, test_name in sorted(OWN_LEAK_TESTS.items()):
+        if route_name not in routes:
+            problems.append(f"{route_name}: no office route has this name")
+        if test_name not in tests:
+            problems.append(f"{route_name}: no test is named {test_name}")
     return problems
 
 
@@ -960,6 +1007,37 @@ def test_route_check_reads_a_download_sent_in_pieces(
 
 
 @pytest.mark.django_db
+def test_route_check_reports_an_answer_it_cannot_read(
+    monkeypatch: pytest.MonkeyPatch, settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
+) -> None:
+    # The probe's report answers a PDF: its text is squeezed, so no search finds shop A's names in it, and a pass
+    # would prove nothing. The sweep says so, and names the way out.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="Note of shop A").save()
+
+    problems = route_problems(staff_client_b, shop_a, shop_b)
+
+    assert problems["note-report-pdf"] == [
+        "answers application/pdf, which the sweep can't read: give the route a leak test of its own, and name it"
+        " in OWN_LEAK_TESTS (backend/tests/sweep_lists.py)"
+    ]
+    # Named there, with its own leak test, the route is left to that test. (This test stands in for it.)
+    monkeypatch.setitem(OWN_LEAK_TESTS, "note-report-pdf", "test_route_check_reports_an_answer_it_cannot_read")
+    assert "note-report-pdf" not in route_problems(staff_client_b, shop_a, shop_b)
+
+
+def test_own_leak_test_check_finds_stale_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A route left to a test nobody wrote, and a test named for a route that is gone: either way, nothing checks.
+    monkeypatch.setitem(OWN_LEAK_TESTS, "side-list", "test_that_nobody_wrote")
+    monkeypatch.setitem(OWN_LEAK_TESTS, "gone-list", "test_no_route_leaks_across_shops")
+
+    assert own_leak_test_problems() == [
+        "gone-list: no office route has this name",
+        "side-list: no test is named test_that_nobody_wrote",
+    ]
+
+
+@pytest.mark.django_db
 def test_route_check_sends_the_parameters_a_route_needs(
     settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
 ) -> None:
@@ -1186,3 +1264,7 @@ def test_every_side_link_is_named_on_its_route() -> None:
 
 def test_every_api_route_is_swept() -> None:
     assert api_route_problems() == []
+
+
+def test_every_route_left_to_its_own_test_has_one() -> None:
+    assert own_leak_test_problems() == []

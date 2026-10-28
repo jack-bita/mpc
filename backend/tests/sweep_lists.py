@@ -45,3 +45,8 @@ NOT_SHOP_ROUTES: set[type] = {
     SpectacularAPIView,
     SpectacularSwaggerView,
 }
+
+# Office routes whose answers the sweep can't read, such as a PDF or an Excel download, which squeeze their
+# text: route name → the test that proves the route shows nothing of another shop's. The sweep leaves each
+# such route to its test, and checks that the test exists (test_every_route_left_to_its_own_test_has_one).
+OWN_LEAK_TESTS: dict[str, str] = {}
