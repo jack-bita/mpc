@@ -123,7 +123,7 @@ def test_split_refuses_bad_factors(factors: list[str]) -> None:
 
 
 def test_split_never_rounds_the_rest() -> None:
-    # 999 grams short of a whole bag stays 49.999 kg: the rest is shown as it is, never rounded up.
+    # One gram short of another whole bag stays 49.999 kg: the rest is shown as it is, never rounded up.
     bags, rest = numbers.split_into_units(Decimal("1349.999"), [Decimal("50")])
 
     assert bags == [26]
