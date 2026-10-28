@@ -9,6 +9,7 @@ fixture here may build on any app and still serve the tests of every app.
 
 import pytest
 from django.test import Client
+from rest_framework.test import APIClient
 
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, User
@@ -40,6 +41,26 @@ def staff_a(shop_a: Shop) -> StaffMember:
     user = User.objects.create_user(full_name="Staff Demo")
     with shop_context(shop_a):
         return add_staff(shop=shop_a, user=user, display_name="Staff A", by=None)
+
+
+@pytest.fixture
+def staff_b(shop_b: Shop) -> StaffMember:
+    # A fake staff member at shop B, for tests that check a person of one shop can't act in another (T1).
+    user = User.objects.create_user(full_name="Staff Demo B")
+    with shop_context(shop_b):
+        return add_staff(shop=shop_b, user=user, display_name="Staff B", by=None)
+
+
+@pytest.fixture
+def staff_client_a(staff_a: StaffMember) -> APIClient:
+    # DRF's test client, logged in as a staff member of shop A, the way the office screens will be. The
+    # logins themselves come later (AUTH-3, AUTH-4) and will leave the person acting in `request.auth`,
+    # which names the shop the visit works for (apps/core/api/base.py). force_authenticate skips the login
+    # and puts the staff member there directly. DRF's type stubs expect its own Token model there; DRF
+    # itself takes any object, and ours is the staff member.
+    client = APIClient()
+    client.force_authenticate(user=staff_a.user, token=staff_a)  # type: ignore[arg-type]
+    return client
 
 
 @pytest.fixture

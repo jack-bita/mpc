@@ -8,6 +8,7 @@ So User keeps only what belongs to the person. It is global, one of the few tabl
 `migrate` and can't swap it afterwards (ADR-0012, 04 BP5).
 """
 
+import uuid
 from typing import Any
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
@@ -231,6 +232,12 @@ class StaffMember(ShopScoped):
 
     def __str__(self) -> str:
         return self.display_name
+
+    @property
+    def staff_id(self) -> uuid.UUID:
+        # As an Actor (apps/core/tenancy.py), the one a login names: a staff member acts as itself, so it is
+        # the one recorded as who made or changed a row.
+        return self.pk
 
     def clean(self) -> None:
         # full_clean runs this before the rules above: " Asha " and "Asha" are one nickname on screen.

@@ -19,6 +19,7 @@ dependencies = [
     "django>=6.1.2,<6.2",
     "django-stubs-ext>=6.1.2",
     "djangorestframework>=3.18",
+    "drf-spectacular>=0.30.0",
     "gunicorn>=26.2.0",
     "phonenumbers>=9.0.41",
     "psycopg[binary]>=3.3",

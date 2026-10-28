@@ -29,6 +29,13 @@ def test_shop_context_is_cleared_after_the_block(shop_a: Model) -> None:
         current_shop()
 
 
+def test_shop_context_takes_a_shop_id(shop_a: Model) -> None:
+    # A visit knows its shop by id only: the person acting carries `shop_id` (apps/core/api/base.py). So
+    # opening the shop needs no Shop row, and no extra query on every visit.
+    with shop_context(shop_a.pk):
+        assert current_shop() == shop_a.pk
+
+
 def test_shop_context_is_cleared_even_after_an_error(shop_a: Model) -> None:
     # A visit that crashes halfway (a bug, a lost database connection) must not leave its shop behind
     # either: the block clears the shop however it ends.

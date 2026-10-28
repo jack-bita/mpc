@@ -48,6 +48,10 @@ services:
       # or the name Render gave instead. Not written here, so a name with extra letters needs no commit.
       - key: DJANGO_ALLOWED_HOSTS
         sync: false
+      # The API's description and docs page (/api/schema/, /api/docs/) are open to every visitor on the demo:
+      # the API is part of what the demo shows (ADR-0029). The real server leaves this out (prod.py).
+      - key: API_DOCS_PUBLIC
+        value: "true"
       # The database's details, filled in by Render from the database below; prod.py requires each one.
       # When the database is re-created every 30 days, they follow it by themselves.
       - key: DB_HOST

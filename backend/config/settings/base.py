@@ -58,6 +58,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    # Writes the API's OpenAPI description from the routes (ADR-0025, apps/core/api/schema.py).
+    "drf_spectacular",
     # Our domain apps, in layer order (ADR-0035; see apps/__init__.py).
     "apps.core",
     "apps.control",
@@ -143,6 +145,62 @@ TIME_ZONE = "UTC"
 USE_TZ = True
 
 STATIC_URL = "static/"
+
+# --- Django REST framework: how every API view behaves, unless a view says otherwise (03 §5.10).
+REST_FRAMEWORK = {
+    # Every refusal leaves in the API's one error shape, with a code the app translates (ADR-0032).
+    "EXCEPTION_HANDLER": "apps.core.api.errors.handle_error",
+    # How the app logs in: Django's session cookie (03 §5.9, ADR-0017); the device key joins it in AUTH-2.
+    # DRF's default also accepts a password sent with every request (Basic), which nothing here uses.
+    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
+    # Closed unless a view says otherwise: a route open to everyone, like the health check, says so itself.
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    # JSON only, in and out (03 §5.10). DRF's browsable HTML pages would also build a form for each route,
+    # after the view has returned and closed the visit's shop (apps/core/api/base.py), so they would fail.
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    # Every list comes in pages, by cursor (apps/core/api/pagination.py). 50 rows *(default)*: a few phone
+    # screens, light enough for a slow connection at the shop.
+    "DEFAULT_PAGINATION_CLASS": "apps.core.api.pagination.CursorPage",
+    "PAGE_SIZE": 50,
+    # The test client sends JSON, as the app does.
+    "TEST_REQUEST_DEFAULT_FORMAT": "json",
+    # How drf-spectacular describes each route: drf-spectacular's own way, plus what our creates and edits
+    # take (apps/core/api/schema.py).
+    "DEFAULT_SCHEMA_CLASS": "apps.core.api.schema.RouteSchema",
+}
+
+# --- The API's description, /api/schema/, and its docs page, /api/docs/ (03 §5.10, ADR-0025).
+SPECTACULAR_SETTINGS = {
+    "TITLE": "MPC API",
+    "DESCRIPTION": (
+        "The routes of the MPC shop system. Every refusal has one shape: "
+        '{"code", "message", "fields", "params"}; the app translates the code.'
+    ),
+    # The description's own version, not the deploy's commit: CI will compare the app's generated types with
+    # the description (UI-2), and a version that changed with every commit would never match.
+    "VERSION": "1",
+    # The description doesn't list its own route.
+    "SERVE_INCLUDE_SCHEMA": False,
+    # What is left out before a route's first part is read: /api/, and the version. The docs page then
+    # groups routes by app ("shops", not "v1"), and the app's generated client names them so
+    # (shops_sides_list).
+    "SCHEMA_PATH_PREFIX": r"/api(/v[0-9]+)?",
+    # Separate shapes for what a route takes and what it answers (SideCreateRequest beside Side), so a field
+    # the server fills, like `created_at`, is never one the app's types make it send.
+    "COMPONENT_SPLIT_REQUEST": True,
+    # An edit's fields keep their own "required": every edit sends the `version` it read. Otherwise
+    # drf-spectacular marks every field of a PATCH optional.
+    "COMPONENT_SPLIT_PATCH": False,
+    # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
+    # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.
+    "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0",
+    "SWAGGER_UI_FAVICON_HREF": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0/favicon-32x32.png",
+}
+
+# Whether the description and the docs page are open (apps/core/api/schema.py). False: closed to everyone,
+# the real server's rule. Off unless an environment turns it on: dev.py does, and the demo does (prod.py).
+API_DOCS_PUBLIC = False
 
 # The version this process runs. A deploy builds the image with its git commit as the version
 # (backend/Dockerfile, `make check-image APP_VERSION=<commit>`); every other build, and a laptop, say "dev".

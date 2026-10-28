@@ -19,7 +19,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.languages import Language
-from apps.core.models import AppendOnly, ShopScoped, TimeStamped, UUIDModel
+from apps.core.models import AppendOnly, Editable, ShopScoped, TimeStamped, UUIDModel
 from apps.core.settings_registry import KEY_SHAPE, REGISTRY, Scope
 
 
@@ -42,8 +42,8 @@ class Shop(UUIDModel, TimeStamped):
 
     name = models.CharField(max_length=100)
     # The short form people already say: MPC for Mabatini Pumba Center (Jack, 26 Oct 2026). One shop
-    # each; its shape (2 to 10 capital letters) is a rule in Meta, and clean() tidies what was typed.
-    code = models.CharField(max_length=10, unique=True)
+    # each, and its shape (2 to 10 capital letters): both are rules in Meta. clean() tidies what was typed.
+    code = models.CharField(max_length=10)
     # Times are stored in UTC and shown in the shop's own time, and its business dates are worked out
     # in this zone (02 §1). 64 characters hold the longest name in the tz database.
     timezone = models.CharField(max_length=64, default="Africa/Dar_es_Salaam")
@@ -98,6 +98,15 @@ class Shop(UUIDModel, TimeStamped):
                 condition=models.Q(code__regex=r"^[A-Z]{2,10}$"),
                 name="shops_shop_code_capital_letters",
                 violation_error_code="shop.code_invalid",
+            ),
+            # One shop per code. A named rule, not `unique=True` on the field: that one can only answer
+            # with Django's generic `unique`, and the app needs a code of ours to translate (ADR-0032).
+            # The message is there for the code's sake, as on Side's letter.
+            models.UniqueConstraint(
+                fields=["code"],
+                name="shops_shop_code_unique",
+                violation_error_code="shop.code_taken",
+                violation_error_message="Another shop has this code.",
             ),
             # The shape of an ISO 4217 code (TZS, KES, USD). Which currencies exist isn't checked here.
             models.CheckConstraint(
@@ -163,10 +172,11 @@ class SaleFlow(models.TextChoices):
     WRITER_CASHIER_LOADER = "writer_cashier_loader", "Writer, cashier, loader"
 
 
-class Side(ShopScoped):
+class Side(Editable):
     # A section of one shop (ADR-0001, 02 §4): its own stock, drawer, staff roles and debts, sharing the
-    # shop's products, prices and customers. ShopScoped (CORE-2) gives `id`, `shop`, `created_at`,
-    # `created_by` and the guard on reads.
+    # shop's products, prices and customers. Editable (CORE-6), built on ShopScoped (CORE-2), gives `id`,
+    # `shop`, `created_at`, `created_by` and the guard on reads, plus `updated_at`, `updated_by` and the
+    # `version` that keeps two people's edits apart: the owner renames a side (rename_side).
 
     # The owner's own word for it: "Dawa".
     name = models.CharField(max_length=40)
@@ -178,8 +188,8 @@ class Side(ShopScoped):
     # counters by surprise. The switch comes with the settings screen (SHOP-3).
     is_live = models.BooleanField(default=False)
 
-    class Meta(ShopScoped.Meta):
-        # Builds on ShopScoped.Meta, so `objects`, with the guard, stays the default manager (CORE-2).
+    class Meta(Editable.Meta):
+        # Builds on Editable.Meta, so `objects`, with the guard, stays the default manager (CORE-2).
         # The database is the last guard (03 §5.6); full_clean checks the same rules first, so a person
         # gets a code, not a database error (ADR-0032).
         constraints = [

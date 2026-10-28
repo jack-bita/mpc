@@ -5,7 +5,7 @@ for one shop, and this file holds that shop for the length of the visit: `shop_c
 `system_context()` opens every shop for a system job, and `current_shop()` reads it. Every ShopScoped
 table's default manager (apps/core/models.py) calls `current_shop()`, so a read that names no shop stops
 with NoShopSelected instead of returning every shop's rows. Code handed another shop, or another shop's
-row, than the one open raises ShopMismatch.
+row, than the one open raises ShopMismatch. An Actor is whoever acts in a visit, and belongs to one shop.
 """
 
 import enum
@@ -13,6 +13,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import Protocol
 
 from django.db import models
 
@@ -39,6 +40,23 @@ class AllShops(enum.Enum):
 
 ALL_SHOPS = AllShops.ALL_SHOPS
 
+
+class Actor(Protocol):
+    # Whoever a visit's login names, as it leaves them in `request.auth` (apps/core/api/base.py): a staff
+    # member (AUTH-3, AUTH-4), or later a paired device (AUTH-2). Described by what it has, not by its name:
+    # `core` and `shops` may not import `people` (ADR-0035).
+    # - `shop_id`: the one shop it belongs to, which the visit works for. The services check it against the
+    #   shop they write to (T1).
+    # - `staff_id`: the staff member acting, whom the services record as who made or changed a row
+    #   (`created_by`, `updated_by`). None when no person acts: a device alone is a shop's machine, not
+    #   someone, so office routes refuse it.
+    @property
+    def shop_id(self) -> uuid.UUID: ...
+
+    @property
+    def staff_id(self) -> uuid.UUID | None: ...
+
+
 # The note itself. It holds a shop's id, ALL_SHOPS, or None: "no shop chosen", how every visit starts.
 # - A context variable, not a plain variable: each visit gets its own note, even when one server worker
 #   runs several visits at once, so two visits never see each other's shop.
@@ -60,10 +78,11 @@ def current_shop() -> uuid.UUID | AllShops:
 
 
 @contextmanager
-def shop_context(shop: models.Model) -> Iterator[None]:
+def shop_context(shop: models.Model | uuid.UUID) -> Iterator[None]:
     # Opens a shop for the code inside the `with` block. `shop` is a Shop row, typed as any model
-    # because `core` may not name `Shop` (ADR-0035).
-    token = _current_shop.set(shop.pk)
+    # because `core` may not name `Shop` (ADR-0035), or a shop's id: a visit knows its shop only by the
+    # id the person acting carries (apps/core/api/base.py), and loading the row would cost a query.
+    token = _current_shop.set(shop if isinstance(shop, uuid.UUID) else shop.pk)
     try:
         yield
     finally:
