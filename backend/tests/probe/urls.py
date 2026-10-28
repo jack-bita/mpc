@@ -10,6 +10,7 @@ from tests.probe.api import (
     LeakyNoteTextViewSet,
     LeakyNoteViewSet,
     NoteByTextViewSet,
+    NoteMakerViewSet,
     NoteViewSet,
     note_count,
 )
@@ -19,6 +20,7 @@ router.register("notes", NoteViewSet, basename="note")
 router.register("leaky-notes", LeakyNoteViewSet, basename="leaky-note")
 router.register("leaky-note-texts", LeakyNoteTextViewSet, basename="leaky-note-text")
 router.register("notes-by-text", NoteByTextViewSet, basename="note-by-text")
+router.register("note-makers", NoteMakerViewSet, basename="note-maker")
 router.register("endless-notes", EndlessNoteViewSet, basename="endless-note")
 
 # Two apps whose routers happen to pick one name. config/urls.py mounts each app with no namespace, so their

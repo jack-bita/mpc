@@ -501,11 +501,15 @@ def route_problems(
 def side_field_problems(views: Iterable[type[ShopViewSet[Any]]]) -> list[str]:
     # The two side hooks of every office route (apps/core/api/base.py, PPL-3) find a row's side through
     # `side_field`: visible_sides() narrows every read by it, and check_side_permission() asks about the side it
-    # names. A name the table doesn't have fails loudly, but None on a table that links a side fails quietly:
-    # once PPL-3 hides sides, the route would still hand every side's rows to anyone of the shop. So each route
-    # names its table's link: "pk" for the sides themselves, the link's own name on a table with one, and None
-    # on a table of the whole shop. The hooks read the link's id (`<side_field>_id`), so only a direct link
-    # counts: a many-to-many one, like PaymentAccount.sides, has no id of its own.
+    # names. A wrong field mostly fails quietly:
+    # - None on a table that links a side: once PPL-3 hides sides, the route would still hand every side's rows
+    #   to anyone of the shop, and let anyone make rows on any side;
+    # - a name the table doesn't have, on a create: side_of_new() looks for it in what was sent, finds nothing,
+    #   and checks the new row as one of the whole shop. (On a read or an edit, side_of() fails loudly instead.)
+    # So each route names its table's link: "pk" for the sides themselves, the link's own name on a table with
+    # one, and None on a table of the whole shop. Every office view is checked, one that only makes rows too
+    # (shop_routes() lists every route, whatever it answers). The hooks read the link's id (`<side_field>_id`),
+    # so only a direct link counts: a many-to-many one, like PaymentAccount.sides, has no id of its own.
     problems = []
     # Each view once, though its list and its detail route both name it.
     for view in dict.fromkeys(views):
@@ -944,6 +948,16 @@ def test_side_check_finds_routes_that_misname_the_side() -> None:
         "AccountsBySide: side_field 'side', but shops.PaymentAccount needs [None]",
         "SidesBySide: side_field 'side', but shops.Side needs ['pk']",
     ]
+
+
+def test_side_check_sees_routes_that_only_make_rows(settings: Settings) -> None:
+    # The probe's note-makers route only makes notes, with no read at all, and names a side link a note doesn't
+    # have. Found by itself among the probe's routes, it is checked like any other.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+
+    problems = side_field_problems(route.view for route in shop_routes())
+
+    assert problems == ["NoteMakerViewSet: side_field 'side', but probe.Note needs [None]"]
 
 
 def test_api_route_check_finds_a_route_off_the_base(settings: Settings) -> None:
