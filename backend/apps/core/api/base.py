@@ -12,6 +12,8 @@ An office route builds on ShopViewSet: `class SideViewSet(ShopViewSet[Side])`.
   the guard filters them to that shop (ADR-0022). A table's rows can't be named in the class body, as DRF
   allows (`queryset = Side.objects.all()`): that would ask for a shop while the module loads, and raise.
 - The per-side check: check_side_permission(), called for every row the view hands out. PPL-3 fills it in.
+- Creates: a route that makes rows adds CreateOnceMixin. The client sends the new row's id (ADR-0007), so
+  the same request sent twice makes one row, and an id already used in another shop is refused.
 
 Long lists come in pages through CursorPage (apps/core/api/pagination.py), the default for every list.
 """
@@ -20,19 +22,24 @@ import uuid
 from contextlib import ExitStack
 from typing import Any, cast
 
-from django.db import models
+import psycopg
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, models, transaction
 from django.http import HttpRequest, HttpResponseBase
-from rest_framework import exceptions
+from rest_framework import exceptions, serializers, status
 from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.core.models import ShopScoped
-from apps.core.tenancy import shop_context
+from apps.core.tenancy import Actor, shop_context
 
 
 class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
     # The table whose rows the route shows, read per visit in get_queryset().
     model: type[M]
+    # Who acts in this visit, from login: the services record it as who made or changed a row.
+    actor: Actor
     # The visit's stack of things to close when it ends: the open shop. Set in dispatch(), once per visit;
     # DRF makes a new view object for every visit, so two visits never share it.
     _visit: ExitStack
@@ -56,6 +63,8 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
             # stops here, before any table is read.
             raise exceptions.NotAuthenticated("This route needs a login at a shop.")
         self._visit.enter_context(shop_context(shop_id))
+        # cast: DRF's type stubs know only its own Token model in `request.auth`; ours carries a shop.
+        self.actor = cast(Actor, request.auth)
 
     def get_queryset(self) -> models.QuerySet[M]:
         # Built on each visit, inside the visit's shop. The default manager is the guarded `objects`, which
@@ -78,3 +87,77 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         # checks, then the side's.
         super().check_object_permissions(request, obj)
         self.check_side_permission(request, self.side_of(obj))
+
+
+class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
+    """POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+
+    The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+    same request again, with the same id, and gets the stored row back, with the same 201, as if the first
+    answer had arrived. A route that makes rows builds on this, names what a create sends
+    (`create_serializer_class`), and writes create_row(), which calls its service."""
+
+    # What a create sends: the new row's fields, `id` among them, and required.
+    create_serializer_class: type[serializers.BaseSerializer[Any]]
+
+    def create_row(self, data: dict[str, Any]) -> M:
+        """Make the new row from the checked input, through the route's service. Each route writes its own."""
+        raise NotImplementedError
+
+    def side_of_new(self, data: dict[str, Any]) -> uuid.UUID | None:
+        """The side a new row will belong to, for the per-side check before it is made: its `side`, or None
+        for a row of the whole shop."""
+        side = data.get("side")
+        return None if side is None else side.pk
+
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # Sent before? Look first, before any check: the row a first send made would fail the checks of
+        # its own retry (MFANO already has a side P: the first send's own).
+        sent_id = request.data.get("id") if isinstance(request.data, dict) else None
+        row = self._stored(sent_id)
+        if row is None:
+            row = self._create(request)
+        else:
+            # Handed out like any row that is read: the side's check applies.
+            self.check_object_permissions(request, row)
+        return Response(self.get_serializer(row).data, status=status.HTTP_201_CREATED)
+
+    def _create(self, request: Request) -> M:
+        sent = self.create_serializer_class(data=request.data, context=self.get_serializer_context())
+        sent.is_valid(raise_exception=True)
+        data = sent.validated_data
+        self.check_side_permission(request, self.side_of_new(data))
+        try:
+            # A savepoint: a refused insert undoes only this part, and the visit can still look and answer.
+            with transaction.atomic():
+                return self.create_row(data)
+        except IntegrityError as error:
+            if not _id_taken(error, self.model):
+                # Another database rule: the service should have checked it first, so this is a bug.
+                raise
+        # The id was taken. Either the same request came twice at the same moment, and the other copy has
+        # just made the row in this shop: then it is the answer, as for any retry.
+        row = self._stored(data["id"])
+        if row is None:
+            # Or another shop's row has this id. The guard hides it from every lookup here, and the answer
+            # says only that the id can't be used: nothing about that row, not even what it is (03 §5.4).
+            raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")})
+        return row
+
+    def _stored(self, row_id: object) -> M | None:
+        # The row with this id in the visit's shop, if there is one: the guard hides every other shop's.
+        try:
+            row_id = uuid.UUID(str(row_id))
+        except ValueError:
+            return None  # no id, or not an id at all: the input check says so, beside the field
+        return self.get_queryset().filter(pk=row_id).first()
+
+
+def _id_taken(error: IntegrityError, model: type[models.Model]) -> bool:
+    # True when the refused insert broke the table's primary key: its id was already taken. PostgreSQL
+    # names the broken rule, and it names a table's primary key "<table>_pkey".
+    cause = error.__cause__
+    return (
+        isinstance(cause, psycopg.errors.UniqueViolation)
+        and cause.diag.constraint_name == f"{model._meta.db_table}_pkey"
+    )

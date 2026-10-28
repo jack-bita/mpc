@@ -5,7 +5,7 @@ for one shop, and this file holds that shop for the length of the visit: `shop_c
 `system_context()` opens every shop for a system job, and `current_shop()` reads it. Every ShopScoped
 table's default manager (apps/core/models.py) calls `current_shop()`, so a read that names no shop stops
 with NoShopSelected instead of returning every shop's rows. Code handed another shop, or another shop's
-row, than the one open raises ShopMismatch.
+row, than the one open raises ShopMismatch. An Actor is whoever acts in a visit, and belongs to one shop.
 """
 
 import enum
@@ -13,6 +13,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import Any, Protocol
 
 from django.db import models
 
@@ -38,6 +39,19 @@ class AllShops(enum.Enum):
 
 
 ALL_SHOPS = AllShops.ALL_SHOPS
+
+
+class Actor(Protocol):
+    # Whoever acts in a visit, as login leaves them in `request.auth` (apps/core/api/base.py): a staff
+    # member (AUTH-3, AUTH-4), or a paired device (AUTH-2). Each belongs to one shop. Described by what it
+    # has, not by its name: `core` and `shops` may not import `people` (ADR-0035). The services record its
+    # `pk` as who made a row, and check its `shop_id` against the shop they write to (T1).
+    @property
+    def pk(self) -> Any: ...
+
+    @property
+    def shop_id(self) -> uuid.UUID: ...
+
 
 # The note itself. It holds a shop's id, ALL_SHOPS, or None: "no shop chosen", how every visit starts.
 # - A context variable, not a plain variable: each visit gets its own note, even when one server worker

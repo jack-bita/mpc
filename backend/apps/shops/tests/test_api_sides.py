@@ -13,19 +13,26 @@ the staff member straight into `request.auth`, as those logins will.
 import uuid
 
 import pytest
+from django.db import IntegrityError
 from django.test import Client
 from rest_framework import exceptions
 from rest_framework.request import Request
 from rest_framework.test import APIClient
 
+from apps.core.api.base import CreateOnceMixin
 from apps.core.api.pagination import CursorPage
 from apps.core.tenancy import NoShopSelected, current_shop, shop_context
 from apps.shops.api.views import SideViewSet
-from apps.shops.models import Shop, Side
+from apps.shops.models import PaymentAccountSide, Shop, Side, StockLocation
 
 pytestmark = pytest.mark.django_db
 
 SIDES = "/api/v1/shops/sides/"
+
+
+def new_side() -> dict[str, str]:
+    # A third side, as the app sends it: with the id the app made itself (ADR-0007).
+    return {"id": str(uuid.uuid7()), "code": "P", "name": "Pembejeo"}
 
 
 @pytest.fixture
@@ -121,3 +128,118 @@ def test_side_permission_hook_checks_each_side(
     refused = staff_client_a.get(f"{SIDES}{vyakula}/")
     assert refused.status_code == 403
     assert refused.json()["code"] == "permission_denied"
+
+
+def test_create_twice_with_same_uuid_makes_one_row(staff_client_a: APIClient, shop_a: Shop) -> None:
+    # A phone adds a side, and the answer is lost on the way back, so the phone sends the same request
+    # again. The id it made makes the second send harmless: it gets the same side back, with the same 201,
+    # as if the first answer had arrived.
+    side = new_side()
+
+    first = staff_client_a.post(SIDES, side)
+    again = staff_client_a.post(SIDES, side)
+
+    assert first.status_code == again.status_code == 201
+    assert again.json() == first.json()
+    with shop_context(shop_a):
+        assert Side.objects.filter(pk=side["id"]).count() == 1
+        # And it came with its default stock location and its cash drawer, once each, as create_shop's
+        # sides do (SHOP-2).
+        assert StockLocation.objects.filter(side_id=side["id"]).count() == 1
+        assert PaymentAccountSide.objects.filter(side_id=side["id"]).count() == 1
+
+
+def test_two_copies_at_the_same_moment_make_one_row(
+    staff_client_a: APIClient, shop_a: Shop, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Two copies of one request arrive together. Each looks for the id before the other has written, and
+    # each one's checks run before the other has committed, so neither can see the other's row. The first
+    # insert wins; the second fails on the id. That copy then looks again, finds the first one's side,
+    # and answers with it, as for any retry.
+    side = new_side()
+    first = staff_client_a.post(SIDES, side)
+
+    # The second copy, as it runs in that race: its first look and its checks see nothing of the first.
+    real_stored = CreateOnceMixin._stored
+    looks: list[object] = []
+
+    def first_look_too_early(view: CreateOnceMixin[Side], row_id: object) -> Side | None:
+        looks.append(row_id)
+        return None if len(looks) == 1 else real_stored(view, row_id)
+
+    monkeypatch.setattr(CreateOnceMixin, "_stored", first_look_too_early)
+    monkeypatch.setattr(Side, "full_clean", lambda *args, **kwargs: None)
+
+    again = staff_client_a.post(SIDES, side)
+
+    assert again.status_code == 201
+    assert again.json() == first.json()
+    with shop_context(shop_a):
+        assert Side.objects.filter(pk=side["id"]).count() == 1
+
+
+def test_other_database_refusal_left_as_a_bug(staff_client_a: APIClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Only a taken id is the create's own to answer. Any other rule the database refuses is one the service
+    # should have checked first: a bug, so it is not dressed up as a refusal, and Django logs it as a 500.
+    def broken_service(view: SideViewSet, data: dict[str, object]) -> Side:
+        raise IntegrityError("another rule")
+
+    monkeypatch.setattr(SideViewSet, "create_row", broken_service)
+
+    with pytest.raises(IntegrityError, match="another rule"):
+        staff_client_a.post(SIDES, new_side())
+
+
+def test_create_needs_the_client_uuid(staff_client_a: APIClient) -> None:
+    # Without an id of its own, a phone's retry would look like a new side, and a lost answer would leave
+    # the shop with two.
+    response = staff_client_a.post(SIDES, {"code": "P", "name": "Pembejeo"})
+
+    assert response.status_code == 400
+    assert response.json()["fields"] == {"id": ["required"]}
+
+
+def test_uuid_of_another_shop_refused_revealing_nothing(staff_client_a: APIClient, shop_a: Shop, side_b: Side) -> None:
+    # Shop B's side already has this id. Shop A's visit can't see it, so the id looks free until the insert
+    # fails on the primary key. That becomes a refusal of the id, and says nothing more: not the other
+    # row's name, not its shop, not even that it is a side (03 §5.4).
+    response = staff_client_a.post(SIDES, {**new_side(), "id": str(side_b.pk)})
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "invalid",
+        "message": "id: This id is already in use.",
+        "fields": {"id": ["id.taken"]},
+        "params": {},
+    }
+    # And nothing was made in shop A.
+    with shop_context(shop_a):
+        assert not Side.objects.exists()
+
+
+def test_create_refused_by_a_rule_answers_its_code(staff_client_a: APIClient, sides_a: dict[str, Side]) -> None:
+    # MFANO already has a side D. The service's check (full_clean) refuses a second one, and the app gets
+    # the rule's own code, which it translates (ADR-0032).
+    response = staff_client_a.post(SIDES, {**new_side(), "code": "D"})
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "side.code_taken"
+
+
+def test_create_passes_the_side_permission_hook(
+    staff_client_a: APIClient, shop_a: Shop, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A new side belongs to no side yet: adding one is an action on the whole shop, so the hook is asked
+    # with no side. A stand-in that refuses whole-shop actions shows the create is checked, and makes
+    # nothing.
+    def refuse_whole_shop(view: SideViewSet, request: Request, side_id: uuid.UUID | None) -> None:
+        if side_id is None:
+            raise exceptions.PermissionDenied
+
+    monkeypatch.setattr(SideViewSet, "check_side_permission", refuse_whole_shop)
+
+    response = staff_client_a.post(SIDES, new_side())
+
+    assert response.status_code == 403
+    with shop_context(shop_a):
+        assert not Side.objects.exists()
