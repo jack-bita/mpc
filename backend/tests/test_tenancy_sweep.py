@@ -536,7 +536,9 @@ def api_route_problems() -> list[str]:
     # the superuser's alone, and reads through its own door (all_shops).
     problems = []
     for address in addresses():
-        if not address.path.startswith("api/"):
+        # An address mounted the older way, with re_path(), is written as a regular expression and starts with
+        # ^ ("^api/v1/…"), which marks its start: without the ^ it is an address like any other.
+        if not address.path.lstrip("^").startswith("api/"):
             continue
         view = getattr(address.view, "cls", None)
         if not (isinstance(view, type) and (issubclass(view, ShopViewSet) or view in NOT_SHOP_ROUTES)):
@@ -945,9 +947,13 @@ def test_side_check_finds_routes_that_misname_the_side() -> None:
 
 
 def test_api_route_check_finds_a_route_off_the_base(settings: Settings) -> None:
+    # The probe's plain view, mounted twice: as a path, and the older way, as a regular expression from ^.
     settings.ROOT_URLCONF = "tests.probe.urls"
 
-    assert api_route_problems() == ["api/v1/probe/count/: a plain Django view, not a ShopViewSet"]
+    assert api_route_problems() == [
+        "api/v1/probe/count/: a plain Django view, not a ShopViewSet",
+        "^api/v1/probe/raw-count/$: a plain Django view, not a ShopViewSet",
+    ]
 
 
 # --- the sweep ------------------------------------------------------------------------------------------------

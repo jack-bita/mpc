@@ -2,7 +2,7 @@
 (tests/probe/api.py) under api/, as the app's own would be, some of them mounted in the awkward ways a real
 address list could be. A test switches to it through the ROOT_URLCONF setting; config/urls.py never mounts it."""
 
-from django.urls import include, path
+from django.urls import include, path, re_path
 from rest_framework.routers import SimpleRouter
 
 from tests.probe.api import (
@@ -37,4 +37,6 @@ urlpatterns = [
     path("api/v1/probe/owners/<uuid:owner>/notes/", NoteViewSet.as_view({"get": "list"}), name="nested-note-list"),
     path("api/v1/probe/unnamed-notes/", NoteViewSet.as_view({"get": "list"})),
     path("api/v1/probe/count/", note_count, name="note-count"),
+    # The same plain view, mounted the older way, with a regular expression that starts with ^.
+    re_path(r"^api/v1/probe/raw-count/$", note_count, name="raw-note-count"),
 ]
