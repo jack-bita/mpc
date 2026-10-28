@@ -48,6 +48,7 @@ Every app may import `control`; `control` imports only `core`. A model may name 
 
 - Office REST under `/api/v1/<app>/` (staff session); sync under `/api/sync/v1/` (device key); PIN login under `/api/auth/`; passwords through allauth at `/_allauth/browser/v1/`.
 - snake_case JSON; money and quantities as strings; ISO 8601 UTC times; cursor pagination; throttles on login, PIN and pairing.
+- Office routes build on `ShopViewSet` (`apps/core/api/base.py`): rows come from `get_queryset()` on each visit, never a class-level `queryset`. A create adds `CreateOnceMixin` (the client's UUID makes it safe to send twice), an edit adds `EditMixin` (PATCH with `version`). Refusals reach the app through the one error handler (`apps/core/api/errors.py`).
 - After changing a serializer or a view, regenerate the schema and the TypeScript types (`cd frontend && pnpm gen:api`).
 - A breaking change gets a `v2` route beside `v1` while devices update.
 

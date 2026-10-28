@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.19 · 28 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.20 · 28 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.20** (28 Oct 2026, CORE-6): the card names the tests and the commits it built. It made three more commits than it listed: a taken shop code got its own, the base views and the creates were split in two, and this docs commit closes it. For the docs in production, "staff only" means the superuser. What CORE-6 decided, for later cards: login names a visit's shop by leaving the person acting in `request.auth`, a staff member or a device, and the base view opens that shop around the whole visit (AUTH-2, AUTH-3, AUTH-4). The per-side check is a hook PPL-3 fills in. An id taken in another shop is refused as `id.taken`, revealing nothing (SYNC-4). The error shape still needs its place in the schema, and every error code a message (UI-2). Marked **(v1.20)**.
 
 **Changes in v1.19** (28 Oct 2026, CORE-5): the card names a test for each *Done when* line and the runner's own checks. Its float check is a test, not CI config, so its commit is `test:`, not `ci:`. The card also names `split_into_units`, the helper behind E1's "26 bags + 35.5 kg". UI-1 gains a *Watch out* on the traps the shared vectors pin, which the TypeScript side must match. Marked **(v1.19)**.
 
@@ -513,13 +515,13 @@ Done in **portion 6**, in chat — not with Claude Code.
 
 ### CORE-6 · API conventions
 `M` · Claude-led · after SHOP-2 · branch `feat/core-6-api`
-**Build:** domain errors with codes and one exception handler (`{"code", "message", "fields", "params"}` — 03 §5.10); base views (tenancy and a per-side permission hook); idempotent creates (the client sends the UUID); the `Editable` base with `version` (stale → `409 version_conflict`); cursor pagination; drf-spectacular at `/api/schema/` and `/api/docs/` (public on the demo, staff only in production).
+**Build:** domain errors with codes and one exception handler (`{"code", "message", "fields", "params"}` — 03 §5.10); base views (tenancy and a per-side permission hook); idempotent creates (the client sends the UUID); the `Editable` base with `version` (stale → `409 version_conflict`); cursor pagination; drf-spectacular at `/api/schema/` and `/api/docs/` (public on the demo, only the superuser in production **(v1.20)**).
 **Watch out:** the guard checks the shop when a read is built (CORE-2). So the base view sets the current shop after DRF has authenticated the visit, around the whole view, and builds its rows in `get_queryset()`: `queryset = Side.objects.all()` in a class body raises as the module loads. DRF's unique check on `id` reads through the guarded manager, so it sees the current shop only: an id already taken in another shop passes it and fails at the insert (`IntegrityError`, a 500). Request code may not read across shops, so decide here how that failure becomes a clean refusal that reveals nothing (03 §5.4) **(v1.13)**. A shop code that is already taken still comes back with Django's generic `unique` code, not one of ours: `Shop.code`'s `unique=True` (SHOP-1) gives no way to name it. Give it a `shop.code_taken` code with the others **(v1.15)**.
 **Done when:**
 - [ ] The Side endpoints show every behaviour above in tests.
 - [ ] The schema builds with no warnings.
-**Tests:** `test_error_shape` · `test_create_twice_with_same_uuid_makes_one_row` · `test_stale_version_gets_409` · `test_docs_hidden_in_production`
-**Commits:** `feat(core): error codes and handler` → `feat(core): base views and idempotent create` → `feat(core): version conflicts` → `feat(core): openapi schema`
+**Tests:** `test_error_shape` · `test_shop_code_taken_has_its_own_code` · `test_side_list_shows_only_the_current_shops_sides` · `test_another_shops_side_is_not_found` · `test_side_routes_need_a_shop_login` · `test_shop_closed_after_the_visit` · `test_side_list_is_paged_with_a_cursor` · `test_side_permission_hook_checks_each_side` · `test_create_twice_with_same_uuid_makes_one_row` · `test_two_copies_at_the_same_moment_make_one_row` · `test_uuid_of_another_shop_refused_revealing_nothing` · `test_stale_version_gets_409` · `test_docs_hidden_in_production` · `test_docs_public_on_the_demo` · `test_schema_builds_without_warnings` **(v1.20)**
+**Commits:** `feat(core): error codes and handler` → `feat(shops): a taken shop code gets its own error code` → `feat(core): base views open the visit's shop` → `feat(core): idempotent creates` → `feat(core): version conflicts` → `feat(core): openapi schema` → `docs: core-6 card names the tests it built` **(v1.20)**
 
 ### CORE-7 · The tenancy sweep
 `M` · Claude-led · after CORE-6 · branch `test/core-7-tenancy-sweep`
@@ -553,7 +555,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Jack-led · after PPL-2, SHOP-2 · branch `feat/ppl-3-permissions`
 **Learn:** role-based permissions, scoped by side (02 §5, rule X1).
 **Build:** the permission codes in `core`; `Role`, `RoleAssignment` (role + side, or all sides) and `PermissionGrant`; the role templates (Owner, Manager, Seller, Order writer, Cashier, Worker) kept in code and copied into each new shop by `create_shop` (Appendix A); `effective_permissions(staff, side)` and `require(staff, permission, side)`.
-**Watch out:** `create_shop` lives in `shops` (layer 1), which may not import `people` (layer 2): the layer contract refuses it (REPO-6, ADR-0035). Decide here how a new shop gets its roles, for example a `people` service that calls `create_shop` and then copies the templates **(v1.3)**.
+**Watch out:** `create_shop` lives in `shops` (layer 1), which may not import `people` (layer 2): the layer contract refuses it (REPO-6, ADR-0035). Decide here how a new shop gets its roles, for example a `people` service that calls `create_shop` and then copies the templates **(v1.3)**. CORE-6's base view calls `check_side_permission(request, side_id)` (`backend/apps/core/api/base.py`) for every row it hands out, and before a new row is made, with that row's side (None for the whole shop). It allows everything until this card fills it in with `require()`. Decide here how a list narrows to the sides a person may see **(v1.20)**.
 **Done when:**
 - [ ] A Worker can't `sale.bargain`; a Manager on all sides has the Manager permissions on both.
 - [ ] An extra grant on one side works only there.
@@ -573,10 +575,11 @@ Done in **portion 6**, in chat — not with Claude Code.
 
 ### AUTH-2 · Device key login
 `M` · Claude-led · after AUTH-1, CORE-6 · branch `feat/auth-2-device-key`
-**Build:** the pairing endpoints (`/api/devices/pairing/…`); the device key as an HttpOnly, Secure cookie; a DRF authentication class that reads it, sets the current shop and enforces CSRF; a blocked device gets `401 device.blocked`; throttling on pairing.
+**Build:** the pairing endpoints (`/api/devices/pairing/…`); the device key as an HttpOnly, Secure cookie; a DRF authentication class that reads it, names the device's shop by returning the device as `request.auth` (CORE-6's base view then opens that shop around the whole visit) **(v1.20)**, and enforces CSRF; a blocked device gets `401 device.blocked`; throttling on pairing.
 **Done when:**
 - [ ] Requests from a paired device carry its shop; a blocked device is refused on its next request.
 - [ ] A request without the CSRF token is refused; repeated pairing attempts are throttled.
+**Watch out** **(v1.20)**: DRF answers 401 only when the first login class names itself in `authenticate_header()`; without it, a refused login is a 403 (CORE-6's `test_error_shape`). For `401 device.blocked`, give the device key's class one.
 **Tests:** `test_device_key_sets_current_shop` · `test_blocked_device_refused` · `test_device_requests_need_csrf` · `test_pairing_throttled`
 **Commits:** `feat(people): pairing endpoints` → `feat(people): device key authentication` → `feat(people): pairing throttle`
 
@@ -584,6 +587,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Claude-led · after PPL-1, CORE-6 · branch `feat/auth-3-allauth`
 **Check first:** the installed django-allauth supports login by phone with no username (03 AD3).
 **Decide first:** PPL-1 asks an email only of the superuser: most of the shop's people have a phone but no email (Jack, 23 Oct). Before building, choose how the owner and managers log in and get back a lost password without email (an SMS code, a first password the owner sets face to face, or the owner registering their phone as a device, then a PIN), and record it as a new ADR that supersedes 02 §5's email rule and ADR-0017's resets by email **(v1.6)**.
+**Watch out** **(v1.20)**: CORE-6's office routes need the person acting in `request.auth`, with a `shop_id`. allauth's session alone leaves it empty, so those routes answer 403 `not_authenticated`. A login must name the staff member it acts as, and one person can work at two shops (02 D12): decide how the shop is chosen.
 **Build:** django-allauth headless, browser client: login by email or phone + password, logout, password reset by email (printed to the console in dev), sign-up closed, login rate limits; sessions stored in PostgreSQL.
 **Done when:**
 - [ ] A manager logs in by email or by phone and gets a session that DRF accepts.
@@ -595,7 +599,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Jack-led · after AUTH-2, PPL-3 · branch `feat/auth-4-pin-login`
 **Learn:** one session per person on a shared device; lockouts that double.
 **Build:** `POST /api/auth/pin-login` (device key + staff + PIN → a session for that person on that device; idle lock from settings; five wrong PINs lock that person on that device for a minute, doubling each time); `POST /api/auth/logout`; `GET /api/auth/me` (user, staff, shop, device, home side, permissions per side).
-**Watch out:** PINs are hashed with Django's `Argon2PasswordHasher` at its default cost, about 100 MiB of memory per check (`apps/people/pins.py`): set the cost on purpose for the demo's 512 MB and two workers, and re-hash old PINs when it changes (`must_update`). `pin_matches` answers at once for a person with no PIN but takes about 0.1 s otherwise, so the timing shows who has one; and a malformed hash raises. Refuse people who have left as well as suspended ones (PPL-2) **(v1.14)**.
+**Watch out:** PINs are hashed with Django's `Argon2PasswordHasher` at its default cost, about 100 MiB of memory per check (`apps/people/pins.py`): set the cost on purpose for the demo's 512 MB and two workers, and re-hash old PINs when it changes (`must_update`). `pin_matches` answers at once for a person with no PIN but takes about 0.1 s otherwise, so the timing shows who has one; and a malformed hash raises. Refuse people who have left as well as suspended ones (PPL-2) **(v1.14)**. The PIN session's login class returns the staff member as `request.auth`, which names the visit's shop for CORE-6's base view **(v1.20)**.
 **Done when:**
 - [ ] A PIN works only on an active device of the same shop; a suspended person is refused.
 - [ ] The lockout doubles; logging out ends the session at once.
@@ -617,6 +621,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### UI-2 · Typed API client
 `M` · Claude-led · after CORE-6, UI-1 · branch `feat/ui-2-api-client`
 **Build:** `pnpm gen:api` (schema → `openapi-typescript` → `src/api/schema.d.ts`); an `openapi-fetch` client that sends `X-CSRFToken`; TanStack Query; API error codes shown as translated messages; a CI step that regenerates both and fails on any difference (03 AD11).
+**Watch out** **(v1.20)**: CORE-6's schema says what each route takes and answers, not how it refuses. Add the error shape (`code`, `message`, `fields`, `params`) as every operation's `default` answer, so `openapi-fetch` types the error. Every code the backend sends needs a message in `sw.json` and `en.json`: ours (`side.code_taken`, `invalid`, `version_conflict`, `id.taken`…) and DRF's (`required`, `not_found`, `not_authenticated`…). A test that lists them keeps that true.
 **Done when:**
 - [ ] Changing a serializer without regenerating turns CI red.
 - [ ] An API error shows its Swahili message.
@@ -706,7 +711,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Jack-led · after SYNC-1, CTRL-1, AUTH-2 · branch `feat/sync-4-push`
 **Learn:** idempotency; one document = one transaction (03 §5.5, §6.3).
 **Build:** the `CounterRecord` base (device, `device_seq`, `client_time`, `received_at`); `POST /api/sync/v1/push` (up to 100 documents); a document-type registry (type + schema version → handler and the permission it needs); posting in `device_seq` order, each document in its own transaction, recording the person and the device (X3); answers `accepted` (with `posted_seq` and flags), `duplicate` (the stored answer), `invalid` (plus a flag) and `retry` (stop here); a UUID that exists in another shop → `invalid`, revealing nothing.
-**Watch out:** inside the push's shop context, a lookup by id sees the current shop only (CORE-2), so a UUID from another shop looks new until the insert fails on the primary key. Request code may not read across shops, so that failure, caught for the one document, is what becomes `invalid`; follow what CORE-6 decided **(v1.13)**.
+**Watch out:** inside the push's shop context, a lookup by id sees the current shop only (CORE-2), so a UUID from another shop looks new until the insert fails on the primary key. Request code may not read across shops, so that failure, caught for the one document, is what becomes `invalid`; follow what CORE-6 decided **(v1.13)**. CORE-6 decided **(v1.20)**: catch the primary-key clash in a savepoint (psycopg's `constraint_name` is `<table>_pkey`), then look the id up again in this shop only. Found: two copies of one document raced, and the stored answer is the answer. Not found: another shop has the id, and the document is refused without a word about that row (`CreateOnceMixin`, `backend/apps/core/api/base.py`).
 **Done when:**
 - [ ] The same batch sent twice posts once and gets the same answers.
 - [ ] Documents post in device order, even when sent out of order.
