@@ -39,7 +39,9 @@ def sweep_shops(shop_a: Shop, shop_b: Shop, staff_a: StaffMember, staff_b: Staff
 
 @pytest.fixture
 def sweep_queries() -> dict[str, dict[str, str]]:
-    # The query parameters a GET route can't answer without, by the route's name: a day's report would need its
-    # date, as in {"daily-report-list": {"date": "2026-11-02"}}. Without them such a route answers 400, and the
-    # sweep, which can't look at it then, fails and points here. No route needs any yet.
+    # The query parameters a GET route can't answer without, by the route's name. They must be ones under which
+    # shop A's rows show: a day's report asks for the day the rows above are made on, the test's today, as in
+    # {"daily-report-list": {"date": str(timezone.localdate())}}, never a fixed date, which would show nothing to
+    # either shop. Without them such a route answers 400; with ones that show nothing, even shop A's own staff
+    # sees nothing; either way the sweep fails and points here. No route needs any yet.
     return {}

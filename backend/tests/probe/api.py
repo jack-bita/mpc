@@ -14,8 +14,9 @@ Each route is built to pass the sweep, or to break one of its checks in one way:
 - NoteByTextViewSet finds a note by its text, a key each shop has its own of.
 - NoteBulkViewSet takes a DELETE on its whole list, which the sweep has no request for.
 - NoteReportViewSet answers a PDF, which the sweep can't read.
-- ClosedNoteViewSet's list refuses everyone; EndlessNoteViewSet's list has a broken cursor, whose next page
-  is always itself.
+- ClosedNoteViewSet's list refuses a shop with no notes; EndlessNoteViewSet's list has a broken cursor,
+  whose next page is always itself.
+- NoteDiaryViewSet shows the notes of one day, as a day's report will: it needs ?date=.
 - note_count is a plain view, built on no ShopViewSet, so the sweep could never call it as a shop: it must
   refuse such a route.
 
@@ -143,16 +144,31 @@ class NoteReportViewSet(NoteViewSet):
 
 class ClosedNoteViewSet(NoteViewSet):
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        # A list that refuses everyone, as one a person has no permission for will (PPL-3): the sweep can't
-        # look inside it.
-        raise PermissionDenied
+        # A list that refuses a visitor, as one a person has no permission for will (PPL-3): the sweep can't
+        # look inside it. It refuses a shop that has no notes, so that in its test shop A, which has one, still
+        # sees its own list, and only shop B is refused.
+        if not self.get_queryset().exists():
+            raise PermissionDenied
+        return super().list(request, *args, **kwargs)
 
 
 class EndlessNoteViewSet(NoteViewSet):
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         # A broken cursor: every page names itself as the next one, so a sweep that followed pages with no
-        # limit would never end.
-        return Response({"next": request.build_absolute_uri(), "previous": None, "results": []})
+        # limit would never end. Each page shows the visit's own notes, as a real page would.
+        notes = NoteSerializer(self.get_queryset(), many=True).data
+        return Response({"next": request.build_absolute_uri(), "previous": None, "results": notes})
+
+
+class NoteDiaryViewSet(NoteViewSet):
+    @action(detail=False)
+    def day(self, request: Request) -> Response:
+        # The notes made on one day, as a day's report will show a day's sales: it needs ?date=, and a date with
+        # no notes shows nothing, to shop A as to shop B.
+        if "date" not in request.query_params:
+            raise serializers.ValidationError({"date": "Required."})
+        notes = self.get_queryset().filter(created_at__date=request.query_params["date"])
+        return Response(NoteSerializer(notes, many=True).data)
 
 
 class NoteTextSerializer(serializers.ModelSerializer[Note]):

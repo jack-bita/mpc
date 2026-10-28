@@ -12,6 +12,7 @@ from tests.probe.api import (
     LeakyNoteViewSet,
     NoteBulkViewSet,
     NoteByTextViewSet,
+    NoteDiaryViewSet,
     NoteFormFirstViewSet,
     NoteMakerViewSet,
     NoteReportViewSet,
@@ -30,6 +31,7 @@ router.register("notes-in-bulk", NoteBulkViewSet, basename="note-bulk")
 router.register("note-reports", NoteReportViewSet, basename="note-report")
 router.register("closed-notes", ClosedNoteViewSet, basename="closed-note")
 router.register("endless-notes", EndlessNoteViewSet, basename="endless-note")
+router.register("diary", NoteDiaryViewSet, basename="diary")
 
 # Two apps whose routers happen to pick one name. config/urls.py mounts each app with no namespace, so their
 # names meet. The leaky one comes first: Django finds a name's last route, so a sweep that went by names
