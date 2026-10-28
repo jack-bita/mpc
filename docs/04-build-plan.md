@@ -505,9 +505,9 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Learn:** why floats lose shillings; half-up rounding; one source of truth for two languages (03 §8).
 **Build:** `core/numbers.py`: money (2 places) and quantity (3 places) helpers on `Decimal`; `round_money(amount, step)`, half-up; `split_into_units(quantity, factors)`, stock as whole selling units, biggest first, plus the rest in the base unit **(v1.19)**; `shared/test-vectors/` files with inputs and expected outputs as strings (`rounding.json`, `units.json` — E1's numbers among them); a pytest runner that loads every vector file.
 **Done when:**
-- [ ] Every vector passes.
-- [ ] E1's 1,335.5 kg shows as 26 bags of 50 kg + 35.5 kg.
-- [ ] A lint rule or a test stops `float` from appearing in calculation code.
+- [x] Every vector passes.
+- [x] E1's 1,335.5 kg shows as 26 bags of 50 kg + 35.5 kg.
+- [x] A lint rule or a test stops `float` from appearing in calculation code.
 **Tests:** `test_vectors_rounding` · `test_vectors_units` · `test_e1_shown_as_bags_and_kg` · `test_no_floats_in_calculation_code` · `test_every_vector_file_is_run` · `test_bare_numbers_refused` **(v1.19)**
 **Commits:** `test(core): rounding and unit vectors` → `feat(core): money and quantity helpers` → `test: no floats in calculation code` → `docs: core-5 card names the tests it built` **(v1.19)**
 
