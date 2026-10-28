@@ -34,7 +34,7 @@ empty, so the sweep can't pass by looking at nothing.
 import ast
 import json
 from collections import Counter
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -393,11 +393,17 @@ def shown(response: HttpResponse, marks: Marks) -> list[str]:
     return [f"shows what only shop A has: {', '.join(leaked)}"] if leaked else []
 
 
-def route_problems(client: APIClient, shop_a: Shop, shop_b: Shop) -> dict[str, list[str]]:
+def route_problems(
+    client: APIClient, shop_a: Shop, shop_b: Shop, queries: Mapping[str, Mapping[str, str]] | None = None
+) -> dict[str, list[str]]:
     # 03 §5.4: no route, called as shop B, returns shop A's rows. `client` is logged in as a staff member of
     # shop B. A list must answer 200 and show none of A's marks, on every page. A detail route, asked for each
     # of A's rows by its id, must answer 404, "not found", as if the row didn't exist (a 403 would tell shop B
     # that it does), and show none of A's marks either.
+    # `queries`: the query parameters some routes can't answer without, by route name, such as a day's report
+    # and its date. They live with the two shops' data (sweep_queries, backend/tests/conftest.py), so that a
+    # card adding such a route gives them there and leaves this file as it is.
+    queries = queries or {}
     marks = marks_of(shop_a, shop_b)
     # How many routes carry each name, across the whole address list. The sweep builds a route's address from
     # its name (reverse()), and Django finds a name's last route only, so two routes with one name would be
@@ -422,14 +428,23 @@ def route_problems(client: APIClient, shop_a: Shop, shop_b: Shop) -> dict[str, l
             found.append(f"shop A has no {table._meta.label} rows to look for: add some in backend/tests/conftest.py")
         elif route.takes_row:
             for row in rows:
-                response = client.get(reverse(route.name, kwargs={route.lookup: row}))
+                response = client.get(reverse(route.name, kwargs={route.lookup: row}), queries.get(route.name))
                 if response.status_code != 404:
                     found.append(f"shop A's row {row}: answered {response.status_code}, not 404")
                 found += shown(response, marks)
         else:
             url: str | None = reverse(route.name)
+            # The route's own parameters go with the first page only: DRF builds the next page's address from
+            # the one it answered, so that address carries them already.
+            sent = queries.get(route.name)
             while url:
-                response = client.get(url)
+                response = client.get(url, sent)
+                sent = None
+                if response.status_code == 400:
+                    # The usual answer of a route that needs a parameter it wasn't given.
+                    where = "give them in sweep_queries (backend/tests/conftest.py)"
+                    found.append(f"answered 400, not 200: if it needs query parameters, {where}")
+                    break
                 if response.status_code != 200:
                     found.append(f"answered {response.status_code}, not 200")
                     break
@@ -772,6 +787,26 @@ def test_route_check_reads_answers_that_are_not_json(
     assert problems["leaky-note-export"] == ["shows what only shop A has: Note of shop A"]
 
 
+@pytest.mark.django_db
+def test_route_check_sends_the_parameters_a_route_needs(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
+) -> None:
+    # The probe's leaky search needs ?text=, as a day's report would need its date. Without it the route
+    # answers 400 and shows nothing, so the sweep can't look, and says where to give the parameter.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="Note of shop A").save()
+    Note(shop=shop_b, text="Note of shop B").save()
+
+    bare = route_problems(staff_client_b, shop_a, shop_b)
+    given = route_problems(staff_client_b, shop_a, shop_b, queries={"leaky-note-search": {"text": "Note"}})
+
+    assert bare["leaky-note-search"] == [
+        "answered 400, not 200: if it needs query parameters, give them in sweep_queries (backend/tests/conftest.py)"
+    ]
+    # Given the parameter, the route answers, and its leak shows.
+    assert given["leaky-note-search"][0].startswith('shows what only shop A has: "Note of shop A"')
+
+
 def test_side_check_finds_routes_that_misname_the_side() -> None:
     class Locations(ShopViewSet[StockLocation]):
         # A location keeps its side in `side`, ShopViewSet's default: right.
@@ -836,7 +871,9 @@ def test_system_context_only_in_system_code() -> None:
 
 
 @pytest.mark.django_db
-def test_no_route_leaks_across_shops(sweep_shops: tuple[Shop, Shop], staff_client_b: APIClient) -> None:
+def test_no_route_leaks_across_shops(
+    sweep_shops: tuple[Shop, Shop], sweep_queries: dict[str, dict[str, str]], staff_client_b: APIClient
+) -> None:
     shop_a, shop_b = sweep_shops
     # The visitor really is shop B's: its side list shows shop B's own side. A login that failed on every
     # route would find nothing of shop A's anywhere, and pass.
@@ -845,7 +882,7 @@ def test_no_route_leaks_across_shops(sweep_shops: tuple[Shop, Shop], staff_clien
     response = staff_client_b.get(reverse("side-list"))
     assert {row["id"] for row in response.json()["results"]} == own
 
-    assert route_problems(staff_client_b, shop_a, shop_b) == {}
+    assert route_problems(staff_client_b, shop_a, shop_b, sweep_queries) == {}
 
 
 def test_every_side_link_is_named_on_its_route() -> None:

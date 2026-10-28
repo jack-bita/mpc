@@ -5,7 +5,8 @@ The sweep calls every office route as a staff member of shop B and looks for any
 answers. It can only find a leak of rows that exist, so both shops get rows of every table a route shows,
 made the way the app makes them, through the services. The checks never change; this file grows instead:
 a card that adds a route over a new table gives both shops a row of it here, and the sweep fails, saying
-so, while shop A has none. The demo seed (DATA-1) could fill the shops later.
+so, while shop A has none; and a card that adds a route needing query parameters gives them here too
+(sweep_queries). The demo seed (DATA-1) could fill the shops later.
 
 The sweep knows shop A's rows by their ids, and by the texts and amounts only shop A holds, so that a leak
 with no ids, like a report of names and totals, is found too. So give shop A values of its own: names and
@@ -34,3 +35,11 @@ def sweep_shops(shop_a: Shop, shop_b: Shop, staff_a: StaffMember, staff_b: Staff
     with shop_context(shop_b):
         add_side(shop=shop_b, code="P", name="Pembejeo", by=staff_b)
     return shop_a, shop_b
+
+
+@pytest.fixture
+def sweep_queries() -> dict[str, dict[str, str]]:
+    # The query parameters a GET route can't answer without, by the route's name: a day's report would need its
+    # date, as in {"daily-report-list": {"date": "2026-11-02"}}. Without them such a route answers 400, and the
+    # sweep, which can't look at it then, fails and points here. No route needs any yet.
+    return {}
