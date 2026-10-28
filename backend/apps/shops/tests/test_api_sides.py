@@ -12,6 +12,7 @@ the staff member straight into `request.auth`, as those logins will. The staff m
 """
 
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -136,6 +137,25 @@ def test_side_list_is_paged_with_a_cursor(
     second = staff_client_a.get(first["next"]).json()
     assert [row["code"] for row in second["results"]] == ["D"]
     assert second["next"] is None
+
+
+def uuid7_at(moment: datetime) -> uuid.UUID:
+    # A UUIDv7 as a phone whose clock shows `moment` would make it: its first 48 bits are that time in
+    # milliseconds. The other 80 bits (version, variant, random) come from a real UUIDv7.
+    millis = int(moment.timestamp()) * 1000
+    return uuid.UUID(int=(millis << 80) | (uuid.uuid7().int & ((1 << 80) - 1)))
+
+
+def test_list_order_follows_the_servers_clock(staff_client_a: APIClient) -> None:
+    # A phone whose clock is years behind makes ids that look old (ADR-0007: the id carries the phone's
+    # time). The side it adds last still comes first: the order is the server's clock (`created_at`), never
+    # the id's.
+    staff_client_a.post(SIDES, {"id": str(uuid.uuid7()), "code": "D", "name": "Dawa"})
+    staff_client_a.post(SIDES, {"id": str(uuid7_at(datetime(2020, 1, 1, tzinfo=UTC))), "code": "F", "name": "Vyakula"})
+
+    listed = staff_client_a.get(SIDES).json()["results"]
+
+    assert [row["code"] for row in listed] == ["F", "D"]
 
 
 def test_side_permission_hook_checks_each_side(
