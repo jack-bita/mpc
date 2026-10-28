@@ -19,9 +19,9 @@ PIN_PEPPER = env("PIN_PEPPER")
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 
-# Who may read the API's description and docs page (base.py). The demo sets "true" (render.yaml): the API is
-# part of what it shows. The real server leaves it out, so only the superuser sees them. Any value other than
-# "true", a typo included, keeps them closed.
+# Whether the API's description and docs page are open (base.py). The demo sets "true" (render.yaml): the API
+# is part of what it shows. The real server leaves it out, so they are closed there, to everyone. Any value
+# other than "true", a typo included, keeps them closed.
 API_DOCS_PUBLIC = env("API_DOCS_PUBLIC", "false") == "true"
 
 DATABASES["default"].update(

@@ -193,13 +193,13 @@ SPECTACULAR_SETTINGS = {
     # drf-spectacular marks every field of a PATCH optional.
     "COMPONENT_SPLIT_PATCH": False,
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
-    # our address can't change under us. In production the superuser is logged in while it runs.
+    # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.
     "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0",
     "SWAGGER_UI_FAVICON_HREF": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0/favicon-32x32.png",
 }
 
-# Who may read the description and the docs page (apps/core/api/schema.py). False: only the superuser, the
-# real server's rule. Off unless an environment turns it on: dev.py does, and the demo does (prod.py).
+# Whether the description and the docs page are open (apps/core/api/schema.py). False: closed to everyone,
+# the real server's rule. Off unless an environment turns it on: dev.py does, and the demo does (prod.py).
 API_DOCS_PUBLIC = False
 
 # The version this process runs. A deploy builds the image with its git commit as the version

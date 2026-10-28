@@ -3,8 +3,8 @@
 
 drf-spectacular reads every route and writes the OpenAPI schema: each address, what it takes and what it
 answers. The app's TypeScript types will be generated from it (UI-2), so it must build with no guesses.
-The docs page shows the same description to people: open to every visitor on the demo, and only for the
-superuser on the real server (API_DOCS_PUBLIC, config/settings/).
+The docs page shows the same description to people: open to every visitor on the demo and on a laptop,
+closed on the real server (API_DOCS_PUBLIC, config/settings/).
 """
 
 import json
@@ -28,13 +28,14 @@ DOCS_ROUTES = ["/api/schema/", "/api/docs/"]
 def test_docs_hidden_in_production(
     superuser_client: Client, staff_client_a: APIClient, settings: Settings, route: str
 ) -> None:
-    # On the real server the routes are no secret, but nobody else needs them: only the superuser, logged in
-    # at /admin/, sees them. Not a shop's staff, who use the app, and not a stranger.
+    # Closed on the real server, for everyone, the superuser too (Jack's choice, CORE-6): the docs page runs
+    # code from another website on our address, and there the superuser would run it logged in. The demo
+    # shows the same API. "Not found", as if there were no docs there at all.
     settings.API_DOCS_PUBLIC = False
 
-    assert Client().get(route).status_code == 403
-    assert staff_client_a.get(route).status_code == 403
-    assert superuser_client.get(route).status_code == 200
+    assert Client().get(route).status_code == 404
+    assert staff_client_a.get(route).status_code == 404
+    assert superuser_client.get(route).status_code == 404
 
 
 @pytest.mark.parametrize("route", DOCS_ROUTES)
