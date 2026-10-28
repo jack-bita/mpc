@@ -7,7 +7,7 @@ No @pytest.mark.django_db: the helpers are pure, and pytest-django blocks the da
 The module is imported whole, not by name, so each piece of numbers.py turns its own tests green.
 """
 
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 import pytest
 
@@ -99,6 +99,42 @@ def test_round_money_refuses_a_step_of_zero_or_less(step: str) -> None:
     # A step of 0 leaves nothing to round to; the setting refuses it too (money.rounding_step, CORE-4).
     with pytest.raises(ValueError):
         numbers.round_money(Decimal("458.5"), Decimal(step))
+
+
+def test_answers_ignore_the_callers_decimal_settings() -> None:
+    # Python keeps one set of decimal settings per thread, and other code may lower its precision. With 5
+    # digits, 4.49999 ÷ 1 would become 4.5000 and round up to 5, and 24,691 bags × 50 would become
+    # 1,234,600 kg. The helpers use settings of their own, so the answers stay the same.
+    with localcontext(prec=5):
+        rounded = numbers.round_money(Decimal("4.49999"), Decimal("1"))
+        money = numbers.parse_money("43000.50")
+        bags, rest = numbers.split_into_units(Decimal("1234567.5"), [Decimal("50")])
+
+    assert str(rounded) == "4.00"
+    assert str(money) == "43000.50"
+    assert bags == [24691]
+    assert str(rest) == "17.500"
+
+
+def test_result_too_big_for_its_column_refused() -> None:
+    # 999,999,999,999.5 rounds to 1,000,000,000,000.00: 15 digits, one more than numeric(14,2) holds. It is
+    # refused here, with a ValueError, not later by the database when a row is saved.
+    with pytest.raises(ValueError):
+        numbers.round_money(Decimal("999999999999.5"), Decimal("1"))
+
+
+@pytest.mark.parametrize("bad", ["NaN", "Infinity", "-Infinity"])
+def test_not_a_number_refused(bad: str) -> None:
+    # Decimal("NaN") and Decimal("Infinity") are Decimals, but no amount or quantity: each helper refuses
+    # them by name, with a ValueError, before a sum turns them into a confusing error.
+    with pytest.raises(ValueError, match="not a number"):
+        numbers.round_money(Decimal(bad), Decimal("1"))
+    with pytest.raises(ValueError, match="not a number"):
+        numbers.round_money(Decimal("458.5"), Decimal(bad))
+    with pytest.raises(ValueError, match="not a number"):
+        numbers.split_into_units(Decimal(bad), [Decimal("50")])
+    with pytest.raises(ValueError, match="not a number"):
+        numbers.split_into_units(Decimal("1335.5"), [Decimal(bad)])
 
 
 def test_result_finer_than_a_cent_refused() -> None:
