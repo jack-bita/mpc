@@ -57,7 +57,7 @@ Every app may import `control`; `control` imports only `core`. A model may name 
 - pytest + pytest-django on real PostgreSQL, never SQLite; factory_boy; Hypothesis for ledger properties.
 - Names state the rule: `test_pin_lockout_doubles`. Worked examples: `test_e5_debt_clears_oldest_first`. Spec §8.1 rows: `test_arrives_0750_full_day_minus_fine`.
 - Calculations also pass `shared/test-vectors/*.json` (inputs and outputs as strings), the same files Vitest runs.
-- Every bug fix adds a test. The tenancy sweep in `backend/tests/` must stay green without being edited.
+- Every bug fix adds a test. The tenancy sweep (`backend/tests/test_tenancy_sweep.py`) must stay green without being edited: a route over a new table gives the sweep's two shops a row of it (`backend/tests/conftest.py`), and its allowed lists grow only by a decision written on the card (a table with no `shop`, a route under `api/` that is not an office route).
 
 ## Privacy
 
