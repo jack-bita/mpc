@@ -314,6 +314,22 @@ def test_other_unique_rule_is_not_a_taken_id(
         staff_client_a.post(SIDES, {**new_side(), "code": "D"})
 
 
+@pytest.mark.parametrize(
+    ("sent", "kept"),
+    [
+        # Not sent: the side sells on one screen, add_side's own default.
+        pytest.param({}, "one_screen", id="not sent"),
+        # MPC's Foods side: one person writes the sale, another takes the money, a third loads (spec §3).
+        pytest.param({"sale_flow": "writer_cashier_loader"}, "writer_cashier_loader", id="sent"),
+    ],
+)
+def test_create_keeps_the_sale_flow_sent(staff_client_a: APIClient, sent: dict[str, str], kept: str) -> None:
+    response = staff_client_a.post(SIDES, {**new_side(), **sent})
+
+    assert response.status_code == 201
+    assert response.json()["sale_flow"] == kept
+
+
 def test_create_needs_the_client_uuid(staff_client_a: APIClient) -> None:
     # Without an id of its own, a phone's retry would look like a new side, and a lost answer would leave
     # the shop with two.

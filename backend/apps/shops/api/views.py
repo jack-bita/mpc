@@ -11,7 +11,7 @@ from rest_framework import mixins
 
 from apps.core.api.base import CreateOnceMixin, EditMixin
 from apps.shops.api.serializers import SideCreateSerializer, SideEditSerializer, SideSerializer
-from apps.shops.models import SaleFlow, Shop, Side
+from apps.shops.models import Shop, Side
 from apps.shops.services import add_side, rename_side
 
 
@@ -29,14 +29,16 @@ class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMi
 
     def create_row(self, data: dict[str, Any]) -> Side:
         # Adding a side also makes its stock location and its cash drawer (add_side). The shop is always the
-        # visit's own.
+        # visit's own. A sale flow is passed on only when the app sent one: otherwise add_side's own default
+        # applies, so the default is written in one place.
+        sale_flow = {"sale_flow": data["sale_flow"]} if "sale_flow" in data else {}
         return add_side(
             shop=Shop.objects.get(pk=self.actor.shop_id),
             side_id=data["id"],
             code=data["code"],
             name=data["name"],
-            sale_flow=data.get("sale_flow", SaleFlow.ONE_SCREEN),
             by=self.actor,
+            **sale_flow,
         )
 
     def edit_row(self, row: Side, data: dict[str, Any]) -> Side:
