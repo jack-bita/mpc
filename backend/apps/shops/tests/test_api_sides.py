@@ -73,6 +73,16 @@ def test_another_shops_side_is_not_found(staff_client_a: APIClient, side_b: Side
     assert response.json()["code"] == "not_found"
 
 
+def test_another_shops_side_cannot_be_renamed(staff_client_a: APIClient, shop_b: Shop, side_b: Side) -> None:
+    # An edit looks its row up through the same guard as a read: to shop A's visit, shop B's side is not
+    # found, and it stays as it was.
+    response = staff_client_a.patch(f"{SIDES}{side_b.pk}/", {"name": "Imeibiwa", "version": 1})
+
+    assert response.status_code == 404
+    with shop_context(shop_b):
+        assert Side.objects.get(pk=side_b.pk).name == "Dawa"
+
+
 def test_side_routes_need_a_shop_login(superuser_client: Client, sides_a: dict[str, Side]) -> None:
     # Nobody logged in: refused before any table is read.
     anonymous = APIClient().get(SIDES)
@@ -129,7 +139,7 @@ def test_side_list_is_paged_with_a_cursor(
 
 
 def test_side_permission_hook_checks_each_side(
-    staff_client_a: APIClient, sides_a: dict[str, Side], monkeypatch: pytest.MonkeyPatch
+    staff_client_a: APIClient, shop_a: Shop, sides_a: dict[str, Side], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # PPL-3 fills the hook in with real permissions. Until then, a stand-in that refuses Vyakula (F)
     # proves that each row the route hands out, to read or to change, passes through the hook, with that
@@ -148,7 +158,9 @@ def test_side_permission_hook_checks_each_side(
     assert refused.json()["code"] == "permission_denied"
     edit = staff_client_a.patch(f"{SIDES}{vyakula}/", {"name": "Chakula", "version": 1})
     assert edit.status_code == 403
-    assert sides_a["F"].name == "Vyakula"
+    # Read again from the database: refused means nothing was written, not only a 403 on the way out.
+    with shop_context(shop_a):
+        assert Side.objects.get(pk=vyakula).name == "Vyakula"
 
 
 def test_list_shows_only_the_sides_a_person_may_see(
@@ -250,6 +262,19 @@ def test_other_database_refusal_left_as_a_bug(staff_client_a: APIClient, monkeyp
 
     with pytest.raises(IntegrityError, match="another rule"):
         staff_client_a.post(SIDES, new_side())
+
+
+def test_other_unique_rule_is_not_a_taken_id(
+    staff_client_a: APIClient, sides_a: dict[str, Side], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A second side D with a new id, its checks skipped, as a service that forgot full_clean would. The
+    # database refuses it on the letter's rule, not on the id: that is a bug in the service, so it must stay
+    # a 500 with its traceback, never pass for "this id is already in use". Only the primary key's rule
+    # (<table>_pkey) counts as a taken id.
+    monkeypatch.setattr(Side, "full_clean", lambda *args, **kwargs: None)
+
+    with pytest.raises(IntegrityError, match="shops_side_code_unique"):
+        staff_client_a.post(SIDES, {**new_side(), "code": "D"})
 
 
 def test_create_needs_the_client_uuid(staff_client_a: APIClient) -> None:
