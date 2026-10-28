@@ -19,8 +19,9 @@ stay in its own place, and tests may use both. Until now only a search by hand f
 And it walks the address list for every route of the office API, the routes built on ShopViewSet
 (apps/core/api/base.py):
 
-- called by a staff member of shop B, no route shows any row of shop A: a list shows none of them, and a
-  detail route answers "not found" for each one (03 §5.4). Both shops are filled in backend/tests/conftest.py;
+- called by a staff member of shop B, no route shows or touches any row of shop A: a list shows none of
+  them, and a detail route answers "not found" for each one, to a read and to an edit alike (03 §5.4). Both
+  shops are filled in backend/tests/conftest.py;
 - each route names where its table keeps a row's side (`side_field`), for the per-side hooks (PPL-3);
 - no route under api/ escapes the sweep by being built on something else.
 
@@ -296,10 +297,12 @@ def addresses(
 
 @dataclass(frozen=True)
 class Route:
-    # One GET route of an office view, as the leak check calls it.
+    # One route of an office view, as the leak check calls it.
     name: str | None
     view: type[ShopViewSet[Any]]
     takes: frozenset[str]
+    # The HTTP methods it answers, in small letters, as DRF notes them: {"get", "patch"}.
+    methods: frozenset[str]
 
     @property
     def lookup(self) -> str:
@@ -313,15 +316,15 @@ class Route:
 
 
 def shop_routes() -> list[Route]:
-    # Every GET route of every office view: its list, its detail route, and any other GET route it adds
-    # (DRF's @action). DRF's routers give a view one address for each, and note on it which action answers
-    # which method (`actions`: {"get": "list", "post": "create"}).
+    # Every route of every office view: its list, its detail route, and any other route it adds (DRF's
+    # @action). DRF's routers give a view one address for each, and note on it which action answers which
+    # method (`actions`: {"get": "list", "post": "create"}).
     routes = []
     for address in addresses():
         view = getattr(address.view, "cls", None)
         actions = getattr(address.view, "actions", None) or {}
-        if isinstance(view, type) and issubclass(view, ShopViewSet) and "get" in actions:
-            routes.append(Route(address.name, view, address.takes))
+        if isinstance(view, type) and issubclass(view, ShopViewSet) and actions:
+            routes.append(Route(address.name, view, address.takes, frozenset(actions)))
     return routes
 
 
@@ -417,6 +420,15 @@ def route_problems(
     names = Counter(address.name for address in addresses() if address.name)
     problems: dict[str, list[str]] = {}
     for route in shop_routes():
+        # What the sweep sends: a read (GET) to any route, and to a detail route each edit it takes as well. An
+        # edit goes empty: DRF's edits and ours (EditMixin) look their row up before they read what was sent,
+        # so another shop's row is "not found" whatever comes with it. A delete goes last, so that a leaky one
+        # can't hide what the edits before it would show. A route that only makes rows (POST) has nothing of
+        # A's to ask for: CORE-6 already refuses an id another shop has (`id.taken`).
+        writes = ("patch", "put", "delete") if route.takes_row else ()
+        sends = [method for method in ("get", *writes) if method in route.methods]
+        if not sends:
+            continue
         found: list[str] = []
         table = route.view.model
         rows = [str(value) for value in rows_of(table, shop_a).values_list(route.view.lookup_field, flat=True)]
@@ -432,11 +444,17 @@ def route_problems(
             # With no row of shop A in its own table, the route could leak and still pass.
             found.append(f"shop A has no {table._meta.label} rows to look for: add some in backend/tests/conftest.py")
         elif route.takes_row:
+            edit = {"patch": client.patch, "put": client.put, "delete": client.delete}
             for row in rows:
-                response = client.get(reverse(route.name, kwargs={route.lookup: row}), queries.get(route.name))
-                if response.status_code != 404:
-                    found.append(f"shop A's row {row}: answered {response.status_code}, not 404")
-                found += shown(response, marks)
+                row_url = reverse(route.name, kwargs={route.lookup: row})
+                for method in sends:
+                    if method == "get":
+                        response = client.get(row_url, queries.get(route.name))
+                    else:
+                        response = edit[method](row_url, {}, format="json")
+                    if response.status_code != 404:
+                        found.append(f"shop A's row {row}: {method.upper()} answered {response.status_code}, not 404")
+                    found += shown(response, marks)
         else:
             url: str | None = reverse(route.name)
             # The route's own parameters go with the first page only: DRF builds the next page's address from
@@ -815,6 +833,24 @@ def test_route_check_sends_the_parameters_a_route_needs(
     ]
     # Given the parameter, the route answers, and its leak shows.
     assert given["leaky-note-search"][0].startswith('shows what only shop A has: "Note of shop A"')
+
+
+@pytest.mark.django_db
+def test_route_check_tries_edits_of_shop_a_rows(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
+) -> None:
+    # Shop B's edit of shop A's note must find no note at all, as a read does. The leaky route's edits find it:
+    # its PATCH changes nothing and answers 200, and its PUT, sent with no text, is refused with a 400, which
+    # tells B that the note exists all the same. The guarded route's edits find nothing.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    note = Note(shop=shop_a, text="Note of shop A")
+    note.save()
+
+    problems = route_problems(staff_client_b, shop_a, shop_b)
+
+    assert f"shop A's row {note.pk}: PATCH answered 200, not 404" in problems["leaky-note-detail"]
+    assert f"shop A's row {note.pk}: PUT answered 400, not 404" in problems["leaky-note-detail"]
+    assert "note-detail" not in problems
 
 
 @pytest.mark.django_db

@@ -30,7 +30,9 @@ class NoteSerializer(serializers.ModelSerializer[Note]):
         fields = ["id", "text"]
 
 
-class NoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, ShopViewSet[Note]):
+class NoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, ShopViewSet[Note]):
+    # Read and edited (PUT, PATCH): DRF's edit looks its row up first, through the same guard as a read, so
+    # another shop's note is "not found" whatever is sent.
     model = Note
     # A note belongs to the whole shop, not to a side.
     side_field = None
