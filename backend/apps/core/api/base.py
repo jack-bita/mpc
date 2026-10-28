@@ -122,12 +122,15 @@ class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
         # its own retry (MFANO already has a side P: the first send's own).
         sent_id = request.data.get("id") if isinstance(request.data, dict) else None
         row = self._stored(sent_id)
-        if row is None:
-            row = self._create(request)
-        else:
-            # Handed out like any row that is read: the side's check applies.
-            self.check_object_permissions(request, row)
+        row = self._create(request) if row is None else self._replay(request, row)
         return Response(self.get_serializer(row).data, status=status.HTTP_201_CREATED)
+
+    def _replay(self, request: Request, row: M) -> M:
+        # A send this shop already has a row for gets that row back, as it is now: if it was edited since,
+        # the answer shows the edit. Handed out like a row that is read, so the side's check applies, as on
+        # a read. The one way back for every repeat, whichever look found it.
+        self.check_object_permissions(request, row)
+        return row
 
     def _create(self, request: Request) -> M:
         sent = self.create_serializer_class(data=request.data, context=self.get_serializer_context())
@@ -135,21 +138,26 @@ class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
         data = sent.validated_data
         self.check_side_permission(request, self.side_of_new(data))
         try:
-            # A savepoint: a refused insert undoes only this part, and the visit can still look and answer.
+            # Its own transaction (inside an open one, such as a test's, a savepoint): a refused write undoes
+            # only this part, and the visit can still look again and answer.
             with transaction.atomic():
                 return self.create_row(data)
-        except IntegrityError as error:
-            if not _id_taken(error, self.model):
-                # Another database rule: the service should have checked it first, so this is a bug.
-                raise
-        # The id was taken. Either the same request came twice at the same moment, and the other copy has
-        # just made the row in this shop: then it is the answer, as for any retry.
-        row = self._stored(data["id"])
-        if row is None:
-            # Or another shop's row has this id. The guard hides it from every lookup here, and the answer
-            # says only that the id can't be used: nothing about that row, not even what it is (03 §5.4).
-            raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")})
-        return row
+        except (ValidationError, IntegrityError) as refusal:
+            # Refused. Perhaps by a twin: another copy of this very request, sent at the same moment, that
+            # made the row while this copy was busy. Finished during this copy's checks, it makes them refuse
+            # ("letter P is taken": by its own side); finished during its insert, the id clashes. The id
+            # names the create, so if this shop now has a row with it, the twin made it: that is the answer.
+            twin = self._stored(data["id"])
+            if twin is not None:
+                return self._replay(request, twin)
+            if isinstance(refusal, IntegrityError) and _id_taken(refusal, self.model):
+                # No twin, yet the id clashes: another shop's row has it. The guard hides that row from every
+                # lookup here, and the answer says only that the id can't be used: nothing about that row,
+                # not even what it is (03 §5.4).
+                raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")}) from None
+            # A real refusal, such as a second side D, answered with its code; or another database rule, which
+            # the service should have checked first: a bug, left to become a 500.
+            raise
 
     def _stored(self, row_id: object) -> M | None:
         # The row with this id in the visit's shop, if there is one: the guard hides every other shop's.

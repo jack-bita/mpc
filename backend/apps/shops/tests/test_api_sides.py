@@ -155,17 +155,10 @@ def test_create_twice_with_same_uuid_makes_one_row(staff_client_a: APIClient, sh
         assert PaymentAccountSide.objects.filter(side_id=side["id"]).count() == 1
 
 
-def test_two_copies_at_the_same_moment_make_one_row(
-    staff_client_a: APIClient, shop_a: Shop, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Two copies of one request arrive together. Each looks for the id before the other has written, and
-    # each one's checks run before the other has committed, so neither can see the other's row. The first
-    # insert wins; the second fails on the id. That copy then looks again, finds the first one's side,
-    # and answers with it, as for any retry.
-    side = new_side()
-    first = staff_client_a.post(SIDES, side)
-
-    # The second copy, as it runs in that race: its first look and its checks see nothing of the first.
+def _next_first_look_too_early(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Two copies of one request arrive together, and each looks for the id before the other has written.
+    # Played here one after the other: the next copy's first look is made to find nothing, as it would have,
+    # had it run before the first copy finished. Its later looks see the database as it is.
     real_stored = CreateOnceMixin._stored
     looks: list[object] = []
 
@@ -174,6 +167,36 @@ def test_two_copies_at_the_same_moment_make_one_row(
         return None if len(looks) == 1 else real_stored(view, row_id)
 
     monkeypatch.setattr(CreateOnceMixin, "_stored", first_look_too_early)
+
+
+def test_two_copies_at_the_same_moment_make_one_row(
+    staff_client_a: APIClient, shop_a: Shop, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The first copy finishes while the second is still checking. The second copy's checks (full_clean) then
+    # see the first one's side, and refuse: "letter P is taken". But it is the same side, made by the same
+    # request: that copy looks again, finds it, and answers with it, as for any retry.
+    side = new_side()
+    first = staff_client_a.post(SIDES, side)
+    _next_first_look_too_early(monkeypatch)
+
+    again = staff_client_a.post(SIDES, side)
+
+    assert again.status_code == 201
+    assert again.json() == first.json()
+    with shop_context(shop_a):
+        assert Side.objects.filter(pk=side["id"]).count() == 1
+
+
+def test_two_copies_clashing_at_the_insert_make_one_row(
+    staff_client_a: APIClient, shop_a: Shop, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The first copy finishes a moment later: after the second copy's checks, before its insert. Those
+    # checks saw nothing, so the insert fails on the id. That copy looks again and answers with the first
+    # one's side.
+    side = new_side()
+    first = staff_client_a.post(SIDES, side)
+    _next_first_look_too_early(monkeypatch)
+    # Its checks ran before the first copy had committed, so they found nothing either.
     monkeypatch.setattr(Side, "full_clean", lambda *args, **kwargs: None)
 
     again = staff_client_a.post(SIDES, side)

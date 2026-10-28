@@ -27,9 +27,9 @@ class SideCreateSerializer(serializers.ModelSerializer[Side]):
         fields = ["id", "code", "name", "sale_flow"]
         extra_kwargs = {
             # Required: without its own id, a phone's retry would look like a new side. No unique check of
-            # the id here: the route looks the id up itself first, and a clash at the insert is its answer
-            # (CreateOnceMixin, apps/core/api/base.py). DRF's check would only add a query, and turn two
-            # copies of one request at the same moment into a refusal instead of one side.
+            # the id here: the route looks the id up itself, first and again after any refusal, and answers
+            # a repeat with the stored side (CreateOnceMixin, apps/core/api/base.py). DRF's check would only
+            # add a query, and refuse a repeat before the route could look.
             "id": {"required": True, "validators": []},
         }
 
