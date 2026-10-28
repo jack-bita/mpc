@@ -513,6 +513,14 @@ def detail_problems(
     # rows, still turns CI red: the test client raises the crash in the test.
     found: list[str] = []
     rows, b_keys = keys
+    takes_changes = any(method != "get" for method in sends)
+    if takes_changes and all(row in b_keys for row in rows):
+        # Only reads for shared keys: with every key of A's shared, no change by key is ever tried, a void as
+        # much as an edit, and a leaky one would pass unseen. (A route that only reads needs nothing more.)
+        found.append(
+            "every key of shop A's rows is shop B's too, so no change could be tried: give shop A a row with a key"
+            " of its own (backend/tests/conftest.py)"
+        )
     for row in rows:
         row_url = reverse(name, kwargs={route.lookup: row})
         if row in b_keys:
@@ -1250,6 +1258,27 @@ def test_route_check_lets_a_shared_key_answer_with_shop_b_row(
     problems = route_problems(staff_client_a, staff_client_b, shop_a, shop_b)
 
     assert "note-by-text-detail" not in problems
+
+
+@pytest.mark.django_db
+def test_route_check_needs_a_key_only_shop_a_has(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_a: APIClient, staff_client_b: APIClient
+) -> None:
+    # If every key of shop A's rows is shop B's too, the sweep only reads, and never tries a change by key: a
+    # change would land on B's own row. A leaky edit by key would then pass unseen, so the sweep says so.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="Shared").save()
+    Note(shop=shop_b, text="Shared").save()
+
+    problems = route_problems(staff_client_a, staff_client_b, shop_a, shop_b)
+
+    every_key_shared = [
+        "every key of shop A's rows is shop B's too, so no change could be tried: give shop A a row with a key of"
+        " its own (backend/tests/conftest.py)"
+    ]
+    assert problems["note-by-text-detail"] == every_key_shared
+    # And a route whose only change is a POST on one row, a void by key.
+    assert problems["note-by-text-void"] == every_key_shared
 
 
 @pytest.mark.django_db
