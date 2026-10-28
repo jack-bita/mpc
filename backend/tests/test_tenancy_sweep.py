@@ -168,6 +168,10 @@ def primary_key_problems(tables: Iterable[type[models.Model]]) -> list[str]:
     problems = []
     with connection.cursor() as cursor:
         for table in tables:
+            # A table Django doesn't manage (`managed = False`), such as a view of the database a report reads
+            # through, has no primary key of its own, and no create writes to it.
+            if not table._meta.managed:
+                continue
             name = table._meta.db_table
             rules = connection.introspection.get_constraints(cursor, name)
             keys = sorted(rule_name for rule_name, rule in rules.items() if rule["primary_key"])
@@ -656,6 +660,20 @@ def test_primary_key_check_finds_a_key_with_another_name() -> None:
         cursor.execute("ALTER TABLE probe_note RENAME CONSTRAINT probe_note_pkey TO probe_memo_pkey")
 
     assert primary_key_problems([Note]) == ["probe.Note: primary key named ['probe_memo_pkey'], not probe_note_pkey"]
+
+
+@pytest.mark.django_db
+def test_primary_key_check_skips_tables_django_does_not_manage() -> None:
+    with throwaway_tables():
+
+        class ReportRow(ShopScoped):
+            # A view of the database, as a report could read through: Django makes no table for it, and it has
+            # no primary key of its own. It still has `shop` and the guard, which the other checks ask for.
+            class Meta:
+                app_label = "probe"
+                managed = False
+
+        assert primary_key_problems([ReportRow]) == []
 
 
 def test_guard_check_finds_tables_that_lose_the_guard() -> None:
