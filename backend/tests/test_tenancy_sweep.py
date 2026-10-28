@@ -30,7 +30,9 @@ And it walks the address list for every route of the office API, the routes buil
 - no route under api/ escapes the sweep by being built on something else.
 
 A new table, file or route is checked with no change here, and this file must stay green without being edited
-(backend rules). Each check is a function that returns what breaks its rule, as in test_no_floats.py. The
+(backend rules). What changes instead lives beside it: the two shops' data, in backend/tests/conftest.py, and
+the tables and routes allowed to break a rule, each with its reason, in backend/tests/sweep_lists.py. Each
+check is a function that returns what breaks its rule, as in test_no_floats.py. The
 tests of the checks hand them tables and code built to break the rule (the tables made in a throwaway
 registry of their own, so they never join the real list), and a few tests make sure the real lists are not
 empty, so the sweep can't pass by looking at nothing.
@@ -53,51 +55,19 @@ from django.db import connection, models
 from django.http import HttpResponse
 from django.test.utils import isolate_apps
 from django.urls import URLPattern, URLResolver, get_resolver, reverse
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from pytest_django import Settings
 from rest_framework.test import APIClient
 
 from apps.core.api.base import ShopViewSet
-from apps.core.api.views import HealthView
 from apps.core.models import ShopScoped, ShopScopedManager, UUIDModel
 from apps.core.tenancy import NoShopSelected, shop_context
 from apps.shops.models import PaymentAccount, Shop, Side, StockLocation
 from tests.probe.models import Note
+from tests.sweep_lists import INFRASTRUCTURE, NO_SHOP, NOT_SHOP_ROUTES
 
 BACKEND = Path(__file__).resolve().parents[1]
 APPS = BACKEND / "apps"
 CONFIG = BACKEND / "config"
-
-# T1's exceptions (02 §1, 03 §5.4): tables that belong to no one shop, so they have no `shop`.
-NO_SHOP = {
-    # A person, who may work in several shops. Their job at each one is a StaffMember, which has a shop (D12).
-    "people.User",
-    # The tenant itself.
-    "shops.Shop",
-    # kg, L, pcs: the same in every shop (CAT-1, still to come).
-    "catalog.Unit",
-}
-
-# Tables Django makes by itself, for its own machinery. They break T1 and T3 by Django's design, so the
-# checks of those two rules skip them. Each one is listed on purpose, with its reason.
-INFRASTRUCTURE = {
-    # The Django admin's permissions for a person, from PermissionsMixin on User: their groups and their own
-    # permissions. Only the superuser's admin uses them; shop permissions are our own codes (PPL-3). Their
-    # links CASCADE, Django's choice, but a User is never deleted, only switched off (`is_active`), so the
-    # CASCADE never runs (Jack, CORE-7's plan, 28 Oct 2026).
-    "people.User_groups",
-    "people.User_user_permissions",
-}
-
-# Routes under api/ that may be built on something other than ShopViewSet, because none of them reads a
-# shop's table. Each one is listed on purpose, with its reason.
-NOT_SHOP_ROUTES: set[type] = {
-    # The uptime check: no login, and no table at all (apps/core/api/views.py).
-    HealthView,
-    # The API's description, and the same as a page: its routes and fields, never a row (CORE-6).
-    SpectacularAPIView,
-    SpectacularSwaggerView,
-}
 
 # The most pages of one list the route sweep reads. A list that goes on longer has a cursor that never ends,
 # and the sweep says so instead of hanging CI. The sweep's shops hold a few rows of each table, so each of
@@ -556,8 +526,9 @@ def side_field_problems(views: Iterable[type[ShopViewSet[Any]]]) -> list[str]:
 def api_route_problems() -> list[str]:
     # The leak check can only call routes built on ShopViewSet: they name their table, and open the visit's
     # shop. A route under api/, where the app's routes live (03 §5.10), built on anything else would never be
-    # checked, so it must be on NOT_SHOP_ROUTES, with its reason. Outside api/, the Django admin (/admin/) is
-    # the superuser's alone, and reads through its own door (all_shops).
+    # checked. So it must read no shop's table, and be on NOT_SHOP_ROUTES (backend/tests/sweep_lists.py) with
+    # its reason; a route that reads one, such as sync's pull, is taught to the sweep instead. Outside api/,
+    # the Django admin (/admin/) is the superuser's alone, and reads through its own door (all_shops).
     problems = []
     for address in addresses():
         # An address mounted the older way, with re_path(), is written as a regular expression and starts with
