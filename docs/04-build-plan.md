@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.18 · 27 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.19 · 28 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.19** (28 Oct 2026, CORE-5): the card names a test for each *Done when* line and the runner's own checks. Its float check is a test, not CI config, so its commit is `test:`, not `ci:`. The card also names `split_into_units`, the helper behind E1's "26 bags + 35.5 kg". UI-1 gains a *Watch out* on the traps the shared vectors pin, which the TypeScript side must match. Marked **(v1.19)**.
 
 **Changes in v1.18** (27 Oct 2026, CORE-4): CORE-4's `Setting` has no `set_by` column. Who set a value is the row's `created_by`, which every shop row has had since PPL-2 (Jack, while planning CORE-4; 02 v1.7). The two tolerances default to 0 until the owner agrees values (02 §20, item 2). The card names a test for its last *Done when* line and the extra tests its plan added, and splits its last commit in two: the dated rows, then the lookup. From CORE-4's review, for later cards: SHOP-3's row says what its write service checks and two choices it makes (backdated values; a side going back to the shop's value); CAT-2's row names the clash between one price row per date (03 §9) and a same-day fix. Marked **(v1.18)**.
 
@@ -501,13 +503,13 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### CORE-5 · Exact money and quantities
 `M` · Jack-led · after REPO-2 · branch `feat/core-5-numbers`
 **Learn:** why floats lose shillings; half-up rounding; one source of truth for two languages (03 §8).
-**Build:** `core/numbers.py`: money (2 places) and quantity (3 places) helpers on `Decimal`; `round_money(amount, step)`, half-up; `shared/test-vectors/` files with inputs and expected outputs as strings (`rounding.json`, `units.json` — E1's numbers among them); a pytest runner that loads every vector file.
+**Build:** `core/numbers.py`: money (2 places) and quantity (3 places) helpers on `Decimal`; `round_money(amount, step)`, half-up; `split_into_units(quantity, factors)`, stock as whole selling units, biggest first, plus the rest in the base unit **(v1.19)**; `shared/test-vectors/` files with inputs and expected outputs as strings (`rounding.json`, `units.json` — E1's numbers among them); a pytest runner that loads every vector file.
 **Done when:**
 - [ ] Every vector passes.
 - [ ] E1's 1,335.5 kg shows as 26 bags of 50 kg + 35.5 kg.
 - [ ] A lint rule or a test stops `float` from appearing in calculation code.
-**Tests:** `test_vectors_rounding` · `test_vectors_units` · `test_e1_shown_as_bags_and_kg`
-**Commits:** `test(core): rounding and unit vectors` → `feat(core): money and quantity helpers` → `ci: no floats in calculations`
+**Tests:** `test_vectors_rounding` · `test_vectors_units` · `test_e1_shown_as_bags_and_kg` · `test_no_floats_in_calculation_code` · `test_every_vector_file_is_run` · `test_bare_numbers_refused` **(v1.19)**
+**Commits:** `test(core): rounding and unit vectors` → `feat(core): money and quantity helpers` → `test: no floats in calculation code` → `docs: core-5 card names the tests it built` **(v1.19)**
 
 ### CORE-6 · API conventions
 `M` · Claude-led · after SHOP-2 · branch `feat/core-6-api`
@@ -608,6 +610,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 - [ ] The same vector files pass in pytest and in Vitest.
 - [ ] Switching to English changes every visible string.
 - [ ] Office pages show the banner offline.
+**Watch out** **(v1.19)**: the vectors pin three traps, so the TypeScript side must give the same text as Python (`backend/apps/core/numbers.py`). A half goes away from zero: −2.5 → −3, while JavaScript's `Math.round(-2.5)` gives −2 (big.js `Big.roundHalfUp` is right). A zero answer is written `0.00` or `0.000`, never with a minus. The split cuts toward zero: −120 kg is −2 bags and −20 kg (big.js `Big.roundDown`), not `Math.floor`'s −3 bags and +30 kg. The Vitest loader refuses a bare JSON number, as pytest's does, because `JSON.parse` reads it as a float.
 **Tests:** `vectors.rounding.test.ts` · `vectors.units.test.ts` · `format.money.test.ts`
 **Commits:** `feat(frontend): swahili and english messages` → `feat(frontend): decimals and rounding from shared vectors` → `feat(frontend): app layout`
 
