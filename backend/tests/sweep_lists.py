@@ -50,3 +50,11 @@ NOT_SHOP_ROUTES: set[type] = {
 # text: route name → the test that proves the route shows nothing of another shop's. The sweep leaves each
 # such route to its test, and checks that the test exists (test_every_route_left_to_its_own_test_has_one).
 OWN_LEAK_TESTS: dict[str, str] = {}
+
+# App files that may build a query by hand, `models.QuerySet(Table)`, which starts from no manager and so from
+# no guard: file → why it reads no shop's row.
+HAND_BUILT_QUERIES = {
+    # A route's description for the API's schema is made with no visit, so with no shop open: the route's rows
+    # come from an empty query (.none()), which reads no row at all (CORE-6).
+    "apps/core/api/base.py": "an empty query, .none(), for the API's description",
+}

@@ -12,13 +12,13 @@ apps (the ones under backend/apps/) and checks each one, with no list of tables 
 - it keeps the guard: every manager it has, except the admin's `all_shops`, refuses to build a read while no
   shop is open (CORE-2).
 
-It also reads our code, as test_no_floats.py does, for the named ways to read every shop at once: the two
-doors, `all_shops` for the superuser's admin pages and `system_context()` for system jobs (03 §5.4), and
-Django's plain base manager, `_base_manager`. Each must stay in its own place; tests may use all three.
-Until now only a search by hand found them. Raw SQL (`.raw()`, `connection.cursor()`) and a query built by
-hand (`models.QuerySet(Side)`) read past the guard too, but a scan by name can't tell them from harmless
-code, such as a sync cursor or a type: review watches for them, and row-level security, before a second
-real shop, closes every way past the guard (ADR-0022).
+It also reads our code, as test_no_floats.py does, for every way past the guard it can name, each of which
+must stay in its own place (tests may use them all): the two doors, `all_shops` for the superuser's admin
+pages and `system_context()` for system jobs (03 §5.4); Django's plain base manager (`_base_manager`,
+`_meta.base_manager`); and, found as calls, which the parser tells from a type or a plain name, raw SQL
+(`.raw()`, `connection.cursor()`) and a query built by hand (`models.QuerySet(Side)`). Until now only a search
+by hand found them. Code can still get past a scan, by a name made up at run time for one; review watches for
+that, and row-level security, before a second real shop, closes every way past the guard (ADR-0022).
 
 And it walks the address list for every route of the office API, the routes built on ShopViewSet
 (apps/core/api/base.py):
@@ -71,7 +71,7 @@ from apps.core.models import ShopScoped, ShopScopedManager, UUIDModel
 from apps.core.tenancy import NoShopSelected, shop_context
 from apps.shops.models import PaymentAccount, PaymentAccountKind, Shop, Side, StockLocation
 from tests.probe.models import Note, VoidableEntry
-from tests.sweep_lists import INFRASTRUCTURE, NO_SHOP, NOT_SHOP_ROUTES, OWN_LEAK_TESTS
+from tests.sweep_lists import HAND_BUILT_QUERIES, INFRASTRUCTURE, NO_SHOP, NOT_SHOP_ROUTES, OWN_LEAK_TESTS
 
 BACKEND = Path(__file__).resolve().parents[1]
 APPS = BACKEND / "apps"
@@ -232,10 +232,24 @@ def may_use_system_context(path: Path) -> bool:
 
 
 def may_use_base_manager(path: Path) -> bool:
-    # Django's plain base manager reads every shop with no name to give it away, so app code never reads
-    # through it by hand: following a link (`location.side`) and save() use it already, the way Django
-    # means (apps/core/models.py). Tests may, to look past the guard on purpose.
+    # Django's plain base manager, `_base_manager` or `_meta.base_manager`, reads every shop with no name to
+    # give it away, so app code never reads through it by hand: following a link (`location.side`) and save()
+    # use it already, the way Django means (apps/core/models.py). Tests may, to look past the guard on purpose.
     return in_tests(path)
+
+
+def may_use_raw_sql(path: Path) -> bool:
+    # Raw SQL, `.raw(...)` or `connection.cursor()`, skips the guard's filter whatever manager it starts from:
+    # `Side.objects.raw("SELECT ...")` reads every shop's sides even inside one shop's visit. Migrations run as
+    # system jobs, with no visit; system jobs may read every shop anyway; tests may.
+    folders = path.relative_to(BACKEND).parts[:-1]
+    return "migrations" in folders or may_use_system_context(path)
+
+
+def may_build_queries(path: Path) -> bool:
+    # A query built by hand, `models.QuerySet(Side)`, starts from no manager, so from no guard. Tests may; app
+    # code only in a file HAND_BUILT_QUERIES lists, with its reason (backend/tests/sweep_lists.py).
+    return in_tests(path) or str(path.relative_to(BACKEND)) in HAND_BUILT_QUERIES
 
 
 def uses_of(name: str, source: str) -> list[int]:
@@ -254,19 +268,36 @@ def uses_of(name: str, source: str) -> list[int]:
     return sorted(lines)
 
 
-def uses_in_our_code(name: str) -> dict[str, list[int]]:
+def calls_of(name: str, source: str) -> list[int]:
+    # The lines where the code calls `name`: as a method (Side.objects.raw(...), connection.cursor()) or by
+    # itself (QuerySet(Side)). Only a call counts: the parser tells it from a type (`models.QuerySet[Side]`) and
+    # from a word that only names something, such as a sync pull's `cursor`.
+    lines = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call):
+            called = node.func
+            if (isinstance(called, ast.Attribute) and called.attr == name) or (
+                isinstance(called, ast.Name) and called.id == name
+            ):
+                lines.append(node.lineno)
+    return sorted(lines)
+
+
+def uses_in_our_code(name: str, finder: Callable[[str, str], list[int]] = uses_of) -> dict[str, list[int]]:
     # Every Python file of our apps and of the settings, tests and migrations included: a migration that
-    # opened every shop would be worth a look too.
+    # opened every shop would be worth a look too. `finder`: uses_of, any use of the name, or calls_of, calls only.
     found = {}
     for path in sorted([*APPS.rglob("*.py"), *CONFIG.rglob("*.py")]):
-        lines = uses_of(name, path.read_text(encoding="utf-8"))
+        lines = finder(name, path.read_text(encoding="utf-8"))
         if lines:
             found[str(path.relative_to(BACKEND))] = lines
     return found
 
 
-def misplaced_uses(name: str, may_use: Callable[[Path], bool]) -> dict[str, list[int]]:
-    return {path: lines for path, lines in uses_in_our_code(name).items() if not may_use(BACKEND / path)}
+def misplaced_uses(
+    name: str, may_use: Callable[[Path], bool], finder: Callable[[str, str], list[int]] = uses_of
+) -> dict[str, list[int]]:
+    return {path: lines for path, lines in uses_in_our_code(name, finder).items() if not may_use(BACKEND / path)}
 
 
 @dataclass(frozen=True)
@@ -962,10 +993,35 @@ def test_guard_check_finds_tables_that_lose_the_guard() -> None:
         ("system_context", "from apps.core.tenancy import system_context as open_all"),
         ("system_context", "from apps.core import tenancy\nopen_all = tenancy.system_context"),
         ("_base_manager", "sides = Side._base_manager.filter(code='D')"),
+        # The same door under another name.
+        ("base_manager", "sides = Side._meta.base_manager.filter(code='D')"),
     ],
 )
 def test_door_check_finds_every_use(name: str, code: str) -> None:
     assert uses_of(name, code) != []
+
+
+@pytest.mark.parametrize(
+    ("name", "code"),
+    [
+        ("raw", "sides = Side.objects.raw('SELECT * FROM shops_side')"),
+        ("cursor", "with connection.cursor() as cursor:\n    cursor.execute('SELECT 1')"),
+        ("QuerySet", "sides = models.QuerySet(Side)"),
+    ],
+)
+def test_call_check_finds_every_call(name: str, code: str) -> None:
+    assert calls_of(name, code) != []
+
+
+def test_call_check_skips_types_and_plain_names() -> None:
+    # A type is not a call, and neither is a word that only names something, such as a sync pull's cursor.
+    code = """
+def visible(rows: models.QuerySet[Side]) -> models.QuerySet[Side]:
+    cursor = request.query_params["cursor"]
+    return rows.filter(code=cursor)
+"""
+    assert calls_of("QuerySet", code) == []
+    assert calls_of("cursor", code) == []
 
 
 def test_door_check_skips_comments_strings_and_the_definition() -> None:
@@ -996,6 +1052,13 @@ def test_doors_are_allowed_only_in_their_places() -> None:
     assert may_use_all_shops(APPS / "core" / "tests" / "test_shop_scoped.py")
     assert may_use_system_context(APPS / "shops" / "tests" / "test_create_shop.py")
     assert may_use_base_manager(APPS / "core" / "tests" / "test_shop_scoped.py")
+    # Raw SQL: migrations, system jobs and tests, never code that answers a visit.
+    assert may_use_raw_sql(APPS / "shops" / "migrations" / "0006_fill_codes.py")
+    assert may_use_raw_sql(APPS / "control" / "management" / "commands" / "check_balances.py")
+    assert not may_use_raw_sql(APPS / "shops" / "selectors.py")
+    # A query built by hand: tests, and the files HAND_BUILT_QUERIES lists with their reason.
+    assert may_build_queries(APPS / "core" / "api" / "base.py")
+    assert not may_build_queries(APPS / "shops" / "api" / "views.py")
 
 
 def test_door_check_reads_our_code() -> None:
@@ -1466,6 +1529,18 @@ def test_system_context_only_in_system_code() -> None:
 
 def test_base_manager_only_in_tests() -> None:
     assert misplaced_uses("_base_manager", may_use_base_manager) == {}
+    assert misplaced_uses("base_manager", may_use_base_manager) == {}
+
+
+def test_raw_sql_only_in_migrations_and_system_code() -> None:
+    assert misplaced_uses("raw", may_use_raw_sql, calls_of) == {}
+    assert misplaced_uses("cursor", may_use_raw_sql, calls_of) == {}
+
+
+def test_hand_built_queries_only_where_listed() -> None:
+    assert misplaced_uses("QuerySet", may_build_queries, calls_of) == {}
+    # And no file is listed that builds none any more: a stale entry would let a new one in unseen.
+    assert set(HAND_BUILT_QUERIES) <= set(uses_in_our_code("QuerySet", calls_of))
 
 
 @pytest.mark.django_db
