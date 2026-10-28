@@ -25,7 +25,7 @@ Every app may import `control`; `control` imports only `core`. A model may name 
 
 ## Inside an app
 
-`models.py` tables and every rule the database can enforce · `services.py` every write, one function per action, each in a transaction · `selectors.py` every read the API and reports use · `calculations.py` pure functions, mirrored in TypeScript · `documents.py` handlers for offline document types · `permissions.py` · `api/` thin serializers, views and urls · `admin.py` · `tests/`
+`models.py` tables and every rule the database can enforce · `services.py` every write, one function per action, each in a transaction · `selectors.py` every read the API and reports use · `calculations.py` pure functions, mirrored in TypeScript · `documents.py` handlers for offline document types · `permissions.py` · `tasks.py` background tasks, which with management commands are the only code that may open every shop (03 §5.11) · `api/` thin serializers, views and urls · `admin.py` · `tests/`
 
 ## Writing services
 
@@ -57,7 +57,7 @@ Every app may import `control`; `control` imports only `core`. A model may name 
 - pytest + pytest-django on real PostgreSQL, never SQLite; factory_boy; Hypothesis for ledger properties.
 - Names state the rule: `test_pin_lockout_doubles`. Worked examples: `test_e5_debt_clears_oldest_first`. Spec §8.1 rows: `test_arrives_0750_full_day_minus_fine`.
 - Calculations also pass `shared/test-vectors/*.json` (inputs and outputs as strings), the same files Vitest runs.
-- Every bug fix adds a test. The tenancy sweep (`backend/tests/test_tenancy_sweep.py`) must stay green without being edited: a route over a new table gives the sweep's two shops a row of it (`backend/tests/conftest.py`), and its allowed lists grow only by a decision written on the card (a table with no `shop`, a route under `api/` that is not an office route).
+- Every bug fix adds a test. The tenancy sweep (`backend/tests/test_tenancy_sweep.py`) must stay green without being edited. A route over a new table gives the sweep's two shops a row of it, with values only shop A has, and a route that needs query parameters gives them in `sweep_queries`, both in `backend/tests/conftest.py`. Its allowed lists (`backend/tests/sweep_lists.py`) grow only by a decision written on the card: a table with no `shop`, or a route under `api/` that reads no shop's table. A route that reads one but is not an office route (pairing, PIN login, sync) is taught to the sweep instead.
 
 ## Privacy
 

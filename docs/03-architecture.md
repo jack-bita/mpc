@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.8 · 28 Oct 2026 · Portion 3 of the planning pack
+**Version:** 1.9 · 28 Oct 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.9** (28 Oct 2026, CORE-7): an app keeps its background tasks in `tasks.py`. With management commands, that is the only code that may open every shop with `system_context()`, and CORE-7's sweep checks it (§5.2, §5.11). Marked **(v1.9)**.
 
 **Changes in v1.8** (28 Oct 2026, CORE-6): login names who acts and the visit's shop, and the base API view opens it around the whole visit; office routes need a staff member (§5.4). The API's conventions as CORE-6 built them: what the error shape means, creates sent twice, edits, pages, and the docs closed in production (§5.10). Marked **(v1.8)**.
 
@@ -250,6 +252,7 @@ apps/sales/
 ├── calculations.py   pure functions with no database (totals, discounts); mirrored in TypeScript
 ├── documents.py      handlers for this app's offline document types
 ├── permissions.py    the permission codes this app checks
+├── tasks.py          background tasks (§5.11) (v1.9)
 ├── api/              serializers.py, views.py, urls.py — thin
 ├── admin.py
 └── tests/
@@ -375,6 +378,7 @@ Conventions:
 ### 5.11 Background jobs (AD9)
 
 - Tasks use Django's `@task` API with the django-tasks-db backend; one worker container runs `db_worker`.
+- Each app keeps its tasks in `tasks.py` (or a `tasks/` package). A task answers no visit, so with management commands it is the only code that may open every shop with `system_context()`; CORE-7's sweep checks that it appears nowhere else **(v1.9)**.
 - The scheduler (supercronic) runs management commands: nightly checks (§5.7), exports, cleanups.
 - Rules: every job is safe to run twice, takes IDs (not objects), works one shop at a time, logs its start and end, and pings a heartbeat so a silent failure gets noticed.
 
