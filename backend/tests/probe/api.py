@@ -9,6 +9,7 @@ Each route is built to pass the sweep, or to break one of its checks in one way:
   shop's notes show, in its list, its detail route, its edits, its CSV export and its search, which needs a
   query parameter. LeakyNoteTextViewSet leaks the same way but shows no ids, only the texts, as a report of
   names and totals would.
+- NoteFormFirstViewSet checks an edit's form before it looks for the row: the same 400 for every row.
 - NoteMakerViewSet only makes notes, and names a side link a note doesn't have.
 - NoteByTextViewSet finds a note by its text, a key each shop has its own of.
 - ClosedNoteViewSet's list refuses everyone; EndlessNoteViewSet's list has a broken cursor, whose next page
@@ -68,6 +69,14 @@ class LeakyNoteViewSet(NoteViewSet):
         if not text:
             raise serializers.ValidationError({"text": "Required."})
         return Response(NoteSerializer(self.get_queryset().filter(text__contains=text), many=True).data)
+
+
+class NoteFormFirstViewSet(NoteViewSet):
+    def partial_update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # Checks what was sent before it looks for the row: an empty edit gets the same 400 whichever row it
+        # names, a real one or one that doesn't exist, so it gives nothing away.
+        self.get_serializer(data=request.data).is_valid(raise_exception=True)
+        return super().partial_update(request, *args, **kwargs)
 
 
 class NoteMakerViewSet(mixins.CreateModelMixin, ShopViewSet[Note]):

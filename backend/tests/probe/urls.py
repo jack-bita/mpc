@@ -11,6 +11,7 @@ from tests.probe.api import (
     LeakyNoteTextViewSet,
     LeakyNoteViewSet,
     NoteByTextViewSet,
+    NoteFormFirstViewSet,
     NoteMakerViewSet,
     NoteViewSet,
     note_count,
@@ -21,6 +22,7 @@ router.register("notes", NoteViewSet, basename="note")
 router.register("leaky-notes", LeakyNoteViewSet, basename="leaky-note")
 router.register("leaky-note-texts", LeakyNoteTextViewSet, basename="leaky-note-text")
 router.register("notes-by-text", NoteByTextViewSet, basename="note-by-text")
+router.register("notes-form-first", NoteFormFirstViewSet, basename="note-form-first")
 router.register("note-makers", NoteMakerViewSet, basename="note-maker")
 router.register("closed-notes", ClosedNoteViewSet, basename="closed-note")
 router.register("endless-notes", EndlessNoteViewSet, basename="endless-note")
