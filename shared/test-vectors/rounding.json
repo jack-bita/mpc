@@ -1,14 +1,15 @@
 {
-  "about": "shared/test-vectors/rounding.json: the answer book for rounding money (03 §8, ADR-0024). round_money(amount, step) rounds an amount half-up to a multiple of the shop's rounding step (the setting money.rounding_step, default 1 shilling) and writes it with two places. Python (backend/tests/test_vectors.py) and TypeScript (from UI-1) must both give every expect exactly. Every number is text, in quotes: a bare JSON number is read as a float. Fake numbers only.",
+  "about": "shared/test-vectors/rounding.json: the answer book for rounding money (03 §8, ADR-0024). round_money(amount, step) rounds an amount half-up to a multiple of the shop's rounding step (the setting money.rounding_step, default 1 shilling) and writes it with two places. Half-up means a half goes away from zero: 458.5 → 459 and −2.5 → −3 (JavaScript's Math.round gives −2). Some cases are here because a version written with floats gets them wrong (1.65 ÷ 1.10 is 1.4999… in floats). Python (backend/tests/test_vectors.py) and TypeScript (from UI-1) must both give every expect exactly. Every number is text, in quotes: a bare JSON number is read as a float. Fake numbers only.",
   "cases": [
     { "name": "whole_shillings_stay", "amount": "43000", "step": "1", "expect": "43000.00" },
     { "name": "half_goes_up", "amount": "458.5", "step": "1", "expect": "459.00" },
     { "name": "below_half_goes_down", "amount": "458.49", "step": "1", "expect": "458.00" },
-    { "name": "float_answer_goes_down", "amount": "458.49999", "step": "1", "expect": "458.00" },
+    { "name": "just_below_half_goes_down", "amount": "458.49999", "step": "1", "expect": "458.00" },
     { "name": "kg_times_price_many_places", "amount": "432.89667", "step": "1", "expect": "433.00" },
     { "name": "step_50_below_half_goes_down", "amount": "13762", "step": "50", "expect": "13750.00" },
     { "name": "step_50_half_goes_up", "amount": "13775", "step": "50", "expect": "13800.00" },
     { "name": "step_50_just_under_half", "amount": "43024.99", "step": "50", "expect": "43000.00" },
+    { "name": "step_not_whole_half_goes_up", "amount": "1.65", "step": "1.10", "expect": "2.20" },
     { "name": "step_100_above_half_goes_up", "amount": "13762", "step": "100", "expect": "13800.00" },
     { "name": "step_100_half_goes_up", "amount": "13750", "step": "100", "expect": "13800.00" },
     { "name": "negative_half_goes_away_from_zero", "amount": "-2.5", "step": "1", "expect": "-3.00" },
