@@ -144,6 +144,12 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# --- Django REST framework: how every API view behaves, unless a view says otherwise (03 §5.10).
+REST_FRAMEWORK = {
+    # Every refusal leaves in the API's one error shape, with a code the app translates (ADR-0032).
+    "EXCEPTION_HANDLER": "apps.core.api.errors.handle_error",
+}
+
 # The version this process runs. A deploy builds the image with its git commit as the version
 # (backend/Dockerfile, `make check-image APP_VERSION=<commit>`); every other build, and a laptop, say "dev".
 # The health check shows it, so after a deploy the smoke test can tell whether the new version is
