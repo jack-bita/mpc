@@ -32,6 +32,7 @@ empty, so the sweep can't pass by looking at nothing.
 """
 
 import ast
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -343,6 +344,11 @@ def route_problems(client: APIClient, shop: Shop) -> dict[str, list[str]]:
     # route, asked for each of A's rows by its id, must answer 404, "not found", as if the row didn't exist
     # (a 403 would tell shop B that it does), and show none of A's ids either.
     theirs = ids_of(shop)
+    # How many routes carry each name, across the whole address list. The sweep builds a route's address from
+    # its name (reverse()), and Django finds a name's last route only, so two routes with one name would be
+    # one route called twice and one never called. config/urls.py mounts each app with no namespace, so two
+    # apps' routers that pick the same basename meet.
+    names = Counter(address.name for address in addresses() if address.name)
     problems: dict[str, list[str]] = {}
     for route in shop_routes():
         found: list[str] = []
@@ -355,6 +361,10 @@ def route_problems(client: APIClient, shop: Shop) -> dict[str, list[str]]:
             # Every route DRF's routers make has a name and takes at most the row's id. A route nested under
             # another row would need that row too, which the sweep can't guess.
             found.append("no address the sweep can build: it needs a name, and no part but the row's id")
+        elif names[route.name] > 1:
+            found.append(
+                f"{names[route.name]} routes have this name, and Django finds only one of them by it: give each its own"
+            )
         elif not rows:
             # With no row of shop A in its own table, the route could leak and still pass.
             found.append(f"shop A has no {table._meta.label} rows to look for: add some in backend/tests/conftest.py")
@@ -638,8 +648,10 @@ def test_route_check_finds_a_route_that_leaks(
 
     problems = route_problems(staff_client_b, shop_a)
 
-    # Only the leaky routes: the list shows shop A's note, and the detail route hands it over.
-    assert sorted(problems) == ["leaky-note-detail", "leaky-note-list"]
+    # The leaky routes, and not the guarded ones: the list shows shop A's note, and the detail route hands it
+    # over. (The probe's other routes are mounted awkwardly on purpose, for the tests below.)
+    assert {"leaky-note-list", "leaky-note-detail"} <= problems.keys()
+    assert not problems.keys() & {"note-list", "note-detail"}
     assert problems["leaky-note-detail"][0].endswith("answered 200, not 404")
 
 
@@ -651,8 +663,26 @@ def test_route_check_needs_rows_to_look_for(settings: Settings, shop_a: Shop, st
 
     problems = route_problems(staff_client_b, shop_a)
 
-    assert sorted(problems) == ["leaky-note-detail", "leaky-note-list", "note-detail", "note-list"]
-    assert all("no probe.Note rows" in found[0] for found in problems.values())
+    for name in ["leaky-note-detail", "leaky-note-list", "note-detail", "note-list"]:
+        assert problems[name] == ["shop A has no probe.Note rows to look for: add some in backend/tests/conftest.py"]
+
+
+@pytest.mark.django_db
+def test_route_check_tells_every_route_apart(settings: Settings, shop_a: Shop, staff_client_b: APIClient) -> None:
+    # The probe's twin routes share one name, and Django finds a name's last route only: a sweep that called
+    # routes by name alone would call the guarded twin twice and the leaky one never, and pass.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="Note of shop A").save()
+
+    problems = route_problems(staff_client_b, shop_a)
+
+    twins = ["2 routes have this name, and Django finds only one of them by it: give each its own"]
+    assert problems["twin-note-list"] == twins
+    assert problems["twin-note-detail"] == twins
+    # A list nested under another row, and a route with no name: the sweep can't build their addresses.
+    no_address = ["no address the sweep can build: it needs a name, and no part but the row's id"]
+    assert problems["nested-note-list"] == no_address
+    assert problems["(no name)"] == no_address
 
 
 def test_side_check_finds_routes_that_misname_the_side() -> None:
