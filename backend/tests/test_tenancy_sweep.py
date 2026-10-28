@@ -686,6 +686,18 @@ def test_guard_check_finds_tables_that_lose_the_guard() -> None:
             class Meta(ShopScoped.Meta):
                 app_label = "probe"
 
+        class SkipsTheCheck(ShopScopedManager[Any]):
+            # Built on the guard's own class, so it passes for the guard by its class alone, but it leaves out
+            # the guard's check and reads every shop: only asking it to read with no shop open finds it out.
+            def get_queryset(self) -> models.QuerySet[Any]:
+                return models.QuerySet(self.model, using=self._db)
+
+        class GuardThatSkips(ShopScoped):
+            objects = SkipsTheCheck()
+
+            class Meta(ShopScoped.Meta):
+                app_label = "probe"
+
         class OnlyOwnMeta(ShopScoped):
             # Keeps the guard: a Meta of its own and no manager of its own (CORE-3's review).
             class Meta:
@@ -695,6 +707,7 @@ def test_guard_check_finds_tables_that_lose_the_guard() -> None:
             "probe.OnFreshBase.all_shops: no guard (the default)",
             "probe.OwnObjects.objects: no guard (the default)",
             "probe.SecondDoor.everything: no guard",
+            "probe.GuardThatSkips.objects: no guard (the default)",
         ]
 
 
