@@ -42,8 +42,8 @@ class Shop(UUIDModel, TimeStamped):
 
     name = models.CharField(max_length=100)
     # The short form people already say: MPC for Mabatini Pumba Center (Jack, 26 Oct 2026). One shop
-    # each; its shape (2 to 10 capital letters) is a rule in Meta, and clean() tidies what was typed.
-    code = models.CharField(max_length=10, unique=True)
+    # each, and its shape (2 to 10 capital letters): both are rules in Meta. clean() tidies what was typed.
+    code = models.CharField(max_length=10)
     # Times are stored in UTC and shown in the shop's own time, and its business dates are worked out
     # in this zone (02 §1). 64 characters hold the longest name in the tz database.
     timezone = models.CharField(max_length=64, default="Africa/Dar_es_Salaam")
@@ -98,6 +98,15 @@ class Shop(UUIDModel, TimeStamped):
                 condition=models.Q(code__regex=r"^[A-Z]{2,10}$"),
                 name="shops_shop_code_capital_letters",
                 violation_error_code="shop.code_invalid",
+            ),
+            # One shop per code. A named rule, not `unique=True` on the field: that one can only answer
+            # with Django's generic `unique`, and the app needs a code of ours to translate (ADR-0032).
+            # The message is there for the code's sake, as on Side's letter.
+            models.UniqueConstraint(
+                fields=["code"],
+                name="shops_shop_code_unique",
+                violation_error_code="shop.code_taken",
+                violation_error_message="Another shop has this code.",
             ),
             # The shape of an ISO 4217 code (TZS, KES, USD). Which currencies exist isn't checked here.
             models.CheckConstraint(

@@ -53,10 +53,23 @@ def test_shop_status_must_be_known() -> None:
 def test_shop_code_unique() -> None:
     Shop.objects.create(name=NAME, code=CODE)
 
-    # The code is how people tell shops apart (MPC, DEMO), so it must point at one shop only.
-    # PostgreSQL names the unique rule itself: <table>_<column>_key.
-    with pytest.raises(IntegrityError, match="shops_shop_code_key"):
+    # The code is how people tell shops apart (MPC, DEMO), so it must point at one shop only. The
+    # database refuses a second one even from code that skips every form: the rule named in Shop.Meta.
+    with pytest.raises(IntegrityError, match="shops_shop_code_unique"):
         Shop.objects.create(name="Duka Jingine", code=CODE)
+
+
+def test_shop_code_taken_has_its_own_code() -> None:
+    # The way a form or create_shop checks a new shop (full_clean): the clash comes back as our own
+    # code, which the app translates (ADR-0032), not Django's generic `unique`, which says nothing about
+    # which rule was broken. Filed under "__all__", the whole record, as SHOP-2's side letters are.
+    Shop.objects.create(name=NAME, code=CODE)
+    second = Shop(name="Duka Jingine", code=CODE)
+
+    with pytest.raises(ValidationError) as refused:
+        second.full_clean()
+
+    assert [error.code for error in refused.value.error_dict["__all__"]] == ["shop.code_taken"]
 
 
 def test_shop_code_stored_in_capitals() -> None:
