@@ -22,9 +22,11 @@ from apps.core import numbers
 # The repo's shared/ folder, beside backend/: this file is backend/tests/test_vectors.py, two folders down.
 VECTORS = Path(__file__).resolve().parents[2] / "shared" / "test-vectors"
 
-# Every vector file this module runs. A new file is added here with its test, or
-# test_every_vector_file_is_run fails: an answer book nobody runs would check nothing.
-RUN_HERE = {"rounding.json", "units.json"}
+# Every vector file a test has loaded, by its path inside VECTORS. cases_in() adds to it while pytest
+# collects this module, before any test runs; test_every_vector_file_is_run then compares it with the
+# folder, so a file that no test loads turns CI red: an answer book nobody runs would check nothing.
+# Every vector test lives in this module, so the record is complete once the module is loaded.
+LOADED: set[str] = set()
 
 
 def _bare_number(text: str) -> Any:
@@ -38,17 +40,29 @@ def _bare_number(text: str) -> Any:
 def read_cases(text: str) -> list[dict[str, Any]]:
     data = json.loads(text, parse_float=_bare_number, parse_int=_bare_number, parse_constant=_bare_number)
     cases: list[dict[str, Any]] = data["cases"]
+    # Each name becomes a test id. pytest would quietly rename a second "zero" to "zero1", and a failure
+    # could then point at the wrong case.
+    names = [case["name"] for case in cases]
+    if len(names) != len(set(names)):
+        raise ValueError(f"Two cases share a name: {sorted({n for n in names if names.count(n) > 1})}.")
     return cases
 
 
 def cases_in(file_name: str) -> list[Any]:
     # One pytest case per vector, named by the vector's `name`.
+    LOADED.add(file_name)
     text = (VECTORS / file_name).read_text(encoding="utf-8")
     return [pytest.param(case, id=case["name"]) for case in read_cases(text)]
 
 
 def test_every_vector_file_is_run() -> None:
-    assert {path.name for path in VECTORS.glob("*.json")} == RUN_HERE
+    # rglob: a file in a subfolder counts too.
+    assert {path.relative_to(VECTORS).as_posix() for path in VECTORS.rglob("*.json")} == LOADED
+
+
+def test_duplicate_case_names_refused() -> None:
+    with pytest.raises(ValueError, match="share a name"):
+        read_cases('{"cases": [{"name": "zero"}, {"name": "zero"}]}')
 
 
 @pytest.mark.parametrize("bare", ["2.5", "2", "1e3", "NaN", "-Infinity"])
