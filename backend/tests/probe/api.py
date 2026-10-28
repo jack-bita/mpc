@@ -4,7 +4,7 @@
 Each route is built to pass the sweep, or to break one of its checks in one way:
 
 - NoteViewSet is built the way every office route is (apps/core/api/base.py), so it shows, edits, makes and
-  voids each visit's own shop's notes only, and sends them as a download in pieces too.
+  voids each visit's own shop's notes only, and sends them as downloads too: a CSV, in pieces and whole.
 - LeakyNoteViewSet makes the mistake the sweep is there to catch: it reads its rows past the guard, so every
   shop's notes show, in its list, its detail route, its edits, its void, the note a create hands back, its
   download, its CSV export, its search, which needs a query parameter, and its plain JSON.
@@ -84,17 +84,17 @@ class NoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.Updat
         texts = [note.text for note in self.get_queryset()]
         return StreamingHttpResponse((f"{text}\n" for text in texts), content_type="text/csv")
 
+    @action(detail=False)
+    def export(self, request: Request) -> HttpResponse:
+        # The notes as a CSV made all at once, as a report's export may answer: not JSON, and its texts written
+        # with no quotes around them, one note to a line.
+        return HttpResponse("\n".join(note.text for note in self.get_queryset()), content_type="text/csv")
+
 
 class LeakyNoteViewSet(NoteViewSet):
     def get_queryset(self) -> models.QuerySet[Note]:
         # The leak: every shop's notes, read through the admin's door instead of the guard.
         return Note.all_shops.all()
-
-    @action(detail=False)
-    def export(self, request: Request) -> HttpResponse:
-        # The same leak as a download, in CSV, as a report's export would answer: not JSON, and its texts
-        # written with no quotes around them.
-        return HttpResponse("\n".join(note.text for note in self.get_queryset()), content_type="text/csv")
 
     @action(detail=False)
     def search(self, request: Request) -> Response:

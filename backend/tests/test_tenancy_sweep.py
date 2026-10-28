@@ -42,6 +42,8 @@ empty, so the sweep can't pass by looking at nothing.
 """
 
 import ast
+import csv
+import io
 import json
 import uuid
 from collections import Counter
@@ -419,23 +421,31 @@ def read(response: HttpResponseBase) -> Reply:
 def leaks(reply: Reply, marks: Marks) -> list[str]:
     # Shop A's marks found anywhere in a readable answer: in a row of the route's own table, in a row of another
     # table nested in it, or in a link. Looked for in the answer's bytes as they were sent, so more than one kind
-    # of answer can be read: JSON, a CSV download, a download sent in pieces.
+    # of answer can be read: JSON, a CSV download, a download sent in pieces, a page.
     # - An id, as it is: long and unique, it can't turn up by chance.
     # - A text, in a JSON answer: as JSON writes it, quotes and all ("Vyakula"), so a short one matches only a
     #   whole value: "F", A's side letter, never the F of "Fanta". The cost: a name inside a longer text, such
     #   as a label "Mbegu (MFANO)", is not found; the row's id, if the answer shows it, still is. Both ways of
     #   writing a letter such as é are looked for: as itself, as DRF writes it (its UNICODE_JSON setting), and
     #   as an escape code (\u00e9), as Django's own JsonResponse does.
-    # - A text, in any other answer: as it is, since a CSV writes its texts with no quotes, but only when it is
-    #   long enough, 4 characters or more, not to turn up by chance. So in a CSV, a side's letter goes unseen;
-    #   its id and its name don't.
-    needles = list(marks.ids)
-    for text in marks.texts:
-        if reply.is_json:
-            needles += {json.dumps(text, ensure_ascii=False), json.dumps(text)}
-        elif len(text) >= 4:
-            needles.append(text)
-    return sorted(needle for needle in needles if needle.encode() in reply.body)
+    # - A text, in a CSV: as a whole cell, as the csv module reads the file, since a CSV writes its texts with
+    #   no quotes. So A's amount "5000" is never found inside B's own "15000".
+    # - A text, in any other answer (a page, plain text): as it is, but only when it is long enough, 4 characters
+    #   or more, not to turn up by chance. So there a side's letter goes unseen; its id and its name don't.
+    found = [row_id for row_id in marks.ids if row_id.encode() in reply.body]
+    if reply.is_json:
+        for text in marks.texts:
+            found += [
+                needle
+                for needle in {json.dumps(text, ensure_ascii=False), json.dumps(text)}
+                if needle.encode() in reply.body
+            ]
+    elif reply.kind == "text/csv":
+        cells = {cell for line in csv.reader(io.StringIO(reply.body.decode(errors="replace"))) for cell in line}
+        found += [text for text in marks.texts if text in cells]
+    else:
+        found += [text for text in marks.texts if len(text) >= 4 and text.encode() in reply.body]
+    return sorted(found)
 
 
 def shown(reply: Reply, marks: Marks) -> list[str]:
@@ -1113,6 +1123,23 @@ def test_route_check_reads_json_written_with_escape_codes(
     problems = route_problems(staff_client_a, staff_client_b, shop_a, shop_b)
 
     assert problems["leaky-note-plain"] == ['shows what only shop A has: "Caf\\u00e9 of shop A"']
+
+
+@pytest.mark.django_db
+def test_route_check_reads_a_csv_cell_by_cell(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_a: APIClient, staff_client_b: APIClient
+) -> None:
+    # Shop A's amount "5000" sits inside shop B's own "15000". In a CSV, the sweep compares whole cells, so the
+    # probe's guarded export, which shows B only its own "15000", is not taken for a leak.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="5000").save()
+    Note(shop=shop_b, text="15000").save()
+
+    problems = route_problems(staff_client_a, staff_client_b, shop_a, shop_b)
+
+    assert "note-export" not in problems
+    # The leaky export, which shows B both, still gives A's away.
+    assert problems["leaky-note-export"][0].startswith("shows what only shop A has: 5000")
 
 
 @pytest.mark.django_db
