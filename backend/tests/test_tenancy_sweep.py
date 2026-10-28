@@ -1015,11 +1015,14 @@ def test_marks_leave_out_choice_words_and_zero_amounts(shop_a: Shop, shop_b: Sho
 def test_sweep_reads_shop_a_rows_past_every_manager(monkeypatch: pytest.MonkeyPatch, shop_a: Shop) -> None:
     # The sweep finds shop A's rows with no shop open, through no manager of the table's: the guard is what it
     # checks, so no manager may decide what counts as A's. Even a table whose plain base manager was made the
-    # guarded one (Meta.base_manager_name = "objects") is read. Note is made such a table for this test only:
-    # monkeypatch puts its options back afterwards, the cached base manager too.
+    # guarded one (Meta.base_manager_name = "objects") is read. Note is made such a table for this test only.
+    # Django works the base manager out once and keeps it in the table's options, so the guarded one is put there
+    # directly: setitem puts back what was kept before, or takes it away if nothing was, and Note is left as the
+    # test found it, whatever ran before it. (Taking the kept one away instead left the guarded one behind for
+    # the rest of the run, when nothing had been kept yet.)
     Note(shop=shop_a, text="Note of shop A").save()
     monkeypatch.setattr(Note._meta, "base_manager_name", "objects")
-    monkeypatch.delitem(Note._meta.__dict__, "base_manager", raising=False)
+    monkeypatch.setitem(vars(Note._meta), "base_manager", Note._meta.managers_map["objects"])
     with pytest.raises(NoShopSelected):
         Note._base_manager.all()
 
