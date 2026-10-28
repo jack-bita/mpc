@@ -48,6 +48,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -66,8 +67,8 @@ from rest_framework.test import APIClient
 from apps.core.api.base import ShopViewSet
 from apps.core.models import ShopScoped, ShopScopedManager, UUIDModel
 from apps.core.tenancy import NoShopSelected, shop_context
-from apps.shops.models import PaymentAccount, Shop, Side, StockLocation
-from tests.probe.models import Note
+from apps.shops.models import PaymentAccount, PaymentAccountKind, Shop, Side, StockLocation
+from tests.probe.models import Note, VoidableEntry
 from tests.sweep_lists import INFRASTRUCTURE, NO_SHOP, NOT_SHOP_ROUTES, OWN_LEAK_TESTS
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -342,16 +343,25 @@ def rows_of(table: type[models.Model], shop: Shop) -> models.QuerySet[Any]:
 
 
 def texts_of(table: type[models.Model], shop: Shop) -> set[str]:
-    # The texts and amounts a shop's rows of one table hold. Dates and times are left out: JSON writes them in
-    # a form of its own, and the rows' ids give every row away already.
+    # The texts and amounts a shop's rows of one table hold, those that could tell one shop from another. Left
+    # out, as they can't:
+    # - a field's fixed choices ("cash_drawer", "mobile_money"): the same words in every shop, so a summary of
+    #   shop B's own by kind would hold them too;
+    # - a zero amount ("0.00"): any shop's total may be zero;
+    # - dates and times: JSON writes them in a form of its own, and the rows' ids give every row away already.
     fields = [
         field.attname
         for field in table._meta.concrete_fields
-        if isinstance(field, models.CharField | models.TextField | models.DecimalField)
+        if isinstance(field, models.CharField | models.TextField | models.DecimalField) and not field.choices
     ]
     if not fields:
         return set()
-    return {str(value) for row in rows_of(table, shop).values_list(*fields) for value in row if value not in (None, "")}
+    return {
+        str(value)
+        for row in rows_of(table, shop).values_list(*fields)
+        for value in row
+        if value not in (None, "") and not (isinstance(value, Decimal) and value == 0)
+    }
 
 
 @dataclass(frozen=True)
@@ -972,6 +982,21 @@ def test_route_sweep_finds_the_side_routes() -> None:
     routes = {(route.name, route.takes_row) for route in shop_routes()}
 
     assert {("side-list", False), ("side-detail", True)} <= routes
+
+
+@pytest.mark.django_db
+def test_marks_leave_out_choice_words_and_zero_amounts(shop_a: Shop, shop_b: Shop) -> None:
+    # A word from a field's fixed choices ("mobile_money") is the same in every shop, and any shop's amount can be
+    # zero: neither can give shop A away, and either, taken as A's, would fail a summary of B's own that held it.
+    PaymentAccount(
+        shop=shop_a, kind=PaymentAccountKind.MOBILE_MONEY, name="Lipa Namba", provider="Pesa Demo", number="000111"
+    ).save()
+    VoidableEntry(shop_id=shop_a.pk, amount=Decimal("1500.00")).save()
+
+    texts = marks_of(shop_a, shop_b).texts
+
+    assert {"Lipa Namba", "Pesa Demo", "000111", "1500.00"} <= texts
+    assert not texts & {"mobile_money", "0.00"}
 
 
 @pytest.mark.django_db

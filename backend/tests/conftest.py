@@ -11,7 +11,8 @@ so, while shop A has none; and a card that adds a route needing query parameters
 The sweep knows shop A's rows by their ids, and by the texts and amounts only shop A holds, so that a leak
 with no ids, like a report of names and totals, is found too. So give shop A values of its own: names and
 amounts no row of shop B holds (B's side is Pembejeo, not a second Dawa), and none that an answer could hold
-by itself, like "name", a word every answer has as a key.
+by itself, like "name", a word every answer has as a key. Words from a field's fixed choices and zero amounts
+never count: they are the same in every shop.
 
 The shops and their staff come from backend/conftest.py. Fake data only: the repo is public (03 §10).
 """
