@@ -65,13 +65,15 @@ def handle_error(exc: Exception, context: dict[str, Any]) -> Response | None:
     if isinstance(exc, DjangoValidationError):
         # How the services refuse (03 §5.2), and what full_clean raises. DRF's own handler doesn't know
         # Django's ValidationError, and would leave it to become a 500.
-        # set_rollback() as DRF's handler does it: if the visit runs in one transaction, its writes are
-        # undone, so a refused request leaves nothing half written.
+        # set_rollback(), as DRF's own handler calls it: it undoes the visit's writes when the whole visit
+        # runs in one transaction (ATOMIC_REQUESTS). Today it does nothing: that setting is off, and each
+        # service runs its own transaction, which the refusal has already undone. Called anyway, so turning
+        # the setting on later needs no change here.
         set_rollback()
         return Response(_shape(_problems_from_django(exc)), status=400)
     if isinstance(exc, VersionConflict):
         # 409 Conflict: the request is fine, but it was made on an old copy of the row. The app reloads the
-        # row and lets the person try again.
+        # row and lets the person try again. set_rollback() as above.
         set_rollback()
         return Response(_shape([_Problem(None, "version_conflict", str(exc))]), status=409)
 

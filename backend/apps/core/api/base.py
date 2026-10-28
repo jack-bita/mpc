@@ -136,9 +136,10 @@ class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
     """POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
 
     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
-    same request again, with the same id, and gets the stored row back, with the same 201, as if the first
-    answer had arrived. A route that makes rows builds on this, names what a create sends
-    (`create_serializer_class`), and writes create_row(), which calls its service."""
+    same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+    now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+    gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+    create sends (`create_serializer_class`), and writes create_row(), which calls its service."""
 
     # What a create sends: the new row's fields, `id` among them, and required.
     create_serializer_class: type[serializers.BaseSerializer[Any]]

@@ -40,7 +40,8 @@ def editing[M: Editable](row: M, *, version: int, by: Actor | None) -> Iterator[
     read again and locked. If the row is no longer at `version`, the version the person read, the block
     never runs: VersionConflict. After the block, the row is checked (full_clean), its version goes up by
     1, who and when are recorded, and it is saved. All in one transaction: a refusal anywhere leaves the
-    row as it was."""
+    row as it was. Change the copy the block is handed (`with editing(side, …) as fresh`), never the row
+    passed in: that one is not saved, and the edit would store nothing but a new version."""
     # T1: the edit stays inside one shop. The guard watches reads, not writes (CORE-2), so these checks are
     # editing()'s own. Both catch a bug in the calling code, so they raise ShopMismatch, a server error.
     open_shop = current_shop()  # NoShopSelected when no shop is open
