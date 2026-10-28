@@ -150,10 +150,13 @@ def primary_key_problems(tables: Iterable[type[models.Model]]) -> list[str]:
     # name short, to fit its limit of 63. Either way, a taken id would get a 500 instead of `id.taken`.
     problems = []
     with connection.cursor() as cursor:
+        # The database's views, as PostgreSQL lists them ("v", a view or a materialized view): a report may read
+        # through one, and a view has no primary key of its own, and no create writes to it. Only views are
+        # skipped: a table Django doesn't manage (`managed = False`) but which is a real table, such as a ledger
+        # split in parts by hand, still takes creates, so its key is checked like any other.
+        views = {info.name for info in connection.introspection.get_table_list(cursor) if info.type == "v"}
         for table in tables:
-            # A table Django doesn't manage (`managed = False`), such as a view of the database a report reads
-            # through, has no primary key of its own, and no create writes to it.
-            if not table._meta.managed:
+            if table._meta.db_table in views:
                 continue
             name = table._meta.db_table
             rules = connection.introspection.get_constraints(cursor, name)
@@ -870,17 +873,30 @@ def test_primary_key_check_finds_a_key_with_another_name() -> None:
 
 
 @pytest.mark.django_db
-def test_primary_key_check_skips_tables_django_does_not_manage() -> None:
+def test_primary_key_check_skips_database_views_only() -> None:
+    # Two tables Django doesn't manage (managed = False), each made here by hand, inside the test's transaction,
+    # which PostgreSQL takes back at its end. A view, which a report could read through, has no primary key of
+    # its own, and no create writes to it: skipped. A real table made by hand, as a ledger split in parts could
+    # be, still takes creates, so its key is checked like any other.
+    with connection.cursor() as cursor:
+        cursor.execute("CREATE VIEW probe_reportrow AS SELECT id, shop_id, created_at, created_by_id FROM probe_note")
+        cursor.execute("CREATE TABLE probe_ledgerpart (id uuid CONSTRAINT probe_ledger_key PRIMARY KEY)")
+
     with throwaway_tables():
 
         class ReportRow(ShopScoped):
-            # A view of the database, as a report could read through: Django makes no table for it, and it has
-            # no primary key of its own. It still has `shop` and the guard, which the other checks ask for.
             class Meta:
                 app_label = "probe"
                 managed = False
 
-        assert primary_key_problems([ReportRow]) == []
+        class LedgerPart(UUIDModel):
+            class Meta:
+                app_label = "probe"
+                managed = False
+
+        assert primary_key_problems([ReportRow, LedgerPart]) == [
+            "probe.LedgerPart: primary key named ['probe_ledger_key'], not probe_ledgerpart_pkey"
+        ]
 
 
 def test_guard_check_finds_tables_that_lose_the_guard() -> None:
