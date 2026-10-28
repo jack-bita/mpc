@@ -87,8 +87,10 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         # cast: mypy reads the manager of `type[M]` as ShopScoped's, though the rows are this route's table's.
         return cast("models.QuerySet[M]", self.model._default_manager.all())
 
-    # Where a row names its side, for visible_sides(): `side` on most tables; "pk" on a route whose rows are
-    # sides themselves (SideViewSet); None on a table whose rows belong to the whole shop, such as products.
+    # Where a row keeps its side, read by both side hooks: `side` on most tables; the link's own name on a
+    # table that names it otherwise (a device's `home_side`); "pk" on a route whose rows are sides themselves
+    # (SideViewSet); None on a table whose rows belong to the whole shop, such as products. A name the table
+    # doesn't have fails loudly, instead of quietly passing every row off as one of the whole shop.
     side_field: str | None = "side"
 
     def visible_sides(self, request: Request) -> Collection[uuid.UUID] | None:
@@ -107,9 +109,14 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         return rows.filter(**{f"{self.side_field}__in": sides})
 
     def side_of(self, row: M) -> uuid.UUID | None:
-        """The side a row belongs to, for the per-side check: its `side`, or None for a row of the whole shop,
-        such as a product. A route whose rows are sides themselves says so (SideViewSet)."""
-        return getattr(row, "side_id", None)
+        """The side a row belongs to, for the per-side check, found by `side_field`: None for a row of the
+        whole shop."""
+        if self.side_field is None:
+            return None
+        if self.side_field == "pk":
+            return row.pk
+        # The link's id (`side_id`), read without loading the side. No default: a wrong name raises.
+        return cast("uuid.UUID | None", getattr(row, f"{self.side_field}_id"))
 
     def check_side_permission(self, request: Request, side_id: uuid.UUID | None) -> None:
         """The per-side check (03 §5.4): may the person acting do this action (`self.action`) on this side, or
@@ -141,9 +148,12 @@ class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
         raise NotImplementedError
 
     def side_of_new(self, data: dict[str, Any]) -> uuid.UUID | None:
-        """The side a new row will belong to, for the per-side check before it is made: its `side`, or None
-        for a row of the whole shop."""
-        side = data.get("side")
+        """The side a new row will belong to, for the per-side check before it is made, found by
+        `side_field` in what was sent: None for a row of the whole shop, and for a new side, which belongs to
+        no side yet."""
+        if self.side_field is None or self.side_field == "pk":
+            return None
+        side = data.get(self.side_field)
         return None if side is None else side.pk
 
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:

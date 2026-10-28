@@ -5,7 +5,6 @@ writes through a service (ADR-0015). For now a shop's sides: the list, one side,
 renaming one.
 """
 
-import uuid
 from typing import Any
 
 from rest_framework import mixins
@@ -20,20 +19,17 @@ class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMi
     # GET sides/ lists the visit's shop's sides, in pages; GET sides/{id}/ reads one; POST sides/ adds one;
     # PATCH sides/{id}/ renames one.
     model = Side
-    # A side is its own side: a list shows the sides a person may see by their own id (visible_sides()).
+    # A side is its own side, found by its own id: whoever may act on Dawa may see Dawa (side_of()), and a
+    # list shows the sides a person may see (visible_sides()). A new side belongs to no side yet, so adding
+    # one is checked as an action on the whole shop (side_of_new()).
     side_field = "pk"
     serializer_class = SideSerializer
     create_serializer_class = SideCreateSerializer
     edit_serializer_class = SideEditSerializer
 
-    def side_of(self, row: Side) -> uuid.UUID:
-        # A side is its own side: whoever may act on Dawa may see Dawa.
-        return row.pk
-
     def create_row(self, data: dict[str, Any]) -> Side:
         # Adding a side also makes its stock location and its cash drawer (add_side). The shop is always the
-        # visit's own. A new side belongs to no side yet, so the per-side check asks about the whole shop
-        # (side_of_new finds no `side` in what was sent).
+        # visit's own.
         return add_side(
             shop=Shop.objects.get(pk=self.actor.shop_id),
             side_id=data["id"],

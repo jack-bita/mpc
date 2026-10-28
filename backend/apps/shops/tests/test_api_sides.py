@@ -23,7 +23,7 @@ from rest_framework import exceptions
 from rest_framework.request import Request
 from rest_framework.test import APIClient
 
-from apps.core.api.base import CreateOnceMixin
+from apps.core.api.base import CreateOnceMixin, ShopViewSet
 from apps.core.api.pagination import CursorPage
 from apps.core.tenancy import NoShopSelected, current_shop, shop_context
 from apps.shops.api.views import SideViewSet
@@ -181,6 +181,23 @@ def test_side_permission_hook_checks_each_side(
     # Read again from the database: refused means nothing was written, not only a 403 on the way out.
     with shop_context(shop_a):
         assert Side.objects.get(pk=vyakula).name == "Vyakula"
+
+
+def test_side_field_names_where_a_row_keeps_its_side(sides_a: dict[str, Side]) -> None:
+    # Both side hooks read one setting, `side_field`. Most tables keep a row's side under `side` (a stock
+    # location's, here); a row of the whole shop has none (None); and a name the table doesn't have fails
+    # loudly, instead of quietly passing every row off as one of the whole shop.
+    location = StockLocation(shop_id=sides_a["F"].shop_id, side=sides_a["F"], name="Vyakula")
+
+    class Locations(ShopViewSet[StockLocation]):
+        model = StockLocation
+
+    assert Locations().side_of(location) == sides_a["F"].pk
+    Locations.side_field = None
+    assert Locations().side_of(location) is None
+    Locations.side_field = "home_side"
+    with pytest.raises(AttributeError):
+        Locations().side_of(location)
 
 
 def test_list_shows_only_the_sides_a_person_may_see(
