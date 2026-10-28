@@ -1,0 +1,20 @@
+{
+  "about": "shared/test-vectors/units.json: the answer book for showing stock in selling units (02 §6, 02 §15 item 1). split_into_units(quantity, factors) takes a quantity in the product's base unit (kg, L, pcs or m) and the factors of its selling units, biggest first, leaving out the base unit's own selling unit (factor 1, such as E1's Kilo): that unit is the rest, so a factor of 1 is refused, and returns how many whole units of each, plus the rest in the base unit, with three places. Below zero (ADR-0010), the counts and the rest are both negative: the split truncates toward zero. unit is for the reader; the maths sees only the factors. Some cases are here because a version written with floats gets them wrong (0.3 ÷ 0.1 is 2.9999… in floats, so 2 bottles instead of 3). Python (backend/tests/test_vectors.py) and TypeScript (from UI-1) must both give every expect exactly. Every number is text, in quotes: a bare JSON number is read as a float. Fake numbers only.",
+  "cases": [
+    { "name": "e1_bags_and_kg", "unit": "kg", "quantity": "1335.5", "factors": ["50"], "expect": { "counts": ["26"], "rest": "35.500" } },
+    { "name": "whole_bags_no_rest", "unit": "kg", "quantity": "1000", "factors": ["50"], "expect": { "counts": ["20"], "rest": "0.000" } },
+    { "name": "less_than_one_bag", "unit": "kg", "quantity": "35.5", "factors": ["50"], "expect": { "counts": ["0"], "rest": "35.500" } },
+    { "name": "two_bag_sizes", "unit": "kg", "quantity": "1335.5", "factors": ["50", "25"], "expect": { "counts": ["26", "1"], "rest": "10.500" } },
+    { "name": "no_selling_units", "unit": "kg", "quantity": "12.5", "factors": [], "expect": { "counts": [], "rest": "12.500" } },
+    { "name": "below_zero_bags_and_kg", "unit": "kg", "quantity": "-120", "factors": ["50"], "expect": { "counts": ["-2"], "rest": "-20.000" } },
+    { "name": "below_zero_less_than_a_bag", "unit": "kg", "quantity": "-20", "factors": ["50"], "expect": { "counts": ["0"], "rest": "-20.000" } },
+    { "name": "below_zero_whole_bags", "unit": "kg", "quantity": "-100", "factors": ["50"], "expect": { "counts": ["-2"], "rest": "0.000" } },
+    { "name": "zero", "unit": "kg", "quantity": "0", "factors": ["50"], "expect": { "counts": ["0"], "rest": "0.000" } },
+    { "name": "pieces_in_boxes", "unit": "pcs", "quantity": "250", "factors": ["100"], "expect": { "counts": ["2"], "rest": "50.000" } },
+    { "name": "pieces_in_cartons_boxes_packets", "unit": "pcs", "quantity": "2356", "factors": ["1000", "100", "10"], "expect": { "counts": ["2", "3", "5"], "rest": "6.000" } },
+    { "name": "litres_in_jerrycans", "unit": "L", "quantity": "45.5", "factors": ["20"], "expect": { "counts": ["2"], "rest": "5.500" } },
+    { "name": "litres_in_bottles_of_100_ml", "unit": "L", "quantity": "2.35", "factors": ["0.1"], "expect": { "counts": ["23"], "rest": "0.050" } },
+    { "name": "exactly_three_bottles_of_100_ml", "unit": "L", "quantity": "0.3", "factors": ["0.1"], "expect": { "counts": ["3"], "rest": "0.000" } },
+    { "name": "metres_in_rolls", "unit": "m", "quantity": "120.5", "factors": ["50"], "expect": { "counts": ["2"], "rest": "20.500" } }
+  ]
+}

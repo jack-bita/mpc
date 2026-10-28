@@ -1,0 +1,116 @@
+"""apps/core/numbers.py — the one way money and quantities are read, rounded and shown (ADR-0024).
+
+A float can't hold 0.35 exactly, so 0.35 kg × 1,310 comes out as 458.4999… and rounds to 458, not 459.
+So every amount and quantity here is a Decimal, read from text, never from a float. The same sums run in
+TypeScript on counter devices (UI-1); both pass shared/test-vectors/, so they agree to the shilling.
+Bad input raises ValueError (TypeError for a float), as the settings registry does; the code that calls
+these helpers turns it into an error code for the screens (ADR-0032), as Setting.clean() does.
+"""
+
+import re
+from collections.abc import Iterable
+from decimal import ROUND_HALF_UP, Context, Decimal, localcontext
+from itertools import pairwise
+
+# Money is stored with two places (numeric(14,2)), quantities with three (numeric(14,3)) (03 §9).
+CENT = Decimal("0.01")
+THOUSANDTH = Decimal("0.001")
+
+# The decimal settings every sum here uses, whatever the caller's thread has set. Python keeps one set per
+# thread, and other code may lower its precision: with 5 digits, 4.49999 ÷ 1 would become 4.5000 and round
+# up to 5. 40 digits is far more than any column holds (14), so a division keeps every digit the half-up
+# rounding needs.
+_EXACT = Context(prec=40)
+
+# Every money and quantity column holds 14 digits in all (numeric(14,2), numeric(14,3)) (03 §9).
+_COLUMN_DIGITS = 14
+
+# What number text must look like before Decimal() reads it: an optional minus, digits, and at most two
+# places (money) or three (quantities). Decimal() alone would also read "1e3", "NaN", " 12" and "1_000".
+# [0-9], not \d: \d also matches other scripts' digits ("١٢"), and Decimal() reads them as 12.
+# 12 and 11 digits before the point: the most numeric(14,2) and numeric(14,3) hold (03 §9).
+_MONEY_TEXT = re.compile(r"-?[0-9]{1,12}(\.[0-9]{1,2})?")
+_QUANTITY_TEXT = re.compile(r"-?[0-9]{1,11}(\.[0-9]{1,3})?")
+
+
+def _finite(*values: Decimal) -> None:
+    # NaN and Infinity are Decimals too, but never an amount or a quantity: refused by name, before a sum
+    # turns them into a confusing error (Infinity // 50 would crash int() with an OverflowError).
+    for value in values:
+        if not value.is_finite():
+            raise ValueError(f"{value} is not a number.")
+
+
+def _fit(value: Decimal, places: Decimal) -> Decimal:
+    # Writes a value with its column's places: 459 becomes 459.00. It only adds zeros: a value it would
+    # have to round is refused, so round_money stays the one place that rounds (ADR-0024).
+    fitted = value.quantize(places, context=_EXACT)
+    if fitted != value:
+        raise ValueError(f"{value} has more places than {places}.")
+    # A result the column can't hold is refused here, not by the database when a row is saved.
+    if len(fitted.as_tuple().digits) > _COLUMN_DIGITS:
+        raise ValueError(f"{value} has more digits than a column holds.")
+    # -0 equals 0 but prints as "-0.00": never on a receipt.
+    if fitted == 0:
+        return abs(fitted)
+    return fitted
+
+
+def _parse(text: str, shape: re.Pattern[str], places: Decimal) -> Decimal:
+    # Money and quantities travel as text (ADR-0024). A float has already lost the exact value, so it is
+    # refused, not converted: that is what a number without quotes in JSON becomes.
+    if not isinstance(text, str):
+        raise TypeError(f"{text!r} is not text: send money and quantities as strings.")
+    if not shape.fullmatch(text):
+        raise ValueError(f"{text!r} is not a number this column can hold.")
+    return _fit(Decimal(text), places)
+
+
+def parse_money(text: str) -> Decimal:
+    return _parse(text, _MONEY_TEXT, CENT)
+
+
+def parse_quantity(text: str) -> Decimal:
+    return _parse(text, _QUANTITY_TEXT, THOUSANDTH)
+
+
+def round_money(amount: Decimal, step: Decimal) -> Decimal:
+    # The one rounding rule (03 §8, ADR-0024): half-up to a multiple of the shop's step (the setting
+    # money.rounding_step, default 1 shilling). Count the steps, round that count to a whole number, turn
+    # it back into money. ROUND_HALF_UP sends a half away from zero: 458.5 → 459, and -2.5 → -3, so a
+    # refund rounds like the sale it reverses. Python's round() would send 458.5 to 458 (half to even).
+    _finite(amount, step)
+    if step <= 0:
+        raise ValueError(f"A rounding step must be above zero, not {step}.")
+    with localcontext(_EXACT):
+        steps = (amount / step).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        return _fit(steps * step, CENT)
+
+
+def split_into_units(quantity: Decimal, factors: Iterable[Decimal]) -> tuple[list[int], Decimal]:
+    # Shows stock as people count it (02 §15, item 1): a quantity in the base unit (kg, L, pcs, m) as whole
+    # selling units, biggest first, plus the rest in the base unit. 1,335.5 kg with bags of 50 → 26 bags
+    # + 35.5 kg. A factor is a selling unit's size in the base unit (CAT-2); its name doesn't matter here.
+    # Read once into a tuple: the checks and the loop below each walk the factors, and factors that come
+    # one at a time (a generator) would be used up by the first check.
+    factors = tuple(factors)
+    _finite(quantity, *factors)
+    if any(factor <= 0 for factor in factors):
+        raise ValueError(f"A selling unit's factor must be above zero: {factors}.")
+    # The base unit's own selling unit (E1's Kilo, factor 1) is the rest itself: passed in, 35.5 kg would
+    # show as 35 kilos + 0.5 kg. Callers leave it out.
+    if any(factor == 1 for factor in factors):
+        raise ValueError(f"Leave out the base unit itself (factor 1): it is the rest. {factors}")
+    # Smallest first would count everything in the small unit; the same size twice always shows 0.
+    if any(bigger <= smaller for bigger, smaller in pairwise(factors)):
+        raise ValueError(f"Factors go biggest first, each size once: {factors}.")
+    counts: list[int] = []
+    rest = quantity
+    with localcontext(_EXACT):
+        for factor in factors:
+            # Decimal's // cuts toward zero: -120 kg is -2 bags and -20 kg, not -3 bags and +30 kg, so stock
+            # below zero (ADR-0010) reads like the same stock above zero, with a minus.
+            count = rest // factor
+            counts.append(int(count))
+            rest -= count * factor
+    return counts, _fit(rest, THOUSANDTH)
