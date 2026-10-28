@@ -32,6 +32,7 @@ empty, so the sweep can't pass by looking at nothing.
 """
 
 import ast
+import json
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
@@ -319,31 +320,61 @@ def shop_routes() -> list[Route]:
     return routes
 
 
-def ids_of(shop: Shop) -> set[str]:
-    # Every id shop A has: its own, and every row's in every shop table installed, the probe's included. Read
-    # past the guard on purpose, through Django's plain base manager with a filter by shop: the guard is what
-    # is being checked, so it must not decide what counts as shop A's.
-    ids = {str(shop.pk)}
-    for table in apps.get_models():
-        if issubclass(table, ShopScoped):
-            ids |= {str(pk) for pk in table._base_manager.filter(shop_id=shop.pk).values_list("pk", flat=True)}
-    return ids
+def shop_tables() -> list[type[models.Model]]:
+    # Every table that holds a shop's rows: Shop, for the shop's own row, and every shop table installed, the
+    # probe's included.
+    return [Shop, *(table for table in apps.get_models() if issubclass(table, ShopScoped))]
 
 
-def shown(response: HttpResponse, ids: set[str]) -> list[str]:
-    # Any of shop A's ids anywhere in the answer: a row of the route's own table, a row of another table nested
-    # in it, or a link's id. JSON writes a UUID just as str() does.
-    text = response.content.decode()
-    leaked = sorted(row_id for row_id in ids if row_id in text)
-    return [f"shows shop A's ids {leaked}"] if leaked else []
+def rows_of(table: type[models.Model], shop: Shop) -> models.QuerySet[Any]:
+    # A shop's rows of one table, read past the guard on purpose, through Django's plain base manager with a
+    # filter by shop: the guard is what is being checked, so it must not decide what counts as shop A's.
+    if table is Shop:
+        return table._base_manager.filter(pk=shop.pk)
+    return table._base_manager.filter(shop_id=shop.pk)
 
 
-def route_problems(client: APIClient, shop: Shop) -> dict[str, list[str]]:
+def texts_of(table: type[models.Model], shop: Shop) -> set[str]:
+    # The texts and amounts a shop's rows of one table hold. Dates and times are left out: JSON writes them in
+    # a form of its own, and the rows' ids give every row away already.
+    fields = [
+        field.attname
+        for field in table._meta.concrete_fields
+        if isinstance(field, models.CharField | models.TextField | models.DecimalField)
+    ]
+    if not fields:
+        return set()
+    return {str(value) for row in rows_of(table, shop).values_list(*fields) for value in row if value not in (None, "")}
+
+
+def marks_of(shop_a: Shop, shop_b: Shop) -> set[bytes]:
+    # What would give shop A away in an answer to shop B (03 §5.4): the id of each of A's rows, and of A itself;
+    # and each text or amount that A's rows hold and no row of B holds: a side's name ("Vyakula") today, a
+    # customer's name or a debt's amount later. A leak with no ids, like a report of names and totals, still
+    # shows those. A text is looked for as JSON writes it, quotes and all ("Vyakula"), so a short one matches
+    # only a whole value: "F", A's side letter, never the F of "Fanta". An amount is a text in JSON too
+    # (ADR-0024). The two shops' data must give A values of its own (backend/tests/conftest.py).
+    tables = shop_tables()
+    ids = {str(pk) for table in tables for pk in rows_of(table, shop_a).values_list("pk", flat=True)}
+    only_a = {text for table in tables for text in texts_of(table, shop_a)}
+    only_a -= {text for table in tables for text in texts_of(table, shop_b)}
+    # ensure_ascii=False: the API writes a letter such as "é" as itself, not as "é" (DRF's UNICODE_JSON).
+    return {row_id.encode() for row_id in ids} | {json.dumps(text, ensure_ascii=False).encode() for text in only_a}
+
+
+def shown(response: HttpResponse, marks: set[bytes]) -> list[str]:
+    # Any of shop A's marks anywhere in the answer: in a row of the route's own table, in a row of another table
+    # nested in it, or in a link. Looked for in the answer's bytes, as they were sent.
+    leaked = sorted(mark.decode() for mark in marks if mark in response.content)
+    return [f"shows what only shop A has: {', '.join(leaked)}"] if leaked else []
+
+
+def route_problems(client: APIClient, shop_a: Shop, shop_b: Shop) -> dict[str, list[str]]:
     # 03 §5.4: no route, called as shop B, returns shop A's rows. `client` is logged in as a staff member of
-    # shop B, and `shop` is shop A. A list must answer 200 and show none of A's ids, on every page. A detail
-    # route, asked for each of A's rows by its id, must answer 404, "not found", as if the row didn't exist
-    # (a 403 would tell shop B that it does), and show none of A's ids either.
-    theirs = ids_of(shop)
+    # shop B. A list must answer 200 and show none of A's marks, on every page. A detail route, asked for each
+    # of A's rows by its id, must answer 404, "not found", as if the row didn't exist (a 403 would tell shop B
+    # that it does), and show none of A's marks either.
+    marks = marks_of(shop_a, shop_b)
     # How many routes carry each name, across the whole address list. The sweep builds a route's address from
     # its name (reverse()), and Django finds a name's last route only, so two routes with one name would be
     # one route called twice and one never called. config/urls.py mounts each app with no namespace, so two
@@ -353,10 +384,7 @@ def route_problems(client: APIClient, shop: Shop) -> dict[str, list[str]]:
     for route in shop_routes():
         found: list[str] = []
         table = route.view.model
-        rows = [
-            str(value)
-            for value in table._base_manager.filter(shop_id=shop.pk).values_list(route.view.lookup_field, flat=True)
-        ]
+        rows = [str(value) for value in rows_of(table, shop_a).values_list(route.view.lookup_field, flat=True)]
         if route.name is None or route.takes - {route.lookup}:
             # Every route DRF's routers make has a name and takes at most the row's id. A route nested under
             # another row would need that row too, which the sweep can't guess.
@@ -373,7 +401,7 @@ def route_problems(client: APIClient, shop: Shop) -> dict[str, list[str]]:
                 response = client.get(reverse(route.name, kwargs={route.lookup: row}))
                 if response.status_code != 404:
                     found.append(f"shop A's row {row}: answered {response.status_code}, not 404")
-                found += shown(response, theirs)
+                found += shown(response, marks)
         else:
             url: str | None = reverse(route.name)
             while url:
@@ -381,7 +409,7 @@ def route_problems(client: APIClient, shop: Shop) -> dict[str, list[str]]:
                 if response.status_code != 200:
                     found.append(f"answered {response.status_code}, not 200")
                     break
-                found += shown(response, theirs)
+                found += shown(response, marks)
                 # The next page's address, from the cursor pages (apps/core/api/pagination.py); None on the last.
                 body = response.json()
                 url = body.get("next") if isinstance(body, dict) else None
@@ -646,7 +674,7 @@ def test_route_check_finds_a_route_that_leaks(
     Note(shop=shop_a, text="Note of shop A").save()
     Note(shop=shop_b, text="Note of shop B").save()
 
-    problems = route_problems(staff_client_b, shop_a)
+    problems = route_problems(staff_client_b, shop_a, shop_b)
 
     # The leaky routes, and not the guarded ones: the list shows shop A's note, and the detail route hands it
     # over. (The probe's other routes are mounted awkwardly on purpose, for the tests below.)
@@ -656,25 +684,29 @@ def test_route_check_finds_a_route_that_leaks(
 
 
 @pytest.mark.django_db
-def test_route_check_needs_rows_to_look_for(settings: Settings, shop_a: Shop, staff_client_b: APIClient) -> None:
+def test_route_check_needs_rows_to_look_for(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
+) -> None:
     # With no note in shop A, even the leaky routes would show nothing of A's: a pass that proves nothing, so
     # the check refuses it.
     settings.ROOT_URLCONF = "tests.probe.urls"
 
-    problems = route_problems(staff_client_b, shop_a)
+    problems = route_problems(staff_client_b, shop_a, shop_b)
 
     for name in ["leaky-note-detail", "leaky-note-list", "note-detail", "note-list"]:
         assert problems[name] == ["shop A has no probe.Note rows to look for: add some in backend/tests/conftest.py"]
 
 
 @pytest.mark.django_db
-def test_route_check_tells_every_route_apart(settings: Settings, shop_a: Shop, staff_client_b: APIClient) -> None:
+def test_route_check_tells_every_route_apart(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
+) -> None:
     # The probe's twin routes share one name, and Django finds a name's last route only: a sweep that called
     # routes by name alone would call the guarded twin twice and the leaky one never, and pass.
     settings.ROOT_URLCONF = "tests.probe.urls"
     Note(shop=shop_a, text="Note of shop A").save()
 
-    problems = route_problems(staff_client_b, shop_a)
+    problems = route_problems(staff_client_b, shop_a, shop_b)
 
     twins = ["2 routes have this name, and Django finds only one of them by it: give each its own"]
     assert problems["twin-note-list"] == twins
@@ -683,6 +715,21 @@ def test_route_check_tells_every_route_apart(settings: Settings, shop_a: Shop, s
     no_address = ["no address the sweep can build: it needs a name, and no part but the row's id"]
     assert problems["nested-note-list"] == no_address
     assert problems["(no name)"] == no_address
+
+
+@pytest.mark.django_db
+def test_route_check_finds_a_leak_that_shows_no_ids(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
+) -> None:
+    # The probe's text-only leaky list shows every shop's notes with no ids, as a report of names and totals
+    # would. Shop A's text, which no row of shop B holds, gives it away.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="Note of shop A").save()
+    Note(shop=shop_b, text="Note of shop B").save()
+
+    problems = route_problems(staff_client_b, shop_a, shop_b)
+
+    assert problems["leaky-note-text-list"] == ['shows what only shop A has: "Note of shop A"']
 
 
 def test_side_check_finds_routes_that_misname_the_side() -> None:
@@ -758,7 +805,7 @@ def test_no_route_leaks_across_shops(sweep_shops: tuple[Shop, Shop], staff_clien
     response = staff_client_b.get(reverse("side-list"))
     assert {row["id"] for row in response.json()["results"]} == own
 
-    assert route_problems(staff_client_b, shop_a) == {}
+    assert route_problems(staff_client_b, shop_a, shop_b) == {}
 
 
 def test_every_side_link_is_named_on_its_route() -> None:

@@ -5,11 +5,12 @@ address list could be. A test switches to it through the ROOT_URLCONF setting; c
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from tests.probe.api import LeakyNoteViewSet, NoteViewSet, note_count
+from tests.probe.api import LeakyNoteTextViewSet, LeakyNoteViewSet, NoteViewSet, note_count
 
 router = SimpleRouter()
 router.register("notes", NoteViewSet, basename="note")
 router.register("leaky-notes", LeakyNoteViewSet, basename="leaky-note")
+router.register("leaky-note-texts", LeakyNoteTextViewSet, basename="leaky-note-text")
 
 # Two apps whose routers happen to pick one name. config/urls.py mounts each app with no namespace, so their
 # names meet. The leaky one comes first: Django finds a name's last route, so a sweep that went by names

@@ -7,6 +7,11 @@ made the way the app makes them, through the services. The checks never change; 
 a card that adds a route over a new table gives both shops a row of it here, and the sweep fails, saying
 so, while shop A has none. The demo seed (DATA-1) could fill the shops later.
 
+The sweep knows shop A's rows by their ids, and by the texts and amounts only shop A holds, so that a leak
+with no ids, like a report of names and totals, is found too. So give shop A values of its own: names and
+amounts no row of shop B holds (B's side is Pembejeo, not a second Dawa), and none that an answer could hold
+by itself, like "name", a word every answer has as a key.
+
 The shops and their staff come from backend/conftest.py. Fake data only: the repo is public (03 §10).
 """
 
@@ -27,5 +32,5 @@ def sweep_shops(shop_a: Shop, shop_b: Shop, staff_a: StaffMember, staff_b: Staff
         add_side(shop=shop_a, code="D", name="Dawa", by=staff_a)
         add_side(shop=shop_a, code="F", name="Vyakula", by=staff_a)
     with shop_context(shop_b):
-        add_side(shop=shop_b, code="D", name="Dawa", by=staff_b)
+        add_side(shop=shop_b, code="P", name="Pembejeo", by=staff_b)
     return shop_a, shop_b
