@@ -4,11 +4,11 @@
 Each route is built to pass the sweep, or to break one of its checks in one way:
 
 - NoteViewSet is built the way every office route is (apps/core/api/base.py), so it shows, edits, makes and
-  voids each visit's own shop's notes only.
+  voids each visit's own shop's notes only, and sends them as a download in pieces too.
 - LeakyNoteViewSet makes the mistake the sweep is there to catch: it reads its rows past the guard, so every
   shop's notes show, in its list, its detail route, its edits, its void, the note a create hands back, its
-  CSV export and its search, which needs a query parameter. LeakyNoteTextViewSet leaks the same way but shows
-  no ids, only the texts, as a report of names and totals would.
+  download, its CSV export and its search, which needs a query parameter. LeakyNoteTextViewSet leaks the
+  same way but shows no ids, only the texts, as a report of names and totals would.
 - NoteFormFirstViewSet checks an edit's form before it looks for the row: the same 400 for every row.
 - NoteMakerViewSet only makes notes, and names a side link a note doesn't have.
 - NoteByTextViewSet finds a note by its text, a key each shop has its own of.
@@ -24,7 +24,7 @@ tests/probe/urls.py mounts them, and only the sweep's tests use that address lis
 from typing import Any
 
 from django.db import models
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse, StreamingHttpResponse
 from rest_framework import mixins, serializers
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -72,6 +72,14 @@ class NoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.Updat
         # replaced (rule 7, 03 §5.10). It finds its note through the route's own rows, as a payment's void will,
         # by whatever names the note in the address (`pk`, or `text` on NoteByTextViewSet).
         return Response(self.get_serializer(self.get_object()).data)
+
+    @action(detail=False)
+    def stream(self, request: Request) -> StreamingHttpResponse:
+        # The notes as a download sent in pieces, the usual way to send a file (a payslip, a report): such an
+        # answer has no `.content`, only its pieces. The notes are read here, inside the visit, while its shop
+        # is open: pieces made later, as the answer goes out, would find the shop closed and raise.
+        texts = [note.text for note in self.get_queryset()]
+        return StreamingHttpResponse((f"{text}\n" for text in texts), content_type="text/csv")
 
 
 class LeakyNoteViewSet(NoteViewSet):

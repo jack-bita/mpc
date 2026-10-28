@@ -54,7 +54,7 @@ from django.apps import apps
 from django.apps.registry import Apps
 from django.core.exceptions import FieldDoesNotExist
 from django.db import connection, models
-from django.http import HttpResponse
+from django.http import HttpResponseBase
 from django.test.utils import isolate_apps
 from django.urls import URLPattern, URLResolver, get_resolver, reverse
 from pytest_django import Settings
@@ -370,14 +370,29 @@ def marks_of(shop_a: Shop, shop_b: Shop) -> Marks:
     return Marks(frozenset(ids), frozenset(only_a))
 
 
-def is_json(response: HttpResponse) -> bool:
-    return response.headers.get("Content-Type", "").startswith("application/json")
+@dataclass(frozen=True)
+class Reply:
+    # One answer as the sweep reads it: its status, its kind, and its body in bytes. Read once, right after the
+    # request, because an answer sent in pieces can be read only once.
+    status: int
+    content_type: str
+    body: bytes
+
+    @property
+    def is_json(self) -> bool:
+        return self.content_type.startswith("application/json")
 
 
-def shown(response: HttpResponse, marks: Marks) -> list[str]:
+def read(response: HttpResponseBase) -> Reply:
+    # getvalue() reads either kind of answer whole: one made all at once (HttpResponse), and one sent in pieces
+    # (StreamingHttpResponse, FileResponse), the usual way to send a file, which has no `.content`.
+    return Reply(response.status_code, response.headers.get("Content-Type", ""), response.getvalue())
+
+
+def shown(reply: Reply, marks: Marks) -> list[str]:
     # Any of shop A's marks anywhere in the answer: in a row of the route's own table, in a row of another table
-    # nested in it, or in a link. Looked for in the answer's bytes as they were sent, so an answer of any kind
-    # can be read: JSON, a CSV download, a PDF.
+    # nested in it, or in a link. Looked for in the answer's bytes as they were sent, so an answer of more than
+    # one kind can be read: JSON, a CSV download, a download sent in pieces.
     # - An id, as it is: long and unique, it can't turn up by chance.
     # - A text, in a JSON answer: as JSON writes it, quotes and all ("Vyakula"), so a short one matches only a
     #   whole value: "F", A's side letter, never the F of "Fanta". ensure_ascii=False: the API writes a letter
@@ -385,23 +400,22 @@ def shown(response: HttpResponse, marks: Marks) -> list[str]:
     # - A text, in any other answer: as it is, since a CSV writes its texts with no quotes, but only when it is
     #   long enough, 4 characters or more, not to turn up by chance. So in a CSV, a side's letter goes unseen;
     #   its id and its name don't.
-    in_json = is_json(response)
     needles = list(marks.ids)
     for text in marks.texts:
-        if in_json:
+        if reply.is_json:
             needles.append(json.dumps(text, ensure_ascii=False))
         elif len(text) >= 4:
             needles.append(text)
-    leaked = sorted(needle for needle in needles if needle.encode() in response.content)
+    leaked = sorted(needle for needle in needles if needle.encode() in reply.body)
     return [f"shows what only shop A has: {', '.join(leaked)}"] if leaked else []
 
 
-def send(client: APIClient, method: str, url: str, params: Mapping[str, str] | None = None) -> HttpResponse:
+def send(client: APIClient, method: str, url: str, params: Mapping[str, str] | None = None) -> Reply:
     # One request as the sweep sends it: a read with the route's query parameters, or a change sent empty.
     if method == "get":
-        return client.get(url, params)
-    change: Callable[..., HttpResponse] = getattr(client, method)
-    return change(url, {}, format="json")
+        return read(client.get(url, params))
+    change: Callable[..., HttpResponseBase] = getattr(client, method)
+    return read(change(url, {}, format="json"))
 
 
 def page_problems(client: APIClient, url: str, params: Mapping[str, str] | None, marks: Marks) -> list[str]:
@@ -416,28 +430,28 @@ def page_problems(client: APIClient, url: str, params: Mapping[str, str] | None,
         if pages > MAX_PAGES:
             found.append(f"more than {MAX_PAGES} pages: does its cursor ever end?")
             break
-        response = client.get(next_url, params)
+        reply = send(client, "get", next_url, params)
         params = None
-        if response.status_code == 400:
+        if reply.status == 400:
             # The usual answer of a route that needs a parameter it wasn't given.
             where = "give them in sweep_queries (backend/tests/conftest.py)"
             found.append(f"answered 400, not 200: if it needs query parameters, {where}")
             break
-        if response.status_code != 200:
-            found.append(f"answered {response.status_code}, not 200")
+        if reply.status != 200:
+            found.append(f"answered {reply.status}, not 200")
             break
-        found += shown(response, marks)
+        found += shown(reply, marks)
         # The next page's address, from the cursor pages (apps/core/api/pagination.py); None on the last, and on
         # an answer that is not JSON, such as a CSV download, which comes whole.
-        body = response.json() if is_json(response) else None
+        body = json.loads(reply.body) if reply.is_json else None
         next_url = body.get("next") if isinstance(body, dict) else None
     return found
 
 
-def answer(response: HttpResponse, key: str) -> tuple[int, bytes]:
+def answer(reply: Reply, key: str) -> tuple[int, bytes]:
     # What an answer tells the one who asked: its status and its body, with the key that was asked for taken
     # out, so that an answer that only repeats the key ("No note 0199… here") reads the same for every key.
-    return response.status_code, response.content.replace(key.encode(), b"<key>")
+    return reply.status, reply.body.replace(key.encode(), b"<key>")
 
 
 def route_problems(
@@ -507,26 +521,26 @@ def route_problems(
                 row_url = reverse(route.name, kwargs={route.lookup: row})
                 if row in b_keys:
                     if "get" in sends:
-                        found += shown(client.get(row_url, queries.get(route.name)), marks)
+                        found += shown(send(client, "get", row_url, queries.get(route.name)), marks)
                     continue
                 for method in sends:
-                    response = send(client, method, row_url, queries.get(route.name))
+                    reply = send(client, method, row_url, queries.get(route.name))
                     # The same request about a row no shop has: an id made just now, which nothing can have.
                     nobody = str(uuid.uuid7())
                     control = send(
                         client, method, reverse(route.name, kwargs={route.lookup: nobody}), queries.get(route.name)
                     )
-                    if response.status_code != control.status_code:
+                    if reply.status != control.status:
                         found.append(
-                            f"shop A's row {row}: {method.upper()} answered {response.status_code}, but"
-                            f" {control.status_code} for an id no shop has"
+                            f"shop A's row {row}: {method.upper()} answered {reply.status}, but"
+                            f" {control.status} for an id no shop has"
                         )
-                    elif answer(response, row) != answer(control, nobody):
+                    elif answer(reply, row) != answer(control, nobody):
                         found.append(
-                            f"shop A's row {row}: {method.upper()} answered {response.status_code}, as for an id"
+                            f"shop A's row {row}: {method.upper()} answered {reply.status}, as for an id"
                             " no shop has, but with another body"
                         )
-                    found += shown(response, marks)
+                    found += shown(reply, marks)
         else:
             if "get" in sends:
                 found += page_problems(client, reverse(route.name), queries.get(route.name), marks)
@@ -535,8 +549,8 @@ def route_problems(
                 # a create that needs no more than an id may make a row for an id no shop has, and refuse A's
                 # with `id.taken` (CORE-6), which reveals nothing about A's row.
                 for row_id in rows_of(table, shop_a).values_list("pk", flat=True):
-                    response = client.post(reverse(route.name), {"id": str(row_id)}, format="json")
-                    found += [f"POST with shop A's id {row_id}: {problem}" for problem in shown(response, marks)]
+                    reply = read(client.post(reverse(route.name), {"id": str(row_id)}, format="json"))
+                    found += [f"POST with shop A's id {row_id}: {problem}" for problem in shown(reply, marks)]
         if found:
             problems[route.name or "(no name)"] = found
     return problems
@@ -927,6 +941,22 @@ def test_route_check_reads_answers_that_are_not_json(
     problems = route_problems(staff_client_b, shop_a, shop_b)
 
     assert problems["leaky-note-export"] == ["shows what only shop A has: Note of shop A"]
+
+
+@pytest.mark.django_db
+def test_route_check_reads_a_download_sent_in_pieces(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
+) -> None:
+    # A file usually goes out in pieces (StreamingHttpResponse, FileResponse), an answer with no `.content`. The
+    # sweep reads it all the same: the probe's guarded download passes, and the leaky one shows A's note.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="Note of shop A").save()
+    Note(shop=shop_b, text="Note of shop B").save()
+
+    problems = route_problems(staff_client_b, shop_a, shop_b)
+
+    assert "note-stream" not in problems
+    assert problems["leaky-note-stream"] == ["shows what only shop A has: Note of shop A"]
 
 
 @pytest.mark.django_db
