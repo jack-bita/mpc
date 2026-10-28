@@ -11,7 +11,10 @@ An office route builds on ShopViewSet: `class SideViewSet(ShopViewSet[Side])`.
 - The rows. get_queryset() builds them from the guarded manager on each visit, inside the open shop, so
   the guard filters them to that shop (ADR-0022). A table's rows can't be named in the class body, as DRF
   allows (`queryset = Side.objects.all()`): that would ask for a shop while the module loads, and raise.
-- The per-side check: check_side_permission(), called for every row the view hands out. PPL-3 fills it in.
+- The sides. Two hooks PPL-3 fills in (02 §5, X1). visible_sides(): which sides' rows a person may see at
+  all; every read leaves the others out, so a list never shows them and their rows are "not found".
+  check_side_permission(): may the person do this action on this side, asked for each row read, edited or
+  made one at a time.
 - Creates: a route that makes rows adds CreateOnceMixin. The client sends the new row's id (ADR-0007), so
   the same request sent twice makes one row, and an id already used in another shop is refused.
 - Edits: a route that changes rows adds EditMixin. The client sends the `version` it read, so an edit made
@@ -21,6 +24,7 @@ Long lists come in pages through CursorPage (apps/core/api/pagination.py), the d
 """
 
 import uuid
+from collections.abc import Collection
 from contextlib import ExitStack
 from typing import Any, cast
 
@@ -83,15 +87,36 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         # cast: mypy reads the manager of `type[M]` as ShopScoped's, though the rows are this route's table's.
         return cast("models.QuerySet[M]", self.model._default_manager.all())
 
+    # Where a row names its side, for visible_sides(): `side` on most tables; "pk" on a route whose rows are
+    # sides themselves (SideViewSet); None on a table whose rows belong to the whole shop, such as products.
+    side_field: str | None = "side"
+
+    def visible_sides(self, request: Request) -> Collection[uuid.UUID] | None:
+        """The sides whose rows the person acting may see, or None for all of them. PPL-3 fills it in from the
+        person's roles; until then, every side."""
+        return None
+
+    def filter_queryset[R](self, queryset: models.QuerySet[M, R]) -> models.QuerySet[M, R]:
+        # DRF narrows every read here: a list's rows, and the one row a read or an edit looks up (get_object).
+        # Rows of a side the person may not see are left out of both, so a hidden side is not even shown to
+        # exist: its rows are "not found", as another shop's are.
+        rows = super().filter_queryset(queryset)
+        sides = self.visible_sides(self.request)
+        if sides is None or self.side_field is None:
+            return rows
+        return rows.filter(**{f"{self.side_field}__in": sides})
+
     def side_of(self, row: M) -> uuid.UUID | None:
         """The side a row belongs to, for the per-side check: its `side`, or None for a row of the whole shop,
         such as a product. A route whose rows are sides themselves says so (SideViewSet)."""
         return getattr(row, "side_id", None)
 
     def check_side_permission(self, request: Request, side_id: uuid.UUID | None) -> None:
-        """The per-side check (03 §5.4): may the person acting do this action on this side, or on the whole
-        shop when `side_id` is None? Refuses with PermissionDenied. PPL-3 fills it in with its permission
-        codes; until then, anyone logged in at the open shop may."""
+        """The per-side check (03 §5.4): may the person acting do this action (`self.action`) on this side, or
+        on the whole shop when `side_id` is None? Asked for each row handed out one at a time: read, edited,
+        or made, and a create's repeat as a read of the stored row. A list is narrowed by visible_sides()
+        instead. Refuses with PermissionDenied. PPL-3 fills it in with its permission codes; until then,
+        anyone logged in at the open shop may."""
 
     def check_object_permissions(self, request: Request, obj: Any) -> None:
         # DRF calls this for every row get_object() hands out, to read it or to change it: the usual

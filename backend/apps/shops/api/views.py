@@ -20,6 +20,8 @@ class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMi
     # GET sides/ lists the visit's shop's sides, in pages; GET sides/{id}/ reads one; POST sides/ adds one;
     # PATCH sides/{id}/ renames one.
     model = Side
+    # A side is its own side: a list shows the sides a person may see by their own id (visible_sides()).
+    side_field = "pk"
     serializer_class = SideSerializer
     create_serializer_class = SideCreateSerializer
     edit_serializer_class = SideEditSerializer

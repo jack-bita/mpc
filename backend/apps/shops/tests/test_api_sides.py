@@ -151,6 +151,24 @@ def test_side_permission_hook_checks_each_side(
     assert sides_a["F"].name == "Vyakula"
 
 
+def test_list_shows_only_the_sides_a_person_may_see(
+    staff_client_a: APIClient, sides_a: dict[str, Side], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # PPL-3 decides from each person's roles which sides they may see. A stand-in that shows only Dawa (D)
+    # proves the list leaves Vyakula out, and that Vyakula's own address is "not found", as another shop's
+    # row is: a hidden side is not even shown to exist.
+    dawa = sides_a["D"].pk
+
+    def only_dawa(view: SideViewSet, request: Request) -> set[uuid.UUID]:
+        return {dawa}
+
+    monkeypatch.setattr(SideViewSet, "visible_sides", only_dawa)
+
+    listed = staff_client_a.get(SIDES).json()["results"]
+    assert [row["code"] for row in listed] == ["D"]
+    assert staff_client_a.get(f"{SIDES}{sides_a['F'].pk}/").status_code == 404
+
+
 def test_create_twice_with_same_uuid_makes_one_row(staff_client_a: APIClient, shop_a: Shop) -> None:
     # A phone adds a side, and the answer is lost on the way back, so the phone sends the same request
     # again. The id it made makes the second send harmless: it gets the same side back, with the same 201,
