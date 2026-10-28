@@ -8,17 +8,26 @@ under backend/apps/) and checks each one, with no list of tables to keep up to d
 
 - it has `shop`, through ShopScoped, unless it belongs to no one shop (T1);
 - every link it holds to another table uses PROTECT, so deleting a row never takes other rows with it (T3);
-- its primary key keeps the name PostgreSQL gave it, which the API's creates rely on (CORE-6).
+- its primary key keeps the name PostgreSQL gave it, which the API's creates rely on (CORE-6);
+- it keeps the guard: every manager it has, except the admin's `all_shops`, refuses to build a read while no
+  shop is open (CORE-2).
 
-A new table is checked with no change here, and this file must stay green without being edited (backend
-rules). Each check is a function that returns what breaks its rule, as in test_no_floats.py. The tests of
-the checks hand them tables built to break the rule, made in a throwaway registry of their own, so those
-tables never join the real list; and one test makes sure the real list is not empty, so the sweep can't
-pass by looking at nothing.
+It also reads our code, as test_no_floats.py does, for the only two doors that open every shop at once:
+`all_shops`, for the superuser's admin pages, and `system_context()`, for system jobs (03 §5.4). Each must
+stay in its own place, and tests may use both. Until now only a search by hand found them.
+
+A new table or file is checked with no change here, and this file must stay green without being edited
+(backend rules). Each check is a function that returns what breaks its rule, as in test_no_floats.py. The
+tests of the checks hand them tables and code built to break the rule (the tables made in a throwaway
+registry of their own, so they never join the real list), and a few tests make sure the real lists are not
+empty, so the sweep can't pass by looking at nothing.
 """
 
-from collections.abc import Iterable, Iterator
+import ast
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
+from pathlib import Path
+from typing import Any
 
 import pytest
 from django.apps import apps
@@ -27,8 +36,13 @@ from django.core.exceptions import FieldDoesNotExist
 from django.db import connection, models
 from django.test.utils import isolate_apps
 
-from apps.core.models import ShopScoped, UUIDModel
+from apps.core.models import ShopScoped, ShopScopedManager, UUIDModel
+from apps.core.tenancy import NoShopSelected
 from tests.probe.models import Note
+
+BACKEND = Path(__file__).resolve().parents[1]
+APPS = BACKEND / "apps"
+CONFIG = BACKEND / "config"
 
 # T1's exceptions (02 §1, 03 §5.4): tables that belong to no one shop, so they have no `shop`.
 NO_SHOP = {
@@ -125,6 +139,97 @@ def primary_key_problems(tables: Iterable[type[models.Model]]) -> list[str]:
             if keys != [f"{name}_pkey"]:
                 problems.append(f"{table._meta.label}: primary key named {keys}, not {name}_pkey")
     return problems
+
+
+def guarded(manager: models.Manager[Any]) -> bool:
+    # The guard is ShopScopedManager (apps/core/models.py), and it shows itself by refusing to build a read
+    # while no shop is open: it fails closed (ADR-0022). Both are asked, because a manager of another class,
+    # or one built on this class that skips its check, reads every shop. Asked with no shop open, as every
+    # test starts; refusing costs no query, so no database is needed.
+    if not isinstance(manager, ShopScopedManager):
+        return False
+    try:
+        manager.all()
+    except NoShopSelected:
+        return True
+    return False
+
+
+def guard_problems(tables: Iterable[type[models.Model]]) -> list[str]:
+    # CORE-2: a shop's table loses its guard with no error in two ways (apps/core/models.py, ShopScoped.Meta):
+    # - an abstract base built on ShopScoped that writes a Meta of its own, not built on ShopScoped.Meta: its
+    #   tables lose `default_manager_name`, and the first manager ShopScoped declares, `all_shops`, becomes
+    #   their default, the one Django, the admin's forms and DRF read through;
+    # - a table that declares managers of its own: its own `objects`, which replaces the guarded one, or any
+    #   other manager, a second door that reads every shop.
+    # So every manager a table has is asked, the default above all. The one exception is `all_shops`, the
+    # superuser's admin door (CORE-2), as long as it is not the default. A table whose only change is a Meta
+    # of its own keeps the guard: with no manager of its own, Django takes the default's name from its first
+    # parent (CORE-3's review). Tables not built on ShopScoped are the shop check's to report.
+    problems = []
+    for table in tables:
+        if not issubclass(table, ShopScoped):
+            continue
+        # Django always gives a table a default manager; its type stubs allow None.
+        default = getattr(table._meta.default_manager, "name", None)
+        for manager in table._meta.managers:
+            if manager.name == "all_shops" and manager.name != default:
+                continue
+            if not guarded(manager):
+                which = " (the default)" if manager.name == default else ""
+                problems.append(f"{table._meta.label}.{manager.name}: no guard{which}")
+    return problems
+
+
+def in_tests(path: Path) -> bool:
+    # Tests may open every shop: to count every shop's rows after a write (test_create_shop_all_or_nothing,
+    # SHOP-2), or to test the doors themselves (apps/core/tests/test_shop_scoped.py, CORE-2).
+    return "tests" in path.relative_to(BACKEND).parts[:-1] or path.name in {"tests.py", "conftest.py"}
+
+
+def may_use_all_shops(path: Path) -> bool:
+    # The superuser's admin pages. A page answers a visit, and system_context() is for system jobs only, so
+    # the admin has its own door, for its lists (apps/core/models.py).
+    return path.name == "admin.py" or in_tests(path)
+
+
+def may_use_system_context(path: Path) -> bool:
+    # System jobs, which answer no visit: management commands (the nightly checks the scheduler runs, and
+    # the demo seed, DATA-1) and background tasks (tasks.py, 03 §5.11). Never code that answers a visit, the
+    # admin's pages included: a visit works for one shop (03 §5.4).
+    folders = path.relative_to(BACKEND).parts[:-1]
+    return folders[-2:] == ("management", "commands") or path.name == "tasks.py" or in_tests(path)
+
+
+def uses_of(name: str, source: str) -> list[int]:
+    # The lines where the code uses `name`: by itself (system_context()), as an attribute (Side.all_shops,
+    # tenancy.system_context), or imported. Python's own parser reads the code (the `ast` module), so
+    # comments and strings never count, and neither does the line that stores the name: `all_shops =
+    # models.Manager()` in apps/core/models.py defines the door, it doesn't open it.
+    lines = []
+    for node in ast.walk(ast.parse(source)):
+        if (
+            (isinstance(node, ast.Name) and node.id == name and isinstance(node.ctx, ast.Load))
+            or (isinstance(node, ast.Attribute) and node.attr == name and isinstance(node.ctx, ast.Load))
+            or (isinstance(node, ast.alias) and node.name.split(".")[-1] == name)
+        ):
+            lines.append(node.lineno)
+    return sorted(lines)
+
+
+def uses_in_our_code(name: str) -> dict[str, list[int]]:
+    # Every Python file of our apps and of the settings, tests and migrations included: a migration that
+    # opened every shop would be worth a look too.
+    found = {}
+    for path in sorted([*APPS.rglob("*.py"), *CONFIG.rglob("*.py")]):
+        lines = uses_of(name, path.read_text(encoding="utf-8"))
+        if lines:
+            found[str(path.relative_to(BACKEND))] = lines
+    return found
+
+
+def misplaced_uses(name: str, may_use: Callable[[Path], bool]) -> dict[str, list[int]]:
+    return {path: lines for path, lines in uses_in_our_code(name).items() if not may_use(BACKEND / path)}
 
 
 @contextmanager
@@ -234,6 +339,91 @@ def test_primary_key_check_finds_a_key_with_another_name() -> None:
     assert primary_key_problems([Note]) == ["probe.Note: primary key named ['probe_memo_pkey'], not probe_note_pkey"]
 
 
+def test_guard_check_finds_tables_that_lose_the_guard() -> None:
+    with throwaway_tables() as registry:
+
+        class FreshBase(ShopScoped):
+            # An abstract base whose Meta is not built on ShopScoped.Meta, as AppendOnly's must be.
+            class Meta:
+                abstract = True
+
+        class OnFreshBase(FreshBase):
+            # Gets `all_shops` as its default manager: every read through Django, the admin or DRF, unguarded.
+            class Meta:
+                app_label = "probe"
+
+        class OwnObjects(ShopScoped):
+            # A plain `objects` of its own, which replaces the guarded one under the same name. mypy refuses
+            # this one too, as a type error; it can't see the other two ways, so the sweep checks all three.
+            objects = models.Manager()  # type: ignore[assignment]
+
+            class Meta(ShopScoped.Meta):
+                app_label = "probe"
+
+        class SecondDoor(ShopScoped):
+            # The guard stays the default, but a plain manager beside it reads every shop.
+            everything = models.Manager()
+
+            class Meta(ShopScoped.Meta):
+                app_label = "probe"
+
+        class OnlyOwnMeta(ShopScoped):
+            # Keeps the guard: a Meta of its own and no manager of its own (CORE-3's review).
+            class Meta:
+                app_label = "probe"
+
+        assert guard_problems(registry.get_models()) == [
+            "probe.OnFreshBase.all_shops: no guard (the default)",
+            "probe.OwnObjects.objects: no guard (the default)",
+            "probe.SecondDoor.everything: no guard",
+        ]
+
+
+@pytest.mark.parametrize(
+    ("name", "code"),
+    [
+        ("all_shops", "sides = Side.all_shops.filter(code='D')"),
+        ("system_context", "with system_context():\n    debts = Debt.objects.all()"),
+        ("system_context", "from apps.core.tenancy import system_context"),
+        # Under another name, the import still gives it away.
+        ("system_context", "from apps.core.tenancy import system_context as open_all"),
+        ("system_context", "from apps.core import tenancy\nopen_all = tenancy.system_context"),
+    ],
+)
+def test_door_check_finds_every_use(name: str, code: str) -> None:
+    assert uses_of(name, code) != []
+
+
+def test_door_check_skips_comments_strings_and_the_definition() -> None:
+    code = '''
+"""A docstring may name system_context() and Side.all_shops."""
+# So may a comment: system_context(), Side.all_shops.
+all_shops = models.Manager()
+'''
+    assert uses_of("all_shops", code) == []
+    assert uses_of("system_context", code) == []
+
+
+def test_doors_are_allowed_only_in_their_places() -> None:
+    assert may_use_all_shops(APPS / "shops" / "admin.py")
+    assert not may_use_all_shops(APPS / "shops" / "api" / "views.py")
+    assert may_use_system_context(APPS / "control" / "management" / "commands" / "check_balances.py")
+    assert may_use_system_context(APPS / "control" / "tasks.py")
+    assert not may_use_system_context(APPS / "shops" / "services.py")
+    # An admin page answers a visit too: it has its own door, and never needs this one.
+    assert not may_use_system_context(APPS / "shops" / "admin.py")
+    # Tests may use both.
+    assert may_use_all_shops(APPS / "core" / "tests" / "test_shop_scoped.py")
+    assert may_use_system_context(APPS / "shops" / "tests" / "test_create_shop.py")
+
+
+def test_door_check_reads_our_code() -> None:
+    # Never passes on nothing: the scan reads our files, and finds both doors where CORE-2's own tests of them
+    # use them today.
+    assert "apps/core/tests/test_shop_scoped.py" in uses_in_our_code("all_shops")
+    assert "apps/core/tests/test_shop_scoped.py" in uses_in_our_code("system_context")
+
+
 # --- the sweep ------------------------------------------------------------------------------------------------
 
 
@@ -248,3 +438,15 @@ def test_every_foreign_key_protects() -> None:
 @pytest.mark.django_db
 def test_every_primary_key_keeps_its_postgres_name() -> None:
     assert primary_key_problems(our_tables()) == []
+
+
+def test_every_shop_table_keeps_the_guard() -> None:
+    assert guard_problems(our_tables()) == []
+
+
+def test_all_shops_only_in_admin() -> None:
+    assert misplaced_uses("all_shops", may_use_all_shops) == {}
+
+
+def test_system_context_only_in_system_code() -> None:
+    assert misplaced_uses("system_context", may_use_system_context) == {}
