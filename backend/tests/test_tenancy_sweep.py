@@ -895,6 +895,20 @@ def test_route_check_sends_the_parameters_a_route_needs(
 
 
 @pytest.mark.django_db
+def test_route_check_reports_a_list_it_cannot_look_in(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
+) -> None:
+    # The probe's closed list refuses shop B's staff member, as a list they had no permission for would. A
+    # refusal shows nothing, so no leak shows either: a pass that proves nothing, so the sweep reports it.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    Note(shop=shop_a, text="Note of shop A").save()
+
+    problems = route_problems(staff_client_b, shop_a, shop_b)
+
+    assert problems["closed-note-list"] == ["answered 403, not 200"]
+
+
+@pytest.mark.django_db
 def test_route_check_tries_edits_of_shop_a_rows(
     settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_b: APIClient
 ) -> None:

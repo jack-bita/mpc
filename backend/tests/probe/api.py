@@ -1,16 +1,22 @@
 """tests/probe/api.py — test-only routes over probe.Note, for the tenancy sweep's own tests
 (backend/tests/test_tenancy_sweep.py).
 
-NoteViewSet is built the way every office route is (apps/core/api/base.py), so it shows each visit only its
-own shop's notes. LeakyNoteViewSet makes the mistake the sweep is there to catch: it reads its rows past the
-guard, so every shop's notes show: in its list, its detail route, its CSV export and its search, which needs
-a query parameter. LeakyNoteTextViewSet
-leaks the same way but shows no ids, only the texts, as a report of names and totals would.
-NoteMakerViewSet only makes notes, and names a side link a note doesn't have. NoteByTextViewSet finds a note
-by its text, a key each shop has its own of. EndlessNoteViewSet's list has a
-broken cursor, whose next page is always itself. note_count is a
-plain view, built on no ShopViewSet, so the sweep could never call it as a shop: it must refuse such a
-route. tests/probe/urls.py mounts them, and only the sweep's tests use that address list.
+Each route is built to pass the sweep, or to break one of its checks in one way:
+
+- NoteViewSet is built the way every office route is (apps/core/api/base.py), so it shows and edits each
+  visit's own shop's notes only.
+- LeakyNoteViewSet makes the mistake the sweep is there to catch: it reads its rows past the guard, so every
+  shop's notes show, in its list, its detail route, its edits, its CSV export and its search, which needs a
+  query parameter. LeakyNoteTextViewSet leaks the same way but shows no ids, only the texts, as a report of
+  names and totals would.
+- NoteMakerViewSet only makes notes, and names a side link a note doesn't have.
+- NoteByTextViewSet finds a note by its text, a key each shop has its own of.
+- ClosedNoteViewSet's list refuses everyone; EndlessNoteViewSet's list has a broken cursor, whose next page
+  is always itself.
+- note_count is a plain view, built on no ShopViewSet, so the sweep could never call it as a shop: it must
+  refuse such a route.
+
+tests/probe/urls.py mounts them, and only the sweep's tests use that address list.
 """
 
 from typing import Any
@@ -19,6 +25,7 @@ from django.db import models
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from rest_framework import mixins, serializers
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -74,6 +81,13 @@ class NoteByTextViewSet(NoteViewSet):
     # A row found by a key of each shop's own, as a side could be by its letter: two shops may each have a
     # note with the same text.
     lookup_field = "text"
+
+
+class ClosedNoteViewSet(NoteViewSet):
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # A list that refuses everyone, as one a person has no permission for will (PPL-3): the sweep can't
+        # look inside it.
+        raise PermissionDenied
 
 
 class EndlessNoteViewSet(NoteViewSet):
