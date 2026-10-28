@@ -3,11 +3,11 @@ for the per-side permission check (03 §5.4, §5.10).
 
 An office route builds on ShopViewSet: `class SideViewSet(ShopViewSet[Side])`.
 
-- The shop. Login names the shop a visit works for: it leaves the person acting in `request.auth`, and that
-  person belongs to one shop (`shop_id`). Right after login, before any check reads a table, the view opens
-  that shop (shop_context, apps/core/tenancy.py) and keeps it open for the whole visit, the error answer
-  included. It closes it however the visit ends, so the next visit on the same server worker starts with
-  no shop. A visit whose login names no shop is refused.
+- The shop. Login names who acts and the shop a visit works for: it leaves the staff member acting in
+  `request.auth`, an Actor (apps/core/tenancy.py) with a `shop_id` and a `staff_id`. Right after login,
+  before any check reads a table, the view opens that shop (shop_context) and keeps it open for the whole
+  visit, the error answer included. It closes it however the visit ends, so the next visit on the same
+  server worker starts with no shop. A visit whose login names no shop, or no staff member, is refused.
 - The rows. get_queryset() builds them from the guarded manager on each visit, inside the open shop, so
   the guard filters them to that shop (ADR-0022). A table's rows can't be named in the class body, as DRF
   allows (`queryset = Side.objects.all()`): that would ask for a shop while the module loads, and raise.
@@ -40,7 +40,8 @@ from apps.core.tenancy import Actor, shop_context
 class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
     # The table whose rows the route shows, read per visit in get_queryset().
     model: type[M]
-    # Who acts in this visit, from login: the services record it as who made or changed a row.
+    # Who acts in this visit, from login: a staff member of the visit's shop, whom the services record as
+    # who made or changed a row.
     actor: Actor
     # The visit's stack of things to close when it ends: the open shop. Set in dispatch(), once per visit;
     # DRF makes a new view object for every visit, so two visits never share it.
@@ -59,11 +60,14 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         # read tables too: so the shop opens here, and not later.
         super().perform_authentication(request)  # runs the login: request.user and request.auth
         shop_id = getattr(request.auth, "shop_id", None)
-        if not isinstance(shop_id, uuid.UUID):
-            # Nobody logged in, or a login that names no shop, like the superuser's admin session: the
-            # superuser is nobody's staff. Request code never reads across shops (03 §5.4), so the visit
-            # stops here, before any table is read.
-            raise exceptions.NotAuthenticated("This route needs a login at a shop.")
+        staff_id = getattr(request.auth, "staff_id", None)
+        if not isinstance(shop_id, uuid.UUID) or not isinstance(staff_id, uuid.UUID):
+            # Nobody logged in; a login that names no shop, like the superuser's admin session (the
+            # superuser is nobody's staff); or one that names a shop but no person, like a device's key
+            # alone (AUTH-2). Request code never reads across shops (03 §5.4), and every row an office route
+            # makes or changes records the staff member who did it, so the visit stops here, before any
+            # table is read.
+            raise exceptions.NotAuthenticated("Office routes need a staff login at a shop.")
         self._visit.enter_context(shop_context(shop_id))
         # cast: DRF's type stubs know only its own Token model in `request.auth`; ours carries a shop.
         self.actor = cast(Actor, request.auth)

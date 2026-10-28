@@ -13,7 +13,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any, Protocol
+from typing import Protocol
 
 from django.db import models
 
@@ -42,15 +42,19 @@ ALL_SHOPS = AllShops.ALL_SHOPS
 
 
 class Actor(Protocol):
-    # Whoever acts in a visit, as login leaves them in `request.auth` (apps/core/api/base.py): a staff
-    # member (AUTH-3, AUTH-4), or a paired device (AUTH-2). Each belongs to one shop. Described by what it
-    # has, not by its name: `core` and `shops` may not import `people` (ADR-0035). The services record its
-    # `pk` as who made a row, and check its `shop_id` against the shop they write to (T1).
-    @property
-    def pk(self) -> Any: ...
-
+    # Whoever a visit's login names, as it leaves them in `request.auth` (apps/core/api/base.py): a staff
+    # member (AUTH-3, AUTH-4), or later a paired device (AUTH-2). Described by what it has, not by its name:
+    # `core` and `shops` may not import `people` (ADR-0035).
+    # - `shop_id`: the one shop it belongs to, which the visit works for. The services check it against the
+    #   shop they write to (T1).
+    # - `staff_id`: the staff member acting, whom the services record as who made or changed a row
+    #   (`created_by`, `updated_by`). None when no person acts: a device alone is a shop's machine, not
+    #   someone, so office routes refuse it.
     @property
     def shop_id(self) -> uuid.UUID: ...
+
+    @property
+    def staff_id(self) -> uuid.UUID | None: ...
 
 
 # The note itself. It holds a shop's id, ALL_SHOPS, or None: "no shop chosen", how every visit starts.

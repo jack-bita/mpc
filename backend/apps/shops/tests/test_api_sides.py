@@ -12,6 +12,7 @@ the staff member straight into `request.auth`, as those logins will. The staff m
 """
 
 import uuid
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -83,6 +84,20 @@ def test_side_routes_need_a_shop_login(superuser_client: Client, sides_a: dict[s
     admin = superuser_client.get(SIDES)
     assert admin.status_code == 403
     assert admin.json()["code"] == "not_authenticated"
+
+
+def test_device_alone_cannot_act_on_office_routes(staff_a: Any, sides_a: dict[str, Side]) -> None:
+    # A paired device knows its shop, but it is not a person (AUTH-2): whoever makes or changes a row on
+    # an office route is recorded by name (`created_by`, `updated_by`), and that must be a staff member. So
+    # a login that names a shop and no staff member, as a device's key will, is refused too.
+    device = SimpleNamespace(shop_id=staff_a.shop_id, staff_id=None)
+    client = APIClient()
+    client.force_authenticate(user=staff_a.user, token=device)  # type: ignore[arg-type]
+
+    response = client.get(SIDES)
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_authenticated"
 
 
 def test_shop_closed_after_the_visit(staff_client_a: APIClient, sides_a: dict[str, Side]) -> None:

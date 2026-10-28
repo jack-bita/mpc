@@ -9,7 +9,7 @@ rule with a ValidationError that carries a code (ADR-0032), which the API's erro
 (apps/core/api/errors.py) turns into its error shape.
 
 `shops` is layer 1 and may not import `people`, not even as a type (ADR-0035). Who acts is an Actor
-(apps/core/tenancy.py): anything with a `pk` and a `shop_id`, which a staff member has. create_shop needs
+(apps/core/tenancy.py): anything with a `shop_id` and a `staff_id`, as a staff member has. create_shop needs
 none: a new shop has no staff yet, so every row it makes has `created_by` empty, like any row the system
 makes (02 §1). How a new shop gets its role templates, which live in `people`, is PPL-3's to decide; one
 way is a `people` service that calls create_shop, then copies them in.
@@ -80,7 +80,7 @@ def add_side(
     `side_id`: the id the client made for the new side (ADR-0007), if it made one. `by`: who adds it; None
     for the system or the superuser."""
     _check_shop(shop, by)
-    created_by_id = None if by is None else by.pk
+    created_by_id = None if by is None else by.staff_id
     # One transaction, so a side never exists without its location and its drawer. Inside create_shop's
     # own transaction, it is a part that is taken back with the rest.
     with transaction.atomic():

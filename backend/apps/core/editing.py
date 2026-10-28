@@ -62,5 +62,5 @@ def editing[M: Editable](row: M, *, version: int, by: Actor | None) -> Iterator[
         fresh.full_clean()
         fresh.version += 1
         fresh.updated_at = timezone.now()
-        fresh.updated_by_id = None if by is None else by.pk
+        fresh.updated_by_id = None if by is None else by.staff_id
         fresh.save()
