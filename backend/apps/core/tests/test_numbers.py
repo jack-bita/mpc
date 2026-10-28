@@ -115,11 +115,24 @@ def test_result_finer_than_a_cent_refused() -> None:
         ["-50"],
         ["25", "50"],  # smallest first: 1,335.5 kg would show as 53 small bags and never a big one
         ["50", "50"],  # the same size twice: the second always shows 0
+        # The base unit itself (E1's Kilo, factor 1) is the rest: passed in, 1,335.5 kg would show as
+        # 26 bags + 35 kilos + 0.5 kg instead of E1's 26 bags + 35.5 kg.
+        ["1"],
+        ["50", "1"],
     ],
 )
 def test_split_refuses_bad_factors(factors: list[str]) -> None:
     with pytest.raises(ValueError):
         numbers.split_into_units(Decimal("1335.5"), [Decimal(f) for f in factors])
+
+
+def test_split_takes_factors_one_at_a_time() -> None:
+    # Factors may come one at a time (a generator over SellingUnit rows), not only as a list. Read only
+    # once, they would be used up by the first check and the split would quietly show no bags at all.
+    bags, rest = numbers.split_into_units(Decimal("1335.5"), (Decimal(f) for f in ["50"]))
+
+    assert bags == [26]
+    assert str(rest) == "35.500"
 
 
 def test_split_never_rounds_the_rest() -> None:

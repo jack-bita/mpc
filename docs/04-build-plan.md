@@ -610,7 +610,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 - [ ] The same vector files pass in pytest and in Vitest.
 - [ ] Switching to English changes every visible string.
 - [ ] Office pages show the banner offline.
-**Watch out** **(v1.19)**: the vectors pin three traps, so the TypeScript side must give the same text as Python (`backend/apps/core/numbers.py`). A half goes away from zero: −2.5 → −3, while JavaScript's `Math.round(-2.5)` gives −2 (big.js `Big.roundHalfUp` is right). A zero answer is written `0.00` or `0.000`, never with a minus. The split cuts toward zero: −120 kg is −2 bags and −20 kg (big.js `Big.roundDown`), not `Math.floor`'s −3 bags and +30 kg. The Vitest loader refuses a bare JSON number, as pytest's does, because `JSON.parse` reads it as a float.
+**Watch out** **(v1.19)**: the vectors pin three traps, so the TypeScript side must give the same text as Python (`backend/apps/core/numbers.py`). A half goes away from zero: −2.5 → −3, while JavaScript's `Math.round(-2.5)` gives −2 (big.js `Big.roundHalfUp` is right). A zero answer is written `0.00` or `0.000`, never with a minus. The split cuts toward zero: −120 kg is −2 bags and −20 kg (big.js `Big.roundDown`), not `Math.floor`'s −3 bags and +30 kg. A factor of 1 is refused: the base unit's own selling unit (E1's Kilo) is the rest, so it is left out. The Vitest loader refuses a bare JSON number, as pytest's does, because `JSON.parse` reads it as a float.
 **Tests:** `vectors.rounding.test.ts` · `vectors.units.test.ts` · `format.money.test.ts`
 **Commits:** `feat(frontend): swahili and english messages` → `feat(frontend): decimals and rounding from shared vectors` → `feat(frontend): app layout`
 

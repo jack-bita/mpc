@@ -6,7 +6,7 @@ TypeScript on counter devices (UI-1); both pass shared/test-vectors/, so they ag
 """
 
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable
 from decimal import ROUND_HALF_UP, Decimal
 from itertools import pairwise
 
@@ -63,12 +63,19 @@ def round_money(amount: Decimal, step: Decimal) -> Decimal:
     return _fit(steps * step, CENT)
 
 
-def split_into_units(quantity: Decimal, factors: Sequence[Decimal]) -> tuple[list[int], Decimal]:
+def split_into_units(quantity: Decimal, factors: Iterable[Decimal]) -> tuple[list[int], Decimal]:
     # Shows stock as people count it (02 §15, item 1): a quantity in the base unit (kg, L, pcs, m) as whole
     # selling units, biggest first, plus the rest in the base unit. 1,335.5 kg with bags of 50 → 26 bags
     # + 35.5 kg. A factor is a selling unit's size in the base unit (CAT-2); its name doesn't matter here.
+    # Read once into a tuple: the checks and the loop below each walk the factors, and factors that come
+    # one at a time (a generator) would be used up by the first check.
+    factors = tuple(factors)
     if any(factor <= 0 for factor in factors):
         raise ValueError(f"A selling unit's factor must be above zero: {factors}.")
+    # The base unit's own selling unit (E1's Kilo, factor 1) is the rest itself: passed in, 35.5 kg would
+    # show as 35 kilos + 0.5 kg. Callers leave it out.
+    if any(factor == 1 for factor in factors):
+        raise ValueError(f"Leave out the base unit itself (factor 1): it is the rest. {factors}")
     # Smallest first would count everything in the small unit; the same size twice always shows 0.
     if any(bigger <= smaller for bigger, smaller in pairwise(factors)):
         raise ValueError(f"Factors go biggest first, each size once: {factors}.")
