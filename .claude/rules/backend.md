@@ -25,7 +25,7 @@ Every app may import `control`; `control` imports only `core`. A model may name 
 
 ## Inside an app
 
-`models.py` tables and every rule the database can enforce · `services.py` every write, one function per action, each in a transaction · `selectors.py` every read the API and reports use · `calculations.py` pure functions, mirrored in TypeScript · `documents.py` handlers for offline document types · `permissions.py` · `api/` thin serializers, views and urls · `admin.py` · `tests/`
+`models.py` tables and every rule the database can enforce · `services.py` every write, one function per action, each in a transaction · `selectors.py` every read the API and reports use · `calculations.py` pure functions, mirrored in TypeScript · `documents.py` handlers for offline document types · `permissions.py` · `tasks.py` background tasks, which with management commands are the only code that may open every shop (03 §5.11) · `api/` thin serializers, views and urls · `admin.py` · `tests/`
 
 ## Writing services
 
@@ -57,7 +57,7 @@ Every app may import `control`; `control` imports only `core`. A model may name 
 - pytest + pytest-django on real PostgreSQL, never SQLite; factory_boy; Hypothesis for ledger properties.
 - Names state the rule: `test_pin_lockout_doubles`. Worked examples: `test_e5_debt_clears_oldest_first`. Spec §8.1 rows: `test_arrives_0750_full_day_minus_fine`.
 - Calculations also pass `shared/test-vectors/*.json` (inputs and outputs as strings), the same files Vitest runs.
-- Every bug fix adds a test. The tenancy sweep in `backend/tests/` must stay green without being edited.
+- Every bug fix adds a test. The tenancy sweep (`backend/tests/test_tenancy_sweep.py`) is never loosened, nor edited, to let a table or a route pass. What grows instead: in `backend/tests/conftest.py`, a row of each new route's table for the sweep's two shops, with values only shop A has, and the query parameters a route needs (`sweep_queries`); in `backend/tests/sweep_lists.py`, only by a decision written on the card, the allowed lists: a table with no `shop`, a route under `api/` that reads no shop's table, a route whose answers the sweep can't read, with its own leak test (`OWN_LEAK_TESTS`), and a file that builds a query by hand (`HAND_BUILT_QUERIES`). Teaching the sweep something new, such as calling a route that reads shop tables with a device's key (pairing, PIN login, sync), is a new check, added in a reviewed change.
 
 ## Privacy
 

@@ -64,6 +64,15 @@ def staff_client_a(staff_a: StaffMember) -> APIClient:
 
 
 @pytest.fixture
+def staff_client_b(staff_b: StaffMember) -> APIClient:
+    # The same, as a staff member of shop B: the visitor the tenancy sweep sends to every route, to look
+    # for shop A's rows (backend/tests/test_tenancy_sweep.py).
+    client = APIClient()
+    client.force_authenticate(user=staff_b.user, token=staff_b)  # type: ignore[arg-type]
+    return client
+
+
+@pytest.fixture
 def superuser() -> User:
     # Our own fixture, not pytest-django's `admin_user`: that one calls create_superuser without a
     # full name, which our User requires.
