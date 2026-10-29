@@ -14,7 +14,8 @@ from rest_framework.test import APIClient
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, User
 from apps.people.services import add_staff
-from apps.shops.models import Shop
+from apps.shops.models import Shop, Side
+from apps.shops.services import add_side
 
 # Fake data only: the repo is public (03 §10).
 SUPERUSER_PASSWORD = "a-long-test-password"
@@ -41,6 +42,28 @@ def staff_a(shop_a: Shop) -> StaffMember:
     user = User.objects.create_user(full_name="Staff Demo")
     with shop_context(shop_a):
         return add_staff(shop=shop_a, user=user, display_name="Staff A", by=None)
+
+
+@pytest.fixture
+def staff_a2(shop_a: Shop) -> StaffMember:
+    # A second staff member at shop A, for a flag that names two people who each explain it (CTRL-1).
+    user = User.objects.create_user(full_name="Staff Demo Two")
+    with shop_context(shop_a):
+        return add_staff(shop=shop_a, user=user, display_name="Staff A2", by=None)
+
+
+@pytest.fixture
+def side_a(shop_a: Shop) -> Side:
+    # A side of shop A, made the way the app makes one: with its stock location and its cash drawer (SHOP-2).
+    with shop_context(shop_a):
+        return add_side(shop=shop_a, code="D", name="Dawa", by=None)
+
+
+@pytest.fixture
+def side_b(shop_b: Shop) -> Side:
+    # A side of shop B, for tests that check a row of one shop can't link to another shop's side (T1).
+    with shop_context(shop_b):
+        return add_side(shop=shop_b, code="P", name="Pembejeo", by=None)
 
 
 @pytest.fixture
