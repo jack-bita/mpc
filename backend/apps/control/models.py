@@ -1,5 +1,6 @@
 """apps/control/models.py — the control tables: the flags, one review queue for every difference and every
-offline rule break (02 §13, big idea 4); and the audit trail, what a person did and why (03 §5.16).
+offline rule break (02 §13, big idea 4); and the audit trail's two books, what a person did and why, and what
+changed in each office record (03 §5.16).
 
 A Flag says that what should be there and what is there don't match, and someone must say why. E4's cash-up:
 the Dawa drawer should hold 163,000, Asha counts 160,000, so a flag for −3,000 names Asha and the Dawa side.
@@ -16,15 +17,21 @@ An AuditEvent is one important action, written by the service that does it, in t
 manager suspends Asha, and one line keeps who, when, what changed and why ("Hakuja kazini siku 3"). Like a flag's
 notes, its lines are append-only. apps/control/services.py writes them (audit) and nothing else does.
 
+An EditEvent is one change to an office record, written by PostgreSQL itself, so no code path can skip it: the
+owner renames the side "Dawa" to "Dawa za Mifugo", and a trigger writes who, when, and the name before and after
+(apps/control/operations.py, ADR-0036). No Python code writes this table.
+
 `control` is layer 0, beside `core`, so every app can raise flags and write audit lines (ADR-0035). It imports
 only `core`: it names the tables of `shops` and `people` by text ("shops.Side"), which is not an import (03 §5.1).
 """
+
+from typing import Any, NoReturn
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 
 from apps.core.links import TYPE_CODE_MAX_LENGTH, TYPE_CODE_SHAPE, load_link
-from apps.core.models import AppendOnly, ShopScoped
+from apps.core.models import AppendOnly, AppendOnlyError, ShopScoped
 
 
 # Outside Flag so that its Meta can read the values, as StaffStatus is (apps/people/models.py).
@@ -285,4 +292,53 @@ class AuditEvent(AppendOnly):
     def subject(self) -> ShopScoped:
         # The row the action was done to, loaded from its two columns through the shop guard, so it needs the
         # line's shop open (apps/core/links.py).
+        return load_link(self.subject_type, self.subject_id)
+
+
+class EditEvent(AppendOnly):
+    # One change to one office row (02 §13, 03 §5.16): the owner renames the side "Dawa" to "Dawa za Mifugo".
+    # Written only by the trigger control_record_edit(), after the row's UPDATE, in the same transaction
+    # (apps/control/operations.py, ADR-0036): never by Python, so no service, bulk update() or admin page can
+    # change an office row without leaving one. ShopScoped (CORE-2) gives `id` (a UUIDv7 PostgreSQL makes),
+    # `shop` (the edited row's), `created_at` (when) and `created_by` (who acted, as the visit told PostgreSQL:
+    # apps/core/acting.py; empty outside a visit, when the system acted). AppendOnly (CORE-3) refuses a second
+    # save() and any delete() in Python, and the trigger in this table's migration refuses the same in PostgreSQL
+    # (ADR-0021). The device joins in AUTH-4.
+
+    # The row that changed: its table's code (apps/core/links.py) and its id, as an audit line's subject.
+    subject_type = models.CharField(max_length=TYPE_CODE_MAX_LENGTH)
+    subject_id = models.UUIDField()
+    # Only the fields that changed, each value as text, as the API sends it: {"name": "Dawa"} before,
+    # {"name": "Dawa za Mifugo"} after. A field that became empty is null. Never a PIN hash: its table's trigger
+    # skips it, so a reset shows only `pin_changed_at`.
+    before = models.JSONField()
+    after = models.JSONField()
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2).
+        constraints = [
+            # The trigger takes its type code from the migration that switched a table's history on, which
+            # RecordEdits checks too; the database checks it once more.
+            models.CheckConstraint(
+                condition=models.Q(subject_type__regex=TYPE_CODE_SHAPE),
+                name="control_editevent_subject_type_shape",
+                violation_error_code="edit.subject_type_invalid",
+            ),
+        ]
+        indexes = [
+            # The owner's trail of one record (CTRL-5), as AuditEvent's. Leads with `shop` (03 §9).
+            models.Index(fields=["shop", "subject_type", "subject_id", "created_at"], name="control_edit_by_subject"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.subject_type} {self.subject_id}: {self.before} → {self.after}"
+
+    def save(self, *args: Any, **kwargs: Any) -> NoReturn:
+        # The history is written only by its trigger (ADR-0036): a row saved from Python, even a new one, would be
+        # a change nobody made. So save() always refuses, as AppendOnly's delete() does.
+        raise AppendOnlyError("EditEvent rows are written only by the database's trigger (ADR-0036).")
+
+    @property
+    def subject(self) -> ShopScoped:
+        # The row that changed, loaded from its two columns through the shop guard (apps/core/links.py).
         return load_link(self.subject_type, self.subject_id)
