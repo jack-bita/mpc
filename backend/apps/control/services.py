@@ -145,6 +145,11 @@ def audit(
     reason = reason.strip()
     if not reason:
         raise ValidationError({"reason": ValidationError("A reason is required.", code="audit.reason_required")})
+    # ADR-0024: amounts are Decimal, never float. A float is stored as a JSON number and read back as a float,
+    # already off (0.1 + 0.2 is 0.30000000000000004), so a price change's line would show the owner a wrong price.
+    # Refused at any depth, before anything is written: a bug in the calling code, so a TypeError, not a code.
+    if _holds_a_float(before) or _holds_a_float(after):
+        raise TypeError("audit() keeps amounts as Decimal, never float (ADR-0024).")
     return _saved(
         AuditEvent(
             shop_id=shop_id,
@@ -215,6 +220,17 @@ def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUI
         fresh.full_clean(exclude=[field.name for field in Flag._meta.fields if field.name != "status"])
         fresh.save(update_fields=["status"])
     return fresh
+
+
+def _holds_a_float(value: object) -> bool:
+    # A float anywhere in what an action changed: a value, or inside a dict or a list of them.
+    if isinstance(value, float):
+        return True
+    if isinstance(value, Mapping):
+        return any(_holds_a_float(inner) for inner in value.values())
+    if isinstance(value, list | tuple):
+        return any(_holds_a_float(inner) for inner in value)
+    return False
 
 
 def _check_shop(shop_id: uuid.UUID, by: Actor | None) -> None:

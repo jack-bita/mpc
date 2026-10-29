@@ -85,6 +85,17 @@ def test_audit_records_who_what_and_why(shop_a: Model, asha_job: Note, staff_a: 
         assert (line.before, line.after) == ({"price": "1500.00"}, {"on": "2026-10-29"})
 
 
+def test_audit_refuses_floats(shop_a: Model, asha_job: Note, staff_a: Actor) -> None:
+    # ADR-0024: amounts are Decimal, never float. A float is stored as a JSON number and read back as a float, already
+    # off: 0.1 + 0.2 is 0.30000000000000004. A price change (CTRL-5) that passed one would show the owner a wrong
+    # price, so audit() refuses it, at any depth, before anything is written. A bug in the calling code: TypeError.
+    with shop_context(shop_a):
+        for changes in ({"before": {"price": 1500.5}}, {"after": {"lines": [{"quantity": 0.1}]}}):
+            with pytest.raises(TypeError, match="Decimal"):
+                write_line(asha_job, by=staff_a, **changes)
+        assert not AuditEvent.objects.exists()
+
+
 @pytest.mark.parametrize(
     ("reason", "code"),
     [("", "audit.reason_required"), ("   ", "audit.reason_required"), ("a" * 501, "max_length")],
