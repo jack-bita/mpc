@@ -35,8 +35,11 @@ TYPE_CODE_MAX_LENGTH = 40
 # changes. Each card adds the tables its links point at, as each card adds its setting keys
 # (apps/core/settings_registry.py).
 LINK_TYPES: dict[str, str] = {
-    # A staff member's job: the audit trail's lines about suspending, bringing back and leaving (CTRL-2).
+    # A staff member's job: the audit trail's lines about suspending, bringing back and leaving, and the history of
+    # its edits (CTRL-2).
     "staff": "people.StaffMember",
+    # A side: the history of its edits, such as a new name (CTRL-2).
+    "side": "shops.Side",
 }
 
 
