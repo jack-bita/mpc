@@ -231,7 +231,7 @@ def test_flag_links_stay_in_one_shop(
         with pytest.raises(ShopMismatch):
             raise_flag(kind=FlagKind.CASH_DIFFERENCE, subject=drawer_day, by=None)
         with pytest.raises(ShopMismatch):
-            dismiss_flag(flag, note="Si tatizo", by=None)
+            dismiss_flag(flag, note="Si tatizo", by=staff_b)
 
     with shop_context(shop_a):
         # A generic link has no foreign key, so the database can't check it: a row never saved would leave
@@ -255,6 +255,20 @@ def test_flag_note_required(shop_a: Model, flag: Flag, staff_a: Actor) -> None:
                 with pytest.raises(ValidationError) as refused:
                     move(flag, note=note, by=staff_a)
                 assert refused.value.code == "flag.note_required"
+
+        assert Flag.objects.get(pk=flag.pk).status == FlagStatus.OPEN
+        assert notes_of(flag) == []
+
+
+def test_every_step_names_its_person(shop_a: Model, flag: Flag) -> None:
+    # Rule 7: every step keeps who. A note can never be edited (ADR-0021), so one saved without a name would
+    # stay nameless for good. Whoever explains or closes a flag is a person: a device alone has nobody to
+    # name (03 §5.4), and "nobody" is not an Actor at all, which the type checker refuses.
+    device = DeviceAlone(shop_a.pk)
+    with shop_context(shop_a):
+        for move in (explain_flag, resolve_flag, dismiss_flag):
+            with pytest.raises(ValueError, match="person"):
+                move(flag, note="Imekaguliwa", by=device)
 
         assert Flag.objects.get(pk=flag.pk).status == FlagStatus.OPEN
         assert notes_of(flag) == []

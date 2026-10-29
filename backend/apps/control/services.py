@@ -7,10 +7,12 @@ with a note in a person's own words, who and when kept with it (Jack, 29 Oct 202
       └────────────────────resolve_flag / dismiss_flag─────────────────▶
 
 explain_flag may be called again and again: each person a flag names may explain it, and every explanation
-is kept. Nothing moves a flag back, and nothing touches a closed one. A broken rule is a ValidationError
-with a code (ADR-0032), which the API's error handler (apps/core/api/errors.py) will turn into its error
-shape when the review screen comes (CTRL-4); a bug in the calling code, such as a row of another shop, is
-ShopMismatch, a server error.
+is kept. Each step names the person who took it: a flag is raised by the system as often as not, but only a
+person explains or closes one. Nothing moves a flag back, and nothing touches a closed one.
+
+A broken rule is a ValidationError with a code (ADR-0032), which the API's error handler
+(apps/core/api/errors.py) will turn into its error shape when the review screen comes (CTRL-4); a bug in the
+calling code, such as a row of another shop, is ShopMismatch, a server error.
 
 `control` is layer 0 and may import only `core` (ADR-0035), so the services can't name a Side or a
 StaffMember. The caller passes in what they need, as ADR-0035 says: the subject and the side as rows
@@ -86,27 +88,31 @@ def raise_flag(
     return flag
 
 
-def explain_flag(flag: Flag, *, note: str, by: Actor | None) -> Flag:
+def explain_flag(flag: Flag, *, note: str, by: Actor) -> Flag:
     """Say why the difference happened. The first explanation moves an open flag to explained; each person
     the flag names may add their own, and all are kept."""
     return _step(flag, FlagStep.EXPLAINED, note=note, by=by)
 
 
-def resolve_flag(flag: Flag, *, note: str, by: Actor | None) -> Flag:
+def resolve_flag(flag: Flag, *, note: str, by: Actor) -> Flag:
     """Close the flag: a real difference, dealt with ("Asha will pay the 3,000 tomorrow"). Straight from open
     too, when a manager finds the reason themselves."""
     return _step(flag, FlagStep.RESOLVED, note=note, by=by)
 
 
-def dismiss_flag(flag: Flag, *, note: str, by: Actor | None) -> Flag:
+def dismiss_flag(flag: Flag, *, note: str, by: Actor) -> Flag:
     """Close the flag: no real problem after all ("the money was under the drawer's tray")."""
     return _step(flag, FlagStep.DISMISSED, note=note, by=by)
 
 
-def _step(flag: Flag, step: FlagStep, *, note: str, by: Actor | None) -> Flag:
+def _step(flag: Flag, step: FlagStep, *, note: str, by: Actor) -> Flag:
     # The one way a flag moves: a note, then the status the note's step names. Every step keeps who
     # (`created_by`), when (`created_at`) and why (the note): rule 7.
     _check_shop(flag.shop_id, by)
+    # Who is always a person. A note is never edited (ADR-0021), so one written with no name would stay
+    # nameless for good. `by` is never None (the type says so); a device alone has no staff member to name.
+    if by.staff_id is None:
+        raise ValueError("A flag's step is taken by a person: a device alone is no person.")
     # Trimmed first: a note of only spaces says no more than none, and the database would take it.
     text = note.strip()
     if not text:
@@ -126,7 +132,7 @@ def _step(flag: Flag, step: FlagStep, *, note: str, by: Actor | None) -> Flag:
                 flag=fresh,
                 step=step,
                 text=text,
-                created_by_id=None if by is None else by.staff_id,
+                created_by_id=by.staff_id,
             )
         )
         # Each step's value is the status it leads to (apps/control/models.py, FlagStep).
