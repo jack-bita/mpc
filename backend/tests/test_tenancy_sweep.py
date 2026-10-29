@@ -29,7 +29,7 @@ And it walks the address list for every route of the office API, the routes buil
   them, a create sent an id of A's hands nothing of A's back, and a detail route answers about each one, to
   a read, an edit, a POST (a void) and a delete alike, exactly as about an id no shop has (03 §5.4). Both
   shops are filled in backend/tests/conftest.py;
-- each route names where its table keeps a row's side (`side_field`), for the per-side hooks (PPL-3);
+- each route names where its table keeps a row's side (`side_field`), for the per-side hooks (PPL-5);
 - no route under api/ escapes the sweep by being built on something else.
 
 A new table, file or route is checked with no change here. The checks are never loosened, nor edited, to let
@@ -747,10 +747,10 @@ def own_leak_test_problems() -> list[str]:
 
 
 def side_field_problems(views: Iterable[type[ShopViewSet[Any]]]) -> list[str]:
-    # The two side hooks of every office route (apps/core/api/base.py, PPL-3) find a row's side through
+    # The two side hooks of every office route (apps/core/api/base.py, PPL-5) find a row's side through
     # `side_field`: visible_sides() narrows every read by it, and check_side_permission() asks about the side it
     # names. A wrong field mostly fails quietly:
-    # - None on a table that links a side: once PPL-3 hides sides, the route would still hand every side's rows
+    # - None on a table that links a side: once PPL-5 hides sides, the route would still hand every side's rows
     #   to anyone of the shop, and let anyone make rows on any side;
     # - a name the table doesn't have, on a create: side_of_new() looks for it in what was sent, finds nothing,
     #   and checks the new row as one of the whole shop. (On a read or an edit, side_of() fails loudly instead.)
@@ -1498,7 +1498,7 @@ def test_side_check_finds_routes_that_misname_the_side() -> None:
         model = StockLocation
 
     class LocationsOfNoSide(ShopViewSet[StockLocation]):
-        # Every side's stock to anyone of the shop, once PPL-3 hides sides.
+        # Every side's stock to anyone of the shop, once PPL-5 hides sides.
         model = StockLocation
         side_field = None
 

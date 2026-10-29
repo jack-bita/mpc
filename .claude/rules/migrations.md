@@ -14,5 +14,5 @@ paths:
 - Every other shop table people change gets `RecordEdits` from `control` in its migration, with its type code, and `skip=[...]` for any column that must never be copied, such as a hash or a key (ADR-0036).
 - Rules the database can enforce go into the migration: check constraints, partial unique indexes, `PROTECT` foreign keys.
 - A change old devices may still rely on goes "add the new → move over → remove the old", across releases.
-- Global seed data (units) is a data migration. Role templates are not: they live in code and `create_shop` copies them into each shop.
+- Global seed data (units) is a data migration. Role templates are not: they live in code (`apps/core/permissions.py`) and `set_up_shop` (`apps/people/services.py`) copies them into each new shop. A new permission code is added to the shops that already have their roles in a data migration: their Owner, and their Manager unless it is one of the owner's four (03 §5.8).
 - `makemigrations --check` must be clean before the PR.

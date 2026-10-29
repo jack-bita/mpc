@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.9 · 29 Oct 2026 · Portion 2 of the planning pack
+**Version:** 1.10 · 29 Oct 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -23,6 +23,8 @@
 **Changes in v1.8** (29 Oct 2026, CTRL-1): three decisions by Jack, made while building CTRL-1. A flag may be resolved or dismissed straight from `open`, always with a note, as a bank's reconciliation queue works. When a flag names several people, each may explain it, and every explanation is kept; a flag's notes are never edited. A person a flag names may explain it, but never close it: someone else decides (§13, §14). A new permission, `flag.review`, closes flags on a side (§5). Marked **(v1.8)**.
 
 **Changes in v1.9** (29 Oct 2026, CTRL-2): an audit event's `actor` and `at` are the row's `created_by` and `created_at` (§1), and it always has a reason (T3); its `device` and `approval` come with their tables. A new append-only record, `EditEvent`, keeps every change to an office record, written by the database itself (Jack, while planning CTRL-2; 03 §5.16, ADR-0036); payment accounts and stock locations are office records too (Jack, at CTRL-2's review). T2 names it (§13, §16). Marked **(v1.9)**.
+
+**Changes in v1.10** (29 Oct 2026, PPL-3): a decision by Jack, made while planning PPL-3. Goods that arrive are weighed on the shop's scale before they go in, a few sacks at a time; the device adds up the sacks and the kg at once, offline too, and the stock goes in at the scale's kg (§7, §17). Weighing is its own permission, `stock.weigh`, which any role may have; completing the delivery with its buying prices stays `stock.receive`, because buying prices never go to devices (§5). Also from PPL-3: a role's fields, who may give a role or a permission (Jack), and what a person holds on a side and on the whole shop (§5); a new code reaches the shops that already exist through a data migration (§5, 03 §5.8). Marked **(v1.10)**.
 
 ---
 
@@ -193,13 +195,18 @@ A full diagram for GitHub is in Appendix A.
 - PIN: 4 digits, not 1234 and not four of a kind, hashed with Argon2 plus a server secret (03 §5.9). `pin_changed_at` tells devices to drop their offline check. A person who has left gets none **(v1.4)**.
 
 **Role** [R1] → Shop — a named bundle of permissions. Copied from templates (Owner, Manager, Seller, Order writer, Cashier, Worker — spec §6); the owner can edit them.
+- `template` (the one it was copied from; blank for a role an owner makes later), `name` (blank on a copied role: the screens show the template's name), `permissions` (its codes, one list). One role per template per shop. The six templates hold what Jack chose for MPC; they live in code, beside the codes (03 §5.8) **(v1.10)**.
 
-**RoleAssignment** [R1] → StaffMember — `role` + `side` (empty = all sides).
+**RoleAssignment** [R1] → StaffMember — `role` + `side` (empty = all sides, a side added later included). Given once per side, "all sides" included, and never to someone who has left **(v1.10)**.
 
-**PermissionGrant** [R1] → StaffMember — one extra `permission` for one person, optionally on one `side`.
+**PermissionGrant** [R1] → StaffMember — one extra `permission` for one person, optionally on one `side`. Given once per side, as a role is, and never to someone who has left; a suspended person may still be given a role or a permission, which counts once they are brought back **(v1.10)**.
 
-**Permissions** are fixed codes in code (not a table):
-`sale.write` · `sale.take_payment` · `sale.hand_over` · `sale.bargain` (down to the floor) · `sale.below_floor_approve` · `sale.jumla_switch` · `sale.cancel` · `sale.refund` · `credit.give` · `credit.approve` · `debt.view` · `debt.adjust` · `price.change` · `cost.view` (buying prices, profit) · `product.manage` · `contact.manage` · `stock.receive` · `stock.loss` · `stock.count` · `stock.count_approve` · `stock.transfer` · `money.expense` · `money.advance` · `money.withdraw` · `drawer.count` · `drawer.confirm` · `drawer.approve` (approve the day) · `staff.manage` · `attendance.manage` · `pay.run` · `pay.approve` · `settings.manage` · `device.manage` · `flag.review` (resolve or dismiss a side's flags) **(v1.8)** · `report.view` · `job.manage` (R2) · `production.run` (R2)
+**Who may give** a role or a permission **(v1.10)**: someone with `staff.manage` on that side, and only codes they hold there themselves, so a manager handed `staff.manage` to add a loader can't make himself Owner (Jack, PPL-3). The system or the superuser sets up a shop's first owner.
+
+**What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again.
+
+**Permissions** are fixed codes in code (not a table). A new code reaches the shops that already have their roles through a data migration: their Owner gets it, and their Manager unless it is one of the owner's own four (03 §5.8) **(v1.10)**:
+`sale.write` · `sale.take_payment` · `sale.hand_over` · `sale.bargain` (down to the floor) · `sale.below_floor_approve` · `sale.jumla_switch` · `sale.cancel` · `sale.refund` · `credit.give` · `credit.approve` · `debt.view` · `debt.adjust` · `price.change` · `cost.view` (buying prices, profit) · `product.manage` · `contact.manage` · `stock.receive` (complete a delivery, with its buying prices) · `stock.weigh` (weigh goods as they arrive: any role may have it, and it shows no buying price) **(v1.10)** · `stock.loss` · `stock.count` · `stock.count_approve` · `stock.transfer` · `money.expense` · `money.advance` · `money.withdraw` · `drawer.count` · `drawer.confirm` · `drawer.approve` (approve the day) · `staff.manage` · `attendance.manage` · `pay.run` · `pay.approve` · `settings.manage` · `device.manage` · `flag.review` (resolve or dismiss a side's flags) **(v1.8)** · `report.view` · `job.manage` (R2) · `production.run` (R2)
 
 **Approval** [R1] ✚ → Shop — a permitted person says yes on the spot.
 - `action`, `subject`, `requested_by`, `approved_by`, `method`: `pin_here` (they type their PIN on the same device; works offline) | [Later] `remote`; `note`
@@ -268,6 +275,7 @@ A full diagram for GitHub is in Appendix A.
 - `status`: `pending_details` → `completed` | `cancelled`
 - `payment`: `paid` (a `supplier_payment` money movement) | `on_credit` (R1: marked only; R2: posted as `supplier_credit`) | `mixed`
 - Lines: `product`, `selling_unit`, `qty_on_paper`, `qty_received`, `cost` (per selling unit), `lot_number` + `expiry_date` (drugs), `note`
+- **Weighing** **(v1.10)**: goods that arrive are weighed on the shop's scale before they go in, a few sacks at a time (Jack). Each weighing is a number of sacks and the kg the scale shows; the device adds them up at once, offline too, and the line's `qty_received` is the total kg: 3 sacks 152.5 kg + 2 sacks 101.0 kg + 1 sack 50.4 kg = 6 sacks, 303.9 kg, never 6 × 50. Weighing needs `stock.weigh`; adding the cost and completing the delivery needs `stock.receive` (§5).
 - **"Received, pending"** = a photo and a note only. Nothing is posted until it is completed (next morning); its movements are dated at arrival.
 - Completing posts `receipt` movements and new `ProductCost` rows, and flags paper-vs-received differences. [R2] If the cost went up, the system suggests a new selling price.
 
@@ -550,7 +558,7 @@ These become database constraints and automated tests.
 
 ## 17. Offline and sync
 
-- **Works offline (R1):** clock in and out, one-screen sales, payments, debt repayments, quick-add customer (name + phone), drawer money movements, PIN approvals, and opening the drawer **(v1.1)**. Everything else needs the internet *(default)*.
+- **Works offline (R1):** clock in and out, one-screen sales, payments, debt repayments, quick-add customer (name + phone), drawer money movements, PIN approvals, and opening the drawer **(v1.1)**; weighing a delivery as it arrives, with no buying price **(v1.10)**. Everything else needs the internet *(default)*.
 - **Kept on the device:** products, selling units, current and future-dated prices, batches and stock, contacts with balances (as of the last sync), staff names and status, permissions, and the settings in force plus future-dated ones **(v1.1)**. No PIN hashes: each device makes its own offline PIN check the first time a person logs in online on it **(v1.1)**. Buying prices never go to devices.
 - **Safe to resend:** each document travels with its UUID; sending it twice changes nothing.
 - **Accept, then flag:** the server accepts offline documents and flags what it could only check online — negative stock, a duplicate code, over the credit limit, a suspended worker, an archived product. A price changed meanwhile doesn't matter: the sale keeps the device's price.
