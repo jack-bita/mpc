@@ -72,6 +72,18 @@ def test_edit_recorded_with_person_and_changes(shop_a: Model, card: Card, staff_
         ]
 
 
+def test_each_edit_keeps_its_own_time(shop_a: Model, card: Card, staff_a: Actor) -> None:
+    # The owner's trail (CTRL-5) shows a row's edits in the order they happened, by their time. Two edits in one
+    # transaction, as editing() and the staff services make, must get two times, the second after the first;
+    # the transaction's start time would give both the same one, and an edit that waited for a lock an earlier
+    # time than the edit it waited for.
+    with shop_context(shop_a), acting_as(staff_a), transaction.atomic():
+        Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
+        Card.objects.filter(pk=card.pk).update(name="Dawa ya Kuku")
+        first, second = history_of(card)
+    assert first.created_at < second.created_at
+
+
 def test_edit_of_another_shops_row_refused(shop_b: Model, staff_a: Actor) -> None:
     # T1: a visit works for one shop (03 §5.4). If a bug let shop A's visit change shop B's row, the history row,
     # written in shop B, would name shop A's staff member, and shop B's trail would load that person. So the trigger
@@ -195,7 +207,7 @@ def test_record_edits_checks_its_names() -> None:
 
 # Each SQL string of the rule, by its SHA-256 fingerprint, taken when the rule was written.
 PINNED_SQL = {
-    "RECORD_EDIT_FUNCTION": "f3e818ee10826239730bc9117100c0ef9a633104bde6872695788b7236cd21ea",
+    "RECORD_EDIT_FUNCTION": "f304792db801aed85c04f1c6a9fec126232fb3c090c09929cde2540e868d25a9",
     "CREATE_RECORD_EDITS_TRIGGER": "3dabe4bacd3ea9c135e1e48a20030d74fe423948eed49e2d9bd1f9e5446aaa8e",
     "DROP_RECORD_EDITS_TRIGGER": "bcf9a1bf65eb27df33203fec7a0c45364b1379a3cc481273dd0ac381e2d59a9d",
     "EDITS_BY_TRIGGER_ONLY_FUNCTION": "d7550bb29e00e98194c0c6d4f59ce12fbab1d3c3765c14473836adcc721be4c0",

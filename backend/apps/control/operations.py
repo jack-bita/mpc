@@ -145,8 +145,11 @@ class FlagForwardOnlyTrigger(AppendOnlyTrigger):
 #   are kept, each as text (`->>`), the way the API sends a number or a date, so an amount is never read back as a
 #   float (ADR-0024): {"name": "Dawa"} before, {"name": "Dawa za Mifugo"} after.
 # - Nothing visible changed (a save that changed nothing, or only a skipped column): nothing is written.
-# - The row: a new UUIDv7 from PostgreSQL itself (ADR-0007; PostgreSQL 18), the edited row's shop, the time,
-#   who acts as the visit told PostgreSQL ('' or never told: nobody, so NULL), the type code and the row's id.
+# - The row: a new UUIDv7 from PostgreSQL itself (ADR-0007; PostgreSQL 18), the edited row's shop, the edit's own
+#   time, who acts as the visit told PostgreSQL ('' or never told: nobody, so NULL), the type code and the row's id.
+#   The time is clock_timestamp(), the clock as the row is written, not now(), the transaction's start: two edits in
+#   one transaction would share a time, and an edit that waited for another's lock would get an earlier time than
+#   the edit it waited for, so the owner's trail would show them out of order.
 #   Written in the edit's own transaction: an edit that is undone takes its history row with it.
 # - RETURN NULL: an AFTER trigger's answer is not used; the edit has already happened.
 # `before` and `after` are in double quotes in the column list: both are words of SQL's own (BEFORE and AFTER
@@ -176,7 +179,7 @@ BEGIN
     INSERT INTO control_editevent
         (id, shop_id, created_at, created_by_id, subject_type, subject_id, "before", "after")
     VALUES (
-        uuidv7(), NEW.shop_id, now(), NULLIF(current_setting('mpc.staff_id', true), '')::uuid,
+        uuidv7(), NEW.shop_id, clock_timestamp(), NULLIF(current_setting('mpc.staff_id', true), '')::uuid,
         TG_ARGV[0], NEW.id, changed_from, changed_to
     );
     RETURN NULL;
