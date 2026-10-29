@@ -3,6 +3,8 @@
 # FlagNote, each step in a person's own words. FlagPerson and FlagNote are born append-only: AppendOnlyTrigger,
 # right after each one's CreateModel, makes PostgreSQL refuse every UPDATE and DELETE on it (ADR-0021) before
 # it holds a row.
+# Flag itself gets FlagForwardOnlyTrigger, right after its CreateModel: PostgreSQL keeps each flag as it was
+# raised, and lets its status move forward only (apps/control/operations.py).
 
 import uuid
 
@@ -10,6 +12,7 @@ import django.db.models.deletion
 import django.db.models.expressions
 from django.db import migrations, models
 
+from apps.control.operations import FlagForwardOnlyTrigger
 from apps.core.operations import AppendOnlyTrigger
 
 
@@ -112,6 +115,7 @@ class Migration(migrations.Migration):
                 "default_manager_name": "objects",
             },
         ),
+        FlagForwardOnlyTrigger("flag"),
         migrations.CreateModel(
             name="FlagPerson",
             fields=[
