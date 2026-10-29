@@ -13,6 +13,7 @@ function that returns what breaks the rule, and the check's own test hands it pr
 lives outside `apps` because it names tables of several apps (ADR-0035).
 """
 
+import re
 from collections.abc import Iterable
 
 import pytest
@@ -21,6 +22,7 @@ from django.db import connection, models
 
 from apps.core.links import LINK_TYPES
 from apps.core.models import AppendOnly, ShopScoped
+from apps.people.models import StaffMember
 from tests.probe.models import Card, Note
 from tests.sweep_lists import NO_EDIT_HISTORY
 
@@ -53,6 +55,21 @@ RECORD_EDIT_FUNCTION = "control_record_edit"
 # because only an edit PostgreSQL has kept is written down; BEFORE could record an edit a later rule refuses.
 AFTER_UPDATE_FOR_EACH_ROW = 1 + 16
 
+# Column names that hold a secret: a PIN's hash today, and later a device's key (AUTH-1, AUTH-2), a password or a
+# token, as a whole word of the name (`pin_hash`, `key_hash`, `api_token`, never `monkey`). Such a column must be on
+# its table's skip list (RecordEdits(..., skip=[...])): a secret copied into the history could be read by anyone who
+# reads the trail. A table's skip list is frozen in its trigger, so a secret column added later needs a new migration
+# that rebuilds the trigger; this check says so the day the column is added.
+SECRET_COLUMN = re.compile(r"(^|_)(hash|key|secret|password|token)(_|$)")
+
+
+def skipped_columns(words: bytes) -> set[str]:
+    # The trigger's second word: its skip list, as PostgreSQL writes an array of text, "{pin_hash}" ("{}" for none).
+    parts = bytes(words).split(b"\x00")
+    if len(parts) < 2:
+        return set()
+    return {name for name in parts[1].decode().strip("{}").split(",") if name}
+
 
 def history_problems(tables: Iterable[type[models.Model]]) -> list[str]:
     # PostgreSQL's own list of triggers (pg_trigger) says, for each table, whether it has `record_edits`, whether it
@@ -83,6 +100,12 @@ def history_problems(tables: Iterable[type[models.Model]]) -> list[str]:
             codes = [listed for listed, named in LINK_TYPES.items() if named == label]
             if codes != [code]:
                 problems.append(f"{label}: its trigger records {code!r}, but LINK_TYPES gives {codes}")
+            skipped = skipped_columns(words)
+            for field in table._meta.concrete_fields:
+                # Every concrete field has a column; Django's type stubs allow None.
+                column = field.column or ""
+                if SECRET_COLUMN.search(column) and column not in skipped:
+                    problems.append(f"{label}: its trigger would copy {column} into the history")
     return problems
 
 
@@ -129,3 +152,17 @@ def test_history_check_finds_tables_that_lose_it(monkeypatch: pytest.MonkeyPatch
         "probe.Card: its edit history trigger runs core_append_only(), not control_record_edit()",
         "probe.Card: its trigger records '', but LINK_TYPES gives ['probe_card']",
     ]
+
+
+def test_history_check_finds_a_secret_that_would_be_copied() -> None:
+    # A staff member's PIN hash is skipped (people's migration 0004). A trigger rebuilt without that word would copy
+    # every new hash into the history, where anyone who reads the trail could see it. (Inside the test's transaction,
+    # so the rollback at the end puts the real trigger back.)
+    assert history_problems([StaffMember]) == []
+    with connection.cursor() as cursor:
+        cursor.execute("DROP TRIGGER record_edits ON people_staffmember")
+        cursor.execute(
+            "CREATE TRIGGER record_edits AFTER UPDATE ON people_staffmember "
+            "FOR EACH ROW EXECUTE FUNCTION control_record_edit('staff', '{}')"
+        )
+    assert history_problems([StaffMember]) == ["people.StaffMember: its trigger would copy pin_hash into the history"]
