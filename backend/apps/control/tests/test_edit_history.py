@@ -201,8 +201,26 @@ def test_record_edits_checks_its_names() -> None:
     # would fail: the step refuses it as the migration is read. A column's name goes into the SQL too.
     with pytest.raises(ValueError, match="type code"):
         RecordEdits("card", type_code="Probe Card")
+    # A hidden line break at the end passes a check that only looks at the start of the text.
+    with pytest.raises(ValueError, match="type code"):
+        RecordEdits("card", type_code="probe_card\n")
     with pytest.raises(ValueError, match="column"):
         RecordEdits("card", type_code="probe_card", skip=["pin_hash'; DROP TABLE probe_card; --"])
+    # One name, not a list: Python reads the text "pin_hash" as eight one-letter names, none of them a column, and
+    # the hash would be copied.
+    with pytest.raises(TypeError, match="list"):
+        RecordEdits("card", type_code="probe_card", skip="pin_hash")
+
+
+def test_record_edits_checks_the_table_it_is_put_on() -> None:
+    # Checked as the migration runs, against the table as that migration sees it, before any SQL is sent.
+    state = ProjectState.from_apps(apps)
+    # A typo in the list of columns never to copy: the real column would be copied, a PIN hash among them.
+    with pytest.raises(ValueError, match="pin_hsh"), connection.schema_editor() as editor:
+        RecordEdits("card", type_code="probe_card", skip=["pin_hsh"]).database_forwards("probe", editor, state, state)
+    # A table with no shop: the trigger writes the edited row's shop into the history, and every edit would fail.
+    with pytest.raises(ValueError, match="shop"), connection.schema_editor() as editor:
+        RecordEdits("user", type_code="person").database_forwards("people", editor, state, state)
 
 
 # Each SQL string of the rule, by its SHA-256 fingerprint, taken when the rule was written.

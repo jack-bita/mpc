@@ -216,10 +216,16 @@ class RecordEdits(AppendOnlyTrigger):
         # Checked here, as the migration is read, not when the first edit is made. A code of the wrong shape would
         # break EditEvent's own rule on every edit of the table, so every edit would fail. The two words are also
         # written into the SQL with quotes put around them by hand, which is safe only for names of these shapes.
-        if not re.match(TYPE_CODE_SHAPE, type_code):
+        # fullmatch, not match: `$` in a pattern also matches before a final line break, so match() would let
+        # "staff\n" through.
+        # One string is a sequence of letters to Python: skip="pin_hash" would skip eight one-letter columns that
+        # don't exist, and copy the hash. So a list, always.
+        if isinstance(skip, str):
+            raise TypeError(f"skip is a list of column names, not one name: write skip=[{skip!r}].")
+        if not re.fullmatch(TYPE_CODE_SHAPE, type_code):
             raise ValueError(f"{type_code!r} is not a type code: small letters and underscores (apps/core/links.py).")
         for column in skip:
-            if not re.match(_COLUMN_NAME, column):
+            if not re.fullmatch(_COLUMN_NAME, column):
                 raise ValueError(f"{column!r} is not a column's name.")
         self.type_code = type_code
         self.skip = list(skip)
@@ -231,8 +237,20 @@ class RecordEdits(AppendOnlyTrigger):
         from_state: ProjectState,
         to_state: ProjectState,
     ) -> None:
-        # Write the rule, then put it on the table. The columns to skip go in as one PostgreSQL array, '{pin_hash}'
-        # ('{}' for none), which the rule reads with TG_ARGV[1]::text[]. params=None, as in core's operations.
+        # First, the table as this migration sees it (to_state, not today's models.py), before any SQL is sent:
+        # - every column to skip is one of its own. A typo ("pin_hsh") would skip nothing, and the real column, a
+        #   PIN hash, would be copied into every history row, with nothing to say so;
+        # - it has `id` and `shop_id`, which the rule writes into each history row: without them, every edit of the
+        #   table would fail, perhaps months later.
+        model = to_state.apps.get_model(app_label, self.model_name)
+        columns = {field.column for field in model._meta.concrete_fields}
+        for column in self.skip:
+            if column not in columns:
+                raise ValueError(f"{model._meta.label} has no column {column!r} to skip.")
+        if not {"id", "shop_id"} <= columns:
+            raise ValueError(f"{model._meta.label} has no `id` and `shop_id`: the history keeps a shop's rows only.")
+        # Then write the rule, and put it on the table. The columns to skip go in as one PostgreSQL array,
+        # '{pin_hash}' ('{}' for none), which the rule reads with TG_ARGV[1]::text[]. params=None, as in core's.
         table = self._table(app_label, schema_editor, to_state)
         sql = CREATE_RECORD_EDITS_TRIGGER.format(
             table=table, type_code=f"'{self.type_code}'", skipped="'{" + ",".join(self.skip) + "}'"
