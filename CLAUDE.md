@@ -70,7 +70,7 @@ Open these when a task needs them; don't read them all up front.
 
 These protect money, history and each shop's privacy. If a task seems to need breaking one, stop and ask Jack.
 1. **Tenancy.** Every model has `shop` (except `User`, `Unit`, the `Shop` itself and infrastructure tables), and every query goes through the scoped manager, which fails closed. `system_context()` only in system jobs and commands, never in request code. (ADR-0022)
-2. **Ledgers are append-only.** Stock movements, balance entries, allocations, attendance events, audit events, the change log, payments, money movements and dated-rule rows (prices, costs, settings, pay rates) are written only by posting services and never updated or deleted. Fixes are new rows; payments, money movements and attendance events can only be voided. (ADR-0008, ADR-0021)
+2. **Ledgers are append-only.** Stock movements, balance entries, allocations, attendance events, audit events, flag notes and the people a flag names, the change log, payments, money movements and dated-rule rows (prices, costs, settings, pay rates) are written only by posting services and never updated or deleted. Fixes are new rows; payments, money movements and attendance events can only be voided. (ADR-0008, ADR-0021)
 3. **Exact numbers.** Money and quantities are `Decimal` in Python, big.js in TypeScript and strings in JSON — never floats. Round only with the shared rounding function. (ADR-0024)
 4. **Logic lives in services and calculations only.** Views, serializers, `save()` and signals stay thin. (ADR-0015)
 5. **Two data paths.** Counter screens use Dexie only; office screens use the API client only. (ADR-0019, ADR-0020)
