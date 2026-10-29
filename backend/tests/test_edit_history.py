@@ -44,25 +44,41 @@ def office_tables() -> list[type[models.Model]]:
     return [table for table in changeable_tables() if table._meta.label not in NO_EDIT_HISTORY]
 
 
+# The function every office table's trigger runs (apps/control/operations.py). When AUTH-4 moves the tables to
+# control_record_edit_v2(), for the device, this name moves with them, and the check finds any table left behind.
+RECORD_EDIT_FUNCTION = "control_record_edit"
+
+# How PostgreSQL stores when a trigger runs (`tgtype`), as bits added up: 1 = FOR EACH ROW, 2 = BEFORE (none =
+# AFTER), 4 = INSERT, 8 = DELETE, 16 = UPDATE. The history's trigger is AFTER UPDATE FOR EACH ROW: 1 + 16. AFTER,
+# because only an edit PostgreSQL has kept is written down; BEFORE could record an edit a later rule refuses.
+AFTER_UPDATE_FOR_EACH_ROW = 1 + 16
+
+
 def history_problems(tables: Iterable[type[models.Model]]) -> list[str]:
     # PostgreSQL's own list of triggers (pg_trigger) says, for each table, whether it has `record_edits`, whether it
     # is switched on (`tgenabled`: O or A fire in every session; D is off; R fires only on a copy of the database),
+    # when it runs (`tgtype`), which function it runs (`tgfoid`, named in pg_proc, PostgreSQL's list of functions),
     # and the words it was given (`tgargs`: each one ends with a zero byte), the first of which is the type code.
     problems = []
     with connection.cursor() as cursor:
         for table in tables:
             label = table._meta.label
             cursor.execute(
-                "SELECT tgargs, tgenabled FROM pg_trigger WHERE tgrelid = %s::regclass AND tgname = 'record_edits'",
+                "SELECT t.tgargs, t.tgenabled, t.tgtype, p.proname FROM pg_trigger t "
+                "JOIN pg_proc p ON p.oid = t.tgfoid WHERE t.tgrelid = %s::regclass AND t.tgname = 'record_edits'",
                 [table._meta.db_table],
             )
             row = cursor.fetchone()
             if row is None:
                 problems.append(f"{label}: no edit history trigger")
                 continue
-            words, enabled = row
+            words, enabled, timing, function = row
             if enabled not in ("O", "A"):
                 problems.append(f"{label}: its edit history trigger is switched off")
+            if function != RECORD_EDIT_FUNCTION:
+                problems.append(f"{label}: its edit history trigger runs {function}(), not {RECORD_EDIT_FUNCTION}()")
+            if timing != AFTER_UPDATE_FOR_EACH_ROW:
+                problems.append(f"{label}: its edit history trigger is not AFTER UPDATE FOR EACH ROW")
             code = bytes(words).split(b"\x00")[0].decode()
             codes = [listed for listed, named in LINK_TYPES.items() if named == label]
             if codes != [code]:
@@ -95,3 +111,21 @@ def test_history_check_finds_tables_that_lose_it(monkeypatch: pytest.MonkeyPatch
     with connection.cursor() as cursor:
         cursor.execute("ALTER TABLE probe_card DISABLE TRIGGER record_edits")
     assert history_problems([Card]) == ["probe.Card: its edit history trigger is switched off"]
+    # A trigger with the right name, built wrong: one that runs before the edit, when the edit may still be refused,
+    # and one that runs another rule altogether, with none of the words the history needs.
+    with connection.cursor() as cursor:
+        cursor.execute("DROP TRIGGER record_edits ON probe_card")
+        cursor.execute(
+            "CREATE TRIGGER record_edits BEFORE UPDATE ON probe_card "
+            "FOR EACH ROW EXECUTE FUNCTION control_record_edit('probe_card', '{}')"
+        )
+    assert history_problems([Card]) == ["probe.Card: its edit history trigger is not AFTER UPDATE FOR EACH ROW"]
+    with connection.cursor() as cursor:
+        cursor.execute("DROP TRIGGER record_edits ON probe_card")
+        cursor.execute(
+            "CREATE TRIGGER record_edits AFTER UPDATE ON probe_card FOR EACH ROW EXECUTE FUNCTION core_append_only()"
+        )
+    assert history_problems([Card]) == [
+        "probe.Card: its edit history trigger runs core_append_only(), not control_record_edit()",
+        "probe.Card: its trigger records '', but LINK_TYPES gives ['probe_card']",
+    ]
