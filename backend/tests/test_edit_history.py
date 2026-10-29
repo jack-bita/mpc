@@ -1,9 +1,11 @@
 """backend/tests/test_edit_history.py — every office table keeps the history of its edits (03 §5.16, ADR-0036).
 
-An office table is one that people change from the office: every table built on Editable (CORE-6), and
-StaffMember, which is older than Editable. Each must carry the trigger that writes control.EditEvent, put there by
-RecordEdits in its migration (apps/control/operations.py): switched on, and recording the table's own type code
-from apps/core/links.py, so its history rows load back.
+An office table is a shop table people change: every table built on ShopScoped that is not a ledger (AppendOnly,
+whose rows never change). Today: sides, payment accounts, stock locations and staff members' jobs. Each must carry
+the trigger that writes control.EditEvent, put there by RecordEdits in its migration (apps/control/operations.py):
+switched on, and recording the table's own type code from apps/core/links.py, so its history rows load back. The
+few that keep their history another way are listed, each with its reason, in NO_EDIT_HISTORY
+(backend/tests/sweep_lists.py), which changes only by a decision written on a card.
 
 This module asks Django for those tables itself, as the tenancy sweep does (test_tenancy_sweep.py), so a new
 office table that forgets (products, contacts, roles, devices) turns CI red with no change here. The check is a
@@ -18,21 +20,28 @@ from django.apps import apps
 from django.db import connection, models
 
 from apps.core.links import LINK_TYPES
-from apps.core.models import Editable
-from apps.people.models import StaffMember
+from apps.core.models import AppendOnly, ShopScoped
 from tests.probe.models import Card, Note
+from tests.sweep_lists import NO_EDIT_HISTORY
 
 pytestmark = pytest.mark.django_db
 
 
-def office_tables() -> list[type[models.Model]]:
-    # Every Editable table of our apps (backend/apps/; the test-only probe app is not one), and StaffMember.
-    editable = [
+def changeable_tables() -> list[type[models.Model]]:
+    # Every shop table of our apps (backend/apps/; the test-only probe app is not one) whose rows can change: built
+    # on ShopScoped, and not a ledger. Editable tables are among them, and so are older ones like StaffMember.
+    return [
         table
         for table in apps.get_models()
-        if issubclass(table, Editable) and table._meta.app_config.name.startswith("apps.")
+        if table._meta.app_config.name.startswith("apps.")
+        and issubclass(table, ShopScoped)
+        and not issubclass(table, AppendOnly)
     ]
-    return [*editable, StaffMember]
+
+
+def office_tables() -> list[type[models.Model]]:
+    # The ones that must keep an edit history: all of them, but the few listed with their reason.
+    return [table for table in changeable_tables() if table._meta.label not in NO_EDIT_HISTORY]
 
 
 def history_problems(tables: Iterable[type[models.Model]]) -> list[str]:
@@ -63,9 +72,13 @@ def history_problems(tables: Iterable[type[models.Model]]) -> list[str]:
 
 def test_every_office_table_records_its_edits() -> None:
     tables = office_tables()
-    # Not looking at nothing: the sides and the staff are office tables today.
-    assert {"shops.Side", "people.StaffMember"} <= {table._meta.label for table in tables}
+    # Not looking at nothing: these are office tables today.
+    assert {"shops.Side", "shops.PaymentAccount", "shops.StockLocation", "people.StaffMember"} <= {
+        table._meta.label for table in tables
+    }
     assert history_problems(tables) == []
+    # And no table is listed that isn't a changeable shop table any more: a stale entry would let a new one in unseen.
+    assert set(NO_EDIT_HISTORY) <= {table._meta.label for table in changeable_tables()}
 
 
 def test_history_check_finds_tables_that_lose_it(monkeypatch: pytest.MonkeyPatch) -> None:

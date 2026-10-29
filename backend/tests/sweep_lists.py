@@ -1,7 +1,8 @@
-"""backend/tests/sweep_lists.py — the tenancy sweep's allowed lists: the tables and routes that may break one
-of its rules, each one on purpose and with its reason (backend/tests/test_tenancy_sweep.py).
+"""backend/tests/sweep_lists.py — the sweeps' allowed lists: the tables, routes and files that may break one of
+their rules, each one on purpose and with its reason. Most are the tenancy sweep's
+(backend/tests/test_tenancy_sweep.py); the last is the edit history's (backend/tests/test_edit_history.py).
 
-The sweep's checks are never loosened, nor edited, to let a table or a route pass; these lists change
+The sweeps' checks are never loosened, nor edited, to let a table or a route pass; these lists change
 instead, and only by a decision written on a card, as a table with no `shop` changes rule T1 (02 §16). Each
 entry carries its reason, and the card that put it there. Teaching the sweep something new, such as calling
 the sync routes with a device's key, is a new check instead, added in a reviewed change (backend rules).
@@ -65,4 +66,15 @@ RAW_SQL = {
     # Tells PostgreSQL who acts in an office visit, for the trigger that records office edits: its SQL reads and
     # writes one setting of the database session, never a table (CTRL-2, ADR-0036).
     "apps/core/acting.py": "current_setting and set_config on the session's `mpc.staff_id`, never a table",
+}
+
+# The shop tables people change that keep no edit history of their own trigger (ADR-0036): table → why. Every other
+# shop table that is not a ledger (AppendOnly) must carry it (backend/tests/test_edit_history.py), so a new office
+# record, such as a product or a contact, can't forget it.
+NO_EDIT_HISTORY = {
+    # A flag keeps its own history: each step is a FlagNote with who, when and why, and its own trigger keeps its facts
+    # as raised (apps/control/operations.py, CTRL-1).
+    "control.Flag": "its notes are its history, and its own trigger keeps its facts",
+    # A link row, made when an account starts serving a side: nothing in it is ever edited, only its two links.
+    "shops.PaymentAccountSide": "a link row, made and never edited",
 }

@@ -40,6 +40,9 @@ LINK_TYPES: dict[str, str] = {
     "staff": "people.StaffMember",
     # A side: the history of its edits, such as a new name (CTRL-2).
     "side": "shops.Side",
+    # A payment account and a stock location: the history of their edits, such as a till's new number (CTRL-2).
+    "payment_account": "shops.PaymentAccount",
+    "stock_location": "shops.StockLocation",
 }
 
 
