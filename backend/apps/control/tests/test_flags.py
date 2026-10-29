@@ -275,12 +275,10 @@ def test_flag_notes_cannot_be_edited(shop_a: Model, flag: Flag, staff_a: Actor) 
     # Plain SQL, which no model code sees: only the trigger is left to refuse it. (The table's name comes from
     # the model, not from outside, so building the SQL with it is safe; the values are parameters.)
     table = FlagNote._meta.db_table
-    for sql, values in [
-        (f"UPDATE {table} SET text = %s WHERE id = %s", ["Sikukosea", note.pk]),
-        (f"DELETE FROM {table} WHERE id = %s", [note.pk]),
-    ]:
-        with pytest.raises(IntegrityError, match="append-only"), transaction.atomic(), connection.cursor() as cursor:
-            cursor.execute(sql, values)
+    with pytest.raises(IntegrityError, match="append-only"), transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute(f"UPDATE {table} SET text = %s WHERE id = %s", ["Sikukosea", note.pk])
+    with pytest.raises(IntegrityError, match="append-only"), transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute(f"DELETE FROM {table} WHERE id = %s", [note.pk])
 
     note.refresh_from_db()
     assert note.text == "Nilitoa chenji zaidi"
