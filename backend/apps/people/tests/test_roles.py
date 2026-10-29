@@ -37,6 +37,8 @@ def test_one_role_per_template_per_shop(shop_a: Shop, shop_b: Shop) -> None:
         second = Role(shop=shop_a, template=RoleTemplate.MANAGER, permissions=[Permission.SALE_WRITE])
         with pytest.raises(ValidationError) as refused:
             second.full_clean()
+        with pytest.raises(IntegrityError, match="people_role_one_per_template"), transaction.atomic():
+            second.save()
     assert [error.code for error in refused.value.error_dict["__all__"]] == ["role.template_taken"]
     with shop_context(shop_b):
         Role(shop=shop_b, template=RoleTemplate.MANAGER, permissions=[Permission.SALE_WRITE]).full_clean()
@@ -65,9 +67,29 @@ def test_extra_permission_known_and_given_once(shop_a: Shop, side_a: Side, staff
         with pytest.raises(ValidationError) as refused:
             typo.full_clean()
         assert [error.code for error in refused.value.error_dict["__all__"]] == ["permission.unknown"]
+        with pytest.raises(IntegrityError, match="people_permissiongrant_permission_known"), transaction.atomic():
+            typo.save()
         for side in (side_a, None):
             PermissionGrant(shop=shop_a, staff=staff_a, permission=Permission.STOCK_COUNT, side=side).save()
             again = PermissionGrant(shop=shop_a, staff=staff_a, permission=Permission.STOCK_COUNT, side=side)
             with pytest.raises(ValidationError) as refused:
                 again.full_clean()
             assert [error.code for error in refused.value.error_dict["__all__"]] == ["permission.already_given"]
+            with pytest.raises(IntegrityError, match="people_permissiongrant_once"), transaction.atomic():
+                again.save()
+
+
+@pytest.mark.parametrize(
+    ("fields", "rule"),
+    [
+        # Code that saves directly skips full_clean, so these reach the database as typed.
+        pytest.param({"template": "boss"}, "people_role_template_known", id="template_unknown"),
+        pytest.param({"template": "", "name": ""}, "people_role_named", id="no_name"),
+    ],
+)
+def test_database_refuses_a_role_that_breaks_a_rule(shop_a: Shop, fields: dict[str, object], rule: str) -> None:
+    # One run per rule in Role.Meta not tested above, each naming the rule it expects: a refusal by another rule would
+    # hide a broken one. "boss" is no template; a role with neither a template nor a name has nothing to show.
+    seller = {"template": RoleTemplate.SELLER, "permissions": [Permission.SALE_WRITE]}
+    with shop_context(shop_a), pytest.raises(IntegrityError, match=rule):
+        Role.objects.create(shop=shop_a, **{**seller, **fields})
