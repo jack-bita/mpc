@@ -8,6 +8,8 @@ An office route builds on ShopViewSet: `class SideViewSet(ShopViewSet[Side])`.
   before any check reads a table, the view opens that shop (shop_context) and keeps it open for the whole
   visit, the error answer included. It closes it however the visit ends, so the next visit on the same
   server worker starts with no shop. A visit whose login names no shop, or no staff member, is refused.
+- Who acts. Right after the shop, the view tells PostgreSQL who acts for the visit (apps/core/acting.py), so
+  the trigger that records every office edit names them (03 §5.16), and takes it back as the visit ends.
 - The rows. get_queryset() builds them from the guarded manager on each visit, inside the open shop, so
   the guard filters them to that shop (ADR-0022). A table's rows can't be named in the class body, as DRF
   allows (`queryset = Side.objects.all()`): that would ask for a shop while the module loads, and raise.
@@ -37,6 +39,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from apps.core.acting import acting_as
 from apps.core.models import Editable, ShopScoped
 from apps.core.tenancy import Actor, shop_context
 
@@ -47,14 +50,15 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
     # Who acts in this visit, from login: a staff member of the visit's shop, whom the services record as
     # who made or changed a row.
     actor: Actor
-    # The visit's stack of things to close when it ends: the open shop. Set in dispatch(), once per visit;
-    # DRF makes a new view object for every visit, so two visits never share it.
+    # The visit's stack of things to close when it ends: the open shop, and who acts as PostgreSQL knows it.
+    # Set in dispatch(), once per visit; DRF makes a new view object for every visit, so two visits never
+    # share it.
     _visit: ExitStack
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         # DRF's whole visit runs inside this `with`: login, checks, the action, and the error answer if
-        # one is raised. perform_authentication() below opens the shop on the stack; leaving the `with`
-        # closes it, however the visit ends. (DRF turns the answer into bytes only after this returns.
+        # one is raised. perform_authentication() below opens the shop and who acts on the stack; leaving
+        # the `with` closes both, however the visit ends. (DRF turns the answer into bytes only after this returns.
         # By then its data is already built, so nothing reads a table with the shop closed.)
         with ExitStack() as self._visit:
             return super().dispatch(request, *args, **kwargs)
@@ -75,6 +79,9 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         self._visit.enter_context(shop_context(shop_id))
         # cast: DRF's type stubs know only its own Token model in `request.auth`; ours carries a shop.
         self.actor = cast(Actor, request.auth)
+        # Opened after the shop, so it closes first, as the visit ends. Every edit the visit makes to an office
+        # table is then recorded with this staff member's name, whichever service makes it (ADR-0036).
+        self._visit.enter_context(acting_as(self.actor))
 
     def get_queryset(self) -> models.QuerySet[M]:
         if getattr(self, "swagger_fake_view", False):
