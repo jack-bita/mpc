@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
 
-**Changes in v1.12** (29 Oct 2026, PPL-3): a new shop gets its role templates from a `people` service, `set_up_shop`, which makes the shop with `create_shop` and then copies them, in one transaction: `create_shop` lives in `shops`, which may not import `people`, where the `Role` table lives (ADR-0035). A shop made by `create_shop` alone has no roles, so nobody may act there: forgetting fails closed (§5.8, §9). Marked **(v1.12)**.
+**Changes in v1.12** (29 Oct 2026, PPL-3): a new shop gets its role templates from a `people` service, `set_up_shop`, which makes the shop with `create_shop` and then copies them, in one transaction: `create_shop` lives in `shops`, which may not import `people`, where the `Role` table lives (ADR-0035). A shop made by `create_shop` alone has no roles, so nobody may act there: forgetting fails closed (§5.8, §9). Weighing a delivery as it arrives works offline, with no buying price (Jack, 02 v1.10; §6.9). Marked **(v1.12)**.
 
 **Changes in v1.11** (29 Oct 2026, CTRL-2): office edits are recorded by a trigger of our own into one append-only table, `control.EditEvent`, not by django-pghistory, whose tables have no shop guard (Jack, while planning CTRL-2; ADR-0036). Each office visit tells PostgreSQL who acts, for that trigger. PostgreSQL 18 is now needed: the trigger makes ids with `uuidv7()` (§3, §5.4, §5.6, §5.16). After CTRL-2's review: the visit also tells PostgreSQL its shop, and the trigger refuses an edit of another shop's row; only the trigger writes the history, at each edit's own time; and every shop table people change keeps one, payment accounts and stock locations included (Jack). Marked **(v1.11)**.
 
@@ -503,7 +503,7 @@ Each pull returns the server time; the device stores its clock offset. Documents
 
 ### 6.9 What works offline
 
-As 02 §17: one-screen sales, payments, debt repayments, quick-add customer, drawer money movements, and clock-in and out [R1b]. Also PIN approvals (02 §5) and **opening the drawer** ✚ (selling shouldn't wait for the internet; two openings for one drawer → Flag). Everything else shows *Inahitaji mtandao* (needs internet).
+As 02 §17: one-screen sales, payments, debt repayments, quick-add customer, drawer money movements, and clock-in and out [R1b]. Also PIN approvals (02 §5) and **opening the drawer** ✚ (selling shouldn't wait for the internet; two openings for one drawer → Flag). Also **weighing a delivery as it arrives**, a few sacks at a time, added up on the device, with no buying price (02 §7) **(v1.12)**. Everything else shows *Inahitaji mtandao* (needs internet).
 
 ### 6.10 Foods hand-off [R2] (AD16)
 
