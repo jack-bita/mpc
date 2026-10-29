@@ -33,7 +33,7 @@ from apps.control.models import Flag, FlagKind, FlagNote, FlagPerson, FlagStatus
 from apps.control.services import dismiss_flag, explain_flag, raise_flag, resolve_flag
 from apps.core.links import LINK_TYPES
 from apps.core.models import AppendOnlyError, ShopScoped
-from apps.core.tenancy import Actor, ShopMismatch, shop_context
+from apps.core.tenancy import Actor, ShopMismatch, shop_context, system_context
 from tests.probe.models import Note
 
 pytestmark = pytest.mark.django_db
@@ -339,6 +339,39 @@ def test_flag_links_stay_in_one_shop(
         # Only E4's flag, from the fixture: every refusal above wrote nothing, and moved nothing.
         assert list(Flag.objects.values_list("pk", "status")) == [(flag.pk, FlagStatus.OPEN)]
         assert notes_of(flag) == []
+
+
+def test_nightly_job_raises_each_shops_flags(shop_a: Model, shop_b: Model, staff_b: Actor) -> None:
+    # A nightly check (03 §5.7) runs under system_context(), with every shop open, and raises a flag in each
+    # shop it finds a problem in: here a cache that no longer matches its ledger, in both shops at once.
+    shop_a_row = Note(shop_id=shop_a.pk, text="Salio la mteja, MFANO")
+    shop_b_row = Note(shop_id=shop_b.pk, text="Salio la mteja, JINGINE")
+    shop_a_row.save()
+    shop_b_row.save()
+    with system_context():
+        flag_a = raise_flag(
+            kind=FlagKind.BALANCE_MISMATCH,
+            subject=shop_a_row,
+            expected=Decimal("70000.00"),
+            actual=Decimal("0"),
+            by=None,
+        )
+        flag_b = raise_flag(
+            kind=FlagKind.BALANCE_MISMATCH,
+            subject=shop_b_row,
+            expected=Decimal("5000.00"),
+            actual=Decimal("0"),
+            by=None,
+        )
+        # Every shop open is no shop's door to another: T1 still holds, so shop B's seller can't be named on
+        # shop A's flag.
+        with pytest.raises(ShopMismatch):
+            raise_flag(kind=FlagKind.BALANCE_MISMATCH, subject=shop_a_row, people=[staff_b], by=None)
+
+    # Each flag belongs to its subject's shop, and each shop sees only its own.
+    assert (flag_a.shop_id, flag_b.shop_id) == (shop_a.pk, shop_b.pk)
+    with shop_context(shop_a):
+        assert list(Flag.objects.values_list("pk", flat=True)) == [flag_a.pk]
 
 
 def test_flag_note_required(shop_a: Model, flag: Flag, staff_a2: Actor) -> None:
