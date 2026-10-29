@@ -12,7 +12,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from apps.core.permissions import ROLE_TEMPLATES, Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import PermissionGrant, Role, RoleAssignment, StaffMember
-from apps.people.services import assign_role, copy_role_templates, grant_permission, mark_left
+from apps.people.services import assign_role, copy_role_templates, grant_permission, mark_left, suspend
 from apps.shops.models import Shop, Side
 
 pytestmark = pytest.mark.django_db
@@ -136,3 +136,26 @@ def test_giver_check_reads_the_role_as_stored(shop_a: Shop, staff_a: StaffMember
         with pytest.raises(PermissionDenied):
             assign_role(staff_a, owner, side=None, by=staff_a2)
         assert not RoleAssignment.objects.filter(staff=staff_a).exists()
+
+
+def test_suspended_or_departed_giver_gives_nothing(
+    shop_a: Shop, side_a: Side, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # A giver's roles count only while they work. Staff A2, an owner, is suspended, then leaves; staff_a2 is still the
+    # copy loaded before, which says "active", so the check must read the giver from the database (X2).
+    with shop_context(shop_a):
+        roles = copy_role_templates(shop_a)
+        assign_role(staff_a2, roles[RoleTemplate.OWNER], side=None, by=None)
+
+        def gives_nothing() -> None:
+            with pytest.raises(PermissionDenied):
+                assign_role(staff_a, roles[RoleTemplate.WORKER], side=side_a, by=staff_a2)
+            with pytest.raises(PermissionDenied):
+                grant_permission(staff_a, Permission.STOCK_COUNT, side=side_a, by=staff_a2)
+
+        suspend(staff_a2, by=None, reason="Missed three days of work")
+        gives_nothing()
+        mark_left(staff_a2, left_on=staff_a2.started_on, by=None, reason="Moved to another town")
+        gives_nothing()
+        assert not RoleAssignment.objects.filter(staff=staff_a).exists()
+        assert not PermissionGrant.objects.filter(staff=staff_a).exists()
