@@ -8,8 +8,9 @@ An office route builds on ShopViewSet: `class SideViewSet(ShopViewSet[Side])`.
   before any check reads a table, the view opens that shop (shop_context) and keeps it open for the whole
   visit, the error answer included. It closes it however the visit ends, so the next visit on the same
   server worker starts with no shop. A visit whose login names no shop, or no staff member, is refused.
-- Who acts. Right after the shop, the view tells PostgreSQL who acts for the visit (apps/core/acting.py), so
-  the trigger that records every office edit names them (03 §5.16), and takes it back as the visit ends.
+- Who acts. Right after the shop, the view tells PostgreSQL who acts for the visit, and its shop
+  (apps/core/acting.py), so the trigger that records every office edit names them and refuses an edit of another
+  shop's row (03 §5.16), and takes both back as the visit ends.
 - The rows. get_queryset() builds them from the guarded manager on each visit, inside the open shop, so
   the guard filters them to that shop (ADR-0022). A table's rows can't be named in the class body, as DRF
   allows (`queryset = Side.objects.all()`): that would ask for a shop while the module loads, and raise.
@@ -80,7 +81,8 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         # cast: DRF's type stubs know only its own Token model in `request.auth`; ours carries a shop.
         self.actor = cast(Actor, request.auth)
         # Opened after the shop, so it closes first, as the visit ends. Every edit the visit makes to an office
-        # table is then recorded with this staff member's name, whichever service makes it (ADR-0036).
+        # table is then recorded with this staff member's name, whichever service makes it, and an edit of another
+        # shop's row is refused (ADR-0036, T1).
         self._visit.enter_context(acting_as(self.actor))
 
     def get_queryset(self) -> models.QuerySet[M]:

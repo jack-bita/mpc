@@ -20,7 +20,7 @@ from django.db import connection, models
 from apps.core.links import LINK_TYPES
 from apps.core.models import Editable
 from apps.people.models import StaffMember
-from tests.probe.models import Entry, Note
+from tests.probe.models import Card, Note
 
 pytestmark = pytest.mark.django_db
 
@@ -70,15 +70,15 @@ def test_every_office_table_records_its_edits() -> None:
 
 def test_history_check_finds_tables_that_lose_it(monkeypatch: pytest.MonkeyPatch) -> None:
     # The check itself, handed a table of each kind it must find. A check that finds nothing would pass every table.
-    # Entry has no such trigger; Note has one (its probe migration), with a code the real list doesn't hold.
-    assert history_problems([Entry, Note]) == [
-        "probe.Entry: no edit history trigger",
-        "probe.Note: its trigger records 'probe_note', but LINK_TYPES gives []",
+    # Note has no such trigger; Card has one (its probe migration), with a code the real list doesn't hold.
+    assert history_problems([Note, Card]) == [
+        "probe.Note: no edit history trigger",
+        "probe.Card: its trigger records 'probe_card', but LINK_TYPES gives []",
     ]
-    # With its code listed, Note passes, until its trigger is switched off. (Inside the test's transaction, so the
+    # With its code listed, Card passes, until its trigger is switched off. (Inside the test's transaction, so the
     # rollback at the end switches it back on.)
-    monkeypatch.setitem(LINK_TYPES, "probe_note", "probe.Note")
-    assert history_problems([Note]) == []
+    monkeypatch.setitem(LINK_TYPES, "probe_card", "probe.Card")
+    assert history_problems([Card]) == []
     with connection.cursor() as cursor:
-        cursor.execute("ALTER TABLE probe_note DISABLE TRIGGER record_edits")
-    assert history_problems([Note]) == ["probe.Note: its edit history trigger is switched off"]
+        cursor.execute("ALTER TABLE probe_card DISABLE TRIGGER record_edits")
+    assert history_problems([Card]) == ["probe.Card: its edit history trigger is switched off"]

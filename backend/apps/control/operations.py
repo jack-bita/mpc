@@ -134,6 +134,10 @@ class FlagForwardOnlyTrigger(AppendOnlyTrigger):
 # The edit history's rule (03 §5.16, ADR-0036), stored in PostgreSQL as a function. A trigger runs it after each
 # UPDATE of a row of an office table, with OLD (the row before) and NEW (the row after), and two words of its own
 # (TG_ARGV, set by RecordEdits below): the table's type code (apps/core/links.py) and the columns never to copy.
+# - First, T1: an office visit told PostgreSQL its shop (`mpc.shop_id`, apps/core/acting.py), and the edited row must
+#   belong to it. If a bug elsewhere let shop A's visit change shop B's row, the edit itself is refused, so shop B's
+#   history never names shop A's person. Outside a visit the setting is empty ('' or never set: NULL), and a system
+#   job may work across shops (03 §5.11): no check. Checked before anything else, even an edit that changes nothing.
 # - `skipped`: those columns, plus the edit's own bookkeeping on an Editable row (`version`, `updated_at`,
 #   `updated_by_id`): the history row keeps who and when itself, and a version that moved says nothing to the
 #   owner. Missing columns are fine: `jsonb - text[]` takes out only the keys a row has.
@@ -151,12 +155,17 @@ RECORD_EDIT_FUNCTION = """
 CREATE OR REPLACE FUNCTION control_record_edit() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
+    acting_shop uuid := NULLIF(current_setting('mpc.shop_id', true), '')::uuid;
     skipped text[] := ARRAY['version', 'updated_at', 'updated_by_id'] || TG_ARGV[1]::text[];
     old_row jsonb := to_jsonb(OLD) - skipped;
     new_row jsonb := to_jsonb(NEW) - skipped;
     changed_from jsonb;
     changed_to jsonb;
 BEGIN
+    IF acting_shop IS NOT NULL AND acting_shop <> NEW.shop_id THEN
+        RAISE EXCEPTION 'UPDATE on % refused: the row belongs to another shop than the visit (T1)', TG_TABLE_NAME
+            USING ERRCODE = 'restrict_violation';
+    END IF;
     SELECT jsonb_object_agg(field, old_row ->> field), jsonb_object_agg(field, new_row ->> field)
         INTO changed_from, changed_to
         FROM jsonb_object_keys(new_row) AS field
