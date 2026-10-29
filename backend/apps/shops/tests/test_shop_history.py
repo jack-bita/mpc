@@ -22,6 +22,7 @@ from apps.control.models import EditEvent
 from apps.core.acting import acting_as
 from apps.core.tenancy import shop_context
 from apps.shops.models import PaymentAccount, PaymentAccountKind, Shop, Side
+from apps.shops.services import rename_side
 
 pytestmark = pytest.mark.django_db
 
@@ -57,3 +58,15 @@ def test_payment_account_number_change_recorded(shop_a: Shop, staff_a: Any) -> N
 
     assert edit.created_by_id == staff_a.pk
     assert (edit.before, edit.after) == ({"number": "0755000111"}, {"number": "0755999888"})
+
+
+def test_service_edit_names_its_by_outside_a_visit(staff_a: Any, shop_a: Shop, side_a: Side) -> None:
+    # A service takes who acts as `by` and records it as the side's `updated_by` (editing(), CORE-6). The history
+    # must name the same person, even where no visit told PostgreSQL anyone, as in a job or a command: two places
+    # for one fact must never disagree (02 v1.7).
+    with shop_context(shop_a):
+        renamed = rename_side(side_a, version=1, name="Dawa za Mifugo", by=staff_a)
+        [edit] = EditEvent.objects.filter(subject_type="side", subject_id=side_a.pk)
+
+    assert renamed.updated_by_id == staff_a.pk
+    assert edit.created_by_id == staff_a.pk
