@@ -27,6 +27,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Model
+from pytest_django import DjangoAssertNumQueries
 
 from apps.control.models import Flag, FlagKind, FlagNote, FlagPerson, FlagStatus, FlagStep
 from apps.control.services import dismiss_flag, explain_flag, raise_flag, resolve_flag
@@ -393,6 +394,19 @@ def test_a_retried_step_is_written_once(
             explain_flag(other, note="Nambari ilitumika mara mbili", by=staff_a, note_id=explanation_id)
         assert refused.value.code == "id.taken"
         assert notes_of(other) == []
+
+
+def test_a_step_checks_only_what_it_changes(
+    shop_a: Model, flag: Flag, staff_a: Actor, django_assert_max_num_queries: DjangoAssertNumQueries
+) -> None:
+    # A step writes one note and changes one column, the status. The flag's other fields were checked when
+    # it was raised, and the trigger keeps them as they were (apps/control/operations.py), so checking them
+    # all again cost a dozen queries a step, on a list a manager may close a page at a time (CTRL-4). The
+    # limit leaves no room for that. 18 = the step's transaction (2) and the lock (1); the new note's own
+    # checks, its links, its id and its two rules (10), and its insert (1); the status's one rule (3) and
+    # its update (1). Re-checking the whole flag took it to 29.
+    with shop_context(shop_a), django_assert_max_num_queries(18):
+        explain_flag(flag, note="Nilitoa chenji zaidi", by=staff_a)
 
 
 def test_flag_notes_cannot_be_edited(shop_a: Model, flag: Flag, staff_a: Actor) -> None:

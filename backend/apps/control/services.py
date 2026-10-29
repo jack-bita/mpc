@@ -154,7 +154,10 @@ def _step(flag: Flag, step: FlagStep, *, note: str, by: Actor, note_id: uuid.UUI
         _saved(written)
         # Each step's value is the status it leads to (apps/control/models.py, FlagStep).
         fresh.status = FlagStatus(step.value)
-        fresh.full_clean()
+        # Only the status changed, so only its own rule is checked again (control_flag_status_known). Every
+        # other field was checked when the flag was raised, and the trigger keeps them as they were
+        # (apps/control/operations.py): checking them all again cost a dozen queries a step.
+        fresh.full_clean(exclude=[field.name for field in Flag._meta.fields if field.name != "status"])
         fresh.save(update_fields=["status"])
     return fresh
 
