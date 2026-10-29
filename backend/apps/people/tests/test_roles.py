@@ -93,3 +93,16 @@ def test_database_refuses_a_role_that_breaks_a_rule(shop_a: Shop, fields: dict[s
     seller = {"template": RoleTemplate.SELLER, "permissions": [Permission.SALE_WRITE]}
     with shop_context(shop_a), pytest.raises(IntegrityError, match=rule):
         Role.objects.create(shop=shop_a, **{**seller, **fields})
+
+
+def test_role_name_trimmed(shop_a: Shop) -> None:
+    # A role an owner names: spaces around the name are dropped, as on a side's name, and a name of only spaces is no
+    # name at all, which a role from no template needs (role.name_blank).
+    with shop_context(shop_a):
+        helper = Role(shop=shop_a, name="  Msaidizi ", permissions=[Permission.SALE_WRITE])
+        helper.full_clean()
+        blank = Role(shop=shop_a, name="   ", permissions=[Permission.SALE_WRITE])
+        with pytest.raises(ValidationError) as refused:
+            blank.full_clean()
+    assert helper.name == "Msaidizi"
+    assert [error.code for error in refused.value.error_dict["__all__"]] == ["role.name_blank"]

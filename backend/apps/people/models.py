@@ -302,6 +302,12 @@ class Role(Editable):
     def __str__(self) -> str:
         return self.name or self.template
 
+    def clean(self) -> None:
+        # full_clean runs this before the rules in Meta: " Msaidizi " and "Msaidizi" are one name on screen, as for a
+        # side, and a name of only spaces becomes "", which people_role_named refuses on a role from no template.
+        super().clean()
+        self.name = (self.name or "").strip()
+
 
 class RoleAssignment(ShopScoped):
     # One role given to one person, on one side or on all of them (02 §5): Asha is Cashier on Vyakula. Who gave it,
