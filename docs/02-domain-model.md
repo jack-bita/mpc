@@ -20,9 +20,9 @@
 
 **Changes in v1.7** (27 Oct 2026, CORE-4): a setting and a price have no `set_by` column (§4, §6). Who set a value is the row's `created_by`, which every shop row has (§1): two columns for one fact could one day disagree (Jack, while planning CORE-4). §4 also says each setting key has a scope, as ADR-0013 does. From CORE-4's review, §4 says which row wins on one date, and that a side's row beats even an older shop row, so devices can pick the same row offline. Marked **(v1.7)**.
 
-**Changes in v1.9** (29 Oct 2026, CTRL-2): an audit event's `actor` and `at` are the row's `created_by` and `created_at` (§1), and it always has a reason (T3); its `device` and `approval` come with their tables. A new append-only record, `EditEvent`, keeps every change to an office record, written by the database itself (Jack, while planning CTRL-2; 03 §5.16, ADR-0036). T2 names it (§13, §16). Marked **(v1.9)**.
-
 **Changes in v1.8** (29 Oct 2026, CTRL-1): three decisions by Jack, made while building CTRL-1. A flag may be resolved or dismissed straight from `open`, always with a note, as a bank's reconciliation queue works. When a flag names several people, each may explain it, and every explanation is kept; a flag's notes are never edited. A person a flag names may explain it, but never close it: someone else decides (§13, §14). A new permission, `flag.review`, closes flags on a side (§5). Marked **(v1.8)**.
+
+**Changes in v1.9** (29 Oct 2026, CTRL-2): an audit event's `actor` and `at` are the row's `created_by` and `created_at` (§1), and it always has a reason (T3); its `device` and `approval` come with their tables. A new append-only record, `EditEvent`, keeps every change to an office record, written by the database itself (Jack, while planning CTRL-2; 03 §5.16, ADR-0036); payment accounts and stock locations are office records too (Jack, at CTRL-2's review). T2 names it (§13, §16). Marked **(v1.9)**.
 
 ---
 
@@ -442,7 +442,7 @@ Advances come from `MoneyMovement` `staff_advance` and are deducted in the next 
 **AuditEvent** [R1] — who did what: `actor`, `device`, `action`, `subject`, `before`, `after`, `reason`, `approval`, `at`. Append-only.
 - `actor` and `at` are the row's `created_by` and `created_at` (§1): empty `actor` when the system acts. A reason is always given (T3). `device` joins when a visit knows its device (AUTH-4), `approval` with the Approval table **(v1.9)**.
 
-**EditEvent** [R1] — one change to an office record (a staff member, a side; later products, contacts, roles and devices), written by the database itself, so no change can skip it: who (`created_by`), when (`created_at`), the record (`subject`), and the fields that changed, `before` and `after`. No reason: an action that needs one also writes an AuditEvent. A PIN hash is never copied. Append-only **(v1.9)**.
+**EditEvent** [R1] — one change to an office record (a staff member, a side, a payment account, a stock location; later products, contacts, roles and devices), written by the database itself, so no change can skip it: who (`created_by`), when (`created_at`), the record (`subject`), and the fields that changed, `before` and `after`. No reason: an action that needs one also writes an AuditEvent. A PIN hash is never copied. Append-only **(v1.9)**.
 
 **Attachment** [R1] — a photo or file on any record: supplier paper, expense receipt, clock-in photo. Photos taken offline upload later, Wi-Fi first.
 

@@ -10,13 +10,15 @@ cost-to-change: medium
 
 ## Context
 
-03 §5.16 wants every change to an office record kept, with the person who made it, by database triggers, so that no code path can skip it. Office records are staff members and sides today, and products, contacts, roles and devices later. 03 §3 named django-pghistory as the default tool. By default that library adds one event table per tracked table, copying every column. Those tables are not built on `ShopScoped`, their links use `DO_NOTHING` instead of `PROTECT`, and they have no shop guard. Its context table, which holds who acted, has no shop at all. CORE-7's tenancy sweep refuses all of this, rightly: shop B's code could read shop A's history.
+03 §5.16 wants every change to an office record kept, with the person who made it, by database triggers, so that no code path can skip it. Office records are staff members, sides, payment accounts and stock locations today, and products, contacts, roles and devices later. 03 §3 named django-pghistory as the default tool. By default that library adds one event table per tracked table, copying every column. Those tables are not built on `ShopScoped`, their links use `DO_NOTHING` instead of `PROTECT`, and they have no shop guard. Its context table, which holds who acted, has no shop at all. CORE-7's tenancy sweep refuses all of this, rightly: shop B's code could read shop A's history.
 
 ## Decision
 
 - One append-only table, `control.EditEvent`, built on `AppendOnly` like every ledger. Each row holds the shop, who (`created_by`), when (`created_at`), the row that changed (a type code and its UUID, 03 §5.1), and the columns that changed, before and after, every value as text.
-- One trigger function of our own, `control_record_edit()`, which each office table's migration puts on that table (`RecordEdits`). It runs after every UPDATE and writes a row only when something visible changed. Columns that must never be copied, such as a PIN hash, are skipped.
-- Each office visit tells PostgreSQL who acts (`set_config('mpc.staff_id', …)` in `apps/core/acting.py`), and the trigger reads it. Outside a visit nobody is named: the system acted.
+- One trigger function of our own, `control_record_edit()`, which each office table's migration puts on that table (`RecordEdits`). It runs after every UPDATE and writes a row only when something visible changed, at the edit's own time (`clock_timestamp()`). Columns that must never be copied, such as a PIN hash, are skipped.
+- Only that trigger writes the table: a guard refuses any other INSERT, so neither `bulk_create` nor SQL typed by hand can add a change nobody made.
+- Each office visit tells PostgreSQL who acts and its shop (`set_config('mpc.staff_id', …)` and `mpc.shop_id` in `apps/core/acting.py`), and the trigger reads both: it names the person, and refuses an edit of another shop's row (T1). A service that passes its own `by` tells PostgreSQL too. Outside a visit nobody is named: the system acted.
+- Every shop table that is not a ledger keeps a history, unless a short list names it with its reason (`NO_EDIT_HISTORY`): payment accounts and stock locations too (Jack, at CTRL-2's review).
 - The trigger's SQL is frozen once it is on `main`. A change is a new function (`control_record_edit_v2`), as with the ledgers' rules (ADR-0021).
 
 ## Consequences
@@ -37,7 +39,7 @@ cost-to-change: medium
 
 ## Enforced by
 
-- CTRL-2: `test_every_office_table_records_its_edits` (every `Editable` table, and `StaffMember`, has the trigger with its type code), `test_history_rows_append_only`, `test_edit_trigger_sql_never_changes_once_on_main`.
+- CTRL-2: `test_every_office_table_records_its_edits` (every shop table that is not a ledger has the trigger, built right, with its type code, and copies no secret column), `test_history_rows_append_only`, `test_only_the_trigger_writes_history`, `test_edit_of_another_shops_row_refused`, `test_edit_trigger_sql_never_changes_once_on_main`.
 - CORE-7's tenancy sweep, which checks `control.EditEvent` like every shop table.
 
 ## Related
