@@ -160,11 +160,12 @@ class AppendOnlyError(Exception):
 
 class AppendOnly(ShopScoped):
     # The base of every ledger table (03 §5.3; the list is 03 §5.6): stock movements, balance entries,
-    # allocations, payments, money movements, attendance events, audit events, the change log, and the
-    # dated rules: prices, product costs, settings and pay rates. A ledger is ShopScoped plus this: its
-    # rows are written once, and never changed or deleted (T2). Its migration adds the trigger that
-    # refuses the same in PostgreSQL (apps/core/operations.py), whatever sends the change; this class
-    # only stops the commonest mistake earlier, with a clear message, before the database is asked.
+    # allocations, payments, money movements, attendance events, audit events, a flag's notes and the
+    # people it names, the change log, and the dated rules: prices, product costs, settings and pay rates.
+    # A ledger is ShopScoped plus this: its rows are written once, and never changed or deleted (T2). Its
+    # migration adds the trigger that refuses the same in PostgreSQL (apps/core/operations.py), whatever
+    # sends the change; this class only stops the commonest mistake earlier, with a clear message, before
+    # the database is asked.
     # A base built on ShopScoped, not a mixin listed beside it, because a mixin can be listed wrong: a
     # plain Python mixin listed after ShopScoped never runs (Django's own save() comes first), and a
     # model mixin listed before it, with a Meta of its own, drops the shop guard (CORE-1). A base can't
