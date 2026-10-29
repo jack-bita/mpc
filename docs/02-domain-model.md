@@ -22,7 +22,7 @@
 
 **Changes in v1.8** (29 Oct 2026, CTRL-1): three decisions by Jack, made while building CTRL-1. A flag may be resolved or dismissed straight from `open`, always with a note, as a bank's reconciliation queue works. When a flag names several people, each may explain it, and every explanation is kept; a flag's notes are never edited. A person a flag names may explain it, but never close it: someone else decides (§13, §14). A new permission, `flag.review`, closes flags on a side (§5). Marked **(v1.8)**.
 
-**Changes in v1.10** (29 Oct 2026, PPL-3): a decision by Jack, made while planning PPL-3. Goods that arrive are weighed on the shop's scale before they go in, a few sacks at a time; the device adds up the sacks and the kg at once, offline too, and the stock goes in at the scale's kg (§7, §17). Weighing is its own permission, `stock.weigh`, which any role may have; completing the delivery with its buying prices stays `stock.receive`, because buying prices never go to devices (§5). Marked **(v1.10)**.
+**Changes in v1.10** (29 Oct 2026, PPL-3): a decision by Jack, made while planning PPL-3. Goods that arrive are weighed on the shop's scale before they go in, a few sacks at a time; the device adds up the sacks and the kg at once, offline too, and the stock goes in at the scale's kg (§7, §17). Weighing is its own permission, `stock.weigh`, which any role may have; completing the delivery with its buying prices stays `stock.receive`, because buying prices never go to devices (§5). Also from PPL-3: a role's fields, who may give a role or a permission (Jack), and what a person holds on a side and on the whole shop (§5). Marked **(v1.10)**.
 
 **Changes in v1.9** (29 Oct 2026, CTRL-2): an audit event's `actor` and `at` are the row's `created_by` and `created_at` (§1), and it always has a reason (T3); its `device` and `approval` come with their tables. A new append-only record, `EditEvent`, keeps every change to an office record, written by the database itself (Jack, while planning CTRL-2; 03 §5.16, ADR-0036); payment accounts and stock locations are office records too (Jack, at CTRL-2's review). T2 names it (§13, §16). Marked **(v1.9)**.
 
@@ -195,10 +195,15 @@ A full diagram for GitHub is in Appendix A.
 - PIN: 4 digits, not 1234 and not four of a kind, hashed with Argon2 plus a server secret (03 §5.9). `pin_changed_at` tells devices to drop their offline check. A person who has left gets none **(v1.4)**.
 
 **Role** [R1] → Shop — a named bundle of permissions. Copied from templates (Owner, Manager, Seller, Order writer, Cashier, Worker — spec §6); the owner can edit them.
+- `template` (the one it was copied from; blank for a role an owner makes later), `name` (blank on a copied role: the screens show the template's name), `permissions` (its codes, one list). One role per template per shop. The six templates hold what Jack chose for MPC; they live in code, beside the codes (03 §5.8) **(v1.10)**.
 
-**RoleAssignment** [R1] → StaffMember — `role` + `side` (empty = all sides).
+**RoleAssignment** [R1] → StaffMember — `role` + `side` (empty = all sides, a side added later included). Given once per side, "all sides" included, and never to someone who has left **(v1.10)**.
 
-**PermissionGrant** [R1] → StaffMember — one extra `permission` for one person, optionally on one `side`.
+**PermissionGrant** [R1] → StaffMember — one extra `permission` for one person, optionally on one `side`. Given once per side, as a role is **(v1.10)**.
+
+**Who may give** a role or a permission **(v1.10)**: someone with `staff.manage` on that side, and only codes they hold there themselves, so a manager handed `staff.manage` to add a loader can't make himself Owner (Jack, PPL-3). The system or the superuser sets up a shop's first owner.
+
+**What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again.
 
 **Permissions** are fixed codes in code (not a table):
 `sale.write` · `sale.take_payment` · `sale.hand_over` · `sale.bargain` (down to the floor) · `sale.below_floor_approve` · `sale.jumla_switch` · `sale.cancel` · `sale.refund` · `credit.give` · `credit.approve` · `debt.view` · `debt.adjust` · `price.change` · `cost.view` (buying prices, profit) · `product.manage` · `contact.manage` · `stock.receive` (complete a delivery, with its buying prices) · `stock.weigh` (weigh goods as they arrive: any role may have it, and it shows no buying price) **(v1.10)** · `stock.loss` · `stock.count` · `stock.count_approve` · `stock.transfer` · `money.expense` · `money.advance` · `money.withdraw` · `drawer.count` · `drawer.confirm` · `drawer.approve` (approve the day) · `staff.manage` · `attendance.manage` · `pay.run` · `pay.approve` · `settings.manage` · `device.manage` · `flag.review` (resolve or dismiss a side's flags) **(v1.8)** · `report.view` · `job.manage` (R2) · `production.run` (R2)
