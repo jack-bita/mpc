@@ -20,8 +20,11 @@ Each route is built to pass the sweep, or to break one of its checks in one way:
 - NoteDiaryViewSet shows the notes of one day, as a day's report will: it needs ?date=.
 - note_count is a plain view, built on no ShopViewSet, so the sweep could never call it as a shop: it must
   refuse such a route.
+- DeletableNoteViewSet and LeakyDeletableNoteViewSet take a DELETE, guarded and not; LeakyNoteByTextViewSet
+  crashes on a key both shops have.
 
-tests/probe/urls.py mounts them, and only the sweep's tests use that address list.
+tests/probe/urls.py mounts them, but for the last three, which have address lists of their own
+(urls_delete.py, urls_crash.py). Only the sweep's tests use these lists.
 """
 
 from typing import Any
@@ -186,6 +189,28 @@ class NoteTextSerializer(serializers.ModelSerializer[Note]):
 
 class LeakyNoteTextViewSet(LeakyNoteViewSet):
     serializer_class = NoteTextSerializer
+
+
+# For address lists of their own (tests/probe/urls_delete.py, urls_crash.py), apart from tests/probe/urls.py: a
+# leaky delete really deletes shop A's note, which the routes checked after it would miss, and a crash stops the
+# whole check, so neither may sit among the other routes.
+
+
+class DeletableNoteViewSet(mixins.DestroyModelMixin, NoteViewSet):
+    # Takes a DELETE, which an app route never would (rule 7: nothing is deleted), so that the sweep's DELETE is
+    # tried: through the guard, another shop's note is "not found".
+    pass
+
+
+class LeakyDeletableNoteViewSet(mixins.DestroyModelMixin, LeakyNoteViewSet):
+    # The same DELETE past the guard: it deletes shop A's note when shop B asks.
+    pass
+
+
+class LeakyNoteByTextViewSet(LeakyNoteViewSet):
+    # Finds a note by its text, past the guard: when both shops have a note with one text, it finds two, and
+    # crashes (MultipleObjectsReturned).
+    lookup_field = "text"
 
 
 def note_count(request: HttpRequest) -> JsonResponse:

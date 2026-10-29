@@ -57,7 +57,7 @@ from typing import Any
 import pytest
 from django.apps import apps
 from django.apps.registry import Apps
-from django.core.exceptions import FieldDoesNotExist
+from django.core.exceptions import FieldDoesNotExist, MultipleObjectsReturned
 from django.db import connection, models
 from django.http import HttpResponseBase
 from django.test.utils import isolate_apps
@@ -1353,6 +1353,41 @@ def test_route_check_tries_edits_of_shop_a_rows(
     assert f"shop A's row {note.pk}: PATCH answered 200, but 404 for an id no shop has" in problems["leaky-note-detail"]
     assert f"shop A's row {note.pk}: PUT answered 400, but 404 for an id no shop has" in problems["leaky-note-detail"]
     assert "note-detail" not in problems
+
+
+@pytest.mark.django_db
+def test_route_check_sends_a_delete_last(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_a: APIClient, staff_client_b: APIClient
+) -> None:
+    # The probe's delete routes, in an address list of their own (tests/probe/urls_delete.py). Through the guard,
+    # shop B's DELETE finds no note of A's; past it, it deletes A's note, answering 204 where a note no shop has
+    # gets a 404. The DELETE goes last of the route's requests, so the read and the edits before it found the
+    # note still there, and were caught too.
+    settings.ROOT_URLCONF = "tests.probe.urls_delete"
+    note = Note(shop=shop_a, text="Note of shop A")
+    note.save()
+
+    problems = route_problems(staff_client_a, staff_client_b, shop_a, shop_b)
+
+    leaky = problems["leaky-deletable-note-detail"]
+    assert f"shop A's row {note.pk}: DELETE answered 204, but 404 for an id no shop has" in leaky
+    assert f"shop A's row {note.pk}: GET answered 200, but 404 for an id no shop has" in leaky
+    assert "deletable-note-detail" not in problems
+
+
+@pytest.mark.django_db
+def test_a_crash_on_a_shared_key_turns_the_sweep_red(
+    settings: Settings, shop_a: Shop, shop_b: Shop, staff_client_a: APIClient, staff_client_b: APIClient
+) -> None:
+    # The probe's leaky route finds a note by its text past the guard (tests/probe/urls_crash.py). Both shops have
+    # a note "Shared", so it finds two, and crashes. The sweep doesn't catch the crash: the test client raises
+    # it in the test, so CI goes red, in Django's words rather than the sweep's.
+    settings.ROOT_URLCONF = "tests.probe.urls_crash"
+    Note(shop=shop_a, text="Shared").save()
+    Note(shop=shop_b, text="Shared").save()
+
+    with pytest.raises(MultipleObjectsReturned):
+        route_problems(staff_client_a, staff_client_b, shop_a, shop_b)
 
 
 @pytest.mark.django_db
