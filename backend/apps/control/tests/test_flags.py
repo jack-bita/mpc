@@ -248,6 +248,55 @@ def test_flag_numbers_come_in_pairs(shop_a: Model, drawer_day: Note) -> None:
         assert (duplicate.expected, duplicate.actual, duplicate.difference) == (None, None, None)
 
 
+@pytest.mark.parametrize(
+    ("rule", "bad_row"),
+    [
+        # A note of nothing: the services trim and refuse it first (flag.note_required).
+        (
+            "control_flagnote_text_not_blank",
+            lambda flag, person: FlagNote(shop_id=flag.shop_id, flag=flag, step="explained", text=""),
+        ),
+        # A note that opens a flag: no step does that, only raise_flag.
+        (
+            "control_flagnote_step_known",
+            lambda flag, person: FlagNote(shop_id=flag.shop_id, flag=flag, step="open", text="Tena"),
+        ),
+        # Asha named twice on one flag: raise_flag names each person once.
+        (
+            "control_flagperson_once",
+            lambda flag, person: FlagPerson(shop_id=flag.shop_id, flag=flag, staff_id=person.staff_id),
+        ),
+        # A status no screen knows: the services only ever set the four.
+        (
+            "control_flag_status_known",
+            lambda flag, person: Flag(
+                shop_id=flag.shop_id,
+                kind=flag.kind,
+                subject_type="probe_note",
+                subject_id=flag.subject_id,
+                status="closed",
+            ),
+        ),
+        # A table's code with a capital and a space: link_type_of hands out codes from the list only.
+        (
+            "control_flag_subject_type_shape",
+            lambda flag, person: Flag(
+                shop_id=flag.shop_id, kind=flag.kind, subject_type="Probe Note", subject_id=flag.subject_id
+            ),
+        ),
+    ],
+    ids=["blank_note", "note_that_opens", "person_twice", "unknown_status", "bad_type_code"],
+)
+def test_database_refuses_what_the_services_check_first(
+    flag: Flag, staff_a: Actor, rule: str, bad_row: Callable[[Flag, Actor], Model]
+) -> None:
+    # The services refuse each of these before the database is asked, so no other test reaches the database's
+    # own rule: dropped from the migration, it would leave every test green. Here the row is saved directly, as a
+    # bug or SQL typed by hand would, past the service and every check: the database is the last guard (03 §5.6).
+    with pytest.raises(IntegrityError, match=rule), transaction.atomic():
+        bad_row(flag, staff_a).save()
+
+
 def test_flag_links_stay_in_one_shop(
     shop_a: Model,
     shop_b: Model,
