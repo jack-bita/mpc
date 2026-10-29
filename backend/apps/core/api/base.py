@@ -90,7 +90,9 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
     # Where a row keeps its side, read by both side hooks: `side` on most tables; the link's own name on a
     # table that names it otherwise (a device's `home_side`); "pk" on a route whose rows are sides themselves
     # (SideViewSet); None on a table whose rows belong to the whole shop, such as products. A name the table
-    # doesn't have fails loudly, instead of quietly passing every row off as one of the whole shop.
+    # doesn't have fails loudly on a read or an edit (side_of() reads the link's id), but quietly on a create:
+    # side_of_new() looks for it in what was sent, finds nothing, and checks the new row as one of the whole
+    # shop. So CORE-7's sweep checks every route's name against its table (test_every_side_link_is_named_on_its_route).
     side_field: str | None = "side"
 
     def visible_sides(self, request: Request) -> Collection[uuid.UUID] | None:
