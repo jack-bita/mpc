@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.9 · 28 Oct 2026 · Portion 3 of the planning pack
+**Version:** 1.10 · 29 Oct 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.10** (29 Oct 2026, CTRL-1): the type codes of generic links are one list in `core`, and each card adds the tables its links point at (§5.1). A flag's notes are append-only, like the ledgers (§5.6, 02 v1.8). Marked **(v1.10)**.
 
 **Changes in v1.9** (28 Oct 2026, CORE-7): an app keeps its background tasks in `tasks.py`. With management commands, that is the only code that may open every shop with `system_context()`, and CORE-7's sweep checks it (§5.2, §5.11). Marked **(v1.9)**.
 
@@ -240,7 +242,7 @@ An app may import only from layers below it. Same-layer imports are allowed only
 | 6 | `sync` ✚ | Push, pull and bootstrap endpoints, device sequence tracking, the document router |
 | 6 | `reports` ✚ | Daily report, exports; read-only queries across apps |
 
-Models may point at models in higher layers by name (Django's lazy `"app.Model"` references) — that is not an import. Generic links (a ledger row's `source`, a flag's `subject`) are stored as a short type code plus a UUID ✚: readable, and stable across databases.
+Models may point at models in higher layers by name (Django's lazy `"app.Model"` references) — that is not an import. Generic links (a ledger row's `source`, a flag's `subject`) are stored as a short type code plus a UUID ✚: readable, and stable across databases. The codes are one list in `core` (`apps/core/links.py`), as the setting keys are: a code, once stored, never changes or names another table, and each card adds the tables its links point at. Not Django's content types, whose ids differ from one database to the next **(v1.10)**.
 
 ### 5.2 Inside an app
 
@@ -312,7 +314,7 @@ Confirming a one-screen sale:
 
 - A migration helper adds a trigger to each ledger table that raises an error on UPDATE or DELETE.
 - **Payments, money movements and attendance events** allow exactly one change: filling the void stamp (`voided_at`, `voided_by`, `void_reason`, `void_approval`) once. Every other column must stay equal (the trigger compares the old and new rows as JSON, without those columns). For attendance events this is 02 §12's `void` (by, reason) **(v1.1)**.
-- Covered tables: stock movements, balance entries, allocations, attendance events (void only), audit events, the change log, payments and money movements (void only), and the dated-rule tables — prices, product costs, settings, pay rates ✚.
+- Covered tables: stock movements, balance entries, allocations, attendance events (void only), audit events, flag notes **(v1.10)**, the change log, payments and money movements (void only), and the dated-rule tables — prices, product costs, settings, pay rates ✚.
 - Tests prove that an UPDATE fails.
 
 ### 5.7 Caches and nightly checks

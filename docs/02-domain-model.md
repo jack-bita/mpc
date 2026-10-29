@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.7 · 27 Oct 2026 · Portion 2 of the planning pack
+**Version:** 1.8 · 29 Oct 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -19,6 +19,8 @@
 **Changes in v1.6** (27 Oct 2026, CORE-3): a payment has no `status` column (§10). It is void once its void stamp is filled, and valid until then. CORE-3's trigger lets a void change the stamp and nothing else (03 §5.6), so a separate status could never be set (Jack, while building CORE-3). Marked **(v1.6)**.
 
 **Changes in v1.7** (27 Oct 2026, CORE-4): a setting and a price have no `set_by` column (§4, §6). Who set a value is the row's `created_by`, which every shop row has (§1): two columns for one fact could one day disagree (Jack, while planning CORE-4). §4 also says each setting key has a scope, as ADR-0013 does. From CORE-4's review, §4 says which row wins on one date, and that a side's row beats even an older shop row, so devices can pick the same row offline. Marked **(v1.7)**.
+
+**Changes in v1.8** (29 Oct 2026, CTRL-1): two decisions by Jack, made while planning CTRL-1. A flag may be resolved or dismissed straight from `open`, always with a note, as a bank's reconciliation queue works. When a flag names several people, each may explain it, and every explanation is kept; a flag's notes are never edited (§13, §14). Marked **(v1.8)**.
 
 ---
 
@@ -430,6 +432,8 @@ Advances come from `MoneyMovement` `staff_advance` and are deducted in the next 
 - `kind`: `cash_difference` · `count_difference` · `delivery_difference` · `transfer_difference` · `negative_stock` · `duplicate_code` · `late_record` · `unverified_time` · `missing_clock_out` · `suspended_staff_activity` · `device_gap` · `balance_mismatch` · `open_bag_difference` · `production_loss` · `total_mismatch` · `permission_break` · `drawer_conflict` **(v1.1)** · …
 - `subject`, `expected`, `actual`, `difference`, `people`, `side`
 - `status`: `open` → `explained` → `resolved` | `dismissed` (by, note)
+- A manager who finds the reason may resolve or dismiss a flag straight from `open`, with their own note. `resolved` and `dismissed` are final **(v1.8)**.
+- Each step is a note, with who and when. Every explanation is kept: each person a flag names may write their own, and none replaces another. Closing a flag needs a note too. Notes are never edited **(v1.8)**.
 - Low stock and expiring batches are **alerts** (lists), not flags: nobody has to explain them.
 
 **AuditEvent** [R1] — who did what: `actor`, `device`, `action`, `subject`, `before`, `after`, `reason`, `approval`, `at`. Append-only.
@@ -472,7 +476,7 @@ stateDiagram-v2
 - **Transfer** [R2]: `sent` → `received` | `cancelled` (before received).
 - **Job** [R2]: `waiting` → `in_progress` → `ready` → `collected`; `cancelled` before ready (the customer's goods go back).
 - **PayRun** [R1b]: `draft` → `approved` → `paid`.
-- **Flag:** `open` → `explained` → `resolved` | `dismissed`.
+- **Flag:** `open` → `explained` → `resolved` | `dismissed`; it may also close straight from `open` **(v1.8)**.
 - **StaffMember:** `active` ⇄ `suspended` → `left`. **Product, Contact:** `active` ⇄ `archived`. **PaymentAccount:** `active` ⇄ `archived` **(v1.5)**. **Device:** `pending` → `active` ⇄ `blocked`.
 
 ## 15. Calculations
