@@ -18,7 +18,7 @@ import uuid
 from dataclasses import dataclass
 
 import pytest
-from django.db import connection
+from django.db import DataError, connection, transaction
 from django.urls import path
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -71,6 +71,21 @@ def test_acting_as_puts_back_who_acted_before() -> None:
             raise RuntimeError("The visit failed.")
         assert told() == (str(owner.staff_id), str(shop))
 
+    assert told() == ("", "")
+
+
+def test_acting_as_leaves_a_failed_transaction_to_its_rollback() -> None:
+    # A query that fails inside a transaction leaves it broken: PostgreSQL refuses every query after it until the
+    # rollback. Putting the old values back with a query then would fail too, and its error would hide the real one.
+    # The rollback puts them back anyway, since they were changed inside the same transaction.
+    owner = Someone(uuid.uuid7(), uuid.uuid7())
+    with (
+        pytest.raises(DataError, match="division by zero"),
+        transaction.atomic(),
+        acting_as(owner),
+        connection.cursor() as cursor,
+    ):
+        cursor.execute("SELECT 1 / 0")
     assert told() == ("", "")
 
 

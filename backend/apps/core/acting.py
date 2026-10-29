@@ -26,6 +26,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from django.db import connection
+from psycopg.pq import TransactionStatus
 
 from apps.core.tenancy import Actor
 
@@ -46,7 +47,21 @@ def acting_as(actor: Actor) -> Iterator[None]:
     try:
         yield
     finally:
-        _write(staff_before, shop_before)
+        # Not after a query failed inside the transaction: PostgreSQL refuses every query until the rollback, so
+        # writing would fail too, and its error would hide the real one. The rollback puts the old values back
+        # itself: they were changed inside that same transaction, since a `with` block opened inside it ends first.
+        if not _transaction_failed():
+            _write(staff_before, shop_before)
+
+
+def _transaction_failed() -> bool:
+    # Django knows a transaction must roll back (needs_rollback) once an atomic block inside it has failed;
+    # PostgreSQL knows from the first failed query (INERROR), even before any block has ended. Either one is enough.
+    if connection.needs_rollback:
+        return True
+    # The psycopg connection under Django's; None until the first query opens it.
+    raw = connection.connection
+    return raw is not None and raw.info.transaction_status == TransactionStatus.INERROR
 
 
 def _read() -> tuple[str, str]:
