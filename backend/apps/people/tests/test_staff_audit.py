@@ -15,12 +15,15 @@ Every test works inside `shop_context(shop)`, as a visit will. Fake data only: t
 """
 
 from datetime import date
+from typing import Any
 
 import pytest
 from django.core.exceptions import ValidationError
 
-from apps.control.models import AuditAction, AuditEvent
+from apps.control.models import AuditAction, AuditEvent, EditEvent
+from apps.control.services import audit
 from apps.core.tenancy import shop_context
+from apps.people import services
 from apps.people.models import StaffMember, StaffStatus, User
 from apps.people.services import add_staff, mark_left, suspend, unsuspend
 from apps.shops.models import Shop
@@ -80,7 +83,9 @@ def test_unsuspend_and_leave_write_audit_events(shop_a: Shop, asha: StaffMember,
     )
 
 
-def test_refused_action_writes_no_audit_event(shop_a: Shop, asha: StaffMember, staff_a: StaffMember) -> None:
+def test_refused_action_writes_no_audit_event(
+    shop_a: Shop, asha: StaffMember, staff_a: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # A refused action writes no line, and a line that can't be written undoes its action: one transaction holds
     # both, so they are kept together or not at all.
     with shop_context(shop_a):
@@ -94,10 +99,20 @@ def test_refused_action_writes_no_audit_event(shop_a: Shop, asha: StaffMember, s
             mark_left(asha, left_on=date(2099, 1, 1), by=staff_a, reason="Atahamia Moshi")
 
         # Refused by the line itself: a reason longer than the trail keeps. The suspension it came with, already
-        # saved inside the action's transaction, is undone with it.
+        # saved inside the action's transaction, is undone with it, and so is the history line its save made the
+        # trigger write. A spy counts the history lines just before audit() runs: there is one by then.
+        lines_seen: list[int] = []
+
+        def audit_spy(**kwargs: Any) -> AuditEvent:
+            lines_seen.append(EditEvent.objects.count())
+            return audit(**kwargs)
+
+        monkeypatch.setattr(services, "audit", audit_spy)
         with pytest.raises(ValidationError) as refused:
             suspend(asha, by=staff_a, reason="a" * 501)
         assert [error.code for error in refused.value.error_dict["reason"]] == ["max_length"]
+        assert lines_seen == [1]
 
         assert StaffMember.objects.get(pk=asha.pk).status == StaffStatus.ACTIVE
         assert not AuditEvent.objects.exists()
+        assert not EditEvent.objects.exists()
