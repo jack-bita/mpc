@@ -1,5 +1,5 @@
-"""apps/control/models.py — the control tables. For now the flags: one review queue for every difference and
-every offline rule break (02 §13, big idea 4).
+"""apps/control/models.py — the control tables: the flags, one review queue for every difference and every
+offline rule break (02 §13, big idea 4); and the audit trail, what a person did and why (03 §5.16).
 
 A Flag says that what should be there and what is there don't match, and someone must say why. E4's cash-up:
 the Dawa drawer should hold 163,000, Asha counts 160,000, so a flag for −3,000 names Asha and the Dawa side.
@@ -12,10 +12,15 @@ kept, one per person or more, and none can be edited. FlagPerson links a flag to
 names, and is append-only too: who a flag names is part of the fact. apps/control/services.py raises flags
 and moves them; nothing else writes these tables.
 
-`control` is layer 0, beside `core`, so every app can raise flags (ADR-0035). It imports only `core`: it
-names the tables of `shops` and `people` by text ("shops.Side"), which is not an import (03 §5.1).
+An AuditEvent is one important action, written by the service that does it, in the same transaction: the
+manager suspends Asha, and one line keeps who, when, what changed and why ("Hakuja kazini siku 3"). Like a flag's
+notes, its lines are append-only. apps/control/services.py writes them (audit) and nothing else does.
+
+`control` is layer 0, beside `core`, so every app can raise flags and write audit lines (ADR-0035). It imports
+only `core`: it names the tables of `shops` and `people` by text ("shops.Side"), which is not an import (03 §5.1).
 """
 
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 
 from apps.core.links import TYPE_CODE_MAX_LENGTH, TYPE_CODE_SHAPE, load_link
@@ -211,3 +216,73 @@ class FlagNote(AppendOnly):
 
     def __str__(self) -> str:
         return f"{self.step}: {self.text}"
+
+
+class AuditAction(models.TextChoices):
+    # What a person did (02 §13), as a code: a screen shows it in the person's language (ADR-0032). A new action
+    # is a new line here and a migration, since the database rule below names every action, as FlagKind's does.
+    # Each card adds the actions its services write: CTRL-5 adds cancels, approvals, price changes and voids.
+    STAFF_SUSPEND = "staff.suspend", "Staff member suspended"
+    STAFF_UNSUSPEND = "staff.unsuspend", "Staff member brought back"
+    STAFF_LEAVE = "staff.leave", "Staff member left"
+
+
+class AuditEvent(AppendOnly):
+    # One thing a person did, and why (02 §13): the manager suspends Asha because she missed three days of work.
+    # ShopScoped (CORE-2) gives `id`, `shop`, `created_at` (02's `at`) and `created_by` (02's `actor`: who acted,
+    # empty when the system did, or the superuser, who is nobody's staff). AppendOnly (CORE-3) refuses a second
+    # save() and any delete() in Python, and the trigger in this table's migration refuses the same in PostgreSQL
+    # (ADR-0021): the reason stays as written, whoever reads the trail later. Written only by audit()
+    # (apps/control/services.py), inside the action's own transaction. Two of 02's columns come later: `device`
+    # when a visit knows its device (AUTH-4), `approval` with the Approval table (02 v1.9).
+
+    action = models.CharField(max_length=40, choices=AuditAction)
+    # The row the action was done to: its table's code (apps/core/links.py) and its id, as a flag's subject. No
+    # foreign key can point at rows of many tables, so the database can't check this link: audit() does.
+    subject_type = models.CharField(max_length=TYPE_CODE_MAX_LENGTH)
+    subject_id = models.UUIDField()
+    # What the action changed, field by field: {"status": "active"} before, {"status": "suspended"} after. Empty
+    # for an action that changes no field. DjangoJSONEncoder writes a Decimal or a date as text, the way the API
+    # sends them, so an amount is never read back as a float (ADR-0024).
+    before = models.JSONField(null=True, blank=True, encoder=DjangoJSONEncoder)
+    after = models.JSONField(null=True, blank=True, encoder=DjangoJSONEncoder)
+    # Why (T3). As long as a flag's note: a few sentences on a phone, and a limit, so a pasted page can't fill
+    # the owner's trail.
+    reason = models.CharField(max_length=500)
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2).
+        # The database is the last guard (03 §5.6); audit() checks the same rules first.
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(action__in=AuditAction.values),
+                name="control_auditevent_action_known",
+                violation_error_code="audit.action_unknown",
+            ),
+            # The list of codes lives in code, where the database can't see it, but a code's shape it can check.
+            models.CheckConstraint(
+                condition=models.Q(subject_type__regex=TYPE_CODE_SHAPE),
+                name="control_auditevent_subject_type_shape",
+                violation_error_code="audit.subject_type_invalid",
+            ),
+            # T3: every action says why. audit() trims the words first, so spaces alone are refused too.
+            models.CheckConstraint(
+                condition=~models.Q(reason=""),
+                name="control_auditevent_reason_not_blank",
+                violation_error_code="audit.reason_required",
+            ),
+        ]
+        indexes = [
+            # The owner's trail of one record (CTRL-5): every line about Asha's job, oldest first. Leads with
+            # `shop` (03 §9).
+            models.Index(fields=["shop", "subject_type", "subject_id", "created_at"], name="control_audit_by_subject"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.action}: {self.reason}"
+
+    @property
+    def subject(self) -> ShopScoped:
+        # The row the action was done to, loaded from its two columns through the shop guard, so it needs the
+        # line's shop open (apps/core/links.py).
+        return load_link(self.subject_type, self.subject_id)
