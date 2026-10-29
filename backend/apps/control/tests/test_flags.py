@@ -19,6 +19,7 @@ or an Actor. Fake data only: the repo is public (03 §10).
 """
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -121,14 +122,31 @@ def test_flag_subject_loads_from_its_type_code_and_uuid(shop_a: Model, flag: Fla
         assert stored.subject == drawer_day
 
 
-def test_flag_status_only_moves_forward(shop_a: Model, flag: Flag, staff_a: Actor, staff_a2: Actor) -> None:
+# Both ways to close a flag, each with the status it leaves and a note in the shop's words: a real difference
+# dealt with, or none after all. Every rule about closing holds for both, so each test below runs once with each.
+CLOSES = [
+    pytest.param(resolve_flag, FlagStatus.RESOLVED, "Atalipa 3,000 kesho", id="resolve"),
+    pytest.param(dismiss_flag, FlagStatus.DISMISSED, "Pesa ilipatikana chini ya droo", id="dismiss"),
+]
+
+
+@pytest.mark.parametrize(("close", "closed_status", "words"), CLOSES)
+def test_flag_status_only_moves_forward(
+    shop_a: Model,
+    flag: Flag,
+    staff_a: Actor,
+    staff_a2: Actor,
+    close: Callable[..., Flag],
+    closed_status: FlagStatus,
+    words: str,
+) -> None:
     with shop_context(shop_a):
         explained = explain_flag(flag, note="Nilitoa chenji zaidi", by=staff_a)
         assert explained.status == FlagStatus.EXPLAINED
-        resolved = resolve_flag(explained, note="Atalipa 3,000 kesho", by=staff_a2)
-        assert resolved.status == FlagStatus.RESOLVED
+        closed = close(explained, note=words, by=staff_a2)
+        assert closed.status == closed_status
 
-        # Resolved is final: no more notes, whatever the step. Each move is tried with `flag`, the copy read
+        # Closed is final: no more notes, whatever the step. Each move is tried with `flag`, the copy read
         # before any of this, which still says open, as a second manager's screen would: the service reads
         # the row again, locked, and sees it is closed.
         for move in (explain_flag, resolve_flag, dismiss_flag):
@@ -136,18 +154,21 @@ def test_flag_status_only_moves_forward(shop_a: Model, flag: Flag, staff_a: Acto
                 move(flag, note="Tena", by=staff_a2)
             assert refused.value.code == "flag.closed"
 
-        assert Flag.objects.get(pk=flag.pk).status == FlagStatus.RESOLVED
-        assert [step for step, _, _ in notes_of(flag)] == [FlagStep.EXPLAINED, FlagStep.RESOLVED]
+        assert Flag.objects.get(pk=flag.pk).status == closed_status
+        assert [step for step, _, _ in notes_of(flag)] == [FlagStep.EXPLAINED, closed_status]
 
 
-def test_flag_closes_without_explanation(shop_a: Model, flag: Flag, staff_a2: Actor) -> None:
+@pytest.mark.parametrize(("close", "closed_status", "words"), CLOSES)
+def test_flag_closes_without_explanation(
+    shop_a: Model, flag: Flag, staff_a2: Actor, close: Callable[..., Flag], closed_status: FlagStatus, words: str
+) -> None:
     # A manager who finds the reason may close the flag straight from open, with their own note (Jack,
-    # 29 Oct 2026). Here the 3,000 turns up under the drawer's tray: not a real difference.
+    # 29 Oct 2026): settled by them, or found to be no problem at all.
     with shop_context(shop_a):
-        dismissed = dismiss_flag(flag, note="Pesa ilipatikana chini ya droo", by=staff_a2)
+        closed = close(flag, note=words, by=staff_a2)
 
-        assert dismissed.status == FlagStatus.DISMISSED
-        assert notes_of(flag) == [(FlagStep.DISMISSED, "Pesa ilipatikana chini ya droo", staff_a2.staff_id)]
+        assert closed.status == closed_status
+        assert notes_of(flag) == [(closed_status, words, staff_a2.staff_id)]
 
 
 def test_every_explanation_is_kept(shop_a: Model, side_a: ShopScoped, staff_a: Actor, staff_a2: Actor) -> None:
