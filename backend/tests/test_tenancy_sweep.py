@@ -74,7 +74,7 @@ from apps.core.models import ShopScoped, ShopScopedManager, UUIDModel
 from apps.core.tenancy import NoShopSelected, shop_context
 from apps.shops.models import PaymentAccount, PaymentAccountKind, Shop, Side, StockLocation
 from tests.probe.models import Note, VoidableEntry
-from tests.sweep_lists import HAND_BUILT_QUERIES, INFRASTRUCTURE, NO_SHOP, NOT_SHOP_ROUTES, OWN_LEAK_TESTS
+from tests.sweep_lists import HAND_BUILT_QUERIES, INFRASTRUCTURE, NO_SHOP, NOT_SHOP_ROUTES, OWN_LEAK_TESTS, RAW_SQL
 
 BACKEND = Path(__file__).resolve().parents[1]
 APPS = BACKEND / "apps"
@@ -244,9 +244,10 @@ def may_use_base_manager(path: Path) -> bool:
 def may_use_raw_sql(path: Path) -> bool:
     # Raw SQL, `.raw(...)` or `connection.cursor()`, skips the guard's filter whatever manager it starts from:
     # `Side.objects.raw("SELECT ...")` reads every shop's sides even inside one shop's visit. Migrations run as
-    # system jobs, with no visit; system jobs may read every shop anyway; tests may.
+    # system jobs, with no visit; system jobs may read every shop anyway; tests may. App code only in a file
+    # RAW_SQL lists, with its reason (backend/tests/sweep_lists.py): today, the one that tells PostgreSQL who acts.
     folders = path.relative_to(BACKEND).parts[:-1]
-    return "migrations" in folders or may_use_system_context(path)
+    return "migrations" in folders or may_use_system_context(path) or str(path.relative_to(BACKEND)) in RAW_SQL
 
 
 def may_build_queries(path: Path) -> bool:
@@ -1055,10 +1056,13 @@ def test_doors_are_allowed_only_in_their_places() -> None:
     assert may_use_all_shops(APPS / "core" / "tests" / "test_shop_scoped.py")
     assert may_use_system_context(APPS / "shops" / "tests" / "test_create_shop.py")
     assert may_use_base_manager(APPS / "core" / "tests" / "test_shop_scoped.py")
-    # Raw SQL: migrations, system jobs and tests, never code that answers a visit.
+    # Raw SQL: migrations, system jobs and tests, and the files RAW_SQL lists with their reason; never other
+    # code that answers a visit.
     assert may_use_raw_sql(APPS / "shops" / "migrations" / "0006_fill_codes.py")
     assert may_use_raw_sql(APPS / "control" / "management" / "commands" / "check_balances.py")
+    assert may_use_raw_sql(APPS / "core" / "acting.py")
     assert not may_use_raw_sql(APPS / "shops" / "selectors.py")
+    assert not may_use_raw_sql(APPS / "core" / "api" / "base.py")
     # A query built by hand: tests, and the files HAND_BUILT_QUERIES lists with their reason.
     assert may_build_queries(APPS / "core" / "api" / "base.py")
     assert not may_build_queries(APPS / "shops" / "api" / "views.py")
@@ -1573,6 +1577,8 @@ def test_base_manager_only_in_tests() -> None:
 def test_raw_sql_only_in_migrations_and_system_code() -> None:
     assert misplaced_uses("raw", may_use_raw_sql, calls_of) == {}
     assert misplaced_uses("cursor", may_use_raw_sql, calls_of) == {}
+    # And no file is listed that runs none any more: a stale entry would let new SQL in unseen.
+    assert set(RAW_SQL) <= set(uses_in_our_code("cursor", calls_of)) | set(uses_in_our_code("raw", calls_of))
 
 
 def test_hand_built_queries_only_where_listed() -> None:

@@ -46,3 +46,4 @@ An ADR is a short record of one big decision: the context, what we chose, what i
 | [0033](0033-one-website-attendance-first.md) | One website with everything, built one part after another: attendance first | BP7 | confirmed | medium |
 | [0034](0034-no-open-source-licence-yet.md) | No open-source licence yet | BP16 | default | low |
 | [0035](0035-a-modular-monolith-with-control-beside-core.md) | A modular monolith, with control beside core | AD1 (REPO-6) | confirmed | high |
+| [0036](0036-office-edits-are-recorded-by-our-own-trigger.md) | Office edits are recorded by our own trigger, into one table | CTRL-2 | confirmed | medium |

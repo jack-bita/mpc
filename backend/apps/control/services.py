@@ -1,4 +1,5 @@
-"""apps/control/services.py — every write to the flag tables, one function per action (ADR-0015).
+"""apps/control/services.py — every write to the control tables, one function per action (ADR-0015): the flags,
+and the audit trail.
 
 raise_flag writes a flag with the people it names, all or nothing. The other three move it forward, each
 with a note in a person's own words, who and when kept with it (Jack, 29 Oct 2026; 02 v1.8):
@@ -10,6 +11,10 @@ explain_flag may be called again and again: each person a flag names may explain
 is kept. Each step names the person who took it: a flag is raised by the system as often as not, but only a
 person explains or closes one, and never one who is named on it. Nothing moves a flag back, and nothing
 touches a closed one.
+
+audit() writes one line of the audit trail (03 §5.16): who did what to which row, what it changed, and why. The
+service that does the action calls it inside its own transaction, so the action and its line are kept together
+or not at all.
 
 A broken rule is a ValidationError with a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) will turn into its error shape when the review screen comes (CTRL-4); a bug in the
@@ -25,13 +30,15 @@ checks read through the guarded `objects` (CORE-2).
 """
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
+from typing import Any
 
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import connection, models, transaction
+from django.db.transaction import TransactionManagementError
 
-from apps.control.models import Flag, FlagKind, FlagNote, FlagPerson, FlagStatus, FlagStep
+from apps.control.models import AuditAction, AuditEvent, Flag, FlagKind, FlagNote, FlagPerson, FlagStatus, FlagStep
 from apps.core.links import link_type_of
 from apps.core.models import ShopScoped
 from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop
@@ -108,6 +115,57 @@ def dismiss_flag(flag: Flag, *, text: str, by: Actor, note_id: uuid.UUID | None 
     return _step(flag, FlagStep.DISMISSED, text=text, by=by, note_id=note_id)
 
 
+def audit(
+    *,
+    action: AuditAction,
+    subject: ShopScoped,
+    reason: str,
+    by: Actor | None,
+    before: Mapping[str, Any] | None = None,
+    after: Mapping[str, Any] | None = None,
+) -> AuditEvent:
+    """Write down that `by` did `action` to `subject`, a saved row of the open shop, and why. `before` and
+    `after`: the fields the action changed, as they were and as they are ({"status": "active"} →
+    {"status": "suspended"}). `by`: who acted; None when the system did, or the superuser. Call it inside the
+    action's own transaction, after the change is saved."""
+    # The action and its line are kept together or not at all: a suspension kept without its line, or a line kept
+    # for a suspension that was undone, would each tell a false story. Django is inside a transaction exactly
+    # when it is inside an atomic block (its default, autocommit, runs each query as its own), so a caller that
+    # forgot one is a bug, refused before anything is written.
+    if not connection.in_atomic_block:
+        raise TransactionManagementError("audit() runs inside the action's own transaction (transaction.atomic()).")
+    # The line belongs to its subject's shop: shop A's staff member gets a line of shop A.
+    shop_id = subject.shop_id
+    _check_shop(shop_id, by)
+    # A generic link has no foreign key, so the database can't check that it points at a row (as in raise_flag).
+    if subject._state.adding:
+        raise ValueError(f"An audit line's subject must be a saved row; this {type(subject).__name__} was never saved.")
+    # T3: always why. Trimmed first: spaces alone say no more than nothing, and the database would take them.
+    # Filed under the words' field, `reason`, as full_clean files words too long for it.
+    reason = reason.strip()
+    if not reason:
+        raise ValidationError({"reason": ValidationError("A reason is required.", code="audit.reason_required")})
+    # ADR-0024: amounts are Decimal, never float. A float is stored as a JSON number and read back as a float,
+    # already off (0.1 + 0.2 is 0.30000000000000004), so a price change's line would show the owner a wrong price.
+    # Refused at any depth, before anything is written: a bug in the calling code, so a TypeError, not a code.
+    if _holds_a_float(before) or _holds_a_float(after):
+        raise TypeError("audit() keeps amounts as Decimal, never float (ADR-0024).")
+    return _saved(
+        AuditEvent(
+            shop_id=shop_id,
+            action=action,
+            # UnknownLinkType when the subject's table has no code yet: the card that audits its rows adds one
+            # (apps/core/links.py).
+            subject_type=link_type_of(subject),
+            subject_id=subject.pk,
+            before=before,
+            after=after,
+            reason=reason,
+            created_by_id=None if by is None else by.staff_id,
+        )
+    )
+
+
 def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUID | None) -> Flag:
     # The one way a flag moves: a note, then the status the note's step names. Every step keeps who
     # (`created_by`), when (`created_at`) and why (the note): rule 7.
@@ -164,19 +222,30 @@ def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUI
     return fresh
 
 
+def _holds_a_float(value: object) -> bool:
+    # A float anywhere in what an action changed: a value, or inside a dict or a list of them.
+    if isinstance(value, float):
+        return True
+    if isinstance(value, Mapping):
+        return any(_holds_a_float(inner) for inner in value.values())
+    if isinstance(value, list | tuple):
+        return any(_holds_a_float(inner) for inner in value)
+    return False
+
+
 def _check_shop(shop_id: uuid.UUID, by: Actor | None) -> None:
     # T1: an action works inside one shop. The guard watches reads, not writes (CORE-2), so these checks are
     # the service's own. Both catch a bug in the calling code, not a person's mistake, so they raise
     # ShopMismatch, a server error, before anything is written.
-    # 1. The flag's shop is the one this visit opened. Otherwise full_clean's checks would read the open
-    #    shop's rows while the rows are written into another shop. A nightly job, under system_context(),
-    #    has every shop open; no shop open at all raises NoShopSelected.
+    # 1. The row's shop (a flag's, or an audit line's) is the one this visit opened. Otherwise full_clean's
+    #    checks would read the open shop's rows while the rows are written into another shop. A nightly job,
+    #    under system_context(), has every shop open; no shop open at all raises NoShopSelected.
     open_shop = current_shop()
     if open_shop is not ALL_SHOPS and open_shop != shop_id:
-        raise ShopMismatch("The flag's shop is not the one open.")
-    # 2. Who acts belongs to that shop too: shop B's staff can't explain shop A's flag.
+        raise ShopMismatch("The row's shop is not the one open.")
+    # 2. Who acts belongs to that shop too: shop B's staff can't explain shop A's flag, nor suspend its staff.
     if by is not None and by.shop_id != shop_id:
-        raise ShopMismatch("The one acting belongs to another shop than the flag.")
+        raise ShopMismatch("The one acting belongs to another shop than the row.")
 
 
 def _staff_ids(shop_id: uuid.UUID, people: Sequence[Actor]) -> list[uuid.UUID]:

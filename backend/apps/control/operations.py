@@ -1,5 +1,6 @@
-"""apps/control/operations.py — the migration step that makes PostgreSQL keep a flag as it was raised and let its
-status move forward only (02 §13, ADR-0021).
+"""apps/control/operations.py — the migration steps for control's two rules in PostgreSQL: a flag is kept as it was
+raised and its status moves forward only (02 §13, ADR-0021); and every edit of an office table is written to the
+edit history (03 §5.16, ADR-0036).
 
 A flag says what was found when it was raised: its kind, its subject, its two numbers, its side, its shop and
 who raised it. None of that ever changes, as a ledger row never does (T2). Only its status moves, and only
@@ -17,12 +18,26 @@ The SQL strings below are frozen once they are on main, as core's are (rule 9): 
 status, is a new rule, with a new function name (control_flag_forward_only_v2), new strings and a new
 migration. A test pins each string by its fingerprint (test_flag_trigger_sql_never_changes_once_on_main).
 
-This file owns the SQL of that rule and the operation the flag table's migration lists to add it.
+The edit history works the other way round: not a rule that refuses, but one that writes. After every UPDATE of
+an office table, a trigger writes one row of control.EditEvent with what changed and who changed it, so no code
+path can skip the history: a service, a bulk update(), the admin, or SQL typed by hand (ADR-0036). Who comes from
+the visit, which tells PostgreSQL who acts (apps/core/acting.py). Its SQL is frozen once on main in the same way
+(test_edit_trigger_sql_never_changes_once_on_main).
+
+The history table guards itself as well: only that trigger may write a row of it, so neither bulk_create nor SQL
+typed by hand can add a change nobody made (EditsByTriggerOnly).
+
+This file owns the SQL of these rules and the operations the migrations list to add them: FlagForwardOnlyTrigger on
+the flag table, EditsByTriggerOnly on the history table, and RecordEdits on each office table.
 """
+
+import re
+from collections.abc import Sequence
 
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.migrations.state import ProjectState
 
+from apps.core.links import TYPE_CODE_SHAPE
 from apps.core.operations import AppendOnlyTrigger
 
 # The rule, stored in PostgreSQL as a function, as core's are. A trigger runs it before each UPDATE or
@@ -114,3 +129,208 @@ class FlagForwardOnlyTrigger(AppendOnlyTrigger):
 
     def describe(self) -> str:
         return f"Forward-only trigger on {self.model_name}"
+
+
+# The edit history's rule (03 §5.16, ADR-0036), stored in PostgreSQL as a function. A trigger runs it after each
+# UPDATE of a row of an office table, with OLD (the row before) and NEW (the row after), and two words of its own
+# (TG_ARGV, set by RecordEdits below): the table's type code (apps/core/links.py) and the columns never to copy.
+# - First, T1: an office visit told PostgreSQL its shop (`mpc.shop_id`, apps/core/acting.py), and the edited row must
+#   belong to it. If a bug elsewhere let shop A's visit change shop B's row, the edit itself is refused, so shop B's
+#   history never names shop A's person. Outside a visit the setting is empty ('' or never set: NULL), and a system
+#   job may work across shops (03 §5.11): no check. Checked before anything else, even an edit that changes nothing.
+# - `skipped`: those columns, plus the edit's own bookkeeping on an Editable row (`version`, `updated_at`,
+#   `updated_by_id`): the history row keeps who and when itself, and a version that moved says nothing to the
+#   owner. Missing columns are fine: `jsonb - text[]` takes out only the keys a row has.
+# - Each row becomes one JSON object (to_jsonb), without the skipped columns. Only the columns whose values differ
+#   are kept, each as text (`->>`), the way the API sends a number or a date, so an amount is never read back as a
+#   float (ADR-0024): {"name": "Dawa"} before, {"name": "Dawa za Mifugo"} after.
+# - Nothing visible changed (a save that changed nothing, or only a skipped column): nothing is written.
+# - The row: a new UUIDv7 from PostgreSQL itself (ADR-0007; PostgreSQL 18), the edited row's shop, the edit's own
+#   time, who acts as the visit told PostgreSQL ('' or never told: nobody, so NULL), the type code and the row's id.
+#   The time is clock_timestamp(), the clock as the row is written, not now(), the transaction's start: two edits in
+#   one transaction would share a time, and an edit that waited for another's lock would get an earlier time than
+#   the edit it waited for, so the owner's trail would show them out of order.
+#   Written in the edit's own transaction: an edit that is undone takes its history row with it.
+# - RETURN NULL: an AFTER trigger's answer is not used; the edit has already happened.
+# `before` and `after` are in double quotes in the column list: both are words of SQL's own (BEFORE and AFTER
+# triggers), safe as names, but quoted to leave no doubt.
+RECORD_EDIT_FUNCTION = """
+CREATE OR REPLACE FUNCTION control_record_edit() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    acting_shop uuid := NULLIF(current_setting('mpc.shop_id', true), '')::uuid;
+    skipped text[] := ARRAY['version', 'updated_at', 'updated_by_id'] || TG_ARGV[1]::text[];
+    old_row jsonb := to_jsonb(OLD) - skipped;
+    new_row jsonb := to_jsonb(NEW) - skipped;
+    changed_from jsonb;
+    changed_to jsonb;
+BEGIN
+    IF acting_shop IS NOT NULL AND acting_shop <> NEW.shop_id THEN
+        RAISE EXCEPTION 'UPDATE on % refused: the row belongs to another shop than the visit (T1)', TG_TABLE_NAME
+            USING ERRCODE = 'restrict_violation';
+    END IF;
+    SELECT jsonb_object_agg(field, old_row ->> field), jsonb_object_agg(field, new_row ->> field)
+        INTO changed_from, changed_to
+        FROM jsonb_object_keys(new_row) AS field
+        WHERE old_row -> field IS DISTINCT FROM new_row -> field;
+    IF changed_to IS NULL THEN
+        RETURN NULL;
+    END IF;
+    INSERT INTO control_editevent
+        (id, shop_id, created_at, created_by_id, subject_type, subject_id, "before", "after")
+    VALUES (
+        uuidv7(), NEW.shop_id, clock_timestamp(), NULLIF(current_setting('mpc.staff_id', true), '')::uuid,
+        TG_ARGV[0], NEW.id, changed_from, changed_to
+    );
+    RETURN NULL;
+END;
+$$;
+"""
+
+# Puts the rule on one office table; RecordEdits fills in the table and the two words.
+# - Its own name, `record_edits`, beside a table's other triggers.
+# - AFTER UPDATE: only a change that really happened is written, with the values PostgreSQL stored. INSERT is not
+#   listed: a new row already keeps who made it and when (`created_by`, `created_at`). DELETE is not either:
+#   nothing is deleted (T3), and PROTECT on every link refuses most deletes already.
+# - FOR EACH ROW: an update() of ten rows writes ten history rows, one per row.
+CREATE_RECORD_EDITS_TRIGGER = """
+CREATE TRIGGER record_edits
+    AFTER UPDATE ON {table}
+    FOR EACH ROW EXECUTE FUNCTION control_record_edit({type_code}, {skipped});
+"""
+
+# Takes the trigger off, when its migration is undone. The function stays: other tables still use it.
+DROP_RECORD_EDITS_TRIGGER = "DROP TRIGGER record_edits ON {table};"
+
+# A column's name, as Django makes them: small letters, digits and underscores.
+_COLUMN_NAME = r"^[a-z_][a-z0-9_]*$"
+
+
+class RecordEdits(AppendOnlyTrigger):
+    # The step an office table's migration lists to switch its history on:
+    # RecordEdits("staffmember", type_code="staff", skip=["pin_hash"]). Built on core's AppendOnlyTrigger for its
+    # plumbing (the table's real name, a step that adds no column), with its own rule and its own undo.
+
+    def __init__(self, model_name: str, type_code: str, skip: Sequence[str] = ()) -> None:
+        super().__init__(model_name)
+        # Checked here, as the migration is read, not when the first edit is made. A code of the wrong shape would
+        # break EditEvent's own rule on every edit of the table, so every edit would fail. The two words are also
+        # written into the SQL with quotes put around them by hand, which is safe only for names of these shapes.
+        # fullmatch, not match: `$` in a pattern also matches before a final line break, so match() would let
+        # "staff\n" through.
+        # One string is a sequence of letters to Python: skip="pin_hash" would skip eight one-letter columns that
+        # don't exist, and copy the hash. So a list, always.
+        if isinstance(skip, str):
+            raise TypeError(f"skip is a list of column names, not one name: write skip=[{skip!r}].")
+        if not re.fullmatch(TYPE_CODE_SHAPE, type_code):
+            raise ValueError(f"{type_code!r} is not a type code: small letters and underscores (apps/core/links.py).")
+        for column in skip:
+            if not re.fullmatch(_COLUMN_NAME, column):
+                raise ValueError(f"{column!r} is not a column's name.")
+        self.type_code = type_code
+        self.skip = list(skip)
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        # First, the table as this migration sees it (to_state, not today's models.py), before any SQL is sent:
+        # - every column to skip is one of its own. A typo ("pin_hsh") would skip nothing, and the real column, a
+        #   PIN hash, would be copied into every history row, with nothing to say so;
+        # - it has `id` and `shop_id`, which the rule writes into each history row: without them, every edit of the
+        #   table would fail, perhaps months later.
+        model = to_state.apps.get_model(app_label, self.model_name)
+        columns = {field.column for field in model._meta.concrete_fields}
+        for column in self.skip:
+            if column not in columns:
+                raise ValueError(f"{model._meta.label} has no column {column!r} to skip.")
+        if not {"id", "shop_id"} <= columns:
+            raise ValueError(f"{model._meta.label} has no `id` and `shop_id`: the history keeps a shop's rows only.")
+        # Then write the rule, and put it on the table. The columns to skip go in as one PostgreSQL array,
+        # '{pin_hash}' ('{}' for none), which the rule reads with TG_ARGV[1]::text[]. params=None, as in core's.
+        table = self._table(app_label, schema_editor, to_state)
+        sql = CREATE_RECORD_EDITS_TRIGGER.format(
+            table=table, type_code=f"'{self.type_code}'", skipped="'{" + ",".join(self.skip) + "}'"
+        )
+        schema_editor.execute(RECORD_EDIT_FUNCTION, params=None)
+        schema_editor.execute(sql, params=None)
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        # Take the trigger off; the function stays, as core's do.
+        table = self._table(app_label, schema_editor, from_state)
+        schema_editor.execute(DROP_RECORD_EDITS_TRIGGER.format(table=table), params=None)
+
+    def describe(self) -> str:
+        return f"Edit history trigger on {self.model_name}"
+
+
+# The history's own guard (ADR-0036): every row of control_editevent comes from control_record_edit() above, and
+# from nowhere else. EditEvent.save() refuses in Python, but bulk_create() skips save(), and SQL typed by hand skips
+# Python altogether; a row they wrote would be a change nobody made, perhaps naming someone who never made it.
+# - pg_trigger_depth() says how many triggers deep the current statement is running. This rule is itself a
+#   trigger, so an INSERT sent by Python or by hand runs it at depth 1. The INSERT that control_record_edit() sends,
+#   from inside the office table's trigger, runs it at depth 2. So fewer than 2: refused.
+# - Another table's trigger could still write a row at depth 2; only ours does, and review keeps it that way.
+# - ERRCODE 'restrict_violation', as every rule here: Django raises IntegrityError (apps/core/operations.py).
+EDITS_BY_TRIGGER_ONLY_FUNCTION = """
+CREATE OR REPLACE FUNCTION control_edits_by_trigger_only() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF pg_trigger_depth() < 2 THEN
+        RAISE EXCEPTION 'INSERT on % refused: only the edit history''s trigger writes it (ADR-0036)', TG_TABLE_NAME
+            USING ERRCODE = 'restrict_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+"""
+
+# Puts the guard on the history table: BEFORE INSERT, so a refused row is never written; FOR EACH ROW, so a
+# bulk_create of many rows is refused at its first.
+CREATE_EDITS_BY_TRIGGER_ONLY_TRIGGER = """
+CREATE TRIGGER by_trigger_only
+    BEFORE INSERT ON {table}
+    FOR EACH ROW EXECUTE FUNCTION control_edits_by_trigger_only();
+"""
+
+# Takes the guard off, when its migration is undone.
+DROP_EDITS_BY_TRIGGER_ONLY_TRIGGER = "DROP TRIGGER by_trigger_only ON {table};"
+
+
+class EditsByTriggerOnly(AppendOnlyTrigger):
+    # The step the history table's migration lists right after its append-only trigger: EditsByTriggerOnly("editevent").
+    # Built on core's AppendOnlyTrigger for its plumbing, with its own rule and its own undo.
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        # Write the rule, then put it on the table. params=None: the rule's message holds a % sign.
+        table = self._table(app_label, schema_editor, to_state)
+        schema_editor.execute(EDITS_BY_TRIGGER_ONLY_FUNCTION, params=None)
+        schema_editor.execute(CREATE_EDITS_BY_TRIGGER_ONLY_TRIGGER.format(table=table), params=None)
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        table = self._table(app_label, schema_editor, from_state)
+        schema_editor.execute(DROP_EDITS_BY_TRIGGER_ONLY_TRIGGER.format(table=table), params=None)
+
+    def describe(self) -> str:
+        return f"Written-by-trigger-only guard on {self.model_name}"

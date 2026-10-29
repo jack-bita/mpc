@@ -14,15 +14,20 @@ undo the earlier one.
     manager saves "Dawa za Kuku"   → refused: Dawa is at version 2, the manager's copy was version 1
 
 A service changes a row inside editing(): `with editing(side, version=3, by=staff) as side: side.name = …`.
+
+Who made the edit is kept twice, and the two must agree: in the row (`updated_by`), and in the edit's history line,
+which PostgreSQL's own trigger writes (ADR-0036). So editing() tells PostgreSQL who acts for the row's save
+(apps/core/acting.py), as an office visit does for all of its own.
 """
 
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from typing import cast
 
 from django.db import transaction
 from django.utils import timezone
 
+from apps.core.acting import acting_as
 from apps.core.models import Editable
 from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop
 
@@ -64,4 +69,9 @@ def editing[M: Editable](row: M, *, version: int, by: Actor | None) -> Iterator[
         fresh.version += 1
         fresh.updated_at = timezone.now()
         fresh.updated_by_id = None if by is None else by.staff_id
-        fresh.save()
+        # The history's trigger names whoever PostgreSQL was told acts. In an office visit that is `by` already;
+        # a job or a command that passes its own `by` names it too, so the history line and `updated_by` agree
+        # (02 v1.7: one fact, one answer). With `by` None, the system acts, and nobody is told: outside a visit,
+        # the line names nobody, as `updated_by` does.
+        with acting_as(by) if by is not None else nullcontext():
+            fresh.save()

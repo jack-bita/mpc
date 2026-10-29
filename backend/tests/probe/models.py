@@ -10,6 +10,11 @@ Entry and VoidableEntry are ledgers in miniature, for the append-only tests
 as every real ledger will. Entry stands for a stock movement, never changed once written: its migration
 adds the plain trigger. VoidableEntry stands for a payment, which may be voided once and is then frozen:
 its migration adds the void-stamp trigger (03 §5.6).
+
+Card stands for an office record people change, a side or a staff member's job: its migration switches its edit
+history on (RecordEdits, ADR-0036), for the history's own tests (apps/control/tests/test_edit_history.py). A table
+of its own, not Note: the history's trigger refuses an edit of another shop's row, and the tenancy sweep's own tests
+need Note's leaky routes to really make one, to prove the sweep finds it.
 """
 
 from decimal import Decimal
@@ -24,6 +29,13 @@ class Note(ShopScoped):
 
     def __str__(self) -> str:
         return self.text
+
+
+class Card(ShopScoped):
+    name = models.CharField(max_length=100)
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class Entry(AppendOnly):
