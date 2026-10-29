@@ -24,8 +24,11 @@ path can skip the history: a service, a bulk update(), the admin, or SQL typed b
 the visit, which tells PostgreSQL who acts (apps/core/acting.py). Its SQL is frozen once on main in the same way
 (test_edit_trigger_sql_never_changes_once_on_main).
 
-This file owns the SQL of both rules and the operations the migrations list to add them: FlagForwardOnlyTrigger on
-the flag table, RecordEdits on each office table.
+The history table guards itself as well: only that trigger may write a row of it, so neither bulk_create nor SQL
+typed by hand can add a change nobody made (EditsByTriggerOnly).
+
+This file owns the SQL of these rules and the operations the migrations list to add them: FlagForwardOnlyTrigger on
+the flag table, EditsByTriggerOnly on the history table, and RecordEdits on each office table.
 """
 
 import re
@@ -238,3 +241,66 @@ class RecordEdits(AppendOnlyTrigger):
 
     def describe(self) -> str:
         return f"Edit history trigger on {self.model_name}"
+
+
+# The history's own guard (ADR-0036): every row of control_editevent comes from control_record_edit() above, and
+# from nowhere else. EditEvent.save() refuses in Python, but bulk_create() skips save(), and SQL typed by hand skips
+# Python altogether; a row they wrote would be a change nobody made, perhaps naming someone who never made it.
+# - pg_trigger_depth() says how many triggers deep the current statement is running. This rule is itself a
+#   trigger, so an INSERT sent by Python or by hand runs it at depth 1. The INSERT that control_record_edit() sends,
+#   from inside the office table's trigger, runs it at depth 2. So fewer than 2: refused.
+# - Another table's trigger could still write a row at depth 2; only ours does, and review keeps it that way.
+# - ERRCODE 'restrict_violation', as every rule here: Django raises IntegrityError (apps/core/operations.py).
+EDITS_BY_TRIGGER_ONLY_FUNCTION = """
+CREATE OR REPLACE FUNCTION control_edits_by_trigger_only() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF pg_trigger_depth() < 2 THEN
+        RAISE EXCEPTION 'INSERT on % refused: only the edit history''s trigger writes it (ADR-0036)', TG_TABLE_NAME
+            USING ERRCODE = 'restrict_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+"""
+
+# Puts the guard on the history table: BEFORE INSERT, so a refused row is never written; FOR EACH ROW, so a
+# bulk_create of many rows is refused at its first.
+CREATE_EDITS_BY_TRIGGER_ONLY_TRIGGER = """
+CREATE TRIGGER by_trigger_only
+    BEFORE INSERT ON {table}
+    FOR EACH ROW EXECUTE FUNCTION control_edits_by_trigger_only();
+"""
+
+# Takes the guard off, when its migration is undone.
+DROP_EDITS_BY_TRIGGER_ONLY_TRIGGER = "DROP TRIGGER by_trigger_only ON {table};"
+
+
+class EditsByTriggerOnly(AppendOnlyTrigger):
+    # The step the history table's migration lists right after its append-only trigger: EditsByTriggerOnly("editevent").
+    # Built on core's AppendOnlyTrigger for its plumbing, with its own rule and its own undo.
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        # Write the rule, then put it on the table. params=None: the rule's message holds a % sign.
+        table = self._table(app_label, schema_editor, to_state)
+        schema_editor.execute(EDITS_BY_TRIGGER_ONLY_FUNCTION, params=None)
+        schema_editor.execute(CREATE_EDITS_BY_TRIGGER_ONLY_TRIGGER.format(table=table), params=None)
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        table = self._table(app_label, schema_editor, from_state)
+        schema_editor.execute(DROP_EDITS_BY_TRIGGER_ONLY_TRIGGER.format(table=table), params=None)
+
+    def describe(self) -> str:
+        return f"Written-by-trigger-only guard on {self.model_name}"

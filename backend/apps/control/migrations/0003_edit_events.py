@@ -3,13 +3,15 @@
 # written by PostgreSQL's own trigger (apps/control/operations.py). The trigger fills `id` (uuidv7()) and
 # `created_at` (now()) itself: the Python defaults below never run for it. It is born append-only:
 # AppendOnlyTrigger, right after its CreateModel, makes PostgreSQL refuse every UPDATE and DELETE on it
-# (ADR-0021). Each office table switches its history on in its own migration (RecordEdits).
+# (ADR-0021), and EditsByTriggerOnly every INSERT that doesn't come from the trigger. Each office table switches its
+# history on in its own migration (RecordEdits).
 
 import uuid
 
 import django.db.models.deletion
 from django.db import migrations, models
 
+from apps.control.operations import EditsByTriggerOnly
 from apps.core.operations import AppendOnlyTrigger
 
 
@@ -65,4 +67,5 @@ class Migration(migrations.Migration):
             },
         ),
         AppendOnlyTrigger("editevent"),
+        EditsByTriggerOnly("editevent"),
     ]

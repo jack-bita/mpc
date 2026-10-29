@@ -23,7 +23,7 @@ from django.db.models import Model
 
 from apps.control import operations
 from apps.control.models import EditEvent
-from apps.control.operations import RecordEdits
+from apps.control.operations import EditsByTriggerOnly, RecordEdits
 from apps.core.acting import acting_as
 from apps.core.links import LINK_TYPES
 from apps.core.models import AppendOnlyError
@@ -116,17 +116,57 @@ def test_history_rows_append_only(shop_a: Model, note: Note) -> None:
     assert edit.after == {"text": "Dawa za Mifugo"}
 
 
+def test_only_the_trigger_writes_history(shop_a: Model, note: Note, staff_a: Actor) -> None:
+    # save() refuses a made-up row (above), but two ways skip save(): bulk_create, and SQL typed by hand. A history
+    # row that nobody's edit wrote, naming Staff A, would be a lie in the owner's trail (ADR-0036). So PostgreSQL
+    # refuses every INSERT that doesn't come from the edit history's own trigger.
+    made_up = EditEvent(
+        shop_id=note.shop_id,
+        subject_type="probe_note",
+        subject_id=note.pk,
+        before={"text": "Dawa"},
+        after={"text": "Kitu kingine"},
+        created_by_id=staff_a.staff_id,
+    )
+    table = EditEvent._meta.db_table
+    with shop_context(shop_a):
+        with pytest.raises(IntegrityError, match="only the edit history's trigger"), transaction.atomic():
+            EditEvent.objects.bulk_create([made_up])
+        with (
+            pytest.raises(IntegrityError, match="only the edit history's trigger"),
+            transaction.atomic(),
+            connection.cursor() as cursor,
+        ):
+            cursor.execute(
+                f"INSERT INTO {table} (id, shop_id, created_at, subject_type, subject_id, before, after) "
+                "VALUES (uuidv7(), %s, now(), 'probe_note', %s, '{}', '{}')",
+                [note.shop_id, note.pk],
+            )
+        assert not EditEvent.objects.exists()
+
+        # The trigger itself still writes: a real edit leaves its row.
+        Note.objects.filter(pk=note.pk).update(text="Dawa za Mifugo")
+        assert EditEvent.objects.count() == 1
+
+
 def test_edit_trigger_removed_when_migrated_back(shop_a: Model, note: Note) -> None:
-    # Undoing the migration must take the trigger off, or stepping a database back would leave a rule behind that
-    # no migration knows about. In PostgreSQL even this change sits inside the test's transaction, so the rollback
-    # at the end of the test puts the trigger back (as in test_flag_trigger.py).
+    # Undoing a migration must take its trigger off, or stepping a database back would leave a rule behind that no
+    # migration knows about. In PostgreSQL even this change sits inside the test's transaction, so the rollback at
+    # the end of the test puts the triggers back (as in test_flag_trigger.py).
     state = ProjectState.from_apps(apps)
     with connection.schema_editor() as editor:
         RecordEdits("note", type_code="probe_note").database_backwards("probe", editor, state, state)
+        EditsByTriggerOnly("editevent").database_backwards("control", editor, state, state)
 
     with shop_context(shop_a):
+        # The note's trigger is off: an edit writes nothing.
         Note.objects.filter(pk=note.pk).update(text="Dawa za Mifugo")
         assert not EditEvent.objects.exists()
+        # The history's guard is off: a row bulk_create sends goes in.
+        EditEvent.objects.bulk_create(
+            [EditEvent(shop_id=note.shop_id, subject_type="probe_note", subject_id=note.pk, before={}, after={})]
+        )
+        assert EditEvent.objects.count() == 1
 
 
 def test_record_edits_checks_its_names() -> None:
@@ -143,6 +183,9 @@ PINNED_SQL = {
     "RECORD_EDIT_FUNCTION": "13f3ceb57434ade1a1f055b2261b20668050fc26b82b2e8652b9016908ed04dd",
     "CREATE_RECORD_EDITS_TRIGGER": "3dabe4bacd3ea9c135e1e48a20030d74fe423948eed49e2d9bd1f9e5446aaa8e",
     "DROP_RECORD_EDITS_TRIGGER": "bcf9a1bf65eb27df33203fec7a0c45364b1379a3cc481273dd0ac381e2d59a9d",
+    "EDITS_BY_TRIGGER_ONLY_FUNCTION": "d7550bb29e00e98194c0c6d4f59ce12fbab1d3c3765c14473836adcc721be4c0",
+    "CREATE_EDITS_BY_TRIGGER_ONLY_TRIGGER": "952c35c87f01c56dc67006f73666ac00f370898694638b974a50adea951fd9ef",
+    "DROP_EDITS_BY_TRIGGER_ONLY_TRIGGER": "2887133fdc07dc1f30a5cf4a969f6260806fab33ad0a764352161ead73675341",
 }
 
 
