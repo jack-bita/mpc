@@ -74,9 +74,12 @@ def table_of(type_code: str) -> type[ShopScoped]:
     # importing it.
     try:
         table = apps.get_model(label)
-    except LookupError, ValueError:
-        # LookupError: no such app or table; ValueError: text that isn't "app.Model" at all.
-        raise UnknownLinkType(f"{type_code!r} names {label!r}, which is not a table.") from None
+    except LookupError:
+        # No such app, or no such table in it: a typo, or a table a card renamed.
+        raise UnknownLinkType(f"{type_code!r} names {label!r}, but no app has that table.") from None
+    except ValueError:
+        # Text that isn't "app.Model" at all.
+        raise UnknownLinkType(f'{type_code!r} names {label!r}, which is not written as "app.Model".') from None
     # A table with no `shop` (a User, a Unit) has no guard, so loading through it could read any shop's row.
     if not issubclass(table, ShopScoped):
         raise UnknownLinkType(f"{type_code!r} names {label}, which is not a shop's table.")

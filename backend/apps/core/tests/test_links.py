@@ -76,21 +76,22 @@ def test_table_without_type_code_refused(shop_a: Model, monkeypatch: pytest.Monk
 
 
 @pytest.mark.parametrize(
-    "table",
+    ("table", "reason"),
     [
         # A person, who belongs to no one shop (02 §5): no guard, so a link could read anyone.
-        "people.User",
+        ("people.User", "not a shop's table"),
         # A table that doesn't exist, such as a typo.
-        "probe.Missing",
+        ("probe.Missing", "no app has that table"),
         # Text that isn't "app.Model" at all.
-        "Note",
+        ("Note", 'not written as "app.Model"'),
     ],
 )
-def test_type_code_must_name_a_shop_table(table: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_type_code_must_name_a_shop_table(table: str, reason: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(LINK_TYPES, "wrong", table)
 
-    # Refused before any read, so no shop needs to be open.
-    with pytest.raises(UnknownLinkType):
+    # Refused before any read, so no shop needs to be open. Each for its own reason: a case refused for
+    # another one's would prove nothing about its own check.
+    with pytest.raises(UnknownLinkType, match=re.escape(reason)):
         load_link("wrong", uuid.uuid7())
 
 
