@@ -32,7 +32,7 @@ from apps.core.models import ShopScoped
 from apps.core.permissions import ROLE_TEMPLATES, Permission
 from apps.core.tenancy import ALL_SHOPS, current_shop, shop_context
 from apps.people.models import PermissionGrant, Role, RoleAssignment, StaffMember, StaffStatus, User
-from apps.people.permissions import effective_permissions, require
+from apps.people.permissions import effective_permissions
 from apps.people.pins import check_pin_strength, hash_pin
 from apps.shops.models import Shop, Side
 from apps.shops.services import NewSide, create_shop
@@ -248,15 +248,17 @@ def _check_giver(by: StaffMember | None, codes: Collection[str], side: Side | No
     # Who may give (Jack, 29 Oct 2026). `by` None: the system or the superuser, who set up the shop's first owner.
     # Anyone else needs staff.manage on that side, and may give only codes they hold there themselves: Baba hands a
     # manager staff.manage to add a loader, and that manager still can't make himself Owner and approve his own day.
-    # Both checks read the giver's roles from the database (apps/people/permissions.py), so a giver suspended a
-    # moment ago gives nothing.
+    # Both checks use one reading of the giver's roles, from the database (apps/people/permissions.py), so a giver
+    # suspended a moment ago gives nothing.
     if by is None:
         return
-    require(by, Permission.STAFF_MANAGE, side)
+    held = effective_permissions(by, side)
+    if Permission.STAFF_MANAGE not in held:
+        raise PermissionDenied("Giving a role or a permission needs staff.manage on that side.")
     # Only codes from the list are compared: one that isn't is the table's own rule to refuse, with its code
     # (permission.unknown), whoever sends it. A typo is reported as a typo.
     known = {code for code in codes if code in Permission.values}
-    if not known <= effective_permissions(by, side):
+    if not known <= held:
         raise PermissionDenied("Nobody gives a permission they don't hold on that side.")
 
 
