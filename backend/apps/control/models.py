@@ -9,7 +9,8 @@ UUID (apps/core/links.py), because one column can't link to rows of many tables.
 A flag only moves forward: open → explained → resolved | dismissed, and it may close straight from open
 (Jack, 29 Oct 2026; 02 v1.8). Each step is a FlagNote, with who, when and the words: every explanation is
 kept, one per person or more, and none can be edited. FlagPerson links a flag to each staff member it
-names. apps/control/services.py raises flags and moves them; nothing else writes these tables.
+names, and is append-only too: who a flag names is part of the fact. apps/control/services.py raises flags
+and moves them; nothing else writes these tables.
 
 `control` is layer 0, beside `core`, so every app can raise flags (ADR-0035). It imports only `core`: it
 names the tables of `shops` and `people` by text ("shops.Side"), which is not an import (03 §5.1).
@@ -101,8 +102,10 @@ class Flag(ShopScoped):
     # The staff members the flag names: who held the drawer, who sold loose kg in the window (E9). Kept as
     # rows of FlagPerson, which has a shop like every shop row (T1), not in Django's own link table, which
     # would have none and would CASCADE (rule 7). For reading only, as PaymentAccount.sides is: raise_flag
-    # writes the rows. through_fields: FlagPerson links to StaffMember twice, by `staff` and by the
-    # `created_by` every shop row has, so Django is told which of the two this is.
+    # writes the rows. Its `remove()`, `clear()` and `set()` would delete link rows with no who, when or why,
+    # and PROTECT doesn't stop them; FlagPerson's trigger does. through_fields: FlagPerson links to
+    # StaffMember twice, by `staff` and by the `created_by` every shop row has, so Django is told which of the
+    # two this is.
     people = models.ManyToManyField(
         "people.StaffMember", through="FlagPerson", through_fields=("flag", "staff"), related_name="+"
     )
@@ -148,17 +151,20 @@ class Flag(ShopScoped):
         return load_link(self.subject_type, self.subject_id)
 
 
-class FlagPerson(ShopScoped):
+class FlagPerson(AppendOnly):
     # One staff member a flag names. The table behind Flag.people, with a `shop` like every shop row (T1).
     # Written as a row of this table by raise_flag, never through `flag.people.add()`, which knows nothing
-    # of the shop. Never changed: who a flag names is part of the fact.
+    # of the shop. Never changed or deleted: who a flag names is part of the fact (E4's flag names Asha).
+    # AppendOnly (CORE-3) refuses a second save() and any delete() in Python, and the trigger in this
+    # table's migration refuses the same in PostgreSQL (ADR-0021), `flag.people.clear()` included.
 
     # PROTECT: nothing is deleted (rule 7). db_index=False: the unique rule below indexes (shop, flag, staff).
     flag = models.ForeignKey(Flag, on_delete=models.PROTECT, related_name="+", db_index=False)
     # Named, not imported (ADR-0035). T1: raise_flag checks the person belongs to the flag's shop.
     staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
 
-    class Meta(ShopScoped.Meta):
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2).
         constraints = [
             # Named once: a person named twice would be asked to explain twice, and counted twice in a
             # report of who is flagged most. The message is there for the code's sake, as on Side's letter.

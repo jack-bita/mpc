@@ -27,7 +27,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Model
 
-from apps.control.models import Flag, FlagKind, FlagNote, FlagStatus, FlagStep
+from apps.control.models import Flag, FlagKind, FlagNote, FlagPerson, FlagStatus, FlagStep
 from apps.control.services import dismiss_flag, explain_flag, raise_flag, resolve_flag
 from apps.core.links import LINK_TYPES
 from apps.core.models import AppendOnlyError, ShopScoped
@@ -296,3 +296,22 @@ def test_flag_notes_cannot_be_edited(shop_a: Model, flag: Flag, staff_a: Actor) 
 
     note.refresh_from_db()
     assert note.text == "Nilitoa chenji zaidi"
+
+
+def test_flag_people_cannot_be_changed(shop_a: Model, flag: Flag, staff_a: Actor) -> None:
+    # Who a flag names is part of the fact: E4's flag names Asha. Django's `flag.people.clear()`, `remove()`
+    # and `set()` would delete the link rows with no who, when or why, and PROTECT doesn't stop them. So
+    # FlagPerson is append-only too, in Python and in PostgreSQL (ADR-0021).
+    with shop_context(shop_a):
+        link = FlagPerson.objects.get(flag=flag)
+        with pytest.raises(IntegrityError, match="append-only"), transaction.atomic():
+            flag.people.clear()
+        with pytest.raises(IntegrityError, match="append-only"), transaction.atomic():
+            FlagPerson.objects.filter(pk=link.pk).update(staff_id=None)
+
+        with pytest.raises(AppendOnlyError):
+            link.save()
+        with pytest.raises(AppendOnlyError):
+            link.delete()
+
+        assert [person.pk for person in flag.people.all()] == [staff_a.staff_id]
