@@ -171,6 +171,29 @@ def test_flag_closes_without_explanation(
         assert notes_of(flag) == [(closed_status, words, staff_a2.staff_id)]
 
 
+@pytest.mark.parametrize(("close", "closed_status", "words"), CLOSES)
+def test_named_person_cannot_close_their_own_flag(
+    shop_a: Model,
+    flag: Flag,
+    staff_a: Actor,
+    staff_a2: Actor,
+    close: Callable[..., Flag],
+    closed_status: FlagStatus,
+    words: str,
+) -> None:
+    # E4's flag names Asha. She may say why her drawer is short, but not decide it: closing it herself, with
+    # "no problem", would hide her own shortage from the owner (Jack, at CTRL-1's review; 02 v1.8).
+    with shop_context(shop_a):
+        explain_flag(flag, note="Nilitoa chenji zaidi", by=staff_a)
+        with pytest.raises(ValidationError) as refused:
+            close(flag, note=words, by=staff_a)
+        assert refused.value.code == "flag.own_flag"
+        assert Flag.objects.get(pk=flag.pk).status == FlagStatus.EXPLAINED
+
+        # Someone the flag doesn't name decides it.
+        assert close(flag, note=words, by=staff_a2).status == closed_status
+
+
 def test_every_explanation_is_kept(shop_a: Model, side_a: ShopScoped, staff_a: Actor, staff_a2: Actor) -> None:
     # E9 (02 §18): a 50 kg bag, and only 48.5 kg sold loose before the next was opened. Both sellers sold
     # loose kg in that window, so the flag names both, and each explains (Jack, 29 Oct 2026).

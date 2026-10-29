@@ -8,7 +8,8 @@ with a note in a person's own words, who and when kept with it (Jack, 29 Oct 202
 
 explain_flag may be called again and again: each person a flag names may explain it, and every explanation
 is kept. Each step names the person who took it: a flag is raised by the system as often as not, but only a
-person explains or closes one. Nothing moves a flag back, and nothing touches a closed one.
+person explains or closes one, and never one who is named on it. Nothing moves a flag back, and nothing
+touches a closed one.
 
 A broken rule is a ValidationError with a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) will turn into its error shape when the review screen comes (CTRL-4); a bug in the
@@ -141,6 +142,11 @@ def _step(flag: Flag, step: FlagStep, *, note: str, by: Actor, note_id: uuid.UUI
         # flag takes none.
         if fresh.status in _CLOSED:
             raise ValidationError("This flag is closed.", code="flag.closed")
+        # A person the flag names may explain it, but never decide it (Jack, at CTRL-1's review; 02 v1.8):
+        # Asha closing her own drawer's shortage with "no problem" would hide it from the owner. Someone else
+        # closes it; who may is `flag.review` on the flag's side, which the review screen checks (CTRL-4).
+        if step is not FlagStep.EXPLAINED and FlagPerson.objects.filter(flag=fresh, staff_id=by.staff_id).exists():
+            raise ValidationError("A person this flag names can't close it.", code="flag.own_flag")
         written = FlagNote(shop_id=fresh.shop_id, flag=fresh, step=step, text=text, created_by_id=by.staff_id)
         if note_id is not None:
             # The phone's id, not a new one, so the next copy of this request finds the note above.
