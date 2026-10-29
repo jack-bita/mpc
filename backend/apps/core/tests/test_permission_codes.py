@@ -1,8 +1,10 @@
 """apps/core/tests/test_permission_codes.py — the permission codes, and the six role templates built from them
 (02 §5, 03 §5.8).
 
-The codes are stored in roles and grants (apps/people/models.py), so each must fit the column and the shape the
-database checks; and every template may name only codes from the list, the Owner's every one of them.
+The codes are stored in roles and grants (apps/people/models.py), whose columns hold PERMISSION_CODE_MAX_LENGTH
+characters and whose database rules take only codes from the list: so each code must have the shape 02 §5 writes and
+fit the column; every template may name only codes from the list, the Owner's every one of them; and two of Jack's
+choices hold, that everyone weighs what arrives and that the Manager holds all but the owner's four.
 """
 
 import re

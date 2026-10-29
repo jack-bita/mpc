@@ -22,9 +22,9 @@
 
 **Changes in v1.8** (29 Oct 2026, CTRL-1): three decisions by Jack, made while building CTRL-1. A flag may be resolved or dismissed straight from `open`, always with a note, as a bank's reconciliation queue works. When a flag names several people, each may explain it, and every explanation is kept; a flag's notes are never edited. A person a flag names may explain it, but never close it: someone else decides (§13, §14). A new permission, `flag.review`, closes flags on a side (§5). Marked **(v1.8)**.
 
-**Changes in v1.10** (29 Oct 2026, PPL-3): a decision by Jack, made while planning PPL-3. Goods that arrive are weighed on the shop's scale before they go in, a few sacks at a time; the device adds up the sacks and the kg at once, offline too, and the stock goes in at the scale's kg (§7, §17). Weighing is its own permission, `stock.weigh`, which any role may have; completing the delivery with its buying prices stays `stock.receive`, because buying prices never go to devices (§5). Also from PPL-3: a role's fields, who may give a role or a permission (Jack), and what a person holds on a side and on the whole shop (§5); a new code reaches the shops that already exist through a data migration (§5, 03 §5.8). Marked **(v1.10)**.
-
 **Changes in v1.9** (29 Oct 2026, CTRL-2): an audit event's `actor` and `at` are the row's `created_by` and `created_at` (§1), and it always has a reason (T3); its `device` and `approval` come with their tables. A new append-only record, `EditEvent`, keeps every change to an office record, written by the database itself (Jack, while planning CTRL-2; 03 §5.16, ADR-0036); payment accounts and stock locations are office records too (Jack, at CTRL-2's review). T2 names it (§13, §16). Marked **(v1.9)**.
+
+**Changes in v1.10** (29 Oct 2026, PPL-3): a decision by Jack, made while planning PPL-3. Goods that arrive are weighed on the shop's scale before they go in, a few sacks at a time; the device adds up the sacks and the kg at once, offline too, and the stock goes in at the scale's kg (§7, §17). Weighing is its own permission, `stock.weigh`, which any role may have; completing the delivery with its buying prices stays `stock.receive`, because buying prices never go to devices (§5). Also from PPL-3: a role's fields, who may give a role or a permission (Jack), and what a person holds on a side and on the whole shop (§5); a new code reaches the shops that already exist through a data migration (§5, 03 §5.8). Marked **(v1.10)**.
 
 ---
 
@@ -199,7 +199,7 @@ A full diagram for GitHub is in Appendix A.
 
 **RoleAssignment** [R1] → StaffMember — `role` + `side` (empty = all sides, a side added later included). Given once per side, "all sides" included, and never to someone who has left **(v1.10)**.
 
-**PermissionGrant** [R1] → StaffMember — one extra `permission` for one person, optionally on one `side`. Given once per side, as a role is **(v1.10)**.
+**PermissionGrant** [R1] → StaffMember — one extra `permission` for one person, optionally on one `side`. Given once per side, as a role is, and never to someone who has left; a suspended person may still be given a role or a permission, which counts once they are brought back **(v1.10)**.
 
 **Who may give** a role or a permission **(v1.10)**: someone with `staff.manage` on that side, and only codes they hold there themselves, so a manager handed `staff.manage` to add a loader can't make himself Owner (Jack, PPL-3). The system or the superuser sets up a shop's first owner.
 

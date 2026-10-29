@@ -2,9 +2,9 @@
 
 A staff member's working life at one shop (02 §5): they are added, suspended, brought back and marked
 as left, and given a PIN (set_pin; apps/people/pins.py hashes it). And what they may do there: a shop gets
-its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them), and a
-person is given a role, or one extra
-permission, on one side or on all of them (assign_role, grant_permission), by someone who may give it.
+its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
+and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
+grant_permission), by someone who may give it.
 Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
