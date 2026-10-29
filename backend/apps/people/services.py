@@ -2,7 +2,8 @@
 
 A staff member's working life at one shop (02 §5): they are added, suspended, brought back and marked
 as left, and given a PIN (set_pin; apps/people/pins.py hashes it). And what they may do there: a shop gets
-its own copy of the role templates (copy_role_templates), and a person is given a role, or one extra
+its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them), and a
+person is given a role, or one extra
 permission, on one side or on all of them (assign_role, grant_permission), by someone who may give it.
 Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
@@ -15,7 +16,7 @@ Callers open shop_context(shop) first: full_clean and the unique checks read thr
 """
 
 import uuid
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from contextlib import nullcontext
 from datetime import date
 from zoneinfo import ZoneInfo
@@ -29,11 +30,12 @@ from apps.control.services import audit
 from apps.core.acting import acting_as
 from apps.core.models import ShopScoped
 from apps.core.permissions import ROLE_TEMPLATES, Permission
-from apps.core.tenancy import ALL_SHOPS, current_shop
+from apps.core.tenancy import ALL_SHOPS, current_shop, shop_context
 from apps.people.models import PermissionGrant, Role, RoleAssignment, StaffMember, StaffStatus, User
 from apps.people.permissions import effective_permissions, require
 from apps.people.pins import check_pin_strength, hash_pin
 from apps.shops.models import Shop, Side
+from apps.shops.services import NewSide, create_shop
 
 
 def _check_shop(shop_id: uuid.UUID, by: StaffMember | None) -> None:
@@ -201,6 +203,21 @@ def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMem
         staff.full_clean()
         _save(staff, by=by, fields=["pin_hash", "pin_changed_at"])
     return staff
+
+
+def set_up_shop(*, name: str, code: str, sides: Sequence[NewSide]) -> Shop:
+    """Make a live shop with everything it needs to work, all or nothing: its sides, each with its stock location
+    and cash drawer (create_shop, apps/shops/services.py), and its own copy of the six roles. For the superuser and
+    system jobs. `shops` may not import `people` (ADR-0035), so the roles are added here, not by create_shop: a
+    shop made by create_shop alone has no roles, so nobody may act there."""
+    # One transaction around both: if the roles can't be copied, the shop and its sides are taken back too.
+    with transaction.atomic():
+        shop = create_shop(name=name, code=code, sides=sides)
+        # create_shop closes the new shop as it returns; the roles' checks read through the guard, so it is opened
+        # again for them.
+        with shop_context(shop):
+            copy_role_templates(shop)
+    return shop
 
 
 def copy_role_templates(shop: Shop) -> dict[str, Role]:

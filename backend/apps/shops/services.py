@@ -11,8 +11,8 @@ rule with a ValidationError that carries a code (ADR-0032), which the API's erro
 `shops` is layer 1 and may not import `people`, not even as a type (ADR-0035). Who acts is an Actor
 (apps/core/tenancy.py): anything with a `shop_id` and a `staff_id`, as a staff member has. create_shop needs
 none: a new shop has no staff yet, so every row it makes has `created_by` empty, like any row the system
-makes (02 §1). How a new shop gets its role templates, which live in `people`, is PPL-3's to decide; one
-way is a `people` service that calls create_shop, then copies them in.
+makes (02 §1). A new shop's roles live in `people`, so a `people` service, set_up_shop, calls create_shop and
+then copies the role templates in, in one transaction (PPL-3, 03 §5.8).
 """
 
 import uuid
@@ -46,7 +46,8 @@ class NewSide:
 
 def create_shop(*, name: str, code: str, sides: Sequence[NewSide]) -> Shop:
     """Make a live shop with its sides, and for each side a default stock location and a cash drawer, all
-    or nothing. For the superuser and system jobs. Always `kind=live` for now: the demo seed (DATA-1) and
+    or nothing. For set_up_shop (apps/people/services.py), which adds the shop's roles: on its own, it makes a
+    shop with no roles, where nobody may act. Always `kind=live` for now: the demo seed (DATA-1) and
     practice shops (ADR-0014) will need a `kind` argument, which the first of them adds."""
     # A shop does everything on a side (ADR-0001): with none it could neither sell nor count. Refused
     # before anything is written.
