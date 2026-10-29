@@ -121,3 +121,18 @@ def test_manager_cannot_make_himself_owner(
             assign_role(staff_a, roles[RoleTemplate.WORKER], side=None, by=staff_a2)
         # What he holds on Dawa, he may give on Dawa.
         assign_role(staff_a, roles[RoleTemplate.WORKER], side=side_a, by=staff_a2)
+
+
+def test_giver_check_reads_the_role_as_stored(shop_a: Shop, staff_a: StaffMember, staff_a2: StaffMember) -> None:
+    # The role handed in may be a copy whose codes were changed in memory and never saved: here the Owner role, made to
+    # say "sale.write" only. The check reads the role as stored, so a Manager given staff.manage still can't hand out
+    # the real Owner role, with the owner's own approvals (Jack's rule).
+    with shop_context(shop_a):
+        roles = copy_role_templates(shop_a)
+        assign_role(staff_a2, roles[RoleTemplate.MANAGER], side=None, by=None)
+        grant_permission(staff_a2, Permission.STAFF_MANAGE, side=None, by=None)
+        owner = roles[RoleTemplate.OWNER]
+        owner.permissions = [Permission.SALE_WRITE]
+        with pytest.raises(PermissionDenied):
+            assign_role(staff_a, owner, side=None, by=staff_a2)
+        assert not RoleAssignment.objects.filter(staff=staff_a).exists()

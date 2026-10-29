@@ -275,9 +275,14 @@ def assign_role(staff: StaffMember, role: Role, *, side: Side | None, by: StaffM
     gives it; None for the system or the superuser."""
     _check_shop(staff.shop_id, by)
     _check_same_shop(staff, role, side)
-    _check_giver(by, role.permissions, side)
     with transaction.atomic():
         staff = _locked_receiver(staff)
+        # The role as stored, read again and locked: the giver's check compares its saved codes, never those of the
+        # copy handed in, which may have been changed in memory and never saved (the Owner role made to say
+        # "sale.write" would pass as a Seller's). An owner changing the role at the same moment waits until it is
+        # given, or this waits for them.
+        role = Role.objects.select_for_update().get(pk=role.pk)
+        _check_giver(by, role.permissions, side)
         given = RoleAssignment(shop_id=staff.shop_id, staff=staff, role=role, side=side, created_by=by)
         # Every rule in Meta first: the same role twice on one side comes back as a code (role.already_given).
         given.full_clean()
