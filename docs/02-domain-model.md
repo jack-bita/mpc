@@ -20,7 +20,7 @@
 
 **Changes in v1.7** (27 Oct 2026, CORE-4): a setting and a price have no `set_by` column (§4, §6). Who set a value is the row's `created_by`, which every shop row has (§1): two columns for one fact could one day disagree (Jack, while planning CORE-4). §4 also says each setting key has a scope, as ADR-0013 does. From CORE-4's review, §4 says which row wins on one date, and that a side's row beats even an older shop row, so devices can pick the same row offline. Marked **(v1.7)**.
 
-**Changes in v1.8** (29 Oct 2026, CTRL-1): two decisions by Jack, made while planning CTRL-1. A flag may be resolved or dismissed straight from `open`, always with a note, as a bank's reconciliation queue works. When a flag names several people, each may explain it, and every explanation is kept; a flag's notes are never edited (§13, §14). Marked **(v1.8)**.
+**Changes in v1.8** (29 Oct 2026, CTRL-1): three decisions by Jack, made while building CTRL-1. A flag may be resolved or dismissed straight from `open`, always with a note, as a bank's reconciliation queue works. When a flag names several people, each may explain it, and every explanation is kept; a flag's notes are never edited. A person a flag names may explain it, but never close it: someone else decides (§13, §14). A new permission, `flag.review`, closes flags on a side (§5). Marked **(v1.8)**.
 
 ---
 
@@ -197,7 +197,7 @@ A full diagram for GitHub is in Appendix A.
 **PermissionGrant** [R1] → StaffMember — one extra `permission` for one person, optionally on one `side`.
 
 **Permissions** are fixed codes in code (not a table):
-`sale.write` · `sale.take_payment` · `sale.hand_over` · `sale.bargain` (down to the floor) · `sale.below_floor_approve` · `sale.jumla_switch` · `sale.cancel` · `sale.refund` · `credit.give` · `credit.approve` · `debt.view` · `debt.adjust` · `price.change` · `cost.view` (buying prices, profit) · `product.manage` · `contact.manage` · `stock.receive` · `stock.loss` · `stock.count` · `stock.count_approve` · `stock.transfer` · `money.expense` · `money.advance` · `money.withdraw` · `drawer.count` · `drawer.confirm` · `drawer.approve` (approve the day) · `staff.manage` · `attendance.manage` · `pay.run` · `pay.approve` · `settings.manage` · `device.manage` · `report.view` · `job.manage` (R2) · `production.run` (R2)
+`sale.write` · `sale.take_payment` · `sale.hand_over` · `sale.bargain` (down to the floor) · `sale.below_floor_approve` · `sale.jumla_switch` · `sale.cancel` · `sale.refund` · `credit.give` · `credit.approve` · `debt.view` · `debt.adjust` · `price.change` · `cost.view` (buying prices, profit) · `product.manage` · `contact.manage` · `stock.receive` · `stock.loss` · `stock.count` · `stock.count_approve` · `stock.transfer` · `money.expense` · `money.advance` · `money.withdraw` · `drawer.count` · `drawer.confirm` · `drawer.approve` (approve the day) · `staff.manage` · `attendance.manage` · `pay.run` · `pay.approve` · `settings.manage` · `device.manage` · `flag.review` (resolve or dismiss a side's flags) **(v1.8)** · `report.view` · `job.manage` (R2) · `production.run` (R2)
 
 **Approval** [R1] ✚ → Shop — a permitted person says yes on the spot.
 - `action`, `subject`, `requested_by`, `approved_by`, `method`: `pin_here` (they type their PIN on the same device; works offline) | [Later] `remote`; `note`
@@ -434,6 +434,7 @@ Advances come from `MoneyMovement` `staff_advance` and are deducted in the next 
 - `status`: `open` → `explained` → `resolved` | `dismissed` (by, note)
 - A manager who finds the reason may resolve or dismiss a flag straight from `open`, with their own note. `resolved` and `dismissed` are final **(v1.8)**.
 - Each step is a note, with who and when. Every explanation is kept: each person a flag names may write their own, and none replaces another. Closing a flag needs a note too. Notes are never edited **(v1.8)**.
+- A person a flag names may explain it, but never resolve or dismiss it: Asha can't write "no problem" on her own drawer's shortage. Someone else decides, with `flag.review` on the flag's side (X1) **(v1.8)**.
 - Low stock and expiring batches are **alerts** (lists), not flags: nobody has to explain them.
 
 **AuditEvent** [R1] — who did what: `actor`, `device`, `action`, `subject`, `before`, `after`, `reason`, `approval`, `at`. Append-only.
