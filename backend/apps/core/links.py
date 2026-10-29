@@ -43,6 +43,11 @@ LINK_TYPES: dict[str, str] = {
     # A payment account and a stock location: the history of their edits, such as a till's new number (CTRL-2).
     "payment_account": "shops.PaymentAccount",
     "stock_location": "shops.StockLocation",
+    # A role, a role given to a person, and an extra permission: the history of their edits, such as an owner
+    # changing what the shop's Manager may do (PPL-3).
+    "role": "people.Role",
+    "role_assignment": "people.RoleAssignment",
+    "permission_grant": "people.PermissionGrant",
 }
 
 

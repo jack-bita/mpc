@@ -57,6 +57,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # PostgreSQL's own column kinds, such as a role's list of codes (apps/people/models.py). Part of Django
+    # itself, not a new package: we run on PostgreSQL only (ADR-0023).
+    "django.contrib.postgres",
     "rest_framework",
     # Writes the API's OpenAPI description from the routes (ADR-0025, apps/core/api/schema.py).
     "drf_spectacular",

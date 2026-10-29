@@ -1,8 +1,9 @@
-"""apps/people/models.py — the people tables: User, a human across every shop, and StaffMember, their job
-at one shop (02 §5).
+"""apps/people/models.py — the people tables: User, a human across every shop; StaffMember, their job at one
+shop; and what each job may do there: the shop's own roles (Role), the roles a person holds on each side
+(RoleAssignment), and the extra permissions one person holds (PermissionGrant) (02 §5).
 
 A User is the person, not the job: the same person can work at MPC and in its practice shop, and their
-job at each shop (StaffMember) holds the nickname, the status and the PIN; the roles join it in PPL-3.
+job at each shop (StaffMember) holds the nickname, the status and the PIN, and its roles hang from it.
 So User keeps only what belongs to the person. It is global, one of the few tables without a `shop`
 (ADR-0022). User is the project's first migration on purpose: Django fixes its user table at the first
 `migrate` and can't swap it afterwards (ADR-0012, 04 BP5).
@@ -13,12 +14,15 @@ from typing import Any
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.db.models.functions import Lower
 
 from apps.core.fields import PhoneField
 from apps.core.languages import Language
-from apps.core.models import ShopScoped, TimeStamped, UUIDModel
+from apps.core.models import Editable, ShopScoped, TimeStamped, UUIDModel
+from apps.core.permissions import PERMISSION_CODE_MAX_LENGTH, Permission, RoleTemplate
+from apps.shops.models import Side
 
 
 class UserManager(BaseUserManager["User"]):
@@ -243,3 +247,115 @@ class StaffMember(ShopScoped):
         # full_clean runs this before the rules above: " Asha " and "Asha" are one nickname on screen.
         super().clean()
         self.display_name = (self.display_name or "").strip()
+
+
+class Role(Editable):
+    # A named bundle of permissions, the shop's own (02 §5): MPC's Manager, which MPC's owner can change without
+    # touching any other shop's. Each new shop gets one row per template (apps/core/permissions.py), copied in by
+    # copy_role_templates (apps/people/services.py). Editable (CORE-6) gives `updated_at`, `updated_by` and the
+    # `version` that keeps two people's edits apart, for the day the owner changes a role; the trigger in this
+    # table's migration records each change, before and after (ADR-0036).
+
+    # The template it was copied from ("manager"), or blank for a role an owner makes from nothing, later.
+    template = models.CharField(max_length=20, blank=True)
+    # The owner's own name for it. Blank on a copied role: the screens show the template's name in the person's
+    # language, so the server makes up no words (ADR-0032).
+    name = models.CharField(max_length=40, blank=True)
+    # The codes the role gives (02 §5), as one PostgreSQL array: a change to the role is then one row's edit, and
+    # the history keeps the whole list, before and after.
+    permissions = ArrayField(models.CharField(max_length=PERMISSION_CODE_MAX_LENGTH), default=list, blank=True)
+
+    class Meta(Editable.Meta):
+        # Builds on Editable.Meta, so `objects`, with the guard, stays the default manager (CORE-2). The database
+        # is the last guard (03 §5.6); full_clean checks the same rules first, so a person gets a code (ADR-0032).
+        constraints = [
+            # Only codes from the list: a typo would give nobody anything. The list is written into the rule, as
+            # AuditAction's is, so a new code is a new line in Permission and a migration that rebuilds this rule.
+            models.CheckConstraint(
+                condition=models.Q(permissions__contained_by=Permission.values),
+                name="people_role_permissions_known",
+                violation_error_code="permission.unknown",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(template__in=["", *RoleTemplate.values]),
+                name="people_role_template_known",
+                violation_error_code="role.template_unknown",
+            ),
+            # Every role has a name to show: its template's, or the owner's own.
+            models.CheckConstraint(
+                condition=~models.Q(template="", name=""),
+                name="people_role_named",
+                violation_error_code="role.name_blank",
+            ),
+            # One role per template per shop: two Managers would split the shop's managers across two bundles.
+            # Roles an owner makes (no template) don't count. The message is there for the code's sake, as on
+            # Side's letter (apps/shops/models.py).
+            models.UniqueConstraint(
+                fields=["shop", "template"],
+                condition=~models.Q(template=""),
+                name="people_role_one_per_template",
+                violation_error_code="role.template_taken",
+                violation_error_message="This shop already has a role from this template.",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name or self.template
+
+
+class RoleAssignment(ShopScoped):
+    # One role given to one person, on one side or on all of them (02 §5): Asha is Cashier on Vyakula. Who gave it,
+    # and when, are the row's `created_by` and `created_at`. Made only by assign_role (apps/people/services.py),
+    # which checks that the person, the role and the side all belong to the row's shop (T1). Taking a role away
+    # comes with the staff screens (PPL-4), as an edit the history records (ADR-0036): nothing is deleted.
+
+    # PROTECT: nothing is deleted (rule 7). related_name="+": a person's roles are read through the guarded
+    # `objects` (apps/people/permissions.py). db_index=False: the unique rule below indexes (shop, staff, ...),
+    # and nothing is deleted, so PROTECT never has to search the role's or the side's column.
+    staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name="+", db_index=False)
+    role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name="+", db_index=False)
+    # Empty: every side of the shop, a side added later included.
+    side = models.ForeignKey(Side, on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False)
+
+    class Meta(ShopScoped.Meta):
+        constraints = [
+            # Given once per side: a second row would change nothing, and taking the role away would have to find
+            # both. nulls_distinct=False: "all sides" (no side) counts as one value too, which PostgreSQL otherwise
+            # never does with two empty values. The message is there for the code's sake, as on Role.
+            models.UniqueConstraint(
+                fields=["shop", "staff", "role", "side"],
+                nulls_distinct=False,
+                name="people_roleassignment_once",
+                violation_error_code="role.already_given",
+                violation_error_message="This person already has this role on this side.",
+            ),
+        ]
+
+
+class PermissionGrant(ShopScoped):
+    # One extra permission for one person, on one side or on all of them (02 §5): Juma may count the stock on
+    # Vyakula. Made only by grant_permission (apps/people/services.py), with the same checks as a role is given;
+    # taken back with the staff screens (PPL-4), as a role is. Links as on RoleAssignment above.
+    staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name="+", db_index=False)
+    # A code from the list (apps/core/permissions.py).
+    permission = models.CharField(max_length=PERMISSION_CODE_MAX_LENGTH)
+    # Empty: every side of the shop, a side added later included.
+    side = models.ForeignKey(Side, on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False)
+
+    class Meta(ShopScoped.Meta):
+        constraints = [
+            # Only codes from the list, as on a role.
+            models.CheckConstraint(
+                condition=models.Q(permission__in=Permission.values),
+                name="people_permissiongrant_permission_known",
+                violation_error_code="permission.unknown",
+            ),
+            # Given once per side, "all sides" included, as a role is.
+            models.UniqueConstraint(
+                fields=["shop", "staff", "permission", "side"],
+                nulls_distinct=False,
+                name="people_permissiongrant_once",
+                violation_error_code="permission.already_given",
+                violation_error_message="This person already has this permission on this side.",
+            ),
+        ]
