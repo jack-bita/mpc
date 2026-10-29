@@ -13,6 +13,7 @@ Callers open shop_context(shop) first: full_clean and the unique checks read thr
 """
 
 import uuid
+from contextlib import nullcontext
 from datetime import date
 from zoneinfo import ZoneInfo
 
@@ -22,6 +23,7 @@ from django.utils import timezone
 
 from apps.control.models import AuditAction
 from apps.control.services import audit
+from apps.core.acting import acting_as
 from apps.core.tenancy import ALL_SHOPS, current_shop
 from apps.people.models import StaffMember, StaffStatus, User
 from apps.people.pins import check_pin_strength, hash_pin
@@ -86,6 +88,14 @@ def _check_reason(reason: str) -> None:
         raise ValidationError("A reason is required.", code="staff.reason_required")
 
 
+def _save(staff: StaffMember, *, by: StaffMember | None, fields: list[str]) -> None:
+    # Saves the changed fields, with `by` told to PostgreSQL for the save: the history line its trigger writes then
+    # names the same person as the action's audit line, even outside an office visit, as in a job or a command
+    # (02 v1.7: one fact, one answer; apps/core/acting.py). With `by` None, the system acts, and nobody is told.
+    with acting_as(by) if by is not None else nullcontext():
+        staff.save(update_fields=fields)
+
+
 def _locked(staff: StaffMember) -> StaffMember:
     # The row read again, and locked until the transaction ends (SELECT ... FOR UPDATE). Two managers
     # acting on Asha at the same moment take turns, and the second sees what the first one wrote, not
@@ -103,7 +113,7 @@ def suspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Staff
             raise ValidationError("Only an active staff member can be suspended.", code="staff.not_active")
         staff.status = StaffStatus.SUSPENDED
         staff.full_clean()
-        staff.save(update_fields=["status"])
+        _save(staff, by=by, fields=["status"])
         # In the same transaction: if the line can't be written, the suspension is undone with it.
         audit(
             action=AuditAction.STAFF_SUSPEND,
@@ -126,7 +136,7 @@ def unsuspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Sta
             raise ValidationError("Only a suspended staff member can come back.", code="staff.not_suspended")
         staff.status = StaffStatus.ACTIVE
         staff.full_clean()
-        staff.save(update_fields=["status"])
+        _save(staff, by=by, fields=["status"])
         audit(
             action=AuditAction.STAFF_UNSUSPEND,
             subject=staff,
@@ -156,7 +166,7 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
         staff.left_on = left_on
         # The rules in Meta refuse a leaving date before the start date (staff.left_before_start).
         staff.full_clean()
-        staff.save(update_fields=["status", "left_on"])
+        _save(staff, by=by, fields=["status", "left_on"])
         audit(
             action=AuditAction.STAFF_LEAVE,
             subject=staff,
@@ -183,5 +193,5 @@ def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMem
         staff.pin_hash = pin_hash
         staff.pin_changed_at = timezone.now()
         staff.full_clean()
-        staff.save(update_fields=["pin_hash", "pin_changed_at"])
+        _save(staff, by=by, fields=["pin_hash", "pin_changed_at"])
     return staff

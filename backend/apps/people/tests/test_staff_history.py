@@ -11,7 +11,8 @@ PostgreSQL's own trigger (EditEvent):
 
 A PIN reset shows as a new `pin_changed_at` only: the PIN's hash never leaves its column (03 §5.9). The office
 visit that names who acts comes with the staff screen (PPL-4), so acting_as() opens it here, as the base view
-will (apps/core/acting.py). Fake data only: the repo is public (03 §10).
+will (apps/core/acting.py). Outside a visit, each action names its own `by` (the last test). Fake data
+only: the repo is public (03 §10).
 """
 
 from datetime import date, datetime
@@ -74,3 +75,17 @@ def test_pin_hash_never_copied_to_history(shop_a: Shop, asha: StaffMember, staff
     # The hash shows nowhere: not as a field, and not as a value.
     assert asha.pin_hash
     assert asha.pin_hash not in f"{edit.before} {edit.after}"
+
+
+def test_staff_action_names_its_by_outside_a_visit(shop_a: Shop, asha: StaffMember, staff_a: StaffMember) -> None:
+    # Each staff action takes who acts as `by`, and its audit line names them. The history line of the same change
+    # must name the same person, even where no visit told PostgreSQL anyone, as in a job or a command: the two books
+    # must never disagree about who did it (02 v1.7).
+    with shop_context(shop_a):
+        asha = suspend(asha, by=staff_a, reason="Hakuja kazini siku 3")
+        set_pin(asha, "4826", by=staff_a)
+        edits = history_of(asha)
+        [line] = AuditEvent.objects.filter(subject_id=asha.pk)
+
+    assert line.created_by_id == staff_a.pk
+    assert [edit.created_by_id for edit in edits] == [staff_a.pk, staff_a.pk]
