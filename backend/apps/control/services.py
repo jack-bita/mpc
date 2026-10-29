@@ -89,26 +89,26 @@ def raise_flag(
     return flag
 
 
-def explain_flag(flag: Flag, *, note: str, by: Actor, note_id: uuid.UUID | None = None) -> Flag:
+def explain_flag(flag: Flag, *, text: str, by: Actor, note_id: uuid.UUID | None = None) -> Flag:
     """Say why the difference happened. The first explanation moves an open flag to explained; each person
     the flag names may add their own, and all are kept. `note_id`: the id the phone made for the note
     (ADR-0007), if it made one, so the same request sent twice writes it once."""
-    return _step(flag, FlagStep.EXPLAINED, note=note, by=by, note_id=note_id)
+    return _step(flag, FlagStep.EXPLAINED, text=text, by=by, note_id=note_id)
 
 
-def resolve_flag(flag: Flag, *, note: str, by: Actor, note_id: uuid.UUID | None = None) -> Flag:
+def resolve_flag(flag: Flag, *, text: str, by: Actor, note_id: uuid.UUID | None = None) -> Flag:
     """Close the flag: a real difference, dealt with ("Asha will pay the 3,000 tomorrow"). Straight from open
     too, when a manager finds the reason themselves. `note_id` as for explain_flag."""
-    return _step(flag, FlagStep.RESOLVED, note=note, by=by, note_id=note_id)
+    return _step(flag, FlagStep.RESOLVED, text=text, by=by, note_id=note_id)
 
 
-def dismiss_flag(flag: Flag, *, note: str, by: Actor, note_id: uuid.UUID | None = None) -> Flag:
+def dismiss_flag(flag: Flag, *, text: str, by: Actor, note_id: uuid.UUID | None = None) -> Flag:
     """Close the flag: no real problem after all ("the money was under the drawer's tray"). `note_id` as for
     explain_flag."""
-    return _step(flag, FlagStep.DISMISSED, note=note, by=by, note_id=note_id)
+    return _step(flag, FlagStep.DISMISSED, text=text, by=by, note_id=note_id)
 
 
-def _step(flag: Flag, step: FlagStep, *, note: str, by: Actor, note_id: uuid.UUID | None) -> Flag:
+def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUID | None) -> Flag:
     # The one way a flag moves: a note, then the status the note's step names. Every step keeps who
     # (`created_by`), when (`created_at`) and why (the note): rule 7.
     _check_shop(flag.shop_id, by)
@@ -116,10 +116,12 @@ def _step(flag: Flag, step: FlagStep, *, note: str, by: Actor, note_id: uuid.UUI
     # nameless for good. `by` is never None (the type says so); a device alone has no staff member to name.
     if by.staff_id is None:
         raise ValueError("A flag's step is taken by a person: a device alone is no person.")
-    # Trimmed first: a note of only spaces says no more than none, and the database would take it.
-    text = note.strip()
+    # Trimmed first: a note of only spaces says no more than none, and the database would take it. Filed under
+    # the words' field, `text`, as the note's own check files words too long for it: the review screen shows
+    # either beside the box they were typed in (03 §5.10).
+    text = text.strip()
     if not text:
-        raise ValidationError("A note is required.", code="flag.note_required")
+        raise ValidationError({"text": ValidationError("A note is required.", code="flag.note_required")})
     with transaction.atomic():
         # Read again and locked until the transaction ends (SELECT ... FOR UPDATE), as editing() does
         # (apps/core/editing.py). Two managers closing the same flag at once take turns, and the second

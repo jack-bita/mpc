@@ -142,9 +142,9 @@ def test_flag_status_only_moves_forward(
     words: str,
 ) -> None:
     with shop_context(shop_a):
-        explained = explain_flag(flag, note="Nilitoa chenji zaidi", by=staff_a)
+        explained = explain_flag(flag, text="Nilitoa chenji zaidi", by=staff_a)
         assert explained.status == FlagStatus.EXPLAINED
-        closed = close(explained, note=words, by=staff_a2)
+        closed = close(explained, text=words, by=staff_a2)
         assert closed.status == closed_status
 
         # Closed is final: no more notes, whatever the step. Each move is tried with `flag`, the copy read
@@ -152,7 +152,7 @@ def test_flag_status_only_moves_forward(
         # the row again, locked, and sees it is closed.
         for move in (explain_flag, resolve_flag, dismiss_flag):
             with pytest.raises(ValidationError) as refused:
-                move(flag, note="Tena", by=staff_a2)
+                move(flag, text="Tena", by=staff_a2)
             assert refused.value.code == "flag.closed"
 
         assert Flag.objects.get(pk=flag.pk).status == closed_status
@@ -166,7 +166,7 @@ def test_flag_closes_without_explanation(
     # A manager who finds the reason may close the flag straight from open, with their own note (Jack,
     # 29 Oct 2026): settled by them, or found to be no problem at all.
     with shop_context(shop_a):
-        closed = close(flag, note=words, by=staff_a2)
+        closed = close(flag, text=words, by=staff_a2)
 
         assert closed.status == closed_status
         assert notes_of(flag) == [(closed_status, words, staff_a2.staff_id)]
@@ -185,14 +185,14 @@ def test_named_person_cannot_close_their_own_flag(
     # E4's flag names Asha. She may say why her drawer is short, but not decide it: closing it herself, with
     # "no problem", would hide her own shortage from the owner (Jack, at CTRL-1's review; 02 v1.8).
     with shop_context(shop_a):
-        explain_flag(flag, note="Nilitoa chenji zaidi", by=staff_a)
+        explain_flag(flag, text="Nilitoa chenji zaidi", by=staff_a)
         with pytest.raises(ValidationError) as refused:
-            close(flag, note=words, by=staff_a)
+            close(flag, text=words, by=staff_a)
         assert refused.value.code == "flag.own_flag"
         assert Flag.objects.get(pk=flag.pk).status == FlagStatus.EXPLAINED
 
         # Someone the flag doesn't name decides it.
-        assert close(flag, note=words, by=staff_a2).status == closed_status
+        assert close(flag, text=words, by=staff_a2).status == closed_status
 
 
 def test_every_explanation_is_kept(shop_a: Model, side_a: ShopScoped, staff_a: Actor, staff_a2: Actor) -> None:
@@ -210,8 +210,8 @@ def test_every_explanation_is_kept(shop_a: Model, side_a: ShopScoped, staff_a: A
             people=[staff_a, staff_a2],
             by=None,
         )
-        explain_flag(raised, note="Nilipima kwa mzani wa zamani", by=staff_a)
-        explained = explain_flag(raised, note="Mteja alimwaga kidogo", by=staff_a2)
+        explain_flag(raised, text="Nilipima kwa mzani wa zamani", by=staff_a)
+        explained = explain_flag(raised, text="Mteja alimwaga kidogo", by=staff_a2)
 
         assert raised.difference == Decimal("-1.5")
         # A second explanation keeps the status, and replaces nothing.
@@ -319,13 +319,13 @@ def test_flag_links_stay_in_one_shop(
             raise_flag(kind=FlagKind.CASH_DIFFERENCE, subject=drawer_day, by=staff_b)
         # A moved flag stays in its shop too: shop B's staff can't explain shop A's flag.
         with pytest.raises(ShopMismatch):
-            explain_flag(flag, note="Si mimi", by=staff_b)
+            explain_flag(flag, text="Si mimi", by=staff_b)
     # Shop B's visit can't flag shop A's row, nor move shop A's flag.
     with shop_context(shop_b):
         with pytest.raises(ShopMismatch):
             raise_flag(kind=FlagKind.CASH_DIFFERENCE, subject=drawer_day, by=None)
         with pytest.raises(ShopMismatch):
-            dismiss_flag(flag, note="Si tatizo", by=staff_b)
+            dismiss_flag(flag, text="Si tatizo", by=staff_b)
 
     with shop_context(shop_a):
         # A generic link has no foreign key, so the database can't check it: a row never saved would leave
@@ -341,14 +341,17 @@ def test_flag_links_stay_in_one_shop(
         assert notes_of(flag) == []
 
 
-def test_flag_note_required(shop_a: Model, flag: Flag, staff_a: Actor) -> None:
-    # Rule 7: every step keeps who, when and why. A note of only spaces says no more than none.
+def test_flag_note_required(shop_a: Model, flag: Flag, staff_a2: Actor) -> None:
+    # Rule 7: every step keeps who, when and why. A note of only spaces says no more than none. Each problem
+    # with the words is filed under their field, `text`, so the review screen shows it beside the box the words
+    # were typed in (03 §5.10): one too long for the column, and one with no words at all. Staff A2, whom the
+    # flag doesn't name, so that resolve and dismiss reach the words' checks (Asha may not close her own flag).
     with shop_context(shop_a):
         for move in (explain_flag, resolve_flag, dismiss_flag):
-            for note in ["", "   "]:
+            for text, code in [("", "flag.note_required"), ("   ", "flag.note_required"), ("a" * 501, "max_length")]:
                 with pytest.raises(ValidationError) as refused:
-                    move(flag, note=note, by=staff_a)
-                assert refused.value.code == "flag.note_required"
+                    move(flag, text=text, by=staff_a2)
+                assert [error.code for error in refused.value.error_dict["text"]] == [code]
 
         assert Flag.objects.get(pk=flag.pk).status == FlagStatus.OPEN
         assert notes_of(flag) == []
@@ -362,7 +365,7 @@ def test_every_step_names_its_person(shop_a: Model, flag: Flag) -> None:
     with shop_context(shop_a):
         for move in (explain_flag, resolve_flag, dismiss_flag):
             with pytest.raises(ValueError, match="person"):
-                move(flag, note="Imekaguliwa", by=device)
+                move(flag, text="Imekaguliwa", by=device)
 
         assert Flag.objects.get(pk=flag.pk).status == FlagStatus.OPEN
         assert notes_of(flag) == []
@@ -376,13 +379,13 @@ def test_a_retried_step_is_written_once(
     # could never be deleted (03 §5.5).
     explanation_id, close_id = uuid.uuid7(), uuid.uuid7()
     with shop_context(shop_a):
-        explain_flag(flag, note="Nilitoa chenji zaidi", by=staff_a, note_id=explanation_id)
-        again = explain_flag(flag, note="Nilitoa chenji zaidi", by=staff_a, note_id=explanation_id)
+        explain_flag(flag, text="Nilitoa chenji zaidi", by=staff_a, note_id=explanation_id)
+        again = explain_flag(flag, text="Nilitoa chenji zaidi", by=staff_a, note_id=explanation_id)
         assert again.status == FlagStatus.EXPLAINED
 
-        resolve_flag(flag, note="Atalipa 3,000 kesho", by=staff_a2, note_id=close_id)
+        resolve_flag(flag, text="Atalipa 3,000 kesho", by=staff_a2, note_id=close_id)
         # Sent again after it went through: the closed flag, as the first time, not "this flag is closed".
-        resolved_again = resolve_flag(flag, note="Atalipa 3,000 kesho", by=staff_a2, note_id=close_id)
+        resolved_again = resolve_flag(flag, text="Atalipa 3,000 kesho", by=staff_a2, note_id=close_id)
         assert resolved_again.status == FlagStatus.RESOLVED
 
         assert [step for step, _, _ in notes_of(flag)] == [FlagStep.EXPLAINED, FlagStep.RESOLVED]
@@ -391,7 +394,7 @@ def test_a_retried_step_is_written_once(
         # taken id is (CORE-6).
         other = raise_flag(kind=FlagKind.DUPLICATE_CODE, subject=drawer_day, by=None)
         with pytest.raises(ValidationError) as refused:
-            explain_flag(other, note="Nambari ilitumika mara mbili", by=staff_a, note_id=explanation_id)
+            explain_flag(other, text="Nambari ilitumika mara mbili", by=staff_a, note_id=explanation_id)
         assert refused.value.code == "id.taken"
         assert notes_of(other) == []
 
@@ -406,14 +409,14 @@ def test_a_step_checks_only_what_it_changes(
     # checks, its links, its id and its two rules (10), and its insert (1); the status's one rule (3) and
     # its update (1). Re-checking the whole flag took it to 29.
     with shop_context(shop_a), django_assert_max_num_queries(18):
-        explain_flag(flag, note="Nilitoa chenji zaidi", by=staff_a)
+        explain_flag(flag, text="Nilitoa chenji zaidi", by=staff_a)
 
 
 def test_flag_notes_cannot_be_edited(shop_a: Model, flag: Flag, staff_a: Actor) -> None:
     # Asha's words stay as she wrote them (Jack, 29 Oct 2026): FlagNote is append-only, in Python and in
     # PostgreSQL (ADR-0021).
     with shop_context(shop_a):
-        explain_flag(flag, note="Nilitoa chenji zaidi", by=staff_a)
+        explain_flag(flag, text="Nilitoa chenji zaidi", by=staff_a)
         note = FlagNote.objects.get(flag=flag)
 
     note.text = "Sikukosea"
