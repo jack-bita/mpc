@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.22 · 29 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.23 · 29 Oct 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.23** (29 Oct 2026, CTRL-2): one decision by Jack, made while planning CTRL-2: office edits are recorded by a trigger of our own into one append-only table, `control.EditEvent`, not by django-pghistory, whose tables CORE-7's sweep refuses (ADR-0036, 03 v1.11). No device exists yet, so the history and the audit trail name the person, and AUTH-4 adds the device. CORE-7's sweep gets a list of the files allowed to run raw SQL, with one file. The card names the tests and the commits it plans, and CTRL-5's row names both books. Marked **(v1.23)**.
 
 **Changes in v1.22** (29 Oct 2026, CTRL-1): three decisions by Jack, made while building CTRL-1 (02 v1.8): a flag may close straight from open, always with a note; every explanation is kept; and a person a flag names may explain it but never close it. CTRL-4 checks who may close one (`flag.review`). After CTRL-1's review, the card lists the tests and the fixes it built, one commit each, and CTRL-4's row gets two notes for its screen. So the card also builds the flag's notes and four actions, not two, and keeps its people as link rows: it is `M`, not `S`. Its services take Actors and rows, as CORE-6's do, not ids. The type codes of generic links are one list in `core`, empty until a card points at its own tables (03 v1.10). Marked **(v1.22)**.
 
@@ -549,13 +551,15 @@ Done in **portion 6**, in chat — not with Claude Code.
 
 ### CTRL-2 · Audit trail
 `M` · Claude-led · after CTRL-1, PPL-2 · branch `feat/ctrl-2-audit`
-**Build:** `control.AuditEvent` (append-only) and `audit(...)`; django-pghistory on office-edited models, with the person and device attached from the request; staff status changes audited.
+**Build:** `control.AuditEvent` (append-only) and `audit(...)`; staff status changes audited. Office edits are recorded by a trigger of our own, `control_record_edit()`, into one append-only table, `control.EditEvent`: who, when, which row, and the columns that changed, before and after. The person comes from the visit, which tells PostgreSQL who acts (`apps/core/acting.py`) **(v1.23)**.
+**Watch out** **(v1.23)**: Settled in CTRL-2 (Jack, 29 Oct 2026; ADR-0036): not django-pghistory, as this card first said. By default its tables, one per tracked table, are not built on `ShopScoped`, link with `DO_NOTHING` and have no guard, and its context table has no shop: CORE-7's sweep refuses them all, rightly. No device exists yet (AUTH-1), and a visit knows its device only from AUTH-4: the history and the audit trail name the person, and AUTH-4 adds the device. `approval` waits for the Approval table. The visit tells PostgreSQL who acts with `set_config`, which is raw SQL: CORE-7's sweep gets a list of the files allowed to run it, `RAW_SQL` in `backend/tests/sweep_lists.py`, with one file and its reason. The trigger makes ids with `uuidv7()`, so PostgreSQL 18 is needed (03 §3); its SQL is frozen once on `main`, as core's is. A PIN hash is never copied into the history.
 **Done when:**
-- [ ] Suspending a staff member writes one audit event with the reason.
-- [ ] Editing a staff member leaves a history row naming the person and the device.
-- [ ] Audit rows can't be edited.
-**Tests:** `test_suspend_writes_audit_event` · `test_office_edit_recorded_with_person_and_device` · `test_audit_rows_append_only`
-**Commits:** `feat(control): AuditEvent and audit()` → `feat(control): pghistory for office edits`
+- [ ] Suspending a staff member writes one audit event with the reason; so do bringing one back and marking one as left **(v1.23)**.
+- [ ] Editing a staff member, or renaming a side through its route, leaves a history row naming the person; the device joins in AUTH-4 **(v1.23)**.
+- [ ] Audit rows and history rows can't be edited or deleted, in Django and in PostgreSQL **(v1.23)**.
+- [ ] Every office table records its edits: a new one that doesn't turns CI red **(v1.23)**.
+**Tests:** `test_suspend_writes_audit_event` · `test_unsuspend_and_leave_write_audit_events` · `test_refused_action_writes_no_audit_event` · `test_audit_needs_a_reason` · `test_audit_stays_in_one_shop` · `test_audit_needs_a_transaction` · `test_unknown_audit_action_refused` · `test_audit_rows_append_only` · `test_office_edit_recorded_with_person` · `test_staff_edit_recorded_with_person` · `test_pin_hash_never_copied_to_history` · `test_edit_outside_a_visit_names_nobody` · `test_edit_that_changes_nothing_writes_no_history` · `test_history_rows_append_only` · `test_every_office_table_records_its_edits` · `test_edit_trigger_removed_when_migrated_back` · `test_edit_trigger_sql_never_changes_once_on_main` · `test_acting_as_puts_back_who_acted_before` **(v1.23)**
+**Commits:** `docs: office edits are recorded by our own trigger` → `test(control): audit rules` → `feat(control): AuditEvent and audit()` → `feat(people): staff status changes write audit events` → `feat(core): each office visit tells the database who acts` → `feat(control): edit history written by the database` → `feat: staff members and sides keep their edit history` **(v1.23)**
 
 ### PPL-3 · Roles and permissions per side
 `M` · Jack-led · after PPL-2, SHOP-2 · branch `feat/ppl-3-permissions`
@@ -605,7 +609,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 `M` · Jack-led · after AUTH-2, PPL-3 · branch `feat/auth-4-pin-login`
 **Learn:** one session per person on a shared device; lockouts that double.
 **Build:** `POST /api/auth/pin-login` (device key + staff + PIN → a session for that person on that device; idle lock from settings; five wrong PINs lock that person on that device for a minute, doubling each time); `POST /api/auth/logout`; `GET /api/auth/me` (user, staff, shop, device, home side, permissions per side).
-**Watch out:** PINs are hashed with Django's `Argon2PasswordHasher` at its default cost, about 100 MiB of memory per check (`apps/people/pins.py`): set the cost on purpose for the demo's 512 MB and two workers, and re-hash old PINs when it changes (`must_update`). `pin_matches` answers at once for a person with no PIN but takes about 0.1 s otherwise, so the timing shows who has one; and a malformed hash raises. Refuse people who have left as well as suspended ones (PPL-2) **(v1.14)**. The PIN session's login class returns the staff member as `request.auth`, which names the visit's shop for CORE-6's base view; it checks on every visit that the member and the shop are still active, so a suspension stops the next request **(v1.20)**.
+**Watch out:** PINs are hashed with Django's `Argon2PasswordHasher` at its default cost, about 100 MiB of memory per check (`apps/people/pins.py`): set the cost on purpose for the demo's 512 MB and two workers, and re-hash old PINs when it changes (`must_update`). `pin_matches` answers at once for a person with no PIN but takes about 0.1 s otherwise, so the timing shows who has one; and a malformed hash raises. Refuse people who have left as well as suspended ones (PPL-2) **(v1.14)**. The PIN session's login class returns the staff member as `request.auth`, which names the visit's shop for CORE-6's base view; it checks on every visit that the member and the shop are still active, so a suspension stops the next request **(v1.20)**. From CTRL-2 **(v1.23)**: here a visit first knows its device, so the device joins the two books (X3). `control.AuditEvent` and `control.EditEvent` get a `device` link (empty for a visit with no device, PROTECT), `audit()` takes the device as it takes who, and `acting_as` (`apps/core/acting.py`) tells PostgreSQL the device too. The trigger that records an edit is frozen once on `main`, so it reads the device in a new function, `control_record_edit_v2()`, which every office table's trigger moves to in a reviewed migration.
 **Done when:**
 - [ ] A PIN works only on an active device of the same shop; a suspended person is refused.
 - [ ] The lockout doubles; logging out ends the session at once.
@@ -997,7 +1001,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 | CASH-5 | Daily report and *Send to boss* | M | CASH-4, STK-11 | The report per side from the snapshot: sales by method, credit given, debts collected, expenses, expected vs counted cash, items expiring soon; a `wa.me` text to the owner's number; a worker sees their own cash-ups (A4) |
 | SALE-12 | Late sales from the paper book | S | SALE-6, CASH-4 | Entered with the book number and the real time, approved by a manager; a `late_record` flag if the day is already approved |
 | WAGE-6 | Advances and salaries from the drawer | S | CASH-2, WAGE-3 | Drawer advances are deducted in the next pay run, replacing the manual lines; paying a payslip from a drawer records a `salary_payment` |
-| CTRL-5 | Audit coverage | S | CTRL-2, SALE-11 | Cancels, approvals, price changes and voids write audit events; an audit trail view per record for the owner |
+| CTRL-5 | Audit coverage | S | CTRL-2, SALE-11 | Cancels, approvals, price changes and voids write audit events; an audit trail view per record for the owner, from both of CTRL-2's books: `AuditEvent` (what a person did, and why) and `EditEvent` (what changed) **(v1.23)** |
 
 **Imports and go-live**
 

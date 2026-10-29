@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.10 · 29 Oct 2026 · Portion 3 of the planning pack
+**Version:** 1.11 · 29 Oct 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.11** (29 Oct 2026, CTRL-2): office edits are recorded by a trigger of our own into one append-only table, `control.EditEvent`, not by django-pghistory, whose tables have no shop guard (Jack, while planning CTRL-2; ADR-0036). Each office visit tells PostgreSQL who acts, for that trigger. PostgreSQL 18 is now needed: the trigger makes ids with `uuidv7()` (§3, §5.4, §5.6, §5.16). Marked **(v1.11)**.
 
 **Changes in v1.10** (29 Oct 2026, CTRL-1): the type codes of generic links are one list in `core`, and each card adds the tables its links point at (§5.1). A flag's notes, and the people it names, are append-only, like the ledgers, and a flag's status moves forward only, in the database too (§5.6, 02 v1.8). A flag's numbers hold money or quantities alike (§9). Marked **(v1.10)**.
 
@@ -156,13 +158,13 @@ Swahili first with next-intl, messages in `sw.json` and `en.json`. API errors ca
 | Language (server) | Python 3.14 | Current release; `uuid.uuid7()` is built in |
 | Framework | Django 6.1, then 6.2 LTS when it ships (expected April 2027), staying on LTS after that | 6.1 is current and has the tasks framework; LTS means fewer upgrades |
 | API | Django REST Framework, drf-spectacular, django-filter | Standard and well documented |
-| Database | PostgreSQL 18 *(default; 17 is fine)* | Exact decimals, constraints, triggers, `uuidv7()` |
+| Database | PostgreSQL 18 (17 lacks `uuidv7()`, which the edit history's trigger uses) **(v1.11)** | Exact decimals, constraints, triggers, `uuidv7()` |
 | DB driver | psycopg 3 | The current PostgreSQL driver |
 | Logins | django-allauth (headless, browser mode): password login, email resets, built-in rate limits, later 2FA and passkeys; Argon2 hashing; our own PIN login | A mature library for the security-critical part (AD3) |
 | Background jobs | `django.tasks` + django-tasks-db (`db_worker`) | Built-in API; no Redis |
 | Scheduler | supercronic (cron made for containers) running management commands | Simple, visible, logged |
 | Files | Django storage API: server disk in R1; S3-compatible later (django-storages) | No code change to move |
-| Audit of office edits | django-pghistory *(default)* | Database triggers record every change; nothing can skip it |
+| Audit of office edits | A trigger of our own, writing one table, `control.EditEvent` **(v1.11)** | Database triggers record every change; nothing can skip it. One table with the shop guard, like every shop table (ADR-0036) |
 | Tests | pytest, pytest-django, factory_boy, Hypothesis | Property tests for ledgers |
 | Code quality | ruff, mypy + django-stubs, import-linter | Lint, types, module boundaries |
 | Python packages | uv | Fast installs, one lock file |
@@ -274,7 +276,7 @@ apps/sales/
 
 ### 5.4 Tenancy (AD8)
 
-- **Set once per request.** Login (device key or staff session) names who acts and the shop: it leaves an Actor in `request.auth`, with a `shop_id` and a `staff_id`: a staff member, or a device alone, which is no person (its `staff_id` is None). Right after login, the base API view opens that shop in the context variable, keeps it open for the whole visit, and closes it however the visit ends. Office routes need a staff member, the one recorded as who made or changed a row **(v1.8)**.
+- **Set once per request.** Login (device key or staff session) names who acts and the shop: it leaves an Actor in `request.auth`, with a `shop_id` and a `staff_id`: a staff member, or a device alone, which is no person (its `staff_id` is None). Right after login, the base API view opens that shop in the context variable, keeps it open for the whole visit, and closes it however the visit ends. Office routes need a staff member, the one recorded as who made or changed a row **(v1.8)**. The view also tells PostgreSQL who acts, for the visit, so the trigger that records office edits can name them (§5.16) **(v1.11)**.
 - **Fail closed.** The default manager filters every query by the current shop, and raises an error if no shop is set. System jobs use an explicit `system_context()`, named in code; the Django admin uses a separate manager, for superusers only.
 - **One base API view** gets its queryset through that manager and checks permissions per side.
 - **Writes check links.** Services check that every record they link to belongs to the same shop (T1).
@@ -314,7 +316,7 @@ Confirming a one-screen sale:
 
 - A migration helper adds a trigger to each ledger table that raises an error on UPDATE or DELETE.
 - **Payments, money movements and attendance events** allow exactly one change: filling the void stamp (`voided_at`, `voided_by`, `void_reason`, `void_approval`) once. Every other column must stay equal (the trigger compares the old and new rows as JSON, without those columns). For attendance events this is 02 §12's `void` (by, reason) **(v1.1)**.
-- Covered tables: stock movements, balance entries, allocations, attendance events (void only), audit events, flag notes and the people a flag names **(v1.10)**, the change log, payments and money movements (void only), and the dated-rule tables — prices, product costs, settings, pay rates ✚.
+- Covered tables: stock movements, balance entries, allocations, attendance events (void only), audit events, the edit history **(v1.11)**, flag notes and the people a flag names **(v1.10)**, the change log, payments and money movements (void only), and the dated-rule tables — prices, product costs, settings, pay rates ✚.
 - A flag is not a ledger, but it keeps its facts the same way: a trigger of its own (`control_flag_forward_only`) lets only its status change, and only forward, and refuses a DELETE (02 §13) **(v1.10)**.
 - Tests prove that an UPDATE fails.
 
@@ -410,8 +412,12 @@ The Foods cashier's queue and notifications must update within seconds. Start wi
 
 ### 5.16 Audit
 
-- **Business actions** (cancel, refund, approve, change a price, void) write an `AuditEvent` in the service, with the reason and the approval.
-- **Office edits** (products, contacts, staff, roles, devices) are captured by database triggers through django-pghistory *(default)*, with the person and device attached, so no change can skip the audit.
+- **Business actions** (cancel, refund, approve, change a price, void; suspend a staff member, bring one back, mark one as left **(v1.11)**) write an `AuditEvent` in the service, with the reason and the approval. It is written in the action's own transaction, so the action and its line are kept together or not at all; the approval joins with the Approval table **(v1.11)**.
+- **Office edits** (products, contacts, staff, roles, devices, and sides) are captured by database triggers, so no change can skip the audit **(v1.11)**:
+  - One trigger function of our own, `control_record_edit()`, runs after every UPDATE of an office table and writes one row of `control.EditEvent`: the shop, who, when, the row (a type code and its UUID, §5.1), and the columns that changed, before and after, every value as text. Nothing visible changed, nothing written. A PIN hash is never copied.
+  - Who: each office visit tells PostgreSQL the staff member acting (`set_config`, `apps/core/acting.py`), and the trigger reads it. Outside a visit (a nightly job, the seed) nobody is named: the system. The device joins in AUTH-4.
+  - Each office table gets the trigger in its migration (`RecordEdits`); a test turns CI red for an `Editable` table without it. Its SQL is frozen once on `main`, as the ledgers' rules are (§5.6).
+  - Not django-pghistory, the first default: its tables, one per tracked table, have no shop guard and no PROTECT links, and CORE-7's sweep refuses them (ADR-0036).
 
 ### 5.17 Logs, errors and monitoring
 
