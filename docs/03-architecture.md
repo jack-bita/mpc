@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
 
-**Changes in v1.10** (29 Oct 2026, CTRL-1): the type codes of generic links are one list in `core`, and each card adds the tables its links point at (§5.1). A flag's notes, and the people it names, are append-only, like the ledgers, and a flag's status moves forward only, in the database too (§5.6, 02 v1.8). Marked **(v1.10)**.
+**Changes in v1.10** (29 Oct 2026, CTRL-1): the type codes of generic links are one list in `core`, and each card adds the tables its links point at (§5.1). A flag's notes, and the people it names, are append-only, like the ledgers, and a flag's status moves forward only, in the database too (§5.6, 02 v1.8). A flag's numbers hold money or quantities alike (§9). Marked **(v1.10)**.
 
 **Changes in v1.9** (28 Oct 2026, CORE-7): an app keeps its background tasks in `tasks.py`. With management commands, that is the only code that may open every shop with `system_context()`, and CORE-7's sweep checks it (§5.2, §5.11). Marked **(v1.9)**.
 
@@ -589,7 +589,7 @@ frontend/src/
 
 ## 9. Database
 
-- **Types:** money `numeric(14,2)`, quantities `numeric(14,3)`, times `timestamptz` in UTC, IDs UUIDv7 (`uuid.uuid7()` in Python 3.14, `uuid` v7 in TypeScript).
+- **Types:** money `numeric(14,2)`, quantities `numeric(14,3)` (a flag's `expected` and `actual` are `numeric(15,3)`, wide enough for either, and its `difference` `numeric(16,3)` **(v1.10)**), times `timestamptz` in UTC, IDs UUIDv7 (`uuid.uuid7()` in Python 3.14, `uuid` v7 in TypeScript).
 - **Indexes lead with `shop`:** stock movements on (shop, location, product, occurred_at); balance entries on (shop, contact, side, occurred_at); the change log on (shop, seq).
 - **Rules in the database where possible:** `factor > 0`; floor ≤ jumla ≤ retail *(default)*; one dated row per selling unit and date; one open session per drawer (partial unique index, M9); the transaction-code index (§5.5); the append-only triggers (§5.6).
 - **Migrations** are reviewed by hand and never edited once applied. Seeds for global tables (units) are data migrations; role templates live in code and are copied into each shop by `create_shop` (§5.8) **(v1.1)**. Changes that old devices may still rely on go "add the new → move over → remove the old", across releases.
