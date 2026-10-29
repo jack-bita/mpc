@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.11 · 29 Oct 2026 · Portion 3 of the planning pack
+**Version:** 1.12 · 29 Oct 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.12** (29 Oct 2026, PPL-3): a new shop gets its role templates from a `people` service, `set_up_shop`, which makes the shop with `create_shop` and then copies them, in one transaction: `create_shop` lives in `shops`, which may not import `people`, where the `Role` table lives (ADR-0035). A shop made by `create_shop` alone has no roles, so nobody may act there: forgetting fails closed (§5.8, §9). Marked **(v1.12)**.
 
 **Changes in v1.11** (29 Oct 2026, CTRL-2): office edits are recorded by a trigger of our own into one append-only table, `control.EditEvent`, not by django-pghistory, whose tables have no shop guard (Jack, while planning CTRL-2; ADR-0036). Each office visit tells PostgreSQL who acts, for that trigger. PostgreSQL 18 is now needed: the trigger makes ids with `uuidv7()` (§3, §5.4, §5.6, §5.16). After CTRL-2's review: the visit also tells PostgreSQL its shop, and the trigger refuses an edit of another shop's row; only the trigger writes the history, at each edit's own time; and every shop table people change keeps one, payment accounts and stock locations included (Jack). Marked **(v1.11)**.
 
@@ -329,7 +331,7 @@ Confirming a one-screen sale:
 
 - **Setting keys** are a registry in code: key, type, default, scope, description. `get_setting(key, shop, side, on=date)` returns the row in force (D13).
 - **Devices get future-dated rows too** ✚: prices and settings that start in the next few days, so an offline device switches to the new price or rule on the right day.
-- **Permissions** are codes in code (02 §5). **Role templates** (Owner, Manager, Seller, Order writer, Cashier, Worker) live in code next to them; `create_shop` copies them into each new shop as that shop's own `Role` rows, which the owner can then edit — roles belong to a shop, so they are not seeded by a data migration **(v1.1)**. Devices receive each staff member's effective permissions per side for offline checks; the server checks again and flags offline breaks.
+- **Permissions** are codes in code (02 §5). **Role templates** (Owner, Manager, Seller, Order writer, Cashier, Worker) live in code next to them; each new shop gets them as that shop's own `Role` rows, which the owner can then edit — roles belong to a shop, so they are not seeded by a data migration **(v1.1)**. `set_up_shop`, a `people` service, makes the shop with `create_shop` and copies them in, in one transaction: `shops` may not import `people` (ADR-0035), so `create_shop` can't. A shop made by `create_shop` alone has no roles, so nobody may act there **(v1.12)**. Devices receive each staff member's effective permissions per side for offline checks; the server checks again and flags offline breaks.
 - **Approvals (`pin_here`)**: the approver types their PIN on the same device; it works offline and travels inside the document it approves.
 
 ### 5.9 Auth and devices (AD3, AD4)
@@ -598,7 +600,7 @@ frontend/src/
 - **Types:** money `numeric(14,2)`, quantities `numeric(14,3)` (a flag's `expected` and `actual` are `numeric(15,3)`, wide enough for either, and its `difference` `numeric(16,3)` **(v1.10)**), times `timestamptz` in UTC, IDs UUIDv7 (`uuid.uuid7()` in Python 3.14, `uuid` v7 in TypeScript).
 - **Indexes lead with `shop`:** stock movements on (shop, location, product, occurred_at); balance entries on (shop, contact, side, occurred_at); the change log on (shop, seq).
 - **Rules in the database where possible:** `factor > 0`; floor ≤ jumla ≤ retail *(default)*; one dated row per selling unit and date; one open session per drawer (partial unique index, M9); the transaction-code index (§5.5); the append-only triggers (§5.6).
-- **Migrations** are reviewed by hand and never edited once applied. Seeds for global tables (units) are data migrations; role templates live in code and are copied into each shop by `create_shop` (§5.8) **(v1.1)**. Changes that old devices may still rely on go "add the new → move over → remove the old", across releases.
+- **Migrations** are reviewed by hand and never edited once applied. Seeds for global tables (units) are data migrations; role templates live in code and are copied into each shop as it is made (§5.8) **(v1.1)**, by `set_up_shop` in `people` **(v1.12)**. Changes that old devices may still rely on go "add the new → move over → remove the old", across releases.
 - **Growth path:** indexes and time-ordered IDs carry us to millions of rows; then BRIN indexes on time columns; then ledgers partitioned by shop or month; a read replica for reports; more app containers behind a load balancer (the app keeps no state of its own).
 
 ## 10. Security and privacy
