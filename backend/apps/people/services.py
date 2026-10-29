@@ -4,7 +4,9 @@ For now a staff member's working life at one shop (02 §5): they are added, susp
 marked as left, and given a PIN (set_pin; apps/people/pins.py hashes it). Each action runs in one
 transaction, checks that every row it links to belongs to the same shop (T1), and refuses a broken rule
 with a ValidationError that carries a code (ADR-0032); CORE-6's error handler will turn it into the
-API's error shape.
+API's error shape. A status change also writes its line in the audit trail, with who and why, in the
+same transaction (apps/control/services.py, audit): the change and its line are kept together or not at
+all (T3).
 
 Callers open shop_context(shop) first: full_clean and the unique checks read through the guarded
 `objects` (CORE-2).
@@ -18,6 +20,8 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from apps.control.models import AuditAction
+from apps.control.services import audit
 from apps.core.tenancy import ALL_SHOPS, current_shop
 from apps.people.models import StaffMember, StaffStatus, User
 from apps.people.pins import check_pin_strength, hash_pin
@@ -76,8 +80,8 @@ def add_staff(
 
 
 def _check_reason(reason: str) -> None:
-    # Rule 7: a suspension or a leaving is always recorded with who, when and why. CTRL-2 writes the
-    # reason to the audit trail; until then nothing calls these actions (the staff screen is PPL-4).
+    # Rule 7: a suspension or a leaving is always recorded with who, when and why. Checked before anything
+    # is locked; audit() keeps the reason, trimmed, in the action's own line (CTRL-2).
     if not reason.strip():
         raise ValidationError("A reason is required.", code="staff.reason_required")
 
@@ -100,6 +104,15 @@ def suspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Staff
         staff.status = StaffStatus.SUSPENDED
         staff.full_clean()
         staff.save(update_fields=["status"])
+        # In the same transaction: if the line can't be written, the suspension is undone with it.
+        audit(
+            action=AuditAction.STAFF_SUSPEND,
+            subject=staff,
+            reason=reason,
+            by=by,
+            before={"status": StaffStatus.ACTIVE},
+            after={"status": StaffStatus.SUSPENDED},
+        )
     return staff
 
 
@@ -114,6 +127,14 @@ def unsuspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Sta
         staff.status = StaffStatus.ACTIVE
         staff.full_clean()
         staff.save(update_fields=["status"])
+        audit(
+            action=AuditAction.STAFF_UNSUSPEND,
+            subject=staff,
+            reason=reason,
+            by=by,
+            before={"status": StaffStatus.SUSPENDED},
+            after={"status": StaffStatus.ACTIVE},
+        )
     return staff
 
 
@@ -129,11 +150,21 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
         staff = _locked(staff)
         if staff.status == StaffStatus.LEFT:
             raise ValidationError("This person has already left.", code="staff.left")
+        # Active or suspended: a suspended person can leave too, and the line says which they were.
+        before = {"status": staff.status, "left_on": staff.left_on}
         staff.status = StaffStatus.LEFT
         staff.left_on = left_on
         # The rules in Meta refuse a leaving date before the start date (staff.left_before_start).
         staff.full_clean()
         staff.save(update_fields=["status", "left_on"])
+        audit(
+            action=AuditAction.STAFF_LEAVE,
+            subject=staff,
+            reason=reason,
+            by=by,
+            before=before,
+            after={"status": StaffStatus.LEFT, "left_on": left_on},
+        )
     return staff
 
 

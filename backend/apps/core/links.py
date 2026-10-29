@@ -2,11 +2,11 @@
 (02 §1, 03 §5.1).
 
 Most links point at one table, and are foreign keys: a side's stock location points at a side. A few can
-point at a row of many tables: a flag's subject (a drawer's day, a stock count, a sale...) and, later, a
-ledger row's source. Such a link is stored as two columns: a short code that says which table ("sale"), and
-the row's UUID. A code is readable, and the same in every database. Django's own content types number the
-tables instead, and the numbers differ from one database to the next (the laptop, the demo, a restored
-backup), so a link stored in one would point elsewhere in another.
+point at a row of many tables: a flag's subject (a drawer's day, a stock count, a sale...), an audit line's
+subject (a staff member's job), and, later, a ledger row's source. Such a link is stored as two columns: a
+short code that says which table ("sale"), and the row's UUID. A code is readable, and the same in every
+database. Django's own content types number the tables instead, and the numbers differ from one database to
+the next (the laptop, the demo, a restored backup), so a link stored in one would point elsewhere in another.
 
 This file owns the list of codes: `link_type_of(row)` gives a row's code, `load_link(code, id)` loads the
 row back, and `table_of(code)` names the table behind a code. It names each table by text ("sales.Sale"),
@@ -33,8 +33,11 @@ TYPE_CODE_MAX_LENGTH = 40
 # A code, once stored in a row, never changes and never names another table: old rows would then point at
 # the wrong table, or at none. A table that moves to another app keeps its code; only the text on the right
 # changes. Each card adds the tables its links point at, as each card adds its setting keys
-# (apps/core/settings_registry.py). None yet: the first tables a flag is about come with later cards.
-LINK_TYPES: dict[str, str] = {}
+# (apps/core/settings_registry.py).
+LINK_TYPES: dict[str, str] = {
+    # A staff member's job: the audit trail's lines about suspending, bringing back and leaving (CTRL-2).
+    "staff": "people.StaffMember",
+}
 
 
 class UnknownLinkType(Exception):

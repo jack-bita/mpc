@@ -117,9 +117,9 @@ def type_code_problems() -> list[str]:
 
 
 def test_every_type_code_fits_where_it_is_stored(monkeypatch: pytest.MonkeyPatch) -> None:
-    # The real list, as it is in the code: empty until a card adds the first table a flag is about. Each
-    # card's codes are checked here as soon as it adds them. The probe's own code, added for every test
-    # above, is taken out first: it is the tests', not the list's.
+    # The real list, as it is in the code, which each card grows with the tables its links point at (the
+    # staff's jobs since CTRL-2). Each card's codes are checked here as soon as it adds them. The probe's own
+    # code, added for every test above, is taken out first: it is the tests', not the list's.
     monkeypatch.delitem(LINK_TYPES, "probe_note")
 
     assert type_code_problems() == []

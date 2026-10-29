@@ -10,7 +10,7 @@ a new one, so the old row keeps its history (old sales, attendance):
     JINGINE   Asha Demo   Asha       active    <- the same person, in another shop
 
 The status moves active ⇄ suspended → left, and left is final. Suspending someone or marking them as left
-needs a reason (rule 7); CTRL-2 will write it to the audit trail.
+needs a reason (rule 7); since CTRL-2 it is written to the audit trail (test_staff_audit.py).
 
 StaffMember is the first real ShopScoped table (CORE-2). The services create rows and check the rules
 through the guarded `objects`, so every test works inside `shop_context(shop)`, as a visit will.
