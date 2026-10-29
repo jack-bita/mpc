@@ -97,6 +97,21 @@ def test_acting_as_leaves_a_failed_transaction_to_its_rollback() -> None:
     assert told() == ("", "")
 
 
+def test_acting_as_leaves_a_broken_atomic_block_to_its_rollback() -> None:
+    # The other way a transaction breaks: a step inside an atomic block with no savepoint of its own fails in Python,
+    # with no failed query. PostgreSQL sees nothing wrong, but Django marks the whole transaction for rollback
+    # (needs_rollback) and refuses every query until then: putting the old values back would hide the real error too.
+    owner = Someone(uuid.uuid7(), uuid.uuid7())
+    with (
+        pytest.raises(RuntimeError, match="A step failed"),
+        transaction.atomic(),
+        acting_as(owner),
+        transaction.atomic(savepoint=False),
+    ):
+        raise RuntimeError("A step failed.")
+    assert told() == ("", "")
+
+
 class WhoActsViewSet(ShopViewSet[Note]):
     # An office route like any other, whose one answer is what PostgreSQL holds as who acts and the visit's shop,
     # while the visit runs.
