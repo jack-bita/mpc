@@ -32,13 +32,16 @@ And it walks the address list for every route of the office API, the routes buil
 - each route names where its table keeps a row's side (`side_field`), for the per-side hooks (PPL-3);
 - no route under api/ escapes the sweep by being built on something else.
 
-A new table, file or route is checked with no change here, and this file must stay green without being edited
-(backend rules). What changes instead lives beside it: the two shops' data, in backend/tests/conftest.py, and
-the tables and routes allowed to break a rule, each with its reason, in backend/tests/sweep_lists.py. Each
-check is a function that returns what breaks its rule, as in test_no_floats.py. The
-tests of the checks hand them tables and code built to break the rule (the tables made in a throwaway
-registry of their own, so they never join the real list), and a few tests make sure the real lists are not
-empty, so the sweep can't pass by looking at nothing.
+A new table, file or route is checked with no change here. The checks are never loosened, nor edited, to let
+something pass: what grows instead lives beside them, the two shops' data in backend/tests/conftest.py, and the
+tables, routes and files allowed to break a rule, each with its reason, in backend/tests/sweep_lists.py.
+Teaching the sweep something new, such as calling the sync routes with a device's key, is a new check, added
+in a reviewed change (backend rules).
+
+Each check is a function that returns what breaks its rule, as in test_no_floats.py. The tests of the checks
+hand them tables, code and routes built to break the rule (the tables made in a throwaway registry of their
+own, so they never join the real list; the routes in the test-only probe app), and a few tests make sure the
+real lists are not empty, so the sweep can't pass by looking at nothing.
 """
 
 import ast

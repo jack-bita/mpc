@@ -1,10 +1,10 @@
 """backend/tests/sweep_lists.py — the tenancy sweep's allowed lists: the tables and routes that may break one
 of its rules, each one on purpose and with its reason (backend/tests/test_tenancy_sweep.py).
 
-The sweep's checks never change; these lists change instead, and only by a decision written on a card, as
-a table with no `shop` changes rule T1 (02 §16). Each entry carries its reason, and the card that put it
-there. A list kept apart from the checks lets the rule hold as written: the sweep's own file is never edited
-(backend rules).
+The sweep's checks are never loosened, nor edited, to let a table or a route pass; these lists change
+instead, and only by a decision written on a card, as a table with no `shop` changes rule T1 (02 §16). Each
+entry carries its reason, and the card that put it there. Teaching the sweep something new, such as calling
+the sync routes with a device's key, is a new check instead, added in a reviewed change (backend rules).
 """
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -29,7 +29,7 @@ INFRASTRUCTURE = {
     # Django's data, never a shop's. Their links CASCADE, Django's choice: a User is never deleted, only
     # switched off (`is_active`), but deleting an admin group, or a permission Django drops with a model that
     # is gone, takes its links here with it. That is Django's admin data tidying itself, with no shop's
-    # history in it (Jack, CORE-7, 28 Oct 2026).
+    # history in it. (The decision: Jack, in CORE-7's plan, 28 Oct 2026; this reason was put right in its review.)
     "people.User_groups",
     "people.User_user_permissions",
 }
