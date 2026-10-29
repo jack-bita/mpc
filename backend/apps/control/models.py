@@ -18,7 +18,7 @@ names the tables of `shops` and `people` by text ("shops.Side"), which is not an
 
 from django.db import models
 
-from apps.core.links import TYPE_CODE_SHAPE, load_link
+from apps.core.links import TYPE_CODE_MAX_LENGTH, TYPE_CODE_SHAPE, load_link
 from apps.core.models import AppendOnly, ShopScoped
 
 
@@ -76,7 +76,7 @@ class Flag(ShopScoped):
     kind = models.CharField(max_length=30, choices=FlagKind)
     # The row the flag is about: its table's code (apps/core/links.py) and its id. No foreign key can
     # point at rows of many tables, so the database can't check this link: raise_flag does.
-    subject_type = models.CharField(max_length=40)
+    subject_type = models.CharField(max_length=TYPE_CODE_MAX_LENGTH)
     subject_id = models.UUIDField()
     # What the system worked out, and what a person recorded. Empty, both, for kinds that are facts, not
     # amounts: a transaction code used twice, a device's missing records.

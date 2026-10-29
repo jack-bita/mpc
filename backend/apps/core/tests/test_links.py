@@ -9,13 +9,23 @@ test-only probe Note (backend/tests/probe/), for the length of each test: `core`
 table to test with (ADR-0035). The shops come from backend/conftest.py, typed as plain models.
 """
 
+import re
 import uuid
+from collections import Counter
 from decimal import Decimal
 
 import pytest
 from django.db.models import Model
 
-from apps.core.links import LINK_TYPES, UnknownLinkType, link_type_of, load_link
+from apps.core.links import (
+    LINK_TYPES,
+    TYPE_CODE_MAX_LENGTH,
+    TYPE_CODE_SHAPE,
+    UnknownLinkType,
+    link_type_of,
+    load_link,
+    table_of,
+)
 from apps.core.tenancy import NoShopSelected, shop_context
 from tests.probe.models import Entry, Note
 
@@ -82,3 +92,55 @@ def test_type_code_must_name_a_shop_table(table: str, monkeypatch: pytest.Monkey
     # Refused before any read, so no shop needs to be open.
     with pytest.raises(UnknownLinkType):
         load_link("wrong", uuid.uuid7())
+
+
+def type_code_problems() -> list[str]:
+    # What is wrong with the list of codes, as the tenancy sweep reports what is wrong with the tables
+    # (backend/tests/test_tenancy_sweep.py). Each code must fit the column that stores it and its database
+    # rule, and name a shop table; and no table may have two codes. A later card's mistake then turns CI red
+    # when it is made, not when the first flag about that table is raised.
+    problems = []
+    for code in LINK_TYPES:
+        if not re.match(TYPE_CODE_SHAPE, code):
+            problems.append(f"{code!r}: not small letters and underscores")
+        if len(code) > TYPE_CODE_MAX_LENGTH:
+            problems.append(f"{code!r}: longer than {TYPE_CODE_MAX_LENGTH} characters")
+        try:
+            table_of(code)
+        except UnknownLinkType as error:
+            problems.append(f"{code!r}: {error}")
+    for table, count in Counter(LINK_TYPES.values()).items():
+        if count > 1:
+            problems.append(f"{table}: {count} codes")
+    return problems
+
+
+def test_every_type_code_fits_where_it_is_stored(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The real list, as it is in the code: empty until a card adds the first table a flag is about. Each
+    # card's codes are checked here as soon as it adds them. The probe's own code, added for every test
+    # above, is taken out first: it is the tests', not the list's.
+    monkeypatch.delitem(LINK_TYPES, "probe_note")
+
+    assert type_code_problems() == []
+
+
+def test_type_code_check_finds_bad_codes(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The check itself, handed one bad code of each kind. A check that finds nothing would pass every list.
+    monkeypatch.delitem(LINK_TYPES, "probe_note")
+    for code, table in {
+        "Sale": "probe.Note",  # a capital letter
+        "a" * (TYPE_CODE_MAX_LENGTH + 1): "probe.Entry",  # too long for the column
+        "person": "people.User",  # not a shop's table
+        "note_one": "probe.VoidableEntry",  # two codes for one table...
+        "note_two": "probe.VoidableEntry",  # ...this one
+    }.items():
+        monkeypatch.setitem(LINK_TYPES, code, table)
+
+    problems = type_code_problems()
+
+    assert [problem.split(":")[0] for problem in problems] == [
+        "'Sale'",
+        f"'{'a' * (TYPE_CODE_MAX_LENGTH + 1)}'",
+        "'person'",
+        "probe.VoidableEntry",
+    ]

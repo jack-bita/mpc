@@ -8,9 +8,10 @@ the row's UUID. A code is readable, and the same in every database. Django's own
 tables instead, and the numbers differ from one database to the next (the laptop, the demo, a restored
 backup), so a link stored in one would point elsewhere in another.
 
-This file owns the list of codes: `link_type_of(row)` gives a row's code, and `load_link(code, id)` loads
-the row back. It names each table by text ("sales.Sale"), not by an import: `core` is layer 0 and may not
-import any app (ADR-0035), and a name is not an import (03 §5.1).
+This file owns the list of codes: `link_type_of(row)` gives a row's code, `load_link(code, id)` loads the
+row back, and `table_of(code)` names the table behind a code. It names each table by text ("sales.Sale"),
+not by an import: `core` is layer 0 and may not import any app (ADR-0035), and a name is not an import
+(03 §5.1).
 """
 
 import uuid
@@ -19,9 +20,13 @@ from django.apps import apps
 
 from apps.core.models import ShopScoped
 
-# The shape of a code: small letters and underscores, starting with a letter ("drawer_session"). The tables
-# that store a link check it in the database too (control.Flag's subject_type).
+# The shape of a code: small letters and underscores, starting with a letter ("drawer_session"), and its
+# longest length, the size of the column that stores it. The tables that store a link use both: the column
+# (control.Flag's subject_type) and a database rule on its shape. A code that broke either would be refused
+# only when the first link to its table is written, perhaps while a device's records are posted, which must
+# never fail; so a test checks every code in the list instead (apps/core/tests/test_links.py).
 TYPE_CODE_SHAPE = r"^[a-z][a-z_]*$"
+TYPE_CODE_MAX_LENGTH = 40
 
 # Code → the table it names, as "app.Model". Only shop tables (ShopScoped): a link is a shop's, and it loads
 # through the shop guard.
@@ -56,10 +61,12 @@ def load_link(type_code: str, row_id: uuid.UUID) -> ShopScoped:
     """The row a link names. Read through the table's guarded manager (ADR-0022), so it needs an open shop
     and finds only that shop's rows: a link to another shop's row raises the table's DoesNotExist, as an id no
     shop has does."""
-    return _table(type_code)._default_manager.get(pk=row_id)
+    return table_of(type_code)._default_manager.get(pk=row_id)
 
 
-def _table(type_code: str) -> type[ShopScoped]:
+def table_of(type_code: str) -> type[ShopScoped]:
+    """The shop table a code names. UnknownLinkType for a code the list doesn't hold, or one that names no shop
+    table."""
     label = LINK_TYPES.get(type_code)
     if label is None:
         raise UnknownLinkType(f"{type_code!r} is not a type code in LINK_TYPES (apps/core/links.py).")
