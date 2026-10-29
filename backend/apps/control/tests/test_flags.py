@@ -295,6 +295,34 @@ def test_every_step_names_its_person(shop_a: Model, flag: Flag) -> None:
         assert notes_of(flag) == []
 
 
+def test_a_retried_step_is_written_once(
+    shop_a: Model, flag: Flag, drawer_day: Note, staff_a: Actor, staff_a2: Actor
+) -> None:
+    # The phone makes each note's id, as it makes every record's (ADR-0007). A double tap, or a request sent
+    # again after the network dropped, carries the same id: it gets the same answer, and no second note, which
+    # could never be deleted (03 §5.5).
+    explanation_id, close_id = uuid.uuid7(), uuid.uuid7()
+    with shop_context(shop_a):
+        explain_flag(flag, note="Nilitoa chenji zaidi", by=staff_a, note_id=explanation_id)
+        again = explain_flag(flag, note="Nilitoa chenji zaidi", by=staff_a, note_id=explanation_id)
+        assert again.status == FlagStatus.EXPLAINED
+
+        resolve_flag(flag, note="Atalipa 3,000 kesho", by=staff_a2, note_id=close_id)
+        # Sent again after it went through: the closed flag, as the first time, not "this flag is closed".
+        resolved_again = resolve_flag(flag, note="Atalipa 3,000 kesho", by=staff_a2, note_id=close_id)
+        assert resolved_again.status == FlagStatus.RESOLVED
+
+        assert [step for step, _, _ in notes_of(flag)] == [FlagStep.EXPLAINED, FlagStep.RESOLVED]
+
+        # An id that is already another flag's note is not a retry of this step: refused, as a create with a
+        # taken id is (CORE-6).
+        other = raise_flag(kind=FlagKind.DUPLICATE_CODE, subject=drawer_day, by=None)
+        with pytest.raises(ValidationError) as refused:
+            explain_flag(other, note="Nambari ilitumika mara mbili", by=staff_a, note_id=explanation_id)
+        assert refused.value.code == "id.taken"
+        assert notes_of(other) == []
+
+
 def test_flag_notes_cannot_be_edited(shop_a: Model, flag: Flag, staff_a: Actor) -> None:
     # Asha's words stay as she wrote them (Jack, 29 Oct 2026): FlagNote is append-only, in Python and in
     # PostgreSQL (ADR-0021).

@@ -88,24 +88,26 @@ def raise_flag(
     return flag
 
 
-def explain_flag(flag: Flag, *, note: str, by: Actor) -> Flag:
+def explain_flag(flag: Flag, *, note: str, by: Actor, note_id: uuid.UUID | None = None) -> Flag:
     """Say why the difference happened. The first explanation moves an open flag to explained; each person
-    the flag names may add their own, and all are kept."""
-    return _step(flag, FlagStep.EXPLAINED, note=note, by=by)
+    the flag names may add their own, and all are kept. `note_id`: the id the phone made for the note
+    (ADR-0007), if it made one, so the same request sent twice writes it once."""
+    return _step(flag, FlagStep.EXPLAINED, note=note, by=by, note_id=note_id)
 
 
-def resolve_flag(flag: Flag, *, note: str, by: Actor) -> Flag:
+def resolve_flag(flag: Flag, *, note: str, by: Actor, note_id: uuid.UUID | None = None) -> Flag:
     """Close the flag: a real difference, dealt with ("Asha will pay the 3,000 tomorrow"). Straight from open
-    too, when a manager finds the reason themselves."""
-    return _step(flag, FlagStep.RESOLVED, note=note, by=by)
+    too, when a manager finds the reason themselves. `note_id` as for explain_flag."""
+    return _step(flag, FlagStep.RESOLVED, note=note, by=by, note_id=note_id)
 
 
-def dismiss_flag(flag: Flag, *, note: str, by: Actor) -> Flag:
-    """Close the flag: no real problem after all ("the money was under the drawer's tray")."""
-    return _step(flag, FlagStep.DISMISSED, note=note, by=by)
+def dismiss_flag(flag: Flag, *, note: str, by: Actor, note_id: uuid.UUID | None = None) -> Flag:
+    """Close the flag: no real problem after all ("the money was under the drawer's tray"). `note_id` as for
+    explain_flag."""
+    return _step(flag, FlagStep.DISMISSED, note=note, by=by, note_id=note_id)
 
 
-def _step(flag: Flag, step: FlagStep, *, note: str, by: Actor) -> Flag:
+def _step(flag: Flag, step: FlagStep, *, note: str, by: Actor, note_id: uuid.UUID | None) -> Flag:
     # The one way a flag moves: a note, then the status the note's step names. Every step keeps who
     # (`created_by`), when (`created_at`) and why (the note): rule 7.
     _check_shop(flag.shop_id, by)
@@ -122,19 +124,28 @@ def _step(flag: Flag, step: FlagStep, *, note: str, by: Actor) -> Flag:
         # (apps/core/editing.py). Two managers closing the same flag at once take turns, and the second
         # sees that the first has closed it, not the open copy still on their screen.
         fresh = Flag.objects.select_for_update().get(pk=flag.pk)
+        # The same step sent again, after a double tap or a dropped network: its note is already here, so the
+        # flag is handed back as it is, with no second note, which could never be deleted (03 §5.5). Asked
+        # before the closed check: a close sent twice gets the closed flag back, as the first time, not
+        # "this flag is closed". Asked under the lock, so two copies sent at once take turns, and the second
+        # finds the first's note. Through the guard, so only this shop's notes are seen: an id taken in
+        # another shop fails at the insert instead, as any create's does (CORE-6, `id.taken`).
+        if note_id is not None:
+            sent_before = FlagNote.objects.filter(pk=note_id).first()
+            if sent_before is not None:
+                if sent_before.flag_id != fresh.pk:
+                    # Not this step sent again, but another flag's note.
+                    raise ValidationError("This id is already another flag's note.", code="id.taken")
+                return fresh
         # The status only moves forward: every step leads to explained or to a final status, and a closed
         # flag takes none.
         if fresh.status in _CLOSED:
             raise ValidationError("This flag is closed.", code="flag.closed")
-        _saved(
-            FlagNote(
-                shop_id=fresh.shop_id,
-                flag=fresh,
-                step=step,
-                text=text,
-                created_by_id=by.staff_id,
-            )
-        )
+        written = FlagNote(shop_id=fresh.shop_id, flag=fresh, step=step, text=text, created_by_id=by.staff_id)
+        if note_id is not None:
+            # The phone's id, not a new one, so the next copy of this request finds the note above.
+            written.id = note_id
+        _saved(written)
         # Each step's value is the status it leads to (apps/control/models.py, FlagStep).
         fresh.status = FlagStatus(step.value)
         fresh.full_clean()
