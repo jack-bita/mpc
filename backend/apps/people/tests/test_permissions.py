@@ -17,12 +17,13 @@ Every test works inside shop_context(shop), as a visit will: the services and th
 """
 
 import pytest
+from django.core.exceptions import PermissionDenied
 
 from apps.core.permissions import ROLE_TEMPLATES, Permission, RoleTemplate
-from apps.core.tenancy import shop_context
+from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Role, StaffMember
-from apps.people.permissions import effective_permissions
-from apps.people.services import assign_role, copy_role_templates, grant_permission, mark_left, suspend
+from apps.people.permissions import UnknownPermission, effective_permissions, require
+from apps.people.services import assign_role, copy_role_templates, grant_permission, mark_left, suspend, unsuspend
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
 
@@ -94,3 +95,55 @@ def test_suspended_member_has_no_permissions(
         for staff in (staff_a, staff_a2):
             assert effective_permissions(staff, side_a) == set()
             assert effective_permissions(staff, None) == set()
+
+
+def test_require_refuses_with_permission_denied(
+    shop_a: Shop, side_a: Side, vyakula: Side, staff_a: StaffMember, roles_a: dict[str, Role]
+) -> None:
+    # Asha is Cashier on Vyakula: she may take the money there, not at Dawa. The refusal is Django's
+    # PermissionDenied, which the API answers as 403 permission_denied (CORE-6). A code that isn't on the list is a
+    # bug in the calling code, which would refuse everyone quietly: it fails loudly instead.
+    with shop_context(shop_a):
+        assign_role(staff_a, roles_a[RoleTemplate.CASHIER], side=vyakula, by=None)
+        require(staff_a, Permission.SALE_TAKE_PAYMENT, vyakula)
+        with pytest.raises(PermissionDenied):
+            require(staff_a, Permission.SALE_TAKE_PAYMENT, side_a)
+        with pytest.raises(UnknownPermission):
+            require(staff_a, "sale.take_paymnt", vyakula)
+
+
+def test_whole_shop_needs_all_sides(
+    shop_a: Shop, side_a: Side, staff_a: StaffMember, staff_a2: StaffMember, roles_a: dict[str, Role]
+) -> None:
+    # An action on a row of the whole shop, such as adding a product, needs the permission on every side: a Manager
+    # on Dawa alone may not, a Manager on all sides may.
+    with shop_context(shop_a):
+        assign_role(staff_a, roles_a[RoleTemplate.MANAGER], side=side_a, by=None)
+        assign_role(staff_a2, roles_a[RoleTemplate.MANAGER], side=None, by=None)
+        with pytest.raises(PermissionDenied):
+            require(staff_a, Permission.PRODUCT_MANAGE, None)
+        require(staff_a2, Permission.PRODUCT_MANAGE, None)
+
+
+def test_member_brought_back_holds_their_roles_again(
+    shop_a: Shop, side_a: Side, staff_a: StaffMember, roles_a: dict[str, Role]
+) -> None:
+    # A suspension takes nothing away for good: brought back, the person holds what they held before, and nobody
+    # has to give it again.
+    with shop_context(shop_a):
+        assign_role(staff_a, roles_a[RoleTemplate.WORKER], side=side_a, by=None)
+        suspended = suspend(staff_a, by=None, reason="Missed three days of work")
+        assert effective_permissions(suspended, side_a) == set()
+        back = unsuspend(suspended, by=None, reason="Came back with a doctor's note")
+        assert effective_permissions(back, side_a) == ROLE_TEMPLATES[RoleTemplate.WORKER]
+
+
+def test_side_of_another_shop_refused(
+    shop_a: Shop, side_b: Side, staff_a: StaffMember, roles_a: dict[str, Role]
+) -> None:
+    # T1: asked about shop B's side, the check would find none of A's rows for it, and answer with A's every-side
+    # permissions alone, as if B's side were A's. A bug in the calling code, so a server error (ShopMismatch).
+    with shop_context(shop_a):
+        assign_role(staff_a, roles_a[RoleTemplate.OWNER], side=None, by=None)
+        with pytest.raises(ShopMismatch):
+            effective_permissions(staff_a, side_b)
