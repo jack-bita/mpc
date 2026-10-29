@@ -147,3 +147,10 @@ def test_side_of_another_shop_refused(
         assign_role(staff_a, roles_a[RoleTemplate.OWNER], side=None, by=None)
         with pytest.raises(ShopMismatch):
             effective_permissions(staff_a, side_b)
+
+
+def test_person_of_a_shop_not_open_refused(shop_a: Shop, staff_b: StaffMember) -> None:
+    # T1: with shop A open, the guard reads only A's rows, so shop B's person would quietly hold nothing, and the bug in
+    # the calling code would hide behind a plain "no". It fails loudly instead, as another shop's side does.
+    with shop_context(shop_a), pytest.raises(ShopMismatch):
+        effective_permissions(staff_b, None)

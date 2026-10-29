@@ -16,7 +16,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 
 from apps.core.permissions import Permission
-from apps.core.tenancy import ShopMismatch
+from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.people.models import PermissionGrant, RoleAssignment, StaffMember, StaffStatus
 from apps.shops.models import Side
 
@@ -31,6 +31,11 @@ class UnknownPermission(Exception):
 def effective_permissions(staff: StaffMember, side: Side | None) -> frozenset[str]:
     """Every permission code `staff` holds on `side`, or on the whole shop when `side` is None. Empty for a person
     who is suspended or has left."""
+    open_shop = current_shop()
+    if open_shop is not ALL_SHOPS and open_shop != staff.shop_id:
+        # T1: the guard reads only the open shop's rows, so a person of another shop would quietly hold nothing, and the
+        # bug in the calling code would hide behind a plain "no". A server error instead, as for another shop's side.
+        raise ShopMismatch("The person belongs to another shop than the one open.")
     if side is not None and side.shop_id != staff.shop_id:
         # T1: shop B's side matches none of shop A's rows, so the answer would hold A's every-side codes alone, as if
         # B's side were A's. A bug in the calling code, so a server error (apps/core/tenancy.py).
