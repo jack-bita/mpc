@@ -8,7 +8,10 @@ action: a person would then hold something nobody chose to give them (as with ty
 
 A role template is a named bundle of codes. The templates live here, beside the codes (03 §5.8). Each new shop gets
 its own copy of them, as Role rows its owner can change later (set_up_shop, apps/people/services.py). So a change
-here reaches the shops made after it, never a shop that already has its roles.
+here reaches the shops made after it, never a shop that already has its roles. A new code therefore comes with a data
+migration that adds it to the Owner role of every shop that already has its roles, and to the Manager's unless it
+joins the owner's own four, moving each role's `version` (its history records the edit, ADR-0036): without it, nobody
+in those shops would hold the new code, and under the giver rule nobody there could ever give it (03 §5.8).
 
 Only data lives here. Who holds which code, and where, is `people`'s (apps/people/permissions.py): `core` is layer 0
 and may not import `people` (ADR-0035).
@@ -90,8 +93,9 @@ _OWNERS_OWN = frozenset(
 )
 
 # What each template holds, as Jack chose them for MPC (29 Oct 2026, from spec §6). Each shop's owner can change
-# their own copy later. A new code reaches the Owner by itself, and the Manager unless it joins the owner's own
-# four; any other role, only by a line here. Weighing goods as they arrive is everyone's job (Jack): it is on
+# their own copy later. A new code reaches the Owner's template by itself, and the Manager's unless it joins the
+# owner's own four; any other template, only by a line here. Shops that already have their roles get it through the
+# data migration the header asks for. Weighing goods as they arrive is everyone's job (Jack): it is on
 # every role, and buying prices stay with whoever completes the delivery.
 ROLE_TEMPLATES: dict[RoleTemplate, frozenset[Permission]] = {
     # Everything, on every side: the shop is theirs.
