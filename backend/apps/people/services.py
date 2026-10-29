@@ -3,23 +3,24 @@
 A staff member's working life at one shop (02 §5): they are added, suspended, brought back and marked
 as left, and given a PIN (set_pin; apps/people/pins.py hashes it). And what they may do there: a shop gets
 its own copy of the role templates (copy_role_templates), and a person is given a role, or one extra
-permission, on one side or on all of them (assign_role, grant_permission). Each action runs in one
-transaction, checks that every row it links to belongs to the same shop (T1), and refuses a broken rule
-with a ValidationError that carries a code (ADR-0032); CORE-6's error handler will turn it into the
-API's error shape. A status change also writes its line in the audit trail, with who and why, in the
-same transaction (apps/control/services.py, audit): the change and its line are kept together or not at
-all (T3).
+permission, on one side or on all of them (assign_role, grant_permission), by someone who may give it.
+Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
+and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
+will turn it into the API's error shape. A status change also writes its line in the audit trail, with
+who and why, in the same transaction (apps/control/services.py, audit): the change and its line are kept
+together or not at all (T3).
 
 Callers open shop_context(shop) first: full_clean and the unique checks read through the guarded
 `objects` (CORE-2).
 """
 
 import uuid
+from collections.abc import Collection
 from contextlib import nullcontext
 from datetime import date
 from zoneinfo import ZoneInfo
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
@@ -27,9 +28,10 @@ from apps.control.models import AuditAction
 from apps.control.services import audit
 from apps.core.acting import acting_as
 from apps.core.models import ShopScoped
-from apps.core.permissions import ROLE_TEMPLATES
+from apps.core.permissions import ROLE_TEMPLATES, Permission
 from apps.core.tenancy import ALL_SHOPS, current_shop
 from apps.people.models import PermissionGrant, Role, RoleAssignment, StaffMember, StaffStatus, User
+from apps.people.permissions import effective_permissions, require
 from apps.people.pins import check_pin_strength, hash_pin
 from apps.shops.models import Shop, Side
 
@@ -225,6 +227,22 @@ def _check_same_shop(staff: StaffMember, *rows: ShopScoped | None) -> None:
         raise ValidationError("This belongs to another shop.", code="staff.other_shop")
 
 
+def _check_giver(by: StaffMember | None, codes: Collection[str], side: Side | None) -> None:
+    # Who may give (Jack, 29 Oct 2026). `by` None: the system or the superuser, who set up the shop's first owner.
+    # Anyone else needs staff.manage on that side, and may give only codes they hold there themselves: Baba hands a
+    # manager staff.manage to add a loader, and that manager still can't make himself Owner and approve his own day.
+    # Both checks read the giver's roles from the database (apps/people/permissions.py), so a giver suspended a
+    # moment ago gives nothing.
+    if by is None:
+        return
+    require(by, Permission.STAFF_MANAGE, side)
+    # Only codes from the list are compared: one that isn't is the table's own rule to refuse, with its code
+    # (permission.unknown), whoever sends it. A typo is reported as a typo.
+    known = {code for code in codes if code in Permission.values}
+    if not known <= effective_permissions(by, side):
+        raise PermissionDenied("Nobody gives a permission they don't hold on that side.")
+
+
 def _locked_receiver(staff: StaffMember) -> StaffMember:
     # The person read again and locked (_locked), so a leaving recorded at the same moment either comes first, and is
     # refused here, or waits until this is given. A person who has left gets nothing: a worker who comes back gets a
@@ -240,6 +258,7 @@ def assign_role(staff: StaffMember, role: Role, *, side: Side | None, by: StaffM
     gives it; None for the system or the superuser."""
     _check_shop(staff.shop_id, by)
     _check_same_shop(staff, role, side)
+    _check_giver(by, role.permissions, side)
     with transaction.atomic():
         staff = _locked_receiver(staff)
         given = RoleAssignment(shop_id=staff.shop_id, staff=staff, role=role, side=side, created_by=by)
@@ -256,6 +275,7 @@ def grant_permission(
     Vyakula. Checked as a role is given (assign_role)."""
     _check_shop(staff.shop_id, by)
     _check_same_shop(staff, side)
+    _check_giver(by, [permission], side)
     with transaction.atomic():
         staff = _locked_receiver(staff)
         granted = PermissionGrant(shop_id=staff.shop_id, staff=staff, permission=permission, side=side, created_by=by)

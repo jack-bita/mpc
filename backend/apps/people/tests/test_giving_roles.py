@@ -2,11 +2,12 @@
 permission (02 §5).
 
 Each shop holds its own copy of the six templates, made once. A role or a permission is given only inside its own
-shop (T1), never to someone who has left, and the row keeps who gave it. Fake data only: the repo is public (03 §10).
+shop (T1), never to someone who has left, and the row keeps who gave it. Only someone with staff.manage there may
+give, and only what they hold there themselves (Jack, 29 Oct 2026). Fake data only: the repo is public (03 §10).
 """
 
 import pytest
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 
 from apps.core.permissions import ROLE_TEMPLATES, Permission, RoleTemplate
 from apps.core.tenancy import shop_context
@@ -73,13 +74,50 @@ def test_left_staff_gets_no_role(shop_a: Shop, side_a: Side, staff_a: StaffMembe
 
 
 def test_role_given_keeps_who_gave_it(shop_a: Shop, side_a: Side, staff_a: StaffMember, staff_a2: StaffMember) -> None:
-    # Who gave a role, and when, are the row's own `created_by` and `created_at` (02 §1): Staff A2 gives Staff A the
-    # Worker role, and an extra key of a known code only.
+    # Who gave a role, and when, are the row's own `created_by` and `created_at` (02 §1): Staff A2, the owner, gives
+    # Staff A the Worker role, and an extra key of a known code only.
     with shop_context(shop_a):
-        worker = copy_role_templates(shop_a)[RoleTemplate.WORKER]
+        roles = copy_role_templates(shop_a)
+        worker = roles[RoleTemplate.WORKER]
+        assign_role(staff_a2, roles[RoleTemplate.OWNER], side=None, by=None)
         given = assign_role(staff_a, worker, side=side_a, by=staff_a2)
         granted = grant_permission(staff_a, Permission.STOCK_COUNT, side=None, by=staff_a2)
         with pytest.raises(ValidationError) as typo:
             grant_permission(staff_a, "stock.cont", side=None, by=staff_a2)
     assert given.created_by_id == granted.created_by_id == staff_a2.pk
     assert [error.code for error in typo.value.error_dict["__all__"]] == ["permission.unknown"]
+
+
+def test_giving_a_role_needs_staff_manage(
+    shop_a: Shop, side_a: Side, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # A Manager runs the shop, but adding workers and giving them roles is the owner's (staff.manage, Jack): with
+    # every Manager code on every side, Staff A2 still can't give the Worker role, until the owner grants staff.manage.
+    with shop_context(shop_a):
+        roles = copy_role_templates(shop_a)
+        assign_role(staff_a2, roles[RoleTemplate.MANAGER], side=None, by=None)
+        with pytest.raises(PermissionDenied):
+            assign_role(staff_a, roles[RoleTemplate.WORKER], side=side_a, by=staff_a2)
+        grant_permission(staff_a2, Permission.STAFF_MANAGE, side=None, by=None)
+        assign_role(staff_a, roles[RoleTemplate.WORKER], side=side_a, by=staff_a2)
+
+
+def test_manager_cannot_make_himself_owner(
+    shop_a: Shop, side_a: Side, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # Given staff.manage to add a loader, a Manager may give only what he holds himself: not the Owner role, which
+    # holds the owner's own approvals, to himself or to anyone; not one of those approvals as an extra key; and,
+    # holding staff.manage on Dawa alone, nothing for every side.
+    with shop_context(shop_a):
+        roles = copy_role_templates(shop_a)
+        assign_role(staff_a2, roles[RoleTemplate.MANAGER], side=None, by=None)
+        grant_permission(staff_a2, Permission.STAFF_MANAGE, side=side_a, by=None)
+        for receiver in (staff_a2, staff_a):
+            with pytest.raises(PermissionDenied):
+                assign_role(receiver, roles[RoleTemplate.OWNER], side=side_a, by=staff_a2)
+        with pytest.raises(PermissionDenied):
+            grant_permission(staff_a, Permission.DRAWER_APPROVE, side=side_a, by=staff_a2)
+        with pytest.raises(PermissionDenied):
+            assign_role(staff_a, roles[RoleTemplate.WORKER], side=None, by=staff_a2)
+        # What he holds on Dawa, he may give on Dawa.
+        assign_role(staff_a, roles[RoleTemplate.WORKER], side=side_a, by=staff_a2)
