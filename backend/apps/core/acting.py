@@ -42,8 +42,7 @@ def acting_as(actor: Actor) -> Iterator[None]:
     """Tell PostgreSQL that `actor` acts, for the code inside the `with` block: every row a trigger records
     there names `actor`'s staff member, or nobody for a device alone (03 §5.4), and must belong to `actor`'s
     shop. What was there before is put back however the block ends, as shop_context() puts back the shop."""
-    staff_before, shop_before = _read()
-    _write("" if actor.staff_id is None else str(actor.staff_id), str(actor.shop_id))
+    staff_before, shop_before = _swap("" if actor.staff_id is None else str(actor.staff_id), str(actor.shop_id))
     try:
         yield
     finally:
@@ -64,14 +63,28 @@ def _transaction_failed() -> bool:
     return raw is not None and raw.info.transaction_status == TransactionStatus.INERROR
 
 
-def _read() -> tuple[str, str]:
-    # current_setting(…, true): `true` means "missing is fine", so a session that never set one answers NULL
-    # (None here) instead of raising. Read as "": nobody, no shop.
+# Reads the two settings, then writes the new values, in one query: every office visit opens acting_as(), reads
+# included, so it costs one query on the way in and one on the way out.
+# - current_setting(…, true): `true` means "missing is fine", so a session that never set one answers NULL
+#   (None in Python) instead of raising. Read as "": nobody, no shop.
+# - The order matters: the old values must be read before the new ones are written. PostgreSQL promises no order
+#   between the parts of one SELECT list, so the reading sits in its own step, a MATERIALIZED WITH, which PostgreSQL
+#   works out first, as a table of its own, before the outer SELECT writes anything (set_config, as in _write below).
+_SWAP_SQL = """
+WITH before AS MATERIALIZED (
+    SELECT current_setting(%s, true) AS staff, current_setting(%s, true) AS shop
+)
+SELECT before.staff, before.shop, set_config(%s, %s, false), set_config(%s, %s, false) FROM before
+"""
+
+
+def _swap(staff: str, shop: str) -> tuple[str, str]:
+    # The new values in, the old ones back (see _SWAP_SQL).
     with connection.cursor() as cursor:
-        cursor.execute("SELECT current_setting(%s, true), current_setting(%s, true)", [STAFF_SETTING, SHOP_SETTING])
+        cursor.execute(_SWAP_SQL, [STAFF_SETTING, SHOP_SETTING, STAFF_SETTING, staff, SHOP_SETTING, shop])
         row = cursor.fetchone()
-    staff, shop = row if row else (None, None)
-    return staff or "", shop or ""
+    staff_before, shop_before = (row[0], row[1]) if row else (None, None)
+    return staff_before or "", shop_before or ""
 
 
 def _write(staff: str, shop: str) -> None:

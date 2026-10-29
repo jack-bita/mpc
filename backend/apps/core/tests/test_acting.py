@@ -20,6 +20,7 @@ from dataclasses import dataclass
 import pytest
 from django.db import DataError, connection, transaction
 from django.urls import path
+from pytest_django import DjangoAssertNumQueries
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.test import APIClient
@@ -72,6 +73,13 @@ def test_acting_as_puts_back_who_acted_before() -> None:
         assert told() == (str(owner.staff_id), str(shop))
 
     assert told() == ("", "")
+
+
+def test_acting_as_costs_two_queries(django_assert_num_queries: DjangoAssertNumQueries) -> None:
+    # Every office visit opens it, reads included, so it stays cheap: one query to read the old values and write the
+    # new ones together, one to put the old ones back.
+    with django_assert_num_queries(2), acting_as(Someone(uuid.uuid7(), uuid.uuid7())):
+        pass
 
 
 def test_acting_as_leaves_a_failed_transaction_to_its_rollback() -> None:
