@@ -161,7 +161,7 @@ def test_list_order_follows_the_servers_clock(staff_client_a: APIClient) -> None
 def test_side_permission_hook_checks_each_side(
     staff_client_a: APIClient, shop_a: Shop, sides_a: dict[str, Side], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # PPL-3 fills the hook in with real permissions. Until then, a stand-in that refuses Vyakula (F)
+    # PPL-5 fills the hook in with real permissions. Until then, a stand-in that refuses Vyakula (F)
     # proves that each row the route hands out, to read or to change, passes through the hook, with that
     # row's own side.
     vyakula = sides_a["F"].pk
@@ -203,7 +203,7 @@ def test_side_field_names_where_a_row_keeps_its_side(sides_a: dict[str, Side]) -
 def test_list_shows_only_the_sides_a_person_may_see(
     staff_client_a: APIClient, sides_a: dict[str, Side], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # PPL-3 decides from each person's roles which sides they may see. A stand-in that shows only Dawa (D)
+    # PPL-5 decides from each person's roles which sides they may see. A stand-in that shows only Dawa (D)
     # proves the list leaves Vyakula out, and that Vyakula's own address is "not found", as another shop's
     # row is: a hidden side is not even shown to exist.
     dawa = sides_a["D"].pk

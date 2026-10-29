@@ -14,7 +14,7 @@ An office route builds on ShopViewSet: `class SideViewSet(ShopViewSet[Side])`.
 - The rows. get_queryset() builds them from the guarded manager on each visit, inside the open shop, so
   the guard filters them to that shop (ADR-0022). A table's rows can't be named in the class body, as DRF
   allows (`queryset = Side.objects.all()`): that would ask for a shop while the module loads, and raise.
-- The sides. Two hooks PPL-3 fills in (02 §5, X1). visible_sides(): which sides' rows a person may see at
+- The sides. Two hooks PPL-5 fills in (02 §5, X1). visible_sides(): which sides' rows a person may see at
   all; every read leaves the others out, so a list never shows them and their rows are "not found".
   check_side_permission(): may the person do this action on this side, asked for each row read, edited or
   made one at a time.
@@ -105,7 +105,7 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
     side_field: str | None = "side"
 
     def visible_sides(self, request: Request) -> Collection[uuid.UUID] | None:
-        """The sides whose rows the person acting may see, or None for all of them. PPL-3 fills it in from the
+        """The sides whose rows the person acting may see, or None for all of them. PPL-5 fills it in from the
         person's roles; until then, every side."""
         return None
 
@@ -133,7 +133,7 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         """The per-side check (03 §5.4): may the person acting do this action (`self.action`) on this side, or
         on the whole shop when `side_id` is None? Asked for each row handed out one at a time: read, edited,
         or made, and a create's repeat as a read of the stored row. A list is narrowed by visible_sides()
-        instead. Refuses with PermissionDenied. PPL-3 fills it in with its permission codes; until then,
+        instead. Refuses with PermissionDenied. PPL-5 fills it in with PPL-3's permission codes; until then,
         anyone logged in at the open shop may."""
 
     def check_object_permissions(self, request: Request, obj: Any) -> None:
