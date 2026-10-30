@@ -21,6 +21,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
 from django.db.models import F
 from django.utils import timezone
+from django.views.debug import ExceptionReporter
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
@@ -93,6 +94,27 @@ def test_device_key_stored_hashed(manager_a: StaffMember, side_a: Side) -> None:
     for row in (PairingRequest.objects.get(pk=asked.request.pk), device):
         assert row.key_hash == key_hash
         assert asked.key not in [str(value) for value in row.__dict__.values()]
+
+
+def test_device_key_never_printed(monkeypatch: pytest.MonkeyPatch) -> None:
+    # What a test's failure, a log line or an error page prints shows neither the key nor the waiting code.
+    asked = start_pairing()
+    assert asked.key not in repr(asked)
+    assert asked.request.code not in repr(asked) and asked.request.code not in str(asked.request)
+
+    # And Django's error report, which lists each function's local variables when something fails, hides the key:
+    # here the code can't be drawn, after the key is made.
+    def broken() -> str:
+        raise RuntimeError("no code")
+
+    monkeypatch.setattr(services, "make_pairing_code", broken)
+    try:
+        start_pairing()
+    except RuntimeError as error:
+        frames = ExceptionReporter(None, type(error), error, error.__traceback__).get_traceback_frames()
+    [frame] = [frame for frame in frames if frame["function"] == "start_pairing"]
+    shown = dict(frame["vars"])
+    assert set(str(shown["key"])) == {"*"}
 
 
 def test_device_made_in_the_confirmers_shop(manager_a: StaffMember, side_a: Side) -> None:

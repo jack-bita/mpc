@@ -20,13 +20,14 @@ Callers open shop_context(shop) first: full_clean and the unique checks read thr
 import uuid
 from collections.abc import Collection, Sequence
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from zoneinfo import ZoneInfo
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from django.views.decorators.debug import sensitive_variables
 
 from apps.control.models import AuditAction
 from apps.control.services import audit
@@ -338,7 +339,9 @@ class NewPairing:
     # and its key. The key is handed over once, here, and kept nowhere on the server but as its hash: AUTH-2 puts it in
     # the device's cookie.
     request: PairingRequest
-    key: str
+    # repr=False: a dataclass prints every field by default, so a test's failure message, a log line or an error page
+    # that printed this would show the key itself. Left out, it prints as NewPairing(request=...).
+    key: str = field(repr=False)
 
 
 # How many codes start_pairing draws before it gives up. A clash with a code already given is about 1 in a million
@@ -346,6 +349,9 @@ class NewPairing:
 _CODE_DRAWS = 5
 
 
+# Django's error page (DEBUG) and its error emails list each function's local variables when something fails. This
+# marks `key` as one to hide: it shows as stars, never the device's secret.
+@sensitive_variables("key")
 def start_pairing() -> NewPairing:
     """A new device asks to join a shop (03 §5.9, step 1). It gets a code to show and its key, which opens nothing
     until a manager confirms the code (confirm_pairing). Needs no shop open: the device belongs to no shop yet, and

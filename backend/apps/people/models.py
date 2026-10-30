@@ -534,4 +534,6 @@ class PairingRequest(UUIDModel, TimeStamped):
         ]
 
     def __str__(self) -> str:
-        return self.code
+        # The id, never the code: while it waits, the code is what a manager types to claim the device, so it stays
+        # out of anything that prints a row, such as a log line or an error page.
+        return f"Pairing request {self.pk}"
