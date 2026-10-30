@@ -5,7 +5,8 @@ as left, and given a PIN (set_pin; apps/people/pins.py hashes it). And what they
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
-(start_pairing), and a manager with device.manage says yes (confirm_pairing).
+(start_pairing), a manager with device.manage says yes (confirm_pairing), and blocks it, or lets it work again
+(block, unblock).
 Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
@@ -30,6 +31,7 @@ from django.utils import timezone
 from apps.control.models import AuditAction
 from apps.control.services import audit
 from apps.core.acting import acting_as
+from apps.core.editing import editing
 from apps.core.models import SequenceName, ShopScoped
 from apps.core.permissions import ROLE_TEMPLATES, Permission
 from apps.core.sequences import next_number
@@ -43,6 +45,7 @@ from apps.people.device_keys import (
 )
 from apps.people.models import (
     Device,
+    DeviceStatus,
     PairingRequest,
     PermissionGrant,
     Role,
@@ -108,11 +111,12 @@ def add_staff(
     return staff
 
 
-def _check_reason(reason: str) -> None:
-    # Rule 7: a suspension or a leaving is always recorded with who, when and why. Checked before anything
-    # is locked; audit() keeps the reason, trimmed, in the action's own line (CTRL-2).
+def _check_reason(reason: str, *, code: str = "staff.reason_required") -> None:
+    # Rule 7: a suspension, a leaving or a device's block is always recorded with who, when and why. Checked
+    # before anything is locked; audit() keeps the reason, trimmed, in the action's own line (CTRL-2). `code`
+    # names what needs the reason, so the screen says it in its own words (ADR-0032).
     if not reason.strip():
-        raise ValidationError("A reason is required.", code="staff.reason_required")
+        raise ValidationError("A reason is required.", code=code)
 
 
 def _save(staff: StaffMember, *, by: StaffMember | None, fields: list[str]) -> None:
@@ -413,3 +417,46 @@ def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -
         request.confirmed_at = now
         request.save(update_fields=["device", "confirmed_at"])
     return device
+
+
+def block(device: Device, *, by: StaffMember, reason: str) -> Device:
+    """Stop a device at once, perhaps stolen (03 §5.9, step 4): from its next request, its key opens nothing (AUTH-2).
+    The key is kept, so unblock brings it back. Needs device.manage on the device's home side, and a reason."""
+    return _set_device_status(
+        device, DeviceStatus.ACTIVE, DeviceStatus.BLOCKED, AuditAction.DEVICE_BLOCK, by=by, reason=reason
+    )
+
+
+def unblock(device: Device, *, by: StaffMember, reason: str) -> Device:
+    """Let a blocked device work again, with the same key, so the records it holds can still arrive (Jack, AUTH-1).
+    Only for a device back in the shop's hands: a thief holding it could use it again. Checked as block is."""
+    return _set_device_status(
+        device, DeviceStatus.BLOCKED, DeviceStatus.ACTIVE, AuditAction.DEVICE_UNBLOCK, by=by, reason=reason
+    )
+
+
+def _set_device_status(
+    device: Device, was: DeviceStatus, becomes: DeviceStatus, action: AuditAction, *, by: StaffMember, reason: str
+) -> Device:
+    # block and unblock are one move each way: active → blocked, blocked → active.
+    _check_shop(device.shop_id, by)
+    _check_reason(reason, code="device.reason_required")
+    with transaction.atomic():
+        # The device as stored, read again and locked: its status and home side are checked as they are now, not as
+        # the copy handed in says. Two managers blocking at once take turns, and the second finds it blocked.
+        current = Device.objects.select_for_update().get(pk=device.pk)
+        # Who may: device.manage on the home side as stored (Jack, AUTH-1), as for pairing it. Refused before anything
+        # changes; the transaction leaves the device as it was.
+        require(by, Permission.DEVICE_MANAGE, current.home_side)
+        if current.status != was:
+            code = "device.not_active" if was == DeviceStatus.ACTIVE else "device.not_blocked"
+            raise ValidationError("The device is not in a state this action can change.", code=code)
+        # Through editing(), as every office edit: the version moves on, `updated_by` names who, and the history's
+        # trigger names the same person. With the version just read, never one a screen sent: a block is urgent, and
+        # must not be refused because someone renamed the device a moment ago. A rename screen opened before the
+        # block is the one refused (409), and loads the device again.
+        with editing(current, version=current.version, by=by) as fresh:
+            fresh.status = becomes
+        # In the same transaction: if the line can't be written, the block is undone with it (T3).
+        audit(action=action, subject=fresh, reason=reason, by=by, before={"status": was}, after={"status": becomes})
+    return fresh

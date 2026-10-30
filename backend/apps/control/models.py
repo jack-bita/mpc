@@ -232,6 +232,9 @@ class AuditAction(models.TextChoices):
     STAFF_SUSPEND = "staff.suspend", "Staff member suspended"
     STAFF_UNSUSPEND = "staff.unsuspend", "Staff member brought back"
     STAFF_LEAVE = "staff.leave", "Staff member left"
+    # A device stopped, perhaps stolen, and let work again (AUTH-1): each with who and why (rule 7).
+    DEVICE_BLOCK = "device.block", "Device blocked"
+    DEVICE_UNBLOCK = "device.unblock", "Device unblocked"
 
 
 class AuditEvent(AppendOnly):
