@@ -13,14 +13,18 @@ The device is the visit's Actor (apps/core/tenancy.py): its `shop_id`, and a `st
 shop's machine, not a person. The device routes open its shop for the whole visit (DeviceView, apps/people/api/base.py);
 office routes don't use this login at all, and refuse a device alone (CORE-6).
 
-This file owns the cookie's name, the login class, the CSRF check the device routes share, and the cookie's
-description for the API's schema.
+This file owns the cookie (its name, how long it lasts, and the one function that sets it), the login class, the
+CSRF check the device routes share, and the cookie's description for the API's schema.
 """
 
+from datetime import timedelta
 from typing import Any
 
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
+from django.http import HttpResponseBase
 from django.utils import timezone
+from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from drf_spectacular.openapi import AutoSchema
 from rest_framework import exceptions
@@ -37,6 +41,33 @@ from apps.people.services import note_device_seen
 # error pages and error reports hide the value of any cookie whose name holds KEY, TOKEN or SECRET
 # (SafeExceptionReporterFilter), so a crash in a device's visit never prints its key.
 DEVICE_KEY_COOKIE = "device_key"
+# How long a browser keeps it: 400 days, the most Chrome allows, whatever a server asks for (RFC 6265bis). The device
+# routes send it again as the device is seen (DeviceView), so a device in use never reaches the end.
+DEVICE_KEY_MAX_AGE = timedelta(days=400)
+
+
+# Django's error page and its error reports list each function's local variables when something fails. Marked with
+# no names, so every variable is hidden, shown as stars: here, and in every function this one calls, since Django
+# hides a variable in each frame below a marked one too. Not by name, as start_pairing hides its `key`
+# (apps/people/services.py): Django's own set_cookie holds the key under another name, `value`, and a crash inside it
+# would print it.
+@sensitive_variables()
+def set_key_cookie(response: HttpResponseBase, key: str) -> None:
+    """Put the device's key in its cookie, on the answer about to leave (03 §5.9):
+    - HttpOnly: page scripts can't read it, so a bad script in the page can't steal it (ADR-0017);
+    - Secure, where the session's is (production): it travels over HTTPS only;
+    - SameSite Strict: the browser never sends it with a request another website starts. The app and the API share
+      one address, so the app itself never needs that;
+    - only for /api/: never sent with the app's pages and pictures."""
+    response.set_cookie(
+        DEVICE_KEY_COOKIE,
+        key,
+        max_age=DEVICE_KEY_MAX_AGE,
+        path="/api/",
+        secure=settings.SESSION_COOKIE_SECURE,
+        httponly=True,
+        samesite="Strict",
+    )
 
 
 def enforce_csrf(request: Request) -> None:

@@ -14,14 +14,17 @@ the service, as a manager's visit would call it. Fake data only: the repo is pub
 from collections.abc import Callable
 
 import pytest
+from django.http import HttpResponseBase
+from django.views.debug import ExceptionReporter
 from pytest_django import Settings
 from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
+from apps.people.api import views
 from apps.people.device_keys import hash_device_key
 from apps.people.models import Device, PairingRequest, StaffMember
-from apps.people.services import block, confirm_pairing, start_pairing
+from apps.people.services import NewPairing, block, confirm_pairing, start_pairing
 from apps.shops.models import Shop, Side
 
 pytestmark = pytest.mark.django_db
@@ -133,6 +136,31 @@ def test_waiting_device_may_ask_again() -> None:
     assert second.json()["code"] != first.json()["code"]
     assert keys_set(second) and keys_set(second) != keys_set(first)
     assert PairingRequest.objects.count() == 2
+
+
+def test_start_pairing_keeps_the_key_out_of_error_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The key passes through the start route on its way to the cookie (04 v1.26's note). A crash there, here inside
+    # Django's set_cookie, must not print it: Django's error page and its error reports list each function's
+    # variables, the crashed one's too, where the key sits under a name of Django's own choosing.
+    asked: list[NewPairing] = []
+
+    def recorded() -> NewPairing:
+        asked.append(start_pairing())
+        return asked[0]
+
+    def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("no cookie")
+
+    monkeypatch.setattr(views, "start_pairing", recorded)
+    monkeypatch.setattr(HttpResponseBase, "set_cookie", broken)
+    with pytest.raises(RuntimeError) as crash:
+        APIClient().post(PAIRING)
+
+    frames = ExceptionReporter(None, crash.type, crash.value, crash.tb).get_traceback_frames()
+    shown = {name: str(value) for frame in frames for name, value in frame["vars"]}
+    assert all(asked[0].key not in value for value in shown.values())
+    # Where the key sits in a variable on its own, it shows as stars.
+    assert set(shown["key"]) == {"*"}
 
 
 def test_paired_device_learns_its_shop_and_code(manager_a: StaffMember, side_a: Side, shop_a: Shop) -> None:

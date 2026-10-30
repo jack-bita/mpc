@@ -19,6 +19,8 @@ urlpatterns: list[URLPattern | URLResolver] = [
     # The office routes, one prefix per app (03 §5.10). A change that would break old devices gets v2
     # routes beside these, until every device has updated.
     path("api/v1/shops/", include("apps.shops.api.urls")),
+    # The routes a device calls with its key: the start of a pairing, and what a paired device learns (AUTH-2).
+    path("api/devices/v1/", include("apps.people.api.device_urls")),
     # Only the superuser can log in here (PPL-1, apps/people/admin.py).
     path("admin/", admin.site.urls),
 ]
