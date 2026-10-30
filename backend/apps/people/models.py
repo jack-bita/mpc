@@ -476,19 +476,23 @@ class PairingRequest(UUIDModel, TimeStamped):
     # TimeStamped (CORE-1) give `id` and `created_at`, when it asked.
     # No `shop`, unlike every shop's table (T1's exception, NO_SHOP in backend/tests/sweep_lists.py): until a manager
     # says yes, the device belongs to no shop, and anyone may ask. So no guard either: its default manager reads every
-    # request. A waiting request holds nothing of any shop's. A confirmed one names its device, and keeps its key's
-    # hash, so a key found here leads to a device of some shop with no guard on the way: a door past the guard, as
-    # system_context() is. AUTH-2 decides how a key finds its device and its shop, and whether through here (04 v1.26).
-    # A shop's own tables only ever hold devices one of its managers confirmed.
+    # request. A waiting request holds nothing of any shop's. A confirmed one names its device, but no longer holds the
+    # key's hash, which moved to the device (Jack, AUTH-2): so no key leads through here to a device of some shop, past
+    # the guard. A key finds its shop through one door only (apps/people/login_doors.py). A shop's own tables only ever
+    # hold devices one of its managers confirmed.
 
     # Every code ever given stays taken (unique, below), so a code can only ever mean one request: start_pairing draws
     # again on a clash. With about 850 billion codes, that is rare.
     code = models.CharField(max_length=PAIRING_CODE_LENGTH)
     # created_at + 10 minutes (PAIRING_CODE_LIFETIME): a manager's confirm after this is refused.
     expires_at = models.DateTimeField()
-    # The SHA-256 hash of the key the device was given when it asked, never the key. confirm_pairing copies it onto
-    # the Device, which switches the key on (Jack, AUTH-1).
-    key_hash = models.CharField(max_length=KEY_HASH_LENGTH, editable=False)
+    # The SHA-256 hash of the key the device was given when it asked, never the key, kept only while it waits.
+    # confirm_pairing moves it onto the Device, which switches the key on (Jack, AUTH-1), and empties it here (Jack,
+    # AUTH-2): one fact in one place (02 v1.7). Empty is NULL, never "": the unique rule below compares real hashes
+    # only, as PostgreSQL never counts two NULLs as the same value, so every confirmed request can hold none. (ruff's
+    # DJ001 warns of NULL beside "" in a text column, and lets a `unique=True` field pass for this reason; this one is
+    # unique through its named rule instead, so it says so here.)
+    key_hash = models.CharField(max_length=KEY_HASH_LENGTH, null=True, blank=True, editable=False)  # noqa: DJ001
     # The device it became, once confirmed; empty while it waits. One request per device (OneToOne). PROTECT: nothing
     # is deleted (rule 7). related_name="+": a device's request is read from here, not from the device.
     device = models.OneToOneField(Device, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
@@ -519,6 +523,15 @@ class PairingRequest(UUIDModel, TimeStamped):
                 | models.Q(device__isnull=False, confirmed_at__isnull=False),
                 name="people_pairingrequest_confirmed_whole",
                 violation_error_code="pairing.confirmed_half",
+            ),
+            # The key's hash while the request waits, and never once it names its device: confirming moves it (AUTH-2).
+            # A confirmed request that kept one would be a second way from the key to a device of some shop, past the
+            # guard; a waiting one with none could never be confirmed into a working key.
+            models.CheckConstraint(
+                condition=models.Q(key_hash__isnull=False, device__isnull=True)
+                | models.Q(key_hash__isnull=True, device__isnull=False),
+                name="people_pairingrequest_key_only_while_waiting",
+                violation_error_code="pairing.key_misplaced",
             ),
             models.UniqueConstraint(
                 fields=["code"],

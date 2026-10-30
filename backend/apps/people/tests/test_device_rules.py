@@ -96,11 +96,27 @@ def test_database_refuses_a_request_that_breaks_a_rule(fields: dict[str, Any], r
 
 
 def test_database_refuses_a_request_confirmed_without_a_time(shop_a: Shop, side_a: Side) -> None:
-    # The other half of confirmed_whole: a device named, but no time it was confirmed.
+    # The other half of confirmed_whole: a device named, but no time it was confirmed. No hash, as a confirmed request
+    # holds none (AUTH-2), so this rule is the only one it breaks.
     with shop_context(shop_a):
         device = Device.objects.create(**device_row(shop_a, side_a))
     with pytest.raises(IntegrityError, match="people_pairingrequest_confirmed_whole"):
-        PairingRequest.objects.create(**request_row(device=device))
+        PairingRequest.objects.create(**request_row(device=device, key_hash=None))
+
+
+def test_database_refuses_a_confirmed_request_that_keeps_its_key(shop_a: Shop, side_a: Side) -> None:
+    # Confirming moves the key's hash to the device (Jack, AUTH-2): a confirmed request that kept one would be a second
+    # way from a key to a device of some shop, past the guard. Refused even when the services are skipped.
+    with shop_context(shop_a):
+        device = Device.objects.create(**device_row(shop_a, side_a))
+    with pytest.raises(IntegrityError, match="people_pairingrequest_key_only_while_waiting"):
+        PairingRequest.objects.create(**request_row(device=device, confirmed_at=timezone.now()))
+
+
+def test_database_refuses_a_waiting_request_without_a_key() -> None:
+    # The other half: a waiting request with no hash could never be confirmed into a working key.
+    with pytest.raises(IntegrityError, match="people_pairingrequest_key_only_while_waiting"):
+        PairingRequest.objects.create(**request_row(key_hash=None))
 
 
 @pytest.mark.parametrize(

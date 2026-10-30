@@ -86,15 +86,46 @@ def test_pairing_code_clash_draws_again(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_device_key_stored_hashed(manager_a: StaffMember, side_a: Side) -> None:
-    # The key is a secret the device keeps; the server keeps only its SHA-256 hash, on the request and then on the
-    # device, so a stolen copy of the database can't pretend to be the device (03 §5.9).
+    # The key is a secret the device keeps; the server keeps only its SHA-256 hash, on the request while it waits and
+    # then on the device, so a stolen copy of the database can't pretend to be the device (03 §5.9).
     asked = start_pairing()
     key_hash = hashlib.sha256(asked.key.encode()).hexdigest()
     assert len(asked.key) >= 43  # 32 random bytes, written in 43 URL-safe characters
+    waiting = PairingRequest.objects.get(pk=asked.request.pk)
+    assert waiting.key_hash == key_hash
     device = confirm(asked.request.code, manager_a, side_a)
-    for row in (PairingRequest.objects.get(pk=asked.request.pk), device):
-        assert row.key_hash == key_hash
+    assert device.key_hash == key_hash
+    for row in (waiting, device, PairingRequest.objects.get(pk=asked.request.pk)):
         assert asked.key not in [str(value) for value in row.__dict__.values()]
+
+
+def test_confirm_moves_the_key_to_the_device(manager_a: StaffMember, side_a: Side) -> None:
+    # One fact in one place (Jack, AUTH-2; 02 v1.12): once confirmed, the device holds the key's hash and the request
+    # none, so no key leads through a request to a device of some shop past the guard.
+    asked = start_pairing()
+    key_hash = hashlib.sha256(asked.key.encode()).hexdigest()
+
+    device = confirm(asked.request.code, manager_a, side_a)
+
+    confirmed = PairingRequest.objects.get(pk=asked.request.pk)
+    assert confirmed.key_hash is None
+    assert confirmed.device_id == device.pk
+    with shop_context(manager_a.shop_id):
+        assert Device.objects.get(pk=device.pk).key_hash == key_hash
+
+
+def test_refused_confirm_keeps_the_key_waiting(manager_a: StaffMember, side_a: Side) -> None:
+    # The move is in the confirm's own transaction: a confirm refused for its name leaves the hash on the request, so
+    # the same code can be confirmed again under a better name, and the device's key works then.
+    confirm(start_pairing().request.code, manager_a, side_a, name="Laptop ya Dawa")
+    asked = start_pairing()
+    key_hash = hashlib.sha256(asked.key.encode()).hexdigest()
+    with pytest.raises(ValidationError) as refused:
+        confirm(asked.request.code, manager_a, side_a, name="laptop ya dawa")
+    assert [error.code for error in refused.value.error_dict["__all__"]] == ["device.name_taken"]
+
+    assert PairingRequest.objects.get(pk=asked.request.pk).key_hash == key_hash
+    assert confirm(asked.request.code, manager_a, side_a, name="Simu ya Dawa").key_hash == key_hash
 
 
 def test_device_key_never_printed(monkeypatch: pytest.MonkeyPatch) -> None:

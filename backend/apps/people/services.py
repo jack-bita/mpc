@@ -383,10 +383,10 @@ def start_pairing() -> NewPairing:
 
 def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -> Device:
     """A manager says yes to a waiting device (03 §5.9, step 2): they type the code it shows, name it and pick its home
-    side. The device is made in their own shop, active, with the shop's next device code and the key's hash, so its
-    key works from now on. `by` is always a person, who needs device.manage on `home_side`. Refusals: the code
-    unknown, used or expired (pairing.code_unknown, .code_used, .code_expired); a name the shop already gives another
-    device (device.name_taken)."""
+    side. The device is made in their own shop, active, with the shop's next device code and the key's hash, moved
+    from the request, so its key works from now on. `by` is always a person, who needs device.manage on `home_side`.
+    Refusals: the code unknown, used or expired (pairing.code_unknown, .code_used, .code_expired); a name the shop
+    already gives another device (device.name_taken)."""
     _check_shop(by.shop_id, by)
     # T1: a device of this shop lives on a side of this shop.
     _check_same_shop(by, home_side)
@@ -406,6 +406,11 @@ def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -
         now = timezone.now()
         if request.expires_at <= now:
             raise ValidationError("This code has expired: ask the device for a new one.", code="pairing.code_expired")
+        key_hash = request.key_hash
+        if key_hash is None:
+            # A bug, never a person's mistake: the database keeps a hash on every waiting request
+            # (people_pairingrequest_key_only_while_waiting). Said loudly, never a device made with no key.
+            raise RuntimeError(f"{request} waits with no key's hash.")
         device = Device(
             shop_id=by.shop_id,
             name=name,
@@ -413,7 +418,7 @@ def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -
             # D7: the shop's next device code. If anything below refuses, the transaction rolls back, and the number
             # with it: nothing kept it, so the next device gets it (apps/core/sequences.py).
             code=next_number(by.shop_id, SequenceName.DEVICE),
-            key_hash=request.key_hash,
+            key_hash=key_hash,
             created_by=by,
         )
         # Every field, clean() and the rules in Meta, before anything is written: a name the shop already uses comes
@@ -422,7 +427,12 @@ def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -
         device.save()
         request.device = device
         request.confirmed_at = now
-        request.save(update_fields=["device", "confirmed_at"])
+        # The key's hash moves: from now on the device holds it and the request holds none (Jack, AUTH-2). One fact in
+        # one place, and no way from a key through a request to a device of some shop, past the guard: the login finds
+        # a key's shop through its one door (apps/people/login_doors.py). In this same transaction, so a refused
+        # confirm leaves the hash on the waiting request, and the code can still be confirmed.
+        request.key_hash = None
+        request.save(update_fields=["device", "confirmed_at", "key_hash"])
     return device
 
 
