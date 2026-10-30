@@ -141,10 +141,17 @@ def test_waiting_device_may_ask_again() -> None:
     assert PairingRequest.objects.count() == 2
 
 
+def shown_in_error_report(crash: pytest.ExceptionInfo[BaseException]) -> list[tuple[str, str, str]]:
+    # What Django's error report shows of a crash, frame by frame: the function, and each variable's name and value as
+    # printed. Tests run with DEBUG off, as a server does, so the report hides what it is told to hide.
+    frames = ExceptionReporter(None, crash.type, crash.value, crash.tb).get_traceback_frames()
+    return [(frame["function"], name, str(value)) for frame in frames for name, value in frame["vars"]]
+
+
 def test_start_pairing_keeps_the_key_out_of_error_pages(monkeypatch: pytest.MonkeyPatch) -> None:
     # The key passes through the start route on its way to the cookie (04 v1.26's note). A crash there, here inside
-    # Django's set_cookie, must not print it: Django's error page and its error reports list each function's
-    # variables, the crashed one's too, where the key sits under a name of Django's own choosing.
+    # Django's set_cookie, must not print it: Django's error reports list each function's variables, the crashed
+    # one's too, where the key sits under a name of Django's own choosing.
     asked: list[NewPairing] = []
 
     def recorded() -> NewPairing:
@@ -159,11 +166,13 @@ def test_start_pairing_keeps_the_key_out_of_error_pages(monkeypatch: pytest.Monk
     with pytest.raises(RuntimeError) as crash:
         APIClient().post(PAIRING)
 
-    frames = ExceptionReporter(None, crash.type, crash.value, crash.tb).get_traceback_frames()
-    shown = {name: str(value) for frame in frames for name, value in frame["vars"]}
-    assert all(asked[0].key not in value for value in shown.values())
+    # Every variable of every frame, each kept with its own frame: gathered by name alone, a starred `key` low down
+    # could hide a plain one higher up.
+    shown = shown_in_error_report(crash)
+    assert all(asked[0].key not in value for _, _, value in shown)
     # Where the key sits in a variable on its own, it shows as stars.
-    assert set(shown["key"]) == {"*"}
+    [key] = [value for function, name, value in shown if (function, name) == ("set_key_cookie", "key")]
+    assert set(key) == {"*"}
 
 
 def seen_long_ago(device: Device) -> None:

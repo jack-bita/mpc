@@ -19,13 +19,14 @@ from collections.abc import Callable
 import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
-from django.views.debug import SafeExceptionReporterFilter
+from django.views.debug import ExceptionReporter, SafeExceptionReporterFilter
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import NoShopSelected, current_shop, shop_context
+from apps.people.api import authentication
 from apps.people.api.authentication import DEVICE_KEY_COOKIE, DeviceKeyAuthentication
 from apps.people.device_keys import hash_device_key
 from apps.people.login_doors import shop_of_device_key
@@ -117,10 +118,34 @@ def test_blocked_device_still_seen(manager_a: StaffMember, side_a: Side) -> None
         assert Device.objects.get(pk=device.pk).last_seen_at is not None
 
 
+def test_login_keeps_the_key_out_of_error_reports(
+    monkeypatch: pytest.MonkeyPatch, manager_a: StaffMember, side_a: Side
+) -> None:
+    # Every device request passes through the login holding its key. A crash there, here as if the database dropped
+    # while the door looked the key up, must not print the key or its hash in Django's error report, which lists each
+    # function's variables (DEBUG is off in tests, as on a server).
+    device, key = pair(manager_a, side_a)
+
+    def broken(key_hash: str) -> None:
+        raise RuntimeError("the database went away")
+
+    monkeypatch.setattr(authentication, "shop_of_device_key", broken)
+    with pytest.raises(RuntimeError) as crash:
+        DeviceKeyAuthentication().authenticate(visit_with(key))
+
+    frames = ExceptionReporter(None, crash.type, crash.value, crash.tb).get_traceback_frames()
+    # Each variable with its own frame, so a hidden one low down can't stand in for a plain one higher up. The
+    # report's first frame is this test's own, which holds the key it made: only the app's frames are the app's to hide.
+    shown = [(frame["function"], name, str(value)) for frame in frames[1:] for name, value in frame["vars"]]
+    assert frames[0]["function"] == "test_login_keeps_the_key_out_of_error_reports"
+    assert {"authenticate", "broken"} <= {function for function, _, _ in shown}
+    assert all(key not in value and device.key_hash not in value for _, _, value in shown)
+
+
 def test_device_key_cookie_hidden_on_error_pages() -> None:
-    # Django's error page (DEBUG) and its error reports list a failed request's cookies, and hide the value of any
-    # whose name holds KEY, TOKEN or SECRET. The cookie's name holds "key" for that reason, so a crash in a device's
-    # visit never prints its key.
+    # Django's error reports, and its debug page too, list a failed request's cookies, and hide the value of any
+    # whose name holds KEY, TOKEN or SECRET, whatever DEBUG says. The cookie's name holds "key" for that reason, so a
+    # crash in a device's visit never prints its key.
     key = secrets.token_urlsafe(32)
 
     shown = SafeExceptionReporterFilter().get_safe_cookies(visit_with(key))

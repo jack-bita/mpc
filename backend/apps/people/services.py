@@ -351,8 +351,10 @@ class NewPairing:
 _CODE_DRAWS = 5
 
 
-# Django's error page (DEBUG) and its error emails list each function's local variables when something fails. This
-# marks `key` as one to hide: it shows as stars, never the device's secret.
+# Django's error reports, which a server with DEBUG off logs and sends, list each function's local variables when
+# something fails (its debug page, with DEBUG on, shows everything). This marks `key` as one to hide, here and in each
+# function called from here that names it so (hash_device_key, NewPairing): it shows as stars, never the device's
+# secret.
 @sensitive_variables("key")
 def start_pairing() -> NewPairing:
     """A new device asks to join a shop (03 §5.9, step 1). It gets a code to show and its key, which opens nothing

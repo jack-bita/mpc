@@ -46,9 +46,10 @@ DEVICE_KEY_COOKIE = "device_key"
 DEVICE_KEY_MAX_AGE = timedelta(days=400)
 
 
-# Django's error page and its error reports list each function's local variables when something fails. Marked with
-# no names, so every variable is hidden, shown as stars: here, and in every function this one calls, since Django
-# hides a variable in each frame below a marked one too. Not by name, as start_pairing hides its `key`
+# Django's error reports, which a server with DEBUG off logs and sends, list each function's local variables when
+# something fails. (Its debug page, on a laptop with DEBUG on, shows everything, as DEBUG means it to.) Marked with no
+# names, so every variable is hidden, shown as stars: here, and in every function this one calls, since Django hides a
+# variable in each frame below a marked one too. Not by name, as start_pairing hides its `key`
 # (apps/people/services.py): Django's own set_cookie holds the key under another name, `value`, and a crash inside it
 # would print it.
 @sensitive_variables()
@@ -85,6 +86,10 @@ class DeviceKeyAuthentication(BaseAuthentication):
     # True when this visit moved the device's last_seen_at: the answer then sends the key's cookie again.
     seen = False
 
+    # Every device request passes here holding its key, so a crash anywhere in the login, or below it, must not print
+    # the key or its hash in an error report: every variable hidden, as in set_key_cookie above. A crash here still
+    # shows its lines, only not its values.
+    @sensitive_variables()
     def authenticate(self, request: Request) -> tuple[AnonymousUser, Device] | None:
         key = request.COOKIES.get(DEVICE_KEY_COOKIE)
         if not key:
