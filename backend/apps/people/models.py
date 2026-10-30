@@ -21,7 +21,7 @@ from django.db.models.functions import Lower
 from apps.core.fields import PhoneField
 from apps.core.languages import Language
 from apps.core.models import Editable, ShopScoped, TimeStamped, UUIDModel
-from apps.core.permissions import PERMISSION_CODE_MAX_LENGTH, Permission, RoleTemplate
+from apps.core.permissions import PERMISSION_CODE_MAX_LENGTH, HeldPermissions, Permission, RoleTemplate
 from apps.shops.models import Side
 
 
@@ -242,6 +242,16 @@ class StaffMember(ShopScoped):
         # As an Actor (apps/core/tenancy.py), the one a login names: a staff member acts as itself, so it is
         # the one recorded as who made or changed a row.
         return self.pk
+
+    def held_permissions(self) -> HeldPermissions:
+        # As a Person (apps/core/permissions.py): the office routes ask the person a login names for their own
+        # permissions, since `core` may not import `people` to read them (ADR-0035, PPL-5). The reading itself lives
+        # with the other permission reads. That file imports this one for its tables, so it is imported here, when
+        # first asked, not at the top: at the top, each file would wait for the other to load first, and neither
+        # could.
+        from apps.people.permissions import held_permissions
+
+        return held_permissions(self)
 
     def clean(self) -> None:
         # full_clean runs this before the rules above: " Asha " and "Asha" are one nickname on screen.

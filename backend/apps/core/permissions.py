@@ -13,11 +13,20 @@ migration that adds it to the Owner role of every shop that already has its role
 joins the owner's own four, moving each role's `version` (its history records the edit, ADR-0036): without it, nobody
 in those shops would hold the new code, and under the giver rule nobody there could ever give it (03 §5.8).
 
-Only data lives here. Who holds which code, and where, is `people`'s (apps/people/permissions.py): `core` is layer 0
-and may not import `people` (ADR-0035).
+Who holds which code, and where, is `people`'s (apps/people/permissions.py): `core` is layer 0 and may not import
+`people` (ADR-0035). So `core` only says what an answer looks like, and how it is read (PPL-5): HeldPermissions, every
+code one person holds, side by side; and a Person, the one a visit's login names, who hands theirs over when asked.
+The office routes ask that way (apps/core/api/base.py), never by importing `people`, as they ask an Actor its shop.
 """
 
+import uuid
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import Protocol
+
 from django.db import models
+
+from apps.core.tenancy import Actor
 
 # The shape of a code, "area.action" in small letters and underscores (02 §5), and its longest length, the size of
 # the column that stores one. A test keeps every code storable (apps/core/tests/test_permission_codes.py).
@@ -145,3 +154,43 @@ ROLE_TEMPLATES: dict[RoleTemplate, frozenset[Permission]] = {
     # A loader: hands goods over against paid slips, and weighs what arrives. Clocking in needs no permission.
     RoleTemplate.WORKER: frozenset({Permission.SALE_HAND_OVER, Permission.STOCK_WEIGH}),
 }
+
+
+@dataclass(frozen=True)
+class HeldPermissions:
+    """Every permission code one person holds, side by side, as read once for a visit (PPL-5). The one place the
+    rule of 02 §5 is written: on a side, a person holds what was given on that side plus what was given on every
+    side; on the whole shop, only what was given on every side. apps/people/permissions.py fills it in; the office
+    routes and effective_permissions() both read it, so the rule can't drift between them."""
+
+    # The codes given on every side (a role or grant with no side): they count on each side, a side added later
+    # included, and they alone count for the whole shop.
+    every_side: frozenset[str] = frozenset()
+    # The codes given on one side only, by that side's id.
+    on_side: Mapping[uuid.UUID, frozenset[str]] = field(default_factory=dict)
+
+    def on(self, side_id: uuid.UUID | None) -> frozenset[str]:
+        """The codes held on one side, or on the whole shop when `side_id` is None."""
+        if side_id is None:
+            # A key for Vyakula alone opens nothing of the whole shop's (02 §5).
+            return self.every_side
+        return self.every_side | self.on_side.get(side_id, frozenset())
+
+    def sides_seen(self) -> frozenset[uuid.UUID] | None:
+        """The sides on which the person holds at least one code, or None for every side, a side added later
+        included. A person sees a side's rows only there (02 §5, X1). Empty for someone who holds nothing, such as a
+        person suspended."""
+        if self.every_side:
+            return None
+        # A side listed with no codes, as a role emptied by its owner leaves, opens nothing, so it isn't seen.
+        return frozenset(side for side, codes in self.on_side.items() if codes)
+
+
+class Person(Actor, Protocol):
+    # The staff member a visit's login names, as an Actor (apps/core/tenancy.py) who also answers for their own
+    # permissions. Described by what it does, not by its name, for the same reason as an Actor: `core` may not import
+    # `people` (ADR-0035). people.StaffMember is one. A device alone is an Actor but not a Person: it holds no
+    # permission, and the office routes refuse it before they ask (apps/core/api/base.py).
+    def held_permissions(self) -> HeldPermissions:
+        """Every code this person holds, side by side, read fresh: suspended or gone, they hold nothing (X2)."""
+        ...

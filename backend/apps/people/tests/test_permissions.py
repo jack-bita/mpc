@@ -19,7 +19,7 @@ Every test works inside shop_context(shop), as a visit will: the services and th
 import pytest
 from django.core.exceptions import PermissionDenied
 
-from apps.core.permissions import ROLE_TEMPLATES, Permission, RoleTemplate
+from apps.core.permissions import ROLE_TEMPLATES, HeldPermissions, Permission, Person, RoleTemplate
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Role, StaffMember
 from apps.people.permissions import UnknownPermission, effective_permissions, require
@@ -154,3 +154,37 @@ def test_person_of_a_shop_not_open_refused(shop_a: Shop, staff_b: StaffMember) -
     # the calling code would hide behind a plain "no". It fails loudly instead, as another shop's side does.
     with shop_context(shop_a), pytest.raises(ShopMismatch):
         effective_permissions(staff_b, None)
+
+
+def test_staff_member_answers_for_their_permissions(
+    shop_a: Shop,
+    side_a: Side,
+    vyakula: Side,
+    staff_a: StaffMember,
+    staff_a2: StaffMember,
+    roles_a: dict[str, Role],
+) -> None:
+    # The office routes can't import `people`, so they ask the person a login names for their own keys, all at once,
+    # as a Person (apps/core/permissions.py, PPL-5). Typed as one here, so the type check proves a staff member is.
+    juma: Person = staff_a
+    asha: Person = staff_a2
+    with shop_context(shop_a):
+        # Juma weighs on every side, sells on Dawa, and may count Vyakula's stock.
+        assign_role(staff_a, roles_a[RoleTemplate.WORKER], side=None, by=None)
+        assign_role(staff_a, roles_a[RoleTemplate.SELLER], side=side_a, by=None)
+        grant_permission(staff_a, Permission.STOCK_COUNT, side=vyakula, by=None)
+        # Asha sells on Dawa only.
+        assign_role(staff_a2, roles_a[RoleTemplate.SELLER], side=side_a, by=None)
+
+        held = juma.held_permissions()
+        # The same answers as effective_permissions, side by side and for the whole shop: one rule, read once.
+        assert held.on(side_a.pk) == effective_permissions(staff_a, side_a)
+        assert held.on(vyakula.pk) == effective_permissions(staff_a, vyakula)
+        assert held.on(None) == effective_permissions(staff_a, None)
+        # A role on every side shows every side; Asha's one role shows hers alone.
+        assert held.sides_seen() is None
+        assert asha.held_permissions().sides_seen() == frozenset({side_a.pk})
+
+        # Suspended, he holds nothing, though the copy in hand still says "active" (X2).
+        suspend(staff_a, by=None, reason="Uchunguzi")
+        assert juma.held_permissions() == HeldPermissions()
