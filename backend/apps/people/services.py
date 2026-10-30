@@ -4,7 +4,9 @@ A staff member's working life at one shop (02 §5): they are added, suspended, b
 as left, and given a PIN (set_pin; apps/people/pins.py hashes it). And what they may do there: a shop gets
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
-grant_permission), by someone who may give it.
+grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
+(start_pairing), a manager with device.manage says yes (confirm_pairing), and blocks it, or lets it work again
+(block, unblock).
 Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
@@ -12,27 +14,49 @@ who and why, in the same transaction (apps/control/services.py, audit): the chan
 together or not at all (T3).
 
 Callers open shop_context(shop) first: full_clean and the unique checks read through the guarded
-`objects` (CORE-2).
+`objects` (CORE-2). The one exception is start_pairing: a device that asks to join belongs to no shop yet,
+so it needs none open, and its request links to nothing (02 v1.11).
 """
 
 import uuid
 from collections.abc import Collection, Sequence
 from contextlib import nullcontext
+from dataclasses import dataclass, field
 from datetime import date
 from zoneinfo import ZoneInfo
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
+from django.views.decorators.debug import sensitive_variables
 
 from apps.control.models import AuditAction
 from apps.control.services import audit
 from apps.core.acting import acting_as
-from apps.core.models import ShopScoped
+from apps.core.editing import editing
+from apps.core.models import SequenceName, ShopScoped
 from apps.core.permissions import ROLE_TEMPLATES, Permission
+from apps.core.sequences import next_number
 from apps.core.tenancy import ALL_SHOPS, current_shop, shop_context
-from apps.people.models import PermissionGrant, Role, RoleAssignment, StaffMember, StaffStatus, User
-from apps.people.permissions import effective_permissions
+from apps.people.device_keys import (
+    PAIRING_CODE_LIFETIME,
+    clean_typed_code,
+    hash_device_key,
+    make_device_key,
+    make_pairing_code,
+)
+from apps.people.models import (
+    Device,
+    DeviceStatus,
+    PairingRequest,
+    PermissionGrant,
+    Role,
+    RoleAssignment,
+    StaffMember,
+    StaffStatus,
+    User,
+)
+from apps.people.permissions import effective_permissions, require
 from apps.people.pins import check_pin_strength, hash_pin
 from apps.shops.models import Shop, Side
 from apps.shops.services import NewSide, create_shop
@@ -89,11 +113,12 @@ def add_staff(
     return staff
 
 
-def _check_reason(reason: str) -> None:
-    # Rule 7: a suspension or a leaving is always recorded with who, when and why. Checked before anything
-    # is locked; audit() keeps the reason, trimmed, in the action's own line (CTRL-2).
+def _check_reason(reason: str, *, code: str = "staff.reason_required") -> None:
+    # Rule 7: a suspension, a leaving or a device's block is always recorded with who, when and why. Checked
+    # before anything is locked; audit() keeps the reason, trimmed, in the action's own line (CTRL-2). `code`
+    # names what needs the reason, so the screen says it in its own words (ADR-0032).
     if not reason.strip():
-        raise ValidationError("A reason is required.", code="staff.reason_required")
+        raise ValidationError("A reason is required.", code=code)
 
 
 def _save(staff: StaffMember, *, by: StaffMember | None, fields: list[str]) -> None:
@@ -307,3 +332,138 @@ def grant_permission(
         granted.full_clean()
         granted.save()
     return granted
+
+
+@dataclass(frozen=True)
+class NewPairing:
+    # What a device that asks to join gets back (start_pairing): its waiting request, whose `code` it shows on screen,
+    # and its key. The key is handed over once, here, and kept nowhere on the server but as its hash: AUTH-2 puts it in
+    # the device's cookie.
+    request: PairingRequest
+    # repr=False: a dataclass prints every field by default, so a test's failure message, a log line or an error page
+    # that printed this would show the key itself. Left out, it prints as NewPairing(request=...).
+    key: str = field(repr=False)
+
+
+# How many codes start_pairing draws before it gives up. A clash with a code already given is about 1 in a million
+# even after a million asks, so a fifth clash in a row would mean a bug, not bad luck.
+_CODE_DRAWS = 5
+
+
+# Django's error page (DEBUG) and its error emails list each function's local variables when something fails. This
+# marks `key` as one to hide: it shows as stars, never the device's secret.
+@sensitive_variables("key")
+def start_pairing() -> NewPairing:
+    """A new device asks to join a shop (03 §5.9, step 1). It gets a code to show and its key, which opens nothing
+    until a manager confirms the code (confirm_pairing). Needs no shop open: the device belongs to no shop yet, and
+    the request it waits in has none (02 v1.11)."""
+    # The key is made here, by the device's own request, not when the manager confirms: confirming happens on the
+    # manager's phone, which must never hold the device's key, and the server never keeps it in plain text, not even
+    # until the device comes to collect it (Jack, AUTH-1).
+    key = make_device_key()
+    for _ in range(_CODE_DRAWS):
+        request = PairingRequest(
+            code=make_pairing_code(),
+            expires_at=timezone.now() + PAIRING_CODE_LIFETIME,
+            key_hash=hash_device_key(key),
+        )
+        try:
+            # A savepoint of its own: a clash undoes only this insert, even inside a caller's transaction.
+            with transaction.atomic():
+                request.save()
+        except IntegrityError:
+            # Only a code already given (people_pairingrequest_code_once) is drawn again. Any other broken rule is a
+            # bug in this code, and is raised as it is.
+            if PairingRequest.objects.filter(code=request.code).exists():
+                continue
+            raise
+        return NewPairing(request=request, key=key)
+    raise RuntimeError(f"No free pairing code after {_CODE_DRAWS} draws.")
+
+
+def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -> Device:
+    """A manager says yes to a waiting device (03 §5.9, step 2): they type the code it shows, name it and pick its home
+    side. The device is made in their own shop, active, with the shop's next device code and the key's hash, so its
+    key works from now on. `by` is always a person, who needs device.manage on `home_side`. Refusals: the code
+    unknown, used or expired (pairing.code_unknown, .code_used, .code_expired); a name the shop already gives another
+    device (device.name_taken)."""
+    _check_shop(by.shop_id, by)
+    # T1: a device of this shop lives on a side of this shop.
+    _check_same_shop(by, home_side)
+    # The permission first, before the code is even looked at: someone without device.manage learns nothing about
+    # which codes are waiting (PermissionDenied, 403).
+    require(by, Permission.DEVICE_MANAGE, home_side)
+    with transaction.atomic():
+        try:
+            # Read and locked until this transaction ends, so two managers typing the same code at once take turns,
+            # and the second finds it used.
+            request = PairingRequest.objects.select_for_update().get(code=clean_typed_code(code))
+        except PairingRequest.DoesNotExist:
+            raise ValidationError("No device is waiting with this code.", code="pairing.code_unknown") from None
+        # Used is checked before expired: a code used and then gone stale was used, which is what the manager needs.
+        if request.device_id is not None:
+            raise ValidationError("This code was already used.", code="pairing.code_used")
+        now = timezone.now()
+        if request.expires_at <= now:
+            raise ValidationError("This code has expired: ask the device for a new one.", code="pairing.code_expired")
+        device = Device(
+            shop_id=by.shop_id,
+            name=name,
+            home_side=home_side,
+            # D7: the shop's next device code. If anything below refuses, the transaction rolls back, and the number
+            # with it: nothing kept it, so the next device gets it (apps/core/sequences.py).
+            code=next_number(by.shop_id, SequenceName.DEVICE),
+            key_hash=request.key_hash,
+            created_by=by,
+        )
+        # Every field, clean() and the rules in Meta, before anything is written: a name the shop already uses comes
+        # back as device.name_taken, and the code stays waiting for a better name.
+        device.full_clean()
+        device.save()
+        request.device = device
+        request.confirmed_at = now
+        request.save(update_fields=["device", "confirmed_at"])
+    return device
+
+
+def block(device: Device, *, by: StaffMember, reason: str) -> Device:
+    """Stop a device at once, perhaps stolen (03 §5.9, step 4): from its next request, its key opens nothing (AUTH-2).
+    The key is kept, so unblock brings it back. Needs device.manage on the device's home side, and a reason."""
+    return _set_device_status(
+        device, DeviceStatus.ACTIVE, DeviceStatus.BLOCKED, AuditAction.DEVICE_BLOCK, by=by, reason=reason
+    )
+
+
+def unblock(device: Device, *, by: StaffMember, reason: str) -> Device:
+    """Let a blocked device work again, with the same key, so the records it holds can still arrive (Jack, AUTH-1).
+    Only for a device back in the shop's hands: a thief holding it could use it again. Checked as block is."""
+    return _set_device_status(
+        device, DeviceStatus.BLOCKED, DeviceStatus.ACTIVE, AuditAction.DEVICE_UNBLOCK, by=by, reason=reason
+    )
+
+
+def _set_device_status(
+    device: Device, was: DeviceStatus, becomes: DeviceStatus, action: AuditAction, *, by: StaffMember, reason: str
+) -> Device:
+    # block and unblock are one move each way: active → blocked, blocked → active.
+    _check_shop(device.shop_id, by)
+    _check_reason(reason, code="device.reason_required")
+    with transaction.atomic():
+        # The device as stored, read again and locked: its status and home side are checked as they are now, not as
+        # the copy handed in says. Two managers blocking at once take turns, and the second finds it blocked.
+        current = Device.objects.select_for_update().get(pk=device.pk)
+        # Who may: device.manage on the home side as stored (Jack, AUTH-1), as for pairing it. Refused before anything
+        # changes; the transaction leaves the device as it was.
+        require(by, Permission.DEVICE_MANAGE, current.home_side)
+        if current.status != was:
+            code = "device.not_active" if was == DeviceStatus.ACTIVE else "device.not_blocked"
+            raise ValidationError("The device is not in a state this action can change.", code=code)
+        # Through editing(), as every office edit: the version moves on, `updated_by` names who, and the history's
+        # trigger names the same person. With the version just read, never one a screen sent: a block is urgent, and
+        # must not be refused because someone renamed the device a moment ago. A rename screen opened before the
+        # block is the one refused (409), and loads the device again.
+        with editing(current, version=current.version, by=by) as fresh:
+            fresh.status = becomes
+        # In the same transaction: if the line can't be written, the block is undone with it (T3).
+        audit(action=action, subject=fresh, reason=reason, by=by, before={"status": was}, after={"status": becomes})
+    return fresh

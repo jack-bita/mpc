@@ -20,6 +20,9 @@ NO_SHOP = {
     "shops.Shop",
     # kg, L, pcs: the same in every shop (CAT-1, still to come).
     "catalog.Unit",
+    # A new device waiting for a manager's yes: until a manager confirms it, it belongs to no shop, and anyone may
+    # ask. The Device it becomes is made in the manager's shop, with its shop (Jack, AUTH-1; 02 v1.11).
+    "people.PairingRequest",
 }
 
 # Tables Django makes by itself, for its own machinery. They break T1 and T3 by Django's design, so the
@@ -77,4 +80,8 @@ NO_EDIT_HISTORY = {
     "control.Flag": "its notes are its history, and its own trigger keeps its facts",
     # A link row, made when an account starts serving a side: nothing in it is ever edited, only its two links.
     "shops.PaymentAccountSide": "a link row, made and never edited",
+    # A shop's counter (apps/core/models.py): only the system moves it, never a person, and each number it gives is
+    # kept on the row that took it, such as a device's code. From SYNC-1 it moves on every sale, so a history row each
+    # time would double the shop's busiest writes and tell nothing new (Jack, AUTH-1).
+    "core.ShopSequence": "only the system moves it, and each number is kept on the row that took it",
 }
