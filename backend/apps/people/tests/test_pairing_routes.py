@@ -6,15 +6,18 @@
 
 The key travels only in the cookie, never in an answer's body, and the cookie is one page scripts can't read
 (HttpOnly), that never goes to another website (SameSite Strict) or with anything but the API (`/api/`), and that
-lasts as long as a browser lets one last (400 days). A device that already holds a working key never gets another:
-its key would be lost for good. The manager's side of pairing, the confirm, is an office route (AUTH-5); here it is
-the service, as a manager's visit would call it. Fake data only: the repo is public (03 §10).
+lasts as long as a browser lets one last (400 days), set again as the device is seen, so a device in use never
+loses it. A device that already holds a working key never gets another: its key would be lost for good. The
+manager's side of pairing, the confirm, is an office route (AUTH-5); here it is the service, as a manager's visit
+would call it. Fake data only: the repo is public (03 §10).
 """
 
 from collections.abc import Callable
+from datetime import timedelta
 
 import pytest
 from django.http import HttpResponseBase
+from django.utils import timezone
 from django.views.debug import ExceptionReporter
 from pytest_django import Settings
 from rest_framework.test import APIClient
@@ -161,6 +164,55 @@ def test_start_pairing_keeps_the_key_out_of_error_pages(monkeypatch: pytest.Monk
     assert all(asked[0].key not in value for value in shown.values())
     # Where the key sits in a variable on its own, it shows as stars.
     assert set(shown["key"]) == {"*"}
+
+
+def seen_long_ago(device: Device) -> None:
+    # As if the device was last seen 6 minutes ago: past LAST_SEEN_EVERY, so its next request is noted again.
+    with shop_context(device.shop_id):
+        Device.objects.filter(pk=device.pk).update(last_seen_at=timezone.now() - timedelta(minutes=6))
+
+
+def test_cookie_sent_again_when_seen(manager_a: StaffMember, side_a: Side) -> None:
+    # Browsers drop a cookie 400 days after it was last set. A device in use is seen every few minutes, and each time
+    # its answer sets the same key again with a fresh 400 days, so a working device never loses it.
+    device, key = pair(manager_a, side_a)
+    client = holding(key)
+
+    first = client.get(ME)
+    seen_long_ago(device)
+    later = client.get(ME)
+
+    for answer in (first, later):
+        cookie = answer.cookies[KEY_COOKIE]
+        assert cookie.value == key
+        assert int(cookie["max-age"]) == COOKIE_DAYS * 24 * 60 * 60
+        assert cookie["httponly"] and cookie["samesite"] == "Strict" and cookie["path"] == "/api/"
+
+
+def test_cookie_not_sent_again_while_fresh(manager_a: StaffMember, side_a: Side) -> None:
+    # Within 5 minutes of the last time, the device's call writes nothing, and its answer sets no cookie: the key
+    # travels in an answer as seldom as it can.
+    _, key = pair(manager_a, side_a)
+    client = holding(key)
+    client.get(ME)
+
+    again = client.get(ME)
+
+    assert again.status_code == 200
+    assert KEY_COOKIE not in again.cookies
+
+
+def test_blocked_device_keeps_its_cookie(manager_a: StaffMember, side_a: Side) -> None:
+    # A blocked device is refused, and its key is still kept alive: unblocking brings back the same key, so the
+    # records it holds can still arrive (Jack, AUTH-1), even after a long block.
+    device, key = pair(manager_a, side_a)
+    with shop_context(manager_a.shop_id):
+        block(device, by=manager_a, reason="Imeibiwa kaunta")
+
+    refused = holding(key).get(ME)
+
+    assert refused.status_code == 401
+    assert refused.cookies[KEY_COOKIE].value == key
 
 
 def test_paired_device_learns_its_shop_and_code(manager_a: StaffMember, side_a: Side, shop_a: Shop) -> None:

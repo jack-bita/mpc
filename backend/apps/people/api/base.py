@@ -11,6 +11,8 @@ pairing and `me`; later sync (SYNC-2 on) and PIN login (AUTH-4).
   it has a working key says `device_optional = True`, and then runs with no shop open: it may read no shop's table.
 - CSRF. A device's change is checked by its login; a change sent with no device, such as the start of a pairing, is
   checked here. So every change on every device route needs the token (ADR-0017).
+- The cookie. When a visit moves the device's last_seen_at, its answer sends the key's cookie again, so a browser
+  never drops the cookie of a device in use (03 §5.9).
 
 CORE-7's sweep finds every route built on this by itself, and calls each as a device of each shop, and with no key at
 all (backend/tests/test_tenancy_sweep.py).
@@ -23,11 +25,12 @@ from django.http import HttpRequest, HttpResponseBase
 from rest_framework import exceptions
 from rest_framework.permissions import SAFE_METHODS, AllowAny
 from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.acting import acting_as
 from apps.core.tenancy import shop_context
-from apps.people.api.authentication import DeviceKeyAuthentication, enforce_csrf
+from apps.people.api.authentication import DEVICE_KEY_COOKIE, DeviceKeyAuthentication, enforce_csrf, set_key_cookie
 from apps.people.models import Device
 
 
@@ -69,3 +72,22 @@ class DeviceView(APIView):
             # A change with no device, such as the start of a pairing: no login checked its CSRF token, so it is
             # checked here. Without it, another website could make a paired laptop ask again (03 §5.9).
             enforce_csrf(request)
+
+    def finalize_response(self, request: Request, response: Response, *args: Any, **kwargs: Any) -> Response:
+        # Every answer passes here, a refusal included. When this visit moved the device's last_seen_at, the key's
+        # cookie goes out again with a fresh 400 days: browsers drop a cookie 400 days after it was last set, and a
+        # device that lost its key would have to be paired again, with a new device code. At most every few minutes,
+        # as last_seen_at moves (apps/people/services.py), and for a blocked device too, which keeps its key for an
+        # unblock (Jack, AUTH-1).
+        response = super().finalize_response(request, response, *args, **kwargs)
+        # DRF made this visit's login objects, and kept them on the request; the device key's one says whether it saw
+        # the device (apps/people/api/authentication.py). getattr: a visit refused before DRF wrapped its request has
+        # none.
+        logins = getattr(request, "authenticators", ())
+        seen = any(isinstance(login, DeviceKeyAuthentication) and login.seen for login in logins)
+        # Never over a cookie the route has just set itself, such as a new device's first key. The key is read from
+        # the request's cookie straight into set_key_cookie, never kept in a variable here: only that function hides
+        # its variables from error pages.
+        if seen and DEVICE_KEY_COOKIE not in response.cookies:
+            set_key_cookie(response, request.COOKIES[DEVICE_KEY_COOKIE])
+        return response
