@@ -14,7 +14,8 @@ who and why, in the same transaction (apps/control/services.py, audit): the chan
 together or not at all (T3).
 
 Callers open shop_context(shop) first: full_clean and the unique checks read through the guarded
-`objects` (CORE-2).
+`objects` (CORE-2). The one exception is start_pairing: a device that asks to join belongs to no shop yet,
+so it needs none open, and its request links to nothing (02 v1.11).
 """
 
 import uuid

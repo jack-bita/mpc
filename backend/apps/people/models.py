@@ -476,8 +476,10 @@ class PairingRequest(UUIDModel, TimeStamped):
     # TimeStamped (CORE-1) give `id` and `created_at`, when it asked.
     # No `shop`, unlike every shop's table (T1's exception, NO_SHOP in backend/tests/sweep_lists.py): until a manager
     # says yes, the device belongs to no shop, and anyone may ask. So no guard either: its default manager reads every
-    # request, which is safe because a request holds nothing of any shop's until it names its device. A shop's own
-    # tables only ever hold devices one of its managers confirmed.
+    # request. A waiting request holds nothing of any shop's. A confirmed one names its device, and keeps its key's
+    # hash, so a key found here leads to a device of some shop with no guard on the way: a door past the guard, as
+    # system_context() is. AUTH-2 decides how a key finds its device and its shop, and whether through here (04 v1.26).
+    # A shop's own tables only ever hold devices one of its managers confirmed.
 
     # Every code ever given stays taken (unique, below), so a code can only ever mean one request: start_pairing draws
     # again on a clash. With about 850 billion codes, that is rare.
