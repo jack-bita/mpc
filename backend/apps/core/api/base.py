@@ -210,6 +210,10 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
             return rows if sides else rows.none()
         return rows.filter(**{f"{self.side_field}__in": sides})
 
+    # True while CreateOnceMixin hands back the row a create already made: nothing is made, so the row is checked as a
+    # read, not for the create's key (CreateOnceMixin._replay). Every other check on the row still runs.
+    _replaying = False
+
     # Where a row keeps its side, read by both side hooks: `side` on most tables; the link's own name on a
     # table that names it otherwise (a device's `home_side`); "pk" on a route whose rows are sides themselves
     # (SideViewSet); None on a table whose rows belong to the whole shop, such as products. A name the table
@@ -239,9 +243,9 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         made, and for a change to a whole list. Refuses with PermissionDenied, which the error handler answers as
         403 permission_denied (apps/core/api/errors.py)."""
         needed = self.permission_needed()
-        if needed is SEES_THE_SIDE:
+        if needed is SEES_THE_SIDE or self._replaying:
             # Only to see the side, which every read of the route already keeps to (get_queryset): a row handed out
-            # was found among the person's own sides.
+            # was found among the person's own sides. A create sent again is such a read too (_replay below).
             return
         if needed not in self.held.on(side_id):
             # English for the logs; the screens translate the code (ADR-0032).
@@ -290,10 +294,15 @@ class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
     def _replay(self, request: Request, row: M) -> M:
         # A send this shop already has a row for gets that row back, as it is now: if it was edited since,
         # the answer shows the edit. Handed out like a row that is read: it was found among the person's own
-        # sides (get_queryset), as any read is, so they may see it. The create's own key is not asked again, since
-        # nothing is made: only DRF's own checks run, past ShopViewSet's side check. The one way back for every
+        # sides (get_queryset), as any read is, so they may see it. Nothing is made, so the create's own key is not
+        # asked again: a phone whose answer was lost gets it, even if the person's keys changed in between. Every
+        # other check on the row runs as for any row handed out, a route's own included. The one way back for every
         # repeat, whichever look found it.
-        super(ShopViewSet, self).check_object_permissions(request, row)
+        self._replaying = True
+        try:
+            self.check_object_permissions(request, row)
+        finally:
+            self._replaying = False
         return row
 
     def _create(self, request: Request) -> M:

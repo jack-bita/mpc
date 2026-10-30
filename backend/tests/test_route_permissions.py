@@ -34,7 +34,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import include, path
 from django.utils import timezone
 from pytest_django import Settings
-from rest_framework import mixins, serializers
+from rest_framework import exceptions, mixins, serializers
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -42,7 +42,7 @@ from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIClient
 
 from apps.core.api import base
-from apps.core.api.base import ShopViewSet
+from apps.core.api.base import CreateOnceMixin, ShopViewSet
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember
@@ -50,7 +50,7 @@ from apps.people.services import grant_permission, mark_left, suspend
 from apps.shops.api.views import SideViewSet
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
-from tests.probe.api import NoteSerializer
+from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
 from tests.test_tenancy_sweep import addresses
 
@@ -100,8 +100,28 @@ class KNoteViewSet(mixins.ListModelMixin, ShopViewSet[Note]):
         return super().base_rows().filter(text__startswith="K")
 
 
+class GuardedNoteViewSet(CreateOnceMixin[Note]):
+    # Makes notes once, and has a row check of its own on top of the base's: a note marked "siri" is never handed back.
+    model = Note
+    side_field = None
+    serializer_class = NoteSerializer
+    create_serializer_class = NoteCreateSerializer
+    action_permissions = {"create": Permission.SETTINGS_MANAGE}
+
+    def create_row(self, data: dict[str, Any]) -> Note:
+        note = Note(id=data["id"], shop_id=self.actor.shop_id, text=data["text"])
+        note.save()
+        return note
+
+    def check_object_permissions(self, request: Request, obj: Any) -> None:
+        super().check_object_permissions(request, obj)
+        if obj.text == "siri":
+            raise exceptions.PermissionDenied("A secret note is never handed back.")
+
+
 router = SimpleRouter()
 router.register("plain-note-makers", PlainNoteMakerViewSet, basename="plain-note-maker")
+router.register("guarded-notes", GuardedNoteViewSet, basename="guarded-note")
 router.register("retext-notes", RetextNoteViewSet, basename="retext-note")
 router.register("k-notes", KNoteViewSet, basename="k-note")
 urlpatterns = [path("api/v1/test/", include(router.urls))]
@@ -349,6 +369,22 @@ def test_a_route_adds_to_its_rows_without_losing_the_side_check(
     stop("suspended", staff_a)
 
     assert client.get("/api/v1/test/k-notes/").json()["results"] == []
+
+
+@pytest.mark.django_db
+@pytest.mark.urls(__name__)
+def test_a_create_sent_twice_keeps_the_routes_own_checks(staff_a: StaffMember, give_role: GiveRole) -> None:
+    # The route refuses to hand back a note marked "siri", in a row check of its own. The repeat of the create that
+    # made one is handed back as a read, through the same checks as any row: the route's own refuses it too.
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    client = client_for(staff_a)
+    note = {"id": str(uuid.uuid7()), "text": "siri"}
+    assert client.post("/api/v1/test/guarded-notes/", note).status_code == 201
+
+    again = client.post("/api/v1/test/guarded-notes/", note)
+
+    assert again.status_code == 403
+    assert again.json()["code"] == "permission_denied"
 
 
 # --- Every action is named
