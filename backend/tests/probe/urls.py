@@ -6,8 +6,11 @@ from django.urls import include, path, re_path
 from rest_framework.routers import SimpleRouter
 
 from tests.probe.api import (
+    BlindDeviceView,
     ClosedNoteViewSet,
+    DeviceShopView,
     EndlessNoteViewSet,
+    LeakyDeviceView,
     LeakyNoteTextViewSet,
     LeakyNoteViewSet,
     NoteBulkViewSet,
@@ -51,4 +54,8 @@ urlpatterns = [
     path("api/v1/probe/count/", note_count, name="note-count"),
     # The same plain view, mounted the older way, with a regular expression that starts with ^.
     re_path(r"^api/v1/probe/raw-count/$", note_count, name="raw-note-count"),
+    # Device routes, for the sweep's device check (AUTH-2): built the usual way, leaky, and blind.
+    path("api/devices/v1/probe/shop/", DeviceShopView.as_view(), name="probe-device-shop"),
+    path("api/devices/v1/probe/leaky/", LeakyDeviceView.as_view(), name="probe-device-leaky"),
+    path("api/devices/v1/probe/blind/", BlindDeviceView.as_view(), name="probe-device-blind"),
 ]

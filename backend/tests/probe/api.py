@@ -22,12 +22,14 @@ Each route is built to pass the sweep, or to break one of its checks in one way:
   refuse such a route.
 - DeletableNoteViewSet and LeakyDeletableNoteViewSet take a DELETE, guarded and not; LeakyNoteByTextViewSet
   crashes on a key both shops have.
+- DeviceShopView, LeakyDeviceView and BlindDeviceView are device routes (apps/people/api/base.py), for the sweep's
+  device check (AUTH-2): one built the usual way, one that shows every shop's name, one that shows nothing at all.
 
 tests/probe/urls.py mounts them, but for the last three, which have address lists of their own
 (urls_delete.py, urls_crash.py). Only the sweep's tests use these lists.
 """
 
-from typing import Any
+from typing import Any, cast
 
 from django.db import models
 from django.http import HttpRequest, HttpResponse, JsonResponse, StreamingHttpResponse
@@ -40,6 +42,9 @@ from rest_framework.response import Response
 from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, ShopViewSet, Sight
 from apps.core.api.ids import uuid7_only
 from apps.core.permissions import Permission
+from apps.people.api.base import DeviceView
+from apps.people.models import Device
+from apps.shops.models import Shop
 from tests.probe.models import Note
 
 # What each probe action needs (PPL-5): to see, for one that only shows notes; a key, for one that changes them. Every
@@ -239,3 +244,26 @@ class LeakyNoteByTextViewSet(LeakyNoteViewSet):
 
 def note_count(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"count": 0})
+
+
+class DeviceShopView(DeviceView):
+    # A device route built the way every one is (apps/people/api/base.py): it shows the visit's own shop, the one its
+    # device belongs to, and takes a POST that hands nothing back.
+    def get(self, request: Request) -> Response:
+        return Response({"shop": cast(Device, request.auth).shop.name})
+
+    def post(self, request: Request) -> Response:
+        return Response({}, status=201)
+
+
+class LeakyDeviceView(DeviceView):
+    # The mistake the sweep's device check is there to catch: every shop's name, read from the Shop table, which has no
+    # guard (it is the tenant itself), as a careless "which shops are there?" would.
+    def get(self, request: Request) -> Response:
+        return Response({"shops": [shop.name for shop in Shop.objects.all()]})
+
+
+class BlindDeviceView(DeviceView):
+    # Shows nothing to anyone, not even its own device: it leaks nothing, but proves nothing either.
+    def get(self, request: Request) -> Response:
+        return Response({})

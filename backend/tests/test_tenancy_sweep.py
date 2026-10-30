@@ -32,6 +32,11 @@ And it walks the address list for every route of the office API, the routes buil
 - each route names where its table keeps a row's side (`side_field`), for the per-side hooks (PPL-5);
 - no route under api/ escapes the sweep by being built on something else.
 
+And it walks the address list for every route a device calls with its key, the routes built on DeviceView
+(apps/people/api/base.py, AUTH-2), calling each as a paired device of shop A, which must see its own shop there, then
+as one of shop B and with no key at all, neither of which may see anything of shop A's. The two devices are paired in
+backend/tests/conftest.py (sweep_device_clients).
+
 A new table, file or route is checked with no change here. The checks are never loosened, nor edited, to let
 something pass: what grows instead lives beside them, the two shops' data in backend/tests/conftest.py, and the
 tables, routes and files allowed to break a rule, each with its reason, in backend/tests/sweep_lists.py.
@@ -72,6 +77,7 @@ from rest_framework.test import APIClient
 from apps.core.api.base import ShopViewSet
 from apps.core.models import ShopScoped, ShopScopedManager, UUIDModel
 from apps.core.tenancy import NoShopSelected, shop_context
+from apps.people.api.base import DeviceView
 from apps.shops.models import PaymentAccount, PaymentAccountKind, Shop, Side, StockLocation
 from tests.probe.models import Note, VoidableEntry
 from tests.sweep_lists import HAND_BUILT_QUERIES, INFRASTRUCTURE, NO_SHOP, NOT_SHOP_ROUTES, OWN_LEAK_TESTS, RAW_SQL
@@ -782,11 +788,12 @@ def side_field_problems(views: Iterable[type[ShopViewSet[Any]]]) -> list[str]:
 
 
 def api_route_problems() -> list[str]:
-    # The leak check can only call routes built on ShopViewSet: they name their table, and open the visit's
-    # shop. A route under api/, where the app's routes live (03 §5.10), built on anything else would never be
-    # checked. So it must read no shop's table, and be on NOT_SHOP_ROUTES (backend/tests/sweep_lists.py) with
-    # its reason; a route that reads one, such as sync's pull, is taught to the sweep instead. Outside api/,
-    # the Django admin (/admin/) is the superuser's alone, and reads through its own door (all_shops).
+    # The leak checks can only call routes built on ShopViewSet, which a staff member calls and which name their
+    # table, or on DeviceView, which a device calls with its key (AUTH-2): both open the visit's shop. A route under
+    # api/, where the app's routes live (03 §5.10), built on anything else would never be checked. So it must read no
+    # shop's table, and be on NOT_SHOP_ROUTES (backend/tests/sweep_lists.py) with its reason; a route that reads one
+    # in another way is taught to the sweep instead. Outside api/, the Django admin (/admin/) is the superuser's alone,
+    # and reads through its own door (all_shops).
     problems = []
     for address in addresses():
         # An address mounted the older way, with re_path(), is written as a regular expression and starts with
@@ -794,9 +801,88 @@ def api_route_problems() -> list[str]:
         if not address.path.lstrip("^").startswith("api/"):
             continue
         view = getattr(address.view, "cls", None)
-        if not (isinstance(view, type) and (issubclass(view, ShopViewSet) or view in NOT_SHOP_ROUTES)):
+        swept = isinstance(view, type) and (issubclass(view, ShopViewSet | DeviceView) or view in NOT_SHOP_ROUTES)
+        if not swept:
             built_on = view.__name__ if isinstance(view, type) else "a plain Django view"
             problems.append(f"{address.path}: {built_on}, not a ShopViewSet")
+    return problems
+
+
+@dataclass(frozen=True)
+class DeviceRoute:
+    # One route of a device view (apps/people/api/base.py), as the device check calls it.
+    name: str | None
+    view: type[DeviceView]
+    takes: frozenset[str]
+
+    @property
+    def methods(self) -> frozenset[str]:
+        # The HTTP methods it answers, in small letters: a plain DRF view answers each one it has a function for.
+        return frozenset(method for method in ("get", "post", "put", "patch", "delete") if hasattr(self.view, method))
+
+
+def device_routes() -> list[DeviceRoute]:
+    # Every route built on DeviceView in the address list, found by itself, as shop_routes() finds the office routes.
+    routes = []
+    for address in addresses():
+        view = getattr(address.view, "cls", None)
+        if isinstance(view, type) and issubclass(view, DeviceView):
+            routes.append(DeviceRoute(address.name, view, address.takes))
+    return routes
+
+
+def device_own_problems(device_a: APIClient, url: str, marks: Marks) -> list[str]:
+    # Shop A's own device must see something of A's through the route, as an office route's own look asks of A's staff
+    # (own_problems): a route that shows nothing to anyone shows shop B nothing of A's too, and proves nothing.
+    reply = send(device_a, "get", url)
+    if reply.status != 200:
+        return [f"shop A's own device got {reply.status} here, so shop B's answers would prove nothing"]
+    if not reply.readable or leaks(reply, marks):
+        return []
+    return [
+        "shop A's own device sees nothing of A's here, so shop B's answers would prove nothing: give the route"
+        " something of its device's shop to show"
+    ]
+
+
+def device_route_problems(device_a: APIClient, device_b: APIClient, shop_a: Shop, shop_b: Shop) -> dict[str, list[str]]:
+    # 03 §5.4 for the routes a device calls with its key: called as a device of shop B, or with no key at all, no route
+    # shows anything of shop A's. A device route reads its own shop, the visit's: the one its key's device belongs to.
+    # What the sweep sends: a GET, after shop A's own device looks first (device_own_problems); and a POST, sent empty,
+    # as a device's change, such as the start of a pairing, comes. A route that takes another method, or a part in its
+    # address, is reported rather than passed by: teach the sweep, in a reviewed change.
+    marks = marks_of(shop_a, shop_b)
+    names = Counter(address.name for address in addresses() if address.name)
+    problems: dict[str, list[str]] = {}
+    for route in device_routes():
+        found: list[str] = []
+        unsent = ", ".join(method.upper() for method in sorted(route.methods - {"get", "post"}))
+        if unsent:
+            found.append(f"answers {unsent}, which the sweep doesn't send here: teach it, in a reviewed change")
+        if route.name is None or route.takes:
+            found.append("no address the sweep can build: it needs a name, and no part to fill in")
+        elif names[route.name] > 1:
+            found.append(
+                f"{names[route.name]} routes have this name, and Django finds only one of them by it: give each its own"
+            )
+        else:
+            url = reverse(route.name)
+            own = device_own_problems(device_a, url, marks) if "get" in route.methods else []
+            found += own
+            if not own:
+                for method in sorted(route.methods & {"get", "post"}):
+                    found += [
+                        f"shop B's device, {method.upper()}: {problem}"
+                        for problem in shown(send(device_b, method, url), marks)
+                    ]
+                    # A new client for each request with no key: an answer may set one, a start's above all, and the
+                    # next request would then carry it.
+                    found += [
+                        f"no key, {method.upper()}: {problem}"
+                        for problem in shown(send(APIClient(), method, url), marks)
+                    ]
+        if found:
+            problems[route.name or "(no name)"] = list(dict.fromkeys(found))
     return problems
 
 
@@ -1541,6 +1627,33 @@ def test_api_route_check_finds_a_route_off_the_base(settings: Settings) -> None:
     ]
 
 
+@pytest.mark.django_db
+def test_device_route_check_finds_a_leak(
+    settings: Settings, sweep_shops: tuple[Shop, Shop], sweep_device_clients: tuple[APIClient, APIClient]
+) -> None:
+    # The probe's three device routes (tests/probe/api.py): built the usual way, one that shows every shop's name to
+    # any device, and one that shows nothing at all, even to its own device.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    shop_a, shop_b = sweep_shops
+    device_a, device_b = sweep_device_clients
+
+    problems = device_route_problems(device_a, device_b, shop_a, shop_b)
+
+    assert "probe-device-shop" not in problems
+    [leak] = problems["probe-device-leaky"]
+    assert leak.startswith("shop B's device, GET: shows what only shop A has:")
+    assert '"Duka la Mfano"' in leak
+    assert problems["probe-device-blind"] == [
+        "shop A's own device sees nothing of A's here, so shop B's answers would prove nothing: give the route"
+        " something of its device's shop to show"
+    ]
+    # And the office routes' check takes the device routes as swept: only the probe's two plain views are refused.
+    assert api_route_problems() == [
+        "api/v1/probe/count/: a plain Django view, not a ShopViewSet",
+        "^api/v1/probe/raw-count/$: a plain Django view, not a ShopViewSet",
+    ]
+
+
 # --- the sweep ------------------------------------------------------------------------------------------------
 
 
@@ -1603,6 +1716,16 @@ def test_no_route_leaks_across_shops(
     assert {row["id"] for row in response.json()["results"]} == own
 
     assert route_problems(staff_client_a, staff_client_b, shop_a, shop_b, sweep_queries) == {}
+
+
+@pytest.mark.django_db
+def test_no_device_route_leaks_across_shops(
+    sweep_shops: tuple[Shop, Shop], sweep_device_clients: tuple[APIClient, APIClient]
+) -> None:
+    shop_a, shop_b = sweep_shops
+    device_a, device_b = sweep_device_clients
+
+    assert device_route_problems(device_a, device_b, shop_a, shop_b) == {}
 
 
 def test_every_side_link_is_named_on_its_route() -> None:
