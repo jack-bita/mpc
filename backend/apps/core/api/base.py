@@ -129,11 +129,18 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         # rest. Compared with the method itself, not by the mixin's name: a route can list DRF's mixin before ours,
         # and then DRF's create is the one that runs.
         asks_for_itself = self.action == "create" and getattr(type(self), "create", None) is CreateOnceMixin.create
-        if request.method not in SAFE_METHODS and lookup not in self.kwargs and not asks_for_itself:
+        if request.method in SAFE_METHODS:
+            # Showing rows needs only to see their sides, which every read of the route keeps to (get_queryset).
+            return
+        if lookup in self.kwargs:
+            # A change to one row: the row is found and checked now, with its own side, before the action runs
+            # (get_object(), which asks check_object_permissions()). So an @action that finds its row some other way,
+            # or never asks, is still checked, and a row the person can't see is "not found" before anything changes.
+            # The action looks it up again when it runs: one more small query, for a check nothing can skip.
+            self.get_object()
+        elif not asks_for_itself:
             # A change sent to a whole list, not to one row, such as clearing it, or a create that doesn't ask: no
-            # row's side to ask about, so it is asked on the whole shop, the most it could touch. A change to one row
-            # asks with that row's side, as get_object() hands it out, so an action on one row finds it with
-            # get_object().
+            # row's side to ask about, so it is asked on the whole shop, the most it could touch.
             self.check_side_permission(request, None)
 
     def permission_needed(self) -> Permission | Sight:

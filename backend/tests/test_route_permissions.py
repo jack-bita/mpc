@@ -35,6 +35,9 @@ from django.urls import include, path
 from django.utils import timezone
 from pytest_django import Settings
 from rest_framework import mixins, serializers
+from rest_framework.decorators import action
+from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIClient
 
@@ -71,8 +74,23 @@ class PlainNoteMakerViewSet(mixins.CreateModelMixin, ShopViewSet[Note]):
         serializer.save(shop_id=self.actor.shop_id)
 
 
+class RetextNoteViewSet(ShopViewSet[Note]):
+    # A change to one note through an @action of its own that finds the note without get_object(), so never asks for
+    # its key itself, as a careless route could.
+    model = Note
+    side_field = None
+    action_permissions = {"retext": Permission.SETTINGS_MANAGE}
+
+    @action(detail=True, methods=["post"])
+    def retext(self, request: Request, pk: str) -> Response:
+        text = request.data["text"] if isinstance(request.data, dict) else ""
+        self.get_queryset().filter(pk=pk).update(text=text)
+        return Response({"done": True})
+
+
 router = SimpleRouter()
 router.register("plain-note-makers", PlainNoteMakerViewSet, basename="plain-note-maker")
+router.register("retext-notes", RetextNoteViewSet, basename="retext-note")
 urlpatterns = [path("api/v1/test/", include(router.urls))]
 
 PLAIN_MAKERS = "/api/v1/test/plain-note-makers/"
@@ -278,6 +296,29 @@ def test_a_create_that_does_not_ask_needs_its_key_on_every_side(
     assert client_for(staff_a2).post(PLAIN_MAKERS, {"text": "Kumbukumbu"}).status_code == 201
 
 
+@pytest.mark.django_db
+@pytest.mark.urls(__name__)
+def test_a_change_to_one_row_is_checked_before_it_runs(
+    shop_a: Shop, staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # The route's own action finds its note without get_object(), so nothing in it asks for `settings.manage`. The
+    # base finds and checks the row before the action runs: Juma, a Worker on every side, sees the note but may not
+    # change it, so it stays as it was. Asha, the owner, may.
+    with shop_context(shop_a):
+        note = Note(shop=shop_a, text="Kumbukumbu")
+        note.save()
+    give_role(staff_a, RoleTemplate.WORKER, None)
+    give_role(staff_a2, RoleTemplate.OWNER, None)
+    retext = f"/api/v1/test/retext-notes/{note.pk}/retext/"
+
+    refused = client_for(staff_a).post(retext, {"text": "Imebadilishwa"})
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert Note.objects.get(pk=note.pk).text == "Kumbukumbu"
+    assert client_for(staff_a2).post(retext, {"text": "Imebadilishwa"}).status_code == 200
+
+
 # --- Every action is named
 
 
@@ -290,11 +331,11 @@ def permission_problems(routes: Iterable[tuple[type[ShopViewSet[Any]], Mapping[s
     problems = []
     for view, actions in routes:
         named = getattr(view, "action_permissions", {})
-        for method, action in sorted(actions.items()):
-            if action not in named:
-                problems.append(f"{view.__name__}: {action} names no permission")
-            elif method in ("get", "head") and named[action] is not base.SEES_THE_SIDE:
-                problems.append(f"{view.__name__}: {action} shows rows behind {named[action]}, not built yet")
+        for method, name in sorted(actions.items()):
+            if name not in named:
+                problems.append(f"{view.__name__}: {name} names no permission")
+            elif method in ("get", "head") and named[name] is not base.SEES_THE_SIDE:
+                problems.append(f"{view.__name__}: {name} shows rows behind {named[name]}, not built yet")
     return problems
 
 
