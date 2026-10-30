@@ -20,6 +20,9 @@ NO_SHOP = {
     "shops.Shop",
     # kg, L, pcs: the same in every shop (CAT-1, still to come).
     "catalog.Unit",
+    # A new device waiting for a manager's yes: until a manager confirms it, it belongs to no shop, and anyone may
+    # ask. The Device it becomes is made in the manager's shop, with its shop (Jack, AUTH-1; 02 v1.11).
+    "people.PairingRequest",
 }
 
 # Tables Django makes by itself, for its own machinery. They break T1 and T3 by Django's design, so the

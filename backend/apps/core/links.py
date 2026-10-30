@@ -48,6 +48,9 @@ LINK_TYPES: dict[str, str] = {
     "role": "people.Role",
     "role_assignment": "people.RoleAssignment",
     "permission_grant": "people.PermissionGrant",
+    # A paired device: the history of its edits, such as a new name or a block, and the audit trail's lines about
+    # blocking and unblocking it (AUTH-1).
+    "device": "people.Device",
 }
 
 

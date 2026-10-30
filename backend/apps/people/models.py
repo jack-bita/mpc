@@ -1,6 +1,8 @@
 """apps/people/models.py — the people tables: User, a human across every shop; StaffMember, their job at one
 shop; and what each job may do there: the shop's own roles (Role), the roles a person holds on each side
-(RoleAssignment), and the extra permissions one person holds (PermissionGrant) (02 §5).
+(RoleAssignment), and the extra permissions one person holds (PermissionGrant) (02 §5). And the shop's devices:
+Device, a laptop or phone a manager has paired with the shop, and PairingRequest, a device still waiting for a
+manager's yes, which belongs to no shop yet (AUTH-1).
 
 A User is the person, not the job: the same person can work at MPC and in its practice shop, and their
 job at each shop (StaffMember) holds the nickname, the status and the PIN, and its roles hang from it.
@@ -22,6 +24,7 @@ from apps.core.fields import PhoneField
 from apps.core.languages import Language
 from apps.core.models import Editable, ShopScoped, TimeStamped, UUIDModel
 from apps.core.permissions import PERMISSION_CODE_MAX_LENGTH, HeldPermissions, Permission, RoleTemplate
+from apps.people.device_keys import KEY_HASH_LENGTH, KEY_HASH_SHAPE, PAIRING_CODE_ALPHABET, PAIRING_CODE_LENGTH
 from apps.shops.models import Side
 
 
@@ -375,3 +378,160 @@ class PermissionGrant(ShopScoped):
                 violation_error_message="This person already has this permission on this side.",
             ),
         ]
+
+
+class DeviceStatus(models.TextChoices):
+    # 02 §5 (v1.11): active ⇄ blocked. Never pending: a device waits in a PairingRequest until a manager says yes, and
+    # is born active. Outside Device so that its Meta can read the values.
+    ACTIVE = "active", "Active"
+    BLOCKED = "blocked", "Blocked"
+
+
+class Device(Editable):
+    # A laptop or phone a manager has paired with the shop (02 §5, ADR-0018): "Laptop ya Dawa". Made only by
+    # confirm_pairing (apps/people/services.py), in the confirming manager's shop. Editable (CORE-6) gives
+    # `updated_at`, `updated_by` and the `version` that keeps two people's edits apart, for the day a manager renames
+    # it (UI-3); the trigger in this table's migration records each change, before and after, but never the key's
+    # hash (ADR-0036). Who confirmed it, and when, are the row's `created_by` and `created_at` (02 v1.11). The columns
+    # each sync reports (`last_synced_at`, `unsent_count`...) come with SYNC-5, and `last_seen_at` with AUTH-2.
+
+    # What the manager called it, on the device list: "Laptop ya Dawa".
+    name = models.CharField(max_length=40)
+    # Its number in the shop's receipt numbers (D7): the shop's "device" counter gives it (apps/core/sequences.py),
+    # so it is never given twice, even after a block and a new pairing. editable=False: no form or API changes it.
+    code = models.PositiveIntegerField(editable=False)
+    # The side it mostly serves; who may pair or block it is asked on this side (device.manage). PROTECT: nothing is
+    # deleted (rule 7). db_index=False: indexes lead with `shop`, and nothing is deleted, so PROTECT never searches it.
+    home_side = models.ForeignKey(Side, on_delete=models.PROTECT, related_name="+", db_index=False)
+    status = models.CharField(max_length=10, choices=DeviceStatus, default=DeviceStatus.ACTIVE)
+    # The SHA-256 hash of its key, never the key (03 §5.9). editable=False: no form shows it, and it never leaves the
+    # server. Blocking leaves it in place, so unblocking brings the same key back (Jack, AUTH-1).
+    key_hash = models.CharField(max_length=KEY_HASH_LENGTH, editable=False)
+
+    class Meta(Editable.Meta):
+        # Builds on Editable.Meta, so `objects`, with the guard, stays the default manager (CORE-2). The database is
+        # the last guard (03 §5.6); full_clean checks the same rules first, so a person gets a code (ADR-0032).
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=DeviceStatus.values),
+                name="people_device_status_known",
+                violation_error_code="device.status_unknown",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(name=""),
+                name="people_device_name_not_blank",
+                violation_error_code="device.name_blank",
+            ),
+            # Codes start at 1 (the counter's first number); 0 would mean one was never given.
+            models.CheckConstraint(
+                condition=models.Q(code__gte=1),
+                name="people_device_code_given",
+                violation_error_code="device.code_missing",
+            ),
+            # Only a hash's shape: a key stored by mistake, instead of its hash, is refused here.
+            models.CheckConstraint(
+                condition=models.Q(key_hash__regex=KEY_HASH_SHAPE),
+                name="people_device_key_hashed",
+                violation_error_code="device.key_not_hashed",
+            ),
+            # D7: one device per code in a shop, so two devices never print the same receipt numbers. The counter
+            # already gives each code once; this is the database's own promise, whatever code writes the row.
+            models.UniqueConstraint(
+                fields=["shop", "code"],
+                name="people_device_code_once",
+                violation_error_code="device.code_taken",
+                violation_error_message="This shop already has a device with this code.",
+            ),
+            # The device list names devices, so one name per shop, in any letter case, blocked ones included: a
+            # replacement for a stolen "Laptop ya Dawa" gets a name of its own, and the history stays clear.
+            models.UniqueConstraint(
+                "shop",
+                Lower("name"),
+                name="people_device_name_once",
+                violation_error_code="device.name_taken",
+                violation_error_message="This shop already has a device with this name.",
+            ),
+            # One device per key, across every shop. Not led by `shop`, unlike every other index: a request that
+            # brings a key names no shop yet, so AUTH-2 finds its device by the key's hash alone, in this index.
+            models.UniqueConstraint(
+                fields=["key_hash"],
+                name="people_device_key_once",
+                violation_error_code="device.key_taken",
+                violation_error_message="Another device has this key.",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def clean(self) -> None:
+        # full_clean runs this before the rules above: " Laptop ya Dawa " and "Laptop ya Dawa" are one name on screen.
+        super().clean()
+        self.name = (self.name or "").strip()
+
+
+class PairingRequest(UUIDModel, TimeStamped):
+    # A new device waiting for a manager's yes (02 §5, v1.11): it asked to join (start_pairing), shows `code` on its
+    # screen, and holds its key, which works once a manager confirms the code (confirm_pairing). UUIDModel and
+    # TimeStamped (CORE-1) give `id` and `created_at`, when it asked.
+    # No `shop`, unlike every shop's table (T1's exception, NO_SHOP in backend/tests/sweep_lists.py): until a manager
+    # says yes, the device belongs to no shop, and anyone may ask. So no guard either: its default manager reads every
+    # request, which is safe because a request holds nothing of any shop's until it names its device. A shop's own
+    # tables only ever hold devices one of its managers confirmed.
+
+    # Every code ever given stays taken (unique, below), so a code can only ever mean one request: start_pairing draws
+    # again on a clash. With about 850 billion codes, that is rare.
+    code = models.CharField(max_length=PAIRING_CODE_LENGTH)
+    # created_at + 10 minutes (PAIRING_CODE_LIFETIME): a manager's confirm after this is refused.
+    expires_at = models.DateTimeField()
+    # The SHA-256 hash of the key the device was given when it asked, never the key. confirm_pairing copies it onto
+    # the Device, which switches the key on (Jack, AUTH-1).
+    key_hash = models.CharField(max_length=KEY_HASH_LENGTH, editable=False)
+    # The device it became, once confirmed; empty while it waits. One request per device (OneToOne). PROTECT: nothing
+    # is deleted (rule 7). related_name="+": a device's request is read from here, not from the device.
+    device = models.OneToOneField(Device, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    # When a manager confirmed it. Who did is the device's `created_by`.
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        # Not built on ShopScoped.Meta: this table has no shop, so it has no guard to keep.
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(code__regex=rf"^[{PAIRING_CODE_ALPHABET}]{{{PAIRING_CODE_LENGTH}}}$"),
+                name="people_pairingrequest_code_shape",
+                violation_error_code="pairing.code_invalid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(key_hash__regex=KEY_HASH_SHAPE),
+                name="people_pairingrequest_key_hashed",
+                violation_error_code="pairing.key_not_hashed",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(expires_at__gt=models.F("created_at")),
+                name="people_pairingrequest_expires_after_asked",
+                violation_error_code="pairing.expires_before_asked",
+            ),
+            # Confirmed means both at once: the device it became, and when.
+            models.CheckConstraint(
+                condition=models.Q(device__isnull=True, confirmed_at__isnull=True)
+                | models.Q(device__isnull=False, confirmed_at__isnull=False),
+                name="people_pairingrequest_confirmed_whole",
+                violation_error_code="pairing.confirmed_half",
+            ),
+            models.UniqueConstraint(
+                fields=["code"],
+                name="people_pairingrequest_code_once",
+                violation_error_code="pairing.code_taken",
+                violation_error_message="This pairing code was already given.",
+            ),
+            # A key belongs to one request, as it belongs to one device.
+            models.UniqueConstraint(
+                fields=["key_hash"],
+                name="people_pairingrequest_key_once",
+                violation_error_code="pairing.key_taken",
+                violation_error_message="Another pairing request has this key.",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.code
