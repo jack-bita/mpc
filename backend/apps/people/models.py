@@ -469,6 +469,13 @@ class Device(Editable):
     def __str__(self) -> str:
         return self.name
 
+    @property
+    def staff_id(self) -> None:
+        # As an Actor (apps/core/tenancy.py), the one a device's key login names (AUTH-2): a device alone is a shop's
+        # machine, not a person, so no staff member acts. Office routes refuse it (CORE-6), and the trigger that
+        # records edits names nobody for it (apps/core/acting.py). Its `shop_id` is its own column.
+        return None
+
     def clean(self) -> None:
         # full_clean runs this before the rules above: " Laptop ya Dawa " and "Laptop ya Dawa" are one name on screen.
         super().clean()

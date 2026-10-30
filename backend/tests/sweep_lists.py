@@ -56,11 +56,15 @@ NOT_SHOP_ROUTES: set[type] = {
 OWN_LEAK_TESTS: dict[str, str] = {}
 
 # App files that may build a query by hand, `models.QuerySet(Table)`, which starts from no manager and so from
-# no guard: file → why it reads no shop's row.
+# no guard: file → why it reads no shop's row, or, for a login's door, why it reads one shop's id and nothing more.
 HAND_BUILT_QUERIES = {
     # A route's description for the API's schema is made with no visit, so with no shop open: the route's rows
     # come from an empty query (.none()), which reads no row at all (CORE-6).
     "apps/core/api/base.py": "an empty query, .none(), for the API's description",
+    # A login must find the visit's shop before any is open: each door there reads only the shop's id, by what the
+    # request brings (a device's key's hash), and the device itself is then read through the guard, inside that shop.
+    # A test pins that the door reads a shop's id alone (Jack, AUTH-2; 03 §5.4).
+    "apps/people/login_doors.py": "a login's door: the shop's id of the device that holds a key, and nothing more",
 }
 
 # App files that may run SQL by hand, `connection.cursor()` or `.raw()`, besides migrations, system jobs and tests,
