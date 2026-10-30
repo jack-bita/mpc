@@ -6,7 +6,7 @@ its own copy of the role templates (copy_role_templates; set_up_shop makes a who
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
 (start_pairing), a manager with device.manage says yes (confirm_pairing), and blocks it, or lets it work again
-(block, unblock).
+(block, unblock); and each time its key reaches the server, it is noted as seen (note_device_seen, AUTH-2).
 Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
@@ -22,11 +22,12 @@ import uuid
 from collections.abc import Collection, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
@@ -450,6 +451,32 @@ def unblock(device: Device, *, by: StaffMember, reason: str) -> Device:
     return _set_device_status(
         device, DeviceStatus.BLOCKED, DeviceStatus.ACTIVE, AuditAction.DEVICE_UNBLOCK, by=by, reason=reason
     )
+
+
+# How fresh a device's `last_seen_at` is kept (02 v1.12): close enough for the device list and for spotting a stolen
+# phone that still calls, and few enough writes that a busy counter laptop, calling many times a minute, writes about
+# one every few minutes instead of one per request.
+LAST_SEEN_EVERY = timedelta(minutes=5)
+
+
+def note_device_seen(device: Device, *, at: datetime) -> bool:
+    """Record that a device's key reached the server at `at`, unless the device was already seen less than
+    LAST_SEEN_EVERY before. True when it was written: the login then sends the key's cookie again, so the browser
+    keeps it (apps/people/api/base.py). Called by the login for every device it finds, a blocked one too."""
+    _check_shop(device.shop_id, None)
+    if device.last_seen_at is not None and at - device.last_seen_at < LAST_SEEN_EVERY:
+        # Seen a moment ago, as the copy the login just read says: no query at all.
+        return False
+    # One UPDATE of this one column, not save() and not editing(): the row's version and `updated_at` stay as they
+    # were, so a manager's rename screen, opened a minute ago, is never refused (409) because the device called. The
+    # edit history skips the column (migration 0008). The time condition is in the UPDATE too: two requests of one
+    # device at the same moment both pass the check above, and only the first writes. A single UPDATE is atomic on its
+    # own, so it needs no transaction of ours.
+    stale = Q(last_seen_at__isnull=True) | Q(last_seen_at__lte=at - LAST_SEEN_EVERY)
+    written = Device.objects.filter(stale, pk=device.pk).update(last_seen_at=at)
+    if written:
+        device.last_seen_at = at
+    return bool(written)
 
 
 def _set_device_status(

@@ -393,7 +393,7 @@ class Device(Editable):
     # `updated_at`, `updated_by` and the `version` that keeps two people's edits apart, for the day a manager renames
     # it (UI-3); the trigger in this table's migration records each change, before and after, but never the key's
     # hash (ADR-0036). Who confirmed it, and when, are the row's `created_by` and `created_at` (02 v1.11). The columns
-    # each sync reports (`last_synced_at`, `unsent_count`...) come with SYNC-5, and `last_seen_at` with AUTH-2.
+    # each sync reports (`last_synced_at`, `unsent_count`...) come with SYNC-5.
 
     # What the manager called it, on the device list: "Laptop ya Dawa".
     name = models.CharField(max_length=40)
@@ -407,6 +407,11 @@ class Device(Editable):
     # The SHA-256 hash of its key, never the key (03 §5.9). editable=False: no form shows it, and it never leaves the
     # server. Blocking leaves it in place, so unblocking brings the same key back (Jack, AUTH-1).
     key_hash = models.CharField(max_length=KEY_HASH_LENGTH, editable=False)
+    # The last time its key reached the server, blocked or not (02 v1.12): the device list shows it, and a stolen phone
+    # that keeps calling shows when. Empty until its first request. Moved only by note_device_seen
+    # (apps/people/services.py), at most every few minutes, by itself: its version never moves for it, and its edit
+    # history skips it (migration 0008). editable=False: no form or API changes it.
+    last_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta(Editable.Meta):
         # Builds on Editable.Meta, so `objects`, with the guard, stays the default manager (CORE-2). The database is
