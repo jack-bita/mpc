@@ -28,7 +28,8 @@ The history table guards itself as well: only that trigger may write a row of it
 typed by hand can add a change nobody made (EditsByTriggerOnly).
 
 This file owns the SQL of these rules and the operations the migrations list to add them: FlagForwardOnlyTrigger on
-the flag table, EditsByTriggerOnly on the history table, and RecordEdits on each office table.
+the flag table, EditsByTriggerOnly on the history table, RecordEdits on each office table, and ChangeRecordEdits for
+a later migration that changes which columns a table's history skips, with the same frozen SQL (AUTH-2).
 """
 
 import re
@@ -237,21 +238,27 @@ class RecordEdits(AppendOnlyTrigger):
         from_state: ProjectState,
         to_state: ProjectState,
     ) -> None:
-        # First, the table as this migration sees it (to_state, not today's models.py), before any SQL is sent:
+        # The table as this migration leaves it (to_state, not today's models.py), checked before any SQL is sent.
+        self._put_on(self._checked_table(app_label, schema_editor, to_state), schema_editor)
+
+    def _checked_table(self, app_label: str, schema_editor: BaseDatabaseSchemaEditor, state: ProjectState) -> str:
+        # The table's real name, once the table, as `state` sees it, passes two checks:
         # - every column to skip is one of its own. A typo ("pin_hsh") would skip nothing, and the real column, a
         #   PIN hash, would be copied into every history row, with nothing to say so;
         # - it has `id` and `shop_id`, which the rule writes into each history row: without them, every edit of the
         #   table would fail, perhaps months later.
-        model = to_state.apps.get_model(app_label, self.model_name)
+        model = state.apps.get_model(app_label, self.model_name)
         columns = {field.column for field in model._meta.concrete_fields}
         for column in self.skip:
             if column not in columns:
                 raise ValueError(f"{model._meta.label} has no column {column!r} to skip.")
         if not {"id", "shop_id"} <= columns:
             raise ValueError(f"{model._meta.label} has no `id` and `shop_id`: the history keeps a shop's rows only.")
-        # Then write the rule, and put it on the table. The columns to skip go in as one PostgreSQL array,
-        # '{pin_hash}' ('{}' for none), which the rule reads with TG_ARGV[1]::text[]. params=None, as in core's.
-        table = self._table(app_label, schema_editor, to_state)
+        return self._table(app_label, schema_editor, state)
+
+    def _put_on(self, table: str, schema_editor: BaseDatabaseSchemaEditor) -> None:
+        # Write the rule, and put it on the table. The columns to skip go in as one PostgreSQL array, '{pin_hash}'
+        # ('{}' for none), which the rule reads with TG_ARGV[1]::text[]. params=None, as in core's.
         sql = CREATE_RECORD_EDITS_TRIGGER.format(
             table=table, type_code=f"'{self.type_code}'", skipped="'{" + ",".join(self.skip) + "}'"
         )
@@ -271,6 +278,50 @@ class RecordEdits(AppendOnlyTrigger):
 
     def describe(self) -> str:
         return f"Edit history trigger on {self.model_name}"
+
+
+class ChangeRecordEdits(RecordEdits):
+    # The step a later migration lists to change which columns an office table's history skips:
+    # ChangeRecordEdits("device", type_code="device", skip=["key_hash", "last_seen_at"], was=["key_hash"]), after the
+    # step that adds `last_seen_at` (AUTH-2). A trigger's words are fixed when it is made, and the SQL that makes it is
+    # frozen once on main (rule 9), so this takes the table's trigger off and puts it back with the new list, from the
+    # very same strings: no new SQL. Undone, it puts the old list back. Both moves run in the migration's transaction,
+    # so no edit is ever made between them, unrecorded.
+
+    def __init__(self, model_name: str, type_code: str, skip: Sequence[str], was: Sequence[str]) -> None:
+        super().__init__(model_name, type_code, skip)
+        # The list as the table's trigger holds it now, checked the same way: a step built with it puts it back.
+        self.was = RecordEdits(model_name, type_code, was)
+        if sorted(self.skip) == sorted(self.was.skip):
+            # A step that changes nothing is a mistake in the migration, most likely a column left out of `skip`.
+            raise ValueError(f"skip and was are the same for {model_name}: this step would change nothing.")
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        # The new list is checked against the table as this migration leaves it, before the old trigger comes off.
+        table = self._checked_table(app_label, schema_editor, to_state)
+        schema_editor.execute(DROP_RECORD_EDITS_TRIGGER.format(table=table), params=None)
+        self._put_on(table, schema_editor)
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        # Going back, to_state is the table before this migration: the old list is checked against it, then put back.
+        table = self.was._checked_table(app_label, schema_editor, to_state)
+        schema_editor.execute(DROP_RECORD_EDITS_TRIGGER.format(table=table), params=None)
+        self.was._put_on(table, schema_editor)
+
+    def describe(self) -> str:
+        return f"Edit history of {self.model_name} skips {', '.join(self.skip) or 'nothing'}"
 
 
 # The history's own guard (ADR-0036): every row of control_editevent comes from control_record_edit() above, and
