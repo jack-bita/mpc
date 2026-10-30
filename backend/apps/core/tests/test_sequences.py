@@ -3,21 +3,20 @@
 A counter gives 1, 2, 3... per shop and per name, inside the caller's transaction, with its row locked until that
 transaction ends. These tests pin each promise: it counts up from 1; each shop counts alone; it refuses to run
 outside a transaction, or for a shop that isn't open, or for a name not on the list; a number rolled back is given
-again; and a second pairing at the same moment waits for the first, then gets the next number, never the same one.
-`core` may not import `shops` (ADR-0035), so the two shops come from backend/conftest.py, typed as plain models.
+again; and a second pairing at the same moment waits for the first, then gets the next number, never the same one,
+even when both are the shop's first. `core` may not import `shops` (ADR-0035), so the two shops come from
+backend/conftest.py, typed as plain models.
 """
 
-import threading
-import time
-
 import pytest
-from django.db import IntegrityError, connection, transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Model
 from django.db.transaction import TransactionManagementError
 
 from apps.core.models import SequenceName, ShopSequence
 from apps.core.sequences import UnknownSequence, next_number
 from apps.core.tenancy import ShopMismatch, shop_context
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -95,48 +94,39 @@ def test_counter_needs_a_transaction(shop_a: Model) -> None:
         assert not ShopSequence.objects.exists()
 
 
-def _second_pairing(shop: Model, got: list[int | BaseException]) -> None:
-    # The second pairing, in a thread of its own. Django gives each thread its own database connection, so this is
-    # a second transaction at the same moment, as a second manager's phone would be. A new thread starts with no shop
-    # open (a context variable starts empty there), so it opens its own.
-    try:
-        with shop_context(shop), transaction.atomic():
-            got.append(next_number(shop, DEVICE))
-    except BaseException as error:  # handed back to the test, which fails with it
-        got.append(error)
-    finally:
-        connection.close()
-
-
-def _someone_waits_for_me() -> bool:
-    # PostgreSQL's own list of open connections (pg_stat_activity), and for each one, the connections it waits for
-    # (pg_blocking_pids): is any connection waiting for this one, the test's own (pg_backend_pid)? Asked this way, not
-    # by the database's name, which this list may leave empty for a connection still waiting.
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT count(*) FROM pg_stat_activity WHERE pg_backend_pid() = ANY(pg_blocking_pids(pid))")
-        (waiting,) = cursor.fetchone() or (0,)
-    return waiting > 0
+def _number_in_its_own_transaction(shop: Model) -> int:
+    # The second pairing's part: the next number, in a transaction of its own (backend/tests/concurrency.py).
+    with shop_context(shop), transaction.atomic():
+        return next_number(shop, DEVICE)
 
 
 @pytest.mark.django_db(transaction=True)
 def test_counter_row_locked_until_commit(shop_a: Model) -> None:
     # Two pairings at once in one shop. Without the lock, both would read 1, both write 2, and two devices would
     # print the same receipt numbers (a "lost update"). With it, the second waits until the first commits, then
-    # reads 2 and gives 3. transaction=True: each pairing must really commit, as in production, for the other to
-    # see it.
+    # reads 2 and gives 3.
     with shop_context(shop_a), transaction.atomic():
         next_number(shop_a, DEVICE)  # 1, committed: the row exists for both
-    got: list[int | BaseException] = []
     with shop_context(shop_a), transaction.atomic():
         assert next_number(shop_a, DEVICE) == 2  # the first pairing holds the row now
-        second = threading.Thread(target=_second_pairing, args=(shop_a, got))
-        second.start()
-        # Commit only once the second pairing is really waiting for the lock: committing earlier would let it run
-        # after, and the test would pass even without a lock.
-        deadline = time.monotonic() + 5
-        while not _someone_waits_for_me():
-            assert time.monotonic() < deadline, f"the second pairing never waited for the first: {got}"
-            time.sleep(0.02)
-        assert got == []  # still waiting: it has no number yet
+        second, ended = in_another_transaction(lambda: _number_in_its_own_transaction(shop_a))
+        wait_until_someone_waits_for_me()
+        assert ended == []  # still waiting: it has no number yet
     second.join(timeout=5)
-    assert got == [3]
+    assert ended == [3]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_first_numbers_at_once_make_one_counter(shop_a: Model) -> None:
+    # The shop's first two pairings at the same moment, before its counter has a row. The first makes the row and
+    # takes 1. The second can't see that row until the first commits, so it tries to make the row too: ON CONFLICT DO
+    # NOTHING makes it wait for the first, then do nothing, and its next read finds the row and takes 2. Without it,
+    # the second would fail on the unique rule (core_shopsequence_one_per_name), and its pairing with it.
+    with shop_context(shop_a), transaction.atomic():
+        assert next_number(shop_a, DEVICE) == 1  # the row is made, but not yet committed
+        second, ended = in_another_transaction(lambda: _number_in_its_own_transaction(shop_a))
+        wait_until_someone_waits_for_me()
+    second.join(timeout=5)
+    assert ended == [2]
+    with shop_context(shop_a):
+        assert ShopSequence.objects.count() == 1

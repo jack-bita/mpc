@@ -18,7 +18,7 @@ from datetime import timedelta
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 from django.views.debug import ExceptionReporter
@@ -31,6 +31,7 @@ from apps.people.models import Device, DeviceStatus, PairingRequest, StaffMember
 from apps.people.services import confirm_pairing, mark_left, start_pairing, suspend
 from apps.shops.models import Side
 from apps.shops.services import add_side
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -151,6 +152,26 @@ def make_older(request: PairingRequest, by: timedelta) -> None:
     PairingRequest.objects.filter(pk=request.pk).update(
         created_at=F("created_at") - by, expires_at=F("expires_at") - by
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_managers_confirm_one_code_at_once(
+    manager_a: StaffMember, staff_a2: StaffMember, side_a: Side, give_role: GiveRole
+) -> None:
+    # Juma and a second manager type the same code at the same moment (backend/tests/concurrency.py). The first holds
+    # the request locked; the second waits, then finds it used: one device, and a clear answer. Without the lock, both
+    # would read the request as waiting, and the second would fail on the key's unique rule, a server error.
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    code = start_pairing().request.code
+    with shop_context(manager_a.shop_id), transaction.atomic():
+        first = confirm_pairing(code, name="Laptop ya Dawa", home_side=side_a, by=manager_a)
+        second, ended = in_another_transaction(lambda: confirm(code, staff_a2, side_a, name="Laptop ya Pili"))
+        wait_until_someone_waits_for_me()
+    second.join(timeout=5)
+    [refused] = ended
+    assert isinstance(refused, ValidationError) and refused.code == "pairing.code_used"
+    with shop_context(manager_a.shop_id):
+        assert list(Device.objects.values_list("pk", flat=True)) == [first.pk]
 
 
 def test_pairing_code_expires(manager_a: StaffMember, side_a: Side) -> None:
