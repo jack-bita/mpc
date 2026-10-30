@@ -37,9 +37,31 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.core.api.base import CreateOnceMixin, ShopViewSet
+from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, ShopViewSet, Sight
 from apps.core.api.ids import uuid7_only
+from apps.core.permissions import Permission
 from tests.probe.models import Note
+
+# What each probe action needs (PPL-5): to see, for one that only shows notes; a key, for one that changes them. Every
+# action of every probe route below is named here, the subclasses' own @actions included, so none is refused as
+# forgotten. Which key matters little: the sweep's two visitors are the owners of their shops (backend/conftest.py),
+# who hold every one.
+NOTE_PERMISSIONS: dict[str, Permission | Sight] = {
+    "list": SEES_THE_SIDE,
+    "retrieve": SEES_THE_SIDE,
+    "stream": SEES_THE_SIDE,
+    "export": SEES_THE_SIDE,
+    "search": SEES_THE_SIDE,
+    "plain": SEES_THE_SIDE,
+    "pdf": SEES_THE_SIDE,
+    "day": SEES_THE_SIDE,
+    "create": Permission.SETTINGS_MANAGE,
+    "update": Permission.SETTINGS_MANAGE,
+    "partial_update": Permission.SETTINGS_MANAGE,
+    "void": Permission.SETTINGS_MANAGE,
+    "clear": Permission.SETTINGS_MANAGE,
+    "destroy": Permission.SETTINGS_MANAGE,
+}
 
 
 class NoteSerializer(serializers.ModelSerializer[Note]):
@@ -63,6 +85,7 @@ class NoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.Updat
     model = Note
     # A note belongs to the whole shop, not to a side.
     side_field = None
+    action_permissions = NOTE_PERMISSIONS
     # Typed as any note serializer, so that LeakyNoteTextViewSet below may swap in its own.
     serializer_class: type[serializers.ModelSerializer[Note]] = NoteSerializer
     create_serializer_class = NoteCreateSerializer
@@ -128,6 +151,7 @@ class NoteMakerViewSet(mixins.CreateModelMixin, ShopViewSet[Note]):
     # have: the side check must see a route with no read too.
     model = Note
     serializer_class = NoteSerializer
+    action_permissions = NOTE_PERMISSIONS
 
 
 class NoteByTextViewSet(NoteViewSet):

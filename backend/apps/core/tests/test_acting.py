@@ -26,7 +26,7 @@ from rest_framework.response import Response
 from rest_framework.test import APIClient
 
 from apps.core.acting import SHOP_SETTING, STAFF_SETTING, acting_as
-from apps.core.api.base import ShopViewSet
+from apps.core.api.base import SEES_THE_SIDE, ShopViewSet
 from apps.core.tenancy import Actor
 from tests.probe.models import Note
 
@@ -117,6 +117,8 @@ class WhoActsViewSet(ShopViewSet[Note]):
     # while the visit runs.
     model = Note
     side_field = None
+    # It shows what PostgreSQL holds and changes nothing: seeing the shop is enough (PPL-5).
+    action_permissions = {"list": SEES_THE_SIDE}
 
     def list(self, request: Request) -> Response:
         staff, shop = told()

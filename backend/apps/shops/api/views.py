@@ -9,7 +9,8 @@ from typing import Any
 
 from rest_framework import mixins
 
-from apps.core.api.base import CreateOnceMixin, EditMixin
+from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin
+from apps.core.permissions import Permission
 from apps.shops.api.serializers import SideCreateSerializer, SideEditSerializer, SideSerializer
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side, rename_side
@@ -23,6 +24,15 @@ class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMi
     # list shows the sides a person may see (visible_sides()). A new side belongs to no side yet, so adding
     # one is checked as an action on the whole shop (side_of_new()).
     side_field = "pk"
+    # Anyone who works on a side may see it. Adding a side, or renaming one, changes the shop itself: the shop's rules
+    # (`settings.manage`), one of the owner's own four (spec §6). Adding one asks on the whole shop, renaming one on
+    # that side (PPL-5).
+    action_permissions = {
+        "list": SEES_THE_SIDE,
+        "retrieve": SEES_THE_SIDE,
+        "create": Permission.SETTINGS_MANAGE,
+        "partial_update": Permission.SETTINGS_MANAGE,
+    }
     serializer_class = SideSerializer
     create_serializer_class = SideCreateSerializer
     edit_serializer_class = SideEditSerializer

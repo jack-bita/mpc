@@ -5,9 +5,10 @@ PPL-3 gave every person their keys: roles and extra permissions, each on one sid
 checks that the office routes ask for them, through the two hooks of their base (apps/core/api/base.py):
 
 - a person sees only the sides they hold some permission on; another side's rows are "not found", as another
-  shop's are (visible_sides());
+  shop's are (visible_sides()), whichever way a route reads them, its own @actions included;
 - an action needs the permission its route names for it, on the row's side, or on the whole shop for a row of no
-  side (check_side_permission()); without it, 403 permission_denied, and nothing is written;
+  side, or for a change sent to a whole list (check_side_permission()); without it, 403 permission_denied, and
+  nothing is written;
 - a person who is suspended, or has left, gets nothing at all;
 - every route names a permission for each of its actions, and an action it forgets is refused: no route is ever
   open by forgetting (Jack, PPL-5);
@@ -192,6 +193,44 @@ def test_who_sees_no_side_sees_no_whole_shop_rows(
     stop(how, staff_a)
 
     assert client.get("/api/v1/probe/notes/").json()["results"] == []
+
+
+@pytest.mark.django_db
+def test_every_read_of_a_route_keeps_to_the_persons_sides(
+    settings: Settings, shop_a: Shop, staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # A route's own @action may read its rows without DRF's list, as an export does (tests/probe/api.py). The sides a
+    # person sees are kept to where every read of a route starts (get_queryset), so such an action shows a person
+    # who sees no side nothing, as a list does.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    with shop_context(shop_a):
+        Note(shop=shop_a, text="Kumbukumbu ya duka").save()
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    client = client_for(staff_a)
+    assert client.get("/api/v1/probe/notes/export/").content == b"Kumbukumbu ya duka"
+
+    stop("suspended", staff_a)
+
+    assert client.get("/api/v1/probe/notes/export/").content == b""
+
+
+@pytest.mark.django_db
+def test_change_to_a_whole_list_needs_its_key_on_every_side(
+    settings: Settings, shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # A change sent to a whole list names no row, so no row's side to ask about: it could touch every side's rows,
+    # so it needs its key on every side. The probe's `clear` stands in for one; it needs `settings.manage`.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    clear = "/api/v1/probe/notes-in-bulk/clear/"
+    with shop_context(shop_a):
+        # Juma holds it on Dawa only; Asha on every side.
+        grant_permission(staff_a, Permission.SETTINGS_MANAGE, side=sides["D"], by=None)
+        grant_permission(staff_a2, Permission.SETTINGS_MANAGE, side=None, by=None)
+
+    refused = client_for(staff_a).delete(clear)
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    assert client_for(staff_a2).delete(clear).status_code == 204
 
 
 # --- Every action is named
