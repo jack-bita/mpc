@@ -201,6 +201,7 @@ def test_action_needs_its_permission(
 
     add = manager.post(SIDES, new_side())
     assert add.status_code == 403
+    assert add.json()["code"] == "permission_denied"
     with shop_context(shop_a):
         assert not Side.objects.filter(code="P").exists()
 
@@ -209,6 +210,44 @@ def test_action_needs_its_permission(
     owner = client_for(staff_a)
     assert owner.patch(f"{SIDES}{sides['D'].pk}/", {"name": "Dawa za Kuku", "version": 1}).status_code == 200
     assert owner.post(SIDES, new_side()).status_code == 201
+
+
+@pytest.mark.django_db
+def test_a_key_on_one_side_opens_only_that_side(shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember) -> None:
+    # Rule X1 itself: a key works on the side it was given on, and nowhere else. Juma may change the shop's rules on
+    # Dawa only, and counts stock on Vyakula, so he sees both. He may rename Dawa, not Vyakula; and adding a side, an
+    # action on the whole shop, needs the key on every side, which he doesn't hold (02 §5).
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.SETTINGS_MANAGE, side=sides["D"], by=None)
+        grant_permission(staff_a, Permission.STOCK_COUNT, side=sides["F"], by=None)
+    juma = client_for(staff_a)
+
+    assert juma.patch(f"{SIDES}{sides['D'].pk}/", {"name": "Dawa za Kuku", "version": 1}).status_code == 200
+    vyakula = juma.patch(f"{SIDES}{sides['F'].pk}/", {"name": "Chakula", "version": 1})
+    assert vyakula.status_code == 403
+    assert vyakula.json()["code"] == "permission_denied"
+    assert side_name(shop_a, sides["F"]) == "Vyakula"
+    assert juma.post(SIDES, new_side()).status_code == 403
+
+
+@pytest.mark.django_db
+def test_a_create_sent_twice_is_answered_as_a_read(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # The owner adds a side; the manager's phone sends the same create again, with the same id. Nothing is made, so
+    # the create's key is not asked: the manager, who may see every side but not add one, gets the stored side back,
+    # as any read of it, and there is still one side P (ADR-0007, CORE-6).
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    side = new_side()
+    first = client_for(staff_a).post(SIDES, side)
+
+    again = client_for(staff_a2).post(SIDES, side)
+
+    assert again.status_code == 201
+    assert again.json() == first.json()
+    with shop_context(shop_a):
+        assert Side.objects.filter(code="P").count() == 1
 
 
 def test_side_routes_name_their_permissions() -> None:
@@ -250,6 +289,8 @@ def test_suspended_member_gets_nothing_from_routes(
     assert client.patch(f"{SIDES}{sides['D'].pk}/", {"name": "Imeibiwa", "version": 1}).status_code == 404
     assert client.post(SIDES, new_side()).status_code == 403
     assert side_name(shop_a, sides["D"]) == "Dawa"
+    with shop_context(shop_a):
+        assert not Side.objects.filter(code="P").exists()
 
 
 @pytest.mark.django_db
@@ -499,7 +540,7 @@ def test_unnamed_action_refused(
     # A route that forgets an action is a bug, not a person's mistake: it answers a server error, which is logged,
     # instead of a 403 that would hide the bug behind a plain "no", or a 200 that would open the action to all.
     # Even the owner, who holds every key, is refused.
-    monkeypatch.setattr(SideViewSet, "action_permissions", {"retrieve": base.SEES_THE_SIDE}, raising=False)
+    monkeypatch.setattr(SideViewSet, "action_permissions", {"retrieve": base.SEES_THE_SIDE})
     give_role(staff_a, RoleTemplate.OWNER, None)
 
     with pytest.raises(ImproperlyConfigured, match="list"):
