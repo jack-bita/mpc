@@ -7,13 +7,16 @@ a lower app (shops) may not import a higher one (people). This file is not part 
 fixture here may build on any app and still serve the tests of every app.
 """
 
+from collections.abc import Callable
+
 import pytest
 from django.test import Client
 from rest_framework.test import APIClient
 
+from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import StaffMember, User
-from apps.people.services import add_staff
+from apps.people.models import Role, StaffMember, User
+from apps.people.services import add_staff, assign_role, copy_role_templates
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
 
@@ -75,21 +78,46 @@ def staff_b(shop_b: Shop) -> StaffMember:
 
 
 @pytest.fixture
-def staff_client_a(staff_a: StaffMember) -> APIClient:
+def give_role() -> Callable[[StaffMember, RoleTemplate, Side | None], None]:
+    # Gives a person one of their shop's six roles, on one side or on every side (side=None), the way the app
+    # does (assign_role, PPL-3). shop_a and shop_b are bare Shop rows with no roles, so the first role asked for
+    # copies the six templates in; later ones reuse that copy, as a shop never has two (role.template_taken).
+    # Given by the system (by=None), as a shop's first owner is: the giver's own check is PPL-3's to test.
+    def give(staff: StaffMember, template: RoleTemplate, side: Side | None) -> None:
+        with shop_context(staff.shop_id):
+            role = Role.objects.filter(template=template).first() or copy_role_templates(staff.shop)[template]
+            assign_role(staff, role, side=side, by=None)
+
+    return give
+
+
+@pytest.fixture
+def staff_client_a(
+    staff_a: StaffMember, give_role: Callable[[StaffMember, RoleTemplate, Side | None], None]
+) -> APIClient:
     # DRF's test client, logged in as a staff member of shop A, the way the office screens will be. The
     # logins themselves come later (AUTH-3, AUTH-4) and will leave the person acting in `request.auth`,
     # which names the shop the visit works for (apps/core/api/base.py). force_authenticate skips the login
     # and puts the staff member there directly. DRF's type stubs expect its own Token model there; DRF
     # itself takes any object, and ours is the staff member.
+    # The owner of their shop, on every side (PPL-5): the routes ask for each action's permission, so a person
+    # with none would see nothing and do nothing. Tests that check who may do what give their own people their
+    # own roles (backend/tests/test_route_permissions.py); these clients test everything else a route does.
+    give_role(staff_a, RoleTemplate.OWNER, None)
     client = APIClient()
     client.force_authenticate(user=staff_a.user, token=staff_a)  # type: ignore[arg-type]
     return client
 
 
 @pytest.fixture
-def staff_client_b(staff_b: StaffMember) -> APIClient:
+def staff_client_b(
+    staff_b: StaffMember, give_role: Callable[[StaffMember, RoleTemplate, Side | None], None]
+) -> APIClient:
     # The same, as a staff member of shop B: the visitor the tenancy sweep sends to every route, to look
-    # for shop A's rows (backend/tests/test_tenancy_sweep.py).
+    # for shop A's rows (backend/tests/test_tenancy_sweep.py). The owner of shop B, on every side, so that the
+    # only thing hiding shop A's rows from them is the shop guard, which the sweep is there to check: with no
+    # permission at all, every route would show them nothing, and the sweep would pass without looking (PPL-5).
+    give_role(staff_b, RoleTemplate.OWNER, None)
     client = APIClient()
     client.force_authenticate(user=staff_b.user, token=staff_b)  # type: ignore[arg-type]
     return client
