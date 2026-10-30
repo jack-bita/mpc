@@ -67,6 +67,15 @@ def test_unknown_counter_name_refused(shop_a: Model) -> None:
             ShopSequence.objects.create(shop_id=shop_a.pk, name="devcie")
 
 
+def test_database_keeps_one_counter_per_name(shop_a: Model) -> None:
+    # Two "device" counters in one shop would each count from 1, and give the same code twice (D7). next_number never
+    # makes a second (ON CONFLICT DO NOTHING); the database refuses code that would.
+    with shop_context(shop_a), transaction.atomic():
+        next_number(shop_a, DEVICE)
+        with pytest.raises(IntegrityError, match="core_shopsequence_one_per_name"), transaction.atomic():
+            ShopSequence.objects.create(shop_id=shop_a.pk, name=DEVICE)
+
+
 def test_counter_of_another_shop_refused(shop_a: Model, shop_b: Model) -> None:
     # T1: shop B's numbers are given only while B is open. Inside A's visit it is a bug in the calling code.
     with shop_context(shop_a), transaction.atomic(), pytest.raises(ShopMismatch):

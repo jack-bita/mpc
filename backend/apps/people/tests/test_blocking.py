@@ -21,7 +21,7 @@ from apps.control.models import AuditAction, AuditEvent, EditEvent
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, DeviceStatus, StaffMember
-from apps.people.services import block, confirm_pairing, start_pairing, unblock
+from apps.people.services import block, confirm_pairing, mark_left, start_pairing, suspend, unblock
 from apps.shops.models import Side
 from apps.shops.services import add_side
 
@@ -80,14 +80,20 @@ def test_block_writes_audit_with_reason(juma: StaffMember, laptop: Device) -> No
         assert Device.objects.get(pk=laptop.pk).version == laptop.version + 2
 
 
-def test_block_needs_a_reason(juma: StaffMember, laptop: Device) -> None:
-    # Rule 7: stopped always with who, when and why.
+@pytest.mark.parametrize("action", ["block", "unblock"])
+def test_block_needs_a_reason(juma: StaffMember, laptop: Device, action: str) -> None:
+    # Rule 7: stopped, and let work again, always with who, when and why. Refused with the device's own code, before
+    # audit() would refuse it with its own (audit.reason_required), so the screen can say what is missing.
     with shop_context(juma.shop_id):
+        if action == "unblock":
+            block(laptop, by=juma, reason="Imeibiwa kaunta")
+        status = Device.objects.get(pk=laptop.pk).status
+        lines = len(lines_about(laptop))
         with pytest.raises(ValidationError) as refused:
-            block(laptop, by=juma, reason="   ")
+            (block if action == "block" else unblock)(laptop, by=juma, reason="   ")
         assert refused.value.code == "device.reason_required"
-        assert Device.objects.get(pk=laptop.pk).status == DeviceStatus.ACTIVE
-        assert not AuditEvent.objects.exists()
+        assert Device.objects.get(pk=laptop.pk).status == status
+        assert len(lines_about(laptop)) == lines
 
 
 def test_only_an_active_device_is_blocked(juma: StaffMember, laptop: Device) -> None:
@@ -133,6 +139,42 @@ def test_block_needs_device_manage(
         with pytest.raises(PermissionDenied):
             unblock(laptop, by=staff_a2, reason="Nimeipata")
         assert Device.objects.get(pk=laptop.pk).status == DeviceStatus.BLOCKED
+
+
+@pytest.mark.parametrize("gone", ["suspended", "left"])
+def test_manager_who_cannot_act_cannot_block(juma: StaffMember, laptop: Device, side_a: Side, gone: str) -> None:
+    # A suspended manager, or one who has left, holds nothing (02 §5, X2): Juma can neither block the laptop nor let a
+    # blocked phone work again, and nothing is written.
+    phone = pair(juma, side_a, "Simu ya Dawa")
+    with shop_context(juma.shop_id):
+        block(phone, by=juma, reason="Imepotea")
+        if gone == "suspended":
+            suspend(juma, by=None, reason="Uchunguzi")
+        else:
+            mark_left(juma, left_on=juma.started_on, by=None, reason="Amehamia Moshi")
+        with pytest.raises(PermissionDenied):
+            block(laptop, by=juma, reason="Imeibiwa kaunta")
+        with pytest.raises(PermissionDenied):
+            unblock(phone, by=juma, reason="Imepatikana")
+        assert Device.objects.get(pk=laptop.pk).status == DeviceStatus.ACTIVE
+        assert Device.objects.get(pk=phone.pk).status == DeviceStatus.BLOCKED
+        assert AuditEvent.objects.filter(subject_type="device").count() == 1  # the phone's block, from before
+
+
+def test_manager_of_another_shop_cannot_block(
+    juma: StaffMember, laptop: Device, staff_b: StaffMember, side_b: Side, give_role: GiveRole
+) -> None:
+    # T1: shop B's manager, in their own shop's visit, can't touch shop A's device, whatever they hold in B.
+    give_role(staff_b, RoleTemplate.MANAGER, None)
+    with shop_context(staff_b.shop_id):
+        with pytest.raises(ValidationError) as blocking:
+            block(laptop, by=staff_b, reason="Imeibiwa kaunta")
+        with pytest.raises(ValidationError) as unblocking:
+            unblock(laptop, by=staff_b, reason="Imepatikana")
+    assert blocking.value.code == unblocking.value.code == "staff.other_shop"
+    with shop_context(juma.shop_id):
+        assert Device.objects.get(pk=laptop.pk).status == DeviceStatus.ACTIVE
+        assert not AuditEvent.objects.exists()
 
 
 def test_device_code_never_reused(juma: StaffMember, laptop: Device, side_a: Side) -> None:

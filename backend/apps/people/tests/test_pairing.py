@@ -28,7 +28,7 @@ from apps.core.tenancy import shop_context
 from apps.people import services
 from apps.people.device_keys import PAIRING_CODE_ALPHABET, PAIRING_CODE_LENGTH
 from apps.people.models import Device, DeviceStatus, PairingRequest, StaffMember
-from apps.people.services import confirm_pairing, start_pairing
+from apps.people.services import confirm_pairing, mark_left, start_pairing, suspend
 from apps.shops.models import Side
 from apps.shops.services import add_side
 
@@ -145,23 +145,31 @@ def test_pairing_code_single_use(manager_a: StaffMember, side_a: Side) -> None:
         assert Device.objects.count() == 1
 
 
+def make_older(request: PairingRequest, by: timedelta) -> None:
+    # Time passes: the request is made that much older, both its times at once, with no clock to fake. (Its expiry
+    # alone can't move before its ask: the database refuses it, people_pairingrequest_expires_after_asked.)
+    PairingRequest.objects.filter(pk=request.pk).update(
+        created_at=F("created_at") - by, expires_at=F("expires_at") - by
+    )
+
+
 def test_pairing_code_expires(manager_a: StaffMember, side_a: Side) -> None:
     # Valid 10 minutes from the ask, then refused: the manager asks the device for a new one.
     before = timezone.now()
     asked = start_pairing()
     after = timezone.now()
     assert before + timedelta(minutes=10) <= asked.request.expires_at <= after + timedelta(minutes=10)
-    # Ten minutes and a second pass: the request is made that much older, both its times at once, with no clock to fake.
-    # (Its expiry alone can't move before its ask: the database refuses it, people_pairingrequest_expires_after_asked.)
-    older = timedelta(minutes=10, seconds=1)
-    PairingRequest.objects.filter(pk=asked.request.pk).update(
-        created_at=F("created_at") - older, expires_at=F("expires_at") - older
-    )
+    # At 9 minutes 59 seconds a code still works...
+    almost = start_pairing()
+    make_older(almost.request, timedelta(minutes=9, seconds=59))
+    assert confirm(almost.request.code, manager_a, side_a, name="Simu ya Dawa").code == 1
+    # ...and a second after its 10 minutes, it doesn't.
+    make_older(asked.request, timedelta(minutes=10, seconds=1))
     with pytest.raises(ValidationError) as refused:
         confirm(asked.request.code, manager_a, side_a)
     assert refused.value.code == "pairing.code_expired"
     with shop_context(manager_a.shop_id):
-        assert not Device.objects.exists()
+        assert Device.objects.count() == 1
 
 
 def test_unknown_code_refused(manager_a: StaffMember, side_a: Side) -> None:
@@ -194,6 +202,21 @@ def test_confirm_needs_device_manage(
         confirm(code, staff_a2, side_a)
     # ...but can on their own side, with the same code, still unused.
     assert confirm(code, staff_a2, vyakula).home_side_id == vyakula.pk
+
+
+@pytest.mark.parametrize("gone", ["suspended", "left"])
+def test_manager_who_cannot_act_cannot_confirm(manager_a: StaffMember, side_a: Side, gone: str) -> None:
+    # A suspended manager, or one who has left, holds nothing (02 §5, X2), whatever roles they were given: the code
+    # still waits for someone who may confirm it.
+    code = start_pairing().request.code
+    with shop_context(manager_a.shop_id):
+        if gone == "suspended":
+            suspend(manager_a, by=None, reason="Uchunguzi")
+        else:
+            mark_left(manager_a, left_on=manager_a.started_on, by=None, reason="Amehamia Moshi")
+    with pytest.raises(PermissionDenied):
+        confirm(code, manager_a, side_a)
+    assert PairingRequest.objects.get(code=code).device_id is None
 
 
 def test_confirm_checks_permission_before_the_code(staff_a: StaffMember, side_a: Side, give_role: GiveRole) -> None:
