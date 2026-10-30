@@ -113,9 +113,12 @@ class DeviceKeyAuthentication(BaseAuthentication):
             # Seen, blocked or not: a stolen phone that keeps calling shows when (02 v1.12). At most every few
             # minutes, so most visits write nothing (note_device_seen, apps/people/services.py).
             self.seen = note_device_seen(device, at=timezone.now())
-        if device.status == DeviceStatus.BLOCKED:
-            # Stopped on its very next request (ADR-0018), with a code of its own, so the app locks and says why. 401:
-            # the key itself opens nothing now. English for the logs; the app translates the code (ADR-0032).
+        if device.status != DeviceStatus.ACTIVE:
+            # Only an active device works (02 §5). Asked as "not active", never as "blocked", so a status a later card
+            # adds, such as a retired device, is refused until that card says otherwise: the login fails closed. Today
+            # blocked is the only other status (the database allows no third): stopped on its very next request
+            # (ADR-0018), with a code of its own, so the app locks and says why. 401: the key itself opens nothing now.
+            # English for the logs; the app translates the code (ADR-0032).
             raise exceptions.AuthenticationFailed("This device is blocked.", code="device.blocked")
         # A change needs the CSRF token, as a session's does: the cookie alone would let another website act as the
         # device. A read passes this check by itself.
