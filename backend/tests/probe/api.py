@@ -178,9 +178,9 @@ class NoteReportViewSet(NoteViewSet):
 
 class ClosedNoteViewSet(NoteViewSet):
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        # A list that refuses a visitor, as one a person has no permission for will (PPL-5): the sweep can't
-        # look inside it. It refuses a shop that has no notes, so that in its test shop A, which has one, still
-        # sees its own list, and only shop B is refused.
+        # A list that refuses a visitor, as a route may refuse a person (PPL-5's lists narrow instead, so this
+        # stands for a route of its own kind): the sweep can't look inside it. It refuses a shop that has no notes,
+        # so that in its test shop A, which has one, still sees its own list, and only shop B is refused.
         if not self.get_queryset().exists():
             raise PermissionDenied
         return super().list(request, *args, **kwargs)

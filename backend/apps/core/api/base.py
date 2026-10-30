@@ -1,5 +1,5 @@
-"""apps/core/api/base.py — the base of every office route: one shop per visit, rows built per visit, a place
-for the per-side permission check (03 §5.4, §5.10).
+"""apps/core/api/base.py — the base of every office route: one shop per visit, rows built per visit and kept to
+the sides the person sees, and the per-side permission check of every action (03 §5.4, §5.10; PPL-5).
 
 An office route builds on ShopViewSet: `class SideViewSet(ShopViewSet[Side])`.
 
@@ -75,7 +75,8 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
     # What each action of the route needs, by the action's name as DRF's router gives it ("list", "create",
     # "partial_update", or an @action's own name): a permission code, asked on the row's side, or on the whole shop
     # for a row of no side; or SEES_THE_SIDE, for an action that only shows rows. Each route writes its own, naming
-    # every action it answers. Empty here, so a route that names nothing does nothing (PPL-5).
+    # every action it answers. Empty here, so every action of a route that names nothing is refused with a server error
+    # (permission_needed(), PPL-5).
     action_permissions: ClassVar[Mapping[str, Permission | Sight]] = {}
     # The methods an office route may answer: DRF's list, less OPTIONS and TRACE, which initial() refuses. Listed so
     # that a 405's `Allow` header names only methods that can work.
@@ -324,9 +325,10 @@ class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
             if twin is not None:
                 return self._replay(request, twin)
             if isinstance(refusal, IntegrityError) and _id_taken(refusal, self.model):
-                # No twin, yet the id clashes: another shop's row has it. The guard hides that row from every
-                # lookup here, and the answer says only that the id can't be used: nothing about that row,
-                # not even what it is (03 §5.4).
+                # No twin, yet the id clashes: another row has it that this visit can't see, another shop's, or
+                # this shop's on a side the person doesn't see (get_queryset keeps to their sides). Every lookup here
+                # hides that row, and the answer says only that the id can't be used: nothing about that row, not
+                # even what it is (03 §5.4).
                 raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")}) from None
             # A real refusal, such as a second side D, answered with its code; or another database rule, which
             # the service should have checked first: a bug, left to become a 500.
@@ -358,8 +360,9 @@ class EditMixin[M: Editable](ShopViewSet[M]):
         raise NotImplementedError
 
     def partial_update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        # This shop's row, through the per-side check, as for a read (get_object). Another shop's row is
-        # not found, as for a read.
+        # The row, found among the person's own sides and checked for the edit's key on its side (get_object, which
+        # initial() already ran once before this action began). Another shop's row, or one on a side the person
+        # doesn't see, is not found, as for a read.
         row = self.get_object()
         sent = self.edit_serializer_class(data=request.data, context=self.get_serializer_context())
         sent.is_valid(raise_exception=True)
