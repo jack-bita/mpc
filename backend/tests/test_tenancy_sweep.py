@@ -1629,7 +1629,7 @@ def test_api_route_check_finds_a_route_off_the_base(settings: Settings) -> None:
 
 def test_device_route_sweep_finds_the_device_routes() -> None:
     # Never passes on nothing: the device check finds AUTH-2's device routes by itself.
-    assert {"device-pairing"} <= {route.name for route in device_routes()}
+    assert {"device-pairing", "device-me"} <= {route.name for route in device_routes()}
 
 
 @pytest.mark.django_db
