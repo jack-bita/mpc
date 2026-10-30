@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.10 · 29 Oct 2026 · Portion 2 of the planning pack
+**Version:** 1.11 · 30 Oct 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -25,6 +25,8 @@
 **Changes in v1.9** (29 Oct 2026, CTRL-2): an audit event's `actor` and `at` are the row's `created_by` and `created_at` (§1), and it always has a reason (T3); its `device` and `approval` come with their tables. A new append-only record, `EditEvent`, keeps every change to an office record, written by the database itself (Jack, while planning CTRL-2; 03 §5.16, ADR-0036); payment accounts and stock locations are office records too (Jack, at CTRL-2's review). T2 names it (§13, §16). Marked **(v1.9)**.
 
 **Changes in v1.10** (29 Oct 2026, PPL-3): a decision by Jack, made while planning PPL-3. Goods that arrive are weighed on the shop's scale before they go in, a few sacks at a time; the device adds up the sacks and the kg at once, offline too, and the stock goes in at the scale's kg (§7, §17). Weighing is its own permission, `stock.weigh`, which any role may have; completing the delivery with its buying prices stays `stock.receive`, because buying prices never go to devices (§5). Also from PPL-3: a role's fields, who may give a role or a permission (Jack), and what a person holds on a side and on the whole shop (§5); a new code reaches the shops that already exist through a data migration (§5, 03 §5.8). Marked **(v1.10)**.
+
+**Changes in v1.11** (30 Oct 2026, AUTH-1): decisions by Jack, made while planning AUTH-1. A new device waits for a manager's yes in a `PairingRequest`, which belongs to no shop: until a manager confirms it, the device is nobody's, and anyone may ask. The `Device` is made in the confirming manager's shop, so a device is never `pending`: it is `active` ⇄ `blocked` (§5, §14). `PairingRequest` joins T1's exceptions (§16). Who confirmed a device is the row's `created_by`, so `registered_by` goes, as `set_by` did in v1.7. Blocking and unblocking need a reason and are written in the audit trail; unblocking keeps the device's key, so its unsent records can still arrive (§5). Marked **(v1.11)**.
 
 ---
 
@@ -147,6 +149,8 @@ Shop
 * = ledger (append-only)
 ```
 
+`PairingRequest` sits outside the tree: it belongs to no shop until a manager confirms it (§5) **(v1.11)**.
+
 A full diagram for GitHub is in Appendix A.
 
 ## 4. Shop & setup — module `shops`
@@ -213,9 +217,15 @@ A full diagram for GitHub is in Appendix A.
 - Used for below-floor prices, credit over a limit, cancellations, refunds, debt adjustments, attendance fixes and backdating.
 
 **Device** [R1] ✚ → Shop — a registered shop laptop or phone. (Moved here from `shops` in v1.1.)
-- `name` ("Laptop ya Dawa"), `code` (used in numbers; never reused), `home_side`
-- `status`: `pending` → `active` ⇄ `blocked`; `registered_by`, `last_seen_at`, `last_synced_at`, `last_device_seq`; `unsent_count` and `app_version`, reported at each sync **(v1.1)**
+- `name` ("Laptop ya Dawa"), unique in the shop whatever the letter case **(v1.11)**; `code` (used in numbers; never reused: the shop's own counter gives it **(v1.11)**); `home_side`
+- `status`: `active` ⇄ `blocked` **(v1.11)**; `last_seen_at`, `last_synced_at`, `last_device_seq`; `unsent_count` and `app_version`, reported at each sync **(v1.1)**
+- The hash of its device key, never the key (03 §5.9). Who confirmed it is the row's `created_by` (§1) **(v1.11)**.
 - Only active devices allow PIN login and offline work.
+- Blocking and unblocking need someone with `device.manage` on the device's home side, and a reason, written in the audit trail (T3). Unblocking keeps the device's key, so the records it holds can still arrive (Jack, AUTH-1) **(v1.11)**.
+
+**PairingRequest** [R1] ✚ (no shop) — a device waiting for a manager's yes **(v1.11)**.
+- `code` (8 characters with no look-alikes such as 0/O or 1/I, valid 10 minutes, works once), `expires_at`, the hash of the device's key, and, once confirmed, the `Device` it became.
+- No shop: until a manager confirms it, the device belongs to no shop, and anyone may ask. Confirming needs `device.manage` on the home side chosen, and makes the `Device` in the manager's own shop (T1).
 
 **DeviceOutage** [R1] ✚ → Device — one offline period the device recorded: `started_at`, `ended_at`, reported at the next sync **(v1.1)**. Feeds the sync health page and the R2 decision on a local hub (03 AD16).
 
@@ -491,7 +501,7 @@ stateDiagram-v2
 - **Job** [R2]: `waiting` → `in_progress` → `ready` → `collected`; `cancelled` before ready (the customer's goods go back).
 - **PayRun** [R1b]: `draft` → `approved` → `paid`.
 - **Flag:** `open` → `explained` → `resolved` | `dismissed`; it may also close straight from `open` **(v1.8)**.
-- **StaffMember:** `active` ⇄ `suspended` → `left`. **Product, Contact:** `active` ⇄ `archived`. **PaymentAccount:** `active` ⇄ `archived` **(v1.5)**. **Device:** `pending` → `active` ⇄ `blocked`.
+- **StaffMember:** `active` ⇄ `suspended` → `left`. **Product, Contact:** `active` ⇄ `archived`. **PaymentAccount:** `active` ⇄ `archived` **(v1.5)**. **Device:** `active` ⇄ `blocked` **(v1.11)**. **PairingRequest:** `waiting` → `confirmed` | `expired` **(v1.11)**.
 
 ## 15. Calculations
 
@@ -514,7 +524,7 @@ stateDiagram-v2
 These become database constraints and automated tests.
 
 **Tenancy and history**
-- **T1** Every record (except `User`, `Unit` and the `Shop` itself **(v1.3)**) has a shop, and only points at records of the same shop.
+- **T1** Every record (except `User`, `Unit`, the `Shop` itself **(v1.3)** and a `PairingRequest` **(v1.11)**) has a shop, and only points at records of the same shop.
 - **T2** Stock movements, balance entries, allocations, attendance events, audit events and edit events **(v1.9)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
 - **T3** Nothing is deleted: cancel, void, suspend, archive — always with who, when and why.
 - **T4** Copied values (price, floor, factor, cost, rate, rules, formula version) never change once the record is confirmed.
@@ -596,7 +606,7 @@ Opening count 20 bags +1,000 · sell 3 bags −150 · sell 12.5 kg −12.5 · de
 | Module | R1 | R1b | R2 | R3 / Later |
 |---|---|---|---|---|
 | shops | Shop, Side, StockLocation, PaymentAccount, Setting | | practice shop | Branch |
-| people | User, StaffMember, Role, RoleAssignment, PermissionGrant, Approval, Device, DeviceOutage | | | remote approval |
+| people | User, StaffMember, Role, RoleAssignment, PermissionGrant, Approval, Device, PairingRequest **(v1.11)**, DeviceOutage | | | remote approval |
 | catalog | Unit, Product, Tag, ProductSide, SellingUnit, Price, ProductCost | | services | jumla by quantity, price per side |
 | inventory | StockMovement, StockBalance, Batch, Delivery, StockCount, RestockRequest | | Transfer, ProductionRun, BagOpening | store rooms, supplier returns, purchase orders |
 | contacts | Contact, BalanceEntry, Allocation, ContactBalance | | partners, supplier credit | customer login, reminders |

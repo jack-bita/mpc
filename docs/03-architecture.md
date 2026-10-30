@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.12 · 29 Oct 2026 · Portion 3 of the planning pack
+**Version:** 1.13 · 30 Oct 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.13** (30 Oct 2026, AUTH-1): decisions by Jack, made while planning AUTH-1 (02 v1.11). A new device waits in a `PairingRequest`, which belongs to no shop, and gets its device key at once; the manager's yes makes the `Device` in their own shop and switches the key on. The key is stored as its SHA-256 hash, not with Argon2: it is 32 random bytes, which nobody can guess, and each request finds its device in one index lookup. Unblocking keeps the key, and both block and unblock are written in the audit trail (§5.4, §5.9). Marked **(v1.13)**.
 
 **Changes in v1.12** (29 Oct 2026, PPL-3): a new shop gets its role templates from a `people` service, `set_up_shop`, which makes the shop with `create_shop` and then copies them, in one transaction: `create_shop` lives in `shops`, which may not import `people`, where the `Role` table lives (ADR-0035). A shop made by `create_shop` alone has no roles, so nobody may act there: forgetting fails closed (§5.8, §9). Weighing a delivery as it arrives works offline, with no buying price (Jack, 02 v1.10; §6.9). A new permission code reaches the shops that already have their roles through a data migration (§5.8). Marked **(v1.12)**.
 
@@ -235,7 +237,7 @@ An app may import only from layers below it. Same-layer imports are allowed only
 | 0 | `core` ✚ | Base model classes, the current-shop guard, money and quantity helpers, rounding, permission codes, the settings registry, error codes, the change log (`Change`) and per-shop counters (`ShopSequence`) |
 | 0 | `control` | Flag, AuditEvent, Attachment, ImportJob, Notification [R2]. Every app writes here, so it sits beside `core`: every app may import it, and it may import only `core` **(v1.4)** |
 | 1 | `shops` | Shop, Side, StockLocation, PaymentAccount, Setting |
-| 2 | `people` | User, StaffMember, Role, RoleAssignment, PermissionGrant, Approval, **Device** (moved here: it is access control) |
+| 2 | `people` | User, StaffMember, Role, RoleAssignment, PermissionGrant, Approval, **Device** (moved here: it is access control), PairingRequest **(v1.13)** |
 | 3 | `catalog` | Unit, Product, Tag, ProductSide, SellingUnit, Price, ProductCost |
 | 3 | `contacts` | Contact, BalanceEntry, Allocation, ContactBalance ✚ |
 | 4 | `inventory` | StockMovement, StockBalance, Batch, Delivery, StockCount, RestockRequest; Transfer, ProductionRun, BagOpening [R2]. May import `money` (deliveries pay suppliers) |
@@ -283,7 +285,7 @@ apps/sales/
 - **One base API view** gets its queryset through that manager and checks permissions per side.
 - **Writes check links.** Services check that every record they link to belongs to the same shop (T1).
 - **IDs from devices.** If a document's UUID already exists in *another* shop, the server rejects it and reveals nothing about the other record ✚ (`id.taken`, CORE-6 **(v1.8)**).
-- **Sweep tests:** every model except `User`, `Unit`, the `Shop` itself **(v1.6)** and the infrastructure tables has `shop`; every list and detail endpoint, called as shop B, never returns shop A's rows.
+- **Sweep tests:** every model except `User`, `Unit`, the `Shop` itself **(v1.6)**, a `PairingRequest` (a device no shop has said yes to yet, §5.9) **(v1.13)** and the infrastructure tables has `shop`; every list and detail endpoint, called as shop B, never returns shop A's rows.
 - **Later (before shop #2):** RLS policies on every table (the app connects as a database role that can't bypass them) and composite "same shop" foreign keys.
 
 ### 5.5 Posting: documents in, ledgers out
@@ -339,11 +341,13 @@ Confirming a one-screen sale:
 **Users.** A custom `User` model in the very first migration (D12): UUIDv7 id, full name, phone (optional, unique, +255…), email (optional, unique), password (optional — PIN-only staff have none), language. No username: allauth logs people in by email or phone.
 
 **Registering a device** ✚
-1. A new device opens the app and taps *Sajili kifaa hiki*. The server creates a pending device and shows an 8-character pairing code (valid 10 minutes).
-2. The owner or a manager (`device.manage`), logged in on their own phone, types the code, names the device and picks its home side.
-3. The device receives its **device key** as an HttpOnly, Secure cookie (stored hashed on the server), plus its device code for receipt numbers.
-4. **Blocking** a device from the owner's phone kills its key at once; its next sync fails and the app locks. Unsent records stay on it, so an unblock can still deliver them.
+1. A new device opens the app and taps *Sajili kifaa hiki*. The server makes a **pairing request**, which belongs to no shop yet, with an 8-character pairing code (valid 10 minutes, no look-alikes such as 0/O or 1/I). The device gets its **device key** at once, as an HttpOnly, Secure cookie; the key opens nothing until a manager says yes **(v1.13)**.
+2. The owner or a manager (`device.manage` on the home side they pick), logged in on their own phone, types the code, names the device and picks its home side. The device is made in their shop, with the next device code from the shop's counter (`ShopSequence`), and its key works from then on **(v1.13)**.
+3. The device learns its shop and its device code for receipt numbers.
+4. **Blocking** a device from the owner's phone stops its key at once; its next sync fails and the app locks. Unsent records stay on it, and unblocking brings back the same key, so they can still be delivered. Both need a reason, written in the audit trail **(v1.13)**.
 5. A device that loses its storage registers again and always gets a **new** device code, so receipt numbers stay unique (D7).
+
+**The device key is stored as its SHA-256 hash** **(v1.13)**. It is 32 random bytes: nobody can guess it, so a fast hash is safe, and each request finds its device in one index lookup. A slow hash such as Argon2 is for what people choose and others can guess, PINs and passwords; on every request it would cost about 0.1 s and 100 MiB.
 
 **Staff PIN sessions**
 - **Online:** device key + staff PIN → a Django session for that person on that device. Idle lock after 15 minutes *(default, a setting)*. Quick switch = another PIN.
