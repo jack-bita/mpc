@@ -77,6 +77,9 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
     # for a row of no side; or SEES_THE_SIDE, for an action that only shows rows. Each route writes its own, naming
     # every action it answers. Empty here, so a route that names nothing does nothing (PPL-5).
     action_permissions: ClassVar[Mapping[str, Permission | Sight]] = {}
+    # The methods an office route may answer: DRF's list, less OPTIONS and TRACE, which initial() refuses. Listed so
+    # that a 405's `Allow` header names only methods that can work.
+    http_method_names = ["get", "post", "put", "patch", "delete", "head"]
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         # DRF's whole visit runs inside this `with`: login, checks, the action, and the error answer if
@@ -111,6 +114,13 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         # DRF's checks before any action runs: the login (above), its permission classes and its throttles. Then
         # ours, before the action reads or writes anything (PPL-5).
         super().initial(request, *args, **kwargs)
+        if self.action is None or self.action == "metadata":
+            # A method the route doesn't answer, such as PUT on a list: DRF leaves the action empty and would answer
+            # 405 after these checks, so it is answered 405 here, before the naming check below takes the empty action
+            # for a forgotten one. OPTIONS too (DRF's `metadata`): it would describe the route, the forms of the
+            # actions included, to anyone logged in, even a person who may do none of them; the API's own description
+            # is the schema (apps/core/api/schema.py).
+            raise exceptions.MethodNotAllowed(request.method or "")
         # Every action is named, a route's own @actions included, before it reads or writes anything.
         self.permission_needed()
         lookup = self.lookup_url_kwarg or self.lookup_field
@@ -130,10 +140,6 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         """What this visit's action needs, as the route names it in `action_permissions`. A route that doesn't name
         the action is a bug: refused here with a server error, which is logged, never a 403 that would hide the bug
         behind a plain "no", nor a pass that would open the action to everyone."""
-        if self.action == "metadata":
-            # OPTIONS (DRF's `metadata`) describes the route: it shows no row and changes none. Every route answers
-            # it by itself, so none names it.
-            return SEES_THE_SIDE
         needed = self.action_permissions.get(self.action or "")
         if needed is None:
             raise ImproperlyConfigured(

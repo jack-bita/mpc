@@ -372,12 +372,32 @@ def test_show_action_with_a_key_stopped_for_now(
 
 
 @pytest.mark.django_db
-def test_options_needs_no_named_permission(sides: dict[str, Side], staff_a: StaffMember, give_role: GiveRole) -> None:
-    # OPTIONS describes a route (DRF's `metadata`): it shows no row and changes none. Every route answers it by
-    # itself, so no route lists it.
+@pytest.mark.parametrize(
+    ("method", "address"),
+    [
+        pytest.param("put", "list", id="PUT on the list"),
+        pytest.param("delete", "list", id="DELETE on the list"),
+        pytest.param("put", "row", id="PUT on a side"),
+        pytest.param("delete", "row", id="DELETE on a side"),
+        # OPTIONS would describe the route, its forms included, even to a person who may do none of its actions.
+        pytest.param("options", "list", id="OPTIONS"),
+    ],
+)
+def test_methods_a_route_does_not_answer_get_405(
+    method: str, address: str, sides: dict[str, Side], staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # The side routes answer GET, POST and PATCH. Any other method is "not allowed", as DRF answers it, never a server
+    # error: a method no route answers is a visitor's mistake, not a bug, and must not fill the error logs. The owner
+    # holds every key, so only the method is refused, and the side stays as it was.
     give_role(staff_a, RoleTemplate.OWNER, None)
+    url = SIDES if address == "list" else f"{SIDES}{sides['D'].pk}/"
 
-    assert client_for(staff_a).options(SIDES).status_code == 200
+    response = getattr(client_for(staff_a), method)(url)
+
+    assert response.status_code == 405
+    assert response.json()["code"] == "method_not_allowed"
+    assert "OPTIONS" not in response["Allow"]
+    assert side_name(sides["D"].shop, sides["D"]) == "Dawa"
 
 
 # --- Read once per visit
