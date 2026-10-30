@@ -29,7 +29,7 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django.db import connection
+from django.db import connection, models
 from django.test.utils import CaptureQueriesContext
 from django.urls import include, path
 from django.utils import timezone
@@ -88,9 +88,22 @@ class RetextNoteViewSet(ShopViewSet[Note]):
         return Response({"done": True})
 
 
+class KNoteViewSet(mixins.ListModelMixin, ShopViewSet[Note]):
+    # Adds to its rows, as a route that loads linked rows will: here, only the notes whose text starts with K. Through
+    # base_rows(), so the person's sides are still kept to.
+    model = Note
+    side_field = None
+    serializer_class = NoteSerializer
+    action_permissions = {"list": base.SEES_THE_SIDE}
+
+    def base_rows(self) -> models.QuerySet[Note]:
+        return super().base_rows().filter(text__startswith="K")
+
+
 router = SimpleRouter()
 router.register("plain-note-makers", PlainNoteMakerViewSet, basename="plain-note-maker")
 router.register("retext-notes", RetextNoteViewSet, basename="retext-note")
+router.register("k-notes", KNoteViewSet, basename="k-note")
 urlpatterns = [path("api/v1/test/", include(router.urls))]
 
 PLAIN_MAKERS = "/api/v1/test/plain-note-makers/"
@@ -319,6 +332,25 @@ def test_a_change_to_one_row_is_checked_before_it_runs(
     assert client_for(staff_a2).post(retext, {"text": "Imebadilishwa"}).status_code == 200
 
 
+@pytest.mark.django_db
+@pytest.mark.urls(__name__)
+def test_a_route_adds_to_its_rows_without_losing_the_side_check(
+    shop_a: Shop, staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # The route keeps only the notes starting with K, in base_rows(): the owner sees that one and not the other, so
+    # the route's own rows are used. Suspended, they see none: the side check still runs after them.
+    with shop_context(shop_a):
+        Note(shop=shop_a, text="Kumbukumbu").save()
+        Note(shop=shop_a, text="Zamani").save()
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    client = client_for(staff_a)
+    assert [row["text"] for row in client.get("/api/v1/test/k-notes/").json()["results"]] == ["Kumbukumbu"]
+
+    stop("suspended", staff_a)
+
+    assert client.get("/api/v1/test/k-notes/").json()["results"] == []
+
+
 # --- Every action is named
 
 
@@ -356,6 +388,38 @@ def test_every_route_names_a_permission_for_each_action() -> None:
     # Not passed by looking at nothing: the side routes are there.
     assert SideViewSet in {view for view, _ in routes}
     assert permission_problems(routes) == []
+
+
+def rows_problems(views: Iterable[type[ShopViewSet[Any]]]) -> list[str]:
+    # A route that writes over get_queryset() can lose the person's sides, which are kept to there: such a route
+    # writes over base_rows() instead (apps/core/api/base.py).
+    return sorted(
+        {
+            f"{view.__name__} writes over get_queryset()"
+            for view in views
+            if view.get_queryset is not ShopViewSet.get_queryset
+        }
+    )
+
+
+def test_no_route_writes_over_get_queryset() -> None:
+    assert rows_problems(view for view, _ in office_routes()) == []
+
+
+def test_rows_check_finds_a_route_that_writes_over_get_queryset() -> None:
+    class Narrowed(ShopViewSet[Side]):
+        model = Side
+
+        def base_rows(self) -> models.QuerySet[Side]:
+            return super().base_rows().filter(code="D")
+
+    class Overridden(ShopViewSet[Side]):
+        model = Side
+
+        def get_queryset(self) -> models.QuerySet[Side]:
+            return Side.objects.all()
+
+    assert rows_problems([Narrowed, Overridden]) == ["Overridden writes over get_queryset()"]
 
 
 def test_permission_check_finds_what_breaks_its_rules() -> None:

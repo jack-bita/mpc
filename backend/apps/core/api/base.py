@@ -172,16 +172,23 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         # a Person (apps/core/permissions.py).
         return cast(Person, self.actor).held_permissions()
 
+    def base_rows(self) -> models.QuerySet[M]:
+        """The route's rows before they are kept to the person's sides. A route that needs more from its rows, such
+        as their linked rows loaded with them (`select_related`), writes over this, building on super(), and never
+        over get_queryset(), which keeps every read to the person's sides: a test refuses a route that does
+        (backend/tests/test_route_permissions.py)."""
+        # Built on each visit, inside the visit's shop. The default manager is the guarded `objects`, which
+        # ShopScoped makes the default of every shop's table (CORE-2); CORE-7's sweep checks they all keep it.
+        # cast: mypy reads the manager of `type[M]` as ShopScoped's, though the rows are this route's table's.
+        return cast("models.QuerySet[M]", self.model._default_manager.all())
+
     def get_queryset(self) -> models.QuerySet[M]:
         if getattr(self, "swagger_fake_view", False):
             # drf-spectacular is describing the route (apps/core/api/schema.py), with no visit, so with no
             # shop. It only needs the table, to tell the type of the id in the address. An empty query, built
             # without the guard, can return no row.
             return models.QuerySet(self.model).none()
-        # Built on each visit, inside the visit's shop. The default manager is the guarded `objects`, which
-        # ShopScoped makes the default of every shop's table (CORE-2); CORE-7's sweep checks they all keep it.
-        # cast: mypy reads the manager of `type[M]` as ShopScoped's, though the rows are this route's table's.
-        rows = cast("models.QuerySet[M]", self.model._default_manager.all())
+        rows = self.base_rows()
         # Then kept to the sides the person sees, here, where every read of the route starts: a list, the one row a
         # read or an edit looks up (get_object), a create's look for a repeat, and any @action of the route's own,
         # which may read rows without DRF's filter_queryset(). Rows of a side the person may not see are left out
