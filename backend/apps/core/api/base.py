@@ -114,11 +114,16 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         # Every action is named, a route's own @actions included, before it reads or writes anything.
         self.permission_needed()
         lookup = self.lookup_url_kwarg or self.lookup_field
-        if request.method not in SAFE_METHODS and self.action != "create" and lookup not in self.kwargs:
-            # A change sent to a whole list, not to one row, such as clearing it: no row's side to ask about, so it
-            # is asked on the whole shop, the most it could touch. Creates ask with the new row's side
-            # (CreateOnceMixin); a change to one row asks with that row's side, as get_object() hands it out, so an
-            # action on one row finds it with get_object().
+        # CreateOnceMixin's own create asks with the new row's side, once it has read what was sent. Only that one:
+        # DRF's own CreateModelMixin, or a create a route writes over it, never asks, so it is asked here with the
+        # rest. Compared with the method itself, not by the mixin's name: a route can list DRF's mixin before ours,
+        # and then DRF's create is the one that runs.
+        asks_for_itself = self.action == "create" and getattr(type(self), "create", None) is CreateOnceMixin.create
+        if request.method not in SAFE_METHODS and lookup not in self.kwargs and not asks_for_itself:
+            # A change sent to a whole list, not to one row, such as clearing it, or a create that doesn't ask: no
+            # row's side to ask about, so it is asked on the whole shop, the most it could touch. A change to one row
+            # asks with that row's side, as get_object() hands it out, so an action on one row finds it with
+            # get_object().
             self.check_side_permission(request, None)
 
     def permission_needed(self) -> Permission | Sight:

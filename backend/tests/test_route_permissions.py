@@ -31,8 +31,11 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.urls import include, path
 from django.utils import timezone
 from pytest_django import Settings
+from rest_framework import mixins, serializers
+from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIClient
 
 from apps.core.api import base
@@ -44,12 +47,35 @@ from apps.people.services import grant_permission, mark_left, suspend
 from apps.shops.api.views import SideViewSet
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
+from tests.probe.api import NoteSerializer
 from tests.probe.models import Note
 from tests.test_tenancy_sweep import addresses
 
 SIDES = "/api/v1/shops/sides/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
+
+
+# --- Test-only routes, for the cases no real route has yet. A test that calls them runs with this module's address
+# list (`@pytest.mark.urls(__name__)`); config/urls.py never mounts them, so the route walk below never sees them.
+
+
+class PlainNoteMakerViewSet(mixins.CreateModelMixin, ShopViewSet[Note]):
+    # Makes notes through DRF's own create, which asks for no key, unlike CreateOnceMixin's.
+    model = Note
+    side_field = None
+    serializer_class = NoteSerializer
+    action_permissions = {"create": Permission.SETTINGS_MANAGE}
+
+    def perform_create(self, serializer: serializers.BaseSerializer[Note]) -> None:
+        serializer.save(shop_id=self.actor.shop_id)
+
+
+router = SimpleRouter()
+router.register("plain-note-makers", PlainNoteMakerViewSet, basename="plain-note-maker")
+urlpatterns = [path("api/v1/test/", include(router.urls))]
+
+PLAIN_MAKERS = "/api/v1/test/plain-note-makers/"
 
 
 def client_for(staff: StaffMember) -> APIClient:
@@ -231,6 +257,25 @@ def test_change_to_a_whole_list_needs_its_key_on_every_side(
     assert refused.status_code == 403
     assert refused.json()["code"] == "permission_denied"
     assert client_for(staff_a2).delete(clear).status_code == 204
+
+
+@pytest.mark.django_db
+@pytest.mark.urls(__name__)
+def test_a_create_that_does_not_ask_needs_its_key_on_every_side(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # A route built on DRF's own create, not on CreateOnceMixin's, which asks with the new row's side: nothing in it
+    # asks for a key, so the base asks on the whole shop before it runs. Juma, a Seller on Dawa, doesn't hold
+    # `settings.manage`: refused, and no note is made. Asha, the owner, may.
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    give_role(staff_a2, RoleTemplate.OWNER, None)
+
+    refused = client_for(staff_a).post(PLAIN_MAKERS, {"text": "Haikupaswa"})
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert not Note.objects.exists()
+    assert client_for(staff_a2).post(PLAIN_MAKERS, {"text": "Kumbukumbu"}).status_code == 201
 
 
 # --- Every action is named
