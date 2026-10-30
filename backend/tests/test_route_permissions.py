@@ -355,11 +355,12 @@ def test_a_route_adds_to_its_rows_without_losing_the_side_check(
 
 
 def permission_problems(routes: Iterable[tuple[type[ShopViewSet[Any]], Mapping[str, str]]]) -> list[str]:
-    # What breaks the two rules every route's permission list keeps, for each route and the actions its address
+    # What breaks the three rules every route's permission list keeps, for each route and the actions its address
     # answers with ({"get": "list", "post": "create"}, as DRF's router notes them):
     # - every action is named, so none is open by forgetting;
     # - a show action (GET) needs only to see its side, for now: one behind a key of its own waits for the card that
-    #   first needs one (cost.view, debt.view, report.view), which decides how a list keeps to that key's sides.
+    #   first needs one (cost.view, debt.view, report.view), which decides how a list keeps to that key's sides;
+    # - a change (any other method) always names a key of its own: seeing a side is not leave to change it.
     problems = []
     for view, actions in routes:
         named = getattr(view, "action_permissions", {})
@@ -368,6 +369,8 @@ def permission_problems(routes: Iterable[tuple[type[ShopViewSet[Any]], Mapping[s
                 problems.append(f"{view.__name__}: {name} names no permission")
             elif method in ("get", "head") and named[name] is not base.SEES_THE_SIDE:
                 problems.append(f"{view.__name__}: {name} shows rows behind {named[name]}, not built yet")
+            elif method not in ("get", "head") and named[name] is base.SEES_THE_SIDE:
+                problems.append(f"{view.__name__}: {name} changes rows with no key of its own")
     return problems
 
 
@@ -435,15 +438,21 @@ def test_permission_check_finds_what_breaks_its_rules() -> None:
     class Forgets(ShopViewSet[Side]):
         model = Side
 
+    class ChangesBySight(ShopViewSet[Side]):
+        model = Side
+        action_permissions = {"partial_update": base.SEES_THE_SIDE}
+
     assert permission_problems(
         [
             (Named, {"get": "list", "post": "create"}),
             (ShowsDebts, {"get": "list"}),
             (Forgets, {"post": "void"}),
+            (ChangesBySight, {"patch": "partial_update"}),
         ]
     ) == [
         "ShowsDebts: list shows rows behind debt.view, not built yet",
         "Forgets: void names no permission",
+        "ChangesBySight: partial_update changes rows with no key of its own",
     ]
 
 
@@ -502,6 +511,22 @@ def test_methods_a_route_does_not_answer_get_405(
     assert response.status_code == 405
     assert response.json()["code"] == "method_not_allowed"
     assert "OPTIONS" not in response["Allow"]
+    assert side_name(sides["D"].shop, sides["D"]) == "Dawa"
+
+
+@pytest.mark.django_db
+def test_change_with_no_key_of_its_own_refused(
+    monkeypatch: pytest.MonkeyPatch, sides: dict[str, Side], staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # Renaming a side named as needing only to see it: a Worker who sees Dawa could rename it. A route written that
+    # way is a bug, refused before anything changes, even for the owner.
+    monkeypatch.setattr(
+        SideViewSet, "action_permissions", {**SideViewSet.action_permissions, "partial_update": base.SEES_THE_SIDE}
+    )
+    give_role(staff_a, RoleTemplate.OWNER, None)
+
+    with pytest.raises(ImproperlyConfigured, match="partial_update changes rows"):
+        client_for(staff_a).patch(f"{SIDES}{sides['D'].pk}/", {"name": "Dawa za Kuku", "version": 1})
     assert side_name(sides["D"].shop, sides["D"]) == "Dawa"
 
 

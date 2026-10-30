@@ -160,6 +160,13 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
                 f"{type(self).__name__}.{self.action} shows rows behind {needed}: "
                 "a show action with a key of its own waits for the card that first needs one (PPL-5)."
             )
+        if needed is SEES_THE_SIDE and self.request.method not in SAFE_METHODS:
+            # The mirror rule: a change (a create, an edit, a void) always needs a key of its own. Seeing a side is not
+            # leave to change it: named so, the change would be open to anyone who works there, a Worker included.
+            raise ImproperlyConfigured(
+                f"{type(self).__name__}.{self.action} changes rows and names no key for it: "
+                "a change needs a permission code of its own (PPL-5)."
+            )
         return needed
 
     @cached_property
