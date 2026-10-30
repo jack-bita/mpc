@@ -11,6 +11,10 @@ again or to delete one, and PostgreSQL's trigger backs it up (apps/core/operatio
 are abstract: they make no table of their own, they only pass their columns on to the models that
 inherit them. PPL-1's User builds on the first two, every shop's table on ShopScoped, every office record
 people edit on Editable, and every ledger on AppendOnly.
+
+One real table lives here too, because every app needs it and `core` is the layer all may import:
+ShopSequence, a shop's named counters, such as the one that gives each new device its code (AUTH-1). Only
+next_number moves them (apps/core/sequences.py).
 """
 
 import uuid
@@ -196,3 +200,43 @@ class AppendOnly(ShopScoped):
         raise AppendOnlyError(
             f"{type(self).__name__} rows are never deleted: fix a mistake with a new row (T3, ADR-0021)."
         )
+
+
+class SequenceName(models.TextChoices):
+    # The counters a shop keeps, one row each (03 §5.1). A fixed list, checked by the database too, because a typo
+    # must never start a second counter: "devcie" would count again from 1 and hand out device codes already in use,
+    # so two devices would print the same receipt numbers (D7). A new counter is a new line here and a migration
+    # that rebuilds the rule below, as a new permission code is (apps/core/permissions.py). The change log's
+    # counter comes with SYNC-1.
+    DEVICE = "device", "Device codes"
+
+
+class ShopSequence(ShopScoped):
+    # One named counter of one shop: MPC's "device" counter gave 1 to the first laptop and 2 to the phone after it.
+    # ShopScoped (CORE-2) gives `id`, `shop`, `created_at`, `created_by` (always empty: only the system makes a
+    # counter) and the guard on reads. Moved only by next_number (apps/core/sequences.py), which locks the row
+    # until its transaction ends, so two numbers are never given at once. No edit history (Jack, AUTH-1;
+    # NO_EDIT_HISTORY in backend/tests/sweep_lists.py): only the system moves a counter, and each number it gives
+    # is kept on the row that took it, a device's code.
+
+    name = models.CharField(max_length=20, choices=SequenceName)
+    # The last number given; 0 before the first. A big integer: from SYNC-1, a counter numbers every change a shop
+    # makes, every sale included, and must never run out.
+    value = models.PositiveBigIntegerField(default=0)
+
+    class Meta(ShopScoped.Meta):
+        # Builds on ShopScoped.Meta, so `objects`, with the guard, stays the default manager (CORE-2). No error
+        # codes on these rules: no form or API ever writes a counter, so a broken rule here is a bug in our code,
+        # a server error and a log line, never a message on a screen (ADR-0032).
+        constraints = [
+            # One counter of each name per shop: two "device" rows would each count from 1, and give the same code
+            # twice. It also lets next_number make the row on first use safely (INSERT ... ON CONFLICT DO NOTHING).
+            # Leads with `shop`, as every index does.
+            models.UniqueConstraint(fields=["shop", "name"], name="core_shopsequence_one_per_name"),
+            models.CheckConstraint(
+                condition=models.Q(name__in=SequenceName.values), name="core_shopsequence_name_known"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name}: {self.value}"
