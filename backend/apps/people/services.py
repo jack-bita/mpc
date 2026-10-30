@@ -4,7 +4,8 @@ A staff member's working life at one shop (02 §5): they are added, suspended, b
 as left, and given a PIN (set_pin; apps/people/pins.py hashes it). And what they may do there: a shop gets
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
-grant_permission), by someone who may give it.
+grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
+(start_pairing), and a manager with device.manage says yes (confirm_pairing).
 Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
@@ -18,21 +19,39 @@ Callers open shop_context(shop) first: full_clean and the unique checks read thr
 import uuid
 from collections.abc import Collection, Sequence
 from contextlib import nullcontext
+from dataclasses import dataclass
 from datetime import date
 from zoneinfo import ZoneInfo
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.control.models import AuditAction
 from apps.control.services import audit
 from apps.core.acting import acting_as
-from apps.core.models import ShopScoped
+from apps.core.models import SequenceName, ShopScoped
 from apps.core.permissions import ROLE_TEMPLATES, Permission
+from apps.core.sequences import next_number
 from apps.core.tenancy import ALL_SHOPS, current_shop, shop_context
-from apps.people.models import PermissionGrant, Role, RoleAssignment, StaffMember, StaffStatus, User
-from apps.people.permissions import effective_permissions
+from apps.people.device_keys import (
+    PAIRING_CODE_LIFETIME,
+    clean_typed_code,
+    hash_device_key,
+    make_device_key,
+    make_pairing_code,
+)
+from apps.people.models import (
+    Device,
+    PairingRequest,
+    PermissionGrant,
+    Role,
+    RoleAssignment,
+    StaffMember,
+    StaffStatus,
+    User,
+)
+from apps.people.permissions import effective_permissions, require
 from apps.people.pins import check_pin_strength, hash_pin
 from apps.shops.models import Shop, Side
 from apps.shops.services import NewSide, create_shop
@@ -307,3 +326,90 @@ def grant_permission(
         granted.full_clean()
         granted.save()
     return granted
+
+
+@dataclass(frozen=True)
+class NewPairing:
+    # What a device that asks to join gets back (start_pairing): its waiting request, whose `code` it shows on screen,
+    # and its key. The key is handed over once, here, and kept nowhere on the server but as its hash: AUTH-2 puts it in
+    # the device's cookie.
+    request: PairingRequest
+    key: str
+
+
+# How many codes start_pairing draws before it gives up. A clash with a code already given is about 1 in a million
+# even after a million asks, so a fifth clash in a row would mean a bug, not bad luck.
+_CODE_DRAWS = 5
+
+
+def start_pairing() -> NewPairing:
+    """A new device asks to join a shop (03 §5.9, step 1). It gets a code to show and its key, which opens nothing
+    until a manager confirms the code (confirm_pairing). Needs no shop open: the device belongs to no shop yet, and
+    the request it waits in has none (02 v1.11)."""
+    # The key is made here, by the device's own request, not when the manager confirms: confirming happens on the
+    # manager's phone, which must never hold the device's key, and the server never keeps it in plain text, not even
+    # until the device comes to collect it (Jack, AUTH-1).
+    key = make_device_key()
+    for _ in range(_CODE_DRAWS):
+        request = PairingRequest(
+            code=make_pairing_code(),
+            expires_at=timezone.now() + PAIRING_CODE_LIFETIME,
+            key_hash=hash_device_key(key),
+        )
+        try:
+            # A savepoint of its own: a clash undoes only this insert, even inside a caller's transaction.
+            with transaction.atomic():
+                request.save()
+        except IntegrityError:
+            # Only a code already given (people_pairingrequest_code_once) is drawn again. Any other broken rule is a
+            # bug in this code, and is raised as it is.
+            if PairingRequest.objects.filter(code=request.code).exists():
+                continue
+            raise
+        return NewPairing(request=request, key=key)
+    raise RuntimeError(f"No free pairing code after {_CODE_DRAWS} draws.")
+
+
+def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -> Device:
+    """A manager says yes to a waiting device (03 §5.9, step 2): they type the code it shows, name it and pick its home
+    side. The device is made in their own shop, active, with the shop's next device code and the key's hash, so its
+    key works from now on. `by` is always a person, who needs device.manage on `home_side`. Refusals: the code
+    unknown, used or expired (pairing.code_unknown, .code_used, .code_expired); a name the shop already gives another
+    device (device.name_taken)."""
+    _check_shop(by.shop_id, by)
+    # T1: a device of this shop lives on a side of this shop.
+    _check_same_shop(by, home_side)
+    # The permission first, before the code is even looked at: someone without device.manage learns nothing about
+    # which codes are waiting (PermissionDenied, 403).
+    require(by, Permission.DEVICE_MANAGE, home_side)
+    with transaction.atomic():
+        try:
+            # Read and locked until this transaction ends, so two managers typing the same code at once take turns,
+            # and the second finds it used.
+            request = PairingRequest.objects.select_for_update().get(code=clean_typed_code(code))
+        except PairingRequest.DoesNotExist:
+            raise ValidationError("No device is waiting with this code.", code="pairing.code_unknown") from None
+        # Used is checked before expired: a code used and then gone stale was used, which is what the manager needs.
+        if request.device_id is not None:
+            raise ValidationError("This code was already used.", code="pairing.code_used")
+        now = timezone.now()
+        if request.expires_at <= now:
+            raise ValidationError("This code has expired: ask the device for a new one.", code="pairing.code_expired")
+        device = Device(
+            shop_id=by.shop_id,
+            name=name,
+            home_side=home_side,
+            # D7: the shop's next device code. If anything below refuses, the transaction rolls back, and the number
+            # with it: nothing kept it, so the next device gets it (apps/core/sequences.py).
+            code=next_number(by.shop_id, SequenceName.DEVICE),
+            key_hash=request.key_hash,
+            created_by=by,
+        )
+        # Every field, clean() and the rules in Meta, before anything is written: a name the shop already uses comes
+        # back as device.name_taken, and the code stays waiting for a better name.
+        device.full_clean()
+        device.save()
+        request.device = device
+        request.confirmed_at = now
+        request.save(update_fields=["device", "confirmed_at"])
+    return device

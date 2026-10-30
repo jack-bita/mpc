@@ -18,6 +18,8 @@ from datetime import timedelta
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import IntegrityError
+from django.db.models import F
 from django.utils import timezone
 
 from apps.core.permissions import RoleTemplate
@@ -71,6 +73,14 @@ def test_pairing_code_clash_draws_again(monkeypatch: pytest.MonkeyPatch) -> None
     draws = iter([first, "ABCDEFGH"])
     monkeypatch.setattr(services, "make_pairing_code", lambda: next(draws))
     assert start_pairing().request.code == "ABCDEFGH"
+    # Five clashes in a row would mean a bug, not bad luck: it stops loudly instead of drawing forever.
+    monkeypatch.setattr(services, "make_pairing_code", lambda: first)
+    with pytest.raises(RuntimeError, match="No free pairing code"):
+        start_pairing()
+    # Any other broken rule is a bug too, raised as it is, never drawn again: here a code of the wrong shape.
+    monkeypatch.setattr(services, "make_pairing_code", lambda: "abcdefgh")
+    with pytest.raises(IntegrityError, match="people_pairingrequest_code_shape"):
+        start_pairing()
 
 
 def test_device_key_stored_hashed(manager_a: StaffMember, side_a: Side) -> None:
@@ -119,8 +129,12 @@ def test_pairing_code_expires(manager_a: StaffMember, side_a: Side) -> None:
     asked = start_pairing()
     after = timezone.now()
     assert before + timedelta(minutes=10) <= asked.request.expires_at <= after + timedelta(minutes=10)
-    # Ten minutes pass: the request's expiry moved into the past, with no clock to fake.
-    PairingRequest.objects.filter(pk=asked.request.pk).update(expires_at=timezone.now() - timedelta(seconds=1))
+    # Ten minutes and a second pass: the request is made that much older, both its times at once, with no clock to fake.
+    # (Its expiry alone can't move before its ask: the database refuses it, people_pairingrequest_expires_after_asked.)
+    older = timedelta(minutes=10, seconds=1)
+    PairingRequest.objects.filter(pk=asked.request.pk).update(
+        created_at=F("created_at") - older, expires_at=F("expires_at") - older
+    )
     with pytest.raises(ValidationError) as refused:
         confirm(asked.request.code, manager_a, side_a)
     assert refused.value.code == "pairing.code_expired"
