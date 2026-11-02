@@ -26,9 +26,9 @@
 
 **Changes in v1.10** (29 Oct 2026, PPL-3): a decision by Jack, made while planning PPL-3. Goods that arrive are weighed on the shop's scale before they go in, a few sacks at a time; the device adds up the sacks and the kg at once, offline too, and the stock goes in at the scale's kg (§7, §17). Weighing is its own permission, `stock.weigh`, which any role may have; completing the delivery with its buying prices stays `stock.receive`, because buying prices never go to devices (§5). Also from PPL-3: a role's fields, who may give a role or a permission (Jack), and what a person holds on a side and on the whole shop (§5); a new code reaches the shops that already exist through a data migration (§5, 03 §5.8). Marked **(v1.10)**.
 
-**Changes in v1.12** (30 Oct 2026, AUTH-2): a choice by Jack, made while planning AUTH-2. A pairing request holds the hash of the device's key only while it waits: confirming moves it to the `Device`, so the hash lives in one place at a time, and no path leads from a key through a request to a device of some shop past the guard (§5). A device's `last_seen_at` moves at most every 5 minutes, and never fills the edit history (§5). Marked **(v1.12)**.
-
 **Changes in v1.11** (30 Oct 2026, AUTH-1): decisions by Jack, made while planning AUTH-1. A new device waits for a manager's yes in a `PairingRequest`, which belongs to no shop: until a manager confirms it, the device is nobody's, and anyone may ask. The `Device` is made in the confirming manager's shop, so a device is never `pending`: it is `active` ⇄ `blocked` (§5, §14). `PairingRequest` joins T1's exceptions (§16). Who confirmed a device is the row's `created_by`, so `registered_by` goes, as `set_by` did in v1.7. Blocking and unblocking need a reason and are written in the audit trail; unblocking keeps the device's key, so its unsent records can still arrive (§5). Marked **(v1.11)**.
+
+**Changes in v1.12** (30 Oct 2026, AUTH-2): a choice by Jack, made while planning AUTH-2. A pairing request holds the hash of the device's key only while it waits: confirming moves it to the `Device`, so the hash lives in one place at a time, and no path leads from a key through a request to a device of some shop past the guard (§5). A device's `last_seen_at` moves at most every 5 minutes, and never fills the edit history (§5). Marked **(v1.12)**.
 
 ---
 
