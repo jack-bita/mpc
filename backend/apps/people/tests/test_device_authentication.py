@@ -20,9 +20,10 @@ import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.views.debug import ExceptionReporter, SafeExceptionReporterFilter
+from pytest_django import Settings
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.request import Request
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import NoShopSelected, current_shop, shop_context
@@ -140,6 +141,62 @@ def test_login_keeps_the_key_out_of_error_reports(
     assert frames[0]["function"] == "test_login_keeps_the_key_out_of_error_reports"
     assert {"authenticate", "broken"} <= {function for function, _, _ in shown}
     assert all(key not in value and device.key_hash not in value for _, _, value in shown)
+
+
+PROBE_SHOP = "/api/devices/v1/probe/shop/"
+
+
+def acting_settings() -> tuple[str, str]:
+    # What PostgreSQL is told about who acts, on this test's connection: the shop and the staff member, "" for none.
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT current_setting('mpc.shop_id', true), current_setting('mpc.staff_id', true)")
+        row = cursor.fetchone()
+    return (row[0] or "", row[1] or "") if row else ("", "")
+
+
+def test_device_visit_opens_its_own_shop(
+    settings: Settings, manager_a: StaffMember, side_a: Side, staff_b: StaffMember, side_b: Side, give_role: GiveRole
+) -> None:
+    # Done when #1: a device's requests carry its shop. The probe's device route (tests/probe/api.py) reads its sides
+    # through the guard, which refuses while no shop is open, and answers what PostgreSQL was told: each device gets
+    # its own shop, in Python and in the database, and no person acts. `me` alone can't show this: it reads its shop
+    # and side through their links, which skip the guard.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    give_role(staff_b, RoleTemplate.MANAGER, None)
+    _, key_a = pair(manager_a, side_a)
+    asked = start_pairing()
+    with shop_context(staff_b.shop_id):
+        confirm_pairing(asked.request.code, name="Simu ya Pembejeo", home_side=side_b, by=staff_b)
+
+    for key, shop_id, sides in ((key_a, manager_a.shop_id, ["Dawa"]), (asked.key, staff_b.shop_id, ["Pembejeo"])):
+        client = APIClient()
+        client.cookies[DEVICE_KEY_COOKIE] = key
+        answer = client.get(PROBE_SHOP)
+        assert answer.status_code == 200
+        assert answer.json() == {
+            "shop": str(shop_id),
+            "sides": sides,
+            "acting_shop": str(shop_id),
+            "acting_staff": "",
+        }
+
+
+def test_device_visit_closes_its_shop(settings: Settings, manager_a: StaffMember, side_a: Side) -> None:
+    # However a device's visit ends, answered or refused, it leaves no shop open on this worker, and PostgreSQL is told
+    # nobody acts again, so the next visit, on the same connection, inherits nothing (as CORE-6's office routes).
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    device, key = pair(manager_a, side_a)
+    client = APIClient()
+    client.cookies[DEVICE_KEY_COOKIE] = key
+
+    assert client.get(PROBE_SHOP).status_code == 200
+    with shop_context(manager_a.shop_id):
+        block(device, by=manager_a, reason="Imeibiwa kaunta")
+    assert client.get(PROBE_SHOP).status_code == 401
+
+    with pytest.raises(NoShopSelected):
+        current_shop()
+    assert acting_settings() == ("", "")
 
 
 def test_device_key_cookie_hidden_on_error_pages() -> None:

@@ -29,9 +29,9 @@ tests/probe/urls.py mounts them, but for the last three, which have address list
 (urls_delete.py, urls_crash.py). Only the sweep's tests use these lists.
 """
 
-from typing import Any, cast
+from typing import Any
 
-from django.db import models
+from django.db import connection, models
 from django.http import HttpRequest, HttpResponse, JsonResponse, StreamingHttpResponse
 from rest_framework import mixins, serializers
 from rest_framework.decorators import action
@@ -42,9 +42,9 @@ from rest_framework.response import Response
 from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, ShopViewSet, Sight
 from apps.core.api.ids import uuid7_only
 from apps.core.permissions import Permission
+from apps.core.tenancy import current_shop
 from apps.people.api.base import DeviceView
-from apps.people.models import Device
-from apps.shops.models import Shop
+from apps.shops.models import Shop, Side
 from tests.probe.models import Note
 
 # What each probe action needs (PPL-5): to see, for one that only shows notes; a key, for one that changes them. Every
@@ -247,10 +247,23 @@ def note_count(request: HttpRequest) -> JsonResponse:
 
 
 class DeviceShopView(DeviceView):
-    # A device route built the way every one is (apps/people/api/base.py): it shows the visit's own shop, the one its
-    # device belongs to, and takes a POST that hands nothing back.
+    # A device route built the way every one is (apps/people/api/base.py), which shows what its visit really has open:
+    # the shop open in Python, the sides read through the guard (which refuses while no shop is open), and who acts as
+    # PostgreSQL was told (apps/core/acting.py). So a DeviceView that stopped opening its device's shop fails the
+    # tests (test_device_visit_opens_its_own_shop), as a route reading through a link alone would not. It also takes a
+    # POST that hands nothing back.
     def get(self, request: Request) -> Response:
-        return Response({"shop": cast(Device, request.auth).shop.name})
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_setting('mpc.shop_id', true), current_setting('mpc.staff_id', true)")
+            acting_shop, acting_staff = cursor.fetchone() or (None, None)
+        return Response(
+            {
+                "shop": str(current_shop()),
+                "sides": sorted(Side.objects.values_list("name", flat=True)),
+                "acting_shop": acting_shop,
+                "acting_staff": acting_staff,
+            }
+        )
 
     def post(self, request: Request) -> Response:
         return Response({}, status=201)
