@@ -17,7 +17,7 @@
 
 # --- Stage 1: build the shop app into plain files, frontend/out/ (ADR-0016).
 # Node 24: the version package.json's "engines" and CI's frontend job use.
-FROM node:24.21.0-trixie-slim AS frontend
+FROM node:24.22.0-trixie-slim AS frontend
 # Next.js would otherwise send anonymous usage data from every build. The Serwist CLI (`serwist build`,
 # part of `pnpm build`) would otherwise ask the npm registry whether a newer version exists (SPIKE-1).
 ENV NEXT_TELEMETRY_DISABLED=1 \
@@ -45,7 +45,7 @@ RUN NEXT_PUBLIC_APP_VERSION=$APP_VERSION pnpm build
 # pyproject.toml: uv refuses to run as any other version, so a mismatch stops this build at once.
 FROM ghcr.io/astral-sh/uv:0.11.33 AS uv
 
-FROM python:3.14.7-slim-trixie AS venv
+FROM python:3.14.9-slim-trixie AS venv
 COPY --from=uv /uv /usr/local/bin/uv
 # UV_PYTHON_DOWNLOADS=0: use this image's Python, never download another; the venv points at it.
 # UV_COMPILE_BYTECODE=1: compile the packages to .pyc now, so the app starts faster and never needs to
@@ -61,7 +61,7 @@ RUN uv sync --locked --no-dev
 # --- Stage 3: the image we ship.
 # The same Python tag as stage 2: the venv's `python` is a link to this image's Python, so the two
 # FROM lines must always match. Dependabot bumps both in one PR.
-FROM python:3.14.7-slim-trixie
+FROM python:3.14.9-slim-trixie
 
 # PYTHONUNBUFFERED: logs come out at once, so `docker logs` shows them as they happen.
 # PYTHONDONTWRITEBYTECODE: don't try to write .pyc files at run time: the `app` user couldn't, and
