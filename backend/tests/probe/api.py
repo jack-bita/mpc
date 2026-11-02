@@ -23,7 +23,8 @@ Each route is built to pass the sweep, or to break one of its checks in one way:
 - DeletableNoteViewSet and LeakyDeletableNoteViewSet take a DELETE, guarded and not; LeakyNoteByTextViewSet
   crashes on a key both shops have.
 - DeviceShopView, LeakyDeviceView and BlindDeviceView are device routes (apps/people/api/base.py), for the sweep's
-  device check (AUTH-2): one built the usual way, one that shows every shop's name, one that shows nothing at all.
+  device check (AUTH-2): one built the usual way, one that shows every shop's name, one that shows nothing at all;
+  LeakyDeviceViewSet leaks the same way, built as a ViewSet.
 
 tests/probe/urls.py mounts them, but for the last three, which have address lists of their own
 (urls_delete.py, urls_crash.py). Only the sweep's tests use these lists.
@@ -38,6 +39,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.viewsets import ViewSetMixin
 
 from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, ShopViewSet, Sight
 from apps.core.api.ids import uuid7_only
@@ -273,6 +275,13 @@ class LeakyDeviceView(DeviceView):
     # The mistake the sweep's device check is there to catch: every shop's name, read from the Shop table, which has no
     # guard (it is the tenant itself), as a careless "which shops are there?" would.
     def get(self, request: Request) -> Response:
+        return Response({"shops": [shop.name for shop in Shop.objects.all()]})
+
+
+class LeakyDeviceViewSet(ViewSetMixin, DeviceView):
+    # The same leak, in a device route built as a ViewSet, as sync's may be (SYNC-2): its router maps GET to `list`, so
+    # the view has no `get` of its own, and a sweep that looked for one would send it nothing.
+    def list(self, request: Request) -> Response:
         return Response({"shops": [shop.name for shop in Shop.objects.all()]})
 
 

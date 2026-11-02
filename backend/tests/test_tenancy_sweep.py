@@ -804,7 +804,7 @@ def api_route_problems() -> list[str]:
         swept = isinstance(view, type) and (issubclass(view, ShopViewSet | DeviceView) or view in NOT_SHOP_ROUTES)
         if not swept:
             built_on = view.__name__ if isinstance(view, type) else "a plain Django view"
-            problems.append(f"{address.path}: {built_on}, not a ShopViewSet")
+            problems.append(f"{address.path}: {built_on}, not a ShopViewSet or a DeviceView")
     return problems
 
 
@@ -814,10 +814,18 @@ class DeviceRoute:
     name: str | None
     view: type[DeviceView]
     takes: frozenset[str]
+    # A ViewSet's route notes which action answers which method ({"get": "list"}), as shop_routes() reads them; a plain
+    # view has none.
+    actions: Mapping[str, str]
 
     @property
     def methods(self) -> frozenset[str]:
-        # The HTTP methods it answers, in small letters: a plain DRF view answers each one it has a function for.
+        # The HTTP methods it answers, in small letters. A ViewSet's route answers the methods its router gave it,
+        # whatever the view's functions are named (list, create); a plain DRF view answers each one it has a function
+        # for. Reading only the second, a ViewSet's route would answer nothing, so the check would send it nothing and
+        # pass it (found in AUTH-2's review).
+        if self.actions:
+            return frozenset(self.actions)
         return frozenset(method for method in ("get", "post", "put", "patch", "delete") if hasattr(self.view, method))
 
 
@@ -827,7 +835,8 @@ def device_routes() -> list[DeviceRoute]:
     for address in addresses():
         view = getattr(address.view, "cls", None)
         if isinstance(view, type) and issubclass(view, DeviceView):
-            routes.append(DeviceRoute(address.name, view, address.takes))
+            actions = getattr(address.view, "actions", None) or {}
+            routes.append(DeviceRoute(address.name, view, address.takes, actions))
     return routes
 
 
@@ -859,7 +868,10 @@ def device_route_problems(device_a: APIClient, device_b: APIClient, shop_a: Shop
         unsent = ", ".join(method.upper() for method in sorted(route.methods - {"get", "post"}))
         if unsent:
             found.append(f"answers {unsent}, which the sweep doesn't send here: teach it, in a reviewed change")
-        if route.name is None or route.takes:
+        if not route.methods & {"get", "post"}:
+            # Nothing the sweep can send: it would pass the route without a single request.
+            found.append("answers nothing the sweep can send: teach it, in a reviewed change")
+        elif route.name is None or route.takes:
             found.append("no address the sweep can build: it needs a name, and no part to fill in")
         elif names[route.name] > 1:
             found.append(
@@ -1622,8 +1634,8 @@ def test_api_route_check_finds_a_route_off_the_base(settings: Settings) -> None:
     settings.ROOT_URLCONF = "tests.probe.urls"
 
     assert api_route_problems() == [
-        "api/v1/probe/count/: a plain Django view, not a ShopViewSet",
-        "^api/v1/probe/raw-count/$: a plain Django view, not a ShopViewSet",
+        "api/v1/probe/count/: a plain Django view, not a ShopViewSet or a DeviceView",
+        "^api/v1/probe/raw-count/$: a plain Django view, not a ShopViewSet or a DeviceView",
     ]
 
 
@@ -1648,14 +1660,17 @@ def test_device_route_check_finds_a_leak(
     [leak] = problems["probe-device-leaky"]
     assert leak.startswith("shop B's device, GET: shows what only shop A has:")
     assert '"Duka la Mfano"' in leak
+    # The same leak built as a ViewSet, whose GET answers through `list`: found too.
+    [leak] = problems["probe-device-leaky-set"]
+    assert leak.startswith("shop B's device, GET: shows what only shop A has:")
     assert problems["probe-device-blind"] == [
         "shop A's own device sees nothing of A's here, so shop B's answers would prove nothing: give the route"
         " something of its device's shop to show"
     ]
     # And the office routes' check takes the device routes as swept: only the probe's two plain views are refused.
     assert api_route_problems() == [
-        "api/v1/probe/count/: a plain Django view, not a ShopViewSet",
-        "^api/v1/probe/raw-count/$: a plain Django view, not a ShopViewSet",
+        "api/v1/probe/count/: a plain Django view, not a ShopViewSet or a DeviceView",
+        "^api/v1/probe/raw-count/$: a plain Django view, not a ShopViewSet or a DeviceView",
     ]
 
 

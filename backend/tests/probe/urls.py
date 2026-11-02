@@ -11,6 +11,7 @@ from tests.probe.api import (
     DeviceShopView,
     EndlessNoteViewSet,
     LeakyDeviceView,
+    LeakyDeviceViewSet,
     LeakyNoteTextViewSet,
     LeakyNoteViewSet,
     NoteBulkViewSet,
@@ -58,4 +59,9 @@ urlpatterns = [
     path("api/devices/v1/probe/shop/", DeviceShopView.as_view(), name="probe-device-shop"),
     path("api/devices/v1/probe/leaky/", LeakyDeviceView.as_view(), name="probe-device-leaky"),
     path("api/devices/v1/probe/blind/", BlindDeviceView.as_view(), name="probe-device-blind"),
+    path(
+        "api/devices/v1/probe/leaky-set/",
+        LeakyDeviceViewSet.as_view({"get": "list"}),
+        name="probe-device-leaky-set",
+    ),
 ]
