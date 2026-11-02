@@ -277,6 +277,23 @@ def test_change_record_edits_checks_its_names() -> None:
         )
 
 
+def test_change_record_edits_needs_an_atomic_migration(card: Card) -> None:
+    # The trigger comes off, then goes back on: in a migration that isn't one transaction (`atomic = False`), a failure
+    # between the two would leave the table recording nothing. So the step refuses to run there, either way, before
+    # it sends any SQL, and the table keeps its trigger.
+    state = ProjectState.from_apps(apps)
+    change = ChangeRecordEdits("card", type_code="probe_card", skip=["name"], was=[])
+    with connection.schema_editor(atomic=False) as editor:
+        with pytest.raises(ValueError, match="atomic"):
+            change.database_forwards("probe", editor, state, state)
+        with pytest.raises(ValueError, match="atomic"):
+            change.database_backwards("probe", editor, state, state)
+
+    with shop_context(card.shop_id):
+        Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
+        assert len(history_of(card)) == 1
+
+
 # Each SQL string of the rule, by its SHA-256 fingerprint, taken when the rule was written.
 PINNED_SQL = {
     "RECORD_EDIT_FUNCTION": "f304792db801aed85c04f1c6a9fec126232fb3c090c09929cde2540e868d25a9",

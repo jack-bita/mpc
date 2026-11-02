@@ -286,7 +286,7 @@ class ChangeRecordEdits(RecordEdits):
     # step that adds `last_seen_at` (AUTH-2). A trigger's words are fixed when it is made, and the SQL that makes it is
     # frozen once on main (rule 9), so this takes the table's trigger off and puts it back with the new list, from the
     # very same strings: no new SQL. Undone, it puts the old list back. Both moves run in the migration's transaction,
-    # so no edit is ever made between them, unrecorded.
+    # so no edit is ever made between them, unrecorded; a migration that isn't atomic is refused.
 
     def __init__(self, model_name: str, type_code: str, skip: Sequence[str], was: Sequence[str]) -> None:
         super().__init__(model_name, type_code, skip)
@@ -304,6 +304,7 @@ class ChangeRecordEdits(RecordEdits):
         to_state: ProjectState,
     ) -> None:
         # The new list is checked against the table as this migration leaves it, before the old trigger comes off.
+        self._check_atomic(schema_editor)
         table = self._checked_table(app_label, schema_editor, to_state)
         schema_editor.execute(DROP_RECORD_EDITS_TRIGGER.format(table=table), params=None)
         self._put_on(table, schema_editor)
@@ -316,9 +317,19 @@ class ChangeRecordEdits(RecordEdits):
         to_state: ProjectState,
     ) -> None:
         # Going back, to_state is the table before this migration: the old list is checked against it, then put back.
+        self._check_atomic(schema_editor)
         table = self.was._checked_table(app_label, schema_editor, to_state)
         schema_editor.execute(DROP_RECORD_EDITS_TRIGGER.format(table=table), params=None)
         self.was._put_on(table, schema_editor)
+
+    def _check_atomic(self, schema_editor: BaseDatabaseSchemaEditor) -> None:
+        # The trigger comes off and goes back on in two statements. Only a migration that runs in one transaction
+        # (Django's default on PostgreSQL) undoes the first if the second fails; one marked `atomic = False` would
+        # leave the table with no history at all, and nothing to say so (found in AUTH-2's review). So refused there.
+        if not schema_editor.atomic_migration:
+            raise ValueError(
+                f"ChangeRecordEdits on {self.model_name} needs a migration that runs in one transaction (atomic)."
+            )
 
     def describe(self) -> str:
         return f"Edit history of {self.model_name} skips {', '.join(self.skip) or 'nothing'}"
