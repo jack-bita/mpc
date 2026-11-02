@@ -9,14 +9,13 @@ Thin: each one calls its service (apps/people/services.py), or reads its device,
 
 from typing import cast
 
-from django.core.exceptions import ValidationError
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import extend_schema
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.people.api.authentication import set_key_cookie
+from apps.people.api.authentication import DEVICE_KEY_COOKIE, set_key_cookie
 from apps.people.api.base import DeviceView
 from apps.people.api.serializers import DeviceMeSerializer, PairingStartSerializer
 from apps.people.models import Device
@@ -30,15 +29,14 @@ class PairingView(DeviceView):
 
     @extend_schema(request=None, responses={201: PairingStartSerializer})
     def post(self, request: Request) -> Response:
-        if isinstance(request.auth, Device):
-            # Its cookie already opens a device: a tap on "Sajili kifaa hiki" on a device that works, or a request
-            # another website made it send, must not swap its key for a new one. The old key is in no other place, and
-            # the device would have to be paired again, with a new device code. A blocked device never gets here: its
-            # login refuses it first (device.blocked), so it keeps its key for an unblock (Jack, AUTH-1).
-            raise ValidationError("This device is already paired.", code="pairing.already_paired")
-        # A device whose key is still waiting, or whose code expired, simply asks again: its old key never opened
-        # anything, and the new cookie takes its place.
-        pairing = start_pairing()
+        # The key its cookie holds now, if any, goes to the service, which keeps the rules (ADR-0015). A key that
+        # already opens a device is refused (pairing.already_paired): a tap on "Sajili kifaa hiki" on a working
+        # device, or a request another website made it send, must not swap its key for a new one. A key still waiting
+        # has its old code retired, so a manager can't confirm a code whose key no browser holds any more. A blocked
+        # device never gets here: its login refuses it first (device.blocked), so it keeps its key for an unblock
+        # (AUTH-1). Read straight from the cookie, never kept in a variable here: only the service hides its
+        # variables from error reports.
+        pairing = start_pairing(replacing=request.COOKIES.get(DEVICE_KEY_COOKIE))
         response = Response(PairingStartSerializer(pairing.request).data, status=201)
         # The key goes in the cookie only, never in the body. It stays inside `pairing`, which never prints it
         # (NewPairing's repr=False), until set_key_cookie, which hides it from error pages.

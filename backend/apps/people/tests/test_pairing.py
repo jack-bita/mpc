@@ -205,6 +205,67 @@ def test_two_managers_confirm_one_code_at_once(
         assert list(Device.objects.values_list("pk", flat=True)) == [first.pk]
 
 
+def test_asking_again_retires_the_old_code(manager_a: StaffMember, side_a: Side) -> None:
+    # A device asks again (a double tap, or a refresh) and shows its new code. The old code's key is no longer in any
+    # browser, so a manager who types the old code must not make a device of it: it is expired from the moment the
+    # device asks again (AUTH-2's review). The new one works.
+    first = start_pairing()
+    second = start_pairing(replacing=first.key)
+
+    with pytest.raises(ValidationError) as refused:
+        confirm(first.request.code, manager_a, side_a)
+    assert refused.value.code == "pairing.code_expired"
+    assert confirm(second.request.code, manager_a, side_a).key_hash == hashlib.sha256(second.key.encode()).hexdigest()
+    # Retired, never deleted (rule 7): both requests are kept.
+    assert PairingRequest.objects.count() == 2
+
+
+def test_asking_again_with_a_working_key_refused(manager_a: StaffMember, side_a: Side) -> None:
+    # A key that already opens a device is never swapped for a new one: the service refuses, whoever calls it.
+    asked = start_pairing()
+    confirm(asked.request.code, manager_a, side_a)
+
+    with pytest.raises(ValidationError) as refused:
+        start_pairing(replacing=asked.key)
+
+    assert refused.value.code == "pairing.already_paired"
+    assert PairingRequest.objects.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_asking_again_while_a_manager_confirms(manager_a: StaffMember, side_a: Side) -> None:
+    # The two at the same moment, each on its own connection (backend/tests/concurrency.py). The manager's confirm
+    # holds the request locked; the device's ask waits, then finds its key already opens a device, and is refused:
+    # the working key is kept, and no code is left that nobody can use.
+    asked = start_pairing()
+    with shop_context(manager_a.shop_id), transaction.atomic():
+        device = confirm_pairing(asked.request.code, name="Laptop ya Dawa", home_side=side_a, by=manager_a)
+        again, ended = in_another_transaction(lambda: start_pairing(replacing=asked.key))
+        wait_until_someone_waits_for_me()
+    again.join(timeout=5)
+    [refused] = ended
+    assert isinstance(refused, ValidationError) and refused.code == "pairing.already_paired"
+    assert PairingRequest.objects.count() == 1
+    with shop_context(manager_a.shop_id):
+        assert Device.objects.get().pk == device.pk
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_manager_confirms_while_the_device_asks_again(manager_a: StaffMember, side_a: Side) -> None:
+    # The other order: the device's ask holds the old request locked and retires it; the manager's confirm waits, then
+    # finds the code expired. No device is made with a key no browser holds.
+    asked = start_pairing()
+    with transaction.atomic():
+        start_pairing(replacing=asked.key)
+        confirming, ended = in_another_transaction(lambda: confirm(asked.request.code, manager_a, side_a))
+        wait_until_someone_waits_for_me()
+    confirming.join(timeout=5)
+    [refused] = ended
+    assert isinstance(refused, ValidationError) and refused.code == "pairing.code_expired"
+    with shop_context(manager_a.shop_id):
+        assert not Device.objects.exists()
+
+
 def test_pairing_code_expires(manager_a: StaffMember, side_a: Side) -> None:
     # Valid 10 minutes from the ask, then refused: the manager asks the device for a new one.
     before = timezone.now()

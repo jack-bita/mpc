@@ -154,8 +154,8 @@ def test_start_pairing_keeps_the_key_out_of_error_pages(monkeypatch: pytest.Monk
     # one's too, where the key sits under a name of Django's own choosing.
     asked: list[NewPairing] = []
 
-    def recorded() -> NewPairing:
-        asked.append(start_pairing())
+    def recorded(*, replacing: str | None = None) -> NewPairing:
+        asked.append(start_pairing(replacing=replacing))
         return asked[0]
 
     def broken(*args: object, **kwargs: object) -> None:
