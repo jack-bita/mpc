@@ -6,7 +6,7 @@ its own copy of the role templates (copy_role_templates; set_up_shop makes a who
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
 (start_pairing), a manager with device.manage says yes (confirm_pairing), and blocks it, or lets it work again
-(block, unblock).
+(block, unblock); and each time its key reaches the server, it is noted as seen (note_device_seen, AUTH-2).
 Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
@@ -22,11 +22,12 @@ import uuid
 from collections.abc import Collection, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
@@ -45,6 +46,7 @@ from apps.people.device_keys import (
     make_device_key,
     make_pairing_code,
 )
+from apps.people.login_doors import shop_of_device_key
 from apps.people.models import (
     Device,
     DeviceStatus,
@@ -350,43 +352,74 @@ class NewPairing:
 _CODE_DRAWS = 5
 
 
-# Django's error page (DEBUG) and its error emails list each function's local variables when something fails. This
-# marks `key` as one to hide: it shows as stars, never the device's secret.
-@sensitive_variables("key")
-def start_pairing() -> NewPairing:
+# Django's error reports, which a server with DEBUG off logs and sends, list each function's local variables when
+# something fails (its debug page, with DEBUG on, shows everything). This marks `key` and `replacing`, the new key and
+# the old, as ones to hide, here and in each function called from here that names them so (hash_device_key,
+# NewPairing): they show as stars, never the device's secret.
+@sensitive_variables("key", "replacing")
+def start_pairing(*, replacing: str | None = None) -> NewPairing:
     """A new device asks to join a shop (03 §5.9, step 1). It gets a code to show and its key, which opens nothing
     until a manager confirms the code (confirm_pairing). Needs no shop open: the device belongs to no shop yet, and
-    the request it waits in has none (02 v1.11)."""
-    # The key is made here, by the device's own request, not when the manager confirms: confirming happens on the
-    # manager's phone, which must never hold the device's key, and the server never keeps it in plain text, not even
-    # until the device comes to collect it (Jack, AUTH-1).
-    key = make_device_key()
-    for _ in range(_CODE_DRAWS):
-        request = PairingRequest(
-            code=make_pairing_code(),
-            expires_at=timezone.now() + PAIRING_CODE_LIFETIME,
-            key_hash=hash_device_key(key),
-        )
-        try:
-            # A savepoint of its own: a clash undoes only this insert, even inside a caller's transaction.
-            with transaction.atomic():
-                request.save()
-        except IntegrityError:
-            # Only a code already given (people_pairingrequest_code_once) is drawn again. Any other broken rule is a
-            # bug in this code, and is raised as it is.
-            if PairingRequest.objects.filter(code=request.code).exists():
-                continue
-            raise
-        return NewPairing(request=request, key=key)
-    raise RuntimeError(f"No free pairing code after {_CODE_DRAWS} draws.")
+    the request it waits in has none (02 v1.11).
+
+    `replacing`: the key the device's cookie holds now, if any, as when it asks again with a double tap or after its
+    code expired. A key that already opens a device is refused (pairing.already_paired): its new cookie would wipe a
+    working key for good. A key still waiting has its code retired first, so a manager who types the old code gets
+    pairing.code_expired, never a device whose key no browser holds (AUTH-2's review)."""
+    # One transaction: the old code is retired only if the new one is made.
+    with transaction.atomic():
+        if replacing:
+            _retire_waiting_key(hash_device_key(replacing))
+        # The key is made here, by the device's own request, not when the manager confirms: confirming happens on the
+        # manager's phone, which must never hold the device's key, and the server never keeps it in plain text, not
+        # even until the device comes to collect it (Jack, AUTH-1).
+        key = make_device_key()
+        for _ in range(_CODE_DRAWS):
+            request = PairingRequest(
+                code=make_pairing_code(),
+                expires_at=timezone.now() + PAIRING_CODE_LIFETIME,
+                key_hash=hash_device_key(key),
+            )
+            try:
+                # A savepoint of its own: a clash undoes only this insert, even inside a caller's transaction.
+                with transaction.atomic():
+                    request.save()
+            except IntegrityError:
+                # Only a code already given (people_pairingrequest_code_once) is drawn again. Any other broken rule is
+                # a bug in this code, and is raised as it is.
+                if PairingRequest.objects.filter(code=request.code).exists():
+                    continue
+                raise
+            return NewPairing(request=request, key=key)
+        raise RuntimeError(f"No free pairing code after {_CODE_DRAWS} draws.")
+
+
+def _retire_waiting_key(key_hash: str) -> None:
+    # The request still waiting with this key, read and locked: the same lock confirm_pairing takes, so a manager
+    # confirming its code at this very moment goes first, or after. If after, they find it expired. If first, the hash
+    # has moved to the device by the time this read runs again (PostgreSQL checks a waited-for row once more), and the
+    # door below finds that device.
+    waiting = PairingRequest.objects.select_for_update().filter(key_hash=key_hash).first()
+    if waiting is None:
+        if shop_of_device_key(key_hash) is not None:
+            # The key opens a device: confirmed earlier, or a moment ago. English for the logs; the app translates the
+            # code (ADR-0032).
+            raise ValidationError("This device is already paired.", code="pairing.already_paired")
+        # A key nothing knows, made up or from a database that was reset: nothing to retire.
+        return
+    now = timezone.now()
+    if waiting.expires_at > now:
+        # Retired, not deleted (rule 7): its code stops working now, as if its 10 minutes were up.
+        waiting.expires_at = now
+        waiting.save(update_fields=["expires_at"])
 
 
 def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -> Device:
     """A manager says yes to a waiting device (03 §5.9, step 2): they type the code it shows, name it and pick its home
-    side. The device is made in their own shop, active, with the shop's next device code and the key's hash, so its
-    key works from now on. `by` is always a person, who needs device.manage on `home_side`. Refusals: the code
-    unknown, used or expired (pairing.code_unknown, .code_used, .code_expired); a name the shop already gives another
-    device (device.name_taken)."""
+    side. The device is made in their own shop, active, with the shop's next device code and the key's hash, moved
+    from the request, so its key works from now on. `by` is always a person, who needs device.manage on `home_side`.
+    Refusals: the code unknown, used or expired (pairing.code_unknown, .code_used, .code_expired); a name the shop
+    already gives another device (device.name_taken)."""
     _check_shop(by.shop_id, by)
     # T1: a device of this shop lives on a side of this shop.
     _check_same_shop(by, home_side)
@@ -406,6 +439,11 @@ def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -
         now = timezone.now()
         if request.expires_at <= now:
             raise ValidationError("This code has expired: ask the device for a new one.", code="pairing.code_expired")
+        key_hash = request.key_hash
+        if key_hash is None:
+            # A bug, never a person's mistake: the database keeps a hash on every waiting request
+            # (people_pairingrequest_key_only_while_waiting). Said loudly, never a device made with no key.
+            raise RuntimeError(f"{request} waits with no key's hash.")
         device = Device(
             shop_id=by.shop_id,
             name=name,
@@ -413,7 +451,7 @@ def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -
             # D7: the shop's next device code. If anything below refuses, the transaction rolls back, and the number
             # with it: nothing kept it, so the next device gets it (apps/core/sequences.py).
             code=next_number(by.shop_id, SequenceName.DEVICE),
-            key_hash=request.key_hash,
+            key_hash=key_hash,
             created_by=by,
         )
         # Every field, clean() and the rules in Meta, before anything is written: a name the shop already uses comes
@@ -422,7 +460,12 @@ def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -
         device.save()
         request.device = device
         request.confirmed_at = now
-        request.save(update_fields=["device", "confirmed_at"])
+        # The key's hash moves: from now on the device holds it and the request holds none (Jack, AUTH-2). One fact in
+        # one place, and no way from a key through a request to a device of some shop, past the guard: the login finds
+        # a key's shop through its one door (apps/people/login_doors.py). In this same transaction, so a refused
+        # confirm leaves the hash on the waiting request, and the code can still be confirmed.
+        request.key_hash = None
+        request.save(update_fields=["device", "confirmed_at", "key_hash"])
     return device
 
 
@@ -440,6 +483,32 @@ def unblock(device: Device, *, by: StaffMember, reason: str) -> Device:
     return _set_device_status(
         device, DeviceStatus.BLOCKED, DeviceStatus.ACTIVE, AuditAction.DEVICE_UNBLOCK, by=by, reason=reason
     )
+
+
+# How fresh a device's `last_seen_at` is kept (02 v1.12): close enough for the device list and for spotting a stolen
+# phone that still calls, and few enough writes that a busy counter laptop, calling many times a minute, writes about
+# one every few minutes instead of one per request.
+LAST_SEEN_EVERY = timedelta(minutes=5)
+
+
+def note_device_seen(device: Device, *, at: datetime) -> bool:
+    """Record that a device's key reached the server at `at`, unless the device was already seen less than
+    LAST_SEEN_EVERY before. True when it was written: the login then sends the key's cookie again, so the browser
+    keeps it (apps/people/api/base.py). Called by the login for every device it finds, a blocked one too."""
+    _check_shop(device.shop_id, None)
+    if device.last_seen_at is not None and at - device.last_seen_at < LAST_SEEN_EVERY:
+        # Seen a moment ago, as the copy the login just read says: no query at all.
+        return False
+    # One UPDATE of this one column, not save() and not editing(): the row's version and `updated_at` stay as they
+    # were, so a manager's rename screen, opened a minute ago, is never refused (409) because the device called. The
+    # edit history skips the column (migration 0008). The time condition is in the UPDATE too: two requests of one
+    # device at the same moment both pass the check above, and only the first writes. A single UPDATE is atomic on its
+    # own, so it needs no transaction of ours.
+    stale = Q(last_seen_at__isnull=True) | Q(last_seen_at__lte=at - LAST_SEEN_EVERY)
+    written = Device.objects.filter(stale, pk=device.pk).update(last_seen_at=at)
+    if written:
+        device.last_seen_at = at
+    return bool(written)
 
 
 def _set_device_status(

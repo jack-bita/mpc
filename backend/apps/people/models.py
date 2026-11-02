@@ -393,7 +393,7 @@ class Device(Editable):
     # `updated_at`, `updated_by` and the `version` that keeps two people's edits apart, for the day a manager renames
     # it (UI-3); the trigger in this table's migration records each change, before and after, but never the key's
     # hash (ADR-0036). Who confirmed it, and when, are the row's `created_by` and `created_at` (02 v1.11). The columns
-    # each sync reports (`last_synced_at`, `unsent_count`...) come with SYNC-5, and `last_seen_at` with AUTH-2.
+    # each sync reports (`last_synced_at`, `unsent_count`...) come with SYNC-5.
 
     # What the manager called it, on the device list: "Laptop ya Dawa".
     name = models.CharField(max_length=40)
@@ -407,6 +407,11 @@ class Device(Editable):
     # The SHA-256 hash of its key, never the key (03 §5.9). editable=False: no form shows it, and it never leaves the
     # server. Blocking leaves it in place, so unblocking brings the same key back (Jack, AUTH-1).
     key_hash = models.CharField(max_length=KEY_HASH_LENGTH, editable=False)
+    # The last time its key reached the server, blocked or not (02 v1.12): the device list shows it, and a stolen phone
+    # that keeps calling shows when. Empty until its first request. Moved only by note_device_seen
+    # (apps/people/services.py), at most every few minutes, by itself: its version never moves for it, and its edit
+    # history skips it (migration 0008). editable=False: no form or API changes it.
+    last_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta(Editable.Meta):
         # Builds on Editable.Meta, so `objects`, with the guard, stays the default manager (CORE-2). The database is
@@ -464,6 +469,13 @@ class Device(Editable):
     def __str__(self) -> str:
         return self.name
 
+    @property
+    def staff_id(self) -> None:
+        # As an Actor (apps/core/tenancy.py), the one a device's key login names (AUTH-2): a device alone is a shop's
+        # machine, not a person, so no staff member acts. Office routes refuse it (CORE-6), and the trigger that
+        # records edits names nobody for it (apps/core/acting.py). Its `shop_id` is its own column.
+        return None
+
     def clean(self) -> None:
         # full_clean runs this before the rules above: " Laptop ya Dawa " and "Laptop ya Dawa" are one name on screen.
         super().clean()
@@ -476,19 +488,23 @@ class PairingRequest(UUIDModel, TimeStamped):
     # TimeStamped (CORE-1) give `id` and `created_at`, when it asked.
     # No `shop`, unlike every shop's table (T1's exception, NO_SHOP in backend/tests/sweep_lists.py): until a manager
     # says yes, the device belongs to no shop, and anyone may ask. So no guard either: its default manager reads every
-    # request. A waiting request holds nothing of any shop's. A confirmed one names its device, and keeps its key's
-    # hash, so a key found here leads to a device of some shop with no guard on the way: a door past the guard, as
-    # system_context() is. AUTH-2 decides how a key finds its device and its shop, and whether through here (04 v1.26).
-    # A shop's own tables only ever hold devices one of its managers confirmed.
+    # request. A waiting request holds nothing of any shop's. A confirmed one names its device, but no longer holds the
+    # key's hash, which moved to the device (Jack, AUTH-2): so no key leads through here to a device of some shop, past
+    # the guard. A key finds its shop through one door only (apps/people/login_doors.py). A shop's own tables only ever
+    # hold devices one of its managers confirmed.
 
     # Every code ever given stays taken (unique, below), so a code can only ever mean one request: start_pairing draws
     # again on a clash. With about 850 billion codes, that is rare.
     code = models.CharField(max_length=PAIRING_CODE_LENGTH)
     # created_at + 10 minutes (PAIRING_CODE_LIFETIME): a manager's confirm after this is refused.
     expires_at = models.DateTimeField()
-    # The SHA-256 hash of the key the device was given when it asked, never the key. confirm_pairing copies it onto
-    # the Device, which switches the key on (Jack, AUTH-1).
-    key_hash = models.CharField(max_length=KEY_HASH_LENGTH, editable=False)
+    # The SHA-256 hash of the key the device was given when it asked, never the key, kept only while it waits.
+    # confirm_pairing moves it onto the Device, which switches the key on (Jack, AUTH-1), and empties it here (Jack,
+    # AUTH-2): one fact in one place (02 v1.7). Empty is NULL, never "": the unique rule below compares real hashes
+    # only, as PostgreSQL never counts two NULLs as the same value, so every confirmed request can hold none. (ruff's
+    # DJ001 warns of NULL beside "" in a text column, and lets a `unique=True` field pass for this reason; this one is
+    # unique through its named rule instead, so it says so here.)
+    key_hash = models.CharField(max_length=KEY_HASH_LENGTH, null=True, blank=True, editable=False)  # noqa: DJ001
     # The device it became, once confirmed; empty while it waits. One request per device (OneToOne). PROTECT: nothing
     # is deleted (rule 7). related_name="+": a device's request is read from here, not from the device.
     device = models.OneToOneField(Device, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
@@ -519,6 +535,15 @@ class PairingRequest(UUIDModel, TimeStamped):
                 | models.Q(device__isnull=False, confirmed_at__isnull=False),
                 name="people_pairingrequest_confirmed_whole",
                 violation_error_code="pairing.confirmed_half",
+            ),
+            # The key's hash while the request waits, and never once it names its device: confirming moves it (AUTH-2).
+            # A confirmed request that kept one would be a second way from the key to a device of some shop, past the
+            # guard; a waiting one with none could never be confirmed into a working key.
+            models.CheckConstraint(
+                condition=models.Q(key_hash__isnull=False, device__isnull=True)
+                | models.Q(key_hash__isnull=True, device__isnull=False),
+                name="people_pairingrequest_key_only_while_waiting",
+                violation_error_code="pairing.key_misplaced",
             ),
             models.UniqueConstraint(
                 fields=["code"],

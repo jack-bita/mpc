@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.13 · 30 Oct 2026 · Portion 3 of the planning pack
+**Version:** 1.14 · 30 Oct 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.14** (30 Oct 2026, AUTH-2): choices by Jack, made while planning AUTH-2 (02 v1.12). A device's login finds its shop through one door, which reads only the shop's id of the device that holds the key; the device is then read through the guard, inside that shop. Confirming a pairing moves the key's hash to the device, so it lives in one place (§5.4, §5.9). The key's cookie is SameSite Strict, sent only to `/api/`, and sent again before browsers drop it; the start of a pairing is CSRF-checked, and refused for a device whose key already works (§5.9). Device routes are versioned like sync's, and the manager's confirm is an office route (§5.10). The doors past the guard are a decision of their own, ADR-0037, which supersedes ADR-0022 (AD8). Marked **(v1.14)**.
 
 **Changes in v1.13** (30 Oct 2026, AUTH-1): decisions by Jack, made while planning AUTH-1 (02 v1.11). A new device waits in a `PairingRequest`, which belongs to no shop, and gets its device key at once; the manager's yes makes the `Device` in their own shop and switches the key on. The key is stored as its SHA-256 hash, not with Argon2: it is 32 random bytes, which nobody can guess, and each request finds its device in one index lookup. Unblocking keeps the key, and both block and unblock are written in the audit trail (§5.4, §5.9). Marked **(v1.13)**.
 
@@ -113,7 +115,7 @@ Each document type has one posting function that writes the document and all its
 *Why:* rules T2 and T3 are enforced by the database, not by remembering. *Cost:* high.
 
 **AD8 — Tenancy is enforced in one place; row-level security comes later.** *(default)*
-A request-scoped current shop, scoped model managers that fail closed, one base API view and write-time "same shop" checks, all covered by sweep tests. PostgreSQL row-level security (RLS) is added before a second real shop goes live.
+A request-scoped current shop, scoped model managers that fail closed, one base API view and write-time "same shop" checks, all covered by sweep tests. PostgreSQL row-level security (RLS) is added before a second real shop goes live. Three named ways pass the guard, each kept to its place by the sweep: `system_context()` for system jobs, `all_shops` for the superuser's admin, and the login doors, which read the one shop's id a login needs (ADR-0037, which supersedes ADR-0022; AUTH-2) **(v1.14)**.
 *Why:* RLS doesn't stop cross-shop links anyway (foreign-key checks ignore it), and it complicates migrations and connections. Every table already has `shop_id`, so turning RLS on later is mechanical. *Cost:* medium.
 
 **AD9 — PostgreSQL is the only data store in R1. No Redis.** *(default)*
@@ -280,8 +282,8 @@ apps/sales/
 
 ### 5.4 Tenancy (AD8)
 
-- **Set once per request.** Login (device key or staff session) names who acts and the shop: it leaves an Actor in `request.auth`, with a `shop_id` and a `staff_id`: a staff member, or a device alone, which is no person (its `staff_id` is None). Right after login, the base API view opens that shop in the context variable, keeps it open for the whole visit, and closes it however the visit ends. Office routes need a staff member, the one recorded as who made or changed a row **(v1.8)**. The view also tells PostgreSQL who acts, and the visit's shop, so the trigger that records office edits can name them, and refuses an edit of another shop's row (§5.16) **(v1.11)**.
-- **Fail closed.** The default manager filters every query by the current shop, and raises an error if no shop is set. System jobs use an explicit `system_context()`, named in code; the Django admin uses a separate manager, for superusers only.
+- **Set once per request.** Login (device key or staff session) names who acts and the shop: it leaves an Actor in `request.auth`, with a `shop_id` and a `staff_id`: a staff member, or a device alone, which is no person (its `staff_id` is None). Right after login, the base API view opens that shop in the context variable, keeps it open for the whole visit, and closes it however the visit ends. Office routes need a staff member, the one recorded as who made or changed a row **(v1.8)**. A device's key names no shop, so its login finds the shop through one door, which reads only the shop's id of the device that holds the key, by the key's hash; the device itself is then read through the guard, inside that shop (AUTH-2) **(v1.14)**. The view also tells PostgreSQL who acts, and the visit's shop, so the trigger that records office edits can name them, and refuses an edit of another shop's row (§5.16) **(v1.11)**.
+- **Fail closed.** The default manager filters every query by the current shop, and raises an error if no shop is set. System jobs use an explicit `system_context()`, named in code; the Django admin uses a separate manager, for superusers only; and a login that must find its shop before any is open uses a door of its own, `apps/people/login_doors.py`, which reads a shop's id and nothing else (ADR-0037) **(v1.14)**.
 - **One base API view** gets its queryset through that manager and checks permissions per side.
 - **Writes check links.** Services check that every record they link to belongs to the same shop (T1).
 - **IDs from devices.** If a document's UUID already exists in *another* shop, the server rejects it and reveals nothing about the other record ✚ (`id.taken`, CORE-6 **(v1.8)**).
@@ -341,13 +343,15 @@ Confirming a one-screen sale:
 **Users.** A custom `User` model in the very first migration (D12): UUIDv7 id, full name, phone (optional, unique, +255…), email (optional, unique), password (optional — PIN-only staff have none), language. No username: allauth logs people in by email or phone.
 
 **Registering a device** ✚
-1. A new device opens the app and taps *Sajili kifaa hiki*. The server makes a **pairing request**, which belongs to no shop yet, with an 8-character pairing code (valid 10 minutes, no look-alikes such as 0/O or 1/I). The device gets its **device key** at once, as an HttpOnly, Secure cookie; the key opens nothing until a manager says yes **(v1.13)**.
-2. The owner or a manager (`device.manage` on the home side they pick), logged in on their own phone, types the code, names the device and picks its home side. The device is made in their shop, with the next device code from the shop's counter (`ShopSequence`), and its key works from then on **(v1.13)**.
-3. The device learns its shop and its device code for receipt numbers.
+1. A new device opens the app and taps *Sajili kifaa hiki*. The server makes a **pairing request**, which belongs to no shop yet, with an 8-character pairing code (valid 10 minutes, no look-alikes such as 0/O or 1/I). The device gets its **device key** at once, as an HttpOnly, Secure cookie; the key opens nothing until a manager says yes **(v1.13)**. The start is CSRF-checked, and refused when the device's cookie already opens a device (`pairing.already_paired`): otherwise another website could make a paired laptop ask again, and the new cookie would wipe its working key for good **(v1.14)**.
+2. The owner or a manager (`device.manage` on the home side they pick), logged in on their own phone, types the code, names the device and picks its home side. The device is made in their shop, with the next device code from the shop's counter (`ShopSequence`), and its key works from then on **(v1.13)**. The key's hash moves from the request to the device, so it lives in one place **(v1.14)**.
+3. The device learns its shop and its device code for receipt numbers (`GET /api/devices/v1/me/`), and shows the shop's name, so a code claimed by the wrong shop's manager is seen at once **(v1.14)**.
 4. **Blocking** a device from the owner's phone stops its key at once; its next sync fails and the app locks. Unsent records stay on it, and unblocking brings back the same key, so they can still be delivered. Both need a reason, written in the audit trail **(v1.13)**.
 5. A device that loses its storage registers again and always gets a **new** device code, so receipt numbers stay unique (D7).
 
 **The device key is stored as its SHA-256 hash** **(v1.13)**. It is 32 random bytes: nobody can guess it, so a fast hash is safe, and each request finds its device in one index lookup. A slow hash such as Argon2 is for what people choose and others can guess, PINs and passwords; on every request it would cost about 0.1 s and 100 MiB.
+
+**The device key's cookie** **(v1.14)** is `device_key`: HttpOnly, Secure, SameSite Strict (the app and the API share one address, so it never needs to go to another site), and sent only to `/api/`. Django's error pages hide a cookie whose name holds `KEY`. Browsers keep a cookie 400 days at most, so the server sends it again whenever the device's `last_seen_at` moves, at most every 5 minutes; that write skips the edit history. A blocked device is refused with `401 device.blocked`, and is still seen, so a stolen phone that keeps calling shows when.
 
 **Staff PIN sessions**
 - **Online:** device key + staff PIN → a Django session for that person on that device. Idle lock after 15 minutes *(default, a setting)*. Quick switch = another PIN.
@@ -369,11 +373,11 @@ Confirming a one-screen sale:
 
 | Path | What | Who |
 |---|---|---|
-| `/api/v1/<app>/…` | Office REST: products, prices, deliveries, counts, contacts, cash-up, reports, staff, settings, flags | Staff session |
+| `/api/v1/<app>/…` | Office REST: products, prices, deliveries, counts, contacts, cash-up, reports, staff, settings, flags, devices (a manager confirms a pairing there, AUTH-5) **(v1.14)** | Staff session |
 | `/api/sync/v1/bootstrap`, `/pull`, `/push`, `/attachments/{id}` | Sync (§6) | Device key |
 | `/_allauth/browser/v1/…` | Password login, logout, password reset, session (django-allauth) | — |
 | `/api/auth/…` | PIN login, logout, me (our own) | Device key |
-| `/api/devices/pairing/…` | Device registration | Device + manager |
+| `/api/devices/v1/pairing/`, `/api/devices/v1/me/` | A new device asks to join; a paired device learns its shop. Versioned like sync: devices are the slowest to update **(v1.14)** | Device key (none yet, to ask) |
 | `/api/health/` | Uptime check | Public |
 | `/api/schema/`, `/api/docs/` | The OpenAPI description, and its docs page | Open on the demo and on a laptop; closed in production, where the page would run a CDN's code beside the superuser's login **(v1.8)** |
 

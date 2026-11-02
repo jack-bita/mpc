@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.11 · 30 Oct 2026 · Portion 2 of the planning pack
+**Version:** 1.12 · 30 Oct 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -27,6 +27,8 @@
 **Changes in v1.10** (29 Oct 2026, PPL-3): a decision by Jack, made while planning PPL-3. Goods that arrive are weighed on the shop's scale before they go in, a few sacks at a time; the device adds up the sacks and the kg at once, offline too, and the stock goes in at the scale's kg (§7, §17). Weighing is its own permission, `stock.weigh`, which any role may have; completing the delivery with its buying prices stays `stock.receive`, because buying prices never go to devices (§5). Also from PPL-3: a role's fields, who may give a role or a permission (Jack), and what a person holds on a side and on the whole shop (§5); a new code reaches the shops that already exist through a data migration (§5, 03 §5.8). Marked **(v1.10)**.
 
 **Changes in v1.11** (30 Oct 2026, AUTH-1): decisions by Jack, made while planning AUTH-1. A new device waits for a manager's yes in a `PairingRequest`, which belongs to no shop: until a manager confirms it, the device is nobody's, and anyone may ask. The `Device` is made in the confirming manager's shop, so a device is never `pending`: it is `active` ⇄ `blocked` (§5, §14). `PairingRequest` joins T1's exceptions (§16). Who confirmed a device is the row's `created_by`, so `registered_by` goes, as `set_by` did in v1.7. Blocking and unblocking need a reason and are written in the audit trail; unblocking keeps the device's key, so its unsent records can still arrive (§5). Marked **(v1.11)**.
+
+**Changes in v1.12** (30 Oct 2026, AUTH-2): a choice by Jack, made while planning AUTH-2. A pairing request holds the hash of the device's key only while it waits: confirming moves it to the `Device`, so the hash lives in one place at a time, and no path leads from a key through a request to a device of some shop past the guard (§5). A device's `last_seen_at` moves at most every 5 minutes, and never fills the edit history (§5). Marked **(v1.12)**.
 
 ---
 
@@ -218,13 +220,13 @@ A full diagram for GitHub is in Appendix A.
 
 **Device** [R1] ✚ → Shop — a registered shop laptop or phone. (Moved here from `shops` in v1.1.)
 - `name` ("Laptop ya Dawa"), unique in the shop whatever the letter case **(v1.11)**; `code` (used in numbers; never reused: the shop's own counter gives it **(v1.11)**); `home_side`
-- `status`: `active` ⇄ `blocked` **(v1.11)**; `last_seen_at`, `last_synced_at`, `last_device_seq`; `unsent_count` and `app_version`, reported at each sync **(v1.1)**
+- `status`: `active` ⇄ `blocked` **(v1.11)**; `last_seen_at` (the last time its key reached the server, blocked or not, kept to the nearest 5 minutes and outside the edit history **(v1.12)**), `last_synced_at`, `last_device_seq`; `unsent_count` and `app_version`, reported at each sync **(v1.1)**
 - The hash of its device key, never the key (03 §5.9). Who confirmed it is the row's `created_by` (§1) **(v1.11)**.
 - Only active devices allow PIN login and offline work.
 - Blocking and unblocking need someone with `device.manage` on the device's home side, and a reason, written in the audit trail (T3). Unblocking keeps the device's key, so the records it holds can still arrive (Jack, AUTH-1) **(v1.11)**.
 
 **PairingRequest** [R1] ✚ (no shop) — a device waiting for a manager's yes **(v1.11)**.
-- `code` (8 characters with no look-alikes such as 0/O or 1/I, valid 10 minutes, works once), `expires_at`, the hash of the device's key, and, once confirmed, the `Device` it became.
+- `code` (8 characters with no look-alikes such as 0/O or 1/I, valid 10 minutes, works once), `expires_at`, the hash of the device's key while it waits, and, once confirmed, the `Device` it became. Confirming moves the hash to the `Device`: from then on the request holds none (Jack, AUTH-2) **(v1.12)**.
 - No shop: until a manager confirms it, the device belongs to no shop, and anyone may ask. Confirming needs `device.manage` on the home side chosen, and makes the `Device` in the manager's own shop (T1).
 
 **DeviceOutage** [R1] ✚ → Device — one offline period the device recorded: `started_at`, `ended_at`, reported at the next sync **(v1.1)**. Feeds the sync health page and the R2 decision on a local hub (03 AD16).

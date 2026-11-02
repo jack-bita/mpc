@@ -55,12 +55,26 @@ NOT_SHOP_ROUTES: set[type] = {
 # such route to its test, and checks that the test exists (test_every_route_left_to_its_own_test_has_one).
 OWN_LEAK_TESTS: dict[str, str] = {}
 
+# Device routes with no GET (apps/people/api/base.py), so shop A's own device can't look first, and the sweep's POSTs
+# alone, sent empty, prove little: route name → the test that proves its answer holds nothing of any shop's. The device
+# check reports such a route unless it is named here, and checks that the route and its test exist
+# (test_every_device_route_without_a_look_has_its_test). (Jack, AUTH-2's review.)
+DEVICE_ROUTES_WITHOUT_A_LOOK: dict[str, str] = {
+    # The start of a pairing: its answer is a code and a time, never anything of a shop's; a device whose key already
+    # works is refused (pairing.already_paired), with nothing more.
+    "device-pairing": "test_start_pairing_sets_the_key_cookie",
+}
+
 # App files that may build a query by hand, `models.QuerySet(Table)`, which starts from no manager and so from
-# no guard: file → why it reads no shop's row.
+# no guard: file → why it reads no shop's row, or, for a login's door, why it reads one shop's id and nothing more.
 HAND_BUILT_QUERIES = {
     # A route's description for the API's schema is made with no visit, so with no shop open: the route's rows
     # come from an empty query (.none()), which reads no row at all (CORE-6).
     "apps/core/api/base.py": "an empty query, .none(), for the API's description",
+    # A login must find the visit's shop before any is open: each door there reads only the shop's id, by what the
+    # request brings (a device's key's hash), and the device itself is then read through the guard, inside that shop.
+    # A test pins that the door reads a shop's id alone (Jack, AUTH-2; 03 §5.4).
+    "apps/people/login_doors.py": "a login's door: the shop's id of the device that holds a key, and nothing more",
 }
 
 # App files that may run SQL by hand, `connection.cursor()` or `.raw()`, besides migrations, system jobs and tests,

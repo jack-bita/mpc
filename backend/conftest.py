@@ -15,7 +15,7 @@ from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import Role, StaffMember, User
+from apps.people.models import Role, RoleAssignment, StaffMember, User
 from apps.people.services import add_staff, assign_role, copy_role_templates
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
@@ -82,11 +82,14 @@ def give_role() -> Callable[[StaffMember, RoleTemplate, Side | None], None]:
     # Gives a person one of their shop's six roles, on one side or on every side (side=None), the way the app
     # does (assign_role, PPL-3). shop_a and shop_b are bare Shop rows with no roles, so the first role asked for
     # copies the six templates in; later ones reuse that copy, as a shop never has two (role.template_taken).
-    # Given by the system (by=None), as a shop's first owner is: the giver's own check is PPL-3's to test.
+    # Given by the system (by=None), as a shop's first owner is: the giver's own check is PPL-3's to test. Given once:
+    # a test may ask again for a role a fixture already gave, as the sweep's devices and the staff clients both give
+    # their shop's owner the Owner role (AUTH-2); a second assign_role would be refused (role.already_given).
     def give(staff: StaffMember, template: RoleTemplate, side: Side | None) -> None:
         with shop_context(staff.shop_id):
             role = Role.objects.filter(template=template).first() or copy_role_templates(staff.shop)[template]
-            assign_role(staff, role, side=side, by=None)
+            if not RoleAssignment.objects.filter(staff=staff, role=role, side=side).exists():
+                assign_role(staff, role, side=side, by=None)
 
     return give
 

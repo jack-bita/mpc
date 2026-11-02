@@ -22,6 +22,10 @@ Each route is built to pass the sweep, or to break one of its checks in one way:
   refuse such a route.
 - DeletableNoteViewSet and LeakyDeletableNoteViewSet take a DELETE, guarded and not; LeakyNoteByTextViewSet
   crashes on a key both shops have.
+- DeviceShopView, LeakyDeviceView and BlindDeviceView are device routes (apps/people/api/base.py), for the sweep's
+  device check (AUTH-2): one built the usual way, one that shows every shop's name, one that shows nothing at all;
+  LeakyDeviceViewSet leaks the same way, built as a ViewSet, and LeakyOpenDeviceView to anyone with no key;
+  DeviceMakerView takes a POST and no GET.
 
 tests/probe/urls.py mounts them, but for the last three, which have address lists of their own
 (urls_delete.py, urls_crash.py). Only the sweep's tests use these lists.
@@ -29,17 +33,21 @@ tests/probe/urls.py mounts them, but for the last three, which have address list
 
 from typing import Any
 
-from django.db import models
+from django.db import connection, models
 from django.http import HttpRequest, HttpResponse, JsonResponse, StreamingHttpResponse
 from rest_framework import mixins, serializers
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.viewsets import ViewSetMixin
 
 from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, ShopViewSet, Sight
 from apps.core.api.ids import uuid7_only
 from apps.core.permissions import Permission
+from apps.core.tenancy import current_shop
+from apps.people.api.base import DeviceView
+from apps.shops.models import Shop, Side
 from tests.probe.models import Note
 
 # What each probe action needs (PPL-5): to see, for one that only shows notes; a key, for one that changes them. Every
@@ -239,3 +247,62 @@ class LeakyNoteByTextViewSet(LeakyNoteViewSet):
 
 def note_count(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"count": 0})
+
+
+class DeviceShopView(DeviceView):
+    # A device route built the way every one is (apps/people/api/base.py), which shows what its visit really has open:
+    # the shop open in Python, the sides read through the guard (which refuses while no shop is open), and who acts as
+    # PostgreSQL was told (apps/core/acting.py). So a DeviceView that stopped opening its device's shop fails the
+    # tests (test_device_visit_opens_its_own_shop), as a route reading through a link alone would not. It also takes a
+    # POST that hands nothing back.
+    def get(self, request: Request) -> Response:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_setting('mpc.shop_id', true), current_setting('mpc.staff_id', true)")
+            acting_shop, acting_staff = cursor.fetchone() or (None, None)
+        return Response(
+            {
+                "shop": str(current_shop()),
+                "sides": sorted(Side.objects.values_list("name", flat=True)),
+                "acting_shop": acting_shop,
+                "acting_staff": acting_staff,
+            }
+        )
+
+    def post(self, request: Request) -> Response:
+        return Response({}, status=201)
+
+
+class LeakyDeviceView(DeviceView):
+    # The mistake the sweep's device check is there to catch: every shop's name, read from the Shop table, which has no
+    # guard (it is the tenant itself), as a careless "which shops are there?" would.
+    def get(self, request: Request) -> Response:
+        return Response({"shops": [shop.name for shop in Shop.objects.all()]})
+
+
+class LeakyDeviceViewSet(ViewSetMixin, DeviceView):
+    # The same leak, in a device route built as a ViewSet, as sync's may be (SYNC-2): its router maps GET to `list`, so
+    # the view has no `get` of its own, and a sweep that looked for one would send it nothing.
+    def list(self, request: Request) -> Response:
+        return Response({"shops": [shop.name for shop in Shop.objects.all()]})
+
+
+class LeakyOpenDeviceView(DeviceView):
+    # The same leak again, on a route a new device calls with no key (device_optional, as the start of a pairing): it
+    # shows every shop's name to anyone at all, so the check's call with no key must find it.
+    device_optional = True
+
+    def get(self, request: Request) -> Response:
+        return Response({"shops": [shop.name for shop in Shop.objects.all()]})
+
+
+class DeviceMakerView(DeviceView):
+    # A device route with a POST and no GET: shop A's own device can't look first, so the check wants a leak test of
+    # its own named for it (DEVICE_ROUTES_WITHOUT_A_LOOK, backend/tests/sweep_lists.py).
+    def post(self, request: Request) -> Response:
+        return Response({}, status=201)
+
+
+class BlindDeviceView(DeviceView):
+    # Shows nothing to anyone, not even its own device: it leaks nothing, but proves nothing either.
+    def get(self, request: Request) -> Response:
+        return Response({})

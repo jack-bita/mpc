@@ -8,11 +8,12 @@ would hide a broken one. So a later migration that drops or mistypes a rule turn
 public (03 §10).
 """
 
+import importlib
 from datetime import timedelta
 from typing import Any
 
 import pytest
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
 from django.utils import timezone
 
 from apps.core.tenancy import shop_context
@@ -96,11 +97,53 @@ def test_database_refuses_a_request_that_breaks_a_rule(fields: dict[str, Any], r
 
 
 def test_database_refuses_a_request_confirmed_without_a_time(shop_a: Shop, side_a: Side) -> None:
-    # The other half of confirmed_whole: a device named, but no time it was confirmed.
+    # The other half of confirmed_whole: a device named, but no time it was confirmed. No hash, as a confirmed request
+    # holds none (AUTH-2), so this rule is the only one it breaks.
     with shop_context(shop_a):
         device = Device.objects.create(**device_row(shop_a, side_a))
     with pytest.raises(IntegrityError, match="people_pairingrequest_confirmed_whole"):
-        PairingRequest.objects.create(**request_row(device=device))
+        PairingRequest.objects.create(**request_row(device=device, key_hash=None))
+
+
+def test_database_refuses_a_confirmed_request_that_keeps_its_key(shop_a: Shop, side_a: Side) -> None:
+    # Confirming moves the key's hash to the device (Jack, AUTH-2): a confirmed request that kept one would be a second
+    # way from a key to a device of some shop, past the guard. Refused even when the services are skipped.
+    with shop_context(shop_a):
+        device = Device.objects.create(**device_row(shop_a, side_a))
+    with pytest.raises(IntegrityError, match="people_pairingrequest_key_only_while_waiting"):
+        PairingRequest.objects.create(**request_row(device=device, confirmed_at=timezone.now()))
+
+
+def test_migration_0007_moves_the_hashes_both_ways(shop_a: Shop, side_a: Side) -> None:
+    # Migration 0007 moved each confirmed request's hash to its device (AUTH-2), and promises that going back loses
+    # nothing. The tests' database is built empty, so its SQL never meets a row there: here it runs, as written in the
+    # migration, on a confirmed request. Inside the test's transaction, which the rollback at the end undoes, the new
+    # rule comes off first, as undoing the migration takes it off before this step.
+    migration = importlib.import_module("apps.people.migrations.0007_pairing_key_moves_to_device")
+    with shop_context(shop_a):
+        device = Device.objects.create(**device_row(shop_a, side_a))
+    confirmed = PairingRequest.objects.create(**request_row(device=device, confirmed_at=timezone.now(), key_hash=None))
+    waiting = PairingRequest.objects.create(**request_row(code="BCDEFGHJ", key_hash=OTHER_HASH))
+
+    with connection.cursor() as cursor:
+        # Django's links are checked at the commit (deferred), and PostgreSQL won't change a table with checks still to
+        # run: they run now, as a migration's own transaction would find them done.
+        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        cursor.execute("ALTER TABLE people_pairingrequest DROP CONSTRAINT people_pairingrequest_key_only_while_waiting")
+        # Back: the confirmed request takes its device's hash again; the waiting one keeps its own.
+        cursor.execute(migration.RESTORE_CONFIRMED_HASHES)
+        assert PairingRequest.objects.get(pk=confirmed.pk).key_hash == device.key_hash
+        assert PairingRequest.objects.get(pk=waiting.pk).key_hash == OTHER_HASH
+        # Forward again: the confirmed one gives it up; the waiting one still keeps its own.
+        cursor.execute(migration.EMPTY_CONFIRMED_HASHES)
+    assert PairingRequest.objects.get(pk=confirmed.pk).key_hash is None
+    assert PairingRequest.objects.get(pk=waiting.pk).key_hash == OTHER_HASH
+
+
+def test_database_refuses_a_waiting_request_without_a_key() -> None:
+    # The other half: a waiting request with no hash could never be confirmed into a working key.
+    with pytest.raises(IntegrityError, match="people_pairingrequest_key_only_while_waiting"):
+        PairingRequest.objects.create(**request_row(key_hash=None))
 
 
 @pytest.mark.parametrize(

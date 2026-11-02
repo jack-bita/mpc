@@ -24,7 +24,7 @@ from django.db.models import Model
 
 from apps.control import operations
 from apps.control.models import EditEvent
-from apps.control.operations import EditsByTriggerOnly, RecordEdits
+from apps.control.operations import ChangeRecordEdits, EditsByTriggerOnly, RecordEdits
 from apps.core.acting import acting_as
 from apps.core.links import LINK_TYPES
 from apps.core.models import AppendOnlyError
@@ -221,6 +221,77 @@ def test_record_edits_checks_the_table_it_is_put_on() -> None:
     # A table with no shop: the trigger writes the edited row's shop into the history, and every edit would fail.
     with pytest.raises(ValueError, match="shop"), connection.schema_editor() as editor:
         RecordEdits("user", type_code="person").database_forwards("people", editor, state, state)
+
+
+def test_change_record_edits_skips_the_new_column(shop_a: Model, card: Card, staff_a: Actor) -> None:
+    # A later migration can add a column to a table's skip list, as AUTH-2 adds the device's `last_seen_at`, which
+    # moves on its own every few minutes: an edit of only that column then writes nothing, and every other edit of
+    # the table is still recorded, without it. Put on and taken off inside the test's transaction, which the rollback
+    # at the end undoes (as in test_edit_trigger_removed_when_migrated_back).
+    state = ProjectState.from_apps(apps)
+    with connection.schema_editor() as editor:
+        ChangeRecordEdits("card", type_code="probe_card", skip=["name"], was=[]).database_forwards(
+            "probe", editor, state, state
+        )
+
+    with shop_context(shop_a):
+        Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
+        assert history_of(card) == []
+        # The trigger is still on for the rest of the row.
+        Card.objects.filter(pk=card.pk).update(name="Dawa ya Kuku", created_by_id=staff_a.staff_id)
+        [edit] = history_of(card)
+        assert (edit.before, edit.after) == ({"created_by_id": None}, {"created_by_id": str(staff_a.staff_id)})
+
+
+def test_change_record_edits_puts_the_old_list_back(shop_a: Model, card: Card) -> None:
+    # Undone, the step puts back the list the table had before it, so stepping a database back leaves the history as
+    # that older migration made it: here, the card's name is recorded again.
+    state = ProjectState.from_apps(apps)
+    change = ChangeRecordEdits("card", type_code="probe_card", skip=["name"], was=[])
+    with connection.schema_editor() as editor:
+        change.database_forwards("probe", editor, state, state)
+        change.database_backwards("probe", editor, state, state)
+
+    with shop_context(shop_a):
+        Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
+        [edit] = history_of(card)
+        assert (edit.before, edit.after) == ({"name": "Dawa"}, {"name": "Dawa za Mifugo"})
+
+
+def test_change_record_edits_checks_its_names() -> None:
+    # The same checks as RecordEdits, on both lists: a column's name and the type code go into the SQL.
+    with pytest.raises(ValueError, match="column"):
+        ChangeRecordEdits("card", type_code="probe_card", skip=["name'; --"], was=[])
+    with pytest.raises(ValueError, match="column"):
+        ChangeRecordEdits("card", type_code="probe_card", skip=["name"], was=["name'; --"])
+    with pytest.raises(TypeError, match="list"):
+        ChangeRecordEdits("card", type_code="probe_card", skip=["name"], was="name")
+    # A step that changes nothing is a migration's mistake: most likely the new column was left out of `skip`.
+    with pytest.raises(ValueError, match="change nothing"):
+        ChangeRecordEdits("card", type_code="probe_card", skip=["name"], was=["name"])
+    # And a typo is found against the table as the migration sees it, before the old trigger comes off.
+    state = ProjectState.from_apps(apps)
+    with pytest.raises(ValueError, match="nmae"), connection.schema_editor() as editor:
+        ChangeRecordEdits("card", type_code="probe_card", skip=["nmae"], was=[]).database_forwards(
+            "probe", editor, state, state
+        )
+
+
+def test_change_record_edits_needs_an_atomic_migration(card: Card) -> None:
+    # The trigger comes off, then goes back on: in a migration that isn't one transaction (`atomic = False`), a failure
+    # between the two would leave the table recording nothing. So the step refuses to run there, either way, before
+    # it sends any SQL, and the table keeps its trigger.
+    state = ProjectState.from_apps(apps)
+    change = ChangeRecordEdits("card", type_code="probe_card", skip=["name"], was=[])
+    with connection.schema_editor(atomic=False) as editor:
+        with pytest.raises(ValueError, match="atomic"):
+            change.database_forwards("probe", editor, state, state)
+        with pytest.raises(ValueError, match="atomic"):
+            change.database_backwards("probe", editor, state, state)
+
+    with shop_context(card.shop_id):
+        Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
+        assert len(history_of(card)) == 1
 
 
 # Each SQL string of the rule, by its SHA-256 fingerprint, taken when the rule was written.
