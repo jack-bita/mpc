@@ -14,8 +14,9 @@ pairing and `me`; later sync (SYNC-2 on) and PIN login (AUTH-4).
 - The cookie. When a visit moves the device's last_seen_at, its answer sends the key's cookie again, so a browser
   never drops the cookie of a device in use (03 §5.9).
 
-CORE-7's sweep finds every route built on this by itself, and calls each as a device of each shop, and with no key at
-all (backend/tests/test_tenancy_sweep.py).
+CORE-7's sweep finds every route built on this by itself, a ViewSet's too, and calls each as a device of each shop, and
+with no key at all; one with no GET names a leak test of its own (DEVICE_ROUTES_WITHOUT_A_LOOK,
+backend/tests/sweep_lists.py).
 """
 
 from contextlib import ExitStack
