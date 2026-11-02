@@ -5,8 +5,9 @@ as left, and given a PIN (set_pin; apps/people/pins.py hashes it). And what they
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
-(start_pairing), a manager with device.manage says yes (confirm_pairing), and blocks it, or lets it work again
-(block, unblock); and each time its key reaches the server, it is noted as seen (note_device_seen, AUTH-2).
+(start_pairing), a manager with device.manage says yes (confirm_pairing), renames it (rename_device, AUTH-5), and
+blocks it, or lets it work again (block, unblock); and each time its key reaches the server, it is noted as seen
+(note_device_seen, AUTH-2).
 Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
@@ -475,6 +476,21 @@ def confirm_pairing(
         request.key_hash = None
         request.save(update_fields=["device", "confirmed_at", "key_hash"])
     return device
+
+
+def rename_device(device: Device, *, version: int, name: str, by: StaffMember) -> Device:
+    """Give a device a new name on the shop's device list (UI-3), unless someone changed the device since `version`
+    was read (02 §1): a rename screen opened before a block, or before another rename, is refused (VersionConflict,
+    409) and loads the device again. Needs device.manage on the device's home side, as pairing and blocking it do.
+    Refusals: a name the shop already gives another device (device.name_taken), or none (device.name_blank)."""
+    # editing() checks the shop (T1), reads the device again and locks it, refuses a stale version, then checks the
+    # new name (full_clean trims it, and the shop's one-name-per-device rule) and saves it with the next version.
+    with editing(device, version=version, by=by) as fresh:
+        # Who may: device.manage on the home side as stored, as block asks it (Jack, AUTH-1). Refused before anything
+        # changes; the transaction leaves the device as it was.
+        require(by, Permission.DEVICE_MANAGE, fresh.home_side)
+        fresh.name = name
+    return fresh
 
 
 def block(device: Device, *, by: StaffMember, reason: str) -> Device:
