@@ -55,6 +55,16 @@ NOT_SHOP_ROUTES: set[type] = {
 # such route to its test, and checks that the test exists (test_every_route_left_to_its_own_test_has_one).
 OWN_LEAK_TESTS: dict[str, str] = {}
 
+# Device routes with no GET (apps/people/api/base.py), so shop A's own device can't look first, and the sweep's POSTs
+# alone, sent empty, prove little: route name → the test that proves its answer holds nothing of any shop's. The device
+# check reports such a route unless it is named here, and checks that the route and its test exist
+# (test_every_device_route_without_a_look_has_its_test). (Jack, AUTH-2's review.)
+DEVICE_ROUTES_WITHOUT_A_LOOK: dict[str, str] = {
+    # The start of a pairing: its answer is a code and a time, never anything of a shop's; a device whose key already
+    # works is refused (pairing.already_paired), with nothing more.
+    "device-pairing": "test_start_pairing_sets_the_key_cookie",
+}
+
 # App files that may build a query by hand, `models.QuerySet(Table)`, which starts from no manager and so from
 # no guard: file → why it reads no shop's row, or, for a login's door, why it reads one shop's id and nothing more.
 HAND_BUILT_QUERIES = {

@@ -80,7 +80,15 @@ from apps.core.tenancy import NoShopSelected, shop_context
 from apps.people.api.base import DeviceView
 from apps.shops.models import PaymentAccount, PaymentAccountKind, Shop, Side, StockLocation
 from tests.probe.models import Note, VoidableEntry
-from tests.sweep_lists import HAND_BUILT_QUERIES, INFRASTRUCTURE, NO_SHOP, NOT_SHOP_ROUTES, OWN_LEAK_TESTS, RAW_SQL
+from tests.sweep_lists import (
+    DEVICE_ROUTES_WITHOUT_A_LOOK,
+    HAND_BUILT_QUERIES,
+    INFRASTRUCTURE,
+    NO_SHOP,
+    NOT_SHOP_ROUTES,
+    OWN_LEAK_TESTS,
+    RAW_SQL,
+)
 
 BACKEND = Path(__file__).resolve().parents[1]
 APPS = BACKEND / "apps"
@@ -752,6 +760,20 @@ def own_leak_test_problems() -> list[str]:
     return problems
 
 
+def device_without_a_look_problems() -> list[str]:
+    # A device route named in DEVICE_ROUTES_WITHOUT_A_LOOK must still exist, and so must its test, as for
+    # OWN_LEAK_TESTS: a stale name on either side would leave a route that nothing checks.
+    routes = {route.name for route in device_routes()}
+    tests = names_of_tests()
+    problems = []
+    for route_name, test_name in sorted(DEVICE_ROUTES_WITHOUT_A_LOOK.items()):
+        if route_name not in routes:
+            problems.append(f"{route_name}: no device route has this name")
+        if test_name not in tests:
+            problems.append(f"{route_name}: no test is named {test_name}")
+    return problems
+
+
 def side_field_problems(views: Iterable[type[ShopViewSet[Any]]]) -> list[str]:
     # The two side hooks of every office route (apps/core/api/base.py, PPL-5) find a row's side through
     # `side_field`: visible_sides() narrows every read by it, and check_side_permission() asks about the side it
@@ -879,7 +901,16 @@ def device_route_problems(device_a: APIClient, device_b: APIClient, shop_a: Shop
             )
         else:
             url = reverse(route.name)
-            own = device_own_problems(device_a, url, marks) if "get" in route.methods else []
+            own: list[str] = []
+            if "get" in route.methods:
+                own = device_own_problems(device_a, url, marks)
+            elif route.name not in DEVICE_ROUTES_WITHOUT_A_LOOK:
+                # No GET, so shop A's own device can't look first, and empty POSTs alone prove little: such a route
+                # names its own leak test instead (found in AUTH-2's review).
+                found.append(
+                    "no GET, so shop A's own device can't look first: name a test that proves its answers hold nothing"
+                    " of any shop's in DEVICE_ROUTES_WITHOUT_A_LOOK (backend/tests/sweep_lists.py)"
+                )
             found += own
             if not own:
                 for method in sorted(route.methods & {"get", "post"}):
@@ -1660,6 +1691,16 @@ def test_device_route_check_finds_a_leak(
     [leak] = problems["probe-device-leaky"]
     assert leak.startswith("shop B's device, GET: shows what only shop A has:")
     assert '"Duka la Mfano"' in leak
+    # The same leak on a route that needs no device: found by the call with no key, too.
+    assert any(
+        problem.startswith("no key, GET: shows what only shop A has:")
+        for problem in problems["probe-device-leaky-open"]
+    )
+    # A route with a POST and no GET, whose leak test isn't named: reported.
+    assert problems["probe-device-maker"] == [
+        "no GET, so shop A's own device can't look first: name a test that proves its answers hold nothing of any"
+        " shop's in DEVICE_ROUTES_WITHOUT_A_LOOK (backend/tests/sweep_lists.py)"
+    ]
     # The same leak built as a ViewSet, whose GET answers through `list`: found too.
     [leak] = problems["probe-device-leaky-set"]
     assert leak.startswith("shop B's device, GET: shows what only shop A has:")
@@ -1758,3 +1799,7 @@ def test_every_api_route_is_swept() -> None:
 
 def test_every_route_left_to_its_own_test_has_one() -> None:
     assert own_leak_test_problems() == []
+
+
+def test_every_device_route_without_a_look_has_its_test() -> None:
+    assert device_without_a_look_problems() == []

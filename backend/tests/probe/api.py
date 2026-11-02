@@ -24,7 +24,8 @@ Each route is built to pass the sweep, or to break one of its checks in one way:
   crashes on a key both shops have.
 - DeviceShopView, LeakyDeviceView and BlindDeviceView are device routes (apps/people/api/base.py), for the sweep's
   device check (AUTH-2): one built the usual way, one that shows every shop's name, one that shows nothing at all;
-  LeakyDeviceViewSet leaks the same way, built as a ViewSet.
+  LeakyDeviceViewSet leaks the same way, built as a ViewSet, and LeakyOpenDeviceView to anyone with no key;
+  DeviceMakerView takes a POST and no GET.
 
 tests/probe/urls.py mounts them, but for the last three, which have address lists of their own
 (urls_delete.py, urls_crash.py). Only the sweep's tests use these lists.
@@ -283,6 +284,22 @@ class LeakyDeviceViewSet(ViewSetMixin, DeviceView):
     # the view has no `get` of its own, and a sweep that looked for one would send it nothing.
     def list(self, request: Request) -> Response:
         return Response({"shops": [shop.name for shop in Shop.objects.all()]})
+
+
+class LeakyOpenDeviceView(DeviceView):
+    # The same leak again, on a route a new device calls with no key (device_optional, as the start of a pairing): it
+    # shows every shop's name to anyone at all, so the check's call with no key must find it.
+    device_optional = True
+
+    def get(self, request: Request) -> Response:
+        return Response({"shops": [shop.name for shop in Shop.objects.all()]})
+
+
+class DeviceMakerView(DeviceView):
+    # A device route with a POST and no GET: shop A's own device can't look first, so the check wants a leak test of
+    # its own named for it (DEVICE_ROUTES_WITHOUT_A_LOOK, backend/tests/sweep_lists.py).
+    def post(self, request: Request) -> Response:
+        return Response({}, status=201)
 
 
 class BlindDeviceView(DeviceView):

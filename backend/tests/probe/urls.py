@@ -8,12 +8,14 @@ from rest_framework.routers import SimpleRouter
 from tests.probe.api import (
     BlindDeviceView,
     ClosedNoteViewSet,
+    DeviceMakerView,
     DeviceShopView,
     EndlessNoteViewSet,
     LeakyDeviceView,
     LeakyDeviceViewSet,
     LeakyNoteTextViewSet,
     LeakyNoteViewSet,
+    LeakyOpenDeviceView,
     NoteBulkViewSet,
     NoteByTextViewSet,
     NoteDiaryViewSet,
@@ -59,6 +61,8 @@ urlpatterns = [
     path("api/devices/v1/probe/shop/", DeviceShopView.as_view(), name="probe-device-shop"),
     path("api/devices/v1/probe/leaky/", LeakyDeviceView.as_view(), name="probe-device-leaky"),
     path("api/devices/v1/probe/blind/", BlindDeviceView.as_view(), name="probe-device-blind"),
+    path("api/devices/v1/probe/leaky-open/", LeakyOpenDeviceView.as_view(), name="probe-device-leaky-open"),
+    path("api/devices/v1/probe/maker/", DeviceMakerView.as_view(), name="probe-device-maker"),
     path(
         "api/devices/v1/probe/leaky-set/",
         LeakyDeviceViewSet.as_view({"get": "list"}),
