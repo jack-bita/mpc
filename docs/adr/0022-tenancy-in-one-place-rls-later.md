@@ -1,10 +1,11 @@
 ---
-status: accepted
+status: superseded
 date: 2026-10-18
 source: "03-architecture.md §2 — AD8"
 standing: default
 cost-to-change: medium
 revisit: "before a second real shop goes live (R3): switch on row-level security"
+superseded-by: ADR-0037
 ---
 
 # ADR-0022 · Tenancy is enforced in one place; row-level security comes later

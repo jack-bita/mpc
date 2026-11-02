@@ -32,7 +32,7 @@ An ADR is a short record of one big decision: the context, what we chose, what i
 | [0019](0019-offline-data-lives-in-indexeddb-through-dexie.md) | Offline data lives in IndexedDB, through Dexie | AD5 | decided | medium |
 | [0020](0020-sync-push-documents-pull-changes.md) | Sync = push documents, pull changes | AD6 | decided | high |
 | [0021](0021-posting-services-and-append-only-ledgers.md) | Posting services write the ledgers; the database refuses edits | AD7 | decided | high |
-| [0022](0022-tenancy-in-one-place-rls-later.md) | Tenancy is enforced in one place; row-level security comes later | AD8 | default | medium |
+| [0022](0022-tenancy-in-one-place-rls-later.md) | Tenancy is enforced in one place; row-level security comes later · *superseded by [0037](0037-tenancy-in-one-place-with-named-doors.md)* | AD8 | default | medium |
 | [0023](0023-postgresql-only-no-redis.md) | PostgreSQL is the only data store in R1; no Redis | AD9 | default | low |
 | [0024](0024-exact-numbers-everywhere.md) | Exact numbers everywhere | AD10 | decided | high |
 | [0025](0025-the-api-contract-is-generated.md) | The API contract is generated | AD11 | decided | low |
@@ -47,3 +47,4 @@ An ADR is a short record of one big decision: the context, what we chose, what i
 | [0034](0034-no-open-source-licence-yet.md) | No open-source licence yet | BP16 | default | low |
 | [0035](0035-a-modular-monolith-with-control-beside-core.md) | A modular monolith, with control beside core | AD1 (REPO-6) | confirmed | high |
 | [0036](0036-office-edits-are-recorded-by-our-own-trigger.md) | Office edits are recorded by our own trigger, into one table | CTRL-2 | confirmed | medium |
+| [0037](0037-tenancy-in-one-place-with-named-doors.md) | Tenancy is enforced in one place, with named doors; row-level security comes later | AUTH-2 | confirmed | medium |
