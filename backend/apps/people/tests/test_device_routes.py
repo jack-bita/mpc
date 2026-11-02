@@ -1,0 +1,276 @@
+"""apps/people/tests/test_device_routes.py — the office routes for a shop's devices, /api/v1/people/devices/ (AUTH-5;
+03 §5.9, §5.10).
+
+A manager says yes to a waiting device from their own phone: they type the code it shows, name it and pick its home
+side, and the phone sends the new device's id with them (ADR-0007), so a double tap, or a send again after a lost
+answer, makes one device and gets the first answer back. The device list shows a shop's devices, with when each was
+last seen.
+
+Who may do what (Jack, 2 Nov 2026):
+
+    shop MFANO, sides Dawa (D) and Vyakula (F)
+    who                          sees the list of     confirms a device on
+    Baba, the owner              Dawa, Vyakula        Dawa, Vyakula
+    Neema, manager of Vyakula    Vyakula              Vyakula
+    Asha, seller on Dawa         Dawa                 none: she has no device.manage
+
+A side a person doesn't see is "not found", as another shop's is (PPL-5). Fake data only: the repo is public (03 §10).
+"""
+
+import uuid
+from collections.abc import Callable
+from typing import Any
+
+import pytest
+from rest_framework.test import APIClient
+
+from apps.core.api import base
+from apps.core.api.base import CreateOnceMixin
+from apps.core.permissions import Permission, RoleTemplate
+from apps.core.tenancy import shop_context
+from apps.people.api.authentication import DEVICE_KEY_COOKIE
+from apps.people.api.views import DeviceViewSet
+from apps.people.models import Device, PairingRequest, StaffMember, User
+from apps.people.services import add_staff, confirm_pairing, start_pairing
+from apps.shops.models import Shop, Side
+from apps.shops.services import add_side
+
+pytestmark = pytest.mark.django_db
+
+DEVICES = "/api/v1/people/devices/"
+ME = "/api/devices/v1/me/"
+
+GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
+
+
+@pytest.fixture
+def vyakula(shop_a: Shop, side_a: Side) -> Side:
+    # Shop A's second side, beside Dawa (side_a).
+    with shop_context(shop_a):
+        return add_side(shop=shop_a, code="F", name="Vyakula", by=None)
+
+
+@pytest.fixture
+def baba(staff_a: StaffMember, give_role: GiveRole) -> StaffMember:
+    # The owner: every key, on every side.
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    return staff_a
+
+
+def person(shop: Shop, name: str, role: RoleTemplate, side: Side | None, give_role: GiveRole) -> StaffMember:
+    # A staff member of the shop with one role, on one side or on every side.
+    user = User.objects.create_user(full_name=f"{name} Demo")
+    with shop_context(shop):
+        staff = add_staff(shop=shop, user=user, display_name=name, by=None)
+    give_role(staff, role, side)
+    return staff
+
+
+@pytest.fixture
+def neema(shop_a: Shop, vyakula: Side, give_role: GiveRole) -> StaffMember:
+    # The Vyakula manager: device.manage, on Vyakula only.
+    return person(shop_a, "Neema", RoleTemplate.MANAGER, vyakula, give_role)
+
+
+@pytest.fixture
+def asha(shop_a: Shop, side_a: Side, give_role: GiveRole) -> StaffMember:
+    # A seller on Dawa: she sees Dawa, and holds no device.manage.
+    return person(shop_a, "Asha", RoleTemplate.SELLER, side_a, give_role)
+
+
+def client_of(staff: StaffMember) -> APIClient:
+    # Logged in as this staff member, as backend/conftest.py's staff clients are: the logins come later (AUTH-3,
+    # AUTH-4) and will leave the staff member in `request.auth`.
+    client = APIClient()
+    client.force_authenticate(user=staff.user, token=staff)  # type: ignore[arg-type]
+    return client
+
+
+def confirm_form(code: str, side: Side, name: str = "Laptop ya Dawa") -> dict[str, str]:
+    # What the manager's phone sends: the new device's id it made itself (ADR-0007), the code the device shows, as a
+    # person types it, the name and the home side.
+    return {"id": str(uuid.uuid7()), "pairing_code": code, "name": name, "home_side": str(side.pk)}
+
+
+def pair(by: StaffMember, side: Side, name: str) -> Device:
+    # A device paired straight through the services, for the tests about the list.
+    code = start_pairing().request.code
+    with shop_context(by.shop_id):
+        return confirm_pairing(code, name=name, home_side=side, by=by)
+
+
+def still_waiting(code: str) -> bool:
+    return PairingRequest.objects.get(code=code).device_id is None
+
+
+def test_manager_confirms_a_waiting_device(baba: StaffMember, side_a: Side) -> None:
+    # 03 §5.9, steps 1 to 3, end to end: the laptop asks, the owner says yes from their phone, and the laptop's key
+    # then opens its shop.
+    asked = start_pairing()
+    sent = confirm_form(asked.request.code.lower(), side_a)
+
+    response = client_of(baba).post(DEVICES, sent)
+
+    assert response.status_code == 201
+    row = response.json()
+    assert (row["id"], row["name"], row["code"], row["home_side"], row["status"], row["last_seen_at"]) == (
+        sent["id"],
+        "Laptop ya Dawa",
+        1,
+        str(side_a.pk),
+        "active",
+        None,
+    )
+    laptop = APIClient()
+    laptop.cookies[DEVICE_KEY_COOKIE] = asked.key
+    me = laptop.get(ME)
+    assert me.status_code == 200
+    assert me.json()["device"]["id"] == sent["id"]
+
+
+def test_confirm_sent_twice_makes_one_device(baba: StaffMember, side_a: Side, shop_a: Shop) -> None:
+    # A double tap, or the phone sending again after a lost answer: the same id names the same confirm. The second
+    # answer is the first's, with the same 201, and not pairing.code_used (AUTH-2's note).
+    sent = confirm_form(start_pairing().request.code, side_a)
+    client = client_of(baba)
+
+    first = client.post(DEVICES, sent)
+    again = client.post(DEVICES, sent)
+
+    assert first.status_code == again.status_code == 201
+    assert again.json() == first.json()
+    with shop_context(shop_a):
+        assert Device.objects.count() == 1
+
+
+def test_confirm_sent_twice_at_once_makes_one_device(
+    baba: StaffMember, side_a: Side, shop_a: Shop, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The two copies arrive together: the second looks for its id before the first has made the device, so it goes on
+    # to confirm the code itself, and is refused, the code being used by then (pairing.code_used). That is the first
+    # copy's own work: the second looks again, finds the device by its id, and answers with it. Played one after the
+    # other: the second copy's first look is made to find nothing, as it would have, had it run before the first
+    # finished (as in apps/shops/tests/test_api_sides.py).
+    sent = confirm_form(start_pairing().request.code, side_a)
+    client = client_of(baba)
+    first = client.post(DEVICES, sent)
+    real_stored = CreateOnceMixin._stored
+    looks: list[object] = []
+
+    def first_look_too_early(view: CreateOnceMixin[Device], row_id: object) -> Any:
+        looks.append(row_id)
+        return None if len(looks) == 1 else real_stored(view, row_id)
+
+    monkeypatch.setattr(CreateOnceMixin, "_stored", first_look_too_early)
+
+    again = client.post(DEVICES, sent)
+
+    assert len(looks) == 2
+    assert again.status_code == 201
+    assert again.json() == first.json()
+    with shop_context(shop_a):
+        assert Device.objects.count() == 1
+
+
+def test_confirm_needs_device_manage_on_the_home_side(asha: StaffMember, side_a: Side) -> None:
+    # Asha sees Dawa, but holds no device.manage: refused (403), and the code still waits for a manager.
+    code = start_pairing().request.code
+
+    response = client_of(asha).post(DEVICES, confirm_form(code, side_a))
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "permission_denied"
+    assert still_waiting(code)
+
+
+def test_confirm_on_a_side_not_seen_finds_no_side(neema: StaffMember, side_a: Side) -> None:
+    # Neema manages Vyakula only, so Dawa is hidden from her: "not found", as another shop's side is (PPL-5), never a
+    # 403 that would tell her it exists.
+    code = start_pairing().request.code
+
+    response = client_of(neema).post(DEVICES, confirm_form(code, side_a))
+
+    assert response.status_code == 400
+    assert response.json()["fields"] == {"home_side": ["does_not_exist"]}
+    assert still_waiting(code)
+
+
+def test_confirm_refuses_another_shops_side(baba: StaffMember, side_b: Side) -> None:
+    # T1: a device of shop A lives on a side of shop A. Shop B's side is not found.
+    code = start_pairing().request.code
+
+    response = client_of(baba).post(DEVICES, confirm_form(code, side_b))
+
+    assert response.status_code == 400
+    assert response.json()["fields"] == {"home_side": ["does_not_exist"]}
+    assert still_waiting(code)
+
+
+def test_device_list_keeps_to_the_persons_sides(
+    baba: StaffMember,
+    neema: StaffMember,
+    side_a: Side,
+    vyakula: Side,
+    staff_b: StaffMember,
+    side_b: Side,
+    give_role: GiveRole,
+) -> None:
+    # The owner sees both sides' devices; Neema sees Vyakula's only. Shop B's device, paired by shop B's owner, shows
+    # to nobody here.
+    laptop = pair(baba, side_a, "Laptop ya Dawa")
+    phone = pair(baba, vyakula, "Simu ya Vyakula")
+    give_role(staff_b, RoleTemplate.OWNER, None)
+    pair(staff_b, side_b, "Simu ya Jingine")
+
+    def listed(staff: StaffMember) -> set[str]:
+        response = client_of(staff).get(DEVICES)
+        assert response.status_code == 200
+        return {row["id"] for row in response.json()["results"]}
+
+    assert listed(baba) == {str(laptop.pk), str(phone.pk)}
+    assert listed(neema) == {str(phone.pk)}
+    # And one device read alone: Dawa's laptop is "not found" for Neema, as if it didn't exist.
+    assert client_of(neema).get(f"{DEVICES}{laptop.pk}/").status_code == 404
+    assert client_of(baba).get(f"{DEVICES}{laptop.pk}/").json()["name"] == "Laptop ya Dawa"
+
+
+def test_seller_sees_the_list(baba: StaffMember, asha: StaffMember, side_a: Side, vyakula: Side) -> None:
+    # Jack's choice (2 Nov 2026): whoever works on a side sees its devices, but changes none of them. Asha, a seller on
+    # Dawa, sees "Laptop ya Dawa" and when it was last seen; Vyakula's phone stays hidden from her.
+    laptop = pair(baba, side_a, "Laptop ya Dawa")
+    pair(baba, vyakula, "Simu ya Vyakula")
+
+    response = client_of(asha).get(DEVICES)
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()["results"]] == [str(laptop.pk)]
+
+
+def test_device_rows_never_show_the_key_hash(baba: StaffMember, side_a: Side) -> None:
+    # A key's hash never leaves the server (03 §5.9): not as a field, nor anywhere in the answer.
+    laptop = pair(baba, side_a, "Laptop ya Dawa")
+
+    response = client_of(baba).get(DEVICES)
+
+    assert set(response.json()["results"][0]) == {
+        "id",
+        "name",
+        "code",
+        "home_side",
+        "status",
+        "last_seen_at",
+        "created_at",
+        "updated_at",
+        "version",
+    }
+    assert laptop.key_hash not in response.content.decode()
+
+
+def test_device_routes_name_their_permissions() -> None:
+    # Seeing a side's devices needs only to see the side (Jack, 2 Nov 2026); saying yes to one needs device.manage
+    # (03 §5.9). Written out in full, so a change to what a route asks for is a change to this test too.
+    assert DeviceViewSet.action_permissions == {
+        "list": base.SEES_THE_SIDE,
+        "retrieve": base.SEES_THE_SIDE,
+        "create": Permission.DEVICE_MANAGE,
+    }
