@@ -414,10 +414,15 @@ def _retire_waiting_key(key_hash: str) -> None:
         waiting.save(update_fields=["expires_at"])
 
 
-def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -> Device:
+def confirm_pairing(
+    code: str, *, name: str, home_side: Side, by: StaffMember, device_id: uuid.UUID | None = None
+) -> Device:
     """A manager says yes to a waiting device (03 §5.9, step 2): they type the code it shows, name it and pick its home
     side. The device is made in their own shop, active, with the shop's next device code and the key's hash, moved
     from the request, so its key works from now on. `by` is always a person, who needs device.manage on `home_side`.
+    `device_id`: the id the manager's phone made for the new device (ADR-0007), if it made one. A confirm sent twice,
+    by a double tap or after a lost answer, is refused here as pairing.code_used; the office route then finds the
+    device the first one made by this id, and answers the repeat as a read (CreateOnceMixin, apps/core/api/base.py).
     Refusals: the code unknown, used or expired (pairing.code_unknown, .code_used, .code_expired); a name the shop
     already gives another device (device.name_taken)."""
     _check_shop(by.shop_id, by)
@@ -454,6 +459,9 @@ def confirm_pairing(code: str, *, name: str, home_side: Side, by: StaffMember) -
             key_hash=key_hash,
             created_by=by,
         )
+        if device_id is not None:
+            # The phone's id, not a new one, as add_side keeps a side's (apps/shops/services.py).
+            device.id = device_id
         # Every field, clean() and the rules in Meta, before anything is written: a name the shop already uses comes
         # back as device.name_taken, and the code stays waiting for a better name.
         device.full_clean()
