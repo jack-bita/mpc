@@ -23,6 +23,7 @@ from rest_framework.test import APIClient
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.api.authentication import DEVICE_KEY_COOKIE
+from apps.people.api.throttles import caller_network
 from apps.people.models import PairingRequest, StaffMember, User
 from apps.people.services import add_staff, confirm_pairing, start_pairing
 from apps.shops.models import Shop, Side
@@ -119,6 +120,39 @@ def test_start_throttle_reads_cloudflares_header_on_the_demo(settings: Settings)
 
     assert refused_as_throttled(APIClient().post(PAIRING, HTTP_CF_CONNECTING_IP="203.0.113.10"))
     assert APIClient().post(PAIRING, HTTP_CF_CONNECTING_IP="198.51.100.20").status_code == 201
+
+
+def test_start_throttle_counts_an_ipv6_network_as_one() -> None:
+    # Under IPv6 each phone has an address of its own, and a caller can take a new one in their own network, its /64,
+    # whenever they like: so the network is counted as one, as an IPv4 shop's one address is. Another network is not
+    # slowed down.
+    for phone in range(1, LIMIT + 1):
+        assert APIClient(REMOTE_ADDR=f"2001:db8:5:7::{phone:x}").post(PAIRING).status_code == 201
+
+    assert refused_as_throttled(APIClient(REMOTE_ADDR="2001:db8:5:7:abcd::99").post(PAIRING))
+    assert APIClient(REMOTE_ADDR="2001:db8:5:8::1").post(PAIRING).status_code == 201
+
+
+@pytest.mark.parametrize(
+    ("address", "network"),
+    [
+        ("203.0.113.10", "203.0.113.10"),
+        ("2001:db8:5:7:abcd::99", "2001:db8:5:7::/64"),
+        ("::ffff:203.0.113.10", "203.0.113.10"),
+        # What only a broken proxy would send: counted as it is, so it still has a limit.
+        ("not-an-address", "not-an-address"),
+    ],
+)
+def test_caller_network(address: str, network: str) -> None:
+    assert caller_network(address) == network
+
+
+def test_start_throttle_counts_an_ipv4_address_written_as_ipv6_as_itself() -> None:
+    # A proxy may write an IPv4 caller in IPv6's form, ::ffff:203.0.113.10: the same caller, counted once.
+    for _ in range(LIMIT):
+        assert APIClient(REMOTE_ADDR="203.0.113.10").post(PAIRING).status_code == 201
+
+    assert refused_as_throttled(APIClient(REMOTE_ADDR="::ffff:203.0.113.10").post(PAIRING))
 
 
 def test_only_pairing_is_throttled(baba: StaffMember, side_a: Side, shop_a: Shop) -> None:

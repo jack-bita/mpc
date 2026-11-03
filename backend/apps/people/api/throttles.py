@@ -2,8 +2,9 @@
 
 Two limits, 10 an hour each *(default)* (DEFAULT_THROTTLE_RATES, config/settings/base.py):
 
-- the start of a pairing (POST /api/devices/v1/pairing/), per address: every device of a shop shares the shop's one
-  public address, so the limit counts the whole shop, and a few devices an hour is plenty;
+- the start of a pairing (POST /api/devices/v1/pairing/), per caller's network: its one public IPv4 address, or its
+  IPv6 network (a /64), where each phone has an address of its own. Every device of a shop shares it, so the limit
+  counts the whole shop, and a few devices an hour is plenty;
 - a manager's confirm (POST /api/v1/people/devices/), per person: someone typing codes over and over, by mistake or
   to guess one, waits.
 
@@ -13,14 +14,32 @@ in the database cache, in PostgreSQL, shared by every server worker (CACHES, con
 device's own calls, `me` and later sync, name no limit, so they are never slowed down.
 """
 
+import ipaddress
+
 from django.conf import settings
 from rest_framework.request import Request
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 
 
+def caller_network(address: str) -> str:
+    """The network a caller's address belongs to, as the start's limit counts it: an IPv4 address alone, which a shop
+    shares behind its router; an IPv6 address by its /64, the network a phone takes addresses in as it likes, so a new
+    address in it is the same caller; and an IPv4 address written in IPv6's form (::ffff:203.0.113.10) as that IPv4."""
+    try:
+        ip = ipaddress.ip_address(address.strip())
+    except ValueError:
+        # Not an address at all, which only a broken proxy would send: counted as it is, so it still has a limit.
+        return address
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped is not None:
+            return str(ip.ipv4_mapped)
+        return str(ipaddress.IPv6Network((ip, 64), strict=False))
+    return str(ip)
+
+
 class PairingStartThrottle(SimpleRateThrottle):
-    # The start of a pairing, counted per caller's address: a device that asks has no key that works yet, and nobody
+    # The start of a pairing, counted per caller's network: a device that asks has no key that works yet, and nobody
     # is logged in.
     scope = "pairing.start"
 
@@ -28,6 +47,9 @@ class PairingStartThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
     def get_ident(self, request: Request) -> str:
+        return caller_network(self._address(request))
+
+    def _address(self, request: Request) -> str:
         # The caller's address as the proxy in front saw it, never as the caller says it.
         header = settings.CLIENT_IP_HEADER
         if not header:
