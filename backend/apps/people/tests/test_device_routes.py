@@ -23,6 +23,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.control.models import AuditAction, AuditEvent
@@ -33,7 +34,7 @@ from apps.core.tenancy import shop_context
 from apps.people.api.authentication import DEVICE_KEY_COOKIE
 from apps.people.api.views import DeviceViewSet
 from apps.people.models import Device, PairingRequest, StaffMember, User
-from apps.people.services import add_staff, confirm_pairing, start_pairing
+from apps.people.services import add_staff, confirm_pairing, mark_left, start_pairing, suspend
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
 
@@ -455,6 +456,44 @@ def test_a_manager_of_one_side_changes_only_its_devices(
             "active",
         )
         assert Device.objects.get(pk=blocked.pk).status == "blocked"
+
+
+@pytest.mark.parametrize("how", ["suspended", "left"])
+def test_a_manager_who_may_not_work_gets_nothing(
+    baba: StaffMember, shop_a: Shop, side_a: Side, give_role: GiveRole, how: str
+) -> None:
+    # A manager suspended for a while, or gone for good, holds no key (02 §5), and it takes effect at their next request
+    # (ADR-0017): the device list is empty, a waiting device can't be confirmed, its side "not found", and every device
+    # is "not found" too. The code still waits for someone who may.
+    juma = person(shop_a, "Juma", RoleTemplate.MANAGER, None, give_role)
+    laptop = pair(baba, side_a, "Laptop ya Dawa")
+    client = client_of(juma)
+    assert client.get(DEVICES).json()["results"] != []
+    with shop_context(shop_a):
+        if how == "suspended":
+            suspend(juma, by=None, reason="Uchunguzi wa upotevu")
+        else:
+            mark_left(juma, left_on=timezone.localdate(), by=None, reason="Amehama")
+    code = start_pairing().request.code
+
+    listed = client.get(DEVICES)
+    confirmed = client.post(DEVICES, confirm_form(code, side_a, name="Laptop ya Pili"))
+    changes = [
+        client.get(f"{DEVICES}{laptop.pk}/"),
+        client.patch(f"{DEVICES}{laptop.pk}/", {"name": "Laptop ya Juma", "version": laptop.version}),
+        client.post(f"{DEVICES}{laptop.pk}/block/", {"reason": "Nimeamua"}),
+        client.post(f"{DEVICES}{laptop.pk}/unblock/", {"reason": "Nimeipata"}),
+    ]
+
+    assert (listed.status_code, listed.json()["results"]) == (200, [])
+    assert (confirmed.status_code, confirmed.json()["fields"]) == (400, {"home_side": ["does_not_exist"]})
+    assert [answer.status_code for answer in changes] == [404] * 4
+    assert still_waiting(code)
+    with shop_context(shop_a):
+        assert (Device.objects.get(pk=laptop.pk).name, Device.objects.get(pk=laptop.pk).status) == (
+            "Laptop ya Dawa",
+            "active",
+        )
 
 
 def test_device_routes_name_their_permissions() -> None:
