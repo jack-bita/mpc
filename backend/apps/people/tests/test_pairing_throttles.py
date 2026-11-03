@@ -179,6 +179,19 @@ def test_start_throttle_reads_cloudflares_header_on_the_demo(settings: Settings)
     assert APIClient().post(PAIRING, HTTP_CF_CONNECTING_IP="198.51.100.20").status_code == 201
 
 
+def test_start_without_cloudflares_header_counts_with_the_proxys_address(settings: Settings) -> None:
+    # On the demo every request comes through Cloudflare, which writes its header. One without it did not, so nothing
+    # it carries is trusted, X-Forwarded-For included: it counts with the address it came from, the proxy in front,
+    # shared by every such request. Slowed down sooner, never let through on an address it wrote itself.
+    settings.CLIENT_IP_HEADER = "CF-Connecting-IP"
+    for fake in range(LIMIT):
+        sent = APIClient(REMOTE_ADDR="198.51.100.20").post(PAIRING, HTTP_X_FORWARDED_FOR=f"192.0.2.{fake}")
+        assert sent.status_code == 201
+
+    last = APIClient(REMOTE_ADDR="198.51.100.20").post(PAIRING, HTTP_X_FORWARDED_FOR="192.0.2.99")
+    assert refused_as_throttled(last)
+
+
 def test_start_throttle_counts_an_ipv6_network_as_one() -> None:
     # Under IPv6 each phone has an address of its own, and a caller can take a new one in their own network, its /64,
     # whenever they like: so the network is counted as one, as an IPv4 shop's one address is. Another network is not
