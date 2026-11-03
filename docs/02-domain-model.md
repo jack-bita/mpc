@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.13 · 3 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.14 · 3 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -31,6 +31,8 @@
 **Changes in v1.13** (3 Nov 2026, AUTH-5): a choice by Jack, made while planning AUTH-5, and a rule the card built. Whoever works on a side sees its devices, a seller included, and changes none of them; renaming a device needs `device.manage` on its home side and the version that was read (§5). Marked **(v1.13)**.
 
 **Changes in v1.12** (30 Oct 2026, AUTH-2): a choice by Jack, made while planning AUTH-2. A pairing request holds the hash of the device's key only while it waits: confirming moves it to the `Device`, so the hash lives in one place at a time, and no path leads from a key through a request to a device of some shop past the guard (§5). A device's `last_seen_at` moves at most every 5 minutes, and never fills the edit history (§5). Marked **(v1.12)**.
+
+**Changes in v1.14** (3 Nov 2026, AUTH-3): a choice by Jack, made while planning AUTH-3. A password user needs no email: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link (§5; ADR-0038, which supersedes ADR-0017). Marked **(v1.14)**.
 
 ---
 
@@ -193,7 +195,7 @@ A full diagram for GitHub is in Appendix A.
 ## 5. People & access — module `people`
 
 **User** [R1] — one human, across shops (D12). Global.
-- `full_name`, `phone` (optional, unique, +255…), `email` (optional; required for password users, who reset their password by email through django-allauth **(v1.1)**), `password` (optional: only for people who log in from their own phone), `language`
+- `full_name`, `phone` (optional, unique, +255…), `email` (optional, for password users too: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link through django-allauth **(v1.14)**), `password` (optional: only for people who log in from their own phone), `language`
 
 **StaffMember** [R1] → Shop, User — a person's job at one shop.
 - `display_name`, `photo` (optional: without one, the PIN login screen shows the full name in large letters with the nickname under it) **(v1.4)**, `pin` (hashed), `job_title`, `started_on`, `left_on`

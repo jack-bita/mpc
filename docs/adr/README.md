@@ -27,7 +27,7 @@ An ADR is a short record of one big decision: the context, what we chose, what i
 | [0014](0014-practice-mode-is-a-separate-practice-shop.md) | Practice mode is a separate practice shop | D14 | decided | low |
 | [0015](0015-a-modular-monolith.md) | A modular monolith · *superseded by [0035](0035-a-modular-monolith-with-control-beside-core.md)* | AD1 | decided | high |
 | [0016](0016-the-shop-app-is-a-static-pwa-built-with-next-js.md) | The shop app is a static PWA built with Next.js | AD2 | decided | medium |
-| [0017](0017-one-address-session-cookies-allauth.md) | One web address, session cookies, and django-allauth for passwords | AD3 | confirmed | medium |
+| [0017](0017-one-address-session-cookies-allauth.md) | One web address, session cookies, and django-allauth for passwords · *superseded by [0038](0038-passwords-without-email-reset-face-to-face.md)* | AD3 | confirmed | medium |
 | [0018](0018-two-kinds-of-identity-devices-and-people.md) | Two kinds of identity: devices and people | AD4 | decided | high |
 | [0019](0019-offline-data-lives-in-indexeddb-through-dexie.md) | Offline data lives in IndexedDB, through Dexie | AD5 | decided | medium |
 | [0020](0020-sync-push-documents-pull-changes.md) | Sync = push documents, pull changes | AD6 | decided | high |
@@ -48,3 +48,4 @@ An ADR is a short record of one big decision: the context, what we chose, what i
 | [0035](0035-a-modular-monolith-with-control-beside-core.md) | A modular monolith, with control beside core | AD1 (REPO-6) | confirmed | high |
 | [0036](0036-office-edits-are-recorded-by-our-own-trigger.md) | Office edits are recorded by our own trigger, into one table | CTRL-2 | confirmed | medium |
 | [0037](0037-tenancy-in-one-place-with-named-doors.md) | Tenancy is enforced in one place, with named doors; row-level security comes later | AUTH-2 | confirmed | medium |
+| [0038](0038-passwords-without-email-reset-face-to-face.md) | One web address, session cookies, and django-allauth for passwords; a lost password is reset face to face | AD3 (AUTH-3) | confirmed | medium |

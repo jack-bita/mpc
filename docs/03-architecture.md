@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.15 · 3 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.16 · 3 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
-**Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+**Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, and AD3 ADR-0038 **(v1.16)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.16** (3 Nov 2026, AUTH-3): choices by Jack, made while planning AUTH-3 (04 v1.29). AD3 is now ADR-0038, which supersedes ADR-0017: a password user needs no email. The owner sets a first or forgotten password face to face, and the person chooses their own at the next login (AUTH-6); an email link is only for people who have one; no SMS for now (§2, §5.9, §10). A password login acts as the person's staff member at their one shop, and the person and the shop are checked on every request; a person with current jobs at two shops is refused until AUTH-7 builds the choice (§5.9). Marked **(v1.16)**.
 
 **Changes in v1.15** (3 Nov 2026, AUTH-5): one choice by Jack, and what building AUTH-5 settled (04 v1.28). The office device list shows a side's devices to whoever works on that side, a seller included; confirming, renaming, blocking or unblocking a device needs `device.manage` on its home side (§5.10). Throttle counts live in Django's database cache, a table in PostgreSQL, with no Redis (ADR-0023); its table is made by `manage.py createcachetable`. The pairing limits read the caller's address as the proxy in front saw it: Caddy's entry in `X-Forwarded-For`, or, on the demo, Cloudflare's `CF-Connecting-IP` (§5.10). After AUTH-5's review: each limit counts in a table of its own, a start by the caller's network, keeping no address, and only real starts and new tries of a code count (§5.10). Marked **(v1.15)**.
 
@@ -96,8 +98,8 @@ Next.js builds the app into plain files (`output: 'export'`). Every screen rende
 *Why:* the counter must open and work with no internet; anything rendered on a server can't. Plain files are also cheap and fast to serve. *Cost:* medium — server rendering can be added later for public R3 pages without touching the counter.
 Note: this is not how Next.js is usually used — no server components at runtime, no server actions, no middleware in the shop app.
 
-**AD3 — One web address, session cookies, and django-allauth for passwords.** (confirmed)
-The app files and the API come from the same address (`https://<app-domain>/` and `/api/`). Logins use Django's session cookie (HttpOnly, Secure) with CSRF protection; no tokens are kept in JavaScript. **django-allauth** in headless mode — whose browser client uses exactly these session cookies — handles password login by email or phone, password resets by email, login rate limits and, later, two-factor codes and passkeys for the owner and managers. PIN login on shop devices and device registration are our own small code.
+**AD3 — One web address, session cookies, and django-allauth for passwords.** (confirmed; ADR-0038 **(v1.16)**)
+The app files and the API come from the same address (`https://<app-domain>/` and `/api/`). Logins use Django's session cookie (HttpOnly, Secure) with CSRF protection; no tokens are kept in JavaScript. **django-allauth** in headless mode — whose browser client uses exactly these session cookies — handles password login by phone or email, login rate limits and, later, two-factor codes and passkeys for the owner and managers. A first or forgotten password is set face to face by the owner, and the person chooses their own at the next login; an email link is only for people who have one **(v1.16)**. PIN login on shop devices and device registration are our own small code.
 *Why:* the simplest safe setup for our own web app — no CORS, nothing for a bad script to steal, and logging out, suspending a worker or blocking a device takes effect at once — with a mature library for the security-critical password part instead of hand-written code. *Cost:* medium.
 
 **AD4 — Two kinds of identity: devices and people.**
@@ -168,7 +170,7 @@ Swahili first with next-intl, messages in `sw.json` and `en.json`. API errors ca
 | API | Django REST Framework, drf-spectacular, django-filter | Standard and well documented |
 | Database | PostgreSQL 18 (17 lacks `uuidv7()`, which the edit history's trigger uses) **(v1.11)** | Exact decimals, constraints, triggers, `uuidv7()` |
 | DB driver | psycopg 3 | The current PostgreSQL driver |
-| Logins | django-allauth (headless, browser mode): password login, email resets, built-in rate limits, later 2FA and passkeys; Argon2 hashing; our own PIN login | A mature library for the security-critical part (AD3) |
+| Logins | django-allauth (headless, browser mode): password login by phone or email, email resets for those who have an email **(v1.16)**, built-in rate limits, later 2FA and passkeys; Argon2 hashing; our own PIN login | A mature library for the security-critical part (AD3) |
 | Background jobs | `django.tasks` + django-tasks-db (`db_worker`) | Built-in API; no Redis |
 | Scheduler | supercronic (cron made for containers) running management commands | Simple, visible, logged |
 | Files | Django storage API: server disk in R1; S3-compatible later (django-storages) | No code change to move |
@@ -364,8 +366,9 @@ Confirming a one-screen sale:
 
 **Owner and managers on their own phones** — django-allauth, headless, browser client:
 - Login by email or phone + password. It creates the same Django session that DRF reads, so the office screens just work.
-- Sign-up is closed: the owner adds people, and a new manager sets a password through a reset link.
-- **Password resets go by email** (free). allauth can't reset by phone number yet, so every password user needs an email.
+- **Which shop** **(v1.16)**: an office route reads the session as the person's staff member at their one shop, and checks on every request that the person and the shop are still active, so a suspension stops the next request. A person with current jobs at two shops is refused (`staff.choose_shop`) until AUTH-7 lets them choose, before a second real shop joins.
+- Sign-up is closed: the owner adds people, and sets a new manager's first password face to face **(v1.16)**.
+- **A forgotten password is reset face to face** **(v1.16)**: the owner types a temporary one, and the person must choose their own at the next login (AUTH-6); the owner's own is reset by the superuser. Anyone who has an email may also use an email link. Most of the shop's people have no email, and an SMS code costs money for each message: it may come later (ADR-0038).
 - Built-in rate limits on login and resets. Two-factor codes and passkeys (allauth's MFA) are *Later*.
 - PIN login is our own endpoint: after checking the device key and the PIN, it starts the same kind of Django session, so allauth and DRF both recognise it.
 
@@ -621,7 +624,7 @@ frontend/src/
 | A stolen shop device | Block it from the owner's phone (its key dies at once); PIN lockout; screen lock and disk encryption on devices |
 | A coworker using someone else's name | Personal PINs, idle lock, every record names the person and the device |
 | One shop seeing another's data | Tenancy in one place + sweep tests; RLS before shop #2; the demo on its own server |
-| A stolen owner password | Argon2, allauth's rate limits, resets by email; two-factor *Later* (allauth MFA) |
+| A stolen owner password | Argon2, allauth's rate limits, resets face to face or by email **(v1.16)**; two-factor *Later* (allauth MFA) |
 | A bad script in the page | HttpOnly cookies (nothing to steal), React escaping, strict headers from Caddy, a content security policy (report-only first) |
 | Cross-site requests | Django CSRF + SameSite cookies |
 | Real data reaching GitHub | `.env` never committed; fake seed data; real sheets only in the gitignored `private/` folder **(v1.1)**; GitHub secret scanning and push protection on |
