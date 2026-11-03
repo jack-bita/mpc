@@ -6,7 +6,8 @@ a refused one too: a guessed code is a refused confirm. The address is the one t
 caller wrote: Caddy's X-Forwarded-For entry, or, on the demo, Cloudflare's own header. A device's own calls, and a
 manager's daily work on the device list, are never slowed down.
 
-The counts live in Django's database cache, in PostgreSQL (ADR-0023). Fake data only: the repo is public (03 §10). So
+The counts live in Django's database cache, in PostgreSQL (ADR-0023), and each test starts with them empty
+(backend/conftest.py). Fake data only: the repo is public (03 §10). So
 every address here is one set aside for documentation, which no real network uses (RFC 5737; RFC 3849 for IPv6):
 203.0.113.10 is the shop's own, 198.51.100.20 another network, and 192.0.2.x what a caller writes in a header.
 """
@@ -16,8 +17,6 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from django.conf import settings as django_settings
-from django.core.cache import caches
 from django.db import connection
 from pytest_django import Settings
 from rest_framework.test import APIClient
@@ -39,14 +38,6 @@ DEVICES = "/api/v1/people/devices/"
 LIMIT = 10
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
-
-
-@pytest.fixture(autouse=True)
-def empty_cache() -> None:
-    # Each test counts from nothing: its own writes to the caches roll back with it, and this clears anything left
-    # there before it began, in every cache.
-    for name in django_settings.CACHES:
-        caches[name].clear()
 
 
 @pytest.fixture
