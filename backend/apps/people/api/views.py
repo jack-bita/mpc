@@ -30,6 +30,7 @@ from rest_framework import mixins
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import BaseThrottle
 
 from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin
 from apps.core.permissions import Permission
@@ -71,10 +72,17 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
     serializer_class = DeviceSerializer
     create_serializer_class = DeviceConfirmSerializer
     edit_serializer_class = DeviceEditSerializer
-    # A manager's confirms are limited, per person, so codes can't be guessed; the route's other actions are not
-    # (apps/people/api/throttles.py). Checked right after the login, before anything is looked up, so a refused try
-    # counts too.
-    throttle_classes = [PairingConfirmThrottle]
+
+    def get_throttles(self) -> list[BaseThrottle]:
+        # A manager's confirms are limited, per person, so codes can't be guessed (apps/people/api/throttles.py). DRF
+        # asks this right after the login, before anything is checked, so a refused try counts too. Only a new try of a
+        # code counts: the route's other actions are a manager's daily work; a send with no code can guess none; and a
+        # confirm sent again, whose device the first send made, is answered with that device, as any repeat is
+        # (CreateOnceMixin), so a double tap after a manager's tenth try still gets its laptop, never "wait".
+        sent = self.request.data if isinstance(self.request.data, dict) else {}
+        if self.action != "create" or not sent.get("pairing_code") or self._stored(sent.get("id")) is not None:
+            return []
+        return [PairingConfirmThrottle()]
 
     @property
     def staff(self) -> StaffMember:

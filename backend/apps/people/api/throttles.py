@@ -93,9 +93,7 @@ class PairingConfirmThrottle(OwnTableThrottle):
     scope = "pairing.confirm"
     cache_name = "pairing_confirm"
 
-    def get_cache_key(self, request: Request, view: APIView) -> str | None:
-        if getattr(view, "action", None) != "create":
-            # Only the confirm: the device list, a rename, a block or an unblock are a manager's daily work, never a
-            # guess. None leaves the request uncounted.
-            return None
+    def get_cache_key(self, request: Request, view: APIView) -> str:
+        # The device route hands this limit only a new try of a code (DeviceViewSet.get_throttles,
+        # apps/people/api/views.py): never its other actions, a send with no code, nor a confirm sent again.
         return self.cache_format % {"scope": self.scope, "ident": request.user.pk}

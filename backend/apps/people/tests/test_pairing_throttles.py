@@ -114,6 +114,32 @@ def test_refused_requests_never_use_up_the_shops_starts() -> None:
     assert shop.post(PAIRING).status_code == 201
 
 
+def test_a_confirm_sent_again_is_never_slowed_down(baba: StaffMember, side_a: Side) -> None:
+    # Nine wrong codes, then the right one: the laptop is paired, but the answer is lost, so the phone sends the same
+    # confirm again. That is no new try of a code: it gets the laptop the first send made, as any repeat does
+    # (CreateOnceMixin), never "wait".
+    manager = client_of(baba)
+    for _ in range(LIMIT - 1):
+        manager.post(DEVICES, confirm_form("WRONGCDE", side_a))
+    sent = confirm_form(start_pairing().request.code, side_a)
+    first = manager.post(DEVICES, sent)
+
+    again = manager.post(DEVICES, sent)
+
+    assert first.status_code == again.status_code == 201
+    assert again.json() == first.json()
+
+
+def test_a_send_with_no_code_does_not_count(baba: StaffMember, side_a: Side) -> None:
+    # A send with no code can guess none: refused for what it lacks, and not counted. The manager's ten tries stay
+    # whole. (The tenancy sweep sends such creates too, with nothing but an id.)
+    manager = client_of(baba)
+    for _ in range(LIMIT + 1):
+        assert manager.post(DEVICES, {"id": str(uuid.uuid7())}).json()["fields"]["pairing_code"] == ["required"]
+
+    assert manager.post(DEVICES, confirm_form(start_pairing().request.code, side_a)).status_code == 201
+
+
 def test_a_flood_of_starts_never_clears_a_managers_count(settings: Settings, baba: StaffMember, side_a: Side) -> None:
     # A full cache table loses a third of its rows, picked by their keys' ABC order, not their age (Django's
     # DatabaseCache), and a manager's key (throttle_pairing.confirm_...) sorts before every start's. Each limit counts
