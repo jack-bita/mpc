@@ -59,7 +59,11 @@ class PairingStartThrottle(OwnTableThrottle):
     scope = "pairing.start"
     cache_name = "pairing_start"
 
-    def get_cache_key(self, request: Request, view: APIView) -> str:
+    def get_cache_key(self, request: Request, view: APIView) -> str | None:
+        if request.method != "POST":
+            # Only a start: DRF counts before it finds the action, so a GET, which this route refuses (405), would
+            # count too, and a page's hidden images could use up the shop's starts. None leaves it uncounted.
+            return None
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
     def get_ident(self, request: Request) -> str:

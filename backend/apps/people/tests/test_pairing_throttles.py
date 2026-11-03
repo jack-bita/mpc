@@ -101,6 +101,19 @@ def test_confirm_throttled_per_person(baba: StaffMember, side_a: Side, shop_a: S
     assert client_of(juma).post(DEVICES, confirm_form(code, side_a)).status_code == 201
 
 
+def test_refused_requests_never_use_up_the_shops_starts() -> None:
+    # A bad web page opened on any phone at the shop can make it call the pairing route: hidden images send GETs, a
+    # hidden form a POST with no CSRF token, which only our own app holds. Each is refused, and none counts: only the
+    # shop's own starts use up its ten, so the page can't stop the shop pairing a laptop.
+    shop = APIClient(REMOTE_ADDR="203.0.113.10")
+    tricked = APIClient(REMOTE_ADDR="203.0.113.10", enforce_csrf_checks=True)
+    for _ in range(LIMIT):
+        assert shop.get(PAIRING).status_code == 405
+        assert tricked.post(PAIRING).status_code == 403
+
+    assert shop.post(PAIRING).status_code == 201
+
+
 def test_a_flood_of_starts_never_clears_a_managers_count(settings: Settings, baba: StaffMember, side_a: Side) -> None:
     # A full cache table loses a third of its rows, picked by their keys' ABC order, not their age (Django's
     # DatabaseCache), and a manager's key (throttle_pairing.confirm_...) sorts before every start's. Each limit counts
