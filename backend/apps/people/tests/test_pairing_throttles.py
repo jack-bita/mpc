@@ -16,7 +16,8 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from django.core.cache import cache
+from django.conf import settings as django_settings
+from django.core.cache import caches
 from django.db import connection
 from pytest_django import Settings
 from rest_framework.test import APIClient
@@ -42,9 +43,10 @@ GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
 @pytest.fixture(autouse=True)
 def empty_cache() -> None:
-    # Each test counts from nothing: its own writes to the cache roll back with it, and this clears anything left
-    # there before it began.
-    cache.clear()
+    # Each test counts from nothing: its own writes to the caches roll back with it, and this clears anything left
+    # there before it began, in every cache.
+    for name in django_settings.CACHES:
+        caches[name].clear()
 
 
 @pytest.fixture
@@ -99,6 +101,21 @@ def test_confirm_throttled_per_person(baba: StaffMember, side_a: Side, shop_a: S
     assert client_of(juma).post(DEVICES, confirm_form(code, side_a)).status_code == 201
 
 
+def test_a_flood_of_starts_never_clears_a_managers_count(settings: Settings, baba: StaffMember, side_a: Side) -> None:
+    # A full cache table loses a third of its rows, picked by their keys' ABC order, not their age (Django's
+    # DatabaseCache), and a manager's key (throttle_pairing.confirm_...) sorts before every start's. Each limit counts
+    # in a table of its own, so a flood of starts from many networks clears only starts: the manager's ten wrong codes
+    # still stand. Every table is shrunk to three rows here, so a small flood fills it.
+    settings.CACHES = {name: {**config, "OPTIONS": {"MAX_ENTRIES": 3}} for name, config in settings.CACHES.items()}
+    manager = client_of(baba)
+    for _ in range(LIMIT):
+        manager.post(DEVICES, confirm_form("WRONGCDE", side_a))
+    for network in range(1, 9):
+        APIClient(REMOTE_ADDR=f"198.51.100.{network}").post(PAIRING)
+
+    assert refused_as_throttled(manager.post(DEVICES, confirm_form(start_pairing().request.code, side_a)))
+
+
 def test_start_throttle_reads_the_address_behind_the_proxy() -> None:
     # Caddy, the one proxy in front (NUM_PROXIES), adds the address it saw at the end of X-Forwarded-For. A phone that
     # writes a new address of its own there each time only changes the entries before Caddy's: they are all one
@@ -141,7 +158,7 @@ def test_start_counts_keep_no_address() -> None:
     APIClient(REMOTE_ADDR="203.0.113.10").post(PAIRING)
 
     with connection.cursor() as cursor:
-        cursor.execute("SELECT cache_key FROM django_cache")
+        cursor.execute("SELECT cache_key FROM throttle_pairing_start")
         keys = [key for (key,) in cursor.fetchall()]
     assert [key for key in keys if "pairing.start" in key]
     assert not [key for key in keys if "203.0.113" in key]

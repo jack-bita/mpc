@@ -191,18 +191,20 @@ REST_FRAMEWORK = {
 # Never set it where that proxy isn't in front: a caller could then write the header themselves.
 CLIENT_IP_HEADER = env("CLIENT_IP_HEADER", "")
 
-# The cache: Django's database cache, a table in PostgreSQL, shared by every server worker, so a limit counts a
-# caller's requests whichever worker answers them (ADR-0023: PostgreSQL only, no Redis). Today it holds the pairing
-# throttles' counts; allauth's login limits (AUTH-3) will count here too. Its table is made by `manage.py
-# createcachetable`, not by a migration: start-demo.sh runs it on the demo, `make migrate` on a laptop, and the test
-# database gets it by itself. 10,000 entries *(default)*, one per caller and limit, far above Django's 300: past it,
-# Django deletes a third of them, and those callers' counts start again.
+# The caches: Django's database cache, tables in PostgreSQL, shared by every server worker, so a limit counts a
+# caller's requests whichever worker answers them (ADR-0023: PostgreSQL only, no Redis). Their tables are made by
+# `manage.py createcachetable`, not by a migration: start-demo.sh runs it on the demo, `make migrate` on a laptop, and
+# the test database gets them by itself. 10,000 entries each *(default)*, one per caller and limit, far above Django's
+# 300.
+# One table per limit, and `default` for the rest, such as allauth's login limits (AUTH-3): past its 10,000, a table
+# loses a third of its rows, picked by their keys' ABC order, not their age, so in one shared table a flood of one kind
+# would clear every other kind's counts, the managers' among the first (apps/people/api/throttles.py). Apart, a flood
+# clears only its own kind.
+_DATABASE_CACHE = {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "OPTIONS": {"MAX_ENTRIES": 10_000}}
 CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-        "LOCATION": "django_cache",
-        "OPTIONS": {"MAX_ENTRIES": 10_000},
-    }
+    "default": {**_DATABASE_CACHE, "LOCATION": "django_cache"},
+    "pairing_start": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_start"},
+    "pairing_confirm": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_confirm"},
 }
 
 # --- The API's description, /api/schema/, and its docs page, /api/docs/ (03 §5.10, ADR-0025).

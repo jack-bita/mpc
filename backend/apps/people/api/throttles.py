@@ -10,13 +10,15 @@ Two limits, 10 an hour each *(default)* (DEFAULT_THROTTLE_RATES, config/settings
 
 A request over its limit is refused with 429 throttled, and `wait`, the seconds until the next try
 (apps/core/api/errors.py). Every request counts, a refused one too: a guessed code is a refused confirm. The counts live
-in the database cache, in PostgreSQL, shared by every server worker (CACHES, config/settings/base.py; ADR-0023). A
+in the database cache, in PostgreSQL, shared by every server worker, each limit in a table of its own (CACHES,
+config/settings/base.py; ADR-0023). A
 device's own calls, `me` and later sync, name no limit, so they are never slowed down.
 """
 
 import ipaddress
 
 from django.conf import settings
+from django.core.cache import caches
 from django.utils.crypto import salted_hmac
 from rest_framework.request import Request
 from rest_framework.throttling import SimpleRateThrottle
@@ -39,10 +41,23 @@ def caller_network(address: str) -> str:
     return str(ip)
 
 
-class PairingStartThrottle(SimpleRateThrottle):
+class OwnTableThrottle(SimpleRateThrottle):
+    # A limit that counts in a cache table of its own (CACHES, config/settings/base.py): a full table loses a third of
+    # its rows by their keys' ABC order, so a flood of another limit's callers, in a shared one, would clear this
+    # limit's counts.
+    cache_name: str
+
+    def __init__(self) -> None:
+        # Looked up as the throttle is made, once per visit, never as the module loads: a test may change the caches.
+        self.cache = caches[self.cache_name]
+        super().__init__()
+
+
+class PairingStartThrottle(OwnTableThrottle):
     # The start of a pairing, counted per caller's network: a device that asks has no key that works yet, and nobody
     # is logged in.
     scope = "pairing.start"
+    cache_name = "pairing_start"
 
     def get_cache_key(self, request: Request, view: APIView) -> str:
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
@@ -68,10 +83,11 @@ class PairingStartThrottle(SimpleRateThrottle):
         return str(request.META.get(meta_name) or request.META.get("REMOTE_ADDR", ""))
 
 
-class PairingConfirmThrottle(SimpleRateThrottle):
+class PairingConfirmThrottle(OwnTableThrottle):
     # A manager's confirm, counted per person: one person who works at two shops (02 D12) has one count, not one at
     # each.
     scope = "pairing.confirm"
+    cache_name = "pairing_confirm"
 
     def get_cache_key(self, request: Request, view: APIView) -> str | None:
         if getattr(view, "action", None) != "create":
