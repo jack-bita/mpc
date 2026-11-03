@@ -32,7 +32,6 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, models
 from django.test.utils import CaptureQueriesContext
 from django.urls import include, path
-from django.utils import timezone
 from pytest_django import Settings
 from rest_framework import exceptions, mixins, serializers
 from rest_framework.decorators import action
@@ -270,7 +269,7 @@ def stop(how: str, staff: StaffMember) -> None:
         if how == "suspended":
             suspend(staff, by=None, reason="Uchunguzi wa upotevu")
         else:
-            mark_left(staff, left_on=timezone.localdate(), by=None, reason="Amehama")
+            mark_left(staff, left_on=staff.started_on, by=None, reason="Amehama")
 
 
 @pytest.mark.django_db

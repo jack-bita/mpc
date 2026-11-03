@@ -23,7 +23,6 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.control.models import AuditAction, AuditEvent
@@ -473,7 +472,7 @@ def test_a_manager_who_may_not_work_gets_nothing(
         if how == "suspended":
             suspend(juma, by=None, reason="Uchunguzi wa upotevu")
         else:
-            mark_left(juma, left_on=timezone.localdate(), by=None, reason="Amehama")
+            mark_left(juma, left_on=juma.started_on, by=None, reason="Amehama")
     code = start_pairing().request.code
 
     listed = client.get(DEVICES)
