@@ -229,6 +229,10 @@ SPECTACULAR_SETTINGS = {
     # An edit's fields keep their own "required": every edit sends the `version` it read. Otherwise
     # drf-spectacular marks every field of a PATCH optional.
     "COMPONENT_SPLIT_PATCH": False,
+    # A field's fixed choices are named after their own type, not after the field: drf-spectacular would call a
+    # device's status StatusEnum, and rename it, with a warning, once another table shows a `status` of its own. The
+    # app's generated types keep these names (UI-2).
+    "ENUM_NAME_OVERRIDES": {"DeviceStatusEnum": "apps.people.models.DeviceStatus"},
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.
     "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0",
