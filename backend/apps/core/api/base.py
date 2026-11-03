@@ -324,11 +324,23 @@ class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
             twin = self._stored(data["id"])
             if twin is not None:
                 return self._replay(request, twin)
+            if isinstance(refusal, ValidationError):
+                # The service's own check before the insert (full_clean) reads through the shop's guard: it finds an
+                # id taken by a row of this shop on a side the person doesn't see, and calls it "unique", while
+                # another shop's row only the insert finds. So that problem is left out, as if unseen: the rest of
+                # what is wrong is the answer, else the id is taken, the same two answers as for another shop's row.
+                rest = _without_the_ids_clash(refusal, self.model)
+                if rest is not refusal:
+                    if rest is not None:
+                        raise rest from None
+                    raise ValidationError(
+                        {"id": ValidationError("This id is already in use.", code="id.taken")}
+                    ) from None
             if isinstance(refusal, IntegrityError) and _id_taken(refusal, self.model):
                 # No twin, yet the id clashes: another row has it that this visit can't see, another shop's, or
                 # this shop's on a side the person doesn't see (get_queryset keeps to their sides). Every lookup here
                 # hides that row, and the answer says only that the id can't be used: nothing about that row, not
-                # even what it is (03 §5.4).
+                # even what it is, nor which of the two it is (03 §5.4).
                 raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")}) from None
             # A real refusal, such as a second side D, answered with its code; or another database rule, which
             # the service should have checked first: a bug, left to become a 500.
@@ -367,6 +379,20 @@ class EditMixin[M: Editable](ShopViewSet[M]):
         sent = self.edit_serializer_class(data=request.data, context=self.get_serializer_context())
         sent.is_valid(raise_exception=True)
         return Response(self.get_serializer(self.edit_row(row, sent.validated_data)).data)
+
+
+def _without_the_ids_clash(error: ValidationError, model: type[models.Model]) -> ValidationError | None:
+    # The refusal less full_clean's "unique" on the new row's id: the same error when it has none, None when that was
+    # all that was wrong, else a new one with the rest.
+    problems = getattr(error, "error_dict", {})
+    pk = model._meta.pk.name
+    others = [problem for problem in problems.get(pk, []) if problem.code != "unique"]
+    if len(others) == len(problems.get(pk, [])):
+        return error
+    rest = {field: found for field, found in problems.items() if field != pk}
+    if others:
+        rest[pk] = others
+    return ValidationError(rest) if rest else None
 
 
 def _id_taken(error: IntegrityError, model: type[models.Model]) -> bool:

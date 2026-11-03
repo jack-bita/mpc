@@ -208,6 +208,46 @@ def test_confirm_refuses_another_shops_side(baba: StaffMember, side_b: Side) -> 
     assert still_waiting(code)
 
 
+@pytest.mark.parametrize(
+    ("name", "answer"),
+    [
+        # A name no device of the shop has: the id is all that is wrong.
+        ("Simu ya Vyakula", {"code": "invalid", "fields": {"id": ["id.taken"]}}),
+        # The Dawa laptop's own name too: the name is what is wrong, as for any id no shop has.
+        ("Laptop ya Dawa", {"code": "device.name_taken", "fields": {}}),
+    ],
+)
+def test_a_taken_id_is_refused_alike_wherever_it_is_taken(
+    baba: StaffMember,
+    neema: StaffMember,
+    side_a: Side,
+    vyakula: Side,
+    staff_b: StaffMember,
+    side_b: Side,
+    give_role: GiveRole,
+    name: str,
+    answer: dict[str, object],
+) -> None:
+    # Neema's phone sends an id already taken: by Dawa's laptop, on a side hidden from her, or by a device of another
+    # shop. Both answers are the same, whatever else is wrong, and say nothing about that device, not even that it is
+    # in her shop (03 §5.4; CreateOnceMixin, apps/core/api/base.py).
+    dawa_laptop = pair(baba, side_a, "Laptop ya Dawa")
+    give_role(staff_b, RoleTemplate.OWNER, None)
+    other_shops = pair(staff_b, side_b, "Simu ya Jingine")
+    neema_client = client_of(neema)
+
+    answers = [
+        neema_client.post(
+            DEVICES, {**confirm_form(start_pairing().request.code, vyakula, name=name), "id": str(taken.pk)}
+        )
+        for taken in (dawa_laptop, other_shops)
+    ]
+
+    shown = [{"code": sent.json()["code"], "fields": sent.json()["fields"]} for sent in answers]
+    assert [sent.status_code for sent in answers] == [400, 400]
+    assert shown == [answer, answer]
+
+
 def test_device_list_keeps_to_the_persons_sides(
     baba: StaffMember,
     neema: StaffMember,
