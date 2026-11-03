@@ -2,8 +2,9 @@
 
 Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a
 shop's devices on the office routes (AUTH-5): a device as the device list shows it, and what a manager sends to say
-yes to a waiting one; and the answers of the two routes a device calls with its key (apps/people/api/views.py). A key,
-a key's hash or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
+yes to a waiting one, to rename one, and to block or unblock one; and the answers of the two routes a device calls
+with its key (apps/people/api/views.py). A key, a key's hash or a PIN's hash is never among the fields: they never
+leave the server (03 §5.9).
 """
 
 from typing import Any
@@ -47,6 +48,26 @@ class DeviceConfirmSerializer(serializers.ModelSerializer[Device]):
             # again after any refusal, and answers a repeat with the stored device (CreateOnceMixin).
             "id": {"required": True, "validators": [uuid7_only]},
         }
+
+
+class DeviceEditSerializer(serializers.ModelSerializer[Device]):
+    # What the app sends to rename a device: the new name, and the version of the device it read. Only the name: its
+    # code is printed in receipt numbers (D7) and never changes, and nothing moves a device to another home side yet.
+    # Anything else sent is ignored.
+    # `version` is declared here: the model keeps it out of every form and API field (editable=False), since only
+    # apps/core/editing.py writes it; here it is what the client read, not a value to store.
+    version = serializers.IntegerField(min_value=1)
+
+    class Meta:
+        model = Device
+        fields = ["name", "version"]
+
+
+class DeviceReasonSerializer(serializers.Serializer[Any]):
+    # What a block or an unblock sends: why, kept in its audit line with who and when (rule 7). A blank reason is let
+    # through, so the service refuses it with its own code, device.reason_required, which the screen translates; one
+    # left out is the form's own `required`. 500 characters at most, as the audit line keeps (control.AuditEvent).
+    reason = serializers.CharField(max_length=500, allow_blank=True)
 
 
 class PairingStartSerializer(serializers.ModelSerializer[PairingRequest]):

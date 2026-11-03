@@ -4,12 +4,13 @@
 A manager says yes to a waiting device from their own phone: they type the code it shows, name it and pick its home
 side, and the phone sends the new device's id with them (ADR-0007), so a double tap, or a send again after a lost
 answer, makes one device and gets the first answer back. The device list shows a shop's devices, with when each was
-last seen.
+last seen. From the list, a manager renames a device, blocks it when it is stolen, and unblocks it when it is back,
+each block and unblock with a reason (03 §5.9, step 4).
 
 Who may do what (Jack, 2 Nov 2026):
 
     shop MFANO, sides Dawa (D) and Vyakula (F)
-    who                          sees the list of     confirms a device on
+    who                          sees the list of     confirms, renames, blocks and unblocks a device on
     Baba, the owner              Dawa, Vyakula        Dawa, Vyakula
     Neema, manager of Vyakula    Vyakula              Vyakula
     Asha, seller on Dawa         Dawa                 none: she has no device.manage
@@ -24,6 +25,7 @@ from typing import Any
 import pytest
 from rest_framework.test import APIClient
 
+from apps.control.models import AuditAction, AuditEvent
 from apps.core.api import base
 from apps.core.api.base import CreateOnceMixin
 from apps.core.permissions import Permission, RoleTemplate
@@ -266,11 +268,119 @@ def test_device_rows_never_show_the_key_hash(baba: StaffMember, side_a: Side) ->
     assert laptop.key_hash not in response.content.decode()
 
 
+def test_manager_renames_a_device(baba: StaffMember, side_a: Side) -> None:
+    # The Dawa laptop moves to the front counter. A second screen, opened before the rename, still holds the old
+    # version: its rename is refused (409), never one that undoes the first (02 §1).
+    laptop = pair(baba, side_a, "Laptop ya Dawa")
+    client = client_of(baba)
+
+    renamed = client.patch(f"{DEVICES}{laptop.pk}/", {"name": "Laptop ya Kaunta", "version": laptop.version})
+    stale = client.patch(f"{DEVICES}{laptop.pk}/", {"name": "Laptop ya Stoo", "version": laptop.version})
+
+    assert renamed.status_code == 200
+    assert (renamed.json()["name"], renamed.json()["version"]) == ("Laptop ya Kaunta", laptop.version + 1)
+    assert stale.status_code == 409
+    assert stale.json()["code"] == "version_conflict"
+
+
+def test_manager_blocks_and_unblocks_with_a_reason(baba: StaffMember, side_a: Side, shop_a: Shop) -> None:
+    # The laptop is stolen from the counter: blocked from the owner's phone, its key opens nothing from its next
+    # request. The police bring it back: unblocked, the same key works again, so the records it holds can still
+    # arrive (AUTH-1). Each with its line in the audit trail, with why.
+    asked = start_pairing()
+    with shop_context(shop_a):
+        laptop_row = confirm_pairing(asked.request.code, name="Laptop ya Dawa", home_side=side_a, by=baba)
+    laptop = APIClient()
+    laptop.cookies[DEVICE_KEY_COOKIE] = asked.key
+    manager = client_of(baba)
+
+    blocked = manager.post(f"{DEVICES}{laptop_row.pk}/block/", {"reason": "Imeibiwa kaunta"})
+    refused = laptop.get(ME)
+    unblocked = manager.post(f"{DEVICES}{laptop_row.pk}/unblock/", {"reason": "Polisi wameirudisha"})
+
+    assert (blocked.status_code, blocked.json()["status"]) == (200, "blocked")
+    assert (refused.status_code, refused.json()["code"]) == (401, "device.blocked")
+    assert (unblocked.status_code, unblocked.json()["status"]) == (200, "active")
+    assert laptop.get(ME).status_code == 200
+    with shop_context(shop_a):
+        lines = AuditEvent.objects.filter(subject_type="device", subject_id=laptop_row.pk).order_by("id")
+        assert [(line.action, line.reason) for line in lines] == [
+            (AuditAction.DEVICE_BLOCK, "Imeibiwa kaunta"),
+            (AuditAction.DEVICE_UNBLOCK, "Polisi wameirudisha"),
+        ]
+
+
+@pytest.mark.parametrize(
+    ("sent", "code", "fields"),
+    [({"reason": "  "}, "device.reason_required", {}), ({}, "invalid", {"reason": ["required"]})],
+)
+def test_block_needs_a_reason(
+    baba: StaffMember, side_a: Side, shop_a: Shop, sent: dict[str, str], code: str, fields: dict[str, list[str]]
+) -> None:
+    # Rule 7: a block is always written with why. A blank reason reaches the service and comes back with its own code,
+    # which the screen translates; none at all is the form's own "required". Either way the device keeps working.
+    laptop = pair(baba, side_a, "Laptop ya Dawa")
+
+    response = client_of(baba).post(f"{DEVICES}{laptop.pk}/block/", sent)
+
+    assert response.status_code == 400
+    assert (response.json()["code"], response.json()["fields"]) == (code, fields)
+    with shop_context(shop_a):
+        assert Device.objects.get(pk=laptop.pk).status == "active"
+
+
+def test_seller_cannot_rename_block_or_unblock(
+    baba: StaffMember, asha: StaffMember, side_a: Side, shop_a: Shop
+) -> None:
+    # Asha sees the Dawa laptop on the list (Jack's A), but holds no device.manage: each change is refused (403), and
+    # the device stays as it was. One device blocked by the owner, for her unblock to be tried on.
+    laptop = pair(baba, side_a, "Laptop ya Dawa")
+    phone = pair(baba, side_a, "Simu ya Dawa")
+    client_of(baba).post(f"{DEVICES}{phone.pk}/block/", {"reason": "Imepotea"})
+    asha_client = client_of(asha)
+
+    tries = [
+        asha_client.patch(f"{DEVICES}{laptop.pk}/", {"name": "Laptop ya Asha", "version": laptop.version}),
+        asha_client.post(f"{DEVICES}{laptop.pk}/block/", {"reason": "Nimeamua"}),
+        asha_client.post(f"{DEVICES}{phone.pk}/unblock/", {"reason": "Nimeipata"}),
+    ]
+
+    assert [(answer.status_code, answer.json()["code"]) for answer in tries] == [(403, "permission_denied")] * 3
+    with shop_context(shop_a):
+        assert Device.objects.get(pk=laptop.pk).name == "Laptop ya Dawa"
+        assert Device.objects.get(pk=laptop.pk).status == "active"
+        assert Device.objects.get(pk=phone.pk).status == "blocked"
+
+
+def test_other_sides_manager_cannot_change_the_device(
+    baba: StaffMember, neema: StaffMember, side_a: Side, shop_a: Shop
+) -> None:
+    # Neema manages Vyakula only, so the Dawa laptop is hidden from her: each change is "not found" (404), as for
+    # another shop's device, never a 403 that would tell her it exists (PPL-5).
+    laptop = pair(baba, side_a, "Laptop ya Dawa")
+    neema_client = client_of(neema)
+
+    tries = [
+        neema_client.patch(f"{DEVICES}{laptop.pk}/", {"name": "Laptop ya Neema", "version": laptop.version}),
+        neema_client.post(f"{DEVICES}{laptop.pk}/block/", {"reason": "Nimeamua"}),
+        neema_client.post(f"{DEVICES}{laptop.pk}/unblock/", {"reason": "Nimeipata"}),
+    ]
+
+    assert [answer.status_code for answer in tries] == [404] * 3
+    with shop_context(shop_a):
+        stored = Device.objects.get(pk=laptop.pk)
+    assert (stored.name, stored.status) == ("Laptop ya Dawa", "active")
+
+
 def test_device_routes_name_their_permissions() -> None:
-    # Seeing a side's devices needs only to see the side (Jack, 2 Nov 2026); saying yes to one needs device.manage
-    # (03 §5.9). Written out in full, so a change to what a route asks for is a change to this test too.
+    # Seeing a side's devices needs only to see the side (Jack, 2 Nov 2026); every change, saying yes to one, renaming
+    # it, blocking and unblocking it, needs device.manage on its home side (03 §5.9). Written out in full, so a change
+    # to what a route asks for is a change to this test too.
     assert DeviceViewSet.action_permissions == {
         "list": base.SEES_THE_SIDE,
         "retrieve": base.SEES_THE_SIDE,
         "create": Permission.DEVICE_MANAGE,
+        "partial_update": Permission.DEVICE_MANAGE,
+        "block": Permission.DEVICE_MANAGE,
+        "unblock": Permission.DEVICE_MANAGE,
     }
