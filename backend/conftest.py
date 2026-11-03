@@ -10,6 +10,8 @@ fixture here may build on any app and still serve the tests of every app.
 from collections.abc import Callable
 
 import pytest
+from django.conf import settings
+from django.core.cache import caches
 from django.test import Client
 from rest_framework.test import APIClient
 
@@ -22,6 +24,18 @@ from apps.shops.services import add_side
 
 # Fake data only: the repo is public (03 §10).
 SUPERUSER_PASSWORD = "a-long-test-password"
+
+
+@pytest.fixture(autouse=True)
+def empty_caches(request: pytest.FixtureRequest) -> None:
+    # Every test that uses the database starts with empty caches (backend/tests/test_caches.py). The pairing limits
+    # count in cache tables, which createcachetable makes, not models (CACHES, config/settings/base.py): a test marked
+    # transaction=True really commits, Django's clean-up after it empties the models' tables only, and a count it left
+    # would make a later test's limit come early. A test with no database has no caches, and may not open one.
+    if request.node.get_closest_marker("django_db") is None:
+        return
+    for name in settings.CACHES:
+        caches[name].clear()
 
 
 @pytest.fixture

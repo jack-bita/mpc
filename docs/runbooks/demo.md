@@ -26,7 +26,7 @@ No secret is in the repo. The deploy hook is the only one GitHub holds. Never re
 
 1. A pull request is squash-merged into `main`. *Deploy demo* starts in the repo's **Actions** tab.
 2. **`publish`** builds the image and checks it (`make check-image`, the same as CI), with the merge's commit as its version. It pushes the image to GitHub Container Registry as `:main` and `:<commit>`, then reads its digest.
-3. **`deploy`** calls Render's deploy hook with that digest. Render pulls exactly that image and starts it with `backend/start-demo.sh`, which runs `migrate` first, then gunicorn. Render keeps the old version running until the new one is up.
+3. **`deploy`** calls Render's deploy hook with that digest. Render pulls exactly that image and starts it with `backend/start-demo.sh`, which runs `migrate` and `createcachetable` (the pairing limits' cache tables, AUTH-5) first, then gunicorn. Render keeps the old version running until the new one is up.
 4. **`deploy`** then runs `scripts/smoke_demo.sh`. It asks `/api/health/` every 10 seconds until the answer carries the merge's commit (up to 15 minutes). Then it checks that `/` shows *Karibu* over HTTPS, and that `http://` is redirected to `https://`.
 5. Green: the demo runs the merge. Red: see *Troubleshooting*.
 
@@ -65,7 +65,7 @@ Render's free PostgreSQL expires 30 days after it is created, and Render deletes
 
 1. Render → `mabatinipumba-demo-db` → **Settings** → **Delete Database**.
 2. Render → **Blueprints** → the demo's Blueprint → **Manual Sync**. Render creates the database again from `render.yaml`, and the service's `DB_*` values follow it.
-3. The service → **Manual Deploy** → **Deploy latest reference**. The start command runs every migration on the empty database.
+3. The service → **Manual Deploy** → **Deploy latest reference**. The start command runs every migration on the empty database, and makes its cache tables.
 4. Check <https://mabatinipumba-demo.onrender.com/api/health/>.
 
 *Not yet tried:* these steps are checked the first time they are needed, about 30 days after the first setup. Correct this list then, with what Render really showed.

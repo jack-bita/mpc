@@ -1,5 +1,6 @@
 #!/bin/sh
-# start-demo.sh — how the demo starts on Render: the migrations first, then the image's usual server (OPS-2).
+# start-demo.sh — how the demo starts on Render: the migrations and the cache tables first, then the image's usual
+# server (OPS-2).
 #
 # render.yaml runs it as the service's dockerCommand, `sh start-demo.sh`. A script, not a chain written out
 # in render.yaml, because Render may split that command at its spaces without honouring quotes, and a
@@ -14,6 +15,10 @@
 set -e
 
 python manage.py migrate --noinput
+
+# The cache tables (CACHES, config/settings/base.py), where the pairing limits count (AUTH-5). Django makes them with
+# this command, not with a migration. It leaves a table that is already there as it is, so every start can run it.
+python manage.py createcachetable
 
 # The same server command as the image's CMD (backend/Dockerfile): change both together.
 # exec: gunicorn takes this shell's place as the container's main process, so Render's stop signal reaches

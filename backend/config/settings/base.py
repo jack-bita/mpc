@@ -173,6 +173,38 @@ REST_FRAMEWORK = {
     # How drf-spectacular describes each route: drf-spectacular's own way, plus what our creates and edits
     # take (apps/core/api/schema.py).
     "DEFAULT_SCHEMA_CLASS": "apps.core.api.schema.RouteSchema",
+    # Pairing's two limits, an hour each *(default)* (AUTH-5, apps/people/api/throttles.py): starts per caller's
+    # network, which every device of a shop shares (its one IPv4 address, or its IPv6 /64), so a few devices an hour
+    # is plenty; a manager's tries of a code per person, a wrong code included. No route is slowed down unless it names
+    # its limit: a device's own calls never are.
+    "DEFAULT_THROTTLE_RATES": {"pairing.start": "10/hour", "pairing.confirm": "10/hour"},
+    # How many proxies stand in front of Django and add the caller's address to X-Forwarded-For: Caddy, 1, on a
+    # laptop and on the real server (03 §12). DRF reads the address that many entries from the end; the entries
+    # before them are whatever the caller wrote, so without this a phone could claim any address and never be slowed
+    # down. The demo reads Cloudflare's header instead (CLIENT_IP_HEADER, below).
+    "NUM_PROXIES": int(env("NUM_PROXIES", "1")),
+}
+
+# The header a proxy in front writes the caller's address in, over any the caller sent, when there is one to trust:
+# on the demo, Cloudflare's `CF-Connecting-IP`, Render's own advice, since Render puts two proxies in front and
+# X-Forwarded-For's count is unsure there (render.yaml). Empty elsewhere: X-Forwarded-For and NUM_PROXIES above.
+# Never set it where that proxy isn't in front: a caller could then write the header themselves.
+CLIENT_IP_HEADER = env("CLIENT_IP_HEADER", "")
+
+# The caches: Django's database cache, tables in PostgreSQL, shared by every server worker, so a limit counts a
+# caller's requests whichever worker answers them (ADR-0023: PostgreSQL only, no Redis). Their tables are made by
+# `manage.py createcachetable`, not by a migration: start-demo.sh runs it on the demo, `make migrate` on a laptop, and
+# the test database gets them by itself. 10,000 entries each *(default)*, one per caller and limit, far above Django's
+# 300.
+# One table per limit, and `default` for the rest, such as allauth's login limits (AUTH-3): past its 10,000, a table
+# loses a third of its rows, picked by their keys' ABC order, not their age, so in one shared table a flood of one kind
+# would clear every other kind's counts, the managers' among the first (apps/people/api/throttles.py). Apart, a flood
+# clears only its own kind.
+_DATABASE_CACHE = {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "OPTIONS": {"MAX_ENTRIES": 10_000}}
+CACHES = {
+    "default": {**_DATABASE_CACHE, "LOCATION": "django_cache"},
+    "pairing_start": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_start"},
+    "pairing_confirm": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_confirm"},
 }
 
 # --- The API's description, /api/schema/, and its docs page, /api/docs/ (03 §5.10, ADR-0025).
@@ -197,6 +229,10 @@ SPECTACULAR_SETTINGS = {
     # An edit's fields keep their own "required": every edit sends the `version` it read. Otherwise
     # drf-spectacular marks every field of a PATCH optional.
     "COMPONENT_SPLIT_PATCH": False,
+    # A field's fixed choices are named after their own type, not after the field: drf-spectacular would call a
+    # device's status StatusEnum, and rename it, with a warning, once another table shows a `status` of its own. The
+    # app's generated types keep these names (UI-2).
+    "ENUM_NAME_OVERRIDES": {"DeviceStatusEnum": "apps.people.models.DeviceStatus"},
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.
     "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0",

@@ -85,6 +85,17 @@ def test_schema_says_what_each_route_takes(tmp_path: Path) -> None:
     assert set(side) == {"get", "patch"}
 
 
+def test_a_fields_choices_keep_a_name_of_their_own(tmp_path: Path) -> None:
+    # drf-spectacular names a field's fixed choices after the field: a device's `status` would be StatusEnum. Once a
+    # second table shows a status of its own, such as a staff member's, the two clash, and drf-spectacular renames
+    # both, with a warning that fails the build (above), and the app's types change under it (UI-2). So the device's is
+    # named after its own type (ENUM_NAME_OVERRIDES, config/settings/base.py).
+    shapes = _schema(tmp_path)["components"]["schemas"]
+
+    assert shapes["Device"]["properties"]["status"]["allOf"][0]["$ref"] == "#/components/schemas/DeviceStatusEnum"
+    assert "StatusEnum" not in shapes
+
+
 def test_docs_group_routes_by_app(tmp_path: Path) -> None:
     # The docs page groups routes by their first part after /api/ and the version: "shops" says whose
     # routes they are, where "v1" said nothing. The same part names each route in the app's generated client

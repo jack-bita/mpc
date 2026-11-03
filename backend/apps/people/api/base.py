@@ -67,8 +67,11 @@ class DeviceView(APIView):
             # No key, or one that opens no device. English for the logs; the app translates the code (ADR-0032).
             raise exceptions.NotAuthenticated("This route needs a paired device's key.")
 
-    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
-        super().initial(request, *args, **kwargs)
+    def check_permissions(self, request: Request) -> None:
+        # DRF runs this right after the login, and the limits right after this (initial()): so a change with no device
+        # is CSRF-checked here, refused before any limit counts it. Otherwise a request another website made a shop
+        # phone send would use up the shop's starts (apps/people/api/throttles.py).
+        super().check_permissions(request)
         if request.method not in SAFE_METHODS and not isinstance(request.auth, Device):
             # A change with no device, such as the start of a pairing: no login checked its CSRF token, so it is
             # checked here. Without it, another website could make a paired laptop ask again (03 §5.9).

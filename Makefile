@@ -123,6 +123,9 @@ hooks: ## install the git hooks that check each commit (once per clone)
 # ADR-0012: Django can't swap its user model after the first migration, so the first `migrate`
 # waits for PPL-1's custom User. The guard blocks it for scripted sessions; this check stops
 # anyone who types it.
-migrate: ## apply migrations to the dev database (refused until PPL-1 is merged)
+# Then the cache tables, where the pairing limits count (AUTH-5): Django makes them with its own
+# command, not a migration, and leaves those already there as they are.
+migrate: ## apply migrations to the dev database (refused before PPL-1) and make the cache tables
 	@test -f backend/apps/people/migrations/0001_initial.py || { echo "Refused: no migrate before PPL-1 (ADR-0012)." >&2; exit 1; }
 	cd backend && $(UV_RUN) python manage.py migrate
+	cd backend && $(UV_RUN) python manage.py createcachetable

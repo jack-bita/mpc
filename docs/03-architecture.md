@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.14 · 30 Oct 2026 · Portion 3 of the planning pack
+**Version:** 1.15 · 3 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.15** (3 Nov 2026, AUTH-5): one choice by Jack, and what building AUTH-5 settled (04 v1.28). The office device list shows a side's devices to whoever works on that side, a seller included; confirming, renaming, blocking or unblocking a device needs `device.manage` on its home side (§5.10). Throttle counts live in Django's database cache, a table in PostgreSQL, with no Redis (ADR-0023); its table is made by `manage.py createcachetable`. The pairing limits read the caller's address as the proxy in front saw it: Caddy's entry in `X-Forwarded-For`, or, on the demo, Cloudflare's `CF-Connecting-IP` (§5.10). After AUTH-5's review: each limit counts in a table of its own, a start by the caller's network, keeping no address, and only real starts and new tries of a code count (§5.10). Marked **(v1.15)**.
 
 **Changes in v1.14** (30 Oct 2026, AUTH-2): choices by Jack, made while planning AUTH-2 (02 v1.12). A device's login finds its shop through one door, which reads only the shop's id of the device that holds the key; the device is then read through the guard, inside that shop. Confirming a pairing moves the key's hash to the device, so it lives in one place (§5.4, §5.9). The key's cookie is SameSite Strict, sent only to `/api/`, and sent again before browsers drop it; the start of a pairing is CSRF-checked, and refused for a device whose key already works (§5.9). Device routes are versioned like sync's, and the manager's confirm is an office route (§5.10). The doors past the guard are a decision of their own, ADR-0037, which supersedes ADR-0022 (AD8). Marked **(v1.14)**.
 
@@ -373,7 +375,7 @@ Confirming a one-screen sale:
 
 | Path | What | Who |
 |---|---|---|
-| `/api/v1/<app>/…` | Office REST: products, prices, deliveries, counts, contacts, cash-up, reports, staff, settings, flags, devices (a manager confirms a pairing there, AUTH-5) **(v1.14)** | Staff session |
+| `/api/v1/<app>/…` | Office REST: products, prices, deliveries, counts, contacts, cash-up, reports, staff, settings, flags, devices (a manager confirms a pairing there, AUTH-5) **(v1.14)**, and lists, renames, blocks and unblocks them; the list shows a side's devices to whoever works on that side, and every change needs `device.manage` on the device's home side (Jack, AUTH-5) **(v1.15)** | Staff session |
 | `/api/sync/v1/bootstrap`, `/pull`, `/push`, `/attachments/{id}` | Sync (§6) | Device key |
 | `/_allauth/browser/v1/…` | Password login, logout, password reset, session (django-allauth) | — |
 | `/api/auth/…` | PIN login, logout, me (our own) | Device key |
@@ -388,6 +390,7 @@ Conventions:
 - **Edits** (`PATCH`) send the `version` they read; stale → `409 version_conflict`. No `PUT`, which could send old values back for fields the person never touched, and no `DELETE`: nothing is deleted **(v1.8)**.
 - **One error shape:** `{"code": "sale.below_floor", "message": "…", "fields": {…}, "params": {…}}`. `code` is the first problem with the whole request, or `invalid` when only fields are wrong; `fields` maps each wrong field to its codes (`lines.1.quantity` inside a list); `params` holds what the message needs; `message` is English, for developers and logs. A bug stays a 500, so it is logged. Under `/api/`, an address no route matches answers `not_found` and a crash `server_error`, in the same shape **(v1.8)**.
 - Cursor pagination for long lists, newest first, 50 rows a page *(default)* **(v1.8)**; throttling on login, PIN and pairing.
+- **Throttles** **(v1.15)** count in Django's database cache, tables in PostgreSQL shared by every server worker, with no Redis (ADR-0023); `manage.py createcachetable` makes them on each deploy. Each limit has a table of its own, and `default` holds the rest (allauth's, AUTH-3): a full table loses a third of its rows by their keys' ABC order, not their age, so in a shared one a flood of one kind would clear every other kind's counts. Pairing allows 10 starts an hour per caller's network (its IPv4 address, or its IPv6 `/64`) and 10 tries of a code an hour per person *(default)*. What counts: a start the shop really sent (a POST that passed its CSRF check) and a new try of a code, a wrong one included; never a confirm sent again, nor a send with no code. Over the limit, `429 throttled` with `wait`. A device's own calls are never slowed down. The network is the one the proxy in front saw, never one the caller wrote: Caddy's entry at the end of `X-Forwarded-For` (`NUM_PROXIES`, 1), or, on the demo, where Render puts two proxies in front, Cloudflare's `CF-Connecting-IP` (`CLIENT_IP_HEADER`); the tables keep a fingerprint of it, made with the server's secret key, never the address.
 - Breaking changes get `v2` routes beside `v1` while devices update.
 
 ### 5.11 Background jobs (AD9)

@@ -13,6 +13,7 @@ is public (03 §10).
 """
 
 import hashlib
+import uuid
 from collections.abc import Callable
 from datetime import timedelta
 
@@ -164,6 +165,20 @@ def test_device_made_in_the_confirmers_shop(manager_a: StaffMember, side_a: Side
     assert device.created_by_id == manager_a.pk
     request = PairingRequest.objects.get(pk=asked.request.pk)
     assert request.device_id == device.pk and request.confirmed_at is not None
+
+
+def test_confirm_keeps_the_phones_id(manager_a: StaffMember, side_a: Side) -> None:
+    # The manager's phone makes the new device's id (ADR-0007) and sends it with the confirm. The device keeps it, so a
+    # confirm sent twice, by a double tap or after a lost answer, finds the device the first one made: the office route
+    # answers the repeat as a read (CreateOnceMixin, AUTH-5).
+    asked = start_pairing()
+    phones_id = uuid.uuid7()
+    with shop_context(manager_a.shop_id):
+        device = confirm_pairing(
+            asked.request.code, name="Laptop ya Dawa", home_side=side_a, by=manager_a, device_id=phones_id
+        )
+        assert device.pk == phones_id
+        assert Device.objects.filter(pk=phones_id).exists()
 
 
 def test_pairing_code_single_use(manager_a: StaffMember, side_a: Side) -> None:
