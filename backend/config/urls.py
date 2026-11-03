@@ -26,4 +26,8 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("api/devices/v1/", include("apps.people.api.device_urls")),
     # Only the superuser can log in here (PPL-1, apps/people/admin.py).
     path("admin/", admin.site.urls),
+    # The owner's and managers' password login and logout: the few routes of django-allauth's JSON API for the
+    # browser that the app may call, and no others (ADR-0038). Outside /api/: allauth answers in its own shape, not the
+    # API's one error shape, and Caddy sends /_allauth/ to Django as it does /api/ (03 v1.3).
+    path("_allauth/browser/v1/", include("apps.people.api.password_urls")),
 ]

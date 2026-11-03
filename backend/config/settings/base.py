@@ -63,6 +63,12 @@ INSTALLED_APPS = [
     "rest_framework",
     # Writes the API's OpenAPI description from the routes (ADR-0025, apps/core/api/schema.py).
     "drf_spectacular",
+    # django-allauth: the owner's and managers' password login (ADR-0038). `account` is the login itself, with its
+    # own table of email addresses; `headless` answers it as JSON at /_allauth/ for our own app, which draws its own
+    # screens (UI-5), so allauth's HTML pages stay off (HEADLESS_ONLY, below).
+    "allauth",
+    "allauth.account",
+    "allauth.headless",
     # Our domain apps, in layer order (ADR-0035; see apps/__init__.py).
     "apps.core",
     "apps.control",
@@ -91,6 +97,15 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # allauth's own: it keeps a login's steps together across requests, and refuses to start without it.
+    "allauth.account.middleware.AccountMiddleware",
+]
+
+# Who may check a password. Django's own, by email, for the superuser's admin login (PPL-1); allauth's, for the owner's
+# and managers' login by email or phone (ADR-0038). Both read the same User and the same password hash.
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -132,7 +147,13 @@ DATABASES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    # A password too much like the person's own details is refused. Django's list names a username, first and last
+    # names, which our User doesn't have (PPL-1): it is told ours instead, so "Baba Mfano" can't pick "babamfano", nor
+    # their phone number.
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "OPTIONS": {"user_attributes": ("full_name", "email", "phone")},
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -238,6 +259,24 @@ SPECTACULAR_SETTINGS = {
     "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0",
     "SWAGGER_UI_FAVICON_HREF": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0/favicon-32x32.png",
 }
+
+# --- django-allauth: the owner's and managers' password login (03 §5.9, ADR-0038), at /_allauth/browser/v1/.
+# Our app draws its own screens (UI-5), so allauth answers only its JSON API, for a browser, with Django's session
+# cookie (ADR-0038): its HTML pages are off, and so are its tokens for mobile apps, which we don't have.
+HEADLESS_ONLY = True
+HEADLESS_CLIENTS = ("browser",)
+# How a person names themselves at login.
+ACCOUNT_LOGIN_METHODS = {"email"}
+# No username: our User has none (PPL-1).
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+# The fields of allauth's sign-up form. Nobody signs up, as our adapter refuses it (apps/people/accounts.py), but
+# allauth checks at start-up that this list fits the login methods above.
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*"]
+# An email is typed by the owner, who knows the person, never by a stranger signing up: nobody is sent a link to
+# confirm it, which most of the shop's people couldn't open anyway.
+ACCOUNT_EMAIL_VERIFICATION = "none"
+# What allauth asks of our people: sign-up closed (apps/people/accounts.py).
+ACCOUNT_ADAPTER = "apps.people.accounts.AccountAdapter"
 
 # Whether the description and the docs page are open (apps/core/api/schema.py). False: closed to everyone,
 # the real server's rule. Off unless an environment turns it on: dev.py does, and the demo does (prod.py).
