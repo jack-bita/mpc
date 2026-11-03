@@ -6,7 +6,9 @@ a refused one too: a guessed code is a refused confirm. The address is the one t
 caller wrote: Caddy's X-Forwarded-For entry, or, on the demo, Cloudflare's own header. A device's own calls, and a
 manager's daily work on the device list, are never slowed down.
 
-The counts live in Django's database cache, in PostgreSQL (ADR-0023). Fake data only: the repo is public (03 §10).
+The counts live in Django's database cache, in PostgreSQL (ADR-0023). Fake data only: the repo is public (03 §10). So
+every address here is one set aside for documentation, which no real network uses (RFC 5737; RFC 3849 for IPv6):
+203.0.113.10 is the shop's own, 198.51.100.20 another network, and 192.0.2.x what a caller writes in a header.
 """
 
 import uuid
@@ -69,12 +71,12 @@ def refused_as_throttled(answer: Any) -> bool:
 def test_pairing_throttled() -> None:
     # Ten starts from the shop's one address in an hour are plenty: every device of a shop shares it. The eleventh is
     # refused, and says how long to wait. Another address is not slowed down: each address counts its own.
-    shop_laptop = APIClient(REMOTE_ADDR="196.0.0.10")
+    shop_laptop = APIClient(REMOTE_ADDR="203.0.113.10")
     for _ in range(LIMIT):
         assert shop_laptop.post(PAIRING).status_code == 201
 
     assert refused_as_throttled(shop_laptop.post(PAIRING))
-    assert APIClient(REMOTE_ADDR="196.0.0.20").post(PAIRING).status_code == 201
+    assert APIClient(REMOTE_ADDR="198.51.100.20").post(PAIRING).status_code == 201
 
 
 def test_confirm_throttled_per_person(baba: StaffMember, side_a: Side, shop_a: Shop, give_role: GiveRole) -> None:
@@ -100,10 +102,10 @@ def test_start_throttle_reads_the_address_behind_the_proxy() -> None:
     # writes a new address of its own there each time only changes the entries before Caddy's: they are all one
     # address, and slowed down as one.
     for fake in range(LIMIT):
-        sent = APIClient().post(PAIRING, HTTP_X_FORWARDED_FOR=f"10.9.9.{fake}, 196.0.0.10")
+        sent = APIClient().post(PAIRING, HTTP_X_FORWARDED_FOR=f"192.0.2.{fake}, 203.0.113.10")
         assert sent.status_code == 201
 
-    assert refused_as_throttled(APIClient().post(PAIRING, HTTP_X_FORWARDED_FOR="10.9.9.99, 196.0.0.10"))
+    assert refused_as_throttled(APIClient().post(PAIRING, HTTP_X_FORWARDED_FOR="192.0.2.99, 203.0.113.10"))
 
 
 def test_start_throttle_reads_cloudflares_header_on_the_demo(settings: Settings) -> None:
@@ -112,11 +114,11 @@ def test_start_throttle_reads_cloudflares_header_on_the_demo(settings: Settings)
     # what X-Forwarded-For says changes nothing.
     settings.CLIENT_IP_HEADER = "CF-Connecting-IP"
     for fake in range(LIMIT):
-        sent = APIClient().post(PAIRING, HTTP_CF_CONNECTING_IP="196.0.0.10", HTTP_X_FORWARDED_FOR=f"10.9.9.{fake}")
+        sent = APIClient().post(PAIRING, HTTP_CF_CONNECTING_IP="203.0.113.10", HTTP_X_FORWARDED_FOR=f"192.0.2.{fake}")
         assert sent.status_code == 201
 
-    assert refused_as_throttled(APIClient().post(PAIRING, HTTP_CF_CONNECTING_IP="196.0.0.10"))
-    assert APIClient().post(PAIRING, HTTP_CF_CONNECTING_IP="196.0.0.20").status_code == 201
+    assert refused_as_throttled(APIClient().post(PAIRING, HTTP_CF_CONNECTING_IP="203.0.113.10"))
+    assert APIClient().post(PAIRING, HTTP_CF_CONNECTING_IP="198.51.100.20").status_code == 201
 
 
 def test_only_pairing_is_throttled(baba: StaffMember, side_a: Side, shop_a: Shop) -> None:
