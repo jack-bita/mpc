@@ -80,6 +80,14 @@ def asha(shop_a: Shop, side_a: Side, give_role: GiveRole) -> StaffMember:
     return person(shop_a, "Asha", RoleTemplate.SELLER, side_a, give_role)
 
 
+@pytest.fixture
+def zawadi(shop_a: Shop, side_a: Side, vyakula: Side, give_role: GiveRole) -> StaffMember:
+    # The manager of Vyakula, who also sells on Dawa: she sees both sides, and holds device.manage on Vyakula only.
+    staff = person(shop_a, "Zawadi", RoleTemplate.MANAGER, vyakula, give_role)
+    give_role(staff, RoleTemplate.SELLER, side_a)
+    return staff
+
+
 def client_of(staff: StaffMember) -> APIClient:
     # Logged in as this staff member, as backend/conftest.py's staff clients are: the logins come later (AUTH-3,
     # AUTH-4) and will leave the staff member in `request.auth`.
@@ -410,6 +418,43 @@ def test_other_sides_manager_cannot_change_the_device(
     with shop_context(shop_a):
         stored = Device.objects.get(pk=laptop.pk)
     assert (stored.name, stored.status) == ("Laptop ya Dawa", "active")
+
+
+def test_a_manager_of_one_side_changes_only_its_devices(
+    baba: StaffMember, zawadi: StaffMember, side_a: Side, vyakula: Side, shop_a: Shop
+) -> None:
+    # Zawadi manages Vyakula and sells on Dawa. Each change is asked on the device's own home side: never on the whole
+    # shop, nor on any side where she holds the key (02 §5). So on Vyakula she confirms, renames, blocks and unblocks;
+    # on Dawa, which she sees, each is refused, and nothing changes.
+    client = client_of(zawadi)
+    made = client.post(DEVICES, confirm_form(start_pairing().request.code, vyakula, name="Simu ya Vyakula"))
+    phone = made.json()
+    on_vyakula = [
+        made,
+        client.patch(f"{DEVICES}{phone['id']}/", {"name": "Simu ya Kaunta", "version": phone["version"]}),
+        client.post(f"{DEVICES}{phone['id']}/block/", {"reason": "Imepotea"}),
+        client.post(f"{DEVICES}{phone['id']}/unblock/", {"reason": "Imepatikana"}),
+    ]
+    laptop = pair(baba, side_a, "Laptop ya Dawa")
+    blocked = pair(baba, side_a, "Simu ya Dawa")
+    client_of(baba).post(f"{DEVICES}{blocked.pk}/block/", {"reason": "Imepotea"})
+    code = start_pairing().request.code
+    on_dawa = [
+        client.post(DEVICES, confirm_form(code, side_a, name="Laptop ya Pili")),
+        client.patch(f"{DEVICES}{laptop.pk}/", {"name": "Laptop ya Zawadi", "version": laptop.version}),
+        client.post(f"{DEVICES}{laptop.pk}/block/", {"reason": "Nimeamua"}),
+        client.post(f"{DEVICES}{blocked.pk}/unblock/", {"reason": "Nimeipata"}),
+    ]
+
+    assert [answer.status_code for answer in on_vyakula] == [201, 200, 200, 200]
+    assert [answer.status_code for answer in on_dawa] == [403, 403, 403, 403]
+    assert still_waiting(code)
+    with shop_context(shop_a):
+        assert (Device.objects.get(pk=laptop.pk).name, Device.objects.get(pk=laptop.pk).status) == (
+            "Laptop ya Dawa",
+            "active",
+        )
+        assert Device.objects.get(pk=blocked.pk).status == "blocked"
 
 
 def test_device_routes_name_their_permissions() -> None:
