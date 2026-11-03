@@ -173,6 +173,36 @@ REST_FRAMEWORK = {
     # How drf-spectacular describes each route: drf-spectacular's own way, plus what our creates and edits
     # take (apps/core/api/schema.py).
     "DEFAULT_SCHEMA_CLASS": "apps.core.api.schema.RouteSchema",
+    # Pairing's two limits, an hour each *(default)* (AUTH-5, apps/people/api/throttles.py): starts per address, and
+    # every device of a shop shares the shop's one address, so a few devices an hour is plenty; a manager's
+    # confirms per person, a wrong code included. No route is slowed down unless it names its limit: a device's own
+    # calls never are.
+    "DEFAULT_THROTTLE_RATES": {"pairing.start": "10/hour", "pairing.confirm": "10/hour"},
+    # How many proxies stand in front of Django and add the caller's address to X-Forwarded-For: Caddy, 1, on a
+    # laptop and on the real server (03 §12). DRF reads the address that many entries from the end; the entries
+    # before them are whatever the caller wrote, so without this a phone could claim any address and never be slowed
+    # down. The demo reads Cloudflare's header instead (CLIENT_IP_HEADER, below).
+    "NUM_PROXIES": int(env("NUM_PROXIES", "1")),
+}
+
+# The header a proxy in front writes the caller's address in, over any the caller sent, when there is one to trust:
+# on the demo, Cloudflare's `CF-Connecting-IP`, Render's own advice, since Render puts two proxies in front and
+# X-Forwarded-For's count is unsure there (render.yaml). Empty elsewhere: X-Forwarded-For and NUM_PROXIES above.
+# Never set it where that proxy isn't in front: a caller could then write the header themselves.
+CLIENT_IP_HEADER = env("CLIENT_IP_HEADER", "")
+
+# The cache: Django's database cache, a table in PostgreSQL, shared by every server worker, so a limit counts a
+# caller's requests whichever worker answers them (ADR-0023: PostgreSQL only, no Redis). Today it holds the pairing
+# throttles' counts; allauth's login limits (AUTH-3) will count here too. Its table is made by `manage.py
+# createcachetable`, not by a migration: start-demo.sh runs it on the demo, `make migrate` on a laptop, and the test
+# database gets it by itself. 10,000 entries *(default)*, one per caller and limit, far above Django's 300: past it,
+# Django deletes a third of them, and those callers' counts start again.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache",
+        "OPTIONS": {"MAX_ENTRIES": 10_000},
+    }
 }
 
 # --- The API's description, /api/schema/, and its docs page, /api/docs/ (03 §5.10, ADR-0025).

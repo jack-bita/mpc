@@ -43,6 +43,7 @@ from apps.people.api.serializers import (
     DeviceSerializer,
     PairingStartSerializer,
 )
+from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle
 from apps.people.models import Device, StaffMember
 from apps.people.services import block as block_device
 from apps.people.services import confirm_pairing, rename_device, start_pairing
@@ -70,6 +71,10 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
     serializer_class = DeviceSerializer
     create_serializer_class = DeviceConfirmSerializer
     edit_serializer_class = DeviceEditSerializer
+    # A manager's confirms are limited, per person, so codes can't be guessed; the route's other actions are not
+    # (apps/people/api/throttles.py). Checked right after the login, before anything is looked up, so a refused try
+    # counts too.
+    throttle_classes = [PairingConfirmThrottle]
 
     @property
     def staff(self) -> StaffMember:
@@ -122,6 +127,9 @@ class PairingView(DeviceView):
     # 03 §5.9, step 1: a new device, with no working key yet, asks to join. So no device is needed, and no shop is open
     # unless its cookie already opens a device, which is then refused.
     device_optional = True
+    # Limited per address, so a flood of starts can't fill the waiting list, nor hunt for codes to confirm
+    # (apps/people/api/throttles.py). The device's other route, `me`, names no limit: it is never slowed down.
+    throttle_classes = [PairingStartThrottle]
 
     @extend_schema(request=None, responses={201: PairingStartSerializer})
     def post(self, request: Request) -> Response:
