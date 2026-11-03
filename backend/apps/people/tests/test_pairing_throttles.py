@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 from django.core.cache import cache
+from django.db import connection
 from pytest_django import Settings
 from rest_framework.test import APIClient
 
@@ -131,6 +132,19 @@ def test_start_throttle_counts_an_ipv6_network_as_one() -> None:
 
     assert refused_as_throttled(APIClient(REMOTE_ADDR="2001:db8:5:7:abcd::99").post(PAIRING))
     assert APIClient(REMOTE_ADDR="2001:db8:5:8::1").post(PAIRING).status_code == 201
+
+
+def test_start_counts_keep_no_address() -> None:
+    # The counts sit in a table, and in its backups, long after their hour. An address can name a person, so they keep a
+    # fingerprint of the caller's network instead, made with the server's secret key: the same network always gives
+    # the same one, and nobody without the key can tell which network it was.
+    APIClient(REMOTE_ADDR="203.0.113.10").post(PAIRING)
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT cache_key FROM django_cache")
+        keys = [key for (key,) in cursor.fetchall()]
+    assert [key for key in keys if "pairing.start" in key]
+    assert not [key for key in keys if "203.0.113" in key]
 
 
 @pytest.mark.parametrize(

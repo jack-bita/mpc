@@ -17,6 +17,7 @@ device's own calls, `me` and later sync, name no limit, so they are never slowed
 import ipaddress
 
 from django.conf import settings
+from django.utils.crypto import salted_hmac
 from rest_framework.request import Request
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
@@ -47,7 +48,10 @@ class PairingStartThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
     def get_ident(self, request: Request) -> str:
-        return caller_network(self._address(request))
+        # Kept as a fingerprint of the caller's network, never the address: the counts sit in a table, and in its
+        # backups, long after their hour, and an address can name a person. An HMAC with the server's secret key, so
+        # the same network always gives the same fingerprint, and nobody without the key can tell which it was.
+        return salted_hmac(self.scope, caller_network(self._address(request)), algorithm="sha256").hexdigest()
 
     def _address(self, request: Request) -> str:
         # The caller's address as the proxy in front saw it, never as the caller says it.
