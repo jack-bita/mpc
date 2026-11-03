@@ -9,7 +9,7 @@ Django's session cookie, CSRF-checked (ADR-0038).
 
     GET    auth/session    who is logged in: 200, or 401 when nobody is
     DELETE auth/session    log out: the session ends at once
-    POST   auth/login      log in with an email and a password
+    POST   auth/login      log in with an email, or a phone written +255…, and a password
 
 Not here: sign-up, closed to everyone (the owner adds people, PPL-2); a login by a code sent by email or SMS.
 allauth answers in its own shape, not the API's one error shape (CORE-6): UI-5's forms read its codes.

@@ -265,8 +265,12 @@ SPECTACULAR_SETTINGS = {
 # cookie (ADR-0038): its HTML pages are off, and so are its tokens for mobile apps, which we don't have.
 HEADLESS_ONLY = True
 HEADLESS_CLIENTS = ("browser",)
-# How a person names themselves at login.
-ACCOUNT_LOGIN_METHODS = {"email"}
+# How a person names themselves at login: their email, or their phone, which most of the shop's people have instead
+# (ADR-0038). allauth finds a person by phone through our adapter (apps/people/accounts.py).
+ACCOUNT_LOGIN_METHODS = {"email", "phone"}
+# allauth's check of a phone by an SMS code, off: the owner typed every phone face to face, and an SMS costs money
+# (ADR-0038). Our adapter reports every stored phone as confirmed.
+ACCOUNT_PHONE_VERIFICATION_ENABLED = False
 # No username: our User has none (PPL-1).
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 # The fields of allauth's sign-up form. Nobody signs up, as our adapter refuses it (apps/people/accounts.py), but

@@ -6,6 +6,7 @@ The app calls allauth's JSON routes for the browser, under /_allauth/browser/v1/
 change a browser sends carries the CSRF token, so another website can't log a person in or out in their name.
 
     POST   auth/login      an email and a password       200, a session; a wrong password 400
+    POST   auth/login      a phone (+255…) and a password    the same, by phone: most people have no email
     GET    auth/session    who is logged in              200; nobody 401
     DELETE auth/session    log out                       401: the session is gone
     POST   auth/signup     anything                      404: nobody signs up
@@ -15,6 +16,7 @@ Fake data only: the repo is public (03 §10).
 
 import pytest
 from django.contrib.auth.password_validation import validate_password
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.test import Client, RequestFactory
 
@@ -38,6 +40,13 @@ def manager() -> User:
     return User.objects.create_user(full_name="Meneja Mfano", email="meneja@example.com", password=PASSWORD)
 
 
+@pytest.fixture
+def owner() -> User:
+    # The owner, with a phone and no email, as most of the shop's people (ADR-0038). Typed as people say it; stored
+    # as +255712345678 (apps/core/phones.py).
+    return User.objects.create_user(full_name="Baba Mfano", phone="0712 345 678", password=PASSWORD)
+
+
 def csrf_token(client: Client) -> str:
     # The CSRF token, as the app gets it: from the `csrftoken` cookie, which every allauth route hands out. The app
     # sends it back in the X-CSRFToken header; another website can't read our cookies, so it can't send the header.
@@ -45,22 +54,84 @@ def csrf_token(client: Client) -> str:
     return client.cookies["csrftoken"].value
 
 
-def log_in(client: Client, **sent: str) -> int:
+def log_in(client: Client, **sent: str) -> tuple[int, list[str]]:
+    # A login as the app sends it, JSON with the CSRF token. Its answer's status, and allauth's error codes, in its own
+    # shape, not the API's (apps/people/api/password_urls.py): {"errors": [{"code": ...}, ...]}. UI-5's forms read them.
     answer = client.post(LOGIN, sent, content_type="application/json", HTTP_X_CSRFTOKEN=csrf_token(client))
-    return answer.status_code
+    return answer.status_code, [error["code"] for error in answer.json().get("errors", [])]
 
 
 def test_login_by_email(manager: User) -> None:
     client = Client(enforce_csrf_checks=True)
     assert client.get(SESSION).status_code == 401  # nobody yet
 
-    assert log_in(client, email="meneja@example.com", password="not-the-password") == 400
+    assert log_in(client, email="meneja@example.com", password="not-the-password") == (400, ["email_password_mismatch"])
     assert client.get(SESSION).status_code == 401
 
-    assert log_in(client, email="meneja@example.com", password=PASSWORD) == 200
+    assert log_in(client, email="meneja@example.com", password=PASSWORD) == (200, [])
     answer = client.get(SESSION)
     assert answer.status_code == 200
     assert answer.json()["data"]["user"]["id"] == str(manager.pk)
+
+
+def test_login_by_email_any_case(manager: User) -> None:
+    # Emails are stored in lower case (PPL-1); a phone's keyboard often starts with a capital letter.
+    client = Client(enforce_csrf_checks=True)
+    assert log_in(client, email="Meneja@Example.COM", password=PASSWORD) == (200, [])
+
+
+def test_login_by_phone(owner: User) -> None:
+    client = Client(enforce_csrf_checks=True)
+    assert log_in(client, phone="+255712345678", password="not-the-password") == (400, ["phone_password_mismatch"])
+    assert client.get(SESSION).status_code == 401
+
+    assert log_in(client, phone="+255712345678", password=PASSWORD) == (200, [])
+    answer = client.get(SESSION)
+    assert answer.status_code == 200
+    assert answer.json()["data"]["user"]["id"] == str(owner.pk)
+
+
+def test_phone_login_needs_the_country_code(owner: User) -> None:
+    # allauth's login takes a phone only as +255…: it refuses 0712… before asking us, so the app writes the number out
+    # in full before it sends it (UI-5). A number our cleaner refuses has our code; an unknown one is answered as a
+    # wrong password, so the login never tells a stranger who has an account here.
+    client = Client(enforce_csrf_checks=True)
+    assert log_in(client, phone="0712345678", password=PASSWORD) == (400, ["invalid_phone"])
+    assert log_in(client, phone="+255123", password=PASSWORD) == (400, ["phone.invalid"])
+    assert log_in(client, phone="+255754000000", password=PASSWORD) == (400, ["phone_password_mismatch"])
+    assert client.get(SESSION).status_code == 401
+
+
+def test_phone_login_sends_no_sms(owner: User, monkeypatch: pytest.MonkeyPatch) -> None:
+    # No SMS, and no change to the person's phone: the hooks that would do either are allauth's own, which refuse
+    # loudly; here they only note that something reached them.
+    reached: list[str] = []
+    for hook in ("send_verification_code_sms", "send_unknown_account_sms", "set_phone", "set_phone_verified"):
+        monkeypatch.setattr(AccountAdapter, hook, lambda *args, _hook=hook, **kwargs: reached.append(_hook))
+
+    client = Client(enforce_csrf_checks=True)
+    assert log_in(client, phone="+255712345678", password="not-the-password") == (400, ["phone_password_mismatch"])
+    assert log_in(client, phone="+255712345678", password=PASSWORD) == (200, [])
+    assert reached == []
+    assert mail.outbox == []
+
+
+def test_wrong_passwords_count_per_phone(owner: User) -> None:
+    # allauth counts a person's wrong passwords, 5 in 5 minutes, under their login name: for a phone, our adapter
+    # adds it (apps/people/accounts.py). Without it, every phone login shared one count, and five wrong passwords for
+    # Baba's phone would have locked the manager out too.
+    meneja = User.objects.create_user(full_name="Meneja Mfano", phone="0754 111 222", password=PASSWORD)
+    client = Client(enforce_csrf_checks=True)
+    for _ in range(5):
+        assert log_in(client, phone="+255712345678", password="not-the-password") == (400, ["phone_password_mismatch"])
+
+    # Baba's own count is full: even the right password waits now.
+    assert log_in(client, phone="+255712345678", password=PASSWORD) == (400, ["too_many_login_attempts"])
+
+    # The manager's is her own.
+    other = Client(enforce_csrf_checks=True)
+    assert log_in(other, phone="+255754111222", password=PASSWORD) == (200, [])
+    assert other.get(SESSION).json()["data"]["user"]["id"] == str(meneja.pk)
 
 
 def test_login_needs_csrf(manager: User) -> None:
@@ -74,7 +145,7 @@ def test_login_needs_csrf(manager: User) -> None:
 
 def test_logout_ends_session(manager: User) -> None:
     client = Client(enforce_csrf_checks=True)
-    assert log_in(client, email="meneja@example.com", password=PASSWORD) == 200
+    assert log_in(client, email="meneja@example.com", password=PASSWORD) == (200, [])
 
     # Logging out is a change too: without the token, another website could log the person out.
     assert client.delete(SESSION).status_code == 403
