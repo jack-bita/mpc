@@ -1,5 +1,5 @@
 #!/bin/sh
-# start-demo.sh — how the demo starts on Render: the migrations and the cache's table first, then the image's usual
+# start-demo.sh — how the demo starts on Render: the migrations and the cache tables first, then the image's usual
 # server (OPS-2).
 #
 # render.yaml runs it as the service's dockerCommand, `sh start-demo.sh`. A script, not a chain written out
@@ -16,7 +16,7 @@ set -e
 
 python manage.py migrate --noinput
 
-# The cache's table (CACHES, config/settings/base.py), where the pairing limits count (AUTH-5). Django makes it with
+# The cache tables (CACHES, config/settings/base.py), where the pairing limits count (AUTH-5). Django makes them with
 # this command, not with a migration. It leaves a table that is already there as it is, so every start can run it.
 python manage.py createcachetable
 

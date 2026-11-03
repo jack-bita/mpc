@@ -19,7 +19,8 @@ urlpatterns: list[URLPattern | URLResolver] = [
     # The office routes, one prefix per app (03 §5.10). A change that would break old devices gets v2
     # routes beside these, until every device has updated.
     path("api/v1/shops/", include("apps.shops.api.urls")),
-    # A shop's devices, as a manager sees and pairs them (AUTH-5).
+    # A shop's devices: the list, which whoever works on a side sees, and a manager's confirm, rename, block and
+    # unblock (AUTH-5).
     path("api/v1/people/", include("apps.people.api.urls")),
     # The routes a device calls with its key: the start of a pairing, and what a paired device learns (AUTH-2).
     path("api/devices/v1/", include("apps.people.api.device_urls")),

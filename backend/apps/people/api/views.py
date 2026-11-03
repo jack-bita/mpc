@@ -135,7 +135,7 @@ class PairingView(DeviceView):
     # 03 §5.9, step 1: a new device, with no working key yet, asks to join. So no device is needed, and no shop is open
     # unless its cookie already opens a device, which is then refused.
     device_optional = True
-    # Limited per address, so a flood of starts can't fill the waiting list, nor hunt for codes to confirm
+    # Limited per caller's network, so a flood of starts can't fill the waiting list, nor hunt for codes to confirm
     # (apps/people/api/throttles.py). The device's other route, `me`, names no limit: it is never slowed down.
     throttle_classes = [PairingStartThrottle]
 

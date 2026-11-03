@@ -55,7 +55,7 @@ services:
       # Where the pairing limits read a caller's address (AUTH-5, config/settings/base.py). Render puts Cloudflare
       # and its own load balancer in front, and its own advice is this header: Cloudflare writes it on every request
       # that reaches a web service, over any the caller sent. Left out, Django falls back to X-Forwarded-For, which a
-      # caller could fool here.
+      # caller could fool here. Render's advice: https://render.com/articles/host-pocketbase-on-render
       - key: CLIENT_IP_HEADER
         value: CF-Connecting-IP
       # The database's details, filled in by Render from the database below; prod.py requires each one.

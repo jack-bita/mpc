@@ -8,9 +8,9 @@ from rest_framework.routers import SimpleRouter
 
 from apps.people.api.views import DeviceViewSet
 
-# SimpleRouter, as for the sides (apps/shops/api/urls.py): devices/ and devices/{id}/. `basename` names the routes
-# (device-list, device-detail), which DRF would otherwise read from a `queryset` in the class body, and ShopViewSet has
-# none.
+# SimpleRouter, as for the sides (apps/shops/api/urls.py): devices/, devices/{id}/, and the view's two actions,
+# devices/{id}/block/ and devices/{id}/unblock/. `basename` names the routes (device-list, device-detail, device-block,
+# device-unblock), which DRF would otherwise read from a `queryset` in the class body, and ShopViewSet has none.
 router = SimpleRouter()
 router.register("devices", DeviceViewSet, basename="device")
 

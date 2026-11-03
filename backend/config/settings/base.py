@@ -173,10 +173,10 @@ REST_FRAMEWORK = {
     # How drf-spectacular describes each route: drf-spectacular's own way, plus what our creates and edits
     # take (apps/core/api/schema.py).
     "DEFAULT_SCHEMA_CLASS": "apps.core.api.schema.RouteSchema",
-    # Pairing's two limits, an hour each *(default)* (AUTH-5, apps/people/api/throttles.py): starts per address, and
-    # every device of a shop shares the shop's one address, so a few devices an hour is plenty; a manager's
-    # confirms per person, a wrong code included. No route is slowed down unless it names its limit: a device's own
-    # calls never are.
+    # Pairing's two limits, an hour each *(default)* (AUTH-5, apps/people/api/throttles.py): starts per caller's
+    # network, which every device of a shop shares (its one IPv4 address, or its IPv6 /64), so a few devices an hour
+    # is plenty; a manager's tries of a code per person, a wrong code included. No route is slowed down unless it names
+    # its limit: a device's own calls never are.
     "DEFAULT_THROTTLE_RATES": {"pairing.start": "10/hour", "pairing.confirm": "10/hour"},
     # How many proxies stand in front of Django and add the caller's address to X-Forwarded-For: Caddy, 1, on a
     # laptop and on the real server (03 §12). DRF reads the address that many entries from the end; the entries

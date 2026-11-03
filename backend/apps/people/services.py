@@ -482,7 +482,8 @@ def rename_device(device: Device, *, version: int, name: str, by: StaffMember) -
     """Give a device a new name on the shop's device list (UI-3), unless someone changed the device since `version`
     was read (02 §1): a rename screen opened before a block, or before another rename, is refused (VersionConflict,
     409) and loads the device again. Needs device.manage on the device's home side, as pairing and blocking it do.
-    Refusals: a name the shop already gives another device (device.name_taken), or none (device.name_blank)."""
+    Refusals: a name the shop already gives another device (device.name_taken); no name, refused as Django's `blank`,
+    or a name of spaces only, which full_clean trims to nothing (device.name_blank)."""
     # editing() checks the shop (T1), reads the device again and locks it, refuses a stale version, then checks the
     # new name (full_clean trims it, and the shop's one-name-per-device rule) and saves it with the next version.
     with editing(device, version=version, by=by) as fresh:

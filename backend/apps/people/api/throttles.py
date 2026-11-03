@@ -8,11 +8,20 @@ Two limits, 10 an hour each *(default)* (DEFAULT_THROTTLE_RATES, config/settings
 - a manager's confirm (POST /api/v1/people/devices/), per person: someone typing codes over and over, by mistake or
   to guess one, waits.
 
-A request over its limit is refused with 429 throttled, and `wait`, the seconds until the next try
-(apps/core/api/errors.py). Every request counts, a refused one too: a guessed code is a refused confirm. The counts live
-in the database cache, in PostgreSQL, shared by every server worker, each limit in a table of its own (CACHES,
-config/settings/base.py; ADR-0023). A
-device's own calls, `me` and later sync, name no limit, so they are never slowed down.
+What counts: a start the shop really sent, a POST that passed its CSRF check (DeviceView.check_permissions), and a new
+try of a code, a wrong one included, since a guessed code is a refused confirm (DeviceViewSet.get_throttles). A request
+over its limit is refused with 429 throttled, and `wait`, the seconds until the next try (apps/core/api/errors.py). The
+counts live in the database cache, in PostgreSQL, shared by every server worker, each limit in a table of its own
+(CACHES, config/settings/base.py; ADR-0023). A device's own calls, `me` and later sync, name no limit, so they are
+never slowed down.
+
+Two honest limits:
+- DRF reads a caller's count, then writes it back one higher, with no lock between: two requests at the same instant,
+  on two server workers, can both pass on the same count. A burst can slip a few tries past the ten; ten an hour stays
+  far too slow to guess an 8-character code. An exact count would be our own counter, with a lock.
+- A refused try counts because nothing undoes the visit's writes when it is refused. If every request ever ran in one
+  transaction (Django's ATOMIC_REQUESTS), the error handler's set_rollback() would undo the count with the refusal
+  (apps/core/api/errors.py), and wrong codes would stop counting: test_confirm_throttled_per_person would say so.
 """
 
 import ipaddress
@@ -79,10 +88,9 @@ class PairingStartThrottle(OwnTableThrottle):
             # On a laptop and on the real server: the entry Caddy added to X-Forwarded-For, NUM_PROXIES from its end
             # (DRF's own reading); the entries before it are the caller's own words.
             return super().get_ident(request)
-        # On the demo: the header Cloudflare writes over any the caller sent (render.yaml). Django gives a request's
-        # headers as HTTP_ and their name in capitals, with _ for -: CF-Connecting-IP is HTTP_CF_CONNECTING_IP. A
-        # request without it, which Cloudflare would never pass on, counts with the address it came from: the proxy
-        # in front, shared by every such request, so it is slowed down sooner, never let through.
+        # On the demo: the header Cloudflare writes over any the caller sent (render.yaml). A request without it, which
+        # Cloudflare would never pass on, counts with the address it came from: the proxy in front, shared by every
+        # such request, so it is slowed down sooner, never let through.
         meta_name = "HTTP_" + header.upper().replace("-", "_")
         return str(request.META.get(meta_name) or request.META.get("REMOTE_ADDR", ""))
 
