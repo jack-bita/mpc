@@ -7,7 +7,7 @@ page's three rules: the id is shown but never typed in, nobody is deleted, and a
 person belongs to no one shop, and this page reads none.
 """
 
-from typing import Any
+from typing import Any, cast
 
 from allauth.account.models import EmailAddress
 from django.contrib import admin
@@ -15,6 +15,7 @@ from django.contrib.admin.forms import AdminPasswordChangeForm as OwnPasswordFor
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import AdminPasswordChangeForm, AdminUserCreationForm, UserChangeForm
 from django.core.exceptions import ValidationError
+from django.forms import CharField
 from django.http import HttpRequest
 from django.views.decorators.debug import sensitive_variables
 
@@ -31,7 +32,8 @@ admin.site.unregister(EmailAddress)
 def _take_off_spaces(cleaned_data: dict[str, Any], *fields: str) -> None:
     # Django's admin forms keep the spaces around a password, and allauth's login takes them off what is typed, so a
     # password stored with them could never log in. Taken off first, so Django's checks judge what will be stored:
-    # twelve spaces leave nothing, which it refuses as required.
+    # twelve spaces leave nothing, which SetUnusablePasswordMixin, the parent of the forms that call this, refuses as
+    # required.
     for field in fields:
         if cleaned_data.get(field):
             cleaned_data[field] = cleaned_data[field].strip()
@@ -83,9 +85,16 @@ class ChooseOwnPasswordForm(OwnPasswordForm):
     # one password form here that is not typed for someone else, so it follows the rules of choosing one's own, as
     # allauth's change route does (AccountAdapter, apps/people/accounts.py): never the temporary one, and the mark comes
     # off. Its variables are hidden from error reports, as above.
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Spaces off by the field itself, before its own "required" check, not afterwards as _take_off_spaces does for
+        # the other forms: this form's parent has no second check for an empty password, so spaces alone would store the
+        # hash of nothing, and lock the person out with the page saying it worked.
+        for field in ("new_password1", "new_password2"):
+            cast(CharField, self.fields[field]).strip = True
+
     @sensitive_variables()
     def clean(self) -> dict[str, Any] | None:
-        _take_off_spaces(self.cleaned_data, "new_password1", "new_password2")
         cleaned = super().clean()
         new_password = self.cleaned_data.get("new_password1")
         if new_password and self.user.must_change_password and self.user.check_password(new_password):

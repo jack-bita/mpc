@@ -261,6 +261,22 @@ def test_own_password_page_takes_the_spaces_off(superuser_client: Client) -> Non
     assert Client().post(LOGIN, login, content_type="application/json").status_code == 200
 
 
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [(" " * 12, " " * 12), (" " * 12, NEW_PASSWORD), ("123", "   ")],
+)
+def test_own_password_page_refuses_what_leaves_nothing(
+    superuser_client: Client, superuser: User, first: str, second: str
+) -> None:
+    # Spaces alone are no password. Taken off too late, after the form's own "required" check, they stored the hash of
+    # nothing: the old password dead, the page saying it worked, and no login that takes an empty password. Or they let
+    # "123" past the checker, which skips an empty box. 200: the form again, and nothing changed.
+    sent = {"old_password": PASSWORD, "new_password1": first, "new_password2": second}
+    assert superuser_client.post("/admin/password_change/", sent).status_code == 200
+    superuser.refresh_from_db()
+    assert superuser.check_password(PASSWORD)
+
+
 def test_own_password_page_lifts_the_wrong_password_count(superuser_client: Client) -> None:
     wrong = {"email": "admin@example.com", "password": "not-the-password"}
     for _ in range(5):
