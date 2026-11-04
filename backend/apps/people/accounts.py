@@ -20,7 +20,6 @@ ACCOUNT_ADAPTER (config/settings/base.py). This file owns ours.
   password lifts the person's count of wrong passwords (see set_password).
 - A person who chooses a password, by the change route or by a link, has their "must change password" mark taken off,
   and may not choose the temporary one they were given: the owner knows it (AUTH-6; see clean_password, set_password).
-- A password set for someone else lifts their count of wrong passwords too (lift_wrong_password_count).
 """
 
 from typing import Any
@@ -28,41 +27,14 @@ from typing import Any
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.account.auth_backends import AuthenticationBackend
 from allauth.core import ratelimit
-from allauth.core.internal.ratelimit import get_cache_key, get_rates
-from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.http import HttpRequest
-from django.utils.crypto import salted_hmac
 from django.views.decorators.debug import sensitive_variables
 
 from apps.core.phones import normalise_phone
 from apps.people.api.throttles import caller_fingerprint
+from apps.people.login_counts import login_count_key
 from apps.people.models import User
-
-
-def _login_count_key(login: str) -> str:
-    # Who allauth counts wrong passwords against: the login name, whichever it is, in its stored form (clean_phone), so
-    # each person's count is their own. A fingerprint made with the server's secret key: allauth writes only a plain
-    # hash of this into the row's key, and a plain hash of a phone number can be worked back, by trying every number.
-    return salted_hmac("login.person", login.lower(), algorithm="sha256").hexdigest()
-
-
-def lift_wrong_password_count(user: User) -> None:
-    """Forget this person's own count of wrong passwords, for each name they log in by. For a password set by someone
-    else (set_temporary_password, apps/people/services.py; the admin's forms): the person who forgot has usually typed
-    it wrong a few times, and the new one must work at once, not after 5 minutes standing in front of the owner."""
-    # allauth's own clear also lifts the caller's count, by their network, and so needs a request, which a service has
-    # none of. Here the caller is the owner: their network's count isn't the person's. So only the counts kept per login
-    # name are lifted. allauth's internal helpers name those rows, so a later allauth could move them, and this would
-    # stop working unseen: test_temporary_password_lifts_the_wrong_password_count pins it.
-    for login in (user.email, user.phone):
-        if login:
-            for rate in get_rates(app="allauth.account", action="login_failed"):
-                if rate.per == "key":
-                    row = get_cache_key(
-                        None, app="allauth.account", action="login_failed", rate=rate, key=_login_count_key(login)
-                    )
-                    cache.delete(row)
 
 
 # allauth ships no types, so mypy knows these base classes only as `Any`, and strict mode refuses a class built on one:
@@ -138,8 +110,8 @@ class AccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
     def _get_login_attempts_cache_key(self, request: HttpRequest, **credentials: Any) -> str:
         # Who allauth counts wrong passwords against. Its own key is made of the email or the username: a phone is
         # neither, so every phone login would share one key, and five wrong passwords for anyone's phone would lock
-        # every phone user out. Ours is the login name, whichever it is (_login_count_key).
+        # every phone user out. Ours is the login name, whichever it is (apps/people/login_counts.py).
         # A private method of allauth's, so a later allauth could rename it, and this would stop working unseen:
         # test_wrong_passwords_count_per_phone pins it.
         login = credentials.get("phone") or credentials.get("email") or credentials.get("username") or ""
-        return _login_count_key(login)
+        return login_count_key(login)

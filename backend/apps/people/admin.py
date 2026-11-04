@@ -18,7 +18,7 @@ from django.core.exceptions import ValidationError
 from django.http import HttpRequest
 from django.views.decorators.debug import sensitive_variables
 
-from apps.people.accounts import lift_wrong_password_count
+from apps.people.login_counts import lift_wrong_password_count
 from apps.people.models import User
 
 # allauth puts its own table of addresses on this site, and its login and reset trust that table. A row typed there

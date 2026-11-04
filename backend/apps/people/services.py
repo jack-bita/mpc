@@ -44,7 +44,6 @@ from apps.core.models import SequenceName, ShopScoped
 from apps.core.permissions import ROLE_TEMPLATES, HeldPermissions, Permission, RoleTemplate
 from apps.core.sequences import next_number
 from apps.core.tenancy import ALL_SHOPS, current_shop, shop_context
-from apps.people.accounts import lift_wrong_password_count
 from apps.people.device_keys import (
     PAIRING_CODE_LIFETIME,
     clean_typed_code,
@@ -52,6 +51,7 @@ from apps.people.device_keys import (
     make_device_key,
     make_pairing_code,
 )
+from apps.people.login_counts import lift_wrong_password_count
 from apps.people.login_doors import shop_of_device_key
 from apps.people.models import (
     Device,
