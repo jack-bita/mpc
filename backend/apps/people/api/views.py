@@ -21,9 +21,10 @@ And the routes a device calls with its key, built on DeviceView (apps/people/api
     GET  /api/devices/v1/me/        a paired device learns its shop, its name, its code and its home side
     POST /api/auth/pin-login/       someone at a paired device types their PIN, and gets a session (AUTH-4)
 
-And one route that only ends a session, whoever's it is and whatever has happened to them since (AUTH-4):
+And what a session itself may ask, built on neither (AUTH-4):
 
-    POST /api/auth/logout/          this browser's session ends, at once
+    GET  /api/auth/me/              who is logged in here, where, and what they may do; an office route, in all but name
+    POST /api/auth/logout/          this browser's session ends, at once, whatever has happened to them since
 
 Thin: each one calls its service (apps/people/services.py), or reads its rows, and answers with its serializer
 (ADR-0015).
@@ -51,7 +52,7 @@ from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin, ShopVi
 from apps.core.permissions import Permission
 from apps.people.api.authentication import set_key_cookie
 from apps.people.api.base import DeviceView
-from apps.people.api.pin_session import start_pin_session
+from apps.people.api.pin_session import PIN_SESSION, start_pin_session
 from apps.people.api.serializers import (
     DeviceConfirmSerializer,
     DeviceEditSerializer,
@@ -61,11 +62,13 @@ from apps.people.api.serializers import (
     PairingStartSerializer,
     PinLoginSerializer,
     TemporaryPasswordSerializer,
+    WhoIsHereSerializer,
 )
+from apps.people.api.staff_session import MeSessionAuthentication
 from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle, PinLoginThrottle
 from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import Device, StaffMember
-from apps.people.selectors import LoginRefused, idle_lock_minutes
+from apps.people.selectors import LoginRefused, idle_lock_minutes, who_is_here
 from apps.people.services import block as block_device
 from apps.people.services import confirm_pairing, pin_login, rename_device, set_temporary_password, start_pairing
 from apps.people.services import unblock as unblock_device
@@ -228,6 +231,25 @@ class LogoutView(APIView):
     def post(self, request: Request) -> Response:
         logout(request._request)
         return Response(status=204)
+
+
+class MeViewSet(ShopViewSet[StaffMember]):
+    # Who is logged in here, where, and what they may do (03 §5.10). Built on the office routes' base, so the visit's
+    # shop opens as for any office route, and the sweep calls it as shop B's person. It shows only the person's own job,
+    # so it needs no key of its own.
+    model = StaffMember
+    side_field = None
+    action_permissions = {"me": SEES_THE_SIDE}
+    serializer_class = WhoIsHereSerializer
+    # Open to someone on a temporary password, and to nobody else that the office routes refuse.
+    authentication_classes = [MeSessionAuthentication]
+
+    # `auth` as on LogoutView: the same cookie as the office routes, described by the same name.
+    @extend_schema(responses=WhoIsHereSerializer, auth=[{"cookieAuth": []}])  # type: ignore[list-item]
+    def me(self, request: Request) -> Response:
+        badge = request._request.session.get(PIN_SESSION) or {}
+        here = who_is_here(cast(StaffMember, self.actor), device_id=badge.get("device"))
+        return Response(self.get_serializer(here).data)
 
 
 class PairingView(DeviceView):

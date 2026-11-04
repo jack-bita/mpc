@@ -12,7 +12,7 @@ On every visit, never only at login: a suspension takes effect on the person's v
 hold (ADR-0038), and bringing them back needs no new login. The route then opens the shop again for the whole visit
 (ShopViewSet, apps/core/api/base.py).
 
-This file owns the login class and its description for the API's schema.
+This file owns the two login classes, and their description for the API's schema.
 """
 
 from typing import Any
@@ -33,6 +33,9 @@ class StaffSessionAuthentication(SessionAuthentication):
     # for a change the CSRF token, so another website can't act in the person's name (ADR-0038). No
     # `authenticate_header()`, as DRF's has none: a refused office route answers 403, as CORE-6's do.
 
+    # Does this route need a password of the person's own? Yes, on every route but one (MeSessionAuthentication below).
+    own_password_needed = True
+
     def authenticate(self, request: Request) -> tuple[User, StaffMember | None] | None:
         logged_in: tuple[User, Any] | None = super().authenticate(request)
         if logged_in is None:
@@ -45,15 +48,23 @@ class StaffSessionAuthentication(SessionAuthentication):
         try:
             if badge is None:
                 # A password's session, on a person's own phone.
-                return user, job_of_person(user)
+                return user, job_of_person(user, own_password_needed=self.own_password_needed)
             # The key goes straight from the cookie into the one function that hides it (AUTH-2).
-            staff = job_of_pin_session(user, badge, request.COOKIES.get(DEVICE_KEY_COOKIE))
+            staff = job_of_pin_session(
+                user, badge, request.COOKIES.get(DEVICE_KEY_COOKIE), own_password_needed=self.own_password_needed
+            )
         except LoginRefused as refused:
             raise exceptions.AuthenticationFailed(str(refused), code=refused.code) from refused
         if staff is not None:
             # Only a visit that passes counts as use: a refused one mustn't keep the badge going.
             keep_pin_session_alive(request._request.session)
         return user, staff
+
+
+class MeSessionAuthentication(StaffSessionAuthentication):
+    # The one route someone on a temporary password may still read: the app must be able to ask who they are, to tell
+    # them why the office pages are closed (Jack, 4 Nov 2026). Everything else still applies.
+    own_password_needed = False
 
 
 # drf-spectacular's extension base files each subclass in a registry, in an __init_subclass__ with no type hints, which

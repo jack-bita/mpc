@@ -31,6 +31,7 @@ A PIN's badge needs no door and no choice of shop: it names its job, and the ser
 
 import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date
 from zoneinfo import ZoneInfo
 
@@ -43,7 +44,8 @@ from apps.core.tenancy import shop_context
 from apps.people.device_keys import hash_device_key
 from apps.people.login_doors import shops_of_person
 from apps.people.models import Device, DeviceStatus, StaffMember, StaffStatus, User
-from apps.shops.models import Shop, ShopStatus
+from apps.people.permissions import held_permissions
+from apps.shops.models import Shop, ShopStatus, Side
 from apps.shops.selectors import get_setting
 
 
@@ -88,8 +90,9 @@ def check_own_password(user: User) -> None:
         raise LoginRefused("This person must choose their own password.", code="password.must_change")
 
 
-def job_of_person(user: User) -> StaffMember | None:
-    """The job this person acts in on this visit; None if they have no current job; LoginRefused if they may not act."""
+def job_of_person(user: User, *, own_password_needed: bool = True) -> StaffMember | None:
+    """The job this person acts in on this visit; None if they have no current job; LoginRefused if they may not act.
+    `own_password_needed`: False only on the one route someone on a temporary password may still read."""
     shop_ids = shops_of_person(user.pk)
     if not shop_ids:
         # The superuser, who is nobody's staff, or someone who has left.
@@ -107,7 +110,8 @@ def job_of_person(user: User) -> StaffMember | None:
         return None
     check_may_act(staff)
     # Last: choosing a password wouldn't let in someone stopped for another reason, so they are told that reason first.
-    check_own_password(user)
+    if own_password_needed:
+        check_own_password(user)
     return staff
 
 
@@ -117,9 +121,12 @@ def pin_stamp(staff: StaffMember) -> str:
 
 
 @sensitive_variables()
-def job_of_pin_session(user: User, badge: Mapping[str, str], device_key: str | None) -> StaffMember | None:
+def job_of_pin_session(
+    user: User, badge: Mapping[str, str], device_key: str | None, *, own_password_needed: bool = True
+) -> StaffMember | None:
     """The job a PIN's badge acts in on this visit (03 §5.9); None if it no longer names one; LoginRefused if they may
-    not act. Every variable hidden from error reports: `device_key` is the device's key itself."""
+    not act. Every variable hidden from error reports: `device_key` is the device's key itself. `own_password_needed`:
+    False only on the one route someone on a temporary password may still read."""
     # The badge's own shop, which the server wrote at login: no door needed, and both rows are read through the guard.
     with shop_context(uuid.UUID(badge["shop"])):
         device = Device.objects.select_related("shop").filter(pk=badge["device"]).first()
@@ -139,5 +146,49 @@ def job_of_pin_session(user: User, badge: Mapping[str, str], device_key: str | N
     if staff is None or pin_stamp(staff) != badge["pin_set_at"]:
         return None
     check_may_act(staff)
-    check_own_password(user)
+    if own_password_needed:
+        check_own_password(user)
     return staff
+
+
+@dataclass(frozen=True)
+class SideKeys:
+    # What a person may do on one side, as `me` lists it.
+    side: Side
+    permissions: list[str]
+
+
+@dataclass(frozen=True)
+class WhoIsHere:
+    # Everything `me` answers (apps/people/api/serializers.py).
+    user: User
+    staff: StaffMember
+    shop: Shop
+    device: Device | None
+    home_side: Side | None
+    must_change_password: bool
+    whole_shop: list[str]
+    sides: list[SideKeys]
+
+
+def who_is_here(staff: StaffMember, *, device_id: str | None) -> WhoIsHere:
+    """Everything the app needs to know about who is logged in here (03 §5.10). `device_id`: the one a PIN's badge
+    names; None for a password on a person's own phone. The person's shop must be open."""
+    device = None
+    if device_id is not None:
+        device = Device.objects.select_related("home_side").filter(pk=device_id).first()
+    # Read once, then asked per side: the same few queries however many sides a shop has (PPL-5). HeldPermissions is the
+    # one place the rule of 02 §5 is written, so this can't drift from what the routes check.
+    held = held_permissions(staff)
+    seen = held.sides_seen()
+    sides = Side.objects.order_by("code") if seen is None else Side.objects.filter(pk__in=seen).order_by("code")
+    return WhoIsHere(
+        user=staff.user,
+        staff=staff,
+        shop=staff.shop,
+        device=device,
+        home_side=None if device is None else device.home_side,
+        must_change_password=staff.user.must_change_password,
+        whole_shop=sorted(held.on(None)),
+        sides=[SideKeys(side=side, permissions=sorted(held.on(side.pk))) for side in sides],
+    )
