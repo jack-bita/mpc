@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.17 · 4 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.18 · 4 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, and AD3 ADR-0038 **(v1.16)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.18** (4 Nov 2026, AUTH-3's review): passwords are stored as Argon2 at a cost set on purpose, as §10 promised and no setting did (§10). One password check per login. allauth's table of addresses stays empty, and a reset link lasts an hour (§5.9). A limit on wrong passwords counts per login name, and reset emails have a limit of their own (§5.9). The rules of who may act live in one place (§5.9). Two old lines that said a password user needs an email are corrected (§18, Appendix). Marked **(v1.18)**.
 
 **Changes in v1.17** (4 Nov 2026, AUTH-3): what building AUTH-3 settled (04 v1.30). A staff session's login has a door of its own, which reads only the shops' ids of the person's current jobs (§5.4). Only the allauth routes the app uses are mounted: its others would let a person change their own email or phone past the owner (§5.9, §5.10). The login takes a phone written `+255…` only, which is allauth's rule (§5.9). A reset link holds its key after the `#`, and the real server sends no email until it has a mail service (§5.9). `default` is the login limits' own cache table, as allauth counts only there, and those limits keep fingerprints, never an address or a phone (§5.10). Marked **(v1.17)**.
 
@@ -369,11 +371,13 @@ Confirming a one-screen sale:
 **Owner and managers on their own phones** — django-allauth, headless, browser client:
 - Login by email or phone + password. It creates the same Django session that DRF reads, so the office screens just work. allauth takes a phone written `+255…` only and refuses `0712…`, so the app writes the number out in full before it sends it **(v1.17)**.
 - **Only the routes the app uses** **(v1.17)**: allauth's own list has no setting to leave a route out, and it would let a logged-in person change their own email or phone, past the owner and the audit trail. So we mount session, login, and the two reset routes, each allauth's own view; any other address there answers 404, and a route a newer allauth adds stays closed until a card lists it (`apps/people/api/password_urls.py`).
-- **Which shop** **(v1.16)**: an office route reads the session as the person's staff member at their one shop, and checks on every request that the person and the shop are still active, so a suspension stops the next request. A person with current jobs at two shops is refused (`staff.choose_shop`) until AUTH-7 lets them choose, before a second real shop joins.
+- **Which shop** **(v1.16)**: an office route reads the session as the person's staff member at their one shop, and checks on every request that the person and the shop are still active, so a suspension stops the next request. A person with current jobs at two shops is refused (`staff.choose_shop`) until AUTH-7 lets them choose, before a second real shop joins. These rules live in one place (`job_of_person`, `check_shop_active`, `apps/people/selectors.py`), so every login follows the same ones **(v1.18)**.
 - Sign-up is closed: the owner adds people, and sets a new manager's first password face to face **(v1.16)**.
 - **A forgotten password is reset face to face** **(v1.16)**: the owner types a temporary one, and the person must choose their own at the next login (AUTH-6); the owner's own is reset by the superuser. Anyone who has an email may also use an email link. Most of the shop's people have no email, and an SMS code costs money for each message: it may come later (ADR-0038).
-- **The email link** **(v1.17)** opens the app at `/password-reset#<key>`. The key sits after the `#`, which a browser never sends to a server, so it stays out of the logs. It works once, and a new password ends the person's other sessions and lifts their count of wrong passwords. Asked about an unknown email, the server answers the same and sends nothing, so nobody learns who has an account, and nobody can make us mail a stranger. The real server sends no email until it has a mail service (`MAIL_BACKEND`, OPS-5); the demo prints it to its log, as its people are fake.
-- Built-in rate limits on login and resets **(v1.17)**: 5 wrong passwords in 5 minutes per person and 10 a minute per caller's network *(allauth's defaults)*; past either, even the right password waits. Honest limit: a stranger who knows a person's phone can keep them locked out, by typing five wrong passwords every five minutes. Two-factor codes and passkeys (allauth's MFA) are *Later*.
+- **The email link** **(v1.17)** opens the app at `/password-reset#<key>`. The key sits after the `#`, which a browser never sends to a server, so it stays out of the logs. It works once, for one hour **(v1.18)**, and a new password ends the person's other sessions and lifts their count of wrong passwords. Changing a person's email ends any link already sent **(v1.18)**. Asked about an unknown email, the server answers the same and sends nothing, so nobody learns who has an account, and nobody can make us mail a stranger. The real server sends no email until it has a mail service (`MAIL_BACKEND`, OPS-5); the demo prints it to its log, as its people are fake.
+- **allauth's table of addresses stays empty** **(v1.18)**: our User holds the email, but allauth's login and reset also trust a table of its own, and its default reset key copies the email there whenever anyone asks for a link. A copy outlives a change of email, so an old mailbox would keep working links and a reused address would open its old owner's account. So we use Django's reset key, which writes nothing, and the table is off the admin.
+- **One password check per login** **(v1.18)**: allauth's checker alone, for the admin's login too. With two, Django tries each until one says yes, so a wrong password is hashed twice and a right one once: the answer's time would show a right password, and the admin's login has no limit yet (04, DATA-1).
+- Built-in rate limits on login and resets **(v1.17)**: 5 wrong passwords in 5 minutes per login name, so a person with an email and a phone has a count for each **(v1.18)**, and 10 a minute per caller's network *(allauth's defaults)*; past either, even the right password waits. Reset emails: 3 an hour to one address, as allauth's default would let a stranger send 7,200 a day **(v1.18)**. Honest limit: a stranger who knows a person's phone can keep them locked out, by typing five wrong passwords every five minutes. Two-factor codes and passkeys (allauth's MFA) are *Later*.
 - PIN login is our own endpoint: after checking the device key and the PIN, it starts the same kind of Django session, so allauth and DRF both recognise it.
 
 **Sessions** are stored in PostgreSQL (no Redis). **CSRF:** the app reads the `csrftoken` cookie and sends `X-CSRFToken`; the device-key authentication enforces CSRF too.
@@ -628,7 +632,7 @@ frontend/src/
 | A stolen shop device | Block it from the owner's phone (its key dies at once); PIN lockout; screen lock and disk encryption on devices |
 | A coworker using someone else's name | Personal PINs, idle lock, every record names the person and the device |
 | One shop seeing another's data | Tenancy in one place + sweep tests; RLS before shop #2; the demo on its own server |
-| A stolen owner password | Argon2, allauth's rate limits, resets face to face or by email **(v1.16)**; two-factor *Later* (allauth MFA) |
+| A stolen owner password | Argon2 at 19 MiB, OWASP's minimum, set to fit a small server; an older hash moves to it at the next login (`apps/people/hashers.py`) **(v1.18)**; allauth's rate limits, resets face to face or by email **(v1.16)**; two-factor *Later* (allauth MFA) |
 | A bad script in the page | HttpOnly cookies (nothing to steal), React escaping, strict headers from Caddy, a content security policy (report-only first) |
 | Cross-site requests | Django CSRF + SameSite cookies |
 | Real data reaching GitHub | `.env` never committed; fake seed data; real sheets only in the gitignored `private/` folder **(v1.1)**; GitHub secret scanning and push protection on |
@@ -763,7 +767,7 @@ The working copy of these rules is `CLAUDE.md` at the repo root, with area rules
 2. Shop devices: which laptops and phones, and one counter device per side?
 3. Product name and web address (AD17) — before R1 goes live.
 4. Budget sign-off from the owner (§13 costs).
-5. An email address for the owner and each manager (allauth password resets).
+5. ~~An email address for the owner and each manager (allauth password resets).~~ Not needed: a password user needs no email (ADR-0038) **(v1.18)**.
 6. PDPC registration (the owner).
 7. PIN length: 4 *(default)* or 6.
 8. Idle lock on shared devices: 15 minutes *(default)*.
@@ -836,7 +840,7 @@ Applied in 02 v1.1 (18 Oct 2026).
 12. Dated-rule tables (prices, costs, settings, pay rates) are append-only in the database.
 13. PIN hashes don't sync to devices (02 §17 said they did); each device makes its own offline PIN check at a person's first online login there.
 14. New Flag kinds: `total_mismatch`, `permission_break`, `drawer_conflict`.
-15. Password users (owner, managers) need an email, for allauth password resets.
+15. Password users (owner, managers) need an email, for allauth password resets. *No longer: a password user needs no email (ADR-0038)* **(v1.18)**.
 16. `Sale.paper_receipt_no` ✚: a sale entered late from the paper receipt book keeps the book number (§6.11).
 17. Devices record their offline periods (`DeviceOutage`: start, end) and report them at sync.
 
