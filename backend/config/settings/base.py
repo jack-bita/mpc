@@ -174,11 +174,12 @@ STATIC_URL = "static/"
 REST_FRAMEWORK = {
     # Every refusal leaves in the API's one error shape, with a code the app translates (ADR-0032).
     "EXCEPTION_HANDLER": "apps.core.api.errors.handle_error",
-    # How the office routes log in: Django's session cookie (03 §5.9, ADR-0017). Only the session: a device's key
-    # logs in on the device routes alone, which name their own login (DeviceView, apps/people/api/base.py), so a
-    # device's cookie opens no office route (AUTH-2, CORE-6).
+    # How the office routes log in: Django's session cookie, read as the person's staff member at their shop, checked
+    # on every visit (apps/people/api/staff_session.py; 03 §5.9, ADR-0038). Only the session: a device's key logs in on
+    # the device routes alone, which name their own login (DeviceView, apps/people/api/base.py), so a device's cookie
+    # opens no office route (AUTH-2, CORE-6).
     # DRF's default also accepts a password sent with every request (Basic), which nothing here uses.
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["apps.people.api.staff_session.StaffSessionAuthentication"],
     # Closed unless a view says otherwise: a route open to everyone, like the health check, says so itself.
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     # JSON only, in and out (03 §5.10). DRF's browsable HTML pages would also build a form for each route,

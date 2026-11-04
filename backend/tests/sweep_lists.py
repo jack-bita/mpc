@@ -72,9 +72,9 @@ HAND_BUILT_QUERIES = {
     # come from an empty query (.none()), which reads no row at all (CORE-6).
     "apps/core/api/base.py": "an empty query, .none(), for the API's description",
     # A login must find the visit's shop before any is open: each door there reads only the shop's id, by what the
-    # request brings (a device's key's hash), and the device itself is then read through the guard, inside that shop.
-    # A test pins that the door reads a shop's id alone (Jack, AUTH-2; 03 §5.4).
-    "apps/people/login_doors.py": "a login's door: the shop's id of the device that holds a key, and nothing more",
+    # request brings (a device's key's hash, a logged-in person's id), and the device or the job is then read through
+    # the guard, inside that shop. A test pins that each door reads a shop's id alone (Jack, AUTH-2, AUTH-3; 03 §5.4).
+    "apps/people/login_doors.py": "a login's door: the shop's id of a key's device or a person's job, and nothing more",
 }
 
 # App files that may run SQL by hand, `connection.cursor()` or `.raw()`, besides migrations, system jobs and tests,
