@@ -2,7 +2,8 @@
 
 A staff member's working life at one shop (02 §5): they are added, suspended, brought back and marked
 as left, and given a PIN (set_pin; apps/people/pins.py hashes it) or a temporary password, face to face
-(set_temporary_password, AUTH-6). And what they may do there: a shop gets
+(set_temporary_password, AUTH-6). A PIN login finds the person and checks their PIN, with its count of wrong tries
+(pin_login, check_pin, AUTH-4). And what they may do there: a shop gets
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
@@ -20,18 +21,19 @@ Callers open shop_context(shop) first: full_clean and the unique checks read thr
 so it needs none open, and its request links to nothing (02 v1.11).
 """
 
+import math
 import uuid
 from collections.abc import Collection, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
+from typing import cast
 
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
@@ -58,6 +60,7 @@ from apps.people.models import (
     DeviceStatus,
     PairingRequest,
     PermissionGrant,
+    PinLock,
     Role,
     RoleAssignment,
     StaffMember,
@@ -65,7 +68,16 @@ from apps.people.models import (
     User,
 )
 from apps.people.permissions import effective_permissions, given_permissions, held_permissions, require
-from apps.people.pins import check_pin_strength, hash_pin
+from apps.people.pins import (
+    FIRST_LOCK_MINUTES,
+    LONGEST_LOCK_MINUTES,
+    PIN_TRIES,
+    check_pin_strength,
+    hash_pin,
+    pin_hash_is_old,
+    pin_matches,
+)
+from apps.people.selectors import check_may_act, shop_today
 from apps.shops.models import Shop, Side
 from apps.shops.services import NewSide, create_shop
 
@@ -85,12 +97,6 @@ def _check_shop(shop_id: uuid.UUID, by: StaffMember | None) -> None:
         raise ValidationError("The person acting belongs to another shop.", code="staff.other_shop")
 
 
-def _shop_today(shop: Shop) -> date:
-    # Today in the shop's own time zone (02 §1), not the server's UTC: at 01:00 in Arusha, UTC is still
-    # on yesterday.
-    return timezone.localdate(timezone=ZoneInfo(shop.timezone))
-
-
 def add_staff(
     *,
     shop: Shop,
@@ -103,7 +109,7 @@ def add_staff(
     """Give a person a job at a shop. `by`: who adds them; None for the system or the superuser."""
     _check_shop(shop.pk, by)
     if started_on is None:
-        started_on = _shop_today(shop)
+        started_on = shop_today(shop)
     staff = StaffMember(
         shop=shop,
         user=user,
@@ -195,7 +201,7 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
     _check_reason(reason)
     # On their last day or after, never ahead (Jack, 27 Oct): `left` takes effect at once, so "leaves on
     # Friday" typed on Monday would stop their PIN four days early.
-    if left_on > _shop_today(staff.shop):
+    if left_on > shop_today(staff.shop):
         raise ValidationError("A leaving date can't be in the future.", code="staff.left_in_future")
     with transaction.atomic():
         staff = _locked(staff)
@@ -219,22 +225,116 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
     return staff
 
 
+# Every variable shows as stars in Django's error reports, here and in everything this calls: `pin` is the PIN itself.
+@sensitive_variables()
 def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMember:
     """Give a person a new PIN, online only (03 §5.9). Devices see the new `pin_changed_at` at their next
-    sync and drop their old offline check."""
+    sync and drop their old offline check. A PIN logs in as the whole person, so who may is the rule for a password,
+    with codes of its own (_check_may_act_as; Jack, 4 Nov 2026). `by` None: the system, or the superuser, who is
+    nobody's staff, and the only one who sets an owner's."""
     _check_shop(staff.shop_id, by)
+    # Who may, first, before anything else: a refused try pays for no slow hash. Asked again under the locks below, as
+    # this copy can be out of date by then.
+    if by is not None:
+        _check_may_act_as(staff, staff.user, by=by, secret="pin")
     check_pin_strength(pin)
     # Hashed before the lock: Argon2 is slow on purpose, and the row stays locked only for the short
     # write below.
     pin_hash = hash_pin(pin)
     with transaction.atomic():
-        staff = _locked(staff)
+        if by is None:
+            staff = _locked(staff)
+        else:
+            staff, by = _locked_pair(staff, by)
+            _check_may_act_as(staff, User.objects.get(pk=staff.user_id), by=by, secret="pin")
         if staff.status == StaffStatus.LEFT:
             raise ValidationError("A person who has left can't be given a PIN.", code="staff.left")
         staff.pin_hash = pin_hash
         staff.pin_changed_at = timezone.now()
         staff.full_clean()
         _save(staff, by=by, fields=["pin_hash", "pin_changed_at"])
+        # A new PIN ends any lock at once, on every device: a worker locked out by a coworker's wrong tries asks a
+        # manager, and needs no waiting (Jack, 4 Nov 2026).
+        _lift_pin_locks(PinLock.objects.filter(staff=staff))
+    return staff
+
+
+def _pin_locked(lock: PinLock, at: datetime) -> ValidationError:
+    # `wait`: whole seconds, rounded up, so the app never says "try again in 0 seconds" (ADR-0032). `locked_until` is
+    # never empty here: each caller has just read or set it.
+    wait = math.ceil((cast(datetime, lock.locked_until) - at).total_seconds())
+    return ValidationError("This person is locked on this device.", code="pin.locked", params={"wait": wait})
+
+
+def _count_pin_try(staff: StaffMember, device: Device, *, at: datetime) -> PinLock:
+    # Counted before the PIN is checked, holding the row's lock, and kept even if the check then crashes. Checked first,
+    # twelve tries sent at once would each read "no wrong tries yet", and all twelve would get through. The lock is
+    # dropped before the slow check, so a person's other tries wait for no hash.
+    with transaction.atomic():
+        lock, _ = PinLock.objects.select_for_update().get_or_create(
+            staff=staff, device=device, defaults={"shop_id": staff.shop_id}
+        )
+        if lock.locked_until is not None and at < lock.locked_until:
+            raise _pin_locked(lock, at)
+        lock.wrong_tries += 1
+        if lock.wrong_tries == PIN_TRIES:
+            lock.wrong_tries = 0
+            lock.locked_until = at + timedelta(minutes=lock.next_lock_minutes)
+            lock.next_lock_minutes = min(lock.next_lock_minutes * 2, LONGEST_LOCK_MINUTES)
+        lock.save(update_fields=["wrong_tries", "next_lock_minutes", "locked_until"])
+    return lock
+
+
+def _lift_pin_locks(rows: QuerySet[PinLock]) -> None:
+    rows.update(wrong_tries=0, next_lock_minutes=FIRST_LOCK_MINUTES, locked_until=None)
+
+
+# Every variable shows as stars in Django's error reports, here and in everything this calls: `pin` is the PIN itself.
+@sensitive_variables()
+def check_pin(staff: StaffMember, device: Device, pin: str, *, at: datetime) -> None:
+    """Is this the person's PIN, on this device, at this moment? Answers by returning; refuses with pin.wrong, or
+    pin.locked and the seconds to wait (03 §5.9)."""
+    # T1, both halves: the shop open is theirs, and the person and the device belong together. Without the first, a
+    # visit of shop A could write a count into shop B's rows, which its next read wouldn't find.
+    _check_shop(staff.shop_id, None)
+    _check_same_shop(staff, device)
+    lock = _count_pin_try(staff, device, at=at)
+    if pin_matches(pin, staff.pin_hash, staff_id=staff.pk):
+        _lift_pin_locks(PinLock.objects.filter(pk=lock.pk))
+        return
+    # The fifth wrong try has just started a lock: say so now, so the screen can tell her how long.
+    if lock.locked_until is not None and at < lock.locked_until:
+        raise _pin_locked(lock, at)
+    raise ValidationError("This PIN is wrong.", code="pin.wrong")
+
+
+def _move_pin_to_todays_cost(staff: StaffMember, pin: str) -> None:
+    # One UPDATE of this one column. `pin_changed_at` stays: her PIN didn't change, so devices keep their offline check
+    # of it (03 §5.9). The history skips the hash (ADR-0036), so the owner's trail says nothing. Only if the hash is
+    # still the one just checked: a new PIN set at this same moment must not be overwritten with the old one.
+    StaffMember.objects.filter(pk=staff.pk, pin_hash=staff.pin_hash).update(pin_hash=hash_pin(pin))
+
+
+# Every variable shows as stars in Django's error reports, here and in everything this calls: `pin` is the PIN itself.
+@sensitive_variables()
+def pin_login(device: Device, staff_id: uuid.UUID, pin: str, *, at: datetime) -> StaffMember:
+    """The person this PIN logs in, on this device (03 §5.9). Refuses with pin.wrong or pin.locked, or LoginRefused for
+    someone who can't act today."""
+    _check_shop(device.shop_id, None)
+    # Read through the guard, inside the device's shop: another shop's person isn't found (X2, T1).
+    staff = (
+        StaffMember.objects.select_related("shop", "user").filter(pk=staff_id).exclude(status=StaffStatus.LEFT).first()
+    )
+    if staff is None or not staff.user.is_active:
+        # Nobody here by that id: another shop's person, someone who left or was switched off, or a made-up id. The same
+        # answer as a wrong PIN, after the same work, so neither the words nor the time tell them apart.
+        pin_matches(pin, "")
+        raise ValidationError("This PIN is wrong.", code="pin.wrong")
+    # Before the PIN: this costs no memory, and a suspended person's wrong tries don't lock them for later.
+    check_may_act(staff)
+    check_pin(staff, device, pin, at=at)
+    if pin_hash_is_old(staff.pin_hash):
+        _move_pin_to_todays_cost(staff, pin)
     return staff
 
 
@@ -245,9 +345,9 @@ def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMem
 @sensitive_variables()
 def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember, reason: str) -> None:
     """Set a first or forgotten password, face to face (ADR-0038): Baba types one for Asha and tells it to her. She logs
-    in with it, and every office route refuses her until she chooses her own (apps/people/selectors.py). `by` is always
-    a person, who needs staff.manage on the whole shop, as a password opens the whole person. Refusals, each a code the
-    screen translates: the password's checks, under `password`; staff.reason_required; staff.left; and who may
+    in with it, and every office route but `me` refuses her until she chooses her own (apps/people/selectors.py). `by`
+    is always a person, who needs staff.manage on the whole shop, as a password opens the whole person. Refusals, each a
+    code the screen translates: the password's checks, under `password`; staff.reason_required; staff.left; and who may
     (_check_may_set_password). Her older logins end, as each holds a fingerprint of the password it started with, so a
     lost phone is logged out. Returns nothing: the password goes no further than this function (no answer, log or audit
     line holds it)."""
@@ -272,15 +372,7 @@ def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember
     # write below. make_password, not user.set_password: that keeps the typed password on the row in memory until save.
     encoded = make_password(password)
     with transaction.atomic():
-        # Her job and the job of the one acting, read again and locked. A role given to her, a leaving recorded, or a
-        # suspension of the one acting, at this same moment, comes first and is seen here, or waits until this is done:
-        # the hash above left plenty of time for one. In id order, so two people each setting the other's password at
-        # once take turns. no_key: a row another transaction links to needs a light lock at that transaction's commit,
-        # and a full lock here would block it, while this waits for that same transaction: Baba giving Juma a key while
-        # setting his password would deadlock, and one request would answer a server error.
-        rows = StaffMember.objects.select_for_update(no_key=True).filter(pk__in=[staff.pk, by.pk]).order_by("pk")
-        jobs = {job.pk: job for job in rows}
-        staff, by = jobs[staff.pk], jobs[by.pk]
+        staff, by = _locked_pair(staff, by)
         # Her person, read afresh. Not locked: everything that decides who may hangs on the jobs locked above, and the
         # write below names only its own two columns.
         user = User.objects.get(pk=staff.user_id)
@@ -305,37 +397,55 @@ def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember
         lift_wrong_password_count(user)
 
 
+def _locked_pair(staff: StaffMember, by: StaffMember) -> tuple[StaffMember, StaffMember]:
+    # A person's job and the job of the one acting, read again and locked. A role given to them, a leaving recorded, or
+    # a suspension of the one acting, at this same moment, comes first and is seen here, or waits until this is done:
+    # the slow hash before it left plenty of time for one. In id order, so two people each setting the other's password
+    # at once take turns. no_key: a row another transaction links to needs a light lock at that transaction's commit,
+    # and a full lock here would block it, while this waits for that same transaction: Baba giving Juma a key while
+    # setting his password would deadlock, and one request would answer a server error.
+    rows = StaffMember.objects.select_for_update(no_key=True).filter(pk__in=[staff.pk, by.pk]).order_by("pk")
+    jobs = {job.pk: job for job in rows}
+    return jobs[staff.pk], jobs[by.pk]
+
+
 def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) -> None:
-    # Whoever sets a person's password can log in as them. So this is the giver rule (02 §5), for a whole person: Baba
-    # may hand a manager staff.manage to deal with a forgotten password, and that manager still can't become anyone
-    # stronger than himself (Jack, 4 Nov 2026). Refused as a ValidationError with its code, as flag.own_flag is, so the
-    # screen can say what to do.
-    # The key, on the whole shop, read afresh: a giver suspended a moment ago holds nothing (PermissionDenied, 403).
-    require(by, Permission.STAFF_MANAGE, None)
-    if staff.status == StaffStatus.LEFT:
-        raise ValidationError("A person who has left can't be given a password.", code="staff.left")
-    if staff.pk == by.pk:
-        # A thief holding a logged-in phone could set a new password for its owner, with no current one, and keep the
-        # login for good. A person changes their own by allauth's change route, which asks for the current one.
-        raise ValidationError("A person changes their own password with the current one.", code="password.own")
-    # The superuser's alone (ADR-0038). Read from the roles, whatever the person's status: a suspended owner holds no
-    # keys but is still the owner, and two owners may have fallen out with each other. When PPL-4 adds an end to a role,
-    # an ended Owner role must stop counting here too.
-    is_owner = RoleAssignment.objects.filter(staff=staff, role__template=RoleTemplate.OWNER).exists()
-    # Their password opens the admin, which reads every shop's rows: no shop's owner hands that out. A job at another
-    # shop isn't looked at: reading that shop's rows during this shop's visit would pass the guard, which is only for a
-    # login, before any shop is open (ADR-0037, Jack, 4 Nov 2026). Nothing is lost yet, as a person at two shops is
-    # refused at every office route until AUTH-7, whose card adds this rule.
-    if is_owner or user.is_superuser or user.is_staff:
-        raise ValidationError("Only the superuser may reset this person's password.", code="password.superuser_only")
-    # What the person was given, whatever their status, as they hold it all again once brought back; against what the
-    # one acting holds now.
-    if not held_permissions(by).covers(given_permissions(staff)):
-        raise ValidationError("This person holds a key the one acting doesn't.", code="password.more_keys")
+    _check_may_act_as(staff, user, by=by, secret="password")
     # A login is by phone or by email. With neither, the password could never be used, and the mark would stay on for
     # good: the owner is told now, and adds the phone first, not when the person can't log in.
     if not user.phone and not user.email:
         raise ValidationError("This person has no phone or email to log in with.", code="password.no_login_name")
+
+
+def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, secret: str) -> None:
+    # Whoever sets a person's password or PIN can log in as them. So this is the giver rule (02 §5), for a whole person:
+    # Baba may hand a manager staff.manage to deal with a forgotten password, and that manager still can't become anyone
+    # stronger than himself (Jack, 4 Nov 2026). `secret`, "password" or "pin", names the refusal's code. Refused as a
+    # ValidationError with its code, as flag.own_flag is, so the screen can say what to do.
+    # The key, on the whole shop, read afresh: a giver suspended a moment ago holds nothing (PermissionDenied, 403).
+    require(by, Permission.STAFF_MANAGE, None)
+    if staff.status == StaffStatus.LEFT:
+        raise ValidationError(f"A person who has left can't be given a {secret}.", code="staff.left")
+    if staff.pk == by.pk:
+        # A thief holding a logged-in phone could set a new one for its owner, with no current one, and keep the login
+        # for good. A person changes their own password by allauth's change route, which asks for the current one. A PIN
+        # has no such route: someone else sets it, face to face, and PPL-4's screen decides how the person types it.
+        raise ValidationError(f"A person doesn't set their own {secret} here.", code=f"{secret}.own")
+    # The superuser's alone (ADR-0038). Read from the roles, whatever the person's status: a suspended owner holds no
+    # keys but is still the owner, and two owners may have fallen out with each other. When PPL-4 adds an end to a role,
+    # an ended Owner role must stop counting here too.
+    is_owner = RoleAssignment.objects.filter(staff=staff, role__template=RoleTemplate.OWNER).exists()
+    # Someone who can open the admin reads every shop's rows, so they stand above any shop's people: no shop's owner may
+    # act as them, whether by their password, which opens the admin, or by their PIN, which opens their job. A job at
+    # another shop isn't looked at: reading that shop's rows during this shop's visit would pass the guard, which is
+    # only for a login, before any shop is open (ADR-0037, Jack, 4 Nov 2026). Nothing is lost yet, as a person at two
+    # shops is refused at every office route until AUTH-7, whose card adds this rule.
+    if is_owner or user.is_superuser or user.is_staff:
+        raise ValidationError(f"Only the superuser may reset this person's {secret}.", code=f"{secret}.superuser_only")
+    # What the person was given, whatever their status, as they hold it all again once brought back; against what the
+    # one acting holds now.
+    if not held_permissions(by).covers(given_permissions(staff)):
+        raise ValidationError("This person holds a key the one acting doesn't.", code=f"{secret}.more_keys")
 
 
 def set_up_shop(*, name: str, code: str, sides: Sequence[NewSide]) -> Shop:

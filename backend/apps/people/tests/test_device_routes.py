@@ -30,8 +30,8 @@ from apps.core.api import base
 from apps.core.api.base import CreateOnceMixin
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.api.authentication import DEVICE_KEY_COOKIE
 from apps.people.api.views import DeviceViewSet
+from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import Device, PairingRequest, StaffMember, User
 from apps.people.services import add_staff, confirm_pairing, mark_left, start_pairing, suspend
 from apps.shops.models import Shop, Side
@@ -89,8 +89,8 @@ def zawadi(shop_a: Shop, side_a: Side, vyakula: Side, give_role: GiveRole) -> St
 
 
 def client_of(staff: StaffMember) -> APIClient:
-    # Logged in as this staff member, as backend/conftest.py's staff clients are: the logins come later (AUTH-3,
-    # AUTH-4) and will leave the staff member in `request.auth`.
+    # Logged in as this staff member, as backend/conftest.py's staff clients are: the real logins (AUTH-3, AUTH-4) leave
+    # the staff member in `request.auth`, and have tests of their own.
     client = APIClient()
     client.force_authenticate(user=staff.user, token=staff)  # type: ignore[arg-type]
     return client

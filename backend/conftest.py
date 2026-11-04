@@ -113,7 +113,7 @@ def staff_client_a(
     staff_a: StaffMember, give_role: Callable[[StaffMember, RoleTemplate, Side | None], None]
 ) -> APIClient:
     # DRF's test client, logged in as a staff member of shop A, the way the office screens are. A login, AUTH-3's
-    # password session (apps/people/api/staff_session.py) and later AUTH-4's PIN, leaves the person acting in
+    # password or AUTH-4's PIN (apps/people/api/staff_session.py), leaves the person acting in
     # `request.auth`, which names the shop the visit works for (apps/core/api/base.py). force_authenticate skips the
     # login and puts the staff member there directly; apps/people/tests/test_staff_session.py goes through the real
     # one. DRF's type stubs expect its own Token model there; DRF itself takes any object, and ours is the staff member.

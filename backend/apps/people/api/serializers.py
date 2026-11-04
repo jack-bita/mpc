@@ -3,8 +3,9 @@
 Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a
 shop's devices on the office routes (AUTH-5): a device as the device list shows it, and what a manager sends to say
 yes to a waiting one, to rename one, and to block or unblock one; what the owner sends to set a temporary password
-(AUTH-6); and the answers of the two routes a device calls with its key (apps/people/api/views.py). A key, a key's hash
-or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
+(AUTH-6); what a device sends for a PIN login, and what `me` answers (AUTH-4); and the answers of the two routes a
+device calls with its key (apps/people/api/views.py). A key, a key's hash or a PIN's hash is never among the fields:
+they never leave the server (03 §5.9).
 """
 
 from typing import Any
@@ -12,7 +13,7 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
-from apps.people.models import Device, PairingRequest
+from apps.people.models import Device, PairingRequest, StaffMember, User
 from apps.shops.api.fields import SideField
 from apps.shops.models import Shop, Side
 
@@ -82,6 +83,15 @@ class TemporaryPasswordSerializer(serializers.Serializer[Any]):
     reason = serializers.CharField(max_length=500, allow_blank=True, write_only=True)
 
 
+class PinLoginSerializer(serializers.Serializer[Any]):
+    # What a shop's device sends when someone types their PIN (AUTH-4): who, and the PIN. Only ever read in: the route
+    # answers with nothing, and nothing shows a PIN back.
+    staff = serializers.UUIDField(write_only=True)
+    # 16 characters at most, so a huge text can't reach the slow hash. Not checked as 4 digits here: anything else just
+    # counts as a wrong try, with the same answer.
+    pin = serializers.CharField(max_length=16, write_only=True)
+
+
 class PairingStartSerializer(serializers.ModelSerializer[PairingRequest]):
     # What a new device gets back when it asks to join: the code to show on its screen, and until when it can be typed.
     # Never the key: an answer's body is what page scripts can read; the key goes in its cookie only.
@@ -122,6 +132,55 @@ class DeviceMeSerializer(serializers.Serializer[Device]):
     device = MeDeviceSerializer(source="*")
     home_side = MeSideSerializer()
     shop = MeShopSerializer()
+
+    def to_internal_value(self, data: Any) -> Any:
+        # Only ever an answer: nothing is sent to this route.
+        raise NotImplementedError
+
+
+class MeUserSerializer(serializers.ModelSerializer[User]):
+    # The person, as the screens greet them, in their own language (03 §7.4). No phone and no email: a screen on a
+    # shared laptop doesn't need them, and the next person could read them there.
+    class Meta:
+        model = User
+        fields = ["id", "full_name", "language"]
+        read_only_fields = fields
+
+
+class MeStaffSerializer(serializers.ModelSerializer[StaffMember]):
+    # Their job at this shop. Never the PIN's hash.
+    class Meta:
+        model = StaffMember
+        fields = ["id", "display_name", "job_title"]
+        read_only_fields = fields
+
+
+class MeSideKeysSerializer(serializers.Serializer[Any]):
+    # One side, with what the person may do there. The side's own fields beside its keys, so a screen needs no second
+    # call to name its tabs.
+    id = serializers.UUIDField(source="side.pk")
+    code = serializers.CharField(source="side.code")
+    name = serializers.CharField(source="side.name")
+    permissions = serializers.ListField(child=serializers.CharField())
+
+
+class MePermissionsSerializer(serializers.Serializer[Any]):
+    # What the person may do (02 §5, X1): on the whole shop, and on each side they hold a key on. A side they hold none
+    # on isn't named: they don't see it on any route either.
+    whole_shop = serializers.ListField(child=serializers.CharField())
+    sides = MeSideKeysSerializer(many=True)
+
+
+class WhoIsHereSerializer(serializers.Serializer[Any]):
+    # What `GET /api/auth/me/` answers (apps/people/selectors.py, who_is_here). `device` and `home_side` are empty for a
+    # password on a person's own phone.
+    user = MeUserSerializer()
+    staff = MeStaffSerializer()
+    shop = MeShopSerializer()
+    device = MeDeviceSerializer(allow_null=True)
+    home_side = MeSideSerializer(allow_null=True)
+    must_change_password = serializers.BooleanField()
+    permissions = MePermissionsSerializer(source="*")
 
     def to_internal_value(self, data: Any) -> Any:
         # Only ever an answer: nothing is sent to this route.

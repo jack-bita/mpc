@@ -246,7 +246,7 @@ class AuditEvent(AppendOnly):
     # save() and any delete() in Python, and the trigger in this table's migration refuses the same in PostgreSQL
     # (ADR-0021): the reason stays as written, whoever reads the trail later. Written only by audit()
     # (apps/control/services.py), inside the action's own transaction. Two of 02's columns come later: `device`
-    # when a visit knows its device (AUTH-4), `approval` with the Approval table (02 v1.9).
+    # when a visit knows its device (AUTH-8), `approval` with the Approval table (02 v1.9).
 
     action = models.CharField(max_length=40, choices=AuditAction)
     # The row the action was done to: its table's code (apps/core/links.py) and its id, as a flag's subject. No
@@ -308,7 +308,7 @@ class EditEvent(AppendOnly):
     # `shop` (the edited row's), `created_at` (when) and `created_by` (who acted, as the visit told PostgreSQL:
     # apps/core/acting.py; empty outside a visit, when the system acted). AppendOnly (CORE-3) refuses a second
     # save() and any delete() in Python, and the trigger in this table's migration refuses the same in PostgreSQL
-    # (ADR-0021). The device joins in AUTH-4.
+    # (ADR-0021). The device joins in AUTH-8.
 
     # The row that changed: its table's code (apps/core/links.py) and its id, as an audit line's subject.
     subject_type = models.CharField(max_length=TYPE_CODE_MAX_LENGTH)

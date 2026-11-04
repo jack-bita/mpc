@@ -15,10 +15,16 @@ And a staff member's temporary password (AUTH-6):
     POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
 
 And the routes a device calls with its key, built on DeviceView (apps/people/api/base.py), under /api/devices/v1/
-(apps/people/api/device_urls.py):
+(apps/people/api/device_urls.py) and, for PIN login, /api/auth/ (apps/people/api/auth_urls.py):
 
     POST /api/devices/v1/pairing/   a new device asks to join a shop: a code to show, and its key in a cookie
     GET  /api/devices/v1/me/        a paired device learns its shop, its name, its code and its home side
+    POST /api/auth/pin-login/       someone at a paired device types their PIN, and gets a session (AUTH-4)
+
+And what a session itself may ask, built on neither (AUTH-4):
+
+    GET  /api/auth/me/              who is logged in here, where, and what they may do; an office route, in all but name
+    POST /api/auth/logout/          this browser's session ends, at once, whatever has happened to them since
 
 Thin: each one calls its service (apps/people/services.py), or reads its rows, and answers with its serializer
 (ADR-0015).
@@ -27,20 +33,26 @@ Thin: each one calls its service (apps/people/services.py), or reads its rows, a
 from collections.abc import Callable
 from typing import Any, cast
 
+from django.contrib.auth import logout
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.utils import extend_schema
-from rest_framework import mixins
+from rest_framework import exceptions, mixins
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import BaseThrottle
+from rest_framework.views import APIView
 
 from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin, ShopViewSet
 from apps.core.permissions import Permission
-from apps.people.api.authentication import DEVICE_KEY_COOKIE, set_key_cookie
+from apps.people.api.authentication import set_key_cookie
 from apps.people.api.base import DeviceView
+from apps.people.api.pin_session import PIN_SESSION, start_pin_session
 from apps.people.api.serializers import (
     DeviceConfirmSerializer,
     DeviceEditSerializer,
@@ -48,12 +60,17 @@ from apps.people.api.serializers import (
     DeviceReasonSerializer,
     DeviceSerializer,
     PairingStartSerializer,
+    PinLoginSerializer,
     TemporaryPasswordSerializer,
+    WhoIsHereSerializer,
 )
-from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle
+from apps.people.api.staff_session import MeSessionAuthentication
+from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle, PinLoginThrottle
+from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import Device, StaffMember
+from apps.people.selectors import LoginRefused, idle_lock_minutes, who_is_here
 from apps.people.services import block as block_device
-from apps.people.services import confirm_pairing, rename_device, set_temporary_password, start_pairing
+from apps.people.services import confirm_pairing, pin_login, rename_device, set_temporary_password, start_pairing
 from apps.people.services import unblock as unblock_device
 
 
@@ -171,12 +188,76 @@ class StaffViewSet(ShopViewSet[StaffMember]):
         return Response(status=204)
 
 
+class PinLoginView(DeviceView):
+    # 03 §5.9: a shop's device says who stands at it. Built on DeviceView, so a device logs in first, with its key, and
+    # a blocked one never gets here. It takes no one's PIN but its own shop's people's. Limited per device, as each try
+    # costs a full check of 19 MiB (apps/people/api/throttles.py).
+    throttle_classes = [PinLoginThrottle]
+
+    # `sent` holds the PIN while the service runs: every variable here, and in everything this calls, shows as stars in
+    # Django's error reports.
+    @extend_schema(request=PinLoginSerializer, responses={204: None})
+    @sensitive_variables()
+    def post(self, request: Request) -> Response:
+        sent = PinLoginSerializer(data=request.data)
+        sent.is_valid(raise_exception=True)
+        # cast: DeviceView has refused any visit with no device; mypy can't see that.
+        device = cast(Device, request.auth)
+        try:
+            staff = pin_login(device, sent.validated_data["staff"], sent.validated_data["pin"], at=timezone.now())
+        except LoginRefused as refused:
+            # 403: the device is fine, and it is the person who can't act today. English for the logs; the app
+            # translates the code (ADR-0032).
+            raise exceptions.PermissionDenied(str(refused), code=refused.code) from refused
+        start_pin_session(request, staff, device, idle_minutes=idle_lock_minutes(staff.shop))
+        # Nothing to answer with: the app asks `me` next, as after any login.
+        return Response(status=204)
+
+
+class LogoutView(APIView):
+    # Ends the session this browser holds, at once: the row is deleted on the server, so a copy of its number opens
+    # nothing (03 §5.9). DRF's own session login, not ours: it asks nothing about the person's job or the device, so a
+    # suspended person, or someone on a blocked laptop, can still log out. It still checks the CSRF token, so another
+    # website can't log someone out. With no session, nothing to do, and the same answer. It reads no shop's table
+    # (NOT_SHOP_ROUTES, backend/tests/sweep_lists.py).
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [AllowAny]
+
+    # `auth` names the session's cookie by the name the office routes describe it with (StaffSessionScheme). Left to
+    # read DRF's class, the API's description would meet two different classes under one name, and warn. The library's
+    # type hint says a list of texts, but it copies this value into the description as it stands, and OpenAPI wants
+    # this shape (`manage.py spectacular --validate` agrees): the library's hint, not our value, is what is off.
+    @extend_schema(request=None, responses={204: None}, auth=[{"cookieAuth": []}])  # type: ignore[list-item]
+    def post(self, request: Request) -> Response:
+        logout(request._request)
+        return Response(status=204)
+
+
+class MeViewSet(ShopViewSet[StaffMember]):
+    # Who is logged in here, where, and what they may do (03 §5.10). Built on the office routes' base, so the visit's
+    # shop opens as for any office route, and the sweep calls it as shop B's person. It shows only the person's own job,
+    # so it needs no key of its own.
+    model = StaffMember
+    side_field = None
+    action_permissions = {"me": SEES_THE_SIDE}
+    serializer_class = WhoIsHereSerializer
+    # Open to someone on a temporary password, and to nobody else that the office routes refuse.
+    authentication_classes = [MeSessionAuthentication]
+
+    # `auth` as on LogoutView: the same cookie as the office routes, described by the same name.
+    @extend_schema(responses=WhoIsHereSerializer, auth=[{"cookieAuth": []}])  # type: ignore[list-item]
+    def me(self, request: Request) -> Response:
+        badge = request._request.session.get(PIN_SESSION) or {}
+        here = who_is_here(cast(StaffMember, self.actor), device_id=badge.get("device"))
+        return Response(self.get_serializer(here).data)
+
+
 class PairingView(DeviceView):
     # 03 §5.9, step 1: a new device, with no working key yet, asks to join. So no device is needed, and no shop is open
     # unless its cookie already opens a device, which is then refused.
     device_optional = True
     # Limited per caller's network, so a flood of starts can't fill the waiting list, nor hunt for codes to confirm
-    # (apps/people/api/throttles.py). The device's other route, `me`, names no limit: it is never slowed down.
+    # (apps/people/api/throttles.py). The device's `me` names no limit: it is never slowed down.
     throttle_classes = [PairingStartThrottle]
 
     @extend_schema(request=None, responses={201: PairingStartSerializer})

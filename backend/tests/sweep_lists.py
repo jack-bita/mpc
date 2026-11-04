@@ -11,6 +11,7 @@ the sync routes with a device's key, is a new check instead, added in a reviewed
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.core.api.views import HealthView
+from apps.people.api.views import LogoutView
 
 # T1's exceptions (02 §16, 03 §5.4): tables that belong to no one shop, so they have no `shop`.
 NO_SHOP = {
@@ -48,6 +49,10 @@ NOT_SHOP_ROUTES: set[type] = {
     # The API's description, and the same as a page: its routes and fields, never a row (CORE-6).
     SpectacularAPIView,
     SpectacularSwaggerView,
+    # Logout: it only deletes this browser's session, which belongs to no shop, and answers with nothing. It reads no
+    # shop's table, on purpose: it must work whatever has happened to the person or the device (AUTH-4's plan, approved
+    # by Jack).
+    LogoutView,
 }
 
 # Office routes whose answers the sweep can't read, such as a PDF or an Excel download, which squeeze their
@@ -63,6 +68,9 @@ DEVICE_ROUTES_WITHOUT_A_LOOK: dict[str, str] = {
     # The start of a pairing: its answer is a code and a time, never anything of a shop's; a device whose key already
     # works is refused (pairing.already_paired), with nothing more.
     "device-pairing": "test_start_pairing_sets_the_key_cookie",
+    # PIN login: its answer is empty, or a refusal's code and nothing more, never a name or a shop, on its own device or
+    # on another shop's (AUTH-4).
+    "auth-pin-login": "test_pin_login_answers_hold_nothing_of_any_shop",
 }
 
 # App files that may build a query by hand, `models.QuerySet(Table)`, which starts from no manager and so from
@@ -98,4 +106,8 @@ NO_EDIT_HISTORY = {
     # kept on the row that took it, such as a device's code. From SYNC-1 it moves on every sale, so a history row each
     # time would double the shop's busiest writes and tell nothing new (Jack, AUTH-1).
     "core.ShopSequence": "only the system moves it, and each number is kept on the row that took it",
+    # A person's PIN tries on one device (apps/people/models.py): only the system moves it, at every wrong PIN, and who
+    # typed them is what nobody knows, so a history row would name nobody and tell the owner nothing (AUTH-4's plan,
+    # approved by Jack).
+    "people.PinLock": "only the system moves it, at every wrong PIN, and it names nobody",
 }

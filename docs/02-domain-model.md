@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.15 · 4 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.17 · 4 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -35,6 +35,10 @@
 **Changes in v1.14** (3 Nov 2026, AUTH-3): a choice by Jack, made while planning AUTH-3. A password user needs no email: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link (§5; ADR-0038, which supersedes ADR-0017). Marked **(v1.14)**.
 
 **Changes in v1.15** (4 Nov 2026, AUTH-6): a choice by Jack, made while planning AUTH-6. A person has a "must change password" mark, on while their password is one someone else typed. Someone with `staff.manage` on the whole shop may set a temporary password, under the giver rule: for someone who holds no key the setter lacks, and never for the owner. While it is open, a key its setter lacks waits (§5). Marked **(v1.15)**.
+
+**Changes in v1.16** (4 Nov 2026, AUTH-4): what building AUTH-4 settled (04 v1.34, 03 v1.21). A PIN lock's wait stops growing at an hour (Jack), and a new PIN lifts it and ends the old sessions (Jack); `PinLock` keeps the count (§5). Marked **(v1.16)**.
+
+**Changes in v1.17** (4 Nov 2026, AUTH-4's review): a choice by Jack. A PIN logs in as the whole person, so who may set one follows the rule for a temporary password, and only the superuser sets an owner's (§5). Marked **(v1.17)**.
 
 ---
 
@@ -204,7 +208,7 @@ A full diagram for GitHub is in Appendix A.
 - `status`: `active` ⇄ `suspended` → `left`. Never deleted. `left` is final: a person who comes back gets a new `StaffMember`, so the old one keeps its history **(v1.4)**.
 - One current job (not `left`) per person per shop. Nicknames are unique among a shop's current staff, whatever the letter case: the login screen and receipts show them **(v1.4)**.
 - `left_on` is set exactly when the status is `left`: never before `started_on`, and never after the shop's today, because leaving takes effect at once **(v1.4)**.
-- PIN: 4 digits, not 1234 and not four of a kind, hashed with Argon2 plus a server secret (03 §5.9). `pin_changed_at` tells devices to drop their offline check. A person who has left gets none **(v1.4)**.
+- PIN: 4 digits, not 1234 and not four of a kind, hashed with Argon2 plus a server secret (03 §5.9). `pin_changed_at` tells devices to drop their offline check. A person who has left gets none **(v1.4)**. Five wrong PINs lock that person on that device for a minute, doubling each time, up to an hour; a new PIN lifts the lock, and ends the sessions made with the old one. `PinLock` keeps the count, one row per person per device: only the system moves it, and it names nobody **(v1.16)**.
 
 **Role** [R1] → Shop — a named bundle of permissions. Copied from templates (Owner, Manager, Seller, Order writer, Cashier, Worker — spec §6); the owner can edit them.
 - `template` (the one it was copied from; blank for a role an owner makes later), `name` (blank on a copied role: the screens show the template's name), `permissions` (its codes, one list). One role per template per shop. The six templates hold what Jack chose for MPC; they live in code, beside the codes (03 §5.8) **(v1.10)**.
@@ -216,6 +220,8 @@ A full diagram for GitHub is in Appendix A.
 **Who may give** a role or a permission **(v1.10)**: someone with `staff.manage` on that side, and only codes they hold there themselves, so a manager handed `staff.manage` to add a loader can't make himself Owner (Jack, PPL-3). The system or the superuser sets up a shop's first owner.
 
 **Who may set a temporary password** **(v1.15)**: whoever sets a person's password can log in as them, so this is the giver rule for a whole person (Jack, AUTH-6). Someone with `staff.manage` on the whole shop: the owner, or someone that key has been handed to. Only for someone who holds no key the setter lacks, side by side, counting everything they were given even while suspended. Never for themselves, who change their own with the current password. Only the superuser, in the admin, for an owner, or for someone who can open the admin. Never for someone with no phone and no email, who could not log in with it. A job at another shop isn't looked at until AUTH-7, as a visit reads no other shop's rows. While a temporary password is open, a key its setter lacks is not given: the person chooses their own first, or someone holding that key sets a new one, so the setter gains nothing by knowing it. Honest limit: a setter who logs in as the person and chooses a new password themselves takes the mark off, and no system can tell who typed it. So before giving someone a big key, the owner sets a fresh password for them.
+
+**Who may set a PIN** **(v1.17)**: whoever sets a person's PIN can log in as them, so the same rule applies (Jack, AUTH-4's review). Someone with `staff.manage` on the whole shop, who holds every key the person was given. Never their own. An owner's, or a person's who can open the admin, only by the superuser.
 
 **What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again.
 
@@ -470,7 +476,7 @@ Advances come from `MoneyMovement` `staff_advance` and are deducted in the next 
 - Low stock and expiring batches are **alerts** (lists), not flags: nobody has to explain them.
 
 **AuditEvent** [R1] — who did what: `actor`, `device`, `action`, `subject`, `before`, `after`, `reason`, `approval`, `at`. Append-only.
-- `actor` and `at` are the row's `created_by` and `created_at` (§1): empty `actor` when the system acts. A reason is always given (T3). `device` joins when a visit knows its device (AUTH-4), `approval` with the Approval table **(v1.9)**.
+- `actor` and `at` are the row's `created_by` and `created_at` (§1): empty `actor` when the system acts. A reason is always given (T3). `device` joins when a visit knows its device (AUTH-8), `approval` with the Approval table **(v1.9)**.
 
 **EditEvent** [R1] — one change to an office record (a staff member, a side, a payment account, a stock location; later products, contacts, roles and devices), written by the database itself, so no change can skip it: who (`created_by`), when (`created_at`), the record (`subject`), and the fields that changed, `before` and `after`. No reason: an action that needs one also writes an AuditEvent. A PIN hash is never copied. Append-only **(v1.9)**.
 

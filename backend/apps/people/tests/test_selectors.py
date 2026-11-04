@@ -1,9 +1,9 @@
 """apps/people/tests/test_selectors.py — who may act, asked directly, with no request (apps/people/selectors.py;
 AUTH-3; ADR-0038).
 
-These rules are shared: a later login (AUTH-4's PIN, AUTH-7's choice of shop) calls them too, so what they answer is
-pinned here, apart from any one login. What each answer becomes on the wire is in test_staff_session.py and
-test_device_login.py.
+These rules are shared: a PIN's session asks them too (job_of_pin_session, AUTH-4), and so will AUTH-7's choice of shop,
+so what they answer is pinned here, apart from any one login. What each answer becomes on the wire is in
+test_staff_session.py and test_device_login.py.
 
 Fake data only: the repo is public (03 §10).
 """

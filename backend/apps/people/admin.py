@@ -4,7 +4,7 @@ Only the superuser opens it, to see and fix people before any office screen exis
 from the app's own staff screen (PPL-4), not here. It owns the add and edit forms for a User and the
 page's three rules: the id is shown but never typed in, nobody is deleted, and a password typed here is temporary
 (ADR-0038). A reset here is kept in Django's own admin log, with who and when, and not in the shop's audit trail: a
-person belongs to no one shop, and this page reads none.
+person belongs to no one shop, and this page reads none. And a PIN's badge never opens the site (AUTH-4).
 """
 
 from typing import Any, cast
@@ -14,11 +14,13 @@ from django.contrib import admin
 from django.contrib.admin.forms import AdminPasswordChangeForm as OwnPasswordForm
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import AdminPasswordChangeForm, AdminUserCreationForm, UserChangeForm
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.forms import CharField
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from django.views.decorators.debug import sensitive_variables
 
+from apps.people.api.pin_session import PIN_SESSION
 from apps.people.login_counts import lift_wrong_password_count
 from apps.people.models import User
 
@@ -27,6 +29,37 @@ from apps.people.models import User
 # and the table stays empty (ACCOUNT_PASSWORD_RESET_TOKEN_GENERATOR, config/settings/base.py). allauth comes first in
 # INSTALLED_APPS, so it has registered by now; if that order ever changes, this line stops the start-up, loudly.
 admin.site.unregister(EmailAddress)
+
+_admin_lets_in = admin.site.has_permission
+_admin_login = admin.site.login
+
+
+def _not_by_pin(request: HttpRequest) -> bool:
+    # A PIN's badge never opens this site, whoever's it is. The site reads every shop's rows (ADR-0037), and a badge is
+    # 4 digits typed at a shared counter; and what each visit asks of a badge (job_of_pin_session,
+    # apps/people/selectors.py) is asked by the office routes' login, never here, so a copied badge, a suspended person
+    # or a blocked device would still get in. Someone who may open the site logs in here with their password.
+    return PIN_SESSION not in request.session and _admin_lets_in(request)
+
+
+def _login_starts_clean(request: HttpRequest, extra_context: dict[str, Any] | None = None) -> HttpResponse:
+    if PIN_SESSION in request.session:
+        # Django's login keeps a session's data when it is the same person, so a password typed here over a badge would
+        # keep the badge's mark, and this site would send them back to this page for good. So the badge goes first. A
+        # wrong password then costs that badge too, which logging out costs anyway; the CSRF check has already passed by
+        # here. Only a POST: a plain visit, which any link can cause, must not end a counter's login.
+        if request.method == "POST":
+            request.session.flush()
+        # To this page a badge is nobody. Django's page greets whoever `request.user` is, "You are authenticated as
+        # asha@example.com", and a copied badge must read nothing of the person it names.
+        request.user = AnonymousUser()
+    return _admin_login(request, extra_context)
+
+
+# Set on Django's one site, as its password form is below, rather than replacing the whole site. mypy refuses a method
+# replaced this way; it is what lets this file stay the only place that changes the site.
+admin.site.has_permission = _not_by_pin  # type: ignore[method-assign]
+admin.site.login = _login_starts_clean  # type: ignore[method-assign]
 
 
 def _take_off_spaces(cleaned_data: dict[str, Any], *fields: str) -> None:

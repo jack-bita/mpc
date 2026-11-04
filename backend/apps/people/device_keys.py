@@ -32,6 +32,13 @@ KEY_HASH_SHAPE = r"^[0-9a-f]{64}$"
 # The key's length in random bytes: 256 bits, more than anyone could ever guess.
 KEY_BYTES = 32
 
+# The cookie's name, a promise to every browser that holds one: it never changes. It holds "key" on purpose: Django's
+# error pages and error reports hide the value of any cookie whose name holds KEY, TOKEN or SECRET
+# (SafeExceptionReporterFilter), so a crash in a device's visit never prints its key. Here, not with the rest of the
+# cookie (apps/people/api/authentication.py), as the session's login needs it too (apps/people/api/staff_session.py),
+# and DRF loads that file while DRF itself is still starting, before the other file's imports can load.
+DEVICE_KEY_COOKIE = "device_key"
+
 
 def make_pairing_code() -> str:
     """A new code, 8 characters drawn at random from the alphabet above: "K7P2MXQ9"."""
@@ -54,7 +61,7 @@ def hash_device_key(key: str) -> str:
 
     A fast hash, not Argon2 as for PINs (Jack, AUTH-1; 03 §5.9). A slow hash protects a secret a person chose, which
     others can guess: a 4-digit PIN has only 10,000 values, so each guess must cost time. A key of 32 random bytes
-    can't be guessed at any speed, so slowness would add nothing, and it would cost about 0.1 s and 100 MiB on every
+    can't be guessed at any speed, so slowness would add nothing, and it would cost about 40 ms and 19 MiB on every
     request AUTH-2 checks. No salt either, for the same reason, and so the same key always gives the same hash: a
     request finds its device by this hash in one index lookup."""
     return hashlib.sha256(key.encode()).hexdigest()

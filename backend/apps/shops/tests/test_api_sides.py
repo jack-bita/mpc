@@ -6,8 +6,8 @@ the conventions every office route follows (apps/core/api/, CORE-6).
     JINGINE   Dawa (D)                 nobody: another shop, whose rows MFANO must never see
 
 Each visit works for the one shop its login names, and sees that shop's rows only (ADR-0022). The logins
-themselves come with AUTH-2, AUTH-3 and AUTH-4: here the client from backend/conftest.py skips them and puts
-the staff member straight into `request.auth`, as those logins will. The staff member is typed Any:
+themselves are AUTH-2's, AUTH-3's and AUTH-4's: here the client from backend/conftest.py skips them and puts
+the staff member straight into `request.auth`, as those logins do. The staff member is typed Any:
 `shops` may not name `people`'s StaffMember, not even in its tests (ADR-0035).
 """
 

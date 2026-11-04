@@ -25,7 +25,7 @@ from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.api.authentication import DEVICE_KEY_COOKIE
+from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import StaffMember
 from apps.people.services import confirm_pairing, start_pairing
 from apps.shops.models import Shop, Side

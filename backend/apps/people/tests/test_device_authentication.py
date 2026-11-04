@@ -28,8 +28,8 @@ from rest_framework.test import APIClient, APIRequestFactory
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import NoShopSelected, current_shop, shop_context
 from apps.people.api import authentication
-from apps.people.api.authentication import DEVICE_KEY_COOKIE, DeviceKeyAuthentication
-from apps.people.device_keys import hash_device_key
+from apps.people.api.authentication import DeviceKeyAuthentication
+from apps.people.device_keys import DEVICE_KEY_COOKIE, hash_device_key
 from apps.people.login_doors import shop_of_device_key
 from apps.people.models import Device, StaffMember
 from apps.people.services import block, confirm_pairing, start_pairing
