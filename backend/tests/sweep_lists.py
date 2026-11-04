@@ -98,4 +98,8 @@ NO_EDIT_HISTORY = {
     # kept on the row that took it, such as a device's code. From SYNC-1 it moves on every sale, so a history row each
     # time would double the shop's busiest writes and tell nothing new (Jack, AUTH-1).
     "core.ShopSequence": "only the system moves it, and each number is kept on the row that took it",
+    # A person's PIN tries on one device (apps/people/models.py): only the system moves it, at every wrong PIN, and who
+    # typed them is what nobody knows, so a history row would name nobody and tell the owner nothing (AUTH-4's plan,
+    # approved by Jack).
+    "people.PinLock": "only the system moves it, at every wrong PIN, and it names nobody",
 }

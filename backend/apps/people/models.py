@@ -2,7 +2,8 @@
 shop; and what each job may do there: the shop's own roles (Role), the roles a person holds on each side
 (RoleAssignment), and the extra permissions one person holds (PermissionGrant) (02 §5). And the shop's devices:
 Device, a laptop or phone a manager has paired with the shop, and PairingRequest, a device still waiting for a
-manager's yes, which belongs to no shop yet (AUTH-1).
+manager's yes, which belongs to no shop yet (AUTH-1). And PinLock, how one person's PIN tries stand on one device
+(AUTH-4).
 
 A User is the person, not the job: the same person can work at MPC and in its practice shop, and their
 job at each shop (StaffMember) holds the nickname, the status and the PIN, and its roles hang from it.
@@ -25,6 +26,7 @@ from apps.core.languages import Language
 from apps.core.models import Editable, ShopScoped, TimeStamped, UUIDModel
 from apps.core.permissions import PERMISSION_CODE_MAX_LENGTH, HeldPermissions, Permission, RoleTemplate
 from apps.people.device_keys import KEY_HASH_LENGTH, KEY_HASH_SHAPE, PAIRING_CODE_ALPHABET, PAIRING_CODE_LENGTH
+from apps.people.pins import FIRST_LOCK_MINUTES, LONGEST_LOCK_MINUTES, PIN_TRIES
 from apps.shops.models import Side
 
 
@@ -569,3 +571,47 @@ class PairingRequest(UUIDModel, TimeStamped):
         # The id, never the code: while it waits, the code is what a manager types to claim the device, so it stays
         # out of anything that prints a row, such as a log line or an error page.
         return f"Pairing request {self.pk}"
+
+
+class PinLock(ShopScoped):
+    # How one person's PIN tries stand on one device (03 §5.9). Moved only by check_pin and set_pin
+    # (apps/people/services.py). The right PIN puts its numbers back rather than deleting it (rule 7).
+    # Who typed the wrong PINs is what nobody knows, so its `created_by` stays empty, and it keeps no edit history
+    # (NO_EDIT_HISTORY): only the system moves it, and a row at every wrong PIN would tell the owner nothing.
+
+    # PROTECT: nothing is deleted (rule 7). related_name="+": read through the guarded `objects`. db_index=False: the
+    # unique rule below indexes (shop, staff, device), and nothing is deleted, so PROTECT never has to search either.
+    staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name="+", db_index=False)
+    device = models.ForeignKey(Device, on_delete=models.PROTECT, related_name="+", db_index=False)
+    # Wrong tries since the last lock, or since the right PIN.
+    wrong_tries = models.PositiveSmallIntegerField(default=0, editable=False)
+    # How long the next lock lasts. The minutes themselves, not a count of locks, so nothing here ever grows past the
+    # limit.
+    next_lock_minutes = models.PositiveSmallIntegerField(default=FIRST_LOCK_MINUTES, editable=False)
+    # When the last lock ends, or ended; empty if there has been none since the right PIN.
+    locked_until = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta(ShopScoped.Meta):
+        # Builds on ShopScoped.Meta, so `objects`, with the guard, stays the default manager (CORE-2). The database is
+        # the last guard (03 §5.6).
+        constraints = [
+            # One row per person per device: two rows would be two counts, and each would let five more tries through.
+            # The message is there for the code's sake, as on Side's letter (apps/shops/models.py).
+            models.UniqueConstraint(
+                fields=["shop", "staff", "device"],
+                name="people_pinlock_once",
+                violation_error_code="pin_lock.taken",
+                violation_error_message="This person already has a row for this device.",
+            ),
+            # The fifth wrong try starts a lock and puts the count back, so five is never stored.
+            models.CheckConstraint(
+                condition=models.Q(wrong_tries__lt=PIN_TRIES),
+                name="people_pinlock_wrong_tries_below_the_lock",
+                violation_error_code="pin_lock.too_many_tries",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(next_lock_minutes__range=(FIRST_LOCK_MINUTES, LONGEST_LOCK_MINUTES)),
+                name="people_pinlock_wait_within_limits",
+                violation_error_code="pin_lock.wait_out_of_range",
+            ),
+        ]

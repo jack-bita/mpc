@@ -32,6 +32,12 @@ _FOUR_DIGITS = re.compile(r"[0-9]{4}")
 # The first PIN anyone tries (03 §5.9). Four of a kind (0000, 1111...) is checked below.
 _TOO_EASY = {"1234"}
 
+# Five wrong PINs lock a person on a device for a minute, and each lock lasts twice as long as the last, up to an hour
+# (Jack, 4 Nov 2026): someone typing wrong PINs on purpose can't keep a coworker out for days (03 §5.9).
+PIN_TRIES = 5
+FIRST_LOCK_MINUTES = 1
+LONGEST_LOCK_MINUTES = 60
+
 # Our own Argon2 class, the one passwords use (apps/people/hashers.py): 19 MiB a check, so two checks at once fit the
 # demo's 512 MB. Used directly, not through PASSWORD_HASHERS: the test settings swap that list for a fast, weak hasher,
 # and PINs must be hashed for real everywhere. Its cost is written into each hash, so a later change still checks the

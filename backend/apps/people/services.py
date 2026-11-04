@@ -2,7 +2,8 @@
 
 A staff member's working life at one shop (02 §5): they are added, suspended, brought back and marked
 as left, and given a PIN (set_pin; apps/people/pins.py hashes it) or a temporary password, face to face
-(set_temporary_password, AUTH-6). And what they may do there: a shop gets
+(set_temporary_password, AUTH-6). A PIN is checked with its count of wrong tries (check_pin, AUTH-4). And what they
+may do there: a shop gets
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
@@ -20,18 +21,20 @@ Callers open shop_context(shop) first: full_clean and the unique checks read thr
 so it needs none open, and its request links to nothing (02 v1.11).
 """
 
+import math
 import uuid
 from collections.abc import Collection, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from typing import cast
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
@@ -58,6 +61,7 @@ from apps.people.models import (
     DeviceStatus,
     PairingRequest,
     PermissionGrant,
+    PinLock,
     Role,
     RoleAssignment,
     StaffMember,
@@ -65,7 +69,14 @@ from apps.people.models import (
     User,
 )
 from apps.people.permissions import effective_permissions, given_permissions, held_permissions, require
-from apps.people.pins import check_pin_strength, hash_pin
+from apps.people.pins import (
+    FIRST_LOCK_MINUTES,
+    LONGEST_LOCK_MINUTES,
+    PIN_TRIES,
+    check_pin_strength,
+    hash_pin,
+    pin_matches,
+)
 from apps.shops.models import Shop, Side
 from apps.shops.services import NewSide, create_shop
 
@@ -237,7 +248,56 @@ def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMem
         staff.pin_changed_at = timezone.now()
         staff.full_clean()
         _save(staff, by=by, fields=["pin_hash", "pin_changed_at"])
+        # A new PIN ends any lock at once, on every device: a worker locked out by a coworker's wrong tries asks a
+        # manager, and needs no waiting (Jack, 4 Nov 2026).
+        _lift_pin_locks(PinLock.objects.filter(staff=staff))
     return staff
+
+
+def _pin_locked(lock: PinLock, at: datetime) -> ValidationError:
+    # `wait`: whole seconds, rounded up, so the app never says "try again in 0 seconds" (ADR-0032). `locked_until` is
+    # never empty here: each caller has just read or set it.
+    wait = math.ceil((cast(datetime, lock.locked_until) - at).total_seconds())
+    return ValidationError("This person is locked on this device.", code="pin.locked", params={"wait": wait})
+
+
+def _count_pin_try(staff: StaffMember, device: Device, *, at: datetime) -> PinLock:
+    # Counted before the PIN is checked, holding the row's lock, and kept even if the check then crashes. Checked first,
+    # twelve tries sent at once would each read "no wrong tries yet", and all twelve would get through. The lock is
+    # dropped before the slow check, so a person's other tries wait for no hash.
+    with transaction.atomic():
+        lock, _ = PinLock.objects.select_for_update().get_or_create(
+            staff=staff, device=device, defaults={"shop_id": staff.shop_id}
+        )
+        if lock.locked_until is not None and at < lock.locked_until:
+            raise _pin_locked(lock, at)
+        lock.wrong_tries += 1
+        if lock.wrong_tries == PIN_TRIES:
+            lock.wrong_tries = 0
+            lock.locked_until = at + timedelta(minutes=lock.next_lock_minutes)
+            lock.next_lock_minutes = min(lock.next_lock_minutes * 2, LONGEST_LOCK_MINUTES)
+        lock.save(update_fields=["wrong_tries", "next_lock_minutes", "locked_until"])
+    return lock
+
+
+def _lift_pin_locks(rows: QuerySet[PinLock]) -> None:
+    rows.update(wrong_tries=0, next_lock_minutes=FIRST_LOCK_MINUTES, locked_until=None)
+
+
+# Every variable shows as stars in Django's error reports, here and in everything this calls: `pin` is the PIN itself.
+@sensitive_variables()
+def check_pin(staff: StaffMember, device: Device, pin: str, *, at: datetime) -> None:
+    """Is this the person's PIN, on this device, at this moment? Answers by returning; refuses with pin.wrong, or
+    pin.locked and the seconds to wait (03 §5.9)."""
+    _check_same_shop(staff, device)
+    lock = _count_pin_try(staff, device, at=at)
+    if pin_matches(pin, staff.pin_hash):
+        _lift_pin_locks(PinLock.objects.filter(pk=lock.pk))
+        return
+    # The fifth wrong try has just started a lock: say so now, so the screen can tell her how long.
+    if lock.locked_until is not None and at < lock.locked_until:
+        raise _pin_locked(lock, at)
+    raise ValidationError("This PIN is wrong.", code="pin.wrong")
 
 
 # Every variable shows as stars in Django's error reports, which list each function's variables when something fails,
