@@ -65,3 +65,46 @@ def test_nothing_held_sees_no_side() -> None:
     assert nobody.sides_seen() == frozenset()
     assert nobody.on(DAWA) == frozenset()
     assert nobody.on(None) == frozenset()
+
+
+def test_more_keys_cover_fewer() -> None:
+    # Baba holds every key on every side: he covers Asha, and she doesn't cover him.
+    baba = HeldPermissions(every_side=frozenset(Permission))
+    asha = HeldPermissions(every_side=WEIGH_EVERYWHERE, on_side={DAWA: SELLER_ON_DAWA})
+
+    assert baba.covers(asha)
+    assert not asha.covers(baba)
+
+
+def test_a_key_on_one_side_does_not_cover_it_on_every_side() -> None:
+    # The side counts, not only the code. Meneja weighs on Dawa alone; Juma weighs on every side, a side added later
+    # included, so Juma holds more, though both hold the same code.
+    meneja = HeldPermissions(on_side={DAWA: WEIGH_EVERYWHERE})
+    juma = HeldPermissions(every_side=WEIGH_EVERYWHERE)
+
+    assert not meneja.covers(juma)
+    assert juma.covers(meneja)
+
+
+def test_a_key_on_one_side_does_not_cover_it_on_another() -> None:
+    meneja = HeldPermissions(on_side={DAWA: SELLER_ON_DAWA})
+    asha = HeldPermissions(on_side={VYAKULA: SELLER_ON_DAWA})
+
+    assert not meneja.covers(asha)
+
+
+def test_keys_from_a_side_and_from_every_side_add_up() -> None:
+    # On Dawa, Meneja holds both codes: one given there, and one on every side. That covers someone given both on Dawa.
+    meneja = HeldPermissions(every_side=WEIGH_EVERYWHERE, on_side={DAWA: SELLER_ON_DAWA})
+    asha = HeldPermissions(on_side={DAWA: SELLER_ON_DAWA | WEIGH_EVERYWHERE})
+
+    assert meneja.covers(asha)
+
+
+def test_everyone_covers_someone_with_no_keys() -> None:
+    # An emptied role on a side adds nothing to cover. And two people holding the same keys cover each other.
+    juma = HeldPermissions(on_side={VYAKULA: frozenset()})
+
+    assert HeldPermissions().covers(juma)
+    assert HeldPermissions().covers(HeldPermissions())
+    assert juma.covers(juma)

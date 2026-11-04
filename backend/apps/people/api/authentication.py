@@ -48,7 +48,7 @@ DEVICE_KEY_COOKIE = "device_key"
 DEVICE_KEY_MAX_AGE = timedelta(days=400)
 
 
-# Django's error reports, which a server with DEBUG off logs and sends, list each function's local variables when
+# Django's error reports, which a server will log and send (OPS-10), list each function's local variables when
 # something fails. (Its debug page, on a laptop with DEBUG on, shows everything, as DEBUG means it to.) Marked with no
 # names, so every variable is hidden, shown as stars: here, and in every function this one calls, since Django hides a
 # variable in each frame below a marked one too. Not by name, as start_pairing hides its `key`

@@ -10,6 +10,10 @@ under /api/v1/people/ (apps/people/api/urls.py). Today a shop's devices (AUTH-5)
     POST  /api/v1/people/devices/{id}/block/     a manager stops it at once, with a reason
     POST  /api/v1/people/devices/{id}/unblock/   a manager lets it work again, with a reason
 
+And a staff member's temporary password (AUTH-6):
+
+    POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
+
 And the routes a device calls with its key, built on DeviceView (apps/people/api/base.py), under /api/devices/v1/
 (apps/people/api/device_urls.py):
 
@@ -25,6 +29,7 @@ from typing import Any, cast
 
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins
 from rest_framework.decorators import action
@@ -32,7 +37,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import BaseThrottle
 
-from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin
+from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin, ShopViewSet
 from apps.core.permissions import Permission
 from apps.people.api.authentication import DEVICE_KEY_COOKIE, set_key_cookie
 from apps.people.api.base import DeviceView
@@ -43,11 +48,12 @@ from apps.people.api.serializers import (
     DeviceReasonSerializer,
     DeviceSerializer,
     PairingStartSerializer,
+    TemporaryPasswordSerializer,
 )
 from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle
 from apps.people.models import Device, StaffMember
 from apps.people.services import block as block_device
-from apps.people.services import confirm_pairing, rename_device, start_pairing
+from apps.people.services import confirm_pairing, rename_device, set_temporary_password, start_pairing
 from apps.people.services import unblock as unblock_device
 
 
@@ -129,6 +135,40 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
         sent = DeviceReasonSerializer(data=request.data)
         sent.is_valid(raise_exception=True)
         return Response(self.get_serializer(change(device, by=self.staff, reason=sent.validated_data["reason"])).data)
+
+
+class StaffViewSet(ShopViewSet[StaffMember]):
+    # A shop's people. One action so far: a first or forgotten password, set face to face (ADR-0038). PPL-4 adds the
+    # list, the adding and the rest, and its screen calls this.
+    model = StaffMember
+    # A person's password opens them on every side, whichever side they work on: the row belongs to the whole shop, so
+    # the key is asked on the whole shop, where a key for Dawa alone opens nothing (PPL-5).
+    side_field = None
+    # The owner's own key, which he may hand to a manager (Jack, 4 Nov 2026). The service asks it again, with the rest
+    # of who may (_check_may_set_password, apps/people/services.py).
+    action_permissions = {"temporary_password": Permission.STAFF_MANAGE}
+    serializer_class = TemporaryPasswordSerializer
+
+    # `sent` holds the password while the service runs, and so do the serializer's frames while they read it: every
+    # variable here, and in everything this calls, shows as stars in Django's error reports, as in the service itself.
+    @extend_schema(request=TemporaryPasswordSerializer, responses={204: None})
+    @action(detail=True, methods=["post"], url_path="temporary-password")
+    @sensitive_variables()
+    def temporary_password(self, request: Request, pk: str | None = None) -> Response:
+        # The person, found in the visit's shop and checked for the action's key (get_object; initial() already ran it
+        # once, before the action began): another shop's person is "not found", before anything sent is read.
+        staff = self.get_object()
+        sent = self.get_serializer(data=request.data)
+        sent.is_valid(raise_exception=True)
+        # cast: the login leaves the staff member acting in `request.auth`, which mypy reads as an Actor.
+        set_temporary_password(
+            staff,
+            sent.validated_data["password"],
+            by=cast(StaffMember, self.actor),
+            reason=sent.validated_data["reason"],
+        )
+        # Nothing to answer with, on purpose: once sent, the password is never shown again (ADR-0038).
+        return Response(status=204)
 
 
 class PairingView(DeviceView):
