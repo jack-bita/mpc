@@ -305,6 +305,12 @@ ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False
 # would open its old owner's account, perhaps at another shop. Our User holds the email and the table stays empty.
 # Django's key is made from the User's email too, so a change of email also ends a link already sent.
 ACCOUNT_PASSWORD_RESET_TOKEN_GENERATOR = "django.contrib.auth.tokens.PasswordResetTokenGenerator"
+# 3 reset emails an hour to one address. allauth's default, 5 a minute, would let a stranger who knows the address send
+# 7,200 a day. A stranger using these up can't keep the person out: each link goes to the person's own mailbox and
+# works. allauth's limit per caller stays as it was. Its other limits keep their defaults.
+ACCOUNT_RATE_LIMITS = {"reset_password": "20/m/ip,3/h/key"}
+# A reset link works for an hour, not Django's 3 days: one left in a mailbox is a way in for whoever opens it later.
+PASSWORD_RESET_TIMEOUT = 60 * 60
 
 # Whether the description and the docs page are open (apps/core/api/schema.py). False: closed to everyone,
 # the real server's rule. Off unless an environment turns it on: dev.py does, and the demo does (prod.py).

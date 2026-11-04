@@ -9,10 +9,15 @@ The key in the link sits after the #, which a browser never sends to a server. F
 (03 §10).
 """
 
+from datetime import datetime, timedelta
+from unittest import mock
+
 import pytest
 from allauth.account.models import EmailAddress
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core import mail
 from django.test import Client
+from pytest_django import Settings
 
 from apps.people.models import User
 
@@ -185,9 +190,23 @@ def test_a_reused_email_opens_only_its_new_owner(manager: User) -> None:
     assert manager.check_password(PASSWORD)
 
 
-def test_reset_requests_are_slowed_down(manager: User) -> None:
-    # allauth's default, 5 a minute per email: enough for a person, too few to fill their inbox.
-    for _ in range(5):
+def test_reset_requests_are_slowed_down(manager: User, settings: Settings) -> None:
+    # 3 an hour per email: enough for a person, too few to fill their inbox. allauth's default, 5 a minute, would let a
+    # stranger who knows the address send them 7,200 emails a day. The count's hour is read from the setting: a test
+    # can't wait it out.
+    assert settings.ACCOUNT_RATE_LIMITS["reset_password"].endswith(",3/h/key")
+    for _ in range(3):
         assert post(Client(), REQUEST, email=EMAIL) == (200, [])
     assert Client().post(REQUEST, {"email": EMAIL}, content_type=JSON).status_code == 429
-    assert len(mail.outbox) == 5
+    assert len(mail.outbox) == 3
+
+
+def test_reset_link_ends_after_an_hour(manager: User) -> None:
+    # A link left in a mailbox for days is a way in for whoever opens that mailbox later. Still good until then: what
+    # stopped it is the time, not the key.
+    post(Client(), REQUEST, email=EMAIL)
+    key = key_from_the_email()
+    just_past_the_hour = datetime.now() + timedelta(hours=1, seconds=5)
+    with mock.patch.object(PasswordResetTokenGenerator, "_now", return_value=just_past_the_hour):
+        assert post(Client(), RESET, key=key, password=NEW_PASSWORD) == (400, ["invalid_password_reset"])
+    assert post(Client(), RESET, key=key, password=NEW_PASSWORD) == (401, [])
