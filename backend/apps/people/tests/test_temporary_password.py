@@ -358,6 +358,15 @@ def test_password_and_line_are_kept_together(baba: StaffMember, asha: StaffMembe
     assert_unchanged(asha)
 
 
+def test_a_failed_lift_undoes_the_password(baba: StaffMember, asha: StaffMember) -> None:
+    # The owner sees an error, so he types it again. All or nothing: a password set behind an error would leave him not
+    # knowing which one she has, and an audit line for something he was told had failed.
+    failing = mock.patch("apps.people.services.lift_wrong_password_count", side_effect=RuntimeError("no cache"))
+    with failing, pytest.raises(RuntimeError):
+        set_for(asha, by=baba)
+    assert_unchanged(asha)
+
+
 def test_password_stays_out_of_error_reports(baba: StaffMember, asha: StaffMember) -> None:
     # Django's error report, which a server with DEBUG off logs and sends, lists each function's local variables when
     # something fails. The password and its hash show as stars.

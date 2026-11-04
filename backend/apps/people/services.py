@@ -296,9 +296,9 @@ def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember
             before={"must_change_password": was_marked},
             after={"must_change_password": True},
         )
-    # Outside the transaction: it is a cache row, and needs no lock. If this fails, the password is set, and the person
-    # waits out the 5 minutes.
-    lift_wrong_password_count(user)
+        # Her count of wrong passwords, a row of the cache's table in the same database, so in the same transaction: if
+        # this fails, the owner is told it failed, and it did. All or nothing, and no password set behind an error.
+        lift_wrong_password_count(user)
 
 
 def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) -> None:
