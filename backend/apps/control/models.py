@@ -315,7 +315,7 @@ class AuditEvent(AppendOnly):
 
 class EditEvent(AppendOnly):
     # One change to one office row (02 §13, 03 §5.16): the owner renames the side "Dawa" to "Dawa za Mifugo".
-    # Written only by the trigger control_record_edit(), after the row's UPDATE, in the same transaction
+    # Written only by the trigger control_record_edit_v2(), after the row's UPDATE, in the same transaction
     # (apps/control/operations.py, ADR-0036): never by Python, so no service, bulk update() or admin page can
     # change an office row without leaving one. ShopScoped (CORE-2) gives `id` (a UUIDv7 PostgreSQL makes),
     # `shop` (the edited row's), `created_at` (when) and `created_by` (who acted, as the visit told PostgreSQL:

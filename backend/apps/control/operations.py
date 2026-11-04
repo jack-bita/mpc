@@ -21,15 +21,18 @@ migration. A test pins each string by its fingerprint (test_flag_trigger_sql_nev
 The edit history works the other way round: not a rule that refuses, but one that writes. After every UPDATE of
 an office table, a trigger writes one row of control.EditEvent with what changed and who changed it, so no code
 path can skip the history: a service, a bulk update(), the admin, or SQL typed by hand (ADR-0036). Who comes from
-the visit, which tells PostgreSQL who acts (apps/core/acting.py). Its SQL is frozen once on main in the same way
-(test_edit_trigger_sql_never_changes_once_on_main).
+the visit, which tells PostgreSQL who acts and from which device (apps/core/acting.py). Its SQL is frozen once on main
+in the same way (test_edit_trigger_sql_never_changes_once_on_main), so when the rule learned the device it became a new
+function, control_record_edit_v2(), and every office table moved to it (AUTH-8). The old function stays, for the old
+migrations that still write it on their way to the move.
 
 The history table guards itself as well: only that trigger may write a row of it, so neither bulk_create nor SQL
 typed by hand can add a change nobody made (EditsByTriggerOnly).
 
 This file owns the SQL of these rules and the operations the migrations list to add them: FlagForwardOnlyTrigger on
-the flag table, EditsByTriggerOnly on the history table, RecordEdits on each office table, and ChangeRecordEdits for
-a later migration that changes which columns a table's history skips, with the same frozen SQL (AUTH-2).
+the flag table, EditsByTriggerOnly on the history table; RecordEditsV2 on each new office table; and, for what old
+migrations list, RecordEdits, ChangeRecordEdits (which changes the columns a table's history skips, AUTH-2) and
+MoveRecordEditsToV2 (AUTH-8).
 """
 
 import re
@@ -203,14 +206,66 @@ CREATE TRIGGER record_edits
 # Takes the trigger off, when its migration is undone. The function stays: other tables still use it.
 DROP_RECORD_EDITS_TRIGGER = "DROP TRIGGER record_edits ON {table};"
 
+# The edit history's rule as every office table runs it since AUTH-8: control_record_edit() above, word for word, and
+# one thing more. X3: the row also names the device the visit told PostgreSQL (`mpc.device_id`, apps/core/acting.py), so
+# an edit made on Laptop ya Dawa says so; '' or never told: none, so NULL, as for who acts. A device of another shop
+# can't reach this row: the check at the top refuses any row but the visit's shop's, and acting_as() refuses a device of
+# any other shop than the visit's. Why a new function and not an edit of the old one: its SQL is frozen, as every old
+# migration runs that very string (rule 9, ADR-0036).
+RECORD_EDIT_V2_FUNCTION = """
+CREATE OR REPLACE FUNCTION control_record_edit_v2() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    acting_shop uuid := NULLIF(current_setting('mpc.shop_id', true), '')::uuid;
+    skipped text[] := ARRAY['version', 'updated_at', 'updated_by_id'] || TG_ARGV[1]::text[];
+    old_row jsonb := to_jsonb(OLD) - skipped;
+    new_row jsonb := to_jsonb(NEW) - skipped;
+    changed_from jsonb;
+    changed_to jsonb;
+BEGIN
+    IF acting_shop IS NOT NULL AND acting_shop <> NEW.shop_id THEN
+        RAISE EXCEPTION 'UPDATE on % refused: the row belongs to another shop than the visit (T1)', TG_TABLE_NAME
+            USING ERRCODE = 'restrict_violation';
+    END IF;
+    SELECT jsonb_object_agg(field, old_row ->> field), jsonb_object_agg(field, new_row ->> field)
+        INTO changed_from, changed_to
+        FROM jsonb_object_keys(new_row) AS field
+        WHERE old_row -> field IS DISTINCT FROM new_row -> field;
+    IF changed_to IS NULL THEN
+        RETURN NULL;
+    END IF;
+    INSERT INTO control_editevent
+        (id, shop_id, created_at, created_by_id, device_id, subject_type, subject_id, "before", "after")
+    VALUES (
+        uuidv7(), NEW.shop_id, clock_timestamp(), NULLIF(current_setting('mpc.staff_id', true), '')::uuid,
+        NULLIF(current_setting('mpc.device_id', true), '')::uuid, TG_ARGV[0], NEW.id, changed_from, changed_to
+    );
+    RETURN NULL;
+END;
+$$;
+"""
+
+# Puts the rule on one office table, as CREATE_RECORD_EDITS_TRIGGER does, with the new function. The same trigger name,
+# so DROP_RECORD_EDITS_TRIGGER takes either off.
+CREATE_RECORD_EDITS_V2_TRIGGER = """
+CREATE TRIGGER record_edits
+    AFTER UPDATE ON {table}
+    FOR EACH ROW EXECUTE FUNCTION control_record_edit_v2({type_code}, {skipped});
+"""
+
 # A column's name, as Django makes them: small letters, digits and underscores.
 _COLUMN_NAME = r"^[a-z_][a-z0-9_]*$"
 
 
 class RecordEdits(AppendOnlyTrigger):
-    # The step an office table's migration lists to switch its history on:
+    # The step an office table's migration listed to switch its history on, until AUTH-8:
     # RecordEdits("staffmember", type_code="staff", skip=["pin_hash"]). Built on core's AppendOnlyTrigger for its
-    # plumbing (the table's real name, a step that adds no column), with its own rule and its own undo.
+    # plumbing (the table's real name, a step that adds no column), with its own rule and its own undo. It keeps the old
+    # rule on purpose, as migrations already on main list it (rule 9); a new table lists RecordEditsV2 below.
+
+    # The frozen SQL this step writes. A later version of the rule names its own.
+    function_sql = RECORD_EDIT_FUNCTION
+    trigger_sql = CREATE_RECORD_EDITS_TRIGGER
 
     def __init__(self, model_name: str, type_code: str, skip: Sequence[str] = ()) -> None:
         super().__init__(model_name)
@@ -259,10 +314,10 @@ class RecordEdits(AppendOnlyTrigger):
     def _put_on(self, table: str, schema_editor: BaseDatabaseSchemaEditor) -> None:
         # Write the rule, and put it on the table. The columns to skip go in as one PostgreSQL array, '{pin_hash}'
         # ('{}' for none), which the rule reads with TG_ARGV[1]::text[]. params=None, as in core's.
-        sql = CREATE_RECORD_EDITS_TRIGGER.format(
+        sql = self.trigger_sql.format(
             table=table, type_code=f"'{self.type_code}'", skipped="'{" + ",".join(self.skip) + "}'"
         )
-        schema_editor.execute(RECORD_EDIT_FUNCTION, params=None)
+        schema_editor.execute(self.function_sql, params=None)
         schema_editor.execute(sql, params=None)
 
     def database_backwards(
@@ -333,6 +388,35 @@ class ChangeRecordEdits(RecordEdits):
 
     def describe(self) -> str:
         return f"Edit history of {self.model_name} skips {', '.join(self.skip) or 'nothing'}"
+
+
+class RecordEditsV2(RecordEdits):
+    # The step a new office table's migration lists to switch its history on, since AUTH-8:
+    # RecordEditsV2("product", type_code="product"). All of RecordEdits, with the rule that names the device too.
+    function_sql = RECORD_EDIT_V2_FUNCTION
+    trigger_sql = CREATE_RECORD_EDITS_V2_TRIGGER
+
+    def describe(self) -> str:
+        return f"Edit history trigger (v2) on {self.model_name}"
+
+
+class MoveRecordEditsToV2(RecordEditsV2, ChangeRecordEdits):
+    # The step that moves a table from the old rule to the new one (AUTH-8), with the columns it skips as they are:
+    # MoveRecordEditsToV2("staffmember", type_code="staff", skip=["pin_hash"]). A trigger's function is fixed when it is
+    # made, so the trigger comes off and goes back on. That is what ChangeRecordEdits does, so its moves are used as
+    # they are, each way, in one transaction, and a migration that isn't atomic is refused: no edit is ever unrecorded.
+    # RecordEditsV2 comes first, so the forward move writes the new rule. Undone, `was` puts the old rule back, with the
+    # same list.
+    # A typo in `skip` would copy a column the table's history kept out: a PIN's hash, or a device's last_seen_at, which
+    # moves every few minutes. So backend/tests/test_edit_history.py checks each list after the move.
+
+    def __init__(self, model_name: str, type_code: str, skip: Sequence[str] = ()) -> None:
+        # Past ChangeRecordEdits's own __init__, which refuses `skip` and `was` being the same: here they always are.
+        RecordEdits.__init__(self, model_name, type_code, skip)
+        self.was = RecordEdits(model_name, type_code, skip)
+
+    def describe(self) -> str:
+        return f"Edit history of {self.model_name} moves to the rule that names the device"
 
 
 # The history's own guard (ADR-0036): every row of control_editevent comes from control_record_edit() above, and

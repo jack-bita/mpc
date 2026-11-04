@@ -46,9 +46,10 @@ def office_tables() -> list[type[models.Model]]:
     return [table for table in changeable_tables() if table._meta.label not in NO_EDIT_HISTORY]
 
 
-# The function every office table's trigger runs (apps/control/operations.py). When AUTH-8 moves the tables to
-# control_record_edit_v2(), for the device, this name moves with them, and the check finds any table left behind.
-RECORD_EDIT_FUNCTION = "control_record_edit"
+# The function every office table's trigger runs (apps/control/operations.py). AUTH-8 moved the tables to it, for the
+# device (X3). The check finds any table left behind, and any put back on the old rule by a step that still writes it
+# (RecordEdits, ChangeRecordEdits), whose edits would name no device, with nothing to say so.
+RECORD_EDIT_FUNCTION = "control_record_edit_v2"
 
 # How PostgreSQL stores when a trigger runs (`tgtype`), as bits added up: 1 = FOR EACH ROW, 2 = BEFORE (none =
 # AFTER), 4 = INSERT, 8 = DELETE, 16 = UPDATE. The history's trigger is AFTER UPDATE FOR EACH ROW: 1 + 16. AFTER,
@@ -140,7 +141,7 @@ def test_history_check_finds_tables_that_lose_it(monkeypatch: pytest.MonkeyPatch
         cursor.execute("DROP TRIGGER record_edits ON probe_card")
         cursor.execute(
             "CREATE TRIGGER record_edits BEFORE UPDATE ON probe_card "
-            "FOR EACH ROW EXECUTE FUNCTION control_record_edit('probe_card', '{}')"
+            "FOR EACH ROW EXECUTE FUNCTION control_record_edit_v2('probe_card', '{}')"
         )
     assert history_problems([Card]) == ["probe.Card: its edit history trigger is not AFTER UPDATE FOR EACH ROW"]
     with connection.cursor() as cursor:
@@ -149,9 +150,46 @@ def test_history_check_finds_tables_that_lose_it(monkeypatch: pytest.MonkeyPatch
             "CREATE TRIGGER record_edits AFTER UPDATE ON probe_card FOR EACH ROW EXECUTE FUNCTION core_append_only()"
         )
     assert history_problems([Card]) == [
-        "probe.Card: its edit history trigger runs core_append_only(), not control_record_edit()",
+        "probe.Card: its edit history trigger runs core_append_only(), not control_record_edit_v2()",
         "probe.Card: its trigger records '', but LINK_TYPES gives ['probe_card']",
     ]
+    # Done when #3: a table left behind on the old rule still records every edit, built right in every other way, and
+    # would name no device. So the check says which rule it runs.
+    with connection.cursor() as cursor:
+        cursor.execute("DROP TRIGGER record_edits ON probe_card")
+        cursor.execute(
+            "CREATE TRIGGER record_edits AFTER UPDATE ON probe_card "
+            "FOR EACH ROW EXECUTE FUNCTION control_record_edit('probe_card', '{}')"
+        )
+    assert history_problems([Card]) == [
+        "probe.Card: its edit history trigger runs control_record_edit(), not control_record_edit_v2()"
+    ]
+
+
+def test_the_move_to_v2_kept_each_skip_list() -> None:
+    # AUTH-8's migrations wrote each table's list out again as they moved it. A word lost on the way would be silent:
+    # `last_seen_at` is no secret, so history_problems wouldn't object, and each device would write a history row every
+    # few minutes, burying the owner's trail. A fixed list of the tables that moved: a new table needs no change here.
+    moved = {
+        "people_staffmember": {"pin_hash"},
+        "people_role": set(),
+        "people_roleassignment": set(),
+        "people_permissiongrant": set(),
+        "people_device": {"key_hash", "last_seen_at"},
+        "shops_side": set(),
+        "shops_paymentaccount": set(),
+        "shops_stocklocation": set(),
+    }
+    found = {}
+    with connection.cursor() as cursor:
+        for table in moved:
+            cursor.execute(
+                "SELECT tgargs FROM pg_trigger WHERE tgrelid = %s::regclass AND tgname = 'record_edits'", [table]
+            )
+            row = cursor.fetchone()
+            assert row is not None, f"{table} has no edit history trigger"
+            found[table] = skipped_columns(row[0])
+    assert found == moved
 
 
 def test_history_check_finds_a_secret_that_would_be_copied() -> None:
@@ -163,6 +201,6 @@ def test_history_check_finds_a_secret_that_would_be_copied() -> None:
         cursor.execute("DROP TRIGGER record_edits ON people_staffmember")
         cursor.execute(
             "CREATE TRIGGER record_edits AFTER UPDATE ON people_staffmember "
-            "FOR EACH ROW EXECUTE FUNCTION control_record_edit('staff', '{}')"
+            "FOR EACH ROW EXECUTE FUNCTION control_record_edit_v2('staff', '{}')"
         )
     assert history_problems([StaffMember]) == ["people.StaffMember: its trigger would copy pin_hash into the history"]
