@@ -92,8 +92,8 @@ class User(UUIDModel, TimeStamped, AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     # On while this person's password is one someone else typed for them, face to face (ADR-0038): someone else knows
     # it. Every office route then refuses them (job_of_person, apps/people/selectors.py) until they choose their own,
-    # which turns it off. editable=False: no form shows it, so nobody can tick it off by hand and keep a password the
-    # owner knows.
+    # which turns it off; or until the superuser disables the password altogether, leaving none to replace. editable=
+    # False: no form shows it, so nobody can tick it off by hand and keep a password the owner knows.
     must_change_password = models.BooleanField(default=False, editable=False)
 
     objects = UserManager()

@@ -72,10 +72,10 @@ class AccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
         return User.objects.filter(phone=phone).first()
 
     def clean_password(self, password: str, user: User | None = None) -> str:
-        # Every password a person chooses passes here, by the change route or by a link. While the mark is on, the
-        # current one is the one the owner typed (ADR-0038): choosing it again would leave the owner knowing it for
-        # good, with the mark off and nothing to show for it. An error code of our own, which UI-5's form translates
-        # (ADR-0032).
+        # Every password a person chooses at the app passes here, by the change route or by a link; the admin's own page
+        # asks the same (ChooseOwnPasswordForm, apps/people/admin.py). While the mark is on, the current one is the one
+        # the owner typed (ADR-0038): choosing it again would leave the owner knowing it for good, with the mark off and
+        # nothing to show for it. An error code of our own, which UI-5's form translates (ADR-0032).
         if user is not None and user.must_change_password and user.check_password(password):
             raise ValidationError("Choose a password other than the temporary one.", code="password.same_as_temporary")
         cleaned: str = super().clean_password(password, user)

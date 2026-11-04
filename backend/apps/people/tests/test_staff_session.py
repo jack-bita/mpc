@@ -152,8 +152,10 @@ def test_must_change_blocks_office_routes(owner: StaffMember, phone: APIClient, 
 
 
 def test_must_change_leaves_the_admin_open(superuser: User, superuser_client: Client) -> None:
-    # The mark closes a job's office routes. The superuser has no job, and their back room isn't one of those: the
-    # person who resets passwords can't be locked out by a reset.
+    # The mark closes a job's office routes, and the admin isn't one of those: the person who resets passwords can't be
+    # locked out by a reset. So the mark protects nothing for someone who can open the admin: one who also has a job
+    # could disable their own password there, and the mark would come off. Nothing is lost, as they hold the whole admin
+    # anyway.
     User.objects.filter(pk=superuser.pk).update(must_change_password=True)
     assert superuser_client.get("/admin/").status_code == 200
 

@@ -12,7 +12,7 @@ under /api/v1/people/ (apps/people/api/urls.py). Today a shop's devices (AUTH-5)
 
 And a staff member's temporary password (AUTH-6):
 
-    POST  /api/v1/people/staff/{id}/temporary-password/   the owner sets one, face to face, with a reason
+    POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
 
 And the routes a device calls with its key, built on DeviceView (apps/people/api/base.py), under /api/devices/v1/
 (apps/people/api/device_urls.py):
