@@ -328,6 +328,10 @@ def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) 
     # one acting holds now.
     if not held_permissions(by).covers(given_permissions(staff)):
         raise ValidationError("This person holds a key the one acting doesn't.", code="password.more_keys")
+    # A login is by phone or by email. With neither, the password could never be used, and the mark would stay on for
+    # good: the owner is told now, and adds the phone first, not when the person can't log in.
+    if not user.phone and not user.email:
+        raise ValidationError("This person has no phone or email to log in with.", code="password.no_login_name")
 
 
 def set_up_shop(*, name: str, code: str, sides: Sequence[NewSide]) -> Shop:

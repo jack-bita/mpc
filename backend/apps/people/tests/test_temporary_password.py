@@ -258,6 +258,13 @@ def test_nobody_sets_their_own(baba: StaffMember, meneja: StaffMember) -> None:
     assert refusal(baba, by=baba) == "password.own"
 
 
+def test_a_person_nobody_can_log_in_as_is_refused(shop_a: Shop, baba: StaffMember) -> None:
+    # A login is by phone or by email. With neither, the password could never be used, and the mark would stay on for
+    # good: the owner adds the phone first, so he is told now, not when Juma can't log in.
+    juma = job(shop_a, "Juma")
+    assert refusal(juma, by=baba) == "password.no_login_name"
+
+
 def test_someone_who_left_is_refused(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
     with shop_context(shop_a):
         mark_left(asha, left_on=asha.started_on, by=None, reason="Amehama")
