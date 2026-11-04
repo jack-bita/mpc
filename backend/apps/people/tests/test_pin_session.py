@@ -15,7 +15,9 @@ tests go through the real login, then an office route, /api/v1/shops/sides/, wit
     the person on a temporary password            403 password.must_change; once they choose their own, 200
     logged out                                    403 not_authenticated, at once
 
-Logout must work whatever has happened to the person or the device: it asks only for the session and the CSRF token.
+A badge never opens the Django admin, whoever's it is: the admin reads every shop's rows, and none of these checks runs
+there. Logout must work whatever has happened to the person or the device: it asks only for the session and the CSRF
+token.
 
 Fake data only: the repo is public (03 §10).
 """
@@ -28,6 +30,7 @@ from unittest import mock
 import pytest
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.models import Session
+from django.test import Client
 from django.utils import timezone
 from django.views.debug import ExceptionReporter
 from rest_framework.test import APIClient
@@ -64,6 +67,8 @@ KEY_COOKIE = "device_key"
 SESSION_COOKIE = "sessionid"
 
 PIN = "4829"
+ADMIN_EMAIL = "admin@example.com"
+ADMIN_PASSWORD = "a-long-test-password"
 # Files whose frames hold what the test itself sent: not the server's, so not for it to hide.
 TEST_CLIENT_FILES = ("django/test/client.py", "rest_framework/test.py", "test_pin_session.py")
 
@@ -405,3 +410,42 @@ def test_logout_ends_a_password_session(asha: StaffMember) -> None:
 
     refused = phone.get(SIDES)
     assert (refused.status_code, refused.data["code"]) == (403, "not_authenticated")
+
+
+@pytest.fixture
+def admin_with_a_job(shop_a: Shop) -> StaffMember:
+    # Someone who can open the admin, and also works at a shop. Nobody does today (the superuser is nobody's staff), and
+    # nothing in the app stops it.
+    user = User.objects.create_superuser(full_name="Admin Demo", email=ADMIN_EMAIL, password=ADMIN_PASSWORD)
+    with shop_context(shop_a):
+        return set_pin(add_staff(shop=shop_a, user=user, display_name="Admin", by=None), PIN, by=None)
+
+
+def test_pin_session_cannot_open_the_admin(admin_with_a_job: StaffMember, laptop_key: str) -> None:
+    # 4 digits at a shared counter must not open a page that reads every shop's rows.
+    client = logged_in(admin_with_a_job, laptop_key)
+    for page in ("/admin/", "/admin/people/user/"):
+        answer = client.get(page)
+        assert answer.status_code == 302
+        assert answer["Location"].startswith("/admin/login/")
+
+    # The same person, logged in with their password: the refusal is the badge's, not theirs.
+    by_password = Client()
+    by_password.force_login(admin_with_a_job.user)
+    assert by_password.get("/admin/").status_code == 200
+
+
+def test_admin_login_over_a_badge_starts_clean(admin_with_a_job: StaffMember, laptop_key: str) -> None:
+    # Their password, typed in the admin on a browser that holds their badge. Django keeps a session's data for the same
+    # person, so the mark would stay, and the admin would send them back to its login page for good.
+    badge = logged_in(admin_with_a_job, laptop_key).cookies[SESSION_COOKIE].value
+    # Django's plain test client: the admin's login is a normal form, and a browser posts it as one.
+    browser = Client()
+    browser.cookies[SESSION_COOKIE] = badge
+
+    answer = browser.post("/admin/login/", {"username": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+
+    assert answer.status_code == 302
+    assert browser.get("/admin/").status_code == 200
+    assert not Session.objects.filter(session_key=badge).exists()
+    assert "pin_session" not in Session.objects.get(session_key=browser.cookies[SESSION_COOKIE].value).get_decoded()
