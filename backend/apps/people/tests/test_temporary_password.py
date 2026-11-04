@@ -15,7 +15,6 @@ Whoever sets a person's password can log in as them, so who may is the giver rul
     Meneja, staff.manage on Dawa     Asha                                   refused: not on the whole shop
     Meneja, handed staff.manage      someone holding a key he lacks         refused: password.more_keys
     anyone at the shop               an owner, suspended or not             refused: password.superuser_only
-    anyone at the shop               someone with a job at another shop     refused: password.superuser_only
     anyone at the shop               someone who can open the admin         refused: password.superuser_only
     anyone                           themselves                             refused: password.own
 
@@ -226,18 +225,14 @@ def test_keys_on_another_side_count_as_more(shop_a: Shop, side_a: Side, give_rol
     assert refusal(juma, by=dawa_seller) == "password.more_keys"
 
 
-def test_a_person_at_two_shops_goes_to_the_superuser(shop_b: Shop, baba: StaffMember, asha: StaffMember) -> None:
-    # One person, one password (D12): it would open her job at the other shop too, which the owner here has no say over.
-    # And the other shop's rows, and her keys there, can't be read from here.
+def test_a_job_at_another_shop_is_not_looked_at_until_auth_7(
+    shop_b: Shop, baba: StaffMember, asha: StaffMember
+) -> None:
+    # Reading shop B's rows during shop A's visit would pass the guard, which is only for a login, before any shop is
+    # open (ADR-0037). Nothing is lost yet: with jobs at two shops she is refused at every office route, whatever her
+    # password. AUTH-7, which lets such a person work, must change this test: then, one password opens her job at both.
     with shop_context(shop_b):
         add_staff(shop=shop_b, user=asha.user, display_name="Asha", by=None)
-    assert refusal(asha, by=baba) == "password.superuser_only"
-
-
-def test_a_job_she_left_at_another_shop_does_not_count(shop_b: Shop, baba: StaffMember, asha: StaffMember) -> None:
-    with shop_context(shop_b):
-        before = add_staff(shop=shop_b, user=asha.user, display_name="Asha", by=None)
-        mark_left(before, left_on=before.started_on, by=None, reason="Amehama")
     set_for(asha, by=baba)
     assert log_in(phone=PHONE, password=TEMPORARY)[0] == 200
 

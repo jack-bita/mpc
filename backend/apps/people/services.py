@@ -51,7 +51,7 @@ from apps.people.device_keys import (
     make_device_key,
     make_pairing_code,
 )
-from apps.people.login_doors import shop_of_device_key, shops_of_person
+from apps.people.login_doors import shop_of_device_key
 from apps.people.models import (
     Device,
     DeviceStatus,
@@ -308,10 +308,11 @@ def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) 
     # keys but is still the owner, and two owners may have fallen out with each other. When PPL-4 adds an end to a role,
     # an ended Owner role must stop counting here too.
     is_owner = RoleAssignment.objects.filter(staff=staff, role__template=RoleTemplate.OWNER).exists()
-    # Their password opens every shop's rows, in the admin, or their job at a shop this owner has no say over, and whose
-    # keys can't be read from here. A job they have left doesn't count (shops_of_person).
-    reaches_past_this_shop = user.is_superuser or user.is_staff or len(shops_of_person(user.pk)) > 1
-    if is_owner or reaches_past_this_shop:
+    # Their password opens the admin, which reads every shop's rows: no shop's owner hands that out. A job at another
+    # shop isn't looked at: reading that shop's rows during this shop's visit would pass the guard, which is only for a
+    # login, before any shop is open (ADR-0037, Jack, 4 Nov 2026). Nothing is lost yet, as a person at two shops is
+    # refused at every office route until AUTH-7, whose card adds this rule.
+    if is_owner or user.is_superuser or user.is_staff:
         raise ValidationError("Only the superuser may reset this person's password.", code="password.superuser_only")
     # What the person was given, whatever their status, as they hold it all again once brought back; against what the
     # one acting holds now, as a giver suspended a moment ago gives nothing.
