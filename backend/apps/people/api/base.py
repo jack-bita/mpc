@@ -2,7 +2,7 @@
 
 An office route builds on ShopViewSet (apps/core/api/base.py) and needs a person. A device route builds on DeviceView
 and needs a paired device instead, logged in by its key (apps/people/api/authentication.py): today the start of a
-pairing and `me`; later sync (SYNC-2 on) and PIN login (AUTH-4).
+pairing, `me` and PIN login (AUTH-4); later sync (SYNC-2 on).
 
 - The shop. Right after the login, before any check reads a table, the view opens the device's shop (shop_context)
   and tells PostgreSQL who acts (acting_as: the shop, and nobody, as a device is no person), and keeps both for the

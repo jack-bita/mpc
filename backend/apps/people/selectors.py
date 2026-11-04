@@ -83,8 +83,10 @@ def check_may_act(staff: StaffMember) -> None:
 
 
 def check_own_password(user: User) -> None:
-    # Someone else typed this person's password (ADR-0038), so until they choose their own, it opens nothing but the way
-    # to choose one. `user` is read afresh on each visit (the session's person), so this takes effect at once.
+    # Someone else typed this person's password (ADR-0038), so until they choose their own, the office routes stay
+    # closed to them, whichever way they logged in. Only the way to choose one, and `me`, which tells the app why, stay
+    # open, and the counter, on the device's key, goes on working. `user` is read afresh on each visit (the session's
+    # person), so this takes effect at once.
     if user.must_change_password:
         raise LoginRefused("This person must choose their own password.", code="password.must_change")
 

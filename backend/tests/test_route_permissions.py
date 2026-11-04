@@ -129,8 +129,8 @@ PLAIN_MAKERS = "/api/v1/test/plain-note-makers/"
 
 
 def client_for(staff: StaffMember) -> APIClient:
-    # The way the office screens will call: logged in as this person, at their shop. The logins come later (AUTH-3,
-    # AUTH-4); force_authenticate puts the person straight into `request.auth`, as they will (backend/conftest.py).
+    # The way the office screens call: logged in as this person, at their shop. force_authenticate puts the person
+    # straight into `request.auth`, as the real logins do (AUTH-3, AUTH-4; backend/conftest.py).
     client = APIClient()
     client.force_authenticate(user=staff.user, token=staff)  # type: ignore[arg-type]
     return client

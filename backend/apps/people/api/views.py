@@ -15,7 +15,7 @@ And a staff member's temporary password (AUTH-6):
     POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
 
 And the routes a device calls with its key, built on DeviceView (apps/people/api/base.py), under /api/devices/v1/
-(apps/people/api/device_urls.py):
+(apps/people/api/device_urls.py) and, for PIN login, /api/auth/ (apps/people/api/auth_urls.py):
 
     POST /api/devices/v1/pairing/   a new device asks to join a shop: a code to show, and its key in a cookie
     GET  /api/devices/v1/me/        a paired device learns its shop, its name, its code and its home side
@@ -257,7 +257,7 @@ class PairingView(DeviceView):
     # unless its cookie already opens a device, which is then refused.
     device_optional = True
     # Limited per caller's network, so a flood of starts can't fill the waiting list, nor hunt for codes to confirm
-    # (apps/people/api/throttles.py). The device's other route, `me`, names no limit: it is never slowed down.
+    # (apps/people/api/throttles.py). The device's `me` names no limit: it is never slowed down.
     throttle_classes = [PairingStartThrottle]
 
     @extend_schema(request=None, responses={201: PairingStartSerializer})

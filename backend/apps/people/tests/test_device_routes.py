@@ -89,8 +89,8 @@ def zawadi(shop_a: Shop, side_a: Side, vyakula: Side, give_role: GiveRole) -> St
 
 
 def client_of(staff: StaffMember) -> APIClient:
-    # Logged in as this staff member, as backend/conftest.py's staff clients are: the logins come later (AUTH-3,
-    # AUTH-4) and will leave the staff member in `request.auth`.
+    # Logged in as this staff member, as backend/conftest.py's staff clients are: the real logins (AUTH-3, AUTH-4) leave
+    # the staff member in `request.auth`, and have tests of their own.
     client = APIClient()
     client.force_authenticate(user=staff.user, token=staff)  # type: ignore[arg-type]
     return client

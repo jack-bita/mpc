@@ -93,9 +93,9 @@ class User(UUIDModel, TimeStamped, AbstractBaseUser, PermissionsMixin):
     # May open the Django admin. In practice only the superuser.
     is_staff = models.BooleanField(default=False)
     # On while this person's password is one someone else typed for them, face to face (ADR-0038): someone else knows
-    # it. Every office route then refuses them (job_of_person, apps/people/selectors.py) until they choose their own,
-    # which turns it off; or until the superuser disables the password altogether, leaving none to replace. editable=
-    # False: no form shows it, so nobody can tick it off by hand and keep a password the owner knows.
+    # it. Every office route but `me` then refuses them (check_own_password, apps/people/selectors.py) until they choose
+    # their own, which turns it off; or until the superuser disables the password altogether, leaving none to replace.
+    # editable=False: no form shows it, so nobody can tick it off by hand and keep a password the owner knows.
     must_change_password = models.BooleanField(default=False, editable=False)
 
     objects = UserManager()
@@ -172,7 +172,7 @@ class StaffMember(ShopScoped):
 
     # PROTECT: nothing is deleted (rule 7). related_name="+": no `user.staffmember_set`; a person's
     # jobs are read through StaffMember.objects, which shows only the current shop's. Django's own index
-    # on `user` stays, unlike `created_by`'s: finding a person's jobs (at login, AUTH-3 and AUTH-4)
+    # on `user` stays, unlike `created_by`'s: finding a person's jobs (at a password's login, AUTH-3)
     # starts from the person, not from a shop.
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
     # What the shop calls them, on the login screen and receipts: "Asha".

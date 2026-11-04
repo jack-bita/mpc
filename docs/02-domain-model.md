@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.16 · 4 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.17 · 4 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -37,6 +37,8 @@
 **Changes in v1.15** (4 Nov 2026, AUTH-6): a choice by Jack, made while planning AUTH-6. A person has a "must change password" mark, on while their password is one someone else typed. Someone with `staff.manage` on the whole shop may set a temporary password, under the giver rule: for someone who holds no key the setter lacks, and never for the owner. While it is open, a key its setter lacks waits (§5). Marked **(v1.15)**.
 
 **Changes in v1.16** (4 Nov 2026, AUTH-4): what building AUTH-4 settled (04 v1.34, 03 v1.21). A PIN lock's wait stops growing at an hour (Jack), and a new PIN lifts it and ends the old sessions (Jack); `PinLock` keeps the count (§5). Marked **(v1.16)**.
+
+**Changes in v1.17** (4 Nov 2026, AUTH-4's review): a choice by Jack. A PIN logs in as the whole person, so who may set one follows the rule for a temporary password, and only the superuser sets an owner's (§5). Marked **(v1.17)**.
 
 ---
 
@@ -218,6 +220,8 @@ A full diagram for GitHub is in Appendix A.
 **Who may give** a role or a permission **(v1.10)**: someone with `staff.manage` on that side, and only codes they hold there themselves, so a manager handed `staff.manage` to add a loader can't make himself Owner (Jack, PPL-3). The system or the superuser sets up a shop's first owner.
 
 **Who may set a temporary password** **(v1.15)**: whoever sets a person's password can log in as them, so this is the giver rule for a whole person (Jack, AUTH-6). Someone with `staff.manage` on the whole shop: the owner, or someone that key has been handed to. Only for someone who holds no key the setter lacks, side by side, counting everything they were given even while suspended. Never for themselves, who change their own with the current password. Only the superuser, in the admin, for an owner, or for someone who can open the admin. Never for someone with no phone and no email, who could not log in with it. A job at another shop isn't looked at until AUTH-7, as a visit reads no other shop's rows. While a temporary password is open, a key its setter lacks is not given: the person chooses their own first, or someone holding that key sets a new one, so the setter gains nothing by knowing it. Honest limit: a setter who logs in as the person and chooses a new password themselves takes the mark off, and no system can tell who typed it. So before giving someone a big key, the owner sets a fresh password for them.
+
+**Who may set a PIN** **(v1.17)**: whoever sets a person's PIN can log in as them, so the same rule applies (Jack, AUTH-4's review). Someone with `staff.manage` on the whole shop, who holds every key the person was given. Never their own. An owner's, or a person's who can open the admin, only by the superuser.
 
 **What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again.
 

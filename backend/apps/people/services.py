@@ -345,9 +345,9 @@ def pin_login(device: Device, staff_id: uuid.UUID, pin: str, *, at: datetime) ->
 @sensitive_variables()
 def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember, reason: str) -> None:
     """Set a first or forgotten password, face to face (ADR-0038): Baba types one for Asha and tells it to her. She logs
-    in with it, and every office route refuses her until she chooses her own (apps/people/selectors.py). `by` is always
-    a person, who needs staff.manage on the whole shop, as a password opens the whole person. Refusals, each a code the
-    screen translates: the password's checks, under `password`; staff.reason_required; staff.left; and who may
+    in with it, and every office route but `me` refuses her until she chooses her own (apps/people/selectors.py). `by`
+    is always a person, who needs staff.manage on the whole shop, as a password opens the whole person. Refusals, each a
+    code the screen translates: the password's checks, under `password`; staff.reason_required; staff.left; and who may
     (_check_may_set_password). Her older logins end, as each holds a fingerprint of the password it started with, so a
     lost phone is logged out. Returns nothing: the password goes no further than this function (no answer, log or audit
     line holds it)."""
