@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.15 · 4 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.16 · 4 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -35,6 +35,8 @@
 **Changes in v1.14** (3 Nov 2026, AUTH-3): a choice by Jack, made while planning AUTH-3. A password user needs no email: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link (§5; ADR-0038, which supersedes ADR-0017). Marked **(v1.14)**.
 
 **Changes in v1.15** (4 Nov 2026, AUTH-6): a choice by Jack, made while planning AUTH-6. A person has a "must change password" mark, on while their password is one someone else typed. Someone with `staff.manage` on the whole shop may set a temporary password, under the giver rule: for someone who holds no key the setter lacks, and never for the owner. While it is open, a key its setter lacks waits (§5). Marked **(v1.15)**.
+
+**Changes in v1.16** (4 Nov 2026, AUTH-4): what building AUTH-4 settled (04 v1.34, 03 v1.21). A PIN lock's wait stops growing at an hour (Jack), and a new PIN lifts it and ends the old sessions (Jack); `PinLock` keeps the count (§5). Marked **(v1.16)**.
 
 ---
 
@@ -204,7 +206,7 @@ A full diagram for GitHub is in Appendix A.
 - `status`: `active` ⇄ `suspended` → `left`. Never deleted. `left` is final: a person who comes back gets a new `StaffMember`, so the old one keeps its history **(v1.4)**.
 - One current job (not `left`) per person per shop. Nicknames are unique among a shop's current staff, whatever the letter case: the login screen and receipts show them **(v1.4)**.
 - `left_on` is set exactly when the status is `left`: never before `started_on`, and never after the shop's today, because leaving takes effect at once **(v1.4)**.
-- PIN: 4 digits, not 1234 and not four of a kind, hashed with Argon2 plus a server secret (03 §5.9). `pin_changed_at` tells devices to drop their offline check. A person who has left gets none **(v1.4)**.
+- PIN: 4 digits, not 1234 and not four of a kind, hashed with Argon2 plus a server secret (03 §5.9). `pin_changed_at` tells devices to drop their offline check. A person who has left gets none **(v1.4)**. Five wrong PINs lock that person on that device for a minute, doubling each time, up to an hour; a new PIN lifts the lock, and ends the sessions made with the old one. `PinLock` keeps the count, one row per person per device: only the system moves it, and it names nobody **(v1.16)**.
 
 **Role** [R1] → Shop — a named bundle of permissions. Copied from templates (Owner, Manager, Seller, Order writer, Cashier, Worker — spec §6); the owner can edit them.
 - `template` (the one it was copied from; blank for a role an owner makes later), `name` (blank on a copied role: the screens show the template's name), `permissions` (its codes, one list). One role per template per shop. The six templates hold what Jack chose for MPC; they live in code, beside the codes (03 §5.8) **(v1.10)**.
