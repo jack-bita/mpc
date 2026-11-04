@@ -25,8 +25,9 @@ from django.db.transaction import TransactionManagementError
 
 from apps.control.models import AuditAction, AuditEvent
 from apps.control.services import audit
+from apps.core.acting import acting_as
 from apps.core.links import LINK_TYPES
-from apps.core.models import AppendOnlyError
+from apps.core.models import AppendOnlyError, ShopScoped
 from apps.core.tenancy import Actor, ShopMismatch, shop_context
 from tests.probe.models import Note
 
@@ -80,6 +81,40 @@ def test_audit_line_keeps_its_device_for_good(shop_a: Model, asha_job: Note, dev
         assert AuditEvent.objects.get(pk=named.pk).device_id == device_a.pk
         with pytest.raises(ProtectedError):
             device_a.delete()
+
+
+def test_audit_line_names_the_device(shop_a: Model, asha_job: Note, staff_a: Actor, device_a: ShopScoped) -> None:
+    # X3: the manager suspends Asha from Laptop ya Dawa, and the line says so, beside who did it. The caller names no
+    # device: audit() reads the note the edit history's trigger reads (Jack, AUTH-8), so no service can forget it, and
+    # the two books agree. An inner block, as editing() opens one mid-action, changes nothing.
+    with shop_context(shop_a), acting_as(staff_a, device=device_a):
+        written = write_line(asha_job, by=staff_a)
+        line = AuditEvent.objects.get(pk=written.pk)
+        assert (line.created_by_id, line.device_id) == (staff_a.staff_id, device_a.pk)
+        with acting_as(staff_a):
+            assert write_line(asha_job, by=staff_a).device_id == device_a.pk
+
+
+def test_audit_line_with_no_device_names_none(shop_a: Model, asha_job: Note, staff_a: Actor) -> None:
+    # A password on a person's own phone: the person is named, and the link stays empty, not filled with a guess. A
+    # nightly job or a command that passes its own `by` opens no visit, so it names no device either.
+    with shop_context(shop_a):
+        with acting_as(staff_a, device=None):
+            assert write_line(asha_job, by=staff_a).device_id is None
+        assert write_line(asha_job, by=staff_a).device_id is None
+
+
+def test_audit_line_of_another_shop_never_names_the_device(
+    shop_a: Model, shop_b: Model, staff_a: Actor, device_a: ShopScoped
+) -> None:
+    # T1: a bug mid-visit writes a line about shop B's row while the visit, on shop A's laptop, is still open. Refused,
+    # and nothing written: shop B's trail would otherwise name shop A's laptop.
+    theirs = Note(shop_id=shop_b.pk, text="Mtu wa duka jingine")
+    theirs.save()
+    with shop_context(shop_a), acting_as(staff_a, device=device_a), shop_context(shop_b):
+        with pytest.raises(ShopMismatch):
+            write_line(theirs, by=None)
+        assert not AuditEvent.objects.exists()
 
 
 def test_audit_records_who_what_and_why(shop_a: Model, asha_job: Note, staff_a: Actor) -> None:

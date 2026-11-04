@@ -62,15 +62,26 @@ def told_device() -> str:
 
 def test_acting_as_tells_the_device_and_puts_it_back(staff_a: Actor, device_a: ShopScoped) -> None:
     # X3: a visit that knows its device tells PostgreSQL, for the trigger, and the audit book reads the same note.
-    assert (told_device(), current_device_id()) == ("", None)
+    shop = staff_a.shop_id
+    assert (told_device(), current_device_id(shop)) == ("", None)
     with acting_as(staff_a, device=device_a):
-        assert (told_device(), current_device_id()) == (str(device_a.pk), device_a.pk)
-    assert (told_device(), current_device_id()) == ("", None)
+        assert (told_device(), current_device_id(shop)) == (str(device_a.pk), device_a.pk)
+    assert (told_device(), current_device_id(shop)) == ("", None)
     # Put back however the block ends: a failed visit must not leave its device on the connection for the next one,
     # or that visit's edits would name a laptop nobody used.
     with pytest.raises(RuntimeError), acting_as(staff_a, device=device_a):
         raise RuntimeError("The visit failed.")
     assert told_device() == ""
+
+
+def test_current_device_is_refused_for_another_shops_row(staff_a: Actor, device_a: ShopScoped) -> None:
+    # T1: the trigger refuses to record a row of another shop than the visit's, and the audit book's read does too.
+    with acting_as(staff_a, device=device_a), pytest.raises(ShopMismatch):
+        current_device_id(uuid.uuid7())
+    # With no device there is nothing to name, so nothing to refuse: the system may work across shops (03 §5.11).
+    with acting_as(staff_a, device=None):
+        assert current_device_id(uuid.uuid7()) is None
+    assert current_device_id(uuid.uuid7()) is None
 
 
 def test_inner_block_keeps_the_visits_device(staff_a: Actor, staff_a2: Actor, device_a: ShopScoped) -> None:

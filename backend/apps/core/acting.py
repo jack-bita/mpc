@@ -81,14 +81,22 @@ def acting_as(actor: Actor, *, device: ShopScoped | None | _Device = KEEP_DEVICE
             _write(staff_before, shop_before, device_before)
 
 
-def current_device_id() -> uuid.UUID | None:
-    """The device this visit told PostgreSQL, or None for none: what the trigger reads for the edit history, so that an
-    audit line names the same one. Outside a visit, always None: the system has no device."""
+def current_device_id(shop_id: uuid.UUID) -> uuid.UUID | None:
+    """The device this visit told PostgreSQL, for a row of `shop_id` to name, or None for none: what the trigger reads
+    for the edit history, so that an audit line names the same one. Outside a visit, always None: the system has no
+    device. T1: a row of another shop than the visit's is a bug in the calling code, refused as the trigger refuses it,
+    so that shop's row never names this shop's device. With no device, there is nothing to name or to check."""
+    # Both in one query: the device, and the shop it was told for.
     with connection.cursor() as cursor:
-        cursor.execute("SELECT current_setting(%s, true)", [DEVICE_SETTING])
+        cursor.execute("SELECT current_setting(%s, true), current_setting(%s, true)", [DEVICE_SETTING, SHOP_SETTING])
         row = cursor.fetchone()
+    device_id, told_shop = (row[0], row[1]) if row else (None, None)
     # "" or never told (NULL): none. Nothing but acting_as() writes the setting, so what is there is an id.
-    return uuid.UUID(row[0]) if row and row[0] else None
+    if not device_id:
+        return None
+    if told_shop != str(shop_id):
+        raise ShopMismatch("The row belongs to another shop than the visit and its device.")
+    return uuid.UUID(device_id)
 
 
 def _transaction_failed() -> bool:
