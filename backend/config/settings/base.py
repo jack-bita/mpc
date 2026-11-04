@@ -145,6 +145,14 @@ DATABASES = {
 # base classes in `core` instead (CORE-1), so this applies only to those infrastructure tables.
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# How a password is stored: the first hashes every new one (Argon2, at the cost in apps/people/hashers.py). The rest can
+# only read older hashes, which move to the first at that person's next login: every password set before AUTH-3 is
+# PBKDF2, Django's default, and must not lock its owner out.
+PASSWORD_HASHERS = [
+    "apps.people.hashers.ShopArgon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     # A password too much like the person's own details is refused. Django's list names a username, first and last
     # names, which our User doesn't have (PPL-1): it is told ours instead, so "Baba Mfano" can't pick "babamfano", nor
