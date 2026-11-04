@@ -513,6 +513,18 @@ def test_a_key_the_setter_lacks_waits_for_the_persons_own_password(
         assert Permission.PAY_APPROVE in given_permissions(juma).on(None)
 
 
+def test_a_worker_who_came_back_still_waits(shop_a: Shop, baba: StaffMember, meneja: StaffMember) -> None:
+    # The password and the mark belong to the person; a job doesn't. Juma leaves and comes back, which makes a new job
+    # (02 §5), and Meneja's password still logs him in. So the rule looks for who set it across all of his jobs here.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    set_for(juma, by=meneja)
+    with shop_context(shop_a):
+        mark_left(juma, left_on=juma.started_on, by=None, reason="Amehama")
+        back = add_staff(shop=shop_a, user=juma.user, display_name="Juma", by=None)
+
+    assert code_of_giving(back, by=baba) == "staff.temporary_password_open"
+
+
 def test_a_key_the_setter_holds_is_given_at_once(shop_a: Shop, baba: StaffMember, meneja: StaffMember) -> None:
     # Meneja could use this key himself anyway, so nothing is gained by knowing the password.
     juma = job(shop_a, "Juma", phone="+255712345674")

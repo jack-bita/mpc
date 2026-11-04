@@ -408,11 +408,15 @@ def _check_no_open_temporary_password(staff: StaffMember, codes: Collection[str]
     # himself. Called with the person locked, so set_temporary_password can't slip in between.
     if not User.objects.filter(pk=staff.user_id, must_change_password=True).exists():
         return
-    # Who set it is kept in the audit trail. The last line counts, as a later one replaced the password. No line, or
-    # nobody named: typed in the admin, by the superuser, who reads every shop's rows anyway.
+    # Who set it is kept in the audit trail. The last line counts, as a later one replaced the password. Across all of
+    # the person's jobs here, as the password and the mark belong to the person: someone who left and came back has a
+    # new job, and the same password. No line, or nobody named: typed in the admin, by the superuser, who reads every
+    # shop's rows anyway.
     set_by = (
         AuditEvent.objects.filter(
-            action=AuditAction.STAFF_TEMPORARY_PASSWORD, subject_type=link_type_of(staff), subject_id=staff.pk
+            action=AuditAction.STAFF_TEMPORARY_PASSWORD,
+            subject_type=link_type_of(staff),
+            subject_id__in=StaffMember.objects.filter(user_id=staff.user_id).values("pk"),
         )
         .order_by("-created_at", "-pk")
         .values_list("created_by_id", flat=True)
