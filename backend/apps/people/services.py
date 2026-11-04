@@ -229,14 +229,24 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
 @sensitive_variables()
 def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMember:
     """Give a person a new PIN, online only (03 §5.9). Devices see the new `pin_changed_at` at their next
-    sync and drop their old offline check."""
+    sync and drop their old offline check. A PIN logs in as the whole person, so who may is the rule for a password,
+    with codes of its own (_check_may_act_as; Jack, 4 Nov 2026). `by` None: the system, or the superuser, who is
+    nobody's staff, and the only one who sets an owner's."""
     _check_shop(staff.shop_id, by)
+    # Who may, first, before anything else: a refused try pays for no slow hash. Asked again under the locks below, as
+    # this copy can be out of date by then.
+    if by is not None:
+        _check_may_act_as(staff, staff.user, by=by, secret="pin")
     check_pin_strength(pin)
     # Hashed before the lock: Argon2 is slow on purpose, and the row stays locked only for the short
     # write below.
     pin_hash = hash_pin(pin)
     with transaction.atomic():
-        staff = _locked(staff)
+        if by is None:
+            staff = _locked(staff)
+        else:
+            staff, by = _locked_pair(staff, by)
+            _check_may_act_as(staff, User.objects.get(pk=staff.user_id), by=by, secret="pin")
         if staff.status == StaffStatus.LEFT:
             raise ValidationError("A person who has left can't be given a PIN.", code="staff.left")
         staff.pin_hash = pin_hash
@@ -359,15 +369,7 @@ def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember
     # write below. make_password, not user.set_password: that keeps the typed password on the row in memory until save.
     encoded = make_password(password)
     with transaction.atomic():
-        # Her job and the job of the one acting, read again and locked. A role given to her, a leaving recorded, or a
-        # suspension of the one acting, at this same moment, comes first and is seen here, or waits until this is done:
-        # the hash above left plenty of time for one. In id order, so two people each setting the other's password at
-        # once take turns. no_key: a row another transaction links to needs a light lock at that transaction's commit,
-        # and a full lock here would block it, while this waits for that same transaction: Baba giving Juma a key while
-        # setting his password would deadlock, and one request would answer a server error.
-        rows = StaffMember.objects.select_for_update(no_key=True).filter(pk__in=[staff.pk, by.pk]).order_by("pk")
-        jobs = {job.pk: job for job in rows}
-        staff, by = jobs[staff.pk], jobs[by.pk]
+        staff, by = _locked_pair(staff, by)
         # Her person, read afresh. Not locked: everything that decides who may hangs on the jobs locked above, and the
         # write below names only its own two columns.
         user = User.objects.get(pk=staff.user_id)
@@ -392,19 +394,40 @@ def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember
         lift_wrong_password_count(user)
 
 
+def _locked_pair(staff: StaffMember, by: StaffMember) -> tuple[StaffMember, StaffMember]:
+    # A person's job and the job of the one acting, read again and locked. A role given to them, a leaving recorded, or
+    # a suspension of the one acting, at this same moment, comes first and is seen here, or waits until this is done:
+    # the slow hash before it left plenty of time for one. In id order, so two people each setting the other's password
+    # at once take turns. no_key: a row another transaction links to needs a light lock at that transaction's commit,
+    # and a full lock here would block it, while this waits for that same transaction: Baba giving Juma a key while
+    # setting his password would deadlock, and one request would answer a server error.
+    rows = StaffMember.objects.select_for_update(no_key=True).filter(pk__in=[staff.pk, by.pk]).order_by("pk")
+    jobs = {job.pk: job for job in rows}
+    return jobs[staff.pk], jobs[by.pk]
+
+
 def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) -> None:
-    # Whoever sets a person's password can log in as them. So this is the giver rule (02 §5), for a whole person: Baba
-    # may hand a manager staff.manage to deal with a forgotten password, and that manager still can't become anyone
-    # stronger than himself (Jack, 4 Nov 2026). Refused as a ValidationError with its code, as flag.own_flag is, so the
-    # screen can say what to do.
+    _check_may_act_as(staff, user, by=by, secret="password")
+    # A login is by phone or by email. With neither, the password could never be used, and the mark would stay on for
+    # good: the owner is told now, and adds the phone first, not when the person can't log in.
+    if not user.phone and not user.email:
+        raise ValidationError("This person has no phone or email to log in with.", code="password.no_login_name")
+
+
+def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, secret: str) -> None:
+    # Whoever sets a person's password or PIN can log in as them. So this is the giver rule (02 §5), for a whole person:
+    # Baba may hand a manager staff.manage to deal with a forgotten password, and that manager still can't become anyone
+    # stronger than himself (Jack, 4 Nov 2026). `secret`, "password" or "pin", names the refusal's code. Refused as a
+    # ValidationError with its code, as flag.own_flag is, so the screen can say what to do.
     # The key, on the whole shop, read afresh: a giver suspended a moment ago holds nothing (PermissionDenied, 403).
     require(by, Permission.STAFF_MANAGE, None)
     if staff.status == StaffStatus.LEFT:
-        raise ValidationError("A person who has left can't be given a password.", code="staff.left")
+        raise ValidationError(f"A person who has left can't be given a {secret}.", code="staff.left")
     if staff.pk == by.pk:
-        # A thief holding a logged-in phone could set a new password for its owner, with no current one, and keep the
-        # login for good. A person changes their own by allauth's change route, which asks for the current one.
-        raise ValidationError("A person changes their own password with the current one.", code="password.own")
+        # A thief holding a logged-in phone could set a new one for its owner, with no current one, and keep the login
+        # for good. A person changes their own password by allauth's change route, which asks for the current one. A PIN
+        # has no such route: someone else sets it, face to face, and PPL-4's screen decides how the person types it.
+        raise ValidationError(f"A person doesn't set their own {secret} here.", code=f"{secret}.own")
     # The superuser's alone (ADR-0038). Read from the roles, whatever the person's status: a suspended owner holds no
     # keys but is still the owner, and two owners may have fallen out with each other. When PPL-4 adds an end to a role,
     # an ended Owner role must stop counting here too.
@@ -414,15 +437,11 @@ def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) 
     # login, before any shop is open (ADR-0037, Jack, 4 Nov 2026). Nothing is lost yet, as a person at two shops is
     # refused at every office route until AUTH-7, whose card adds this rule.
     if is_owner or user.is_superuser or user.is_staff:
-        raise ValidationError("Only the superuser may reset this person's password.", code="password.superuser_only")
+        raise ValidationError(f"Only the superuser may reset this person's {secret}.", code=f"{secret}.superuser_only")
     # What the person was given, whatever their status, as they hold it all again once brought back; against what the
     # one acting holds now.
     if not held_permissions(by).covers(given_permissions(staff)):
-        raise ValidationError("This person holds a key the one acting doesn't.", code="password.more_keys")
-    # A login is by phone or by email. With neither, the password could never be used, and the mark would stay on for
-    # good: the owner is told now, and adds the phone first, not when the person can't log in.
-    if not user.phone and not user.email:
-        raise ValidationError("This person has no phone or email to log in with.", code="password.no_login_name")
+        raise ValidationError("This person holds a key the one acting doesn't.", code=f"{secret}.more_keys")
 
 
 def set_up_shop(*, name: str, code: str, sides: Sequence[NewSide]) -> Shop:
