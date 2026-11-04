@@ -11,11 +11,14 @@ from collections.abc import Callable
 from unittest import mock
 
 import pytest
+from allauth.core.context import request_context
+from django.test import RequestFactory
 from django.views.debug import ExceptionReporter
 from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
+from apps.people.accounts import AccountAdapter
 from apps.people.models import StaffMember, User
 from apps.people.services import add_staff
 from apps.shops.models import Shop, Side
@@ -163,6 +166,22 @@ def test_change_is_slowed_down(asha: StaffMember, phone: APIClient) -> None:
         assert change(phone, current_password="not-the-password", new_password=OWN)[0] == 400
     assert change(phone, current_password=TEMPORARY, new_password=OWN)[0] == 429
     assert mark_of(asha) is True
+
+
+def test_choosing_a_password_leaves_the_rest_of_the_row_alone(asha: StaffMember) -> None:
+    # The visit read her row when it began. The superuser switches her off a moment later, and then her change is saved.
+    # allauth's own method saves the whole row, which would switch her on again with what it read.
+    read_by_the_visit = User.objects.get(pk=asha.user_id)
+    User.objects.filter(pk=asha.user_id).update(is_active=False)
+
+    # allauth's way of handing the adapter the visit's request, which lifting the count needs.
+    with request_context(RequestFactory().post(CHANGE)):
+        AccountAdapter().set_password(read_by_the_visit, OWN)
+
+    stored = User.objects.get(pk=asha.user_id)
+    assert stored.is_active is False
+    assert stored.check_password(OWN)
+    assert stored.must_change_password is False
 
 
 def test_passwords_stay_out_of_error_reports(asha: StaffMember, phone: APIClient) -> None:

@@ -112,14 +112,17 @@ class AccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
     def set_password(self, user: User, password: str) -> None:
         # Only a person choosing their own comes here: the change route and the reset link. A temporary password is set
         # by our own service, past this method (set_temporary_password, apps/people/services.py). So the mark comes off
-        # here, in allauth's one save with the new password: never one without the other.
+        # here, in one save with the new password: never one without the other.
+        user.set_password(password)
         user.must_change_password = False
+        # These two columns alone, not allauth's own save of the whole row: this copy was read when the visit began, so
+        # saving all of it could undo what happened since, such as the superuser switching this person off.
+        user.save(update_fields=["password", "must_change_password"])
         # Someone who forgot their password has usually typed it wrong a few times: with a new one, they must not still
         # be told to wait. allauth lifts the count itself, but only for the emails in its own table of addresses, which
         # stays empty, as our User holds the email (ACCOUNT_PASSWORD_RESET_TOKEN_GENERATOR, config/settings/base.py). So
         # it is lifted here, for each name the person logs in by. `clear` also lifts the caller's own count, as allauth
         # means it to: it is safe, as the reset itself is slowed down.
-        super().set_password(user, password)
         for login in (user.email, user.phone):
             if login:
                 key = self._get_login_attempts_cache_key(self.request, email=login)
