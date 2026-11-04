@@ -17,6 +17,10 @@ Whoever sets a person's password can log in as them, so who may is the giver rul
     anyone at the shop               an owner, suspended or not             refused: password.superuser_only
     anyone at the shop               someone who can open the admin         refused: password.superuser_only
     anyone                           themselves                             refused: password.own
+    anyone                           someone who has left                   refused: staff.left
+    anyone                           someone with no phone and no email     refused: password.no_login_name
+
+And while the password is open, a key its setter lacks waits (staff.temporary_password_open).
 
 Fake data only: the repo is public (03 §10).
 """
@@ -31,8 +35,9 @@ import pytest
 from django.contrib.auth.hashers import make_password
 from django.core import mail
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
 from django.views.debug import ExceptionReporter
 
 from apps.control.models import AuditAction, AuditEvent
@@ -146,6 +151,13 @@ def test_a_person_with_only_a_phone_gets_one_too(
     give_role(juma, RoleTemplate.SELLER, side_a)
     set_for(juma, by=baba)
     assert log_in(phone="+255712345674", password=TEMPORARY)[0] == 200
+
+
+def test_a_person_with_only_an_email_gets_one_too(shop_a: Shop, baba: StaffMember) -> None:
+    # A login name is a phone or an email: either will do.
+    juma = job(shop_a, "Juma", email="juma@example.com")
+    set_for(juma, by=baba)
+    assert log_in(email="juma@example.com", password=TEMPORARY)[0] == 200
 
 
 def test_manager_with_the_key_sets_a_workers(meneja: StaffMember, asha: StaffMember) -> None:
@@ -487,6 +499,46 @@ def test_a_key_given_at_the_same_moment_causes_no_deadlock(shop_a: Shop, baba: S
     assert User.objects.get(pk=juma.user_id).must_change_password is True
 
 
+@pytest.mark.django_db(transaction=True)
+def test_a_key_being_given_right_now_is_counted(shop_a: Shop, baba: StaffMember, meneja: StaffMember) -> None:
+    # Baba's key is being written, and not yet committed, as Meneja's button arrives. Meneja's service must wait for it,
+    # and then count it: seen too late, he would hold the login of someone with a key he lacks.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    with shop_context(shop_a), transaction.atomic():
+        grant_permission(juma, Permission.PAY_APPROVE, side=None, by=baba)
+        second, ended = in_another_transaction(lambda: set_for(juma, by=meneja))
+        wait_until_someone_waits_for_me()
+    second.join(timeout=5)
+    [refused] = ended
+    assert isinstance(refused, ValidationError) and refused.code == "password.more_keys"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_password_being_set_right_now_holds_the_key_back(
+    shop_a: Shop, baba: StaffMember, meneja: StaffMember
+) -> None:
+    # The other way round: Meneja's password is being written as Baba's key arrives. The key must wait for it, and then
+    # see it: checked before the person's row is locked, it would find no mark and go through.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    with shop_context(shop_a), transaction.atomic():
+        set_temporary_password(juma, TEMPORARY, by=meneja, reason="Amesahau")
+        second, ended = in_another_transaction(lambda: give_key(juma, by=baba))
+        wait_until_someone_waits_for_me()
+    second.join(timeout=5)
+    [refused] = ended
+    assert isinstance(refused, ValidationError) and refused.code == "staff.temporary_password_open"
+
+
+def test_both_jobs_are_locked_lightly_and_in_id_order(baba: StaffMember, asha: StaffMember) -> None:
+    # The two things that keep two requests from waiting for each other for good. The tests above meet only one such
+    # pair, so these are pinned in what is sent to PostgreSQL.
+    with CaptureQueriesContext(connection) as queries:
+        set_for(asha, by=baba)
+    [lock] = [query["sql"] for query in queries.captured_queries if "FOR NO KEY UPDATE" in query["sql"]]
+    assert 'FROM "people_staffmember"' in lock
+    assert 'ORDER BY "people_staffmember"."id" ASC' in lock
+
+
 def test_a_refused_try_pays_for_no_hash(baba: StaffMember, meneja: StaffMember) -> None:
     # The hash takes 19 MiB of the demo's 512 MB (apps/people/hashers.py), and this route has no limit: only someone who
     # holds the key can reach it, and they must not be able to waste it on tries that are refused anyway.
@@ -540,6 +592,43 @@ def test_a_worker_who_came_back_still_waits(shop_a: Shop, baba: StaffMember, men
         back = add_staff(shop=shop_a, user=juma.user, display_name="Juma", by=None)
 
     assert code_of_giving(back, by=baba) == "staff.temporary_password_open"
+
+
+def test_a_key_waits_by_the_side_the_setter_holds_it_on(shop_a: Shop, side_a: Side, give_role: GiveRole) -> None:
+    # Neema holds the Seller's keys on Dawa alone, and has been handed staff.manage. A key on Dawa she could use herself
+    # is given at once; the same key on Vyakula, or on every side, is more than she holds, so it waits.
+    with shop_context(shop_a):
+        vyakula = add_side(shop=shop_a, code="F", name="Vyakula", by=None)
+    neema = job(shop_a, "Neema", phone="+255712345675")
+    give_role(neema, RoleTemplate.SELLER, side_a)
+    with shop_context(shop_a):
+        grant_permission(neema, Permission.STAFF_MANAGE, side=None, by=None)
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    set_for(juma, by=neema)
+
+    with shop_context(shop_a):
+        grant_permission(juma, Permission.SALE_WRITE, side=side_a, by=None)
+        assert Permission.SALE_WRITE in given_permissions(juma).on(side_a.pk)
+        for side in (vyakula, None):
+            with pytest.raises(ValidationError) as refused:
+                grant_permission(juma, Permission.SALE_WRITE, side=side, by=None)
+            assert refused.value.code == "staff.temporary_password_open"
+
+
+def test_a_key_stays_held_back_after_a_reset_in_the_admin(
+    shop_a: Shop, baba: StaffMember, meneja: StaffMember, superuser_client: Client
+) -> None:
+    # The superuser resets the password Meneja set, so what Meneja knows opens nothing. The admin writes no audit line,
+    # so his is still the last, and the key still waits: it fails safe, until Juma chooses his own or Baba sets a new
+    # one.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    set_for(juma, by=meneja)
+    sent = {"password1": "mahindi-ya-njano-2028", "password2": "mahindi-ya-njano-2028", "usable_password": "true"}
+    assert superuser_client.post(f"/admin/people/user/{juma.user_id}/password/", sent).status_code == 302
+
+    assert code_of_giving(juma, by=baba) == "staff.temporary_password_open"
+    set_for(juma, by=baba, password="mbolea-ya-kukuzia-2029")
+    give_key(juma, by=baba)
 
 
 def test_a_key_the_setter_holds_is_given_at_once(shop_a: Shop, baba: StaffMember, meneja: StaffMember) -> None:

@@ -415,7 +415,8 @@ def _check_no_open_temporary_password(staff: StaffMember, codes: Collection[str]
     # Who set it is kept in the audit trail. The last line counts, as a later one replaced the password. Across all of
     # the person's jobs here, as the password and the mark belong to the person: someone who left and came back has a
     # new job, and the same password. No line, or nobody named: typed in the admin, by the superuser, who reads every
-    # shop's rows anyway.
+    # shop's rows anyway. A reset in the admin writes no line, so an earlier setter's line still counts, and the key
+    # waits though their password is gone: it fails safe.
     set_by = (
         AuditEvent.objects.filter(
             action=AuditAction.STAFF_TEMPORARY_PASSWORD,
