@@ -13,6 +13,7 @@ PIN starts it all again from zero, and so does a new PIN, which needs no waiting
 Fake data only: the repo is public (03 §10).
 """
 
+import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from unittest import mock
@@ -213,9 +214,9 @@ def test_tries_sent_at_once_cannot_pass_five(asha: StaffMember, laptop: Device) 
     # holding the row's lock, and only then checks.
     checked: list[str] = []
 
-    def counted(pin: str, pin_hash: str) -> bool:
+    def counted(pin: str, pin_hash: str, *, staff_id: uuid.UUID) -> bool:
         checked.append(pin)
-        return pin_matches(pin, pin_hash)
+        return pin_matches(pin, pin_hash, staff_id=staff_id)
 
     def one_try() -> None:
         with shop_context(asha.shop_id):
@@ -249,3 +250,17 @@ def test_one_row_per_person_per_device(asha: StaffMember, laptop: Device) -> Non
         PinLock.objects.create(shop_id=asha.shop_id, staff=asha, device=laptop)
         with pytest.raises(IntegrityError), transaction.atomic():
             PinLock.objects.create(shop_id=asha.shop_id, staff=asha, device=laptop)
+
+
+def test_damaged_pin_is_logged_with_its_person(
+    asha: StaffMember, laptop: Device, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Someone who can't log in, and a log that says who to give a new PIN to, by their id alone (backend rules).
+    with shop_context(asha.shop_id):
+        StaffMember.objects.filter(pk=asha.pk).update(pin_hash="not-a-hash")
+        asha.refresh_from_db()
+        with pytest.raises(ValidationError) as refused:
+            check_pin(asha, laptop, PIN, at=START)
+    assert refused.value.code == "pin.wrong"
+    assert str(asha.pk) in caplog.text
+    assert asha.display_name not in caplog.text

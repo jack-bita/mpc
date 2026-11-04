@@ -299,7 +299,7 @@ def check_pin(staff: StaffMember, device: Device, pin: str, *, at: datetime) -> 
     _check_shop(staff.shop_id, None)
     _check_same_shop(staff, device)
     lock = _count_pin_try(staff, device, at=at)
-    if pin_matches(pin, staff.pin_hash):
+    if pin_matches(pin, staff.pin_hash, staff_id=staff.pk):
         _lift_pin_locks(PinLock.objects.filter(pk=lock.pk))
         return
     # The fifth wrong try has just started a lock: say so now, so the screen can tell her how long.

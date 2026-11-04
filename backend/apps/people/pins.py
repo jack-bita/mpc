@@ -17,6 +17,7 @@ import hmac
 import logging
 import re
 import secrets
+import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -76,16 +77,17 @@ def _nobodys_hash() -> str:
 
 
 @sensitive_variables()
-def pin_matches(pin: str, pin_hash: str) -> bool:
+def pin_matches(pin: str, pin_hash: str, *, staff_id: uuid.UUID | None = None) -> bool:
     """True if `pin` is the PIN behind `pin_hash`. False for an empty hash (no PIN set) or a damaged one. Each answer
-    costs one full check."""
+    costs one full check. `staff_id`: whose it is, for the log line a damaged hash writes."""
     try:
         return _hasher.verify(_peppered(pin), pin_hash or _nobodys_hash())
     except ValueError, AssertionError:
         # A hash that isn't one: only a bug, or a hand edit of the database, could store it. Nobody gets in, and the log
         # says so, as this person can't log in until they get a new PIN. Django's own check raises these two. The log
-        # never holds the hash. One more full check, so even this "no" takes as long.
-        logger.error("A stored PIN hash is damaged: give this person a new PIN.")
+        # names them by id, never by name (backend rules), and never holds the hash. One more full check, so even this
+        # "no" takes as long.
+        logger.error("A stored PIN hash is damaged: give staff member %s a new PIN.", staff_id)
         _hasher.verify(_peppered(pin), _nobodys_hash())
         return False
 

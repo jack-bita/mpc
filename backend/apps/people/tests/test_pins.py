@@ -11,6 +11,7 @@ The check itself costs the same whoever is asked (AUTH-4): a set amount of memor
 so the time an answer takes says nothing about them, and a damaged hash lets nobody in.
 """
 
+import uuid
 from unittest import mock
 
 import pytest
@@ -150,10 +151,11 @@ def test_no_pin_takes_as_long_as_a_wrong_one(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.parametrize("damaged", ["not-a-hash", "md5$abc$def", "argon2$broken"])
 def test_broken_pin_hash_never_matches(damaged: str, caplog: pytest.LogCaptureFixture) -> None:
-    # Nobody gets in, nothing crashes, and the log says so, since this person can't log in until they get a new PIN.
+    # Nobody gets in, nothing crashes, and the log says who, since this person can't log in until they get a new PIN.
     # The log never holds the hash.
-    assert not pin_matches(PIN, damaged)
-    assert "damaged" in caplog.text
+    who = uuid.uuid7()
+    assert not pin_matches(PIN, damaged, staff_id=who)
+    assert str(who) in caplog.text
     assert damaged not in caplog.text
 
 
