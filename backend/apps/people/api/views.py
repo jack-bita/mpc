@@ -41,7 +41,7 @@ from rest_framework.throttling import BaseThrottle
 
 from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin, ShopViewSet
 from apps.core.permissions import Permission
-from apps.people.api.authentication import DEVICE_KEY_COOKIE, set_key_cookie
+from apps.people.api.authentication import set_key_cookie
 from apps.people.api.base import DeviceView
 from apps.people.api.pin_session import start_pin_session
 from apps.people.api.serializers import (
@@ -55,6 +55,7 @@ from apps.people.api.serializers import (
     TemporaryPasswordSerializer,
 )
 from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle, PinLoginThrottle
+from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import Device, StaffMember
 from apps.people.selectors import LoginRefused, idle_lock_minutes
 from apps.people.services import block as block_device

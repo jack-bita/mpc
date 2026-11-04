@@ -31,7 +31,8 @@ from rest_framework.views import APIView
 
 from apps.core.acting import acting_as
 from apps.core.tenancy import shop_context
-from apps.people.api.authentication import DEVICE_KEY_COOKIE, DeviceKeyAuthentication, enforce_csrf, set_key_cookie
+from apps.people.api.authentication import DeviceKeyAuthentication, enforce_csrf, set_key_cookie
+from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import Device
 
 

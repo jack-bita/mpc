@@ -14,8 +14,9 @@ The device is the visit's Actor (apps/core/tenancy.py): its `shop_id`, and a `st
 shop's machine, not a person. The device routes open its shop for the whole visit (DeviceView, apps/people/api/base.py);
 office routes don't use this login at all, and refuse a device alone (CORE-6).
 
-This file owns the cookie (its name, how long it lasts, and the one function that sets it), the login class, the
-CSRF check the device routes share, and the cookie's description for the API's schema.
+This file owns the cookie (how long it lasts, and the one function that sets it; its name is in
+apps/people/device_keys.py), the login class, the CSRF check the device routes share, and the cookie's description for
+the API's schema.
 """
 
 from datetime import timedelta
@@ -33,16 +34,12 @@ from rest_framework.authentication import BaseAuthentication, SessionAuthenticat
 from rest_framework.request import Request
 
 from apps.core.tenancy import shop_context
-from apps.people.device_keys import hash_device_key
+from apps.people.device_keys import DEVICE_KEY_COOKIE, hash_device_key
 from apps.people.login_doors import shop_of_device_key
 from apps.people.models import Device, DeviceStatus
 from apps.people.selectors import LoginRefused, check_shop_active
 from apps.people.services import note_device_seen
 
-# The cookie's name, a promise to every browser that holds one: it never changes. It holds "key" on purpose: Django's
-# error pages and error reports hide the value of any cookie whose name holds KEY, TOKEN or SECRET
-# (SafeExceptionReporterFilter), so a crash in a device's visit never prints its key.
-DEVICE_KEY_COOKIE = "device_key"
 # How long a browser keeps it: 400 days, the most Chrome allows, whatever a server asks for (RFC 6265bis). The device
 # routes send it again as the device is seen (DeviceView), so a device in use never reaches the end.
 DEVICE_KEY_MAX_AGE = timedelta(days=400)

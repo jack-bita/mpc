@@ -153,7 +153,12 @@ def test_right_pin_starts_a_session_on_the_device(asha: StaffMember, laptop: Dev
     assert session["_auth_user_id"] == str(asha.user_id)
     # The badge names its person, shop and device, so each visit checks all three (test_pin_session.py). It names the
     # job, not only the person: someone with jobs at two shops is at this device's shop here.
-    assert session["pin_session"] == {"shop": str(asha.shop_id), "staff": str(asha.pk), "device": str(laptop.pk)}
+    assert session["pin_session"] == {
+        "shop": str(asha.shop_id),
+        "staff": str(asha.pk),
+        "device": str(laptop.pk),
+        "pin_set_at": str(asha.pin_changed_at),
+    }
 
 
 def test_session_lasts_the_shops_idle_minutes(asha: StaffMember, laptop_key: str, shop_a: Shop) -> None:

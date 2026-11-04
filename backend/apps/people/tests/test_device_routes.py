@@ -30,8 +30,8 @@ from apps.core.api import base
 from apps.core.api.base import CreateOnceMixin
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.api.authentication import DEVICE_KEY_COOKIE
 from apps.people.api.views import DeviceViewSet
+from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import Device, PairingRequest, StaffMember, User
 from apps.people.services import add_staff, confirm_pairing, mark_left, start_pairing, suspend
 from apps.shops.models import Shop, Side

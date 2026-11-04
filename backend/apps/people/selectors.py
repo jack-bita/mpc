@@ -2,8 +2,8 @@
 whether a shop is open to anyone (AUTH-3; 03 §5.9; ADR-0038).
 
 A login class only asks these, and turns a refusal into the API's answer. The rules live here so every login follows
-the same ones: the password's today (apps/people/api/staff_session.py), the device's for its shop
-(apps/people/api/authentication.py), and later the PIN's (AUTH-4) and the choice between two shops (AUTH-7).
+the same ones: the password's and the PIN's (apps/people/api/staff_session.py), the device's for its shop
+(apps/people/api/authentication.py), and later the choice between two shops (AUTH-7).
 
     a person ──▶ the door: which shops?         (apps/people/login_doors.py)
                    none ──▶ None: no job, so office routes refuse
@@ -16,17 +16,33 @@ the same ones: the password's today (apps/people/api/staff_session.py), the devi
 
 A person who has left counts as no job, not as refused: they aren't anyone at that shop now. A suspended person's job
 still counts, so they can be told why they are stopped.
+
+A PIN's badge needs no door and no choice of shop: it names its job, and the server wrote it at login (AUTH-4):
+
+    a badge ──▶ that shop open ──▶ its device and its job, through the guard
+                  not beside its device's key: refused, session.wrong_device
+                  shop suspended: refused, shop.suspended
+                  device blocked: refused, device.blocked
+                  person left, or a new PIN since: None, no job
+                  person suspended: refused, staff.suspended
+                  password someone else typed: refused, password.must_change
+                  ──▶ the staff member
 """
 
+import uuid
+from collections.abc import Mapping
 from datetime import date
 from zoneinfo import ZoneInfo
 
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare
+from django.views.decorators.debug import sensitive_variables
 
 from apps.core.settings_registry import IDLE_MINUTES
 from apps.core.tenancy import shop_context
+from apps.people.device_keys import hash_device_key
 from apps.people.login_doors import shops_of_person
-from apps.people.models import StaffMember, StaffStatus, User
+from apps.people.models import Device, DeviceStatus, StaffMember, StaffStatus, User
 from apps.shops.models import Shop, ShopStatus
 from apps.shops.selectors import get_setting
 
@@ -65,6 +81,13 @@ def check_may_act(staff: StaffMember) -> None:
         raise LoginRefused("This person is suspended.", code="staff.suspended")
 
 
+def check_own_password(user: User) -> None:
+    # Someone else typed this person's password (ADR-0038), so until they choose their own, it opens nothing but the way
+    # to choose one. `user` is read afresh on each visit (the session's person), so this takes effect at once.
+    if user.must_change_password:
+        raise LoginRefused("This person must choose their own password.", code="password.must_change")
+
+
 def job_of_person(user: User) -> StaffMember | None:
     """The job this person acts in on this visit; None if they have no current job; LoginRefused if they may not act."""
     shop_ids = shops_of_person(user.pk)
@@ -84,8 +107,37 @@ def job_of_person(user: User) -> StaffMember | None:
         return None
     check_may_act(staff)
     # Last: choosing a password wouldn't let in someone stopped for another reason, so they are told that reason first.
-    # Someone else typed this person's password (ADR-0038), so until they choose their own, it opens nothing but the way
-    # to choose one. `user` is read afresh on each visit (the session's person), so this takes effect at once.
-    if user.must_change_password:
-        raise LoginRefused("This person must choose their own password.", code="password.must_change")
+    check_own_password(user)
+    return staff
+
+
+def pin_stamp(staff: StaffMember) -> str:
+    # When this person's PIN was set, as a badge keeps it: a new PIN ends the badges made with the old one.
+    return str(staff.pin_changed_at)
+
+
+@sensitive_variables()
+def job_of_pin_session(user: User, badge: Mapping[str, str], device_key: str | None) -> StaffMember | None:
+    """The job a PIN's badge acts in on this visit (03 §5.9); None if it no longer names one; LoginRefused if they may
+    not act. Every variable hidden from error reports: `device_key` is the device's key itself."""
+    # The badge's own shop, which the server wrote at login: no door needed, and both rows are read through the guard.
+    with shop_context(uuid.UUID(badge["shop"])):
+        device = Device.objects.select_related("shop").filter(pk=badge["device"]).first()
+        staff = (
+            StaffMember.objects.select_related("shop")
+            .filter(pk=badge["staff"], user=user)
+            .exclude(status=StaffStatus.LEFT)
+            .first()
+        )
+    # First, as it asks who is calling: someone who copied the badge's number is told nothing about the people it names.
+    # Compared in constant time, as a key's hash is a secret of the device's.
+    if device is None or device_key is None or not constant_time_compare(hash_device_key(device_key), device.key_hash):
+        raise LoginRefused("This session belongs to another device.", code="session.wrong_device")
+    check_shop_active(device.shop)
+    if device.status != DeviceStatus.ACTIVE:
+        raise LoginRefused("This device is blocked.", code="device.blocked")
+    if staff is None or pin_stamp(staff) != badge["pin_set_at"]:
+        return None
+    check_may_act(staff)
+    check_own_password(user)
     return staff
