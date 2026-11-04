@@ -22,6 +22,8 @@ from unittest import mock
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
@@ -186,6 +188,16 @@ def test_who_may_is_asked_before_the_hash(baba: StaffMember, meneja: StaffMember
     with mock.patch("apps.people.services.hash_pin") as hashing, pytest.raises(ValidationError):
         set_for(baba, by=meneja)
     hashing.assert_not_called()
+
+
+def test_both_jobs_are_locked_lightly_and_in_id_order(meneja: StaffMember, asha: StaffMember) -> None:
+    # The two things that keep two requests from waiting for each other for good, pinned in what is sent to PostgreSQL,
+    # as for a temporary password. Without a lock on the giver's row, a suspension at this same moment wouldn't be seen.
+    with CaptureQueriesContext(connection) as queries:
+        set_for(asha, by=meneja)
+    [lock] = [query["sql"] for query in queries.captured_queries if "FOR NO KEY UPDATE" in query["sql"]]
+    assert 'FROM "people_staffmember"' in lock
+    assert 'ORDER BY "people_staffmember"."id" ASC' in lock
 
 
 def during_the_hash(happening: Callable[[], object]) -> Any:

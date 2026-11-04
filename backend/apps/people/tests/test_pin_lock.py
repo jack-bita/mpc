@@ -191,6 +191,22 @@ def test_person_of_another_shop_is_refused(staff_b: StaffMember, laptop: Device)
     assert refused.value.code == "staff.other_shop"
 
 
+def test_device_of_another_shop_is_refused(
+    asha: StaffMember, staff_b: StaffMember, side_b: Side, give_role: GiveRole
+) -> None:
+    # T1. The person is the shop's, and only the device isn't, so the check of the open shop passes, and the next one
+    # must stop it: a count kept against another shop's device would point at a row this shop's guard never shows.
+    give_role(staff_b, RoleTemplate.MANAGER, None)
+    device_b = a_device(staff_b, side_b, "Simu ya Jingine")
+
+    with shop_context(asha.shop_id):
+        with pytest.raises(ValidationError) as refused:
+            check_pin(asha, device_b, PIN, at=START)
+        assert not PinLock.objects.exists()
+
+    assert refused.value.code == "staff.other_shop"
+
+
 def test_person_and_device_of_a_shop_not_open_are_refused(
     staff_b: StaffMember, side_b: Side, shop_a: Shop, give_role: GiveRole
 ) -> None:

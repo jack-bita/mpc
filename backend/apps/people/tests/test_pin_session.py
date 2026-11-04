@@ -565,6 +565,19 @@ def test_admin_login_page_shows_no_one_to_a_badge(asha: StaffMember, laptop_key:
     assert Session.objects.filter(session_key=badge).exists()
 
 
+def test_admin_login_needs_csrf_before_it_ends_a_badge(asha: StaffMember, laptop_key: str) -> None:
+    # A password typed in the admin ends the badge on this browser. Without the token, another website could post to
+    # this page and log a shop's laptop out in the middle of a sale.
+    badge = logged_in(asha, laptop_key).cookies[SESSION_COOKIE].value
+    browser = Client(enforce_csrf_checks=True)
+    browser.cookies[SESSION_COOKIE] = badge
+
+    answer = browser.post("/admin/login/", {"username": "someone@example.com", "password": "anything-at-all"})
+
+    assert answer.status_code == 403
+    assert Session.objects.filter(session_key=badge).exists()
+
+
 def test_allauths_session_route_answers_no_badge(asha: StaffMember, laptop_key: str) -> None:
     # allauth's "am I logged in?" holds the person's name and email, and knows nothing of a badge's checks. A copied
     # badge, or the next person at an open laptop, gets what a stranger gets. The email goes in first, so a leak would
