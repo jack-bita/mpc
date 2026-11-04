@@ -217,6 +217,45 @@ def test_admin_refuses_a_password_of_only_spaces(superuser_client: Client) -> No
     assert baba.must_change_password is False
 
 
+def change_own_password(client: Client, new: str, *, old: str = PASSWORD) -> int:
+    # Django's own page where someone who can open the admin changes their own password.
+    sent = {"old_password": old, "new_password1": new, "new_password2": new}
+    return client.post("/admin/password_change/", sent).status_code
+
+
+def test_own_password_page_clears_the_mark(superuser_client: Client, superuser: User) -> None:
+    # Someone who can open the admin chooses their own here too. Django's own form said it worked, and left the mark.
+    User.objects.filter(pk=superuser.pk).update(must_change_password=True)
+    assert change_own_password(superuser_client, NEW_PASSWORD) == 302
+    superuser.refresh_from_db()
+    assert superuser.check_password(NEW_PASSWORD)
+    assert superuser.must_change_password is False
+
+
+def test_own_password_page_refuses_the_temporary_one(superuser_client: Client, superuser: User) -> None:
+    # The same rule as the change route: someone else typed that one. 200: the form again, with its error.
+    User.objects.filter(pk=superuser.pk).update(must_change_password=True)
+    assert change_own_password(superuser_client, PASSWORD) == 200
+    superuser.refresh_from_db()
+    assert superuser.must_change_password is True
+
+
+def test_own_password_page_takes_the_spaces_off(superuser_client: Client) -> None:
+    # As the admin's other forms: allauth's login takes them off what is typed, so one stored with them never logs in.
+    assert change_own_password(superuser_client, f" {NEW_PASSWORD} ") == 302
+    login = {"email": "admin@example.com", "password": NEW_PASSWORD}
+    assert Client().post(LOGIN, login, content_type="application/json").status_code == 200
+
+
+def test_own_password_page_lifts_the_wrong_password_count(superuser_client: Client) -> None:
+    wrong = {"email": "admin@example.com", "password": "not-the-password"}
+    for _ in range(5):
+        Client().post(LOGIN, wrong, content_type="application/json")
+    assert change_own_password(superuser_client, NEW_PASSWORD) == 302
+    login = {"email": "admin@example.com", "password": NEW_PASSWORD}
+    assert Client().post(LOGIN, login, content_type="application/json").status_code == 200
+
+
 def test_admin_shows_the_mark_read_only(superuser_client: Client) -> None:
     # The superuser sees whether a person has chosen their own yet, and can't tick it off for them: that would leave a
     # password someone else knows, with nothing to show for it.

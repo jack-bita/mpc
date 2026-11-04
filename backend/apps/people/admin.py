@@ -11,8 +11,10 @@ from typing import Any
 
 from allauth.account.models import EmailAddress
 from django.contrib import admin
+from django.contrib.admin.forms import AdminPasswordChangeForm as OwnPasswordForm
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import AdminPasswordChangeForm, AdminUserCreationForm, UserChangeForm
+from django.core.exceptions import ValidationError
 from django.http import HttpRequest
 
 from apps.people.accounts import lift_wrong_password_count
@@ -25,20 +27,25 @@ from apps.people.models import User
 admin.site.unregister(EmailAddress)
 
 
+def _take_off_spaces(cleaned_data: dict[str, Any], *fields: str) -> None:
+    # Django's admin forms keep the spaces around a password, and allauth's login takes them off what is typed, so a
+    # password stored with them could never log in. Taken off first, so Django's checks judge what will be stored:
+    # twelve spaces leave nothing, which it refuses as required.
+    for field in fields:
+        if cleaned_data.get(field):
+            cleaned_data[field] = cleaned_data[field].strip()
+
+
 class PasswordTypedHereIsTemporary:
-    # The superuser knows any password typed here: a new owner's first one, or the owner's forgotten one, which nobody
-    # at the shop may reset (ADR-0038). So the person must choose their own at the next login, as with a temporary one
-    # the owner sets (set_temporary_password, apps/people/services.py). Both of the admin's password forms save through
-    # this method, on Django's own, in the classes below.
+    # The superuser knows any password typed for someone else here: a new owner's first one, or the owner's forgotten
+    # one, which nobody at the shop may reset (ADR-0038). So the person must choose their own at the next login, as with
+    # a temporary one the owner sets (set_temporary_password, apps/people/services.py). The add form, and the password
+    # page reached from a person's row, both save through this method, on Django's own, in the classes below.
     cleaned_data: dict[str, Any]
 
     def clean(self) -> dict[str, Any]:
-        # Django's admin forms keep the spaces around a password, and allauth's login takes them off what is typed, so a
-        # password stored with them could never log in. Taken off first, so Django's checks judge what will be stored:
-        # twelve spaces leave nothing, which it refuses as required. mypy reads this class alone, as below.
-        for field in ("password1", "password2"):
-            if self.cleaned_data.get(field):
-                self.cleaned_data[field] = self.cleaned_data[field].strip()
+        _take_off_spaces(self.cleaned_data, "password1", "password2")
+        # mypy reads this class alone, with no parent to call: the forms below give it one.
         cleaned: dict[str, Any] = super().clean()  # type: ignore[misc]
         return cleaned
 
@@ -46,7 +53,7 @@ class PasswordTypedHereIsTemporary:
         # Django's switch: "Disabled" means no password at all, so nothing is left to replace, and the mark would say
         # otherwise. On the row before Django's one save, so the password and the mark are written together.
         user.must_change_password = self.cleaned_data["set_usable_password"]
-        # mypy reads this class alone, with no parent to call: the forms below give it one.
+        # As in clean above, for mypy.
         saved: User = super().set_password_and_save(user, commit=commit, **kwargs)  # type: ignore[misc]
         # They came because they kept typing it wrong: the new one must work at once, not after 5 minutes.
         lift_wrong_password_count(saved)
@@ -64,6 +71,33 @@ class UserAddForm(PasswordTypedHereIsTemporary, AdminUserCreationForm[User]):
 class TemporaryPasswordForm(PasswordTypedHereIsTemporary, AdminPasswordChangeForm[User]):
     # Django's own form for a person's password, on its own page, reached from the person's page.
     pass
+
+
+class ChooseOwnPasswordForm(OwnPasswordForm):
+    # Django's own page where someone who can open the admin changes their own password (/admin/password_change/). The
+    # one password form here that is not typed for someone else, so it follows the rules of choosing one's own, as
+    # allauth's change route does (AccountAdapter, apps/people/accounts.py): never the temporary one, and the mark comes
+    # off.
+    def clean(self) -> dict[str, Any] | None:
+        _take_off_spaces(self.cleaned_data, "new_password1", "new_password2")
+        cleaned = super().clean()
+        new_password = self.cleaned_data.get("new_password1")
+        if new_password and self.user.must_change_password and self.user.check_password(new_password):
+            refused = ValidationError(
+                "Choose a password other than the temporary one.", code="password.same_as_temporary"
+            )
+            self.add_error("new_password1", refused)
+        return cleaned
+
+    def save(self, commit: bool = True) -> User:
+        # In Django's one save with the new password: never one without the other.
+        self.user.must_change_password = False
+        saved: User = super().save(commit=commit)
+        lift_wrong_password_count(saved)
+        return saved
+
+
+admin.site.password_change_form = ChooseOwnPasswordForm
 
 
 class UserEditForm(UserChangeForm[User]):
