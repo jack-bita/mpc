@@ -56,6 +56,17 @@ class PasswordSessionView(SessionView):  # type: ignore[misc]
         return answer
 
 
+class PasswordResetView(ResetPasswordView):  # type: ignore[misc]
+    # allauth's own reset, which ends by answering with whoever is logged in. Juma, resetting his own password on a
+    # laptop where Asha's badge is open, would read her id, name and email. To this route, as to PasswordSessionView
+    # above, a badge is nobody: he gets the answer anyone not logged in gets. The reset itself doesn't change.
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        if PIN_SESSION in request.session:
+            request.user = AnonymousUser()
+        answer: HttpResponse = super().post(request, *args, **kwargs)
+        return answer
+
+
 class ChangeOwnPasswordInput(ChangePasswordInput):  # type: ignore[misc]
     # allauth's own form asks for the current password only of a person who has one, so someone with none may set one
     # with no check at all. A PIN session reaches this route too (AUTH-4): at a shared laptop left open, anyone could
@@ -86,6 +97,6 @@ urlpatterns = [
     _route("auth/session", PasswordSessionView, "password-session"),
     _route("auth/login", LoginView, "password-login"),
     _route("auth/password/request", RequestPasswordResetView, "password-reset-request"),
-    _route("auth/password/reset", ResetPasswordView, "password-reset"),
+    _route("auth/password/reset", PasswordResetView, "password-reset"),
     _route("account/password/change", ChangeOwnPasswordView, "password-change"),
 ]

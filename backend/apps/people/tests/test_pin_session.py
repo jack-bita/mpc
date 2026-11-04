@@ -30,6 +30,7 @@ from unittest import mock
 import pytest
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.models import Session
+from django.core import mail
 from django.test import Client
 from django.utils import timezone
 from django.views.debug import ExceptionReporter
@@ -66,6 +67,8 @@ ME = "/api/auth/me/"
 LOGOUT = "/api/auth/logout/"
 SESSION = "/_allauth/browser/v1/auth/session"
 PASSWORD_LOGIN = "/_allauth/browser/v1/auth/login"
+RESET_REQUEST = "/_allauth/browser/v1/auth/password/request"
+RESET = "/_allauth/browser/v1/auth/password/reset"
 KEY_COOKIE = "device_key"
 SESSION_COOKIE = "sessionid"
 
@@ -73,6 +76,7 @@ PIN = "4829"
 PHONE = "+255712345678"
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "a-long-test-password"
+NEW_PASSWORD = "another-long-test-password"
 # Files whose frames hold what the test itself sent: not the server's, so not for it to hide.
 TEST_CLIENT_FILES = ("django/test/client.py", "rest_framework/test.py", "test_pin_session.py")
 
@@ -585,6 +589,27 @@ def test_allauths_session_route_still_answers_a_password(asha: StaffMember) -> N
     answer = phone.get(SESSION)
     assert answer.status_code == 200
     assert answer.json()["data"]["user"]["display"] == asha.user.full_name
+
+
+def test_allauths_reset_route_names_no_badge(asha: StaffMember, laptop_key: str) -> None:
+    # Juma resets his own password, with his own good link, on a laptop where Asha's badge is open. allauth answers with
+    # whoever is logged in, which would tell him her id, name and email. His password still changes.
+    User.objects.filter(pk=asha.user_id).update(email="asha@example.com")
+    User.objects.create_user(full_name="Juma Demo", email="juma@example.com", password=ADMIN_PASSWORD)
+    client = logged_in(asha, laptop_key)
+    assert client.post(RESET_REQUEST, {"email": "juma@example.com"}, format="json").status_code == 200
+    [link] = [word for word in mail.outbox[-1].body.split() if "/password-reset#" in word]
+
+    answer = client.post(RESET, {"key": link.partition("#")[2], "password": NEW_PASSWORD}, format="json")
+
+    # 401, the answer anyone not logged in gets: reset, and nobody is logged in by it.
+    assert answer.status_code == 401
+    body = answer.content.decode()
+    assert "asha@example.com" not in body
+    assert asha.user.full_name not in body
+    assert str(asha.user_id) not in body
+    login = APIClient().post(PASSWORD_LOGIN, {"email": "juma@example.com", "password": NEW_PASSWORD}, format="json")
+    assert login.status_code == 200
 
 
 def test_allauths_logout_still_ends_a_badge(asha: StaffMember, laptop_key: str) -> None:
