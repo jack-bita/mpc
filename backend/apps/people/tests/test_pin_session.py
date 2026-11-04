@@ -24,7 +24,7 @@ Fake data only: the repo is public (03 §10).
 
 import time
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from unittest import mock
 
 import pytest
@@ -36,6 +36,7 @@ from django.views.debug import ExceptionReporter
 from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
+from apps.core.settings_registry import IDLE_MINUTES
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
 from apps.people.services import (
@@ -49,7 +50,7 @@ from apps.people.services import (
     unblock,
     unsuspend,
 )
-from apps.shops.models import Shop, ShopStatus, Side
+from apps.shops.models import Setting, Shop, ShopStatus, Side
 
 pytestmark = pytest.mark.django_db
 
@@ -247,6 +248,21 @@ def test_use_keeps_the_session_alive(asha: StaffMember, laptop_key: str) -> None
     # A whole idle time again, on the server's row and in the browser's cookie.
     assert session_row(client).expire_date > timezone.now() + timedelta(minutes=14)
     assert answer.cookies[SESSION_COOKIE]["max-age"] == 15 * 60
+
+
+def test_short_idle_time_survives_use(asha: StaffMember, laptop_key: str, shop_a: Shop) -> None:
+    # A shop may set 1 minute (IDLE_MINUTES). Pushed only once a minute, a badge in use would end before its first push:
+    # someone clicking every few seconds would be logged out at the end of the first minute.
+    with shop_context(shop_a):
+        Setting.objects.create(shop=shop_a, key=IDLE_MINUTES.key, value="1", effective_from=date(2020, 1, 1))
+    client = logged_in(asha, laptop_key)
+    last_used(client, seconds_ago=31, ends=timezone.now() + timedelta(seconds=29))
+
+    answer = client.get(SIDES)
+
+    assert answer.status_code == 200
+    assert session_row(client).expire_date > timezone.now() + timedelta(seconds=55)
+    assert answer.cookies[SESSION_COOKIE]["max-age"] == 60
 
 
 def test_session_is_saved_at_most_once_a_minute(asha: StaffMember, laptop_key: str) -> None:
