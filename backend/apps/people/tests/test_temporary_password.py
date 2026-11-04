@@ -28,7 +28,9 @@ from typing import Any
 from unittest import mock
 
 import pytest
+from django.contrib.auth.hashers import make_password
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.test import Client
 from django.views.debug import ExceptionReporter
 
@@ -45,6 +47,7 @@ from apps.people.services import (
 )
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -382,6 +385,59 @@ def test_temporary_password_lifts_the_wrong_password_count(
     set_for(asha, by=baba)
 
     assert log_in(**{name: login, "password": TEMPORARY})[0] == 200
+
+
+def during_the_hash(happening: Callable[[], object]) -> Any:
+    # Something happens while the slow hash runs, when no lock is held.
+    def hashing(password: str) -> str:
+        happening()
+        return make_password(password)
+
+    return mock.patch("apps.people.services.make_password", side_effect=hashing)
+
+
+def test_a_giver_suspended_during_the_hash_sets_nothing(shop_a: Shop, meneja: StaffMember) -> None:
+    # A person with no keys, whom anyone with the key may reset: nothing else stops this but the key itself. Meneja had
+    # it when he pressed the button, and is suspended before the hash ends.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    suspended = during_the_hash(lambda: suspend(meneja, by=None, reason="Uchunguzi"))
+    with suspended, pytest.raises(PermissionDenied):
+        set_for(juma, by=meneja)
+    assert_unchanged(juma)
+
+
+def test_a_key_given_during_the_hash_counts(shop_a: Shop, baba: StaffMember, meneja: StaffMember) -> None:
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    given = during_the_hash(lambda: grant_permission(juma, Permission.PAY_APPROVE, side=None, by=baba))
+    with given, pytest.raises(ValidationError) as refused:
+        set_for(juma, by=meneja)
+    assert refused.value.code == "password.more_keys"
+    assert_unchanged(juma)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_suspension_on_its_way_is_waited_for(shop_a: Shop, meneja: StaffMember) -> None:
+    # Meneja's suspension is being written, and not yet committed, as his button arrives. Without the lock on his row,
+    # the read would still see him active, and his password would be set a moment after he was stopped. So the service
+    # must wait for the suspension, and only then ask (backend/tests/concurrency.py). Waiting is the proof: a service
+    # that takes no lock on him never waits, and wait_until_someone_waits_for_me fails.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    with shop_context(shop_a), transaction.atomic():
+        suspend(meneja, by=None, reason="Uchunguzi")
+        second, ended = in_another_transaction(lambda: set_for(juma, by=meneja))
+        wait_until_someone_waits_for_me()
+    second.join(timeout=5)
+    [refused] = ended
+    assert isinstance(refused, PermissionDenied)
+    assert_unchanged(juma)
+
+
+def test_a_refused_try_pays_for_no_hash(baba: StaffMember, meneja: StaffMember) -> None:
+    # The hash takes 19 MiB of the demo's 512 MB (apps/people/hashers.py), and this route has no limit: only someone who
+    # holds the key can reach it, and they must not be able to waste it on tries that are refused anyway.
+    with mock.patch("apps.people.services.make_password") as hashing:
+        assert refusal(baba, by=meneja) == "password.superuser_only"
+    hashing.assert_not_called()
 
 
 def test_a_second_temporary_password_replaces_the_first(baba: StaffMember, asha: StaffMember) -> None:

@@ -250,8 +250,9 @@ def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember
     line holds it)."""
     _check_shop(staff.shop_id, by)
     _check_reason(reason)
-    # The key first, before the password is even looked at, as confirm_pairing asks its own (PermissionDenied, 403).
-    require(by, Permission.STAFF_MANAGE, None)
+    # Who may, first, before the password is even looked at: a refused try pays for no slow hash, and this route has no
+    # limit to slow one down. Asked again under the locks below, as this copy can be out of date by then.
+    _check_may_set_password(staff, staff.user, by=by)
     # allauth's login takes the spaces off both ends of what is typed. A password stored with them could never match, so
     # she would use up her five tries on what Baba's keyboard added. Taken off before the checks, so they judge what
     # will really be stored: twelve spaces are nothing at all.
@@ -268,11 +269,13 @@ def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember
     # write below. make_password, not user.set_password: that keeps the typed password on the row in memory until save.
     encoded = make_password(password)
     with transaction.atomic():
-        # Her job and her person, read again and locked: a role given, or a leaving recorded, at this same moment comes
-        # first and is seen here, or waits until this is done.
-        staff = _locked(staff)
-        if staff.status == StaffStatus.LEFT:
-            raise ValidationError("A person who has left can't be given a password.", code="staff.left")
+        # Her job, the job of the one acting, and her person, read again and locked. A role given to her, a leaving
+        # recorded, or a suspension of the one acting, at this same moment, comes first and is seen here, or waits until
+        # this is done: the hash above left plenty of time for one. In id order, so two people each setting the other's
+        # password at once take turns, and never wait for each other for good.
+        rows = StaffMember.objects.select_for_update().filter(pk__in=[staff.pk, by.pk]).order_by("pk")
+        jobs = {job.pk: job for job in rows}
+        staff, by = jobs[staff.pk], jobs[by.pk]
         user = User.objects.select_for_update().get(pk=staff.user_id)
         _check_may_set_password(staff, user, by=by)
         was_marked = user.must_change_password
@@ -299,7 +302,11 @@ def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) 
     # Whoever sets a person's password can log in as them. So this is the giver rule (02 §5), for a whole person: Baba
     # may hand a manager staff.manage to deal with a forgotten password, and that manager still can't become anyone
     # stronger than himself (Jack, 4 Nov 2026). Refused as a ValidationError with its code, as flag.own_flag is, so the
-    # screen can say what to do: the key itself is asked by require(), as a 403.
+    # screen can say what to do.
+    # The key, on the whole shop, read afresh: a giver suspended a moment ago holds nothing (PermissionDenied, 403).
+    require(by, Permission.STAFF_MANAGE, None)
+    if staff.status == StaffStatus.LEFT:
+        raise ValidationError("A person who has left can't be given a password.", code="staff.left")
     if staff.pk == by.pk:
         # A thief holding a logged-in phone could set a new password for its owner, with no current one, and keep the
         # login for good. A person changes their own by allauth's change route, which asks for the current one.
@@ -315,7 +322,7 @@ def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) 
     if is_owner or user.is_superuser or user.is_staff:
         raise ValidationError("Only the superuser may reset this person's password.", code="password.superuser_only")
     # What the person was given, whatever their status, as they hold it all again once brought back; against what the
-    # one acting holds now, as a giver suspended a moment ago gives nothing.
+    # one acting holds now.
     if not held_permissions(by).covers(given_permissions(staff)):
         raise ValidationError("This person holds a key the one acting doesn't.", code="password.more_keys")
 
