@@ -14,6 +14,7 @@ from django.contrib import admin
 from django.contrib.admin.forms import AdminPasswordChangeForm as OwnPasswordForm
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import AdminPasswordChangeForm, AdminUserCreationForm, UserChangeForm
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.forms import CharField
 from django.http import HttpRequest, HttpResponse
@@ -42,11 +43,16 @@ def _not_by_pin(request: HttpRequest) -> bool:
 
 
 def _login_starts_clean(request: HttpRequest, extra_context: dict[str, Any] | None = None) -> HttpResponse:
-    # Django's login keeps a session's data when it is the same person, so a password typed here over a badge would keep
-    # the badge's mark, and this site would send them back to this page for good. So the badge goes first. A wrong
-    # password then costs that badge too, which logging out costs anyway; the CSRF check has already passed by here.
-    if request.method == "POST" and PIN_SESSION in request.session:
-        request.session.flush()
+    if PIN_SESSION in request.session:
+        # Django's login keeps a session's data when it is the same person, so a password typed here over a badge would
+        # keep the badge's mark, and this site would send them back to this page for good. So the badge goes first. A
+        # wrong password then costs that badge too, which logging out costs anyway; the CSRF check has already passed by
+        # here. Only a POST: a plain visit, which any link can cause, must not end a counter's login.
+        if request.method == "POST":
+            request.session.flush()
+        # To this page a badge is nobody. Django's page greets whoever `request.user` is, "You are authenticated as
+        # asha@example.com", and a copied badge must read nothing of the person it names.
+        request.user = AnonymousUser()
     return _admin_login(request, extra_context)
 
 

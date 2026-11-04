@@ -543,6 +543,24 @@ def test_admin_login_over_a_badge_starts_clean(admin_with_a_job: StaffMember, la
     assert "pin_session" not in Session.objects.get(session_key=browser.cookies[SESSION_COOKIE].value).get_decoded()
 
 
+def test_admin_login_page_shows_no_one_to_a_badge(asha: StaffMember, laptop_key: str) -> None:
+    # Django's login page greets whoever `request.user` is: "You are authenticated as asha@example.com". A copied badge
+    # must read nothing of hers there, as on allauth's routes. The email goes in first, so a leak would show. A plain
+    # visit leaves the badge as it was: only a password actually typed here ends it.
+    User.objects.filter(pk=asha.user_id).update(email="asha@example.com")
+    badge = logged_in(asha, laptop_key).cookies[SESSION_COOKIE].value
+    thief = Client()
+    thief.cookies[SESSION_COOKIE] = badge
+
+    answer = thief.get("/admin/login/")
+
+    assert answer.status_code == 200
+    body = answer.content.decode()
+    assert "asha@example.com" not in body
+    assert "You are authenticated" not in body
+    assert Session.objects.filter(session_key=badge).exists()
+
+
 def test_allauths_session_route_answers_no_badge(asha: StaffMember, laptop_key: str) -> None:
     # allauth's "am I logged in?" holds the person's name and email, and knows nothing of a badge's checks. A copied
     # badge, or the next person at an open laptop, gets what a stranger gets. The email goes in first, so a leak would
