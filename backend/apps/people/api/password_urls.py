@@ -10,16 +10,26 @@ Django's session cookie, CSRF-checked (ADR-0038).
     GET    auth/session    who is logged in: 200, or 401 when nobody is
     DELETE auth/session    log out: the session ends at once
     POST   auth/login      log in with an email, or a phone written +255…, and a password
+    POST   auth/password/request   send a reset link to this email; the same answer whether or not anyone has it
+    GET    auth/password/reset     is this link's key still good? (X-Password-Reset-Key)
+    POST   auth/password/reset     set a new password with the link's key
 
-Not here: sign-up, closed to everyone (the owner adds people, PPL-2); a login by a code sent by email or SMS.
+Not here: sign-up, closed to everyone (the owner adds people, PPL-2); a login by a code sent by email or SMS; a change
+of one's own password, which comes with AUTH-6.
 allauth answers in its own shape, not the API's one error shape (CORE-6): UI-5's forms read its codes.
 """
 
-from allauth.headless.account.views import LoginView, SessionView
+from allauth.headless.account.views import LoginView, RequestPasswordResetView, ResetPasswordView, SessionView
 from allauth.headless.constants import Client
 from django.urls import path
 
 urlpatterns = [
     path("auth/session", SessionView.as_api_view(client=Client.BROWSER), name="password-session"),
     path("auth/login", LoginView.as_api_view(client=Client.BROWSER), name="password-login"),
+    path(
+        "auth/password/request",
+        RequestPasswordResetView.as_api_view(client=Client.BROWSER),
+        name="password-reset-request",
+    ),
+    path("auth/password/reset", ResetPasswordView.as_api_view(client=Client.BROWSER), name="password-reset"),
 ]

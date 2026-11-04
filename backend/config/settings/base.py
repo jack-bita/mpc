@@ -285,6 +285,13 @@ ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*"]
 ACCOUNT_EMAIL_VERIFICATION = "none"
 # What allauth asks of our people: sign-up closed (apps/people/accounts.py).
 ACCOUNT_ADAPTER = "apps.people.accounts.AccountAdapter"
+# A reset link opens the app (UI-5), at this path on the address the request came to. The key sits after the #, which a
+# browser never sends to a server: so it stays out of Caddy's and Django's logs, and out of any Referer header. A static
+# app (ADR-0016) can read it there with no route of its own for each key.
+HEADLESS_FRONTEND_URLS = {"account_reset_password_from_key": "/password-reset#{key}"}
+# Asked to reset an email nobody here has, allauth would send that address a note saying so: anyone could make us send
+# mail to any stranger. The answer to the asker stays the same either way, so nobody learns who has an account.
+ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False
 
 # Whether the description and the docs page are open (apps/core/api/schema.py). False: closed to everyone,
 # the real server's rule. Off unless an environment turns it on: dev.py does, and the demo does (prod.py).

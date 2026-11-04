@@ -52,6 +52,10 @@ services:
       # the API is part of what the demo shows (ADR-0029). The real server leaves this out (prod.py).
       - key: API_DOCS_PUBLIC
         value: "true"
+      # A password reset's email goes to the demo's log, where the demo's owner can read it: its people and their
+      # emails are fake. The real server leaves this out, and sends none (config/settings/prod.py).
+      - key: MAIL_BACKEND
+        value: django.core.mail.backends.console.EmailBackend
       # Where the pairing limits read a caller's address (AUTH-5, config/settings/base.py). Render puts Cloudflare
       # and its own load balancer in front, and its own advice is this header: Cloudflare writes it on every request
       # that reaches a web service, over any the caller sent. Left out, Django falls back to X-Forwarded-For, which a

@@ -16,11 +16,14 @@ ACCOUNT_ADAPTER (config/settings/base.py). This file owns ours.
   here, and names nobody: a fingerprint of the caller's network, and of the person's login name. Honest limit: a
   stranger who knows Baba's phone can keep him locked out, by typing five wrong passwords every five minutes. Every
   login limit has this cost; two-factor codes are *Later*.
+- A person who has an email may reset their password by a link sent to it; anyone else asks the owner (ADR-0038). A new
+  password lifts the person's count of wrong passwords (see set_password).
 """
 
 from typing import Any
 
 from allauth.account.adapter import DefaultAccountAdapter
+from allauth.core import ratelimit
 from django.http import HttpRequest
 from django.utils.crypto import salted_hmac
 
@@ -50,6 +53,18 @@ class AccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
         # unique (PPL-1), so there is at most one. A User is no shop's row: read without the shop guard (ADR-0037), as
         # every login must start before it knows a shop.
         return User.objects.filter(phone=phone).first()
+
+    def set_password(self, user: User, password: str) -> None:
+        # Someone who forgot their password has usually typed it wrong a few times: with a new one, they must not still
+        # be told to wait. allauth lifts the count itself, but only for the emails in its own table of addresses, which
+        # we leave empty, as our User holds the email (apps/people/models.py). So it is lifted here, for each name the
+        # person logs in by. `clear` also lifts the caller's own count, as allauth means it to: it is safe, as the
+        # reset itself is slowed down.
+        super().set_password(user, password)
+        for login in (user.email, user.phone):
+            if login:
+                key = self._get_login_attempts_cache_key(self.request, email=login)
+                ratelimit.clear(self.request, action="login_failed", key=key)
 
     def get_client_ip(self, request: HttpRequest) -> str:
         # Who allauth's limits count this caller as, and all allauth uses this for here: the same fingerprint of their
