@@ -105,6 +105,8 @@ def test_edit_outside_a_visit_names_nobody(shop_a: Model, card: Card) -> None:
         Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
         [edit] = history_of(card)
         assert edit.created_by_id is None
+        # And no device: nobody stood at one (X3).
+        assert edit.device_id is None
 
 
 def test_edit_that_changes_nothing_writes_no_history(shop_a: Model, card: Card, staff_a: Actor) -> None:

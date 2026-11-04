@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
-from django.db.models import Model
+from django.db.models import Model, ProtectedError
 from django.db.transaction import TransactionManagementError
 
 from apps.control.models import AuditAction, AuditEvent
@@ -60,6 +60,26 @@ def write_line(
     # As a service writes it: inside the action's own transaction, which audit() needs.
     with transaction.atomic():
         return audit(action=action, subject=subject, reason=reason, by=by, **changes)
+
+
+def test_audit_line_keeps_its_device_for_good(shop_a: Model, asha_job: Note, device_a: Model) -> None:
+    # X3: a line can name the device it was written from, and from then on that device can't be deleted: a stolen
+    # laptop must stay in the trail for as long as the trail names it (rule 7). A line that names none is allowed,
+    # since not every visit has one.
+    with shop_context(shop_a):
+        assert write_line(asha_job, by=None).device_id is None
+        named = AuditEvent(
+            shop_id=shop_a.pk,
+            action=AuditAction.STAFF_SUSPEND,
+            subject_type="probe_note",
+            subject_id=asha_job.pk,
+            reason=REASON,
+            device_id=device_a.pk,
+        )
+        named.save()
+        assert AuditEvent.objects.get(pk=named.pk).device_id == device_a.pk
+        with pytest.raises(ProtectedError):
+            device_a.delete()
 
 
 def test_audit_records_who_what_and_why(shop_a: Model, asha_job: Note, staff_a: Actor) -> None:
