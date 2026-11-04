@@ -11,13 +11,20 @@ nothing; and even with it, Argon2 makes every guess slow. The services (apps/peo
 PIN; PIN login (AUTH-4) checks one.
 """
 
+import functools
 import hashlib
 import hmac
+import logging
 import re
+import secrets
 
 from django.conf import settings
-from django.contrib.auth.hashers import Argon2PasswordHasher
 from django.core.exceptions import ValidationError
+from django.views.decorators.debug import sensitive_variables
+
+from apps.people.hashers import ShopArgon2PasswordHasher
+
+logger = logging.getLogger(__name__)
 
 # Exactly four of the digits 0–9. [0-9], not \d: \d also matches other scripts' digits (Arabic "٤"),
 # which no PIN pad types.
@@ -25,10 +32,11 @@ _FOUR_DIGITS = re.compile(r"[0-9]{4}")
 # The first PIN anyone tries (03 §5.9). Four of a kind (0000, 1111...) is checked below.
 _TOO_EASY = {"1234"}
 
-# Django's own Argon2 hasher, used directly instead of through PASSWORD_HASHERS: the test settings swap
-# that list for a fast, weak hasher, and PINs must be hashed for real everywhere. Its cost settings are
-# written into each hash, so a later change still checks the old ones.
-_hasher = Argon2PasswordHasher()
+# Our own Argon2 class, the one passwords use (apps/people/hashers.py): 19 MiB a check, so two checks at once fit the
+# demo's 512 MB. Used directly, not through PASSWORD_HASHERS: the test settings swap that list for a fast, weak hasher,
+# and PINs must be hashed for real everywhere. Its cost is written into each hash, so a later change still checks the
+# old ones.
+_hasher = ShopArgon2PasswordHasher()
 
 
 def check_pin_strength(pin: str) -> None:
@@ -45,13 +53,38 @@ def _peppered(pin: str) -> str:
     return hmac.new(settings.PIN_PEPPER.encode(), pin.encode(), hashlib.sha256).hexdigest()
 
 
+# Every variable shows as stars in Django's error reports, here and in everything these two call, as for a password
+# (apps/people/services.py): the library at the bottom of the hash holds the PIN under names of its own.
+@sensitive_variables()
 def hash_pin(pin: str) -> str:
     """The value to store: Argon2 of the peppered PIN, with a fresh random salt each time."""
     return _hasher.encode(_peppered(pin), _hasher.salt())
 
 
+@functools.cache
+def _nobodys_hash() -> str:
+    # What a person with no PIN is checked against, so their "no" takes as long as a wrong PIN's: a quick "no" would
+    # show anyone at the counter who has no PIN yet. Made from random text, so no PIN ever matches it. Made once per
+    # server worker, the first time it is needed.
+    return _hasher.encode(secrets.token_hex(16), _hasher.salt())
+
+
+@sensitive_variables()
 def pin_matches(pin: str, pin_hash: str) -> bool:
-    """True if `pin` is the PIN behind `pin_hash`. False for an empty hash (no PIN set)."""
-    if not pin_hash:
+    """True if `pin` is the PIN behind `pin_hash`. False for an empty hash (no PIN set) or a damaged one. Each answer
+    costs one full check."""
+    try:
+        return _hasher.verify(_peppered(pin), pin_hash or _nobodys_hash())
+    except ValueError, AssertionError:
+        # A hash that isn't one: only a bug, or a hand edit of the database, could store it. Nobody gets in, and the log
+        # says so, as this person can't log in until they get a new PIN. Django's own check raises these two. The log
+        # never holds the hash. One more full check, so even this "no" takes as long.
+        logger.error("A stored PIN hash is damaged: give this person a new PIN.")
+        _hasher.verify(_peppered(pin), _nobodys_hash())
         return False
-    return _hasher.verify(_peppered(pin), pin_hash)
+
+
+def pin_hash_is_old(pin_hash: str) -> bool:
+    """True when this hash was made at another cost than today's. Only the login can fix it, as it alone holds the PIN
+    itself, just checked: it hashes it again."""
+    return _hasher.must_update(pin_hash)

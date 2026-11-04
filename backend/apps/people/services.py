@@ -219,6 +219,8 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
     return staff
 
 
+# Every variable shows as stars in Django's error reports, here and in everything this calls: `pin` is the PIN itself.
+@sensitive_variables()
 def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMember:
     """Give a person a new PIN, online only (03 §5.9). Devices see the new `pin_changed_at` at their next
     sync and drop their old offline check."""
