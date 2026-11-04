@@ -5,7 +5,8 @@ A paired device keeps its key in a cookie, `device_key`, which page scripts can'
 sends carries the cookie, and DeviceKeyAuthentication, a DRF login class, turns it into the device:
 
     cookie ──hash──▶ the door: which shop? ──▶ that shop open ──▶ the device, through the guard
-                     (apps/people/login_doors.py)                   blocked? 401 device.blocked
+                     (apps/people/login_doors.py)                   shop suspended? 401 shop.suspended
+                                                                    blocked? 401 device.blocked
                                                                     a change? the CSRF token, or 403
                                                                     ──▶ request.auth = the device
 
@@ -36,6 +37,7 @@ from apps.people.device_keys import hash_device_key
 from apps.people.login_doors import shop_of_device_key
 from apps.people.models import Device, DeviceStatus
 from apps.people.services import note_device_seen
+from apps.shops.models import ShopStatus
 
 # The cookie's name, a promise to every browser that holds one: it never changes. It holds "key" on purpose: Django's
 # error pages and error reports hide the value of any cookie whose name holds KEY, TOKEN or SECRET
@@ -106,13 +108,20 @@ class DeviceKeyAuthentication(BaseAuthentication):
         # The device itself, read through the guard inside its shop, which the door named. Opened for this read only:
         # the route opens it again for the whole visit, together with who acts (DeviceView).
         with shop_context(shop_id):
-            device = Device.objects.filter(key_hash=key_hash).first()
+            # Its shop comes with it, in the same query, for the check below.
+            device = Device.objects.select_related("shop").filter(key_hash=key_hash).first()
             if device is None:
                 # Gone between the door and this read, which nothing in the app does: no login, as for no device.
                 return None
             # Seen, blocked or not: a stolen phone that keeps calling shows when (02 v1.12). At most every few
             # minutes, so most visits write nothing (note_device_seen, apps/people/services.py).
             self.seen = note_device_seen(device, at=timezone.now())
+        # A suspended shop stops every way in, a person's password and a device's key alike (ADR-0038, AUTH-3). Asked as
+        # "not active", as the staff session's login asks, and before the device's own status: it is the shop that
+        # stopped it. The key itself still holds, and works again once the shop does (ADR-0018). 401, as for a blocked
+        # device: the key opens nothing now. English for the logs; the app translates the code (ADR-0032).
+        if device.shop.status != ShopStatus.ACTIVE:
+            raise exceptions.AuthenticationFailed("This shop is suspended.", code="shop.suspended")
         if device.status != DeviceStatus.ACTIVE:
             # Only an active device works (02 §5). Asked as "not active", never as "blocked", so a status a later card
             # adds, such as a retired device, is refused until that card says otherwise: the login fails closed. Today
