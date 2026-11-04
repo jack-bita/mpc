@@ -232,6 +232,8 @@ class AuditAction(models.TextChoices):
     STAFF_SUSPEND = "staff.suspend", "Staff member suspended"
     STAFF_UNSUSPEND = "staff.unsuspend", "Staff member brought back"
     STAFF_LEAVE = "staff.leave", "Staff member left"
+    # A first or forgotten password, set face to face (AUTH-6): who did it and why, never the password (ADR-0038).
+    STAFF_TEMPORARY_PASSWORD = "staff.temporary_password", "Temporary password set"
     # A device stopped, perhaps stolen, and let work again (AUTH-1): each with who and why (rule 7).
     DEVICE_BLOCK = "device.block", "Device blocked"
     DEVICE_UNBLOCK = "device.unblock", "Device unblocked"

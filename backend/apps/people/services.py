@@ -1,7 +1,8 @@
 """apps/people/services.py — every write to the people tables, one function per action (ADR-0015).
 
 A staff member's working life at one shop (02 §5): they are added, suspended, brought back and marked
-as left, and given a PIN (set_pin; apps/people/pins.py hashes it). And what they may do there: a shop gets
+as left, and given a PIN (set_pin; apps/people/pins.py hashes it) or a temporary password, face to face
+(set_temporary_password, AUTH-6). And what they may do there: a shop gets
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
@@ -26,6 +27,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from django.contrib.auth.hashers import make_password
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -37,9 +40,10 @@ from apps.control.services import audit
 from apps.core.acting import acting_as
 from apps.core.editing import editing
 from apps.core.models import SequenceName, ShopScoped
-from apps.core.permissions import ROLE_TEMPLATES, Permission
+from apps.core.permissions import ROLE_TEMPLATES, Permission, RoleTemplate
 from apps.core.sequences import next_number
 from apps.core.tenancy import ALL_SHOPS, current_shop, shop_context
+from apps.people.accounts import lift_wrong_password_count
 from apps.people.device_keys import (
     PAIRING_CODE_LIFETIME,
     clean_typed_code,
@@ -47,7 +51,7 @@ from apps.people.device_keys import (
     make_device_key,
     make_pairing_code,
 )
-from apps.people.login_doors import shop_of_device_key
+from apps.people.login_doors import shop_of_device_key, shops_of_person
 from apps.people.models import (
     Device,
     DeviceStatus,
@@ -59,7 +63,7 @@ from apps.people.models import (
     StaffStatus,
     User,
 )
-from apps.people.permissions import effective_permissions, require
+from apps.people.permissions import effective_permissions, given_permissions, held_permissions, require
 from apps.people.pins import check_pin_strength, hash_pin
 from apps.shops.models import Shop, Side
 from apps.shops.services import NewSide, create_shop
@@ -231,6 +235,84 @@ def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMem
         staff.full_clean()
         _save(staff, by=by, fields=["pin_hash", "pin_changed_at"])
     return staff
+
+
+# `password` and `encoded`, its hash, show as stars in Django's error reports, which list each function's local
+# variables when something fails. A person's other details are safe there: a User prints as their name.
+@sensitive_variables("password", "encoded")
+def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember, reason: str) -> None:
+    """Set a first or forgotten password, face to face (ADR-0038): Baba types one for Asha and tells it to her. She logs
+    in with it, and every office route refuses her until she chooses her own (apps/people/selectors.py). `by` is always
+    a person, who needs staff.manage on the whole shop, as a password opens the whole person. Refusals, each a code the
+    screen translates: the password's checks, under `password`; staff.reason_required; staff.left; and who may
+    (_check_may_set_password). Her older logins end, as each holds a fingerprint of the password it started with, so a
+    lost phone is logged out. Returns nothing: the password goes no further than this function (no answer, log or audit
+    line holds it)."""
+    _check_shop(staff.shop_id, by)
+    _check_reason(reason)
+    # The key first, before the password is even looked at, as confirm_pairing asks its own (PermissionDenied, 403).
+    require(by, Permission.STAFF_MANAGE, None)
+    try:
+        # Like any other password: it opens a real login until she replaces it. It reads her name and phone, as a
+        # password too like them is refused.
+        validate_password(password, staff.user)
+    except ValidationError as refused:
+        # Filed under the field, so the screen shows it beside the box the owner typed in. from None: the refused
+        # error's own frames, which hold the password, stay out of the chain.
+        raise ValidationError({"password": refused.error_list}) from None
+    # Hashed before the lock, as set_pin does: Argon2 is slow on purpose, and the rows stay locked only for the short
+    # write below. make_password, not user.set_password: that keeps the typed password on the row in memory until save.
+    encoded = make_password(password)
+    with transaction.atomic():
+        # Her job and her person, read again and locked: a role given, or a leaving recorded, at this same moment comes
+        # first and is seen here, or waits until this is done.
+        staff = _locked(staff)
+        if staff.status == StaffStatus.LEFT:
+            raise ValidationError("A person who has left can't be given a password.", code="staff.left")
+        user = User.objects.select_for_update().get(pk=staff.user_id)
+        _check_may_set_password(staff, user, by=by)
+        was_marked = user.must_change_password
+        # Past AccountAdapter.set_password, which is for a person choosing their own, and takes the mark off.
+        user.password = encoded
+        user.must_change_password = True
+        user.save(update_fields=["password", "must_change_password"])
+        # In the same transaction: if the line can't be written, the password isn't changed either (T3). Only the mark
+        # goes in the line: never the password, nor its hash, which could be attacked by anyone reading the trail.
+        audit(
+            action=AuditAction.STAFF_TEMPORARY_PASSWORD,
+            subject=staff,
+            reason=reason,
+            by=by,
+            before={"must_change_password": was_marked},
+            after={"must_change_password": True},
+        )
+    # Outside the transaction: it is a cache row, and needs no lock. If this fails, the password is set, and the person
+    # waits out the 5 minutes.
+    lift_wrong_password_count(user)
+
+
+def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) -> None:
+    # Whoever sets a person's password can log in as them. So this is the giver rule (02 §5), for a whole person: Baba
+    # may hand a manager staff.manage to deal with a forgotten password, and that manager still can't become anyone
+    # stronger than himself (Jack, 4 Nov 2026). Refused as a ValidationError with its code, as flag.own_flag is, so the
+    # screen can say what to do: the key itself is asked by require(), as a 403.
+    if staff.pk == by.pk:
+        # A thief holding a logged-in phone could set a new password for its owner, with no current one, and keep the
+        # login for good. A person changes their own by allauth's change route, which asks for the current one.
+        raise ValidationError("A person changes their own password with the current one.", code="password.own")
+    # The superuser's alone (ADR-0038). Read from the roles, whatever the person's status: a suspended owner holds no
+    # keys but is still the owner, and two owners may have fallen out with each other. When PPL-4 adds an end to a role,
+    # an ended Owner role must stop counting here too.
+    is_owner = RoleAssignment.objects.filter(staff=staff, role__template=RoleTemplate.OWNER).exists()
+    # Their password opens every shop's rows, in the admin, or their job at a shop this owner has no say over, and whose
+    # keys can't be read from here. A job they have left doesn't count (shops_of_person).
+    reaches_past_this_shop = user.is_superuser or user.is_staff or len(shops_of_person(user.pk)) > 1
+    if is_owner or reaches_past_this_shop:
+        raise ValidationError("Only the superuser may reset this person's password.", code="password.superuser_only")
+    # What the person was given, whatever their status, as they hold it all again once brought back; against what the
+    # one acting holds now, as a giver suspended a moment ago gives nothing.
+    if not held_permissions(by).covers(given_permissions(staff)):
+        raise ValidationError("This person holds a key the one acting doesn't.", code="password.more_keys")
 
 
 def set_up_shop(*, name: str, code: str, sides: Sequence[NewSide]) -> Shop:
