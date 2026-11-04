@@ -61,7 +61,7 @@ def hash_device_key(key: str) -> str:
 
     A fast hash, not Argon2 as for PINs (Jack, AUTH-1; 03 §5.9). A slow hash protects a secret a person chose, which
     others can guess: a 4-digit PIN has only 10,000 values, so each guess must cost time. A key of 32 random bytes
-    can't be guessed at any speed, so slowness would add nothing, and it would cost about 0.1 s and 100 MiB on every
+    can't be guessed at any speed, so slowness would add nothing, and it would cost about 40 ms and 19 MiB on every
     request AUTH-2 checks. No salt either, for the same reason, and so the same key always gives the same hash: a
     request finds its device by this hash in one index lookup."""
     return hashlib.sha256(key.encode()).hexdigest()

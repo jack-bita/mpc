@@ -435,10 +435,11 @@ def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, secret
     # keys but is still the owner, and two owners may have fallen out with each other. When PPL-4 adds an end to a role,
     # an ended Owner role must stop counting here too.
     is_owner = RoleAssignment.objects.filter(staff=staff, role__template=RoleTemplate.OWNER).exists()
-    # Their password opens the admin, which reads every shop's rows: no shop's owner hands that out. A job at another
-    # shop isn't looked at: reading that shop's rows during this shop's visit would pass the guard, which is only for a
-    # login, before any shop is open (ADR-0037, Jack, 4 Nov 2026). Nothing is lost yet, as a person at two shops is
-    # refused at every office route until AUTH-7, whose card adds this rule.
+    # Someone who can open the admin reads every shop's rows, so they stand above any shop's people: no shop's owner may
+    # act as them, whether by their password, which opens the admin, or by their PIN, which opens their job. A job at
+    # another shop isn't looked at: reading that shop's rows during this shop's visit would pass the guard, which is
+    # only for a login, before any shop is open (ADR-0037, Jack, 4 Nov 2026). Nothing is lost yet, as a person at two
+    # shops is refused at every office route until AUTH-7, whose card adds this rule.
     if is_owner or user.is_superuser or user.is_staff:
         raise ValidationError(f"Only the superuser may reset this person's {secret}.", code=f"{secret}.superuser_only")
     # What the person was given, whatever their status, as they hold it all again once brought back; against what the

@@ -47,7 +47,8 @@ def start_pin_session(request: Request, staff: StaffMember, device: Device, *, i
 
 def keep_pin_session_alive(session: SessionBase) -> None:
     """Called at each visit that passes: use pushes the idle time forward. At most once a minute, as a busy screen sends
-    many requests, and each save is a write. So a badge can end up to a minute early, which nobody will notice."""
+    many requests, and each save is a write; at a short idle time, at half of it. So a badge can end up to a minute
+    early, or half a short idle time, which nobody will notice."""
     now = int(time.time())
     # Sooner for a short idle time: a shop may set 1 minute (IDLE_MINUTES), and waiting a whole minute to push it would
     # always come too late, so a person in the middle of their work would be logged out. Half the idle time leaves room,

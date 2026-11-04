@@ -147,7 +147,7 @@ def test_a_suspended_owner_is_still_the_owner(baba: StaffMember, meneja: StaffMe
 
 
 def test_nobody_at_the_shop_sets_an_admin_persons_pin(meneja: StaffMember, shop_a: Shop) -> None:
-    # Their password opens the admin, and no shop's owner hands that out.
+    # Someone who can open the admin stands above every shop's people, so nobody at a shop may act as them.
     person = job(shop_a, "Admin")
     User.objects.filter(pk=person.user_id).update(is_staff=True)
     with pytest.raises(ValidationError) as refused:
