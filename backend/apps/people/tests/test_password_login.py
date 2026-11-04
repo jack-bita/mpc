@@ -24,6 +24,7 @@ from django.core.exceptions import ValidationError
 from django.test import Client, RequestFactory
 
 from apps.people.accounts import AccountAdapter
+from apps.people.api import password_urls
 from apps.people.models import User
 
 pytestmark = pytest.mark.django_db
@@ -187,6 +188,58 @@ def test_signup_closed() -> None:
     assert answer.status_code == 404
     assert AccountAdapter().is_open_for_signup(RequestFactory().post(SIGNUP)) is False
     assert not User.objects.filter(email="mgeni@example.com").exists()
+
+
+# allauth's own list has more than we mount, with no setting to leave one out, and a route a newer allauth adds must
+# stay closed too (apps/people/api/password_urls.py). Among these, a logged-in person could change their own email or
+# phone, past the owner, or log in by a code. Tried logged in, as that is who the worst of them would serve.
+@pytest.mark.parametrize(
+    "route",
+    [
+        "/_allauth/browser/v1/account/email",
+        "/_allauth/browser/v1/account/phone",
+        "/_allauth/browser/v1/account/password/change",
+        "/_allauth/browser/v1/account/authenticators",
+        "/_allauth/browser/v1/auth/code/request",
+        "/_allauth/browser/v1/auth/code/confirm",
+        "/_allauth/browser/v1/auth/email/verify",
+        "/_allauth/browser/v1/auth/phone/verify",
+        "/_allauth/browser/v1/auth/reauthenticate",
+        "/_allauth/browser/v1/auth/provider/redirect",
+        "/_allauth/browser/v1/auth/sessions",
+        "/_allauth/browser/v1/config",
+        "/_allauth/browser/v1/tokens/refresh",
+        "/_allauth/app/v1/auth/login",
+        "/accounts/login/",
+        "/accounts/signup/",
+        "/accounts/password/reset/",
+    ],
+)
+def test_routes_not_on_our_list_do_not_exist(manager: User, route: str) -> None:
+    client = Client()
+    client.force_login(manager)
+    assert client.get(route).status_code == 404
+    assert client.post(route, {}, content_type="application/json").status_code == 404
+
+
+def test_only_the_routes_on_our_list_are_mounted() -> None:
+    # The list itself: adding a route must change this test too, so it is a decision someone looked at.
+    assert {route.name for route in password_urls.urlpatterns} == {
+        "password-session",
+        "password-login",
+        "password-reset-request",
+        "password-reset",
+    }
+
+
+def test_switched_off_person_cannot_log_in(manager: User) -> None:
+    # `is_active`, the switch on the person. Even with the right password: no session starts. Only someone who knows the
+    # password can tell this apart from a wrong one, which still answers as a wrong one.
+    User.objects.filter(pk=manager.pk).update(is_active=False)
+    client = Client()
+    assert log_in(client, email="meneja@example.com", password="not-the-password") == (400, ["email_password_mismatch"])
+    assert log_in(client, email="meneja@example.com", password=PASSWORD)[0] == 401
+    assert client.get(SESSION).status_code == 401
 
 
 @pytest.mark.parametrize("password", ["babamfano", "+255712345678"])

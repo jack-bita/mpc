@@ -90,6 +90,17 @@ def test_password_session_reaches_office_routes(owner: StaffMember, phone: APICl
         assert Side.objects.get(pk=new["id"]).created_by_id == owner.pk
 
 
+def test_email_session_reaches_office_routes(owner: StaffMember) -> None:
+    # The same door by the other login name: a session is a person's, however they logged in.
+    User.objects.filter(pk=owner.user_id).update(email="baba@example.com")
+    client = APIClient(enforce_csrf_checks=True)
+    answer = client.post(
+        LOGIN, {"email": "baba@example.com", "password": PASSWORD}, HTTP_X_CSRFTOKEN=csrf_token(client)
+    )
+    assert answer.status_code == 200
+    assert client.get(SIDES).status_code == 200
+
+
 def test_password_session_changes_need_csrf(owner: StaffMember, phone: APIClient, shop_a: Shop) -> None:
     # The login is built on DRF's session login, whose CSRF check must stay: the cookie alone would let another website
     # change a side in the owner's name.

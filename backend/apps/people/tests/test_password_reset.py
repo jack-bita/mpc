@@ -112,9 +112,13 @@ def test_new_password_must_pass_the_checks(manager: User) -> None:
 
 
 def test_reset_tells_nobody_who_has_an_account(manager: User) -> None:
-    # The same answer for an email nobody here has, and no mail to it: anyone could otherwise make us send mail to a
-    # stranger (ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS).
-    assert post(Client(), REQUEST, email="mgeni@example.com") == post(Client(), REQUEST, email=EMAIL)
+    # The same answer, to the last character, for an email nobody here has, and no mail to it: anyone could otherwise
+    # make us send mail to a stranger (ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS).
+    def answer_to(email: str) -> tuple[int, bytes]:
+        answer = Client().post(REQUEST, {"email": email}, content_type=JSON)
+        return answer.status_code, answer.content
+
+    assert answer_to("mgeni@example.com") == answer_to(EMAIL)
     assert [email.to for email in mail.outbox] == [[EMAIL]]
 
 
@@ -125,18 +129,36 @@ def test_reset_request_needs_csrf(manager: User) -> None:
     assert mail.outbox == []
 
 
-def test_reset_lifts_the_wrong_password_count(manager: User) -> None:
-    # They forgot it, so they typed it wrong, five times, by phone: the limit stops them. A new password from the link
-    # must work at once, by phone or by email: not "wait 5 minutes". allauth's own clean-up looks only in its own table
-    # of addresses, which we leave empty (apps/people/accounts.py).
+@pytest.mark.parametrize(("name", "login"), [("phone", PHONE), ("email", EMAIL)])
+def test_reset_lifts_the_wrong_password_count(manager: User, name: str, login: str) -> None:
+    # They forgot it, so they typed it wrong, five times: the limit stops them. A new password from the link must work
+    # at once, by phone or by email: not "wait 5 minutes". allauth's own clean-up looks only in its own table of
+    # addresses, which we leave empty (apps/people/accounts.py).
     for _ in range(5):
-        post(Client(), LOGIN, phone=PHONE, password="not-the-password")
-    assert post(Client(), LOGIN, phone=PHONE, password=PASSWORD) == (400, ["too_many_login_attempts"])
+        post(Client(), LOGIN, **{name: login, "password": "not-the-password"})
+    assert post(Client(), LOGIN, **{name: login, "password": PASSWORD}) == (400, ["too_many_login_attempts"])
 
     post(Client(), REQUEST, email=EMAIL)
     post(Client(), RESET, key=key_from_the_email(), password=NEW_PASSWORD)
     assert post(Client(), LOGIN, phone=PHONE, password=NEW_PASSWORD) == (200, [])
     assert post(Client(), LOGIN, email=EMAIL, password=NEW_PASSWORD) == (200, [])
+
+
+def test_setting_the_new_password_needs_csrf(manager: User) -> None:
+    # Without the token, another website could post a key it got hold of, with a password of its choosing.
+    post(Client(), REQUEST, email=EMAIL)
+    client = Client(enforce_csrf_checks=True)
+    sent = {"key": key_from_the_email(), "password": NEW_PASSWORD}
+    assert client.post(RESET, sent, content_type=JSON).status_code == 403
+    manager.refresh_from_db()
+    assert manager.check_password(PASSWORD)
+
+    # The token is all it lacked: the same request with it goes through.
+    client.get(SESSION)
+    token = client.cookies["csrftoken"].value
+    assert client.post(RESET, sent, content_type=JSON, HTTP_X_CSRFTOKEN=token).status_code == 401
+    manager.refresh_from_db()
+    assert manager.check_password(NEW_PASSWORD)
 
 
 def test_reset_keeps_no_copy_of_the_email(manager: User) -> None:
