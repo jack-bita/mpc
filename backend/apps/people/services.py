@@ -138,7 +138,8 @@ def _check_reason(reason: str, *, code: str = "staff.reason_required") -> None:
 def _save(staff: StaffMember, *, by: StaffMember | None, fields: list[str]) -> None:
     # Saves the changed fields, with `by` told to PostgreSQL for the save: the history line its trigger writes then
     # names the same person as the action's audit line, even outside an office visit, as in a job or a command
-    # (02 v1.7: one fact, one answer; apps/core/acting.py). With `by` None, the system acts, and nobody is told.
+    # (02 v1.7: one fact, one answer; apps/core/acting.py). With `by` None, the system acts, and nobody is told. No
+    # device named here: the visit's stays as told (X3).
     with acting_as(by) if by is not None else nullcontext():
         staff.save(update_fields=fields)
 

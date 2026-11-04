@@ -72,6 +72,6 @@ def editing[M: Editable](row: M, *, version: int, by: Actor | None) -> Iterator[
         # The history's trigger names whoever PostgreSQL was told acts. In an office visit that is `by` already;
         # a job or a command that passes its own `by` names it too, so the history line and `updated_by` agree
         # (02 v1.7: one fact, one answer). With `by` None, the system acts, and nobody is told: outside a visit,
-        # the line names nobody, as `updated_by` does.
+        # the line names nobody, as `updated_by` does. No device named here: the visit's stays as told (X3).
         with acting_as(by) if by is not None else nullcontext():
             fresh.save()

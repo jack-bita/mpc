@@ -88,9 +88,10 @@ HAND_BUILT_QUERIES = {
 # App files that may run SQL by hand, `connection.cursor()` or `.raw()`, besides migrations, system jobs and tests,
 # which may anyway: file → why it reads no shop's row.
 RAW_SQL = {
-    # Tells PostgreSQL who acts in an office visit, for the trigger that records office edits: its SQL reads and
-    # writes one setting of the database session, never a table (CTRL-2, ADR-0036).
-    "apps/core/acting.py": "current_setting and set_config on the session's `mpc.staff_id`, never a table",
+    # Tells PostgreSQL who acts in a visit and from which device, for the trigger that records office edits, and reads
+    # the device back for the audit book: its SQL reads and writes settings of the database session, never a table
+    # (CTRL-2, AUTH-8, ADR-0036).
+    "apps/core/acting.py": "current_setting and set_config on the session's `mpc.*` settings, never a table",
 }
 
 # The shop tables people change that keep no edit history of their own trigger (ADR-0036): table → why. Every other

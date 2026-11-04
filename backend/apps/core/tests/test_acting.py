@@ -25,9 +25,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.test import APIClient
 
-from apps.core.acting import SHOP_SETTING, STAFF_SETTING, acting_as
+from apps.core.acting import DEVICE_SETTING, SHOP_SETTING, STAFF_SETTING, acting_as, current_device_id
 from apps.core.api.base import SEES_THE_SIDE, ShopViewSet
-from apps.core.tenancy import Actor
+from apps.core.models import ShopScoped
+from apps.core.tenancy import Actor, ShopMismatch
 from tests.probe.models import Note
 
 pytestmark = pytest.mark.django_db
@@ -48,6 +49,74 @@ def told() -> tuple[str, str]:
         row = cursor.fetchone()
     assert row is not None
     return row[0] or "", row[1] or ""
+
+
+def told_device() -> str:
+    # The device PostgreSQL holds right now, as the trigger reads it: "" for none.
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT current_setting(%s, true)", [DEVICE_SETTING])
+        row = cursor.fetchone()
+    assert row is not None
+    return row[0] or ""
+
+
+def test_acting_as_tells_the_device_and_puts_it_back(staff_a: Actor, device_a: ShopScoped) -> None:
+    # X3: a visit that knows its device tells PostgreSQL, for the trigger, and the audit book reads the same note.
+    assert (told_device(), current_device_id()) == ("", None)
+    with acting_as(staff_a, device=device_a):
+        assert (told_device(), current_device_id()) == (str(device_a.pk), device_a.pk)
+    assert (told_device(), current_device_id()) == ("", None)
+    # Put back however the block ends: a failed visit must not leave its device on the connection for the next one,
+    # or that visit's edits would name a laptop nobody used.
+    with pytest.raises(RuntimeError), acting_as(staff_a, device=device_a):
+        raise RuntimeError("The visit failed.")
+    assert told_device() == ""
+
+
+def test_inner_block_keeps_the_visits_device(staff_a: Actor, staff_a2: Actor, device_a: ShopScoped) -> None:
+    # editing() and the staff services open a block of their own for `by`, mid-visit. Had it wiped the device, every
+    # edit made through them would name nobody's device, and the edit history would stay silent on its most common path.
+    with acting_as(staff_a, device=device_a):
+        with acting_as(staff_a2):
+            assert told() == (str(staff_a2.staff_id), str(staff_a2.shop_id))
+            assert told_device() == str(device_a.pk)
+        assert told_device() == str(device_a.pk)
+
+
+def test_block_outside_a_visit_has_no_device_to_keep(staff_a: Actor) -> None:
+    # A nightly job that passes its own `by`: the person is named, and no device, since the system used none.
+    with acting_as(staff_a):
+        assert told_device() == ""
+
+
+def test_visit_says_it_has_no_device(staff_a: Actor, device_a: ShopScoped) -> None:
+    # None is not "leave it": a visit with no device, on a connection another block left a device on, names none.
+    with acting_as(staff_a, device=device_a):
+        with acting_as(staff_a, device=None):
+            assert told_device() == ""
+        assert told_device() == str(device_a.pk)
+
+
+def test_device_stays_inside_its_own_shop(staff_a: Actor, device_a: ShopScoped) -> None:
+    # T1: a device belongs to one shop. A block for another shop's actor doesn't carry it along, or that shop's history
+    # would name this shop's laptop; back in its own shop's block, the device is there again.
+    with acting_as(staff_a, device=device_a):
+        with acting_as(Someone(uuid.uuid7(), uuid.uuid7())):
+            assert told_device() == ""
+        assert told_device() == str(device_a.pk)
+
+
+def test_acting_as_refuses_another_shops_device(
+    device_a: ShopScoped, django_assert_num_queries: DjangoAssertNumQueries
+) -> None:
+    # T1: a bug in the calling code, stopped before PostgreSQL is told anything: no query is sent, and the block never
+    # runs, so nothing can be written that names this device in another shop's history.
+    with (
+        django_assert_num_queries(0),
+        pytest.raises(ShopMismatch),
+        acting_as(Someone(uuid.uuid7(), uuid.uuid7()), device=device_a),
+    ):
+        pytest.fail("The block must not run.")
 
 
 def test_acting_as_puts_back_who_acted_before() -> None:
@@ -75,10 +144,12 @@ def test_acting_as_puts_back_who_acted_before() -> None:
     assert told() == ("", "")
 
 
-def test_acting_as_costs_two_queries(django_assert_num_queries: DjangoAssertNumQueries) -> None:
+def test_acting_as_costs_two_queries(device_a: ShopScoped, django_assert_num_queries: DjangoAssertNumQueries) -> None:
     # Every office visit opens it, reads included, so it stays cheap: one query to read the old values and write the
-    # new ones together, one to put the old ones back.
+    # new ones together, one to put the old ones back. The device, named or not, adds none.
     with django_assert_num_queries(2), acting_as(Someone(uuid.uuid7(), uuid.uuid7())):
+        pass
+    with django_assert_num_queries(2), acting_as(Someone(device_a.shop_id, uuid.uuid7()), device=device_a):
         pass
 
 
