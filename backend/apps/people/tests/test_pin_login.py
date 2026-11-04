@@ -21,13 +21,14 @@ Fake data only: the repo is public (03 §10).
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 from unittest import mock
 
 import pytest
 from django.contrib.auth.hashers import Argon2PasswordHasher
 from django.contrib.sessions.models import Session
+from django.utils import timezone
 from django.views.debug import ExceptionReporter
 from rest_framework.test import APIClient
 
@@ -163,11 +164,13 @@ def test_right_pin_starts_a_session_on_the_device(asha: StaffMember, laptop: Dev
 
 def test_session_lasts_the_shops_idle_minutes(asha: StaffMember, laptop_key: str, shop_a: Shop) -> None:
     # 15 minutes by default (session.idle_minutes, apps/core/settings_registry.py), both in the browser's cookie and on
-    # the server's own row, as a copied cookie must not outlive it.
+    # the server's own row, as a copied cookie must not outlive it. The row's end date is what the server goes by:
+    # test_idle_session_ends proves that it does.
     client = a_browser(laptop_key)
     try_pin(client, asha.pk)
     assert client.cookies[SESSION_COOKIE]["max-age"] == 15 * 60
-    assert session_row(client).get_decoded()["_session_expiry"] == 15 * 60
+    ends_in = session_row(client).expire_date - timezone.now()
+    assert timedelta(minutes=14) < ends_in <= timedelta(minutes=15)
 
     # A shop's own value, from the next login.
     with shop_context(shop_a):

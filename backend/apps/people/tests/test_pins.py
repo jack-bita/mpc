@@ -159,6 +159,24 @@ def test_broken_pin_hash_never_matches(damaged: str, caplog: pytest.LogCaptureFi
     assert damaged not in caplog.text
 
 
+def test_broken_pin_hash_still_costs_a_full_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A damaged hash fails at once, with no work done, so this "no" does one full check more, at today's cost. Without
+    # it the time would show whose stored PIN is broken.
+    checked: list[str] = []
+    real_check = _hasher.verify
+
+    def counted(password: str, encoded: str) -> bool:
+        checked.append(encoded)
+        return real_check(password, encoded)
+
+    monkeypatch.setattr(_hasher, "verify", counted)
+
+    assert not pin_matches(PIN, "not-a-hash")
+    assert checked[0] == "not-a-hash"
+    assert len(checked) == 2
+    assert TODAYS_COST in checked[1]
+
+
 def test_pin_stays_out_of_error_reports(asha: StaffMember, shop_a: Shop) -> None:
     # Django's error report lists each function's variables when something fails. The PIN shows as stars.
     crashing = mock.patch("apps.people.services.hash_pin", side_effect=RuntimeError("no memory"))

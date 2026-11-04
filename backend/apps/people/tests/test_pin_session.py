@@ -45,6 +45,7 @@ from apps.people.services import (
     confirm_pairing,
     mark_left,
     set_pin,
+    set_temporary_password,
     start_pairing,
     suspend,
     unblock,
@@ -61,6 +62,7 @@ GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 PIN_LOGIN = "/api/auth/pin-login/"
 DEVICE_ME = "/api/devices/v1/me/"
 SIDES = "/api/v1/shops/sides/"
+ME = "/api/auth/me/"
 LOGOUT = "/api/auth/logout/"
 SESSION = "/_allauth/browser/v1/auth/session"
 PASSWORD_LOGIN = "/_allauth/browser/v1/auth/login"
@@ -335,6 +337,50 @@ def test_pin_session_meets_the_password_mark(asha: StaffMember, laptop_key: str)
     assert (answer.status_code, answer.data["code"]) == (403, "password.must_change")
 
     User.objects.filter(pk=asha.user_id).update(must_change_password=False)
+    assert client.get(SIDES).status_code == 200
+
+
+def test_temporary_password_ends_a_badge(
+    asha: StaffMember, laptop_key: str, shop_a: Shop, side_a: Side, give_role: GiveRole
+) -> None:
+    # The real thing, not a mark set by hand. The owner types Juma a temporary password. A session holds a fingerprint
+    # of the password it started with, even a PIN's, so his open badge ends, as his phone's would. His PIN still works,
+    # and the next badge says he must choose his own.
+    user = User.objects.create_user(full_name="Juma Demo", phone=PHONE)
+    with shop_context(shop_a):
+        juma = set_pin(add_staff(shop=shop_a, user=user, display_name="Juma", by=None), PIN, by=None)
+    give_role(juma, RoleTemplate.SELLER, side_a)
+    client = logged_in(juma, laptop_key)
+
+    with shop_context(shop_a):
+        set_temporary_password(juma, "a-long-temporary-password", by=asha, reason="Amesahau nenosiri")
+
+    refused = client.get(SIDES)
+    assert (refused.status_code, refused.data["code"]) == (403, "not_authenticated")
+
+    again = logged_in(juma, laptop_key)
+    assert again.get(ME).data["must_change_password"] is True
+    refused = again.get(SIDES)
+    assert (refused.status_code, refused.data["code"]) == (403, "password.must_change")
+
+
+def test_password_login_over_a_badge_changes_nothing(asha: StaffMember, laptop_key: str) -> None:
+    # allauth answers that someone is already logged in here, and the badge goes on as it was, with its checks: a
+    # password typed at a shared laptop never turns a badge into something else.
+    on_a_phone(asha)
+    client = logged_in(asha, laptop_key)
+    badge = client.cookies[SESSION_COOKIE].value
+
+    answer = client.post(
+        PASSWORD_LOGIN,
+        {"phone": PHONE, "password": ADMIN_PASSWORD},
+        format="json",
+        HTTP_X_CSRFTOKEN=client.cookies["csrftoken"].value,
+    )
+
+    assert answer.status_code == 409
+    assert client.cookies[SESSION_COOKIE].value == badge
+    assert "pin_session" in session_row(client).get_decoded()
     assert client.get(SIDES).status_code == 200
 
 
