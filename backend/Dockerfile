@@ -1,6 +1,6 @@
 # backend/Dockerfile — the backend image: Django + DRF under gunicorn, with the built shop app inside (OPS-1).
 #
-# It owns how that image is built. One container answers everything from one address (ADR-0017):
+# It owns how that image is built. One container answers everything from one address (ADR-0038):
 #   /api/, /admin/, /static/  -> Django, through gunicorn
 #   every other path          -> the static shop app (frontend/out/), served by WhiteNoise inside Django
 # That is the demo's whole setup (03 §13, ADR-0029). On the real server Caddy serves the app itself

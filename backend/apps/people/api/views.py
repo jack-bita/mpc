@@ -158,7 +158,7 @@ class PairingView(DeviceView):
 
 # The CSRF token's cookie goes with every answer of this route, a refusal included (ensure_csrf_cookie, around the
 # whole visit): the app asks `me` first, paired or not, and its first change, the start of a pairing, needs the token
-# (ADR-0017). On dispatch, not on get(): a visit with no device is refused before get() runs.
+# (ADR-0038). On dispatch, not on get(): a visit with no device is refused before get() runs.
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class DeviceMeView(DeviceView):
     # 03 §5.9, step 3: the device learns its shop and its device code for receipt numbers, and shows the shop's name.

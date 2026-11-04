@@ -1,7 +1,7 @@
 """apps/people/tests/test_login_limits.py — whoever guesses passwords is slowed down (AUTH-3; 03 §5.10; ADR-0038).
 
-allauth runs two limits on wrong passwords, its defaults, which these tests pin: 5 in 5 minutes per person, and 10 a
-minute per caller. Past either, even the right password waits (`too_many_login_attempts`).
+allauth runs two limits on wrong passwords, its defaults, which these tests pin: 5 in 5 minutes per login name, and 10
+a minute per caller. Past either, even the right password waits (`too_many_login_attempts`).
 
     the caller, as these limits see them      what they are told apart by
     an IPv4 address                           itself: a shop's many phones share one

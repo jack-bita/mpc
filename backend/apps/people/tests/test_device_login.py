@@ -14,7 +14,7 @@ the device's own route, `GET /api/devices/v1/me/`, and the start of a pairing, `
     a suspended shop's device     401 shop.suspended           401 shop.suspended
 
 A device is a shop's machine, not a person, so its key opens no office route (CORE-6). Every change it sends needs
-the CSRF token (ADR-0017), so another website can't send one in its name. Fake data only: the repo is public (03 §10).
+the CSRF token (ADR-0038), so another website can't send one in its name. Fake data only: the repo is public (03 §10).
 """
 
 import secrets
@@ -137,7 +137,7 @@ def test_device_of_suspended_shop_refused(manager_a: StaffMember, side_a: Side, 
 
 
 def test_device_requests_need_csrf(manager_a: StaffMember, side_a: Side) -> None:
-    # A paired device's change without the CSRF token is refused, as a session's is (ADR-0017): its cookie goes with
+    # A paired device's change without the CSRF token is refused, as a session's is (ADR-0038): its cookie goes with
     # every request to our address, even one another website makes the browser send.
     _, key = pair(manager_a, side_a)
     client = holding(key, csrf=True)

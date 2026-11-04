@@ -1,7 +1,7 @@
 """apps/people/login_doors.py — the login doors: the few reads that run before any shop is open (AUTH-2; 03 §5.4).
 
 Every read of a shop's table goes through the guard, which shows only the shop the visit has opened, and refuses
-while none is (ADR-0022). A login can't wait for that: from what a request brings, it must first find which shop the
+while none is (ADR-0037). A login can't wait for that: from what a request brings, it must first find which shop the
 visit works for. So each login gets one door here, which reads the one thing it needs, a shop's id, and nothing else;
 everything after it is read through the guard, inside that shop. Doors are few and named, as system_context() and
 the admin's `all_shops` are, so `grep` finds them all. A door starts from no manager, since the guarded one would

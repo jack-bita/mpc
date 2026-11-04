@@ -10,12 +10,12 @@ ACCOUNT_ADAPTER (config/settings/base.py). This file owns ours.
   to, read from our User, in the one stored form, `+255…` (apps/core/phones.py).
 - No SMS is ever sent. The owner typed each phone, face to face, so allauth's own check by an SMS code is off
   (ACCOUNT_PHONE_VERIFICATION_ENABLED). The hooks that would send one, read a person's phone for it, or change that
-  phone are allauth's own, which refuse loudly (NotImplementedError): nothing on our routes reaches them.
-- Guessers are slowed down: allauth counts wrong passwords, 10 a minute per caller and 5 in 5 minutes per person *(its
-  defaults)*, in a cache table of their own (`default`, CACHES, config/settings/base.py). What it counts by comes from
-  here, and names nobody: a fingerprint of the caller's network, and of the person's login name. Honest limit: a
-  stranger who knows Baba's phone can keep him locked out, by typing five wrong passwords every five minutes. Every
-  login limit has this cost; two-factor codes are *Later*.
+  phone are allauth's own, which do nothing or refuse loudly (NotImplementedError): nothing on our routes reaches them.
+- Guessers are slowed down: allauth counts wrong passwords, 10 a minute per caller and 5 in 5 minutes per login name
+  *(its defaults)*, in a cache table of their own (`default`, CACHES, config/settings/base.py). A person with an email
+  and a phone has a count for each. What it counts by comes from here, and names nobody: a fingerprint of the caller's
+  network, and of the login name. Honest limit: a stranger who knows Baba's phone can keep him locked out, by typing
+  five wrong passwords every five minutes. Every login limit has this cost; two-factor codes are *Later*.
 - A person who has an email may reset their password by a link sent to it; anyone else asks the owner (ADR-0038). A new
   password lifts the person's count of wrong passwords (see set_password).
 """

@@ -1,5 +1,5 @@
 """apps/people/api/authentication.py — the device key login: a paired device's requests log in as that device, in its
-own shop (AUTH-2; 03 §5.4, §5.9; ADR-0017, ADR-0018).
+own shop (AUTH-2; 03 §5.4, §5.9; ADR-0038, ADR-0018).
 
 A paired device keeps its key in a cookie, `device_key`, which page scripts can't read (HttpOnly). Every request it
 sends carries the cookie, and DeviceKeyAuthentication, a DRF login class, turns it into the device:
@@ -57,7 +57,7 @@ DEVICE_KEY_MAX_AGE = timedelta(days=400)
 @sensitive_variables()
 def set_key_cookie(response: HttpResponseBase, key: str) -> None:
     """Put the device's key in its cookie, on the answer about to leave (03 §5.9):
-    - HttpOnly: page scripts can't read it, so a bad script in the page can't steal it (ADR-0017);
+    - HttpOnly: page scripts can't read it, so a bad script in the page can't steal it (ADR-0038);
     - Secure, where the session's is (production): it travels over HTTPS only;
     - SameSite Strict: the browser never sends it with a request another website starts. The app and the API share
       one address, so the app itself never needs that;
@@ -77,7 +77,7 @@ def enforce_csrf(request: Request) -> None:
     """Refuse a change (POST and the like) that doesn't carry the CSRF token, with DRF's own check: the one its session
     login runs, so a refusal reads the same on every route (403 permission_denied, "CSRF Failed: ..."). A browser sends
     the device's cookie with every request to our address, even one another website makes it send; only our own pages
-    can read the `csrftoken` cookie and send its value back in the X-CSRFToken header (ADR-0017)."""
+    can read the `csrftoken` cookie and send its value back in the X-CSRFToken header (ADR-0038)."""
     SessionAuthentication().enforce_csrf(request)
 
 

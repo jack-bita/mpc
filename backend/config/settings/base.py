@@ -230,8 +230,9 @@ CLIENT_IP_HEADER = env("CLIENT_IP_HEADER", "")
 # (apps/people/api/throttles.py). Apart, a flood clears only its own kind.
 # `default` is the login limits' own: allauth counts only in `default`, with no setting to change it (AUTH-3). Nothing
 # else may count there. 100,000 entries *(default)*: a guesser's own count sits in this table beside a flood's, so the
-# table is sized to be dear to fill, and its rows last 5 minutes at most, so filling it takes about 2,000 networks at
-# once. A database made before AUTH-3 keeps an empty, unused table, `django_cache`.
+# table is sized to be dear to fill, and a login's row counts for 5 minutes at most, so filling it takes about 2,000
+# networks at once. A row past its time stays until it is read again or the table fills: OPS-7 prunes them. A database
+# made before AUTH-3 keeps an empty, unused table, `django_cache`.
 _DATABASE_CACHE = {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "OPTIONS": {"MAX_ENTRIES": 10_000}}
 CACHES = {
     "default": {**_DATABASE_CACHE, "LOCATION": "throttle_login", "OPTIONS": {"MAX_ENTRIES": 100_000}},
@@ -290,7 +291,8 @@ ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*"]
 # An email is typed by the owner, who knows the person, never by a stranger signing up: nobody is sent a link to
 # confirm it, which most of the shop's people couldn't open anyway.
 ACCOUNT_EMAIL_VERIFICATION = "none"
-# What allauth asks of our people: sign-up closed (apps/people/accounts.py).
+# What allauth asks of our people: sign-up closed, the login by phone, and what its limits count by
+# (apps/people/accounts.py).
 ACCOUNT_ADAPTER = "apps.people.accounts.AccountAdapter"
 # A reset link opens the app (UI-5), at this path on the address the request came to. The key sits after the #, which a
 # browser never sends to a server: so it stays out of Caddy's and Django's logs, and out of any Referer header. A static
