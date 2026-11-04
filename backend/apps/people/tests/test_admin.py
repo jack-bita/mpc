@@ -302,12 +302,61 @@ def test_admin_keeps_a_password_out_of_error_reports(
     crashing = mock.patch("django.contrib.auth.base_user.make_password", side_effect=MemoryError("out of memory"))
     with crashing, pytest.raises(MemoryError) as crash:
         superuser_client.post(address, sent)
+    assert_nothing_shows(crash, NEW_PASSWORD)
+
+
+def assert_nothing_shows(crash: pytest.ExceptionInfo[BaseException], *secrets: str) -> None:
+    # What Django's error report would show of a crash, read as a server would write it.
     frames = ExceptionReporter(None, crash.type, crash.value, crash.tb).get_traceback_frames()
     # Only the server's frames: the test client's own hold what this test sent.
     on_the_server = [frame for frame in frames if not frame["filename"].endswith(TEST_CLIENT_FILES)]
     shown = [str(value) for frame in on_the_server for _, value in frame["vars"]]
     assert shown
-    assert not [value for value in shown if NEW_PASSWORD in value]
+    assert not [value for value in shown for secret in secrets if secret in value]
+
+
+def test_own_password_page_keeps_the_old_password_out_of_error_reports(superuser_client: Client) -> None:
+    # For someone with the mark on, the old password is the temporary one. It is checked by clean_old_password, outside
+    # the form's clean and save, and Django's own version hides only the name `old_password`, so the frames below it
+    # show the same password as `raw_password`.
+    sent = {"old_password": PASSWORD, "new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD}
+    crashing = mock.patch("django.contrib.auth.base_user.check_password", side_effect=MemoryError("out of memory"))
+    with crashing, pytest.raises(MemoryError) as crash:
+        superuser_client.post("/admin/password_change/", sent)
+    assert_nothing_shows(crash, PASSWORD, NEW_PASSWORD)
+
+
+def test_own_password_page_keeps_the_new_password_out_of_error_reports(
+    superuser_client: Client, superuser: User
+) -> None:
+    # With the mark on, clean hashes the new password too, to compare it with the temporary one. The first check, of the
+    # old password, passes; the second crashes.
+    User.objects.filter(pk=superuser.pk).update(must_change_password=True)
+    sent = {"old_password": PASSWORD, "new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD}
+    crashing = mock.patch(
+        "django.contrib.auth.base_user.check_password", side_effect=[True, MemoryError("out of memory")]
+    )
+    with crashing, pytest.raises(MemoryError) as crash:
+        superuser_client.post("/admin/password_change/", sent)
+    assert_nothing_shows(crash, PASSWORD, NEW_PASSWORD)
+
+
+def test_reset_page_keeps_the_password_out_of_error_reports_in_its_checks(
+    superuser_client: Client, superuser: User
+) -> None:
+    # A crash while the form looks the password over, before anything is saved.
+    sent = {"password1": NEW_PASSWORD, "password2": NEW_PASSWORD, "usable_password": "true"}
+    crashing = mock.patch("apps.people.admin._take_off_spaces", side_effect=MemoryError("out of memory"))
+    with crashing, pytest.raises(MemoryError) as crash:
+        superuser_client.post(f"{USERS}{superuser.pk}/password/", sent)
+    assert_nothing_shows(crash, NEW_PASSWORD)
+
+
+def test_own_password_page_still_refuses_a_wrong_old_password(superuser_client: Client, superuser: User) -> None:
+    # Its check is written out here now, to hide its variables, so its one job is pinned too.
+    assert change_own_password(superuser_client, NEW_PASSWORD, old="not-the-password") == 200
+    superuser.refresh_from_db()
+    assert superuser.check_password(PASSWORD)
 
 
 def test_admin_shows_the_mark_read_only(superuser_client: Client) -> None:

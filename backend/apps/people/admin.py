@@ -44,8 +44,8 @@ class PasswordTypedHereIsTemporary:
     # one, which nobody at the shop may reset (ADR-0038). So the person must choose their own at the next login, as with
     # a temporary one the owner sets (set_temporary_password, apps/people/services.py). The add form, and the password
     # page reached from a person's row, both save through this method, on Django's own, in the classes below. Every
-    # variable in these methods, and in what they call, shows as stars in Django's error reports, as the library at the
-    # bottom of the hash names the password `secret`.
+    # variable in these methods, and in what they call down to any narrower rule of Django's own, shows as stars in
+    # Django's error reports, as the library at the bottom of the hash names the password `secret`.
     cleaned_data: dict[str, Any]
 
     @sensitive_variables()
@@ -92,6 +92,16 @@ class ChooseOwnPasswordForm(OwnPasswordForm):
         # hash of nothing, and lock the person out with the page saying it worked.
         for field in ("new_password1", "new_password2"):
             cast(CharField, self.fields[field]).strip = True
+
+    @sensitive_variables()
+    def clean_old_password(self) -> str:
+        # Written out, with no call to Django's own, which hides only the name `old_password`: the nearest rule wins, so
+        # the frames below it would show this same password as `raw_password`, and at the bottom of the hash as
+        # `secret`. For someone with the mark on, this is the temporary one.
+        old_password: str = self.cleaned_data["old_password"]
+        if not self.user.check_password(old_password):
+            raise ValidationError(self.error_messages["password_incorrect"], code="password_incorrect")
+        return old_password
 
     @sensitive_variables()
     def clean(self) -> dict[str, Any] | None:
