@@ -5,8 +5,11 @@ before any office screen exists. These tests drive it like a browser would, thro
 logged in as a fake superuser (the `superuser` and `superuser_client` fixtures, in backend/conftest.py).
 """
 
+from unittest import mock
+
 import pytest
 from django.contrib import admin
+from django.contrib.auth.hashers import MD5PasswordHasher
 from django.test import Client, RequestFactory
 
 from apps.people.models import User
@@ -21,13 +24,32 @@ PASSWORD = "a-long-test-password"
 
 def test_admin_login_ignores_email_case(client: Client, superuser: User) -> None:
     # Through the real login page: people type their email in any letter case, and emails are stored in
-    # lower case, so the login looks the lower-case form up (UserManager.get_by_natural_key). The admin's
-    # form calls the login name `username`, whatever field it really is.
+    # lower case, so the login looks the lower-case form up (allauth's check, AUTHENTICATION_BACKENDS). The
+    # admin's form calls the login name `username`, whatever field it really is.
     response = client.post("/admin/login/", {"username": "ADMIN@Example.com", "password": PASSWORD, "next": "/admin/"})
 
     # A wrong login shows the form again (200); a right one goes on to the admin.
     assert response.status_code == 302
     assert response["Location"] == "/admin/"
+
+
+def hashes_at_the_admin_door(email: str, password: str) -> int:
+    # How many times one login attempt hashes the password. Every hash passes through the hasher's `encode`, its
+    # check included, and the test settings' hasher is MD5 (config/settings/test.py).
+    with mock.patch.object(MD5PasswordHasher, "encode", autospec=True, side_effect=MD5PasswordHasher.encode) as hashing:
+        Client().post("/admin/login/", {"username": email, "password": password})
+    return hashing.call_count
+
+
+def test_admin_login_takes_one_hash_whatever_is_typed() -> None:
+    # The hash is the slow part of a login, so its count shows in how long the answer takes. The admin's login has no
+    # limit yet (04, DATA-1), and a manager who isn't staff sees the same page for a right password and a wrong one.
+    # Two checkers would hash a wrong password twice and a right one once: a stranger could time guesses here, spot the
+    # right password, then use it once at the real login, past every limit.
+    User.objects.create_user(full_name="Meneja Mfano", email="meneja@example.com", password=PASSWORD)
+    assert hashes_at_the_admin_door("meneja@example.com", PASSWORD) == 1
+    assert hashes_at_the_admin_door("meneja@example.com", "not-the-password") == 1
+    assert hashes_at_the_admin_door("mgeni@example.com", PASSWORD) == 1
 
 
 @pytest.mark.parametrize(

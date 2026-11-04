@@ -14,7 +14,10 @@ change a browser sends carries the CSRF token, so another website can't log a pe
 Fake data only: the repo is public (03 §10).
 """
 
+from unittest import mock
+
 import pytest
+from django.contrib.auth.hashers import MD5PasswordHasher
 from django.contrib.auth.password_validation import validate_password
 from django.core import mail
 from django.core.exceptions import ValidationError
@@ -59,6 +62,27 @@ def log_in(client: Client, **sent: str) -> tuple[int, list[str]]:
     # shape, not the API's (apps/people/api/password_urls.py): {"errors": [{"code": ...}, ...]}. UI-5's forms read them.
     answer = client.post(LOGIN, sent, content_type="application/json", HTTP_X_CSRFTOKEN=csrf_token(client))
     return answer.status_code, [error["code"] for error in answer.json().get("errors", [])]
+
+
+def hashes_at_the_login(**sent: str) -> int:
+    # How many times one login attempt hashes the password. Every hash passes through the hasher's `encode`, its check
+    # included, and the test settings' hasher is MD5 (config/settings/test.py).
+    with mock.patch.object(MD5PasswordHasher, "encode", autospec=True, side_effect=MD5PasswordHasher.encode) as hashing:
+        Client().post(LOGIN, sent, content_type="application/json")
+    return hashing.call_count
+
+
+def test_login_takes_one_hash_whatever_is_typed(manager: User, owner: User) -> None:
+    # The hash is the slow part of a login, so its count shows in how long the answer takes: the same count for a right
+    # password, a wrong one and nobody at all tells a stranger nothing about who has an account, or which guess was
+    # right.
+    for name, known, unknown in (
+        ("email", "meneja@example.com", "mgeni@example.com"),
+        ("phone", "+255712345678", "+255712999999"),
+    ):
+        assert hashes_at_the_login(**{name: known, "password": PASSWORD}) == 1
+        assert hashes_at_the_login(**{name: known, "password": "not-the-password"}) == 1
+        assert hashes_at_the_login(**{name: unknown, "password": PASSWORD}) == 1
 
 
 def test_login_by_email(manager: User) -> None:

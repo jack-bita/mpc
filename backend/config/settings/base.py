@@ -101,12 +101,11 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
 ]
 
-# Who may check a password. Django's own, by email, for the superuser's admin login (PPL-1); allauth's, for the owner's
-# and managers' login by email or phone (ADR-0038). Both read the same User and the same password hash.
-AUTHENTICATION_BACKENDS = [
-    "django.contrib.auth.backends.ModelBackend",
-    "allauth.account.auth_backends.AuthenticationBackend",
-]
+# Who may check a password: allauth's checker alone, for every login, the admin's too (it takes the admin form's email
+# as well as our own login by email or phone, ADR-0038). Never two: Django tries each in turn until one says yes, so a
+# wrong password would be hashed twice and a right one once. The answer's time would then show a right password, and
+# the admin's login has no limit, so a stranger could try passwords there past every limit we count.
+AUTHENTICATION_BACKENDS = ["allauth.account.auth_backends.AuthenticationBackend"]
 
 ROOT_URLCONF = "config.urls"
 
