@@ -18,10 +18,17 @@ A person who has left counts as no job, not as refused: they aren't anyone at th
 still counts, so they can be told why they are stopped.
 """
 
+from datetime import date
+from zoneinfo import ZoneInfo
+
+from django.utils import timezone
+
+from apps.core.settings_registry import IDLE_MINUTES
 from apps.core.tenancy import shop_context
 from apps.people.login_doors import shops_of_person
 from apps.people.models import StaffMember, StaffStatus, User
 from apps.shops.models import Shop, ShopStatus
+from apps.shops.selectors import get_setting
 
 
 class LoginRefused(Exception):
@@ -32,12 +39,30 @@ class LoginRefused(Exception):
         self.code = code
 
 
+def shop_today(shop: Shop) -> date:
+    # Today in the shop's own time zone (02 §1), not the server's UTC: at 01:00 in Arusha, UTC is still on yesterday.
+    return timezone.localdate(timezone=ZoneInfo(shop.timezone))
+
+
+def idle_lock_minutes(shop: Shop) -> int:
+    """How long a PIN session lasts with no use, as the shop's setting says today (03 §5.9). The shop must be open."""
+    return get_setting(IDLE_MINUTES, shop, on=shop_today(shop))
+
+
 def check_shop_active(shop: Shop) -> None:
     # A suspended shop stops every way in, a person's password and a device's key alike (ADR-0038). Asked as "not
     # active", never as "suspended", so a status a later card adds is refused until that card says otherwise: the login
     # fails closed.
     if shop.status != ShopStatus.ACTIVE:
         raise LoginRefused("This shop is suspended.", code="shop.suspended")
+
+
+def check_may_act(staff: StaffMember) -> None:
+    """Refuse a person who can't act today, whichever way they log in. The shop first: a suspended shop stops everyone,
+    whatever each person's own status (ADR-0038). Asked as "not active", so a status a later card adds fails closed."""
+    check_shop_active(staff.shop)
+    if staff.status != StaffStatus.ACTIVE:
+        raise LoginRefused("This person is suspended.", code="staff.suspended")
 
 
 def job_of_person(user: User) -> StaffMember | None:
@@ -57,11 +82,7 @@ def job_of_person(user: User) -> StaffMember | None:
     if staff is None:
         # Left between the door and this read: no job, as above.
         return None
-    # The shop first: a suspended shop stops everyone, whatever each person's own status (ADR-0038).
-    check_shop_active(staff.shop)
-    # Asked as "not active" too, for the same reason as the shop.
-    if staff.status != StaffStatus.ACTIVE:
-        raise LoginRefused("This person is suspended.", code="staff.suspended")
+    check_may_act(staff)
     # Last: choosing a password wouldn't let in someone stopped for another reason, so they are told that reason first.
     # Someone else typed this person's password (ADR-0038), so until they choose their own, it opens nothing but the way
     # to choose one. `user` is read afresh on each visit (the session's person), so this takes effect at once.

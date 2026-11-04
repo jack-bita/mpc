@@ -3,8 +3,9 @@
 Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a
 shop's devices on the office routes (AUTH-5): a device as the device list shows it, and what a manager sends to say
 yes to a waiting one, to rename one, and to block or unblock one; what the owner sends to set a temporary password
-(AUTH-6); and the answers of the two routes a device calls with its key (apps/people/api/views.py). A key, a key's hash
-or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
+(AUTH-6); what a device sends for a PIN login (AUTH-4); and the answers of the two routes a device calls with its key
+(apps/people/api/views.py). A key, a key's hash or a PIN's hash is never among the fields: they never leave the server
+(03 §5.9).
 """
 
 from typing import Any
@@ -80,6 +81,15 @@ class TemporaryPasswordSerializer(serializers.Serializer[Any]):
     # Why, kept in its audit line with who and when (T3). A blank reason is let through, so the service refuses it with
     # its own code, staff.reason_required. 500 characters at most, as the audit line keeps (control.AuditEvent).
     reason = serializers.CharField(max_length=500, allow_blank=True, write_only=True)
+
+
+class PinLoginSerializer(serializers.Serializer[Any]):
+    # What a shop's device sends when someone types their PIN (AUTH-4): who, and the PIN. Only ever read in: the route
+    # answers with nothing, and nothing shows a PIN back.
+    staff = serializers.UUIDField(write_only=True)
+    # 16 characters at most, so a huge text can't reach the slow hash. Not checked as 4 digits here: anything else just
+    # counts as a wrong try, with the same answer.
+    pin = serializers.CharField(max_length=16, write_only=True)
 
 
 class PairingStartSerializer(serializers.ModelSerializer[PairingRequest]):

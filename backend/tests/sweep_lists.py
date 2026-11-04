@@ -63,6 +63,9 @@ DEVICE_ROUTES_WITHOUT_A_LOOK: dict[str, str] = {
     # The start of a pairing: its answer is a code and a time, never anything of a shop's; a device whose key already
     # works is refused (pairing.already_paired), with nothing more.
     "device-pairing": "test_start_pairing_sets_the_key_cookie",
+    # PIN login: its answer is empty, or a refusal's code and nothing more, never a name or a shop, on its own device or
+    # on another shop's (AUTH-4).
+    "auth-pin-login": "test_pin_login_answers_hold_nothing_of_any_shop",
 }
 
 # App files that may build a query by hand, `models.QuerySet(Table)`, which starts from no manager and so from

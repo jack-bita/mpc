@@ -2,8 +2,8 @@
 
 A staff member's working life at one shop (02 §5): they are added, suspended, brought back and marked
 as left, and given a PIN (set_pin; apps/people/pins.py hashes it) or a temporary password, face to face
-(set_temporary_password, AUTH-6). A PIN is checked with its count of wrong tries (check_pin, AUTH-4). And what they
-may do there: a shop gets
+(set_temporary_password, AUTH-6). A PIN login finds the person and checks their PIN, with its count of wrong tries
+(pin_login, check_pin, AUTH-4). And what they may do there: a shop gets
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
@@ -28,7 +28,6 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import cast
-from zoneinfo import ZoneInfo
 
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
@@ -75,8 +74,10 @@ from apps.people.pins import (
     PIN_TRIES,
     check_pin_strength,
     hash_pin,
+    pin_hash_is_old,
     pin_matches,
 )
+from apps.people.selectors import check_may_act, shop_today
 from apps.shops.models import Shop, Side
 from apps.shops.services import NewSide, create_shop
 
@@ -96,12 +97,6 @@ def _check_shop(shop_id: uuid.UUID, by: StaffMember | None) -> None:
         raise ValidationError("The person acting belongs to another shop.", code="staff.other_shop")
 
 
-def _shop_today(shop: Shop) -> date:
-    # Today in the shop's own time zone (02 §1), not the server's UTC: at 01:00 in Arusha, UTC is still
-    # on yesterday.
-    return timezone.localdate(timezone=ZoneInfo(shop.timezone))
-
-
 def add_staff(
     *,
     shop: Shop,
@@ -114,7 +109,7 @@ def add_staff(
     """Give a person a job at a shop. `by`: who adds them; None for the system or the superuser."""
     _check_shop(shop.pk, by)
     if started_on is None:
-        started_on = _shop_today(shop)
+        started_on = shop_today(shop)
     staff = StaffMember(
         shop=shop,
         user=user,
@@ -206,7 +201,7 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
     _check_reason(reason)
     # On their last day or after, never ahead (Jack, 27 Oct): `left` takes effect at once, so "leaves on
     # Friday" typed on Monday would stop their PIN four days early.
-    if left_on > _shop_today(staff.shop):
+    if left_on > shop_today(staff.shop):
         raise ValidationError("A leaving date can't be in the future.", code="staff.left_in_future")
     with transaction.atomic():
         staff = _locked(staff)
@@ -298,6 +293,36 @@ def check_pin(staff: StaffMember, device: Device, pin: str, *, at: datetime) -> 
     if lock.locked_until is not None and at < lock.locked_until:
         raise _pin_locked(lock, at)
     raise ValidationError("This PIN is wrong.", code="pin.wrong")
+
+
+def _move_pin_to_todays_cost(staff: StaffMember, pin: str) -> None:
+    # One UPDATE of this one column. `pin_changed_at` stays: her PIN didn't change, so devices keep their offline check
+    # of it (03 §5.9). The history skips the hash (ADR-0036), so the owner's trail says nothing. Only if the hash is
+    # still the one just checked: a new PIN set at this same moment must not be overwritten with the old one.
+    StaffMember.objects.filter(pk=staff.pk, pin_hash=staff.pin_hash).update(pin_hash=hash_pin(pin))
+
+
+# Every variable shows as stars in Django's error reports, here and in everything this calls: `pin` is the PIN itself.
+@sensitive_variables()
+def pin_login(device: Device, staff_id: uuid.UUID, pin: str, *, at: datetime) -> StaffMember:
+    """The person this PIN logs in, on this device (03 §5.9). Refuses with pin.wrong or pin.locked, or LoginRefused for
+    someone who can't act today."""
+    _check_shop(device.shop_id, None)
+    # Read through the guard, inside the device's shop: another shop's person isn't found (X2, T1).
+    staff = (
+        StaffMember.objects.select_related("shop", "user").filter(pk=staff_id).exclude(status=StaffStatus.LEFT).first()
+    )
+    if staff is None or not staff.user.is_active:
+        # Nobody here by that id: another shop's person, someone who left or was switched off, or a made-up id. The same
+        # answer as a wrong PIN, after the same work, so neither the words nor the time tell them apart.
+        pin_matches(pin, "")
+        raise ValidationError("This PIN is wrong.", code="pin.wrong")
+    # Before the PIN: this costs no memory, and a suspended person's wrong tries don't lock them for later.
+    check_may_act(staff)
+    check_pin(staff, device, pin, at=at)
+    if pin_hash_is_old(staff.pin_hash):
+        _move_pin_to_todays_cost(staff, pin)
+    return staff
 
 
 # Every variable shows as stars in Django's error reports, which list each function's variables when something fails,

@@ -213,7 +213,8 @@ def test_tries_sent_at_once_cannot_pass_five(asha: StaffMember, laptop: Device) 
     refusals = [ended[0] for _, ended in tries]
     assert all(isinstance(refusal, ValidationError) for refusal in refusals), refusals
     # Four wrong; then the fifth, which locks, and seven that find the lock.
-    assert sorted(refusal.code for refusal in refusals) == ["pin.locked"] * 8 + ["pin.wrong"] * 4  # type: ignore[attr-defined]
+    codes = sorted(getattr(refusal, "code", "") for refusal in refusals)
+    assert codes == ["pin.locked"] * 8 + ["pin.wrong"] * 4
     assert len(checked) == 5
 
 

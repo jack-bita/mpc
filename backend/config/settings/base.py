@@ -207,8 +207,8 @@ REST_FRAMEWORK = {
     # Pairing's two limits, an hour each *(default)* (AUTH-5, apps/people/api/throttles.py): starts per caller's
     # network, which every device of a shop shares (its one IPv4 address, or its IPv6 /64), so a few devices an hour
     # is plenty; a manager's tries of a code per person, a wrong code included. No route is slowed down unless it names
-    # its limit: a device's own calls never are.
-    "DEFAULT_THROTTLE_RATES": {"pairing.start": "10/hour", "pairing.confirm": "10/hour"},
+    # its limit: a device's own calls never are. And a device's tries of a PIN, each a full check of 19 MiB (AUTH-4).
+    "DEFAULT_THROTTLE_RATES": {"pairing.start": "10/hour", "pairing.confirm": "10/hour", "pin.login": "30/minute"},
     # How many proxies stand in front of Django and add the caller's address to X-Forwarded-For: Caddy, 1, on a
     # laptop and on the real server (03 §12). DRF reads the address that many entries from the end; the entries
     # before them are whatever the caller wrote, so without this a phone could claim any address and never be slowed
@@ -240,6 +240,7 @@ CACHES = {
     "default": {**_DATABASE_CACHE, "LOCATION": "throttle_login", "OPTIONS": {"MAX_ENTRIES": 100_000}},
     "pairing_start": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_start"},
     "pairing_confirm": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_confirm"},
+    "pin_login": {**_DATABASE_CACHE, "LOCATION": "throttle_pin_login"},
 }
 
 # --- The API's description, /api/schema/, and its docs page, /api/docs/ (03 §5.10, ADR-0025).

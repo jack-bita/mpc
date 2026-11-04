@@ -19,6 +19,7 @@ And the routes a device calls with its key, built on DeviceView (apps/people/api
 
     POST /api/devices/v1/pairing/   a new device asks to join a shop: a code to show, and its key in a cookie
     GET  /api/devices/v1/me/        a paired device learns its shop, its name, its code and its home side
+    POST /api/auth/pin-login/       someone at a paired device types their PIN, and gets a session (AUTH-4)
 
 Thin: each one calls its service (apps/people/services.py), or reads its rows, and answers with its serializer
 (ADR-0015).
@@ -27,11 +28,12 @@ Thin: each one calls its service (apps/people/services.py), or reads its rows, a
 from collections.abc import Callable
 from typing import Any, cast
 
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.utils import extend_schema
-from rest_framework import mixins
+from rest_framework import exceptions, mixins
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -41,6 +43,7 @@ from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin, ShopVi
 from apps.core.permissions import Permission
 from apps.people.api.authentication import DEVICE_KEY_COOKIE, set_key_cookie
 from apps.people.api.base import DeviceView
+from apps.people.api.pin_session import start_pin_session
 from apps.people.api.serializers import (
     DeviceConfirmSerializer,
     DeviceEditSerializer,
@@ -48,12 +51,14 @@ from apps.people.api.serializers import (
     DeviceReasonSerializer,
     DeviceSerializer,
     PairingStartSerializer,
+    PinLoginSerializer,
     TemporaryPasswordSerializer,
 )
-from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle
+from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle, PinLoginThrottle
 from apps.people.models import Device, StaffMember
+from apps.people.selectors import LoginRefused, idle_lock_minutes
 from apps.people.services import block as block_device
-from apps.people.services import confirm_pairing, rename_device, set_temporary_password, start_pairing
+from apps.people.services import confirm_pairing, pin_login, rename_device, set_temporary_password, start_pairing
 from apps.people.services import unblock as unblock_device
 
 
@@ -168,6 +173,32 @@ class StaffViewSet(ShopViewSet[StaffMember]):
             reason=sent.validated_data["reason"],
         )
         # Nothing to answer with, on purpose: once sent, the password is never shown again (ADR-0038).
+        return Response(status=204)
+
+
+class PinLoginView(DeviceView):
+    # 03 §5.9: a shop's device says who stands at it. Built on DeviceView, so a device logs in first, with its key, and
+    # a blocked one never gets here. It takes no one's PIN but its own shop's people's. Limited per device, as each try
+    # costs a full check of 19 MiB (apps/people/api/throttles.py).
+    throttle_classes = [PinLoginThrottle]
+
+    # `sent` holds the PIN while the service runs: every variable here, and in everything this calls, shows as stars in
+    # Django's error reports.
+    @extend_schema(request=PinLoginSerializer, responses={204: None})
+    @sensitive_variables()
+    def post(self, request: Request) -> Response:
+        sent = PinLoginSerializer(data=request.data)
+        sent.is_valid(raise_exception=True)
+        # cast: DeviceView has refused any visit with no device; mypy can't see that.
+        device = cast(Device, request.auth)
+        try:
+            staff = pin_login(device, sent.validated_data["staff"], sent.validated_data["pin"], at=timezone.now())
+        except LoginRefused as refused:
+            # 403: the device is fine, and it is the person who can't act today. English for the logs; the app
+            # translates the code (ADR-0032).
+            raise exceptions.PermissionDenied(str(refused), code=refused.code) from refused
+        start_pin_session(request, staff, device, idle_minutes=idle_lock_minutes(staff.shop))
+        # Nothing to answer with: the app asks `me` next, as after any login.
         return Response(status=204)
 
 
