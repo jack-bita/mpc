@@ -34,7 +34,7 @@
 
 **Changes in v1.14** (3 Nov 2026, AUTH-3): a choice by Jack, made while planning AUTH-3. A password user needs no email: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link (§5; ADR-0038, which supersedes ADR-0017). Marked **(v1.14)**.
 
-**Changes in v1.15** (4 Nov 2026, AUTH-6): a choice by Jack, made while planning AUTH-6. A person has a "must change password" mark, on while their password is one someone else typed. The owner may set a temporary password, or a manager the owner has handed `staff.manage`, under the giver rule: for someone who holds no key the setter lacks, and never for the owner (§5). Marked **(v1.15)**.
+**Changes in v1.15** (4 Nov 2026, AUTH-6): a choice by Jack, made while planning AUTH-6. A person has a "must change password" mark, on while their password is one someone else typed. Someone with `staff.manage` on the whole shop may set a temporary password, under the giver rule: for someone who holds no key the setter lacks, and never for the owner. While it is open, a key its setter lacks waits (§5). Marked **(v1.15)**.
 
 ---
 
@@ -215,7 +215,7 @@ A full diagram for GitHub is in Appendix A.
 
 **Who may give** a role or a permission **(v1.10)**: someone with `staff.manage` on that side, and only codes they hold there themselves, so a manager handed `staff.manage` to add a loader can't make himself Owner (Jack, PPL-3). The system or the superuser sets up a shop's first owner.
 
-**Who may set a temporary password** **(v1.15)**: whoever sets a person's password can log in as them, so this is the giver rule for a whole person (Jack, AUTH-6). Someone with `staff.manage` on the whole shop: the owner, or a manager the owner has handed that key. Only for someone who holds no key the setter lacks, side by side, counting everything they were given even while suspended. Never for themselves, who change their own with the current password. Only the superuser, in the admin, for an owner, for someone with a current job at another shop, or for someone who can open the admin.
+**Who may set a temporary password** **(v1.15)**: whoever sets a person's password can log in as them, so this is the giver rule for a whole person (Jack, AUTH-6). Someone with `staff.manage` on the whole shop: the owner, or someone that key has been handed to. Only for someone who holds no key the setter lacks, side by side, counting everything they were given even while suspended. Never for themselves, who change their own with the current password. Only the superuser, in the admin, for an owner, or for someone who can open the admin. Never for someone with no phone and no email, who could not log in with it. A job at another shop isn't looked at until AUTH-7, as a visit reads no other shop's rows. While a temporary password is open, a key its setter lacks is not given: the person chooses their own first, or someone holding that key sets a new one, so the setter gains nothing by knowing it.
 
 **What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again.
 
