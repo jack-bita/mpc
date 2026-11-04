@@ -218,13 +218,16 @@ CLIENT_IP_HEADER = env("CLIENT_IP_HEADER", "")
 # `manage.py createcachetable`, not by a migration: start-demo.sh runs it on the demo, `make migrate` on a laptop, and
 # the test database gets them by itself. 10,000 entries each *(default)*, one per caller and limit, far above Django's
 # 300.
-# One table per limit, and `default` for the rest, such as allauth's login limits (AUTH-3): past its 10,000, a table
-# loses a third of its rows, picked by their keys' ABC order, not their age, so in one shared table a flood of one kind
-# would clear every other kind's counts, the managers' among the first (apps/people/api/throttles.py). Apart, a flood
-# clears only its own kind.
+# One table per limit: past its 10,000, a table loses a third of its rows, picked by their keys' ABC order, not their
+# age, so in one shared table a flood of one kind would clear every other kind's counts, the managers' among the first
+# (apps/people/api/throttles.py). Apart, a flood clears only its own kind.
+# `default` is the login limits' own: allauth counts only in `default`, with no setting to change it (AUTH-3). Nothing
+# else may count there. 100,000 entries *(default)*: a guesser's own count sits in this table beside a flood's, so the
+# table is sized to be dear to fill, and its rows last 5 minutes at most, so filling it takes about 2,000 networks at
+# once. A database made before AUTH-3 keeps an empty, unused table, `django_cache`.
 _DATABASE_CACHE = {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "OPTIONS": {"MAX_ENTRIES": 10_000}}
 CACHES = {
-    "default": {**_DATABASE_CACHE, "LOCATION": "django_cache"},
+    "default": {**_DATABASE_CACHE, "LOCATION": "throttle_login", "OPTIONS": {"MAX_ENTRIES": 100_000}},
     "pairing_start": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_start"},
     "pairing_confirm": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_confirm"},
 }

@@ -11,7 +11,11 @@ ACCOUNT_ADAPTER (config/settings/base.py). This file owns ours.
 - No SMS is ever sent. The owner typed each phone, face to face, so every phone counts as confirmed, and allauth's
   own check by an SMS code is off (ACCOUNT_PHONE_VERIFICATION_ENABLED). The hooks that would send one, or change a
   person's phone, are allauth's own, which refuse loudly (NotImplementedError): nothing should ever reach them.
-- Wrong passwords count per person, a phone included (see _get_login_attempts_cache_key).
+- Guessers are slowed down: allauth counts wrong passwords, 10 a minute per caller and 5 in 5 minutes per person *(its
+  defaults)*, in a cache table of their own (`default`, CACHES, config/settings/base.py). What it counts by comes from
+  here, and names nobody: a fingerprint of the caller's network, and of the person's login name. Honest limit: a
+  stranger who knows Baba's phone can keep him locked out, by typing five wrong passwords every five minutes. Every
+  login limit has this cost; two-factor codes are *Later*.
 """
 
 from typing import Any
@@ -19,8 +23,10 @@ from typing import Any
 from allauth.account.adapter import DefaultAccountAdapter
 from django.core.exceptions import ValidationError
 from django.http import HttpRequest
+from django.utils.crypto import salted_hmac
 
 from apps.core.phones import normalise_phone
+from apps.people.api.throttles import caller_fingerprint
 from apps.people.models import User
 
 
@@ -56,15 +62,20 @@ class AccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
             return None
         return user.phone, True
 
+    def get_client_ip(self, request: HttpRequest) -> str:
+        # Who allauth's limits count this caller as, and all allauth uses this for here: the same fingerprint of their
+        # network as the pairing limits keep (apps/people/api/throttles.py), read from what the proxy in front saw, so a
+        # phone can't take a new IPv6 address for every guess, or write a false one in a header. allauth leaves a value
+        # that is no address as it is, and writes it into the row's key: so the table holds no address (03 §5.10).
+        return caller_fingerprint("login", request)
+
     def _get_login_attempts_cache_key(self, request: HttpRequest, **credentials: Any) -> str:
-        # allauth counts a person's wrong passwords, 5 in 5 minutes *(its default)*, under a key made of the site's
-        # address and the login name: the email, or else the username. A phone is neither, so every phone login would
-        # share one key, the address alone: five wrong passwords for anyone's phone would lock every phone user out.
-        # The phone joins the key, in its stored form (clean_phone), so each person's count is their own. allauth
-        # keeps only the key's hash, never the phone itself. A private method of allauth's, so a later allauth could
-        # rename it, and this would stop working unseen: test_wrong_passwords_count_per_phone pins it.
-        key: str = super()._get_login_attempts_cache_key(request, **credentials)
-        phone = credentials.get("phone")
-        if phone and not credentials.get("email") and not credentials.get("username"):
-            return f"{key}phone:{phone}"
-        return key
+        # Who allauth counts wrong passwords against. Its own key is made of the email or the username: a phone is
+        # neither, so every phone login would share one key, and five wrong passwords for anyone's phone would lock
+        # every phone user out. Ours is the login name, whichever it is, in its stored form (clean_phone), so each
+        # person's count is their own. A fingerprint made with the server's secret key: allauth writes only a plain hash
+        # of this into the row's key, and a plain hash of a phone number can be worked back, by trying every number.
+        # A private method of allauth's, so a later allauth could rename it, and this would stop working unseen:
+        # test_wrong_passwords_count_per_phone pins it.
+        login = credentials.get("phone") or credentials.get("email") or credentials.get("username") or ""
+        return salted_hmac("login.person", login.lower(), algorithm="sha256").hexdigest()
