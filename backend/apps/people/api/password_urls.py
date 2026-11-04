@@ -33,12 +33,29 @@ from allauth.headless.account.views import (
     SessionView,
 )
 from allauth.headless.constants import Client
+from django.contrib.auth.models import AnonymousUser
+from django.http import HttpRequest, HttpResponse
 from django.urls import URLPattern, path
 from django.views.decorators.debug import sensitive_variables
+
+from apps.people.api.pin_session import PIN_SESSION
 
 
 # allauth ships no types, so mypy knows both base classes below only as `Any`, and strict mode refuses a class built on
 # one: the library's missing types, not ours (pyproject.toml).
+class PasswordSessionView(SessionView):  # type: ignore[misc]
+    # allauth's own "am I logged in?", which answers with the person's name and email. A password's session asks it on
+    # its owner's own phone. A PIN's badge sits on a shared laptop, and this route knows nothing of a badge's checks
+    # (job_of_pin_session, apps/people/selectors.py), which need the device's key, a cookie sent only to /api/. So
+    # someone with a copied badge, or the next person at an open laptop, would read them here. To this route a badge is
+    # nobody: the app asks `me` instead. Logging out through this route still works, as it reads no one's details.
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        if PIN_SESSION in request.session:
+            request.user = AnonymousUser()
+        answer: HttpResponse = super().get(request, *args, **kwargs)
+        return answer
+
+
 class ChangeOwnPasswordInput(ChangePasswordInput):  # type: ignore[misc]
     # allauth's own form asks for the current password only of a person who has one, so someone with none may set one
     # with no check at all. A PIN session reaches this route too (AUTH-4): at a shared laptop left open, anyone could
@@ -66,7 +83,7 @@ def _route(address: str, view: Any, name: str) -> URLPattern:
 
 
 urlpatterns = [
-    _route("auth/session", SessionView, "password-session"),
+    _route("auth/session", PasswordSessionView, "password-session"),
     _route("auth/login", LoginView, "password-login"),
     _route("auth/password/request", RequestPasswordResetView, "password-reset-request"),
     _route("auth/password/reset", ResetPasswordView, "password-reset"),

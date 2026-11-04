@@ -67,6 +67,7 @@ KEY_COOKIE = "device_key"
 SESSION_COOKIE = "sessionid"
 
 PIN = "4829"
+PHONE = "+255712345678"
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "a-long-test-password"
 # Files whose frames hold what the test itself sent: not the server's, so not for it to hide.
@@ -90,6 +91,24 @@ def logged_in(staff: StaffMember, key: str) -> APIClient:
 
 def session_row(client: APIClient) -> Session:
     return Session.objects.get(session_key=client.cookies[SESSION_COOKIE].value)
+
+
+def on_a_phone(staff: StaffMember) -> APIClient:
+    # A person's own phone, logged in with a password through allauth's route: it holds no device's key.
+    user = User.objects.get(pk=staff.user_id)
+    user.phone = PHONE
+    user.set_password(ADMIN_PASSWORD)
+    user.save()
+    phone = APIClient()
+    phone.get(SESSION)
+    login = phone.post(
+        PASSWORD_LOGIN,
+        {"phone": PHONE, "password": ADMIN_PASSWORD},
+        format="json",
+        HTTP_X_CSRFTOKEN=phone.cookies["csrftoken"].value,
+    )
+    assert login.status_code == 200
+    return phone
 
 
 def last_used(client: APIClient, *, seconds_ago: int, ends: datetime) -> None:
@@ -391,19 +410,7 @@ def test_logout_with_no_session_is_fine() -> None:
 
 def test_logout_ends_a_password_session(asha: StaffMember) -> None:
     # The same route for a person on their own phone: a session is a session.
-    User.objects.filter(pk=asha.user_id).update(phone="+255712345678")
-    user = User.objects.get(pk=asha.user_id)
-    user.set_password("a-long-test-password")
-    user.save()
-    phone = APIClient()
-    phone.get(SESSION)
-    login = phone.post(
-        PASSWORD_LOGIN,
-        {"phone": "+255712345678", "password": "a-long-test-password"},
-        format="json",
-        HTTP_X_CSRFTOKEN=phone.cookies["csrftoken"].value,
-    )
-    assert login.status_code == 200
+    phone = on_a_phone(asha)
     assert phone.get(SIDES).status_code == 200
 
     assert phone.post(LOGOUT).status_code == 204
@@ -449,3 +456,38 @@ def test_admin_login_over_a_badge_starts_clean(admin_with_a_job: StaffMember, la
     assert browser.get("/admin/").status_code == 200
     assert not Session.objects.filter(session_key=badge).exists()
     assert "pin_session" not in Session.objects.get(session_key=browser.cookies[SESSION_COOKIE].value).get_decoded()
+
+
+def test_allauths_session_route_answers_no_badge(asha: StaffMember, laptop_key: str) -> None:
+    # allauth's "am I logged in?" holds the person's name and email, and knows nothing of a badge's checks. A copied
+    # badge, or the next person at an open laptop, gets what a stranger gets. The email goes in first, so a leak would
+    # show.
+    User.objects.filter(pk=asha.user_id).update(email="asha@example.com")
+    client = logged_in(asha, laptop_key)
+    thief = APIClient()
+    thief.cookies[SESSION_COOKIE] = client.cookies[SESSION_COOKIE].value
+
+    for browser in (client, thief):
+        answer = browser.get(SESSION)
+        assert answer.status_code == 401
+        body = answer.content.decode()
+        assert "asha@example.com" not in body
+        assert asha.user.full_name not in body
+        assert str(asha.user_id) not in body
+
+
+def test_allauths_session_route_still_answers_a_password(asha: StaffMember) -> None:
+    # On a person's own phone it is the app's way to ask who is logged in (UI-5).
+    phone = on_a_phone(asha)
+    answer = phone.get(SESSION)
+    assert answer.status_code == 200
+    assert answer.json()["data"]["user"]["display"] == asha.user.full_name
+
+
+def test_allauths_logout_still_ends_a_badge(asha: StaffMember, laptop_key: str) -> None:
+    client = logged_in(asha, laptop_key)
+    badge = client.cookies[SESSION_COOKIE].value
+
+    client.delete(SESSION)
+
+    assert not Session.objects.filter(session_key=badge).exists()
