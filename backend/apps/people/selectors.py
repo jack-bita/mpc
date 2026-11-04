@@ -11,6 +11,7 @@ the same ones: the password's today (apps/people/api/staff_session.py), the devi
                    one  ──▶ that shop open ──▶ the job, through the guard
                               shop suspended: refused, shop.suspended
                               person suspended: refused, staff.suspended
+                              password someone else typed: refused, password.must_change
                               ──▶ the staff member
 
 A person who has left counts as no job, not as refused: they aren't anyone at that shop now. A suspended person's job
@@ -61,4 +62,9 @@ def job_of_person(user: User) -> StaffMember | None:
     # Asked as "not active" too, for the same reason as the shop.
     if staff.status != StaffStatus.ACTIVE:
         raise LoginRefused("This person is suspended.", code="staff.suspended")
+    # Last: choosing a password wouldn't let in someone stopped for another reason, so they are told that reason first.
+    # Someone else typed this person's password (ADR-0038), so until they choose their own, it opens nothing but the way
+    # to choose one. `user` is read afresh on each visit (the session's person), so this takes effect at once.
+    if user.must_change_password:
+        raise LoginRefused("This person must choose their own password.", code="password.must_change")
     return staff

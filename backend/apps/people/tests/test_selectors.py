@@ -81,6 +81,32 @@ def test_a_suspended_shop_is_named_before_the_person(person: User, shop_a: Shop)
     assert refusal_of(person) == "shop.suspended"
 
 
+def test_a_person_who_must_change_their_password_is_told_so(person: User, shop_a: Shop) -> None:
+    # Someone else typed their password, so they must choose their own first (ADR-0038).
+    give_job(person, shop_a)
+    User.objects.filter(pk=person.pk).update(must_change_password=True)
+    person.refresh_from_db()
+    assert refusal_of(person) == "password.must_change"
+
+
+def test_a_suspension_is_named_before_the_mark(person: User, shop_a: Shop) -> None:
+    # Both stopped: the suspension is the one to tell, as choosing a new password wouldn't let them in.
+    staff = give_job(person, shop_a)
+    with shop_context(shop_a):
+        suspend(staff, by=None, reason="Cash short for two weeks")
+    User.objects.filter(pk=person.pk).update(must_change_password=True)
+    person.refresh_from_db()
+    assert refusal_of(person) == "staff.suspended"
+
+
+def test_no_job_is_none_with_the_mark_too(person: User) -> None:
+    # The owner's first login may come before their job is added, or the superuser may hold the mark: they are nobody
+    # at any shop, so there is no office route to close. The refusal is for a job, and a job they don't have stays None.
+    User.objects.filter(pk=person.pk).update(must_change_password=True)
+    person.refresh_from_db()
+    assert job_of_person(person) is None
+
+
 def test_a_shop_status_nobody_has_named_is_refused() -> None:
     # Fails closed: a status a later card adds stays refused until that card says otherwise.
     with pytest.raises(LoginRefused) as refused:
