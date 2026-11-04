@@ -2,9 +2,9 @@
 
 Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a
 shop's devices on the office routes (AUTH-5): a device as the device list shows it, and what a manager sends to say
-yes to a waiting one, to rename one, and to block or unblock one; and the answers of the two routes a device calls
-with its key (apps/people/api/views.py). A key, a key's hash or a PIN's hash is never among the fields: they never
-leave the server (03 §5.9).
+yes to a waiting one, to rename one, and to block or unblock one; what the owner sends to set a temporary password
+(AUTH-6); and the answers of the two routes a device calls with its key (apps/people/api/views.py). A key, a key's hash
+or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
 """
 
 from typing import Any
@@ -68,6 +68,17 @@ class DeviceReasonSerializer(serializers.Serializer[Any]):
     # through, so the service refuses it with its own code, device.reason_required, which the screen translates; one
     # left out is the form's own `required`. 500 characters at most, as the audit line keeps (control.AuditEvent).
     reason = serializers.CharField(max_length=500, allow_blank=True)
+
+
+class TemporaryPasswordSerializer(serializers.Serializer[Any]):
+    # What the owner sends to set a person's temporary password (AUTH-6, ADR-0038). Only ever read in: the route answers
+    # with nothing, and nothing shows a password back.
+    # trim_whitespace off: the password is what was typed, or the phrase she was told wouldn't log her in. 128
+    # characters at most, so a huge one can't be sent to the slow hash. What makes a good password is the service's.
+    password = serializers.CharField(max_length=128, trim_whitespace=False, write_only=True)
+    # Why, kept in its audit line with who and when (T3). A blank reason is let through, so the service refuses it with
+    # its own code, staff.reason_required. 500 characters at most, as the audit line keeps (control.AuditEvent).
+    reason = serializers.CharField(max_length=500, allow_blank=True, write_only=True)
 
 
 class PairingStartSerializer(serializers.ModelSerializer[PairingRequest]):
