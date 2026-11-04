@@ -419,12 +419,12 @@ class MoveRecordEditsToV2(RecordEditsV2, ChangeRecordEdits):
         return f"Edit history of {self.model_name} moves to the rule that names the device"
 
 
-# The history's own guard (ADR-0036): every row of control_editevent comes from control_record_edit() above, and
+# The history's own guard (ADR-0036): every row of control_editevent comes from control_record_edit_v2() above, and
 # from nowhere else. EditEvent.save() refuses in Python, but bulk_create() skips save(), and SQL typed by hand skips
 # Python altogether; a row they wrote would be a change nobody made, perhaps naming someone who never made it.
 # - pg_trigger_depth() says how many triggers deep the current statement is running. This rule is itself a
-#   trigger, so an INSERT sent by Python or by hand runs it at depth 1. The INSERT that control_record_edit() sends,
-#   from inside the office table's trigger, runs it at depth 2. So fewer than 2: refused.
+#   trigger, so an INSERT sent by Python or by hand runs it at depth 1. The INSERT that rule sends, from inside the
+#   office table's trigger, runs it at depth 2. So fewer than 2: refused.
 # - Another table's trigger could still write a row at depth 2; only ours does, and review keeps it that way.
 # - ERRCODE 'restrict_violation', as every rule here: Django raises IntegrityError (apps/core/operations.py).
 EDITS_BY_TRIGGER_ONLY_FUNCTION = """

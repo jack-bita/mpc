@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.17 · 4 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.18 · 4 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -39,6 +39,8 @@
 **Changes in v1.16** (4 Nov 2026, AUTH-4): what building AUTH-4 settled (04 v1.34, 03 v1.21). A PIN lock's wait stops growing at an hour (Jack), and a new PIN lifts it and ends the old sessions (Jack); `PinLock` keeps the count (§5). Marked **(v1.16)**.
 
 **Changes in v1.17** (4 Nov 2026, AUTH-4's review): a choice by Jack. A PIN logs in as the whole person, so who may set one follows the rule for a temporary password, and only the superuser sets an owner's (§5). Marked **(v1.17)**.
+
+**Changes in v1.18** (4 Nov 2026, AUTH-8): both books name the device a visit came from, and are empty for a visit with none (§13, X3; 03 v1.24, 04 v1.37). Marked **(v1.18)**.
 
 ---
 
@@ -476,9 +478,9 @@ Advances come from `MoneyMovement` `staff_advance` and are deducted in the next 
 - Low stock and expiring batches are **alerts** (lists), not flags: nobody has to explain them.
 
 **AuditEvent** [R1] — who did what: `actor`, `device`, `action`, `subject`, `before`, `after`, `reason`, `approval`, `at`. Append-only.
-- `actor` and `at` are the row's `created_by` and `created_at` (§1): empty `actor` when the system acts. A reason is always given (T3). `device` joins when a visit knows its device (AUTH-8), `approval` with the Approval table **(v1.9)**.
+- `actor` and `at` are the row's `created_by` and `created_at` (§1): empty `actor` when the system acts. A reason is always given (T3). `device` is the one the visit came from: empty for a visit with none, such as a password or a nightly job **(v1.18)**. `approval` joins with the Approval table **(v1.9)**.
 
-**EditEvent** [R1] — one change to an office record (a staff member, a side, a payment account, a stock location; later products, contacts, roles and devices), written by the database itself, so no change can skip it: who (`created_by`), when (`created_at`), the record (`subject`), and the fields that changed, `before` and `after`. No reason: an action that needs one also writes an AuditEvent. A PIN hash is never copied. Append-only **(v1.9)**.
+**EditEvent** [R1] — one change to an office record (a staff member, a side, a payment account, a stock location; later products, contacts, roles and devices), written by the database itself, so no change can skip it: who (`created_by`), from which device (`device`, as an AuditEvent's) **(v1.18)**, when (`created_at`), the record (`subject`), and the fields that changed, `before` and `after`. No reason: an action that needs one also writes an AuditEvent. A PIN hash is never copied. Append-only **(v1.9)**.
 
 **Attachment** [R1] — a photo or file on any record: supplier paper, expense receipt, clock-in photo. Photos taken offline upload later, Wi-Fi first.
 

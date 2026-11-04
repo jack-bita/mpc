@@ -29,7 +29,7 @@ Every app may import `control`; `control` imports only `core`. A model may name 
 
 ## Writing services
 
-- Take explicit arguments (who, which device, which shop) and return results. Raise domain errors with codes (`sale.below_floor`); one exception handler turns them into `{"code", "message", "fields", "params"}`.
+- Take explicit arguments (who, which shop) and return results. The device a write names comes from the visit's note, not from an argument: `audit()` and the edit history's trigger both read it (`apps/core/acting.py`, AUTH-8). Raise domain errors with codes (`sale.below_floor`); one exception handler turns them into `{"code", "message", "fields", "params"}`.
 - Check that every record you link to belongs to the same shop (T1).
 - Record changes for sync with `record_change` inside the same transaction.
 - Posting one document is one transaction (03 §5.5): the document → rule checks (online: an error; from offline: accept and raise a Flag) → payments and allocations → stock movements + `StockBalance` → debt + `ContactBalance` → flags → change log and jobs → commit.
