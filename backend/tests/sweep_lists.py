@@ -11,6 +11,7 @@ the sync routes with a device's key, is a new check instead, added in a reviewed
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.core.api.views import HealthView
+from apps.people.api.views import LogoutView
 
 # T1's exceptions (02 §16, 03 §5.4): tables that belong to no one shop, so they have no `shop`.
 NO_SHOP = {
@@ -48,6 +49,10 @@ NOT_SHOP_ROUTES: set[type] = {
     # The API's description, and the same as a page: its routes and fields, never a row (CORE-6).
     SpectacularAPIView,
     SpectacularSwaggerView,
+    # Logout: it only deletes this browser's session, which belongs to no shop, and answers with nothing. It reads no
+    # shop's table, on purpose: it must work whatever has happened to the person or the device (AUTH-4's plan, approved
+    # by Jack).
+    LogoutView,
 }
 
 # Office routes whose answers the sweep can't read, such as a PDF or an Excel download, which squeeze their

@@ -13,6 +13,9 @@ tests go through the real login, then an office route, /api/v1/shops/sides/, wit
     no use for 15 minutes                         403 not_authenticated
     the person suspended                          403 staff.suspended; back again, 200, with no new login
     the person on a temporary password            403 password.must_change; once they choose their own, 200
+    logged out                                    403 not_authenticated, at once
+
+Logout must work whatever has happened to the person or the device: it asks only for the session and the CSRF token.
 
 Fake data only: the repo is public (03 §10).
 """
@@ -54,6 +57,9 @@ GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 PIN_LOGIN = "/api/auth/pin-login/"
 DEVICE_ME = "/api/devices/v1/me/"
 SIDES = "/api/v1/shops/sides/"
+LOGOUT = "/api/auth/logout/"
+SESSION = "/_allauth/browser/v1/auth/session"
+PASSWORD_LOGIN = "/_allauth/browser/v1/auth/login"
 KEY_COOKIE = "device_key"
 SESSION_COOKIE = "sessionid"
 
@@ -314,3 +320,88 @@ def test_device_key_stays_out_of_error_reports(asha: StaffMember, laptop_key: st
         if laptop_key in str(value)
     ]
     assert shown == []
+
+
+def test_logout_ends_the_session_at_once(asha: StaffMember, laptop_key: str) -> None:
+    client = logged_in(asha, laptop_key)
+    badge = client.cookies[SESSION_COOKIE].value
+
+    answer = client.post(LOGOUT)
+
+    assert answer.status_code == 204
+    assert not answer.content
+    # Gone on the server, so a copy of its number opens nothing; and the browser is told to forget it.
+    assert not Session.objects.filter(session_key=badge).exists()
+    assert answer.cookies[SESSION_COOKIE]["max-age"] == 0
+    refused = client.get(SIDES)
+    assert (refused.status_code, refused.data["code"]) == (403, "not_authenticated")
+
+
+def test_suspended_person_can_log_out(asha: StaffMember, laptop_key: str) -> None:
+    # Every office route refuses her now, and that must not leave her badge lying on a shared laptop.
+    client = logged_in(asha, laptop_key)
+    badge = client.cookies[SESSION_COOKIE].value
+    with shop_context(asha.shop_id):
+        suspend(asha, by=None, reason="Amekosa kazi siku tatu")
+
+    assert client.post(LOGOUT).status_code == 204
+    assert not Session.objects.filter(session_key=badge).exists()
+
+
+def test_logout_works_on_a_blocked_device(
+    asha: StaffMember, laptop: Device, laptop_key: str, manager: StaffMember
+) -> None:
+    client = logged_in(asha, laptop_key)
+    badge = client.cookies[SESSION_COOKIE].value
+    with shop_context(asha.shop_id):
+        block(laptop, by=manager, reason="Imeibiwa")
+
+    assert client.post(LOGOUT).status_code == 204
+    assert not Session.objects.filter(session_key=badge).exists()
+
+
+def test_logout_needs_csrf(asha: StaffMember, laptop_key: str) -> None:
+    # Without the token, another website could log the shop's laptop out, again and again, in the middle of a sale.
+    client = APIClient(enforce_csrf_checks=True)
+    client.cookies[KEY_COOKIE] = laptop_key
+    client.get(DEVICE_ME)
+    client.post(
+        PIN_LOGIN,
+        {"staff": str(asha.pk), "pin": PIN},
+        format="json",
+        HTTP_X_CSRFTOKEN=client.cookies["csrftoken"].value,
+    )
+    badge = client.cookies[SESSION_COOKIE].value
+
+    answer = client.post(LOGOUT)
+
+    assert (answer.status_code, answer.data["code"]) == (403, "permission_denied")
+    assert Session.objects.filter(session_key=badge).exists()
+
+
+def test_logout_with_no_session_is_fine() -> None:
+    # A second tap, or a badge that had already gone idle: the person wants to be out, and they are.
+    assert APIClient().post(LOGOUT).status_code == 204
+
+
+def test_logout_ends_a_password_session(asha: StaffMember) -> None:
+    # The same route for a person on their own phone: a session is a session.
+    User.objects.filter(pk=asha.user_id).update(phone="+255712345678")
+    user = User.objects.get(pk=asha.user_id)
+    user.set_password("a-long-test-password")
+    user.save()
+    phone = APIClient()
+    phone.get(SESSION)
+    login = phone.post(
+        PASSWORD_LOGIN,
+        {"phone": "+255712345678", "password": "a-long-test-password"},
+        format="json",
+        HTTP_X_CSRFTOKEN=phone.cookies["csrftoken"].value,
+    )
+    assert login.status_code == 200
+    assert phone.get(SIDES).status_code == 200
+
+    assert phone.post(LOGOUT).status_code == 204
+
+    refused = phone.get(SIDES)
+    assert (refused.status_code, refused.data["code"]) == (403, "not_authenticated")

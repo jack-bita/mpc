@@ -21,6 +21,10 @@ And the routes a device calls with its key, built on DeviceView (apps/people/api
     GET  /api/devices/v1/me/        a paired device learns its shop, its name, its code and its home side
     POST /api/auth/pin-login/       someone at a paired device types their PIN, and gets a session (AUTH-4)
 
+And one route that only ends a session, whoever's it is and whatever has happened to them since (AUTH-4):
+
+    POST /api/auth/logout/          this browser's session ends, at once
+
 Thin: each one calls its service (apps/people/services.py), or reads its rows, and answers with its serializer
 (ADR-0015).
 """
@@ -28,16 +32,20 @@ Thin: each one calls its service (apps/people/services.py), or reads its rows, a
 from collections.abc import Callable
 from typing import Any, cast
 
+from django.contrib.auth import logout
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.utils import extend_schema
 from rest_framework import exceptions, mixins
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import BaseThrottle
+from rest_framework.views import APIView
 
 from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin, ShopViewSet
 from apps.core.permissions import Permission
@@ -200,6 +208,25 @@ class PinLoginView(DeviceView):
             raise exceptions.PermissionDenied(str(refused), code=refused.code) from refused
         start_pin_session(request, staff, device, idle_minutes=idle_lock_minutes(staff.shop))
         # Nothing to answer with: the app asks `me` next, as after any login.
+        return Response(status=204)
+
+
+class LogoutView(APIView):
+    # Ends the session this browser holds, at once: the row is deleted on the server, so a copy of its number opens
+    # nothing (03 §5.9). DRF's own session login, not ours: it asks nothing about the person's job or the device, so a
+    # suspended person, or someone on a blocked laptop, can still log out. It still checks the CSRF token, so another
+    # website can't log someone out. With no session, nothing to do, and the same answer. It reads no shop's table
+    # (NOT_SHOP_ROUTES, backend/tests/sweep_lists.py).
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [AllowAny]
+
+    # `auth` names the session's cookie by the name the office routes describe it with (StaffSessionScheme). Left to
+    # read DRF's class, the API's description would meet two different classes under one name, and warn. The library's
+    # type hint says a list of texts, but it copies this value into the description as it stands, and OpenAPI wants
+    # this shape (`manage.py spectacular --validate` agrees): the library's hint, not our value, is what is off.
+    @extend_schema(request=None, responses={204: None}, auth=[{"cookieAuth": []}])  # type: ignore[list-item]
+    def post(self, request: Request) -> Response:
+        logout(request._request)
         return Response(status=204)
 
 
