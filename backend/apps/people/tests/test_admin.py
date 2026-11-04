@@ -8,6 +8,7 @@ logged in as a fake superuser (the `superuser` and `superuser_client` fixtures, 
 from unittest import mock
 
 import pytest
+from allauth.account.models import EmailAddress
 from django.contrib import admin
 from django.contrib.auth.hashers import MD5PasswordHasher
 from django.test import Client, RequestFactory
@@ -31,6 +32,13 @@ def test_admin_login_ignores_email_case(client: Client, superuser: User) -> None
     # A wrong login shows the form again (200); a right one goes on to the admin.
     assert response.status_code == 302
     assert response["Location"] == "/admin/"
+
+
+def test_allauth_table_of_addresses_is_not_in_the_admin(superuser_client: Client) -> None:
+    # allauth's login and reset trust that table, so a row typed there would be a login name for a person, set past the
+    # phone cleaner and the audit trail (PPL-2). Our User holds the email, and the table stays empty.
+    assert not admin.site.is_registered(EmailAddress)
+    assert superuser_client.get("/admin/account/emailaddress/").status_code == 404
 
 
 def hashes_at_the_admin_door(email: str, password: str) -> int:
