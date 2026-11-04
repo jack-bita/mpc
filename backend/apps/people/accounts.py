@@ -6,11 +6,11 @@ guessers. Wherever a project's people differ from its defaults, it asks an adapt
 ACCOUNT_ADAPTER (config/settings/base.py). This file owns ours.
 
 - Nobody signs up. The owner adds people (PPL-2), and sets a first password face to face (AUTH-6).
-- A person logs in by email or by phone. allauth keeps no phones of its own: it asks here for a person's phone, and
-  for the person a phone belongs to, both read from our User, in the one stored form, `+255…` (apps/core/phones.py).
-- No SMS is ever sent. The owner typed each phone, face to face, so every phone counts as confirmed, and allauth's
-  own check by an SMS code is off (ACCOUNT_PHONE_VERIFICATION_ENABLED). The hooks that would send one, or change a
-  person's phone, are allauth's own, which refuse loudly (NotImplementedError): nothing should ever reach them.
+- A person logs in by email or by phone. allauth keeps no phones of its own: it asks here for the person a phone belongs
+  to, read from our User, in the one stored form, `+255…` (apps/core/phones.py).
+- No SMS is ever sent. The owner typed each phone, face to face, so allauth's own check by an SMS code is off
+  (ACCOUNT_PHONE_VERIFICATION_ENABLED). The hooks that would send one, read a person's phone for it, or change that
+  phone are allauth's own, which refuse loudly (NotImplementedError): nothing on our routes reaches them.
 - Guessers are slowed down: allauth counts wrong passwords, 10 a minute per caller and 5 in 5 minutes per person *(its
   defaults)*, in a cache table of their own (`default`, CACHES, config/settings/base.py). What it counts by comes from
   here, and names nobody: a fingerprint of the caller's network, and of the person's login name. Honest limit: a
@@ -21,7 +21,6 @@ ACCOUNT_ADAPTER (config/settings/base.py). This file owns ours.
 from typing import Any
 
 from allauth.account.adapter import DefaultAccountAdapter
-from django.core.exceptions import ValidationError
 from django.http import HttpRequest
 from django.utils.crypto import salted_hmac
 
@@ -47,20 +46,10 @@ class AccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
 
     def get_user_by_phone(self, phone: str) -> User | None:
         # The person this phone belongs to, or None. allauth then checks the password, and that the person is active.
-        # A phone is unique (PPL-1), so there is at most one. A User is no shop's row: read without the shop guard
-        # (ADR-0037), as every login must start before it knows a shop.
-        try:
-            stored = normalise_phone(phone)
-        except ValidationError:
-            return None
-        return User.objects.filter(phone=stored).first()
-
-    def get_phone(self, user: User) -> tuple[str, bool] | None:
-        # A person's phone, and whether it is confirmed: always, since the owner typed it face to face (PPL-2). So
-        # allauth never asks the person to confirm it by an SMS code.
-        if not user.phone:
-            return None
-        return user.phone, True
+        # The phone comes in the form we store: allauth's field has passed it through clean_phone above. A phone is
+        # unique (PPL-1), so there is at most one. A User is no shop's row: read without the shop guard (ADR-0037), as
+        # every login must start before it knows a shop.
+        return User.objects.filter(phone=phone).first()
 
     def get_client_ip(self, request: HttpRequest) -> str:
         # Who allauth's limits count this caller as, and all allauth uses this for here: the same fingerprint of their

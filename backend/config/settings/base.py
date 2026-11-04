@@ -273,7 +273,7 @@ HEADLESS_CLIENTS = ("browser",)
 # (ADR-0038). allauth finds a person by phone through our adapter (apps/people/accounts.py).
 ACCOUNT_LOGIN_METHODS = {"email", "phone"}
 # allauth's check of a phone by an SMS code, off: the owner typed every phone face to face, and an SMS costs money
-# (ADR-0038). Our adapter reports every stored phone as confirmed.
+# (ADR-0038).
 ACCOUNT_PHONE_VERIFICATION_ENABLED = False
 # No username: our User has none (PPL-1).
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
