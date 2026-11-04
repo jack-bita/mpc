@@ -17,10 +17,11 @@ the same ones: the password's and the PIN's (apps/people/api/staff_session.py), 
 A person who has left counts as no job, not as refused: they aren't anyone at that shop now. A suspended person's job
 still counts, so they can be told why they are stopped.
 
-A PIN's badge needs no door and no choice of shop: it names its job, and the server wrote it at login (AUTH-4):
+A PIN's badge names its job, so it needs no choice of shop. Its shop still comes through a door, the device key's, on
+every visit (AUTH-4):
 
-    a badge ──▶ that shop open ──▶ its device and its job, through the guard
-                  not beside its device's key: refused, session.wrong_device
+    a badge + the device's key ──▶ the door: which shop? ──▶ that shop open ──▶ its device and job, through the guard
+                  no key, or not its own shop's or device's: refused, session.wrong_device
                   shop suspended: refused, shop.suspended
                   device blocked: refused, device.blocked
                   person left, or a new PIN since: None, no job
@@ -29,20 +30,18 @@ A PIN's badge needs no door and no choice of shop: it names its job, and the ser
                   ──▶ the staff member
 """
 
-import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from zoneinfo import ZoneInfo
 
 from django.utils import timezone
-from django.utils.crypto import constant_time_compare
 from django.views.decorators.debug import sensitive_variables
 
 from apps.core.settings_registry import IDLE_MINUTES
 from apps.core.tenancy import shop_context
 from apps.people.device_keys import hash_device_key
-from apps.people.login_doors import shops_of_person
+from apps.people.login_doors import shop_of_device_key, shops_of_person
 from apps.people.models import Device, DeviceStatus, StaffMember, StaffStatus, User
 from apps.people.permissions import held_permissions
 from apps.shops.models import Shop, ShopStatus, Side
@@ -127,18 +126,23 @@ def job_of_pin_session(
     """The job a PIN's badge acts in on this visit (03 §5.9); None if it no longer names one; LoginRefused if they may
     not act. Every variable hidden from error reports: `device_key` is the device's key itself. `own_password_needed`:
     False only on the one route someone on a temporary password may still read."""
-    # The badge's own shop, which the server wrote at login: no door needed, and both rows are read through the guard.
-    with shop_context(uuid.UUID(badge["shop"])):
-        device = Device.objects.select_related("shop").filter(pk=badge["device"]).first()
+    # Rule 1: a login finds its shop only through a door. This one reads the shop of the device that holds this key, and
+    # it must be the shop the badge names. First, as it asks who is calling: someone who copied the badge's number, with
+    # no key or another shop's, stops here, with no row read, and is told nothing about the people it names.
+    key_hash = None if device_key is None else hash_device_key(device_key)
+    shop_id = None if key_hash is None else shop_of_device_key(key_hash)
+    if shop_id is None or str(shop_id) != badge["shop"]:
+        raise LoginRefused("This session belongs to another device.", code="session.wrong_device")
+    with shop_context(shop_id):
+        # The key's own device, and it must be the badge's: another laptop of the same shop got this far too.
+        device = Device.objects.select_related("shop").filter(pk=badge["device"], key_hash=key_hash).first()
         staff = (
             StaffMember.objects.select_related("shop")
             .filter(pk=badge["staff"], user=user)
             .exclude(status=StaffStatus.LEFT)
             .first()
         )
-    # First, as it asks who is calling: someone who copied the badge's number is told nothing about the people it names.
-    # Compared in constant time, as a key's hash is a secret of the device's.
-    if device is None or device_key is None or not constant_time_compare(hash_device_key(device_key), device.key_hash):
+    if device is None:
         raise LoginRefused("This session belongs to another device.", code="session.wrong_device")
     check_shop_active(device.shop)
     if device.status != DeviceStatus.ACTIVE:

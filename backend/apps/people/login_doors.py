@@ -9,8 +9,8 @@ refuse, so this file is on the sweep's HAND_BUILT_QUERIES (backend/tests/sweep_l
 pins that each door reads a shop's id alone (apps/people/tests/test_device_authentication.py,
 apps/people/tests/test_staff_session.py).
 
-Two doors: a device's key (AUTH-2), and a person logged in with a password (AUTH-3), who is known by their session
-but belongs to no shop until their job is found.
+Two doors: a device's key (AUTH-2), which a PIN's session goes through on every visit too (AUTH-4), and a person logged
+in with a password (AUTH-3), who is known by their session but belongs to no shop until their job is found.
 """
 
 import uuid

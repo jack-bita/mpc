@@ -227,6 +227,29 @@ def test_session_copied_to_another_device_is_refused(
         assert (answer.status_code, answer.data["code"]) == (403, "session.wrong_device")
 
 
+def test_badge_beside_another_shops_key_is_refused(
+    asha: StaffMember, laptop_key: str, staff_b: StaffMember, side_b: Side, give_role: GiveRole
+) -> None:
+    # Rule 1: the visit's shop comes through the device key's door, and must be the one the badge names. No row of
+    # either shop is read for this answer, so a mismatch can't show anything of shop A's to shop B's device, or back.
+    client = logged_in(asha, laptop_key)
+    give_role(staff_b, RoleTemplate.MANAGER, None)
+    _, key_b = pair(staff_b, side_b, "Simu ya Jingine")
+
+    thief = APIClient()
+    thief.cookies[SESSION_COOKIE] = client.cookies[SESSION_COOKIE].value
+    thief.cookies[KEY_COOKIE] = key_b
+    with (
+        mock.patch("apps.people.selectors.Device") as device_table,
+        mock.patch("apps.people.selectors.StaffMember") as job_table,
+    ):
+        answer = thief.get(SIDES)
+
+    assert (answer.status_code, answer.data["code"]) == (403, "session.wrong_device")
+    device_table.objects.select_related.assert_not_called()
+    job_table.objects.select_related.assert_not_called()
+
+
 def test_idle_session_ends(asha: StaffMember, laptop_key: str) -> None:
     # The end of the idle time, as the server's own row holds it: a copy of the cookie can't outlive it.
     client = logged_in(asha, laptop_key)
