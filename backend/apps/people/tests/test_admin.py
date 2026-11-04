@@ -5,6 +5,7 @@ before any office screen exists. These tests drive it like a browser would, thro
 logged in as a fake superuser (the `superuser` and `superuser_client` fixtures, in backend/conftest.py).
 """
 
+from collections.abc import Callable
 from unittest import mock
 
 import pytest
@@ -13,14 +14,21 @@ from django.contrib import admin
 from django.contrib.auth.hashers import MD5PasswordHasher
 from django.test import Client, RequestFactory
 
-from apps.people.models import User
+from apps.core.permissions import RoleTemplate
+from apps.core.tenancy import shop_context
+from apps.people.models import StaffMember, User
+from apps.people.services import add_staff
+from apps.shops.models import Shop, Side
 
 pytestmark = pytest.mark.django_db
 
 USERS = "/admin/people/user/"
+LOGIN = "/_allauth/browser/v1/auth/login"
 # The password the `superuser` fixture is made with (backend/conftest.py). If the two ever differ, the
 # login test below fails, so they can't drift apart unnoticed.
 PASSWORD = "a-long-test-password"
+NEW_PASSWORD = "mbolea-ya-kupandia-2027"
+PHONE = "+255712345678"
 
 
 def test_admin_login_ignores_email_case(client: Client, superuser: User) -> None:
@@ -85,6 +93,103 @@ def test_admin_adds_a_worker_with_phone_only(superuser_client: Client, typed: st
     assert juma.phone == "+255712345678"  # cleaned by the same field and rules as in create_user
     assert juma.email is None
     assert not juma.has_usable_password()
+
+
+def reset_in_the_admin(client: Client, person: User, password: str = NEW_PASSWORD) -> None:
+    # The admin's page for a person's password, as the superuser fills it in.
+    sent = {"password1": password, "password2": password, "usable_password": "true"}
+    response = client.post(f"{USERS}{person.pk}/password/", sent)
+    assert response.status_code == 302  # saved, and sent on to the next page
+
+
+def test_superuser_resets_the_owners_password(
+    superuser_client: Client, shop_a: Shop, give_role: Callable[[StaffMember, RoleTemplate, Side | None], None]
+) -> None:
+    # Nobody at the shop may reset the owner's (set_temporary_password), so he comes to the superuser, who types one and
+    # tells him. He logs in with it, and must choose his own, so the superuser doesn't go on knowing it (ADR-0038).
+    baba = User.objects.create_user(full_name="Baba Mfano", phone=PHONE, password=PASSWORD)
+    with shop_context(shop_a):
+        staff = add_staff(shop=shop_a, user=baba, display_name="Baba", by=None)
+    give_role(staff, RoleTemplate.OWNER, None)
+
+    reset_in_the_admin(superuser_client, baba)
+
+    phone = Client()
+    login = {"phone": PHONE, "password": NEW_PASSWORD}
+    assert phone.post(LOGIN, login, content_type="application/json").status_code == 200
+    answer = phone.get("/api/v1/shops/sides/")
+    assert (answer.status_code, answer.json()["code"]) == (403, "password.must_change")
+
+
+def test_admin_reset_sets_the_mark(superuser_client: Client) -> None:
+    juma = User.objects.create_user(full_name="Juma Demo", phone=PHONE, password=PASSWORD)
+    reset_in_the_admin(superuser_client, juma)
+    juma.refresh_from_db()
+    assert juma.check_password(NEW_PASSWORD)
+    assert juma.must_change_password is True
+
+
+def test_admin_first_password_sets_the_mark(superuser_client: Client) -> None:
+    # "First or forgotten" (ADR-0038): a new owner's first password is typed here too, until PPL-4's screen, and it is
+    # no more their own than a reset one.
+    response = superuser_client.post(
+        f"{USERS}add/",
+        {
+            "full_name": "Baba Mfano",
+            "phone": PHONE,
+            "email": "",
+            "language": "sw",
+            "usable_password": "true",
+            "password1": NEW_PASSWORD,
+            "password2": NEW_PASSWORD,
+        },
+    )
+    assert response.status_code == 302
+    baba = User.objects.get(full_name="Baba Mfano")
+    assert baba.check_password(NEW_PASSWORD)
+    assert baba.must_change_password is True
+
+
+def test_admin_adding_with_no_password_sets_no_mark(superuser_client: Client) -> None:
+    # A PIN-only worker has no password to change, and the mark would say otherwise.
+    sent = {"full_name": "Juma Demo", "phone": PHONE, "email": "", "language": "sw", "usable_password": "false"}
+    assert superuser_client.post(f"{USERS}add/", sent).status_code == 302
+    assert User.objects.get(full_name="Juma Demo").must_change_password is False
+
+
+def test_admin_disabling_a_password_clears_the_mark(superuser_client: Client) -> None:
+    # No password at all now, so nothing left to replace. "unset-password" is the name of Django's own button.
+    juma = User.objects.create_user(full_name="Juma Demo", phone=PHONE, password=PASSWORD)
+    User.objects.filter(pk=juma.pk).update(must_change_password=True)
+    sent = {"usable_password": "false", "unset-password": "1"}
+    assert superuser_client.post(f"{USERS}{juma.pk}/password/", sent).status_code == 302
+    juma.refresh_from_db()
+    assert not juma.has_usable_password()
+    assert juma.must_change_password is False
+
+
+def test_admin_reset_lifts_the_wrong_password_count(superuser_client: Client) -> None:
+    # He came to the superuser because he kept typing it wrong: the limit stops him, and the new one must work at once.
+    baba = User.objects.create_user(full_name="Baba Mfano", phone=PHONE, password=PASSWORD)
+    wrong = {"phone": PHONE, "password": "not-the-password"}
+    for _ in range(5):
+        Client().post(LOGIN, wrong, content_type="application/json")
+    right = {"phone": PHONE, "password": PASSWORD}
+    assert Client().post(LOGIN, right, content_type="application/json").status_code == 400
+
+    reset_in_the_admin(superuser_client, baba)
+
+    new = {"phone": PHONE, "password": NEW_PASSWORD}
+    assert Client().post(LOGIN, new, content_type="application/json").status_code == 200
+
+
+def test_admin_shows_the_mark_read_only(superuser_client: Client) -> None:
+    # The superuser sees whether a person has chosen their own yet, and can't tick it off for them: that would leave a
+    # password someone else knows, with nothing to show for it.
+    juma = User.objects.create_user(full_name="Juma Demo")
+    response = superuser_client.get(f"{USERS}{juma.pk}/change/")
+    assert "must_change_password" in response.context["adminform"].readonly_fields
+    assert "must_change_password" not in response.context["adminform"].form.fields
 
 
 def test_admin_shows_id_read_only(superuser_client: Client) -> None:
