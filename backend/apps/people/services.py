@@ -272,14 +272,18 @@ def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember
     # write below. make_password, not user.set_password: that keeps the typed password on the row in memory until save.
     encoded = make_password(password)
     with transaction.atomic():
-        # Her job, the job of the one acting, and her person, read again and locked. A role given to her, a leaving
-        # recorded, or a suspension of the one acting, at this same moment, comes first and is seen here, or waits until
-        # this is done: the hash above left plenty of time for one. In id order, so two people each setting the other's
-        # password at once take turns, and never wait for each other for good.
-        rows = StaffMember.objects.select_for_update().filter(pk__in=[staff.pk, by.pk]).order_by("pk")
+        # Her job and the job of the one acting, read again and locked. A role given to her, a leaving recorded, or a
+        # suspension of the one acting, at this same moment, comes first and is seen here, or waits until this is done:
+        # the hash above left plenty of time for one. In id order, so two people each setting the other's password at
+        # once take turns. no_key: a row another transaction links to needs a light lock at that transaction's commit,
+        # and a full lock here would block it, while this waits for that same transaction: Baba giving Juma a key while
+        # setting his password would deadlock, and one request would answer a server error.
+        rows = StaffMember.objects.select_for_update(no_key=True).filter(pk__in=[staff.pk, by.pk]).order_by("pk")
         jobs = {job.pk: job for job in rows}
         staff, by = jobs[staff.pk], jobs[by.pk]
-        user = User.objects.select_for_update().get(pk=staff.user_id)
+        # Her person, read afresh. Not locked: everything that decides who may hangs on the jobs locked above, and the
+        # write below names only its own two columns.
+        user = User.objects.get(pk=staff.user_id)
         _check_may_set_password(staff, user, by=by)
         was_marked = user.must_change_password
         # Past AccountAdapter.set_password, which is for a person choosing their own, and takes the mark off.

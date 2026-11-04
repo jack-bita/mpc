@@ -470,6 +470,23 @@ def test_a_suspension_on_its_way_is_waited_for(shop_a: Shop, meneja: StaffMember
     assert_unchanged(juma)
 
 
+@pytest.mark.django_db(transaction=True)
+def test_a_key_given_at_the_same_moment_causes_no_deadlock(shop_a: Shop, baba: StaffMember) -> None:
+    # Baba gives Juma a key while another of his requests sets Juma's password. The grant holds Juma's row, and at its
+    # commit PostgreSQL checks its link to Baba's row, which needs a light lock on that row. If setting the password
+    # held Baba's row with a full lock while waiting for Juma's, each would wait for the other: PostgreSQL would kill
+    # one after a second, and that request would answer a server error. Baba's id is the lower, as he was added first,
+    # so his row is locked first (the order this needs). Both must simply take turns.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    with shop_context(shop_a), transaction.atomic():
+        grant_permission(juma, Permission.STOCK_COUNT, side=None, by=baba)
+        second, ended = in_another_transaction(lambda: set_for(juma, by=baba))
+        wait_until_someone_waits_for_me()
+    second.join(timeout=5)
+    assert ended == [None]
+    assert User.objects.get(pk=juma.user_id).must_change_password is True
+
+
 def test_a_refused_try_pays_for_no_hash(baba: StaffMember, meneja: StaffMember) -> None:
     # The hash takes 19 MiB of the demo's 512 MB (apps/people/hashers.py), and this route has no limit: only someone who
     # holds the key can reach it, and they must not be able to waste it on tries that are refused anyway.
