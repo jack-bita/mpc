@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.14 · 3 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.15 · 4 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -33,6 +33,8 @@
 **Changes in v1.12** (30 Oct 2026, AUTH-2): a choice by Jack, made while planning AUTH-2. A pairing request holds the hash of the device's key only while it waits: confirming moves it to the `Device`, so the hash lives in one place at a time, and no path leads from a key through a request to a device of some shop past the guard (§5). A device's `last_seen_at` moves at most every 5 minutes, and never fills the edit history (§5). Marked **(v1.12)**.
 
 **Changes in v1.14** (3 Nov 2026, AUTH-3): a choice by Jack, made while planning AUTH-3. A password user needs no email: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link (§5; ADR-0038, which supersedes ADR-0017). Marked **(v1.14)**.
+
+**Changes in v1.15** (4 Nov 2026, AUTH-6): a choice by Jack, made while planning AUTH-6. A person has a "must change password" mark, on while their password is one someone else typed. The owner may set a temporary password, or a manager the owner has handed `staff.manage`, under the giver rule: for someone who holds no key the setter lacks, and never for the owner (§5). Marked **(v1.15)**.
 
 ---
 
@@ -195,7 +197,7 @@ A full diagram for GitHub is in Appendix A.
 ## 5. People & access — module `people`
 
 **User** [R1] — one human, across shops (D12). Global.
-- `full_name`, `phone` (optional, unique, +255…), `email` (optional, for password users too: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link through django-allauth **(v1.14)**), `password` (optional: only for people who log in from their own phone), `language`
+- `full_name`, `phone` (optional, unique, +255…), `email` (optional, for password users too: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link through django-allauth **(v1.14)**), `password` (optional: only for people who log in from their own phone), `must_change_password` (on while the password is one someone else typed: the person reaches no office screen until they choose their own **(v1.15)**), `language`
 
 **StaffMember** [R1] → Shop, User — a person's job at one shop.
 - `display_name`, `photo` (optional: without one, the PIN login screen shows the full name in large letters with the nickname under it) **(v1.4)**, `pin` (hashed), `job_title`, `started_on`, `left_on`
@@ -212,6 +214,8 @@ A full diagram for GitHub is in Appendix A.
 **PermissionGrant** [R1] → StaffMember — one extra `permission` for one person, optionally on one `side`. Given once per side, as a role is, and never to someone who has left; a suspended person may still be given a role or a permission, which counts once they are brought back **(v1.10)**.
 
 **Who may give** a role or a permission **(v1.10)**: someone with `staff.manage` on that side, and only codes they hold there themselves, so a manager handed `staff.manage` to add a loader can't make himself Owner (Jack, PPL-3). The system or the superuser sets up a shop's first owner.
+
+**Who may set a temporary password** **(v1.15)**: whoever sets a person's password can log in as them, so this is the giver rule for a whole person (Jack, AUTH-6). Someone with `staff.manage` on the whole shop: the owner, or a manager the owner has handed that key. Only for someone who holds no key the setter lacks, side by side, counting everything they were given even while suspended. Never for themselves, who change their own with the current password. Only the superuser, in the admin, for an owner, for someone with a current job at another shop, or for someone who can open the admin.
 
 **What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again.
 
