@@ -183,6 +183,40 @@ def test_admin_reset_lifts_the_wrong_password_count(superuser_client: Client) ->
     assert Client().post(LOGIN, new, content_type="application/json").status_code == 200
 
 
+def test_admin_takes_the_spaces_off_a_password(superuser_client: Client) -> None:
+    # Django's admin forms keep spaces around a password, and allauth's login takes them off what is typed, so one
+    # stored with them could never log in. Tried through the real login.
+    baba = User.objects.create_user(full_name="Baba Mfano", phone=PHONE, password=PASSWORD)
+    reset_in_the_admin(superuser_client, baba, f" {NEW_PASSWORD} ")
+    login = {"phone": PHONE, "password": NEW_PASSWORD}
+    assert Client().post(LOGIN, login, content_type="application/json").status_code == 200
+
+
+def test_admin_first_password_loses_its_spaces_too(superuser_client: Client) -> None:
+    sent = {
+        "full_name": "Baba Mfano",
+        "phone": PHONE,
+        "email": "",
+        "language": "sw",
+        "usable_password": "true",
+        "password1": f"{NEW_PASSWORD} ",
+        "password2": f"{NEW_PASSWORD} ",
+    }
+    assert superuser_client.post(f"{USERS}add/", sent).status_code == 302
+    login = {"phone": PHONE, "password": NEW_PASSWORD}
+    assert Client().post(LOGIN, login, content_type="application/json").status_code == 200
+
+
+def test_admin_refuses_a_password_of_only_spaces(superuser_client: Client) -> None:
+    # Nothing is left of it once the spaces are off. 200: the form again, with its error, and nothing saved.
+    baba = User.objects.create_user(full_name="Baba Mfano", phone=PHONE, password=PASSWORD)
+    sent = {"password1": " " * 12, "password2": " " * 12, "usable_password": "true"}
+    assert superuser_client.post(f"{USERS}{baba.pk}/password/", sent).status_code == 200
+    baba.refresh_from_db()
+    assert baba.check_password(PASSWORD)
+    assert baba.must_change_password is False
+
+
 def test_admin_shows_the_mark_read_only(superuser_client: Client) -> None:
     # The superuser sees whether a person has chosen their own yet, and can't tick it off for them: that would leave a
     # password someone else knows, with nothing to show for it.

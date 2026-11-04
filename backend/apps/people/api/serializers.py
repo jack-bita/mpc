@@ -73,9 +73,10 @@ class DeviceReasonSerializer(serializers.Serializer[Any]):
 class TemporaryPasswordSerializer(serializers.Serializer[Any]):
     # What the owner sends to set a person's temporary password (AUTH-6, ADR-0038). Only ever read in: the route answers
     # with nothing, and nothing shows a password back.
-    # trim_whitespace off: the password is what was typed, or the phrase she was told wouldn't log her in. 128
-    # characters at most, so a huge one can't be sent to the slow hash. What makes a good password is the service's.
-    password = serializers.CharField(max_length=128, trim_whitespace=False, write_only=True)
+    # DRF takes the spaces off both ends, as allauth's login does with what is typed, and refuses one of only spaces: a
+    # password stored with them could never log in. 128 characters at most, so a huge one can't be sent to the slow
+    # hash. What makes a good password is the service's.
+    password = serializers.CharField(max_length=128, write_only=True)
     # Why, kept in its audit line with who and when (T3). A blank reason is let through, so the service refuses it with
     # its own code, staff.reason_required. 500 characters at most, as the audit line keeps (control.AuditEvent).
     reason = serializers.CharField(max_length=500, allow_blank=True, write_only=True)

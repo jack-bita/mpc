@@ -301,6 +301,21 @@ def test_temporary_password_goes_through_the_checker(
     assert_unchanged(asha)
 
 
+def test_spaces_around_a_password_are_taken_off(baba: StaffMember, asha: StaffMember) -> None:
+    # The service's own rule, for whichever caller comes: allauth's login takes them off what is typed, so a password
+    # stored with them could never log in.
+    set_for(asha, by=baba, password=f" {TEMPORARY} ")
+    assert log_in(phone=PHONE, password=TEMPORARY)[0] == 200
+
+
+def test_a_password_of_only_spaces_is_too_short(baba: StaffMember, asha: StaffMember) -> None:
+    # Twelve spaces are nothing at all, once they are off.
+    with pytest.raises(ValidationError) as refused:
+        set_for(asha, by=baba, password=" " * 12)
+    assert "password_too_short" in [error.code for error in refused.value.error_dict["password"]]
+    assert_unchanged(asha)
+
+
 @pytest.mark.parametrize("reason", ["", "   "])
 def test_a_reason_is_needed(baba: StaffMember, asha: StaffMember, reason: str) -> None:
     # T3: every action in the audit trail says why.

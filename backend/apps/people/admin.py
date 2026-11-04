@@ -32,6 +32,16 @@ class PasswordTypedHereIsTemporary:
     # this method, on Django's own, in the classes below.
     cleaned_data: dict[str, Any]
 
+    def clean(self) -> dict[str, Any]:
+        # Django's admin forms keep the spaces around a password, and allauth's login takes them off what is typed, so a
+        # password stored with them could never log in. Taken off first, so Django's checks judge what will be stored:
+        # twelve spaces leave nothing, which it refuses as required. mypy reads this class alone, as below.
+        for field in ("password1", "password2"):
+            if self.cleaned_data.get(field):
+                self.cleaned_data[field] = self.cleaned_data[field].strip()
+        cleaned: dict[str, Any] = super().clean()  # type: ignore[misc]
+        return cleaned
+
     def set_password_and_save(self, user: User, commit: bool = True, **kwargs: Any) -> User:
         # Django's switch: "Disabled" means no password at all, so nothing is left to replace, and the mark would say
         # otherwise. On the row before Django's one save, so the password and the mark are written together.

@@ -252,6 +252,10 @@ def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember
     _check_reason(reason)
     # The key first, before the password is even looked at, as confirm_pairing asks its own (PermissionDenied, 403).
     require(by, Permission.STAFF_MANAGE, None)
+    # allauth's login takes the spaces off both ends of what is typed. A password stored with them could never match, so
+    # she would use up her five tries on what Baba's keyboard added. Taken off before the checks, so they judge what
+    # will really be stored: twelve spaces are nothing at all.
+    password = password.strip()
     try:
         # Like any other password: it opens a real login until she replaces it. It reads her name and phone, as a
         # password too like them is refused.

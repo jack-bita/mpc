@@ -136,12 +136,30 @@ def test_refused_password_is_not_in_the_answer(baba: StaffMember, asha: StaffMem
     assert_unchanged(asha)
 
 
-def test_spaces_in_a_password_are_kept(baba: StaffMember, asha: StaffMember) -> None:
-    # DRF trims a text field by default, so what the owner typed and what is stored would differ, and the phrase she was
-    # told wouldn't log her in.
-    with_spaces = f" {TEMPORARY} "
-    assert send(logged_in(BABA_PHONE), asha, password=with_spaces, reason="Amesahau").status_code == 204
-    assert User.objects.get(pk=asha.user_id).check_password(with_spaces)
+@pytest.mark.parametrize("typed", [f"{TEMPORARY} ", f" {TEMPORARY}", f"{TEMPORARY}\n"])
+def test_spaces_around_a_password_still_log_in(baba: StaffMember, asha: StaffMember, typed: str) -> None:
+    # A phone's keyboard adds a space after a word. allauth's login takes the spaces off what is typed, so a password
+    # stored with one could never match, whatever Asha typed: she would use up her five tries. Tried through the real
+    # login, as a look at the stored hash alone once passed with exactly this bug.
+    assert send(logged_in(BABA_PHONE), asha, password=typed, reason="Amesahau").status_code == 204
+    # As she was told it, and as Baba's keyboard wrote it.
+    logged_in(ASHA_PHONE, TEMPORARY)
+    logged_in(ASHA_PHONE, typed)
+
+
+def test_spaces_inside_a_password_are_kept(baba: StaffMember, asha: StaffMember) -> None:
+    # A phrase is a good password, and allauth's login leaves its inner spaces alone too.
+    phrase = "mbolea ya kupandia 2027"
+    assert send(logged_in(BABA_PHONE), asha, password=phrase, reason="Amesahau").status_code == 204
+    logged_in(ASHA_PHONE, phrase)
+
+
+def test_a_password_of_only_spaces_is_refused(baba: StaffMember, asha: StaffMember) -> None:
+    # Twelve spaces would pass a length check and leave nothing at the login.
+    answer = send(logged_in(BABA_PHONE), asha, password=" " * 12, reason="Amesahau")
+    assert answer.status_code == 400
+    assert answer.json()["fields"]["password"] == ["blank"]
+    assert_unchanged(asha)
 
 
 def test_a_reason_is_needed(baba: StaffMember, asha: StaffMember) -> None:
