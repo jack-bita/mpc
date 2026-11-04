@@ -8,8 +8,10 @@ who may put it on, and how, is in test_temporary_password.py. Fake data only: th
 """
 
 from collections.abc import Callable
+from unittest import mock
 
 import pytest
+from django.views.debug import ExceptionReporter
 from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
@@ -32,6 +34,7 @@ SIDES = "/api/v1/shops/sides/"
 PHONE = "+255712345678"
 TEMPORARY = "mbegu-za-mahindi-2026"
 OWN = "mbolea-ya-kupandia-2027"
+TEST_CLIENT_FILES = ("django/test/client.py", "rest_framework/test.py", "test_password_change.py")
 
 
 @pytest.fixture
@@ -160,6 +163,21 @@ def test_change_is_slowed_down(asha: StaffMember, phone: APIClient) -> None:
         assert change(phone, current_password="not-the-password", new_password=OWN)[0] == 400
     assert change(phone, current_password=TEMPORARY, new_password=OWN)[0] == 429
     assert mark_of(asha) is True
+
+
+def test_passwords_stay_out_of_error_reports(asha: StaffMember, phone: APIClient) -> None:
+    # A crash anywhere below this route lists every function's variables in Django's error report, allauth's own frames
+    # included, which hold what was sent. Hidden at the route (apps/people/api/password_urls.py).
+    token = csrf_token(phone)
+    crashing = mock.patch.object(User, "check_password", side_effect=MemoryError("out of memory"))
+    with crashing, pytest.raises(MemoryError) as crash:
+        phone.post(CHANGE, {"current_password": TEMPORARY, "new_password": OWN}, HTTP_X_CSRFTOKEN=token)
+    frames = ExceptionReporter(None, crash.type, crash.value, crash.tb).get_traceback_frames()
+    # Only the server's frames: the test client's own hold what this test sent.
+    on_the_server = [frame for frame in frames if not frame["filename"].endswith(TEST_CLIENT_FILES)]
+    shown = [str(value) for frame in on_the_server for _, value in frame["vars"]]
+    assert shown
+    assert not [value for value in shown if TEMPORARY in value or OWN in value]
 
 
 def test_a_change_with_no_mark_is_an_ordinary_change(asha: StaffMember, phone: APIClient) -> None:

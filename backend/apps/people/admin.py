@@ -16,6 +16,7 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import AdminPasswordChangeForm, AdminUserCreationForm, UserChangeForm
 from django.core.exceptions import ValidationError
 from django.http import HttpRequest
+from django.views.decorators.debug import sensitive_variables
 
 from apps.people.accounts import lift_wrong_password_count
 from apps.people.models import User
@@ -40,15 +41,19 @@ class PasswordTypedHereIsTemporary:
     # The superuser knows any password typed for someone else here: a new owner's first one, or the owner's forgotten
     # one, which nobody at the shop may reset (ADR-0038). So the person must choose their own at the next login, as with
     # a temporary one the owner sets (set_temporary_password, apps/people/services.py). The add form, and the password
-    # page reached from a person's row, both save through this method, on Django's own, in the classes below.
+    # page reached from a person's row, both save through this method, on Django's own, in the classes below. Every
+    # variable in these methods, and in what they call, shows as stars in Django's error reports, as the library at the
+    # bottom of the hash names the password `secret`.
     cleaned_data: dict[str, Any]
 
+    @sensitive_variables()
     def clean(self) -> dict[str, Any]:
         _take_off_spaces(self.cleaned_data, "password1", "password2")
         # mypy reads this class alone, with no parent to call: the forms below give it one.
         cleaned: dict[str, Any] = super().clean()  # type: ignore[misc]
         return cleaned
 
+    @sensitive_variables()
     def set_password_and_save(self, user: User, commit: bool = True, **kwargs: Any) -> User:
         # Django's switch: "Disabled" means no password at all, so nothing is left to replace, and the mark would say
         # otherwise. On the row before Django's one save, so the password and the mark are written together.
@@ -77,7 +82,8 @@ class ChooseOwnPasswordForm(OwnPasswordForm):
     # Django's own page where someone who can open the admin changes their own password (/admin/password_change/). The
     # one password form here that is not typed for someone else, so it follows the rules of choosing one's own, as
     # allauth's change route does (AccountAdapter, apps/people/accounts.py): never the temporary one, and the mark comes
-    # off.
+    # off. Its variables are hidden from error reports, as above.
+    @sensitive_variables()
     def clean(self) -> dict[str, Any] | None:
         _take_off_spaces(self.cleaned_data, "new_password1", "new_password2")
         cleaned = super().clean()
@@ -89,6 +95,7 @@ class ChooseOwnPasswordForm(OwnPasswordForm):
             self.add_error("new_password1", refused)
         return cleaned
 
+    @sensitive_variables()
     def save(self, commit: bool = True) -> User:
         # In Django's one save with the new password: never one without the other.
         self.user.must_change_password = False

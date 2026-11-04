@@ -22,6 +22,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.test import Client, RequestFactory
+from django.views.debug import ExceptionReporter
 
 from apps.people.accounts import AccountAdapter
 from apps.people.api import password_urls
@@ -36,6 +37,7 @@ SESSION = "/_allauth/browser/v1/auth/session"
 SIGNUP = "/_allauth/browser/v1/auth/signup"
 
 PASSWORD = "mbegu-za-mahindi-2026"
+TEST_CLIENT_FILES = ("django/test/client.py", "test_password_login.py")
 
 
 @pytest.fixture
@@ -230,6 +232,29 @@ def test_only_the_routes_on_our_list_are_mounted() -> None:
         "password-reset",
         "password-change",
     }
+
+
+def test_every_password_route_hides_its_variables() -> None:
+    # Each of these holds a password in allauth's own frames, which a crash would list in Django's error report. So each
+    # is wrapped at the route, and everything below it is hidden: the marker is the wrapper's own name (Django's
+    # sensitive_variables, apps/people/api/password_urls.py). A route added to the list must be wrapped too.
+    for route in password_urls.urlpatterns:
+        assert route.callback.__code__.co_name == "sensitive_variables_wrapper", route.name
+
+
+def test_login_keeps_the_password_out_of_error_reports(manager: User) -> None:
+    # A crash at the login itself, where a password is on its way to the hash, and it could be a temporary one. Django's
+    # authenticate() hides only `credentials`, by name, and the nearest rule wins, so the route's own wrapper doesn't
+    # reach here: the checker needs its own (PasswordBackend, apps/people/accounts.py).
+    crashing = mock.patch.object(User, "check_password", side_effect=MemoryError("out of memory"))
+    with crashing, pytest.raises(MemoryError) as crash:
+        log_in(Client(), email="meneja@example.com", password=PASSWORD)
+    frames = ExceptionReporter(None, crash.type, crash.value, crash.tb).get_traceback_frames()
+    # Only the server's frames: the test client's own hold what this test sent.
+    on_the_server = [frame for frame in frames if not frame["filename"].endswith(TEST_CLIENT_FILES)]
+    shown = [str(value) for frame in on_the_server for _, value in frame["vars"]]
+    assert shown
+    assert not [value for value in shown if PASSWORD in value]
 
 
 def test_switched_off_person_cannot_log_in(manager: User) -> None:

@@ -243,6 +243,23 @@ def test_route_shows_nothing_to_a_read(baba: StaffMember, asha: StaffMember) -> 
     assert logged_in(BABA_PHONE).get(route(asha)).status_code == 405
 
 
+def test_password_stays_out_when_the_hash_itself_fails(baba: StaffMember, asha: StaffMember) -> None:
+    # Hiding a variable by its name isn't enough here: the library underneath gives the password its own name, `secret`,
+    # and running out of memory in the hash is the likeliest crash on the demo's 512 MB. So every variable is hidden, in
+    # the route and the service, and in everything they call.
+    client = logged_in(BABA_PHONE)
+    token = csrf_token(client)
+    crashing = mock.patch("apps.people.services.make_password", side_effect=MemoryError("out of memory"))
+    with crashing, pytest.raises(MemoryError) as crash:
+        client.post(route(asha), {"password": TEMPORARY, "reason": "Amesahau"}, HTTP_X_CSRFTOKEN=token)
+    frames = ExceptionReporter(None, crash.type, crash.value, crash.tb).get_traceback_frames()
+    on_the_server = [frame for frame in frames if not frame["filename"].endswith(TEST_CLIENT_FILES)]
+    shown = [
+        (frame["function"], name) for frame in on_the_server for name, value in frame["vars"] if TEMPORARY in str(value)
+    ]
+    assert shown == []
+
+
 def test_password_stays_out_of_error_reports(baba: StaffMember, asha: StaffMember) -> None:
     # A crash in the visit lists every function's variables in Django's error report, which a server with DEBUG off logs
     # and sends. The route holds what was sent while it calls the service, so a crash inside the service, after the

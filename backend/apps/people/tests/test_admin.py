@@ -13,6 +13,7 @@ from allauth.account.models import EmailAddress
 from django.contrib import admin
 from django.contrib.auth.hashers import MD5PasswordHasher
 from django.test import Client, RequestFactory
+from django.views.debug import ExceptionReporter
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
@@ -29,6 +30,7 @@ LOGIN = "/_allauth/browser/v1/auth/login"
 PASSWORD = "a-long-test-password"
 NEW_PASSWORD = "mbolea-ya-kupandia-2027"
 PHONE = "+255712345678"
+TEST_CLIENT_FILES = ("django/test/client.py", "test_admin.py")
 
 
 def test_admin_login_ignores_email_case(client: Client, superuser: User) -> None:
@@ -254,6 +256,30 @@ def test_own_password_page_lifts_the_wrong_password_count(superuser_client: Clie
     assert change_own_password(superuser_client, NEW_PASSWORD) == 302
     login = {"email": "admin@example.com", "password": NEW_PASSWORD}
     assert Client().post(LOGIN, login, content_type="application/json").status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("page", "sent"),
+    [
+        ("reset", {"password1": NEW_PASSWORD, "password2": NEW_PASSWORD, "usable_password": "true"}),
+        ("own", {"old_password": PASSWORD, "new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD}),
+    ],
+)
+def test_admin_keeps_a_password_out_of_error_reports(
+    superuser_client: Client, superuser: User, page: str, sent: dict[str, str]
+) -> None:
+    # The hash can run out of memory, and the library underneath names the password `secret`. Hidden from the forms'
+    # save down (PasswordTypedHereIsTemporary, ChooseOwnPasswordForm).
+    address = f"{USERS}{superuser.pk}/password/" if page == "reset" else "/admin/password_change/"
+    crashing = mock.patch("django.contrib.auth.base_user.make_password", side_effect=MemoryError("out of memory"))
+    with crashing, pytest.raises(MemoryError) as crash:
+        superuser_client.post(address, sent)
+    frames = ExceptionReporter(None, crash.type, crash.value, crash.tb).get_traceback_frames()
+    # Only the server's frames: the test client's own hold what this test sent.
+    on_the_server = [frame for frame in frames if not frame["filename"].endswith(TEST_CLIENT_FILES)]
+    shown = [str(value) for frame in on_the_server for _, value in frame["vars"]]
+    assert shown
+    assert not [value for value in shown if NEW_PASSWORD in value]
 
 
 def test_admin_shows_the_mark_read_only(superuser_client: Client) -> None:

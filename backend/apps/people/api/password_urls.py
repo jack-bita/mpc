@@ -33,7 +33,8 @@ from allauth.headless.account.views import (
     SessionView,
 )
 from allauth.headless.constants import Client
-from django.urls import path
+from django.urls import URLPattern, path
+from django.views.decorators.debug import sensitive_variables
 
 
 # allauth ships no types, so mypy knows both base classes below only as `Any`, and strict mode refuses a class built on
@@ -54,14 +55,20 @@ class ChangeOwnPasswordView(ChangePasswordView):  # type: ignore[misc]
     input_class = ChangeOwnPasswordInput
 
 
+def _route(address: str, view: Any, name: str) -> URLPattern:
+    # allauth's view for the browser, with every variable hidden from Django's error reports, here and in everything it
+    # calls: a server with DEBUG off logs and sends those reports, which list each function's variables when something
+    # fails. Wrapped at the route, as allauth's own frames hold what was sent, and the library at the bottom of the hash
+    # names the password `secret`, so hiding one by its name wouldn't do. A crash here shows its lines, only not its
+    # values. The login's checker needs its own wrapper (PasswordBackend, apps/people/accounts.py).
+    route: URLPattern = path(address, sensitive_variables()(view.as_api_view(client=Client.BROWSER)), name=name)
+    return route
+
+
 urlpatterns = [
-    path("auth/session", SessionView.as_api_view(client=Client.BROWSER), name="password-session"),
-    path("auth/login", LoginView.as_api_view(client=Client.BROWSER), name="password-login"),
-    path(
-        "auth/password/request",
-        RequestPasswordResetView.as_api_view(client=Client.BROWSER),
-        name="password-reset-request",
-    ),
-    path("auth/password/reset", ResetPasswordView.as_api_view(client=Client.BROWSER), name="password-reset"),
-    path("account/password/change", ChangeOwnPasswordView.as_api_view(client=Client.BROWSER), name="password-change"),
+    _route("auth/session", SessionView, "password-session"),
+    _route("auth/login", LoginView, "password-login"),
+    _route("auth/password/request", RequestPasswordResetView, "password-reset-request"),
+    _route("auth/password/reset", ResetPasswordView, "password-reset"),
+    _route("account/password/change", ChangeOwnPasswordView, "password-change"),
 ]

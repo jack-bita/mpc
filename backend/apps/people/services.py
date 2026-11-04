@@ -238,9 +238,11 @@ def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMem
     return staff
 
 
-# `password` and `encoded`, its hash, show as stars in Django's error reports, which list each function's local
-# variables when something fails. A person's other details are safe there: a User prints as their name.
-@sensitive_variables("password", "encoded")
+# Every variable shows as stars in Django's error reports, which list each function's variables when something fails,
+# here and in everything this calls. Hiding `password` by its name wouldn't do: the library at the bottom of the hash
+# names it `secret`, and running out of memory there is the likeliest crash on the demo's 512 MB. A crash here shows its
+# lines, only not its values.
+@sensitive_variables()
 def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember, reason: str) -> None:
     """Set a first or forgotten password, face to face (ADR-0038): Baba types one for Asha and tells it to her. She logs
     in with it, and every office route refuses her until she chooses her own (apps/people/selectors.py). `by` is always

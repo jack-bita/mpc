@@ -104,8 +104,10 @@ MIDDLEWARE = [
 # Who may check a password: allauth's checker alone, for every login, the admin's too (it takes the admin form's email
 # as well as our own login by email or phone, ADR-0038). Never two: Django tries each in turn until one says yes, so a
 # wrong password would be hashed twice and a right one once. The answer's time would then show a right password, and
-# the admin's login has no limit, so a stranger could try passwords there past every limit we count.
-AUTHENTICATION_BACKENDS = ["allauth.account.auth_backends.AuthenticationBackend"]
+# the admin's login has no limit, so a stranger could try passwords there past every limit we count. Ours is allauth's,
+# with its variables hidden from error reports (apps/people/accounts.py). A session names its checker, so a person's
+# session ends once when this name changes.
+AUTHENTICATION_BACKENDS = ["apps.people.accounts.PasswordBackend"]
 
 ROOT_URLCONF = "config.urls"
 

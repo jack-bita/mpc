@@ -149,11 +149,11 @@ class StaffViewSet(ShopViewSet[StaffMember]):
     action_permissions = {"temporary_password": Permission.STAFF_MANAGE}
     serializer_class = TemporaryPasswordSerializer
 
-    # `sent` holds the password while the service runs: it shows as stars in Django's error reports, should the service
-    # crash, as in the service itself. It is never kept in a variable of its own here.
+    # `sent` holds the password while the service runs, and so do the serializer's frames while they read it: every
+    # variable here, and in everything this calls, shows as stars in Django's error reports, as in the service itself.
     @extend_schema(request=TemporaryPasswordSerializer, responses={204: None})
     @action(detail=True, methods=["post"], url_path="temporary-password")
-    @sensitive_variables("sent")
+    @sensitive_variables()
     def temporary_password(self, request: Request, pk: str | None = None) -> Response:
         # The person, found in the visit's shop and checked for the action's key (get_object; initial() already ran it
         # once, before the action began): another shop's person is "not found", before anything sent is read.

@@ -26,12 +26,14 @@ ACCOUNT_ADAPTER (config/settings/base.py). This file owns ours.
 from typing import Any
 
 from allauth.account.adapter import DefaultAccountAdapter
+from allauth.account.auth_backends import AuthenticationBackend
 from allauth.core import ratelimit
 from allauth.core.internal.ratelimit import get_cache_key, get_rates
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.http import HttpRequest
 from django.utils.crypto import salted_hmac
+from django.views.decorators.debug import sensitive_variables
 
 from apps.core.phones import normalise_phone
 from apps.people.api.throttles import caller_fingerprint
@@ -63,8 +65,20 @@ def lift_wrong_password_count(user: User) -> None:
                     cache.delete(row)
 
 
-# allauth ships no types, so mypy knows its base class only as `Any`, and strict mode refuses a class built on one: the
-# library's missing types, not ours (pyproject.toml). Each method we write below keeps its own type hints.
+# allauth ships no types, so mypy knows these base classes only as `Any`, and strict mode refuses a class built on one:
+# the library's missing types, not ours (pyproject.toml). Each method we write below keeps its own type hints.
+class PasswordBackend(AuthenticationBackend):  # type: ignore[misc]
+    # allauth's checker, for every login, the admin's too (AUTHENTICATION_BACKENDS, config/settings/base.py), with every
+    # variable from here down hidden from Django's error reports. A route's own hiding doesn't reach here: Django's
+    # authenticate() hides only `credentials`, by name, and the nearest rule wins, so the frames below it would show the
+    # password as `password`, and at the bottom of the hash as `secret`. Running out of memory there is the likeliest
+    # crash on the demo's 512 MB, and the password could be a temporary one (03 §5.9).
+    @sensitive_variables()
+    def authenticate(self, request: HttpRequest | None, **credentials: Any) -> User | None:
+        user: User | None = super().authenticate(request, **credentials)
+        return user
+
+
 class AccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
     def is_open_for_signup(self, request: HttpRequest) -> bool:
         # Closed to everyone: a stranger who found the address could otherwise make themselves a person here. The
