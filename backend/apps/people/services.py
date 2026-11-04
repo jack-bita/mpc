@@ -294,6 +294,9 @@ def _lift_pin_locks(rows: QuerySet[PinLock]) -> None:
 def check_pin(staff: StaffMember, device: Device, pin: str, *, at: datetime) -> None:
     """Is this the person's PIN, on this device, at this moment? Answers by returning; refuses with pin.wrong, or
     pin.locked and the seconds to wait (03 §5.9)."""
+    # T1, both halves: the shop open is theirs, and the person and the device belong together. Without the first, a
+    # visit of shop A could write a count into shop B's rows, which its next read wouldn't find.
+    _check_shop(staff.shop_id, None)
     _check_same_shop(staff, device)
     lock = _count_pin_try(staff, device, at=at)
     if pin_matches(pin, staff.pin_hash):

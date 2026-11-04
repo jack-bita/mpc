@@ -190,6 +190,22 @@ def test_person_of_another_shop_is_refused(staff_b: StaffMember, laptop: Device)
     assert refused.value.code == "staff.other_shop"
 
 
+def test_person_and_device_of_a_shop_not_open_are_refused(
+    staff_b: StaffMember, side_b: Side, shop_a: Shop, give_role: GiveRole
+) -> None:
+    # T1. Both are shop B's, so they match each other, but shop A is the one open: a count written now would sit in B's
+    # rows, where A's visit could never read it back, and the next try would end in a database error.
+    give_role(staff_b, RoleTemplate.MANAGER, None)
+    device_b = a_device(staff_b, side_b, "Simu ya Jingine")
+
+    with shop_context(shop_a), pytest.raises(ValidationError) as refused:
+        check_pin(staff_b, device_b, PIN, at=START)
+
+    assert refused.value.code == "staff.other_shop"
+    with shop_context(staff_b.shop_id):
+        assert not PinLock.objects.exists()
+
+
 @pytest.mark.django_db(transaction=True)
 def test_tries_sent_at_once_cannot_pass_five(asha: StaffMember, laptop: Device) -> None:
     # Twelve tries at the same moment, each on its own database connection, as twelve requests are. A check that came
