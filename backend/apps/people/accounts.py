@@ -57,9 +57,9 @@ class AccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
     def set_password(self, user: User, password: str) -> None:
         # Someone who forgot their password has usually typed it wrong a few times: with a new one, they must not still
         # be told to wait. allauth lifts the count itself, but only for the emails in its own table of addresses, which
-        # we leave empty, as our User holds the email (apps/people/models.py). So it is lifted here, for each name the
-        # person logs in by. `clear` also lifts the caller's own count, as allauth means it to: it is safe, as the
-        # reset itself is slowed down.
+        # stays empty, as our User holds the email (ACCOUNT_PASSWORD_RESET_TOKEN_GENERATOR, config/settings/base.py). So
+        # it is lifted here, for each name the person logs in by. `clear` also lifts the caller's own count, as allauth
+        # means it to: it is safe, as the reset itself is slowed down.
         super().set_password(user, password)
         for login in (user.email, user.phone):
             if login:

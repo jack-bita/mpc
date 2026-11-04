@@ -10,6 +10,7 @@ The key in the link sits after the #, which a browser never sends to a server. F
 """
 
 import pytest
+from allauth.account.models import EmailAddress
 from django.core import mail
 from django.test import Client
 
@@ -23,6 +24,7 @@ REQUEST = "/_allauth/browser/v1/auth/password/request"
 RESET = "/_allauth/browser/v1/auth/password/reset"
 
 EMAIL = "meneja@example.com"
+NEW_EMAIL = "meneja.mpya@example.com"
 PHONE = "+255712345678"
 PASSWORD = "mbegu-za-mahindi-2026"
 NEW_PASSWORD = "mbolea-ya-kupandia-2027"
@@ -130,6 +132,57 @@ def test_reset_lifts_the_wrong_password_count(manager: User) -> None:
     post(Client(), RESET, key=key_from_the_email(), password=NEW_PASSWORD)
     assert post(Client(), LOGIN, phone=PHONE, password=NEW_PASSWORD) == (200, [])
     assert post(Client(), LOGIN, email=EMAIL, password=NEW_PASSWORD) == (200, [])
+
+
+def test_reset_keeps_no_copy_of_the_email(manager: User) -> None:
+    # allauth has its own table of a person's emails, and both the login and the reset trust it. Our User holds the
+    # email, so that table must stay empty: a copy there would outlive a change of email (the two tests below). Its
+    # default reset key writes one the moment anyone asks for a link, with no login at all.
+    post(Client(), REQUEST, email=EMAIL)
+    assert post(Client(), RESET, key=key_from_the_email(), password=NEW_PASSWORD) == (401, [])
+    assert post(Client(), LOGIN, email=EMAIL, password=NEW_PASSWORD) == (200, [])
+    assert post(Client(), LOGIN, phone=PHONE, password=NEW_PASSWORD) == (200, [])
+    assert not EmailAddress.objects.exists()
+
+
+def test_old_email_opens_nothing_after_a_change(manager: User) -> None:
+    # Someone took over the manager's mailbox, so the email on their record is changed. A link already in that mailbox,
+    # a new link asked for, and a login by the old email must all fail. A request made before the change is what could
+    # have kept the old address alive.
+    post(Client(), REQUEST, email=EMAIL)
+    link_in_the_stolen_mailbox = key_from_the_email()
+    mail.outbox.clear()
+    manager.email = NEW_EMAIL
+    manager.save()
+
+    assert post(Client(), REQUEST, email=EMAIL) == (200, [])
+    assert mail.outbox == []
+    assert post(Client(), RESET, key=link_in_the_stolen_mailbox, password=NEW_PASSWORD) == (
+        400,
+        ["invalid_password_reset"],
+    )
+    assert post(Client(), LOGIN, email=EMAIL, password=PASSWORD) == (400, ["email_password_mismatch"])
+    assert post(Client(), LOGIN, email=NEW_EMAIL, password=PASSWORD) == (200, [])
+
+
+def test_a_reused_email_opens_only_its_new_owner(manager: User) -> None:
+    # The old address is later given to someone else, perhaps at another shop. Its mailbox must get a link for that
+    # person alone, and the old owner's password must not log in with it.
+    post(Client(), REQUEST, email=EMAIL)
+    mail.outbox.clear()
+    manager.email = NEW_EMAIL
+    manager.save()
+    newcomer = User.objects.create_user(full_name="Mgeni Mfano", email=EMAIL, password="ufunguo-wa-mgeni-2026")
+
+    post(Client(), REQUEST, email=EMAIL)
+    assert len(mail.outbox) == 1
+    assert post(Client(), LOGIN, email=EMAIL, password=PASSWORD) == (400, ["email_password_mismatch"])
+
+    post(Client(), RESET, key=key_from_the_email(), password=NEW_PASSWORD)
+    newcomer.refresh_from_db()
+    manager.refresh_from_db()
+    assert newcomer.check_password(NEW_PASSWORD)
+    assert manager.check_password(PASSWORD)
 
 
 def test_reset_requests_are_slowed_down(manager: User) -> None:

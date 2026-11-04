@@ -292,6 +292,12 @@ HEADLESS_FRONTEND_URLS = {"account_reset_password_from_key": "/password-reset#{k
 # Asked to reset an email nobody here has, allauth would send that address a note saying so: anyone could make us send
 # mail to any stranger. The answer to the asker stays the same either way, so nobody learns who has an account.
 ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False
+# Django's own reset key, not allauth's default. allauth's writes the person's email into its own table of addresses
+# whenever a link is made or checked, which anyone can cause with no login, and its login and reset both trust that
+# table. A copy there outlives a change of email: an old mailbox would still get working links, and a reused address
+# would open its old owner's account, perhaps at another shop. Our User holds the email and the table stays empty.
+# Django's key is made from the User's email too, so a change of email also ends a link already sent.
+ACCOUNT_PASSWORD_RESET_TOKEN_GENERATOR = "django.contrib.auth.tokens.PasswordResetTokenGenerator"
 
 # Whether the description and the docs page are open (apps/core/api/schema.py). False: closed to everyone,
 # the real server's rule. Off unless an environment turns it on: dev.py does, and the demo does (prod.py).
