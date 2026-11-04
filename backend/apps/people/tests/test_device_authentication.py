@@ -159,25 +159,26 @@ def test_device_visit_opens_its_own_shop(
 ) -> None:
     # Done when #1: a device's requests carry its shop. The probe's device route (tests/probe/api.py) reads its sides
     # through the guard, which refuses while no shop is open, and answers what PostgreSQL was told: each device gets
-    # its own shop, in Python and in the database, and no person acts. `me` alone can't show this: it reads its shop
-    # and side through their links, which skip the guard.
+    # its own shop, in Python and in the database, and no person acts, but the device itself does (X3). `me` alone can't
+    # show this: it reads its shop and side through their links, which skip the guard.
     settings.ROOT_URLCONF = "tests.probe.urls"
     give_role(staff_b, RoleTemplate.MANAGER, None)
-    _, key_a = pair(manager_a, side_a)
+    device_a, key_a = pair(manager_a, side_a)
     asked = start_pairing()
     with shop_context(staff_b.shop_id):
-        confirm_pairing(asked.request.code, name="Simu ya Pembejeo", home_side=side_b, by=staff_b)
+        device_b = confirm_pairing(asked.request.code, name="Simu ya Pembejeo", home_side=side_b, by=staff_b)
 
-    for key, shop_id, sides in ((key_a, manager_a.shop_id, ["Dawa"]), (asked.key, staff_b.shop_id, ["Pembejeo"])):
+    for key, device, sides in ((key_a, device_a, ["Dawa"]), (asked.key, device_b, ["Pembejeo"])):
         client = APIClient()
         client.cookies[DEVICE_KEY_COOKIE] = key
         answer = client.get(PROBE_SHOP)
         assert answer.status_code == 200
         assert answer.json() == {
-            "shop": str(shop_id),
+            "shop": str(device.shop_id),
             "sides": sides,
-            "acting_shop": str(shop_id),
+            "acting_shop": str(device.shop_id),
             "acting_staff": "",
+            "acting_device": str(device.pk),
         }
 
 

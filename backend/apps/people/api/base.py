@@ -5,8 +5,8 @@ and needs a paired device instead, logged in by its key (apps/people/api/authent
 pairing, `me` and PIN login (AUTH-4); later sync (SYNC-2 on).
 
 - The shop. Right after the login, before any check reads a table, the view opens the device's shop (shop_context)
-  and tells PostgreSQL who acts (acting_as: the shop, and nobody, as a device is no person), and keeps both for the
-  whole visit, the error answer included, as ShopViewSet does. Both close however the visit ends.
+  and tells PostgreSQL who acts (acting_as: the shop, nobody, as a device is no person, and the device itself, X3), and
+  keeps both for the whole visit, the error answer included, as ShopViewSet does. Both close however the visit ends.
 - No device. A route that needs one refuses the visit (401 not_authenticated). A route a new device calls before
   it has a working key says `device_optional = True`, and then runs with no shop open: it may read no shop's table.
 - CSRF. A device's change is checked by its login; a change sent with no device, such as the start of a pairing, is
@@ -62,8 +62,9 @@ class DeviceView(APIView):
         if isinstance(device, Device):
             self._visit.enter_context(shop_context(device.shop_id))
             # Opened after the shop, so it closes first. An edit a device's visit makes to an office table is then
-            # recorded as made in its shop by nobody (apps/core/acting.py), and an edit of another shop's row refused.
-            self._visit.enter_context(acting_as(device))
+            # recorded as made in its shop, by nobody, on this device (apps/core/acting.py, X3), and an edit of another
+            # shop's row refused.
+            self._visit.enter_context(acting_as(device, device=device))
         elif not self.device_optional:
             # No key, or one that opens no device. English for the logs; the app translates the code (ADR-0032).
             raise exceptions.NotAuthenticated("This route needs a paired device's key.")

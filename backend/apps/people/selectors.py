@@ -124,9 +124,10 @@ def pin_stamp(staff: StaffMember) -> str:
 @sensitive_variables()
 def job_of_pin_session(
     user: User, badge: Mapping[str, str], device_key: str | None, *, own_password_needed: bool = True
-) -> StaffMember | None:
-    """The job a PIN's badge acts in on this visit (03 §5.9); None if it no longer names one; LoginRefused if they may
-    not act. Every variable hidden from error reports: `device_key` is the device's key itself. `own_password_needed`:
+) -> tuple[StaffMember, Device] | None:
+    """The job a PIN's badge acts in on this visit (03 §5.9), and the device it stands at, the one holding this key,
+    which the visit names in both books (X3, AUTH-8); None if it no longer names a job; LoginRefused if they may not
+    act. Every variable hidden from error reports: `device_key` is the device's key itself. `own_password_needed`:
     False only on the one route someone on a temporary password may still read."""
     # Rule 1: a login finds its shop only through a door. This one reads the shop of the device that holds this key, and
     # it must be the shop the badge names. First, as it asks who is calling: someone who copied the badge's number, with
@@ -154,7 +155,7 @@ def job_of_pin_session(
     check_may_act(staff)
     if own_password_needed:
         check_own_password(user)
-    return staff
+    return staff, device
 
 
 @dataclass(frozen=True)
