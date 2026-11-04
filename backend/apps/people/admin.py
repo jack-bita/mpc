@@ -116,9 +116,14 @@ class ChooseOwnPasswordForm(OwnPasswordForm):
 
     @sensitive_variables()
     def save(self, commit: bool = True) -> User:
-        # In Django's one save with the new password: never one without the other.
-        self.user.must_change_password = False
-        saved: User = super().save(commit=commit)
+        # The mark comes off in one save with the new password: never one without the other. These two columns alone,
+        # not Django's save of the whole row: this copy was read when the visit began, so saving all of it could undo
+        # what happened since, such as someone taking the admin away from this person.
+        saved: User = self.user
+        saved.set_password(self.cleaned_data["new_password1"])
+        saved.must_change_password = False
+        if commit:
+            saved.save(update_fields=["password", "must_change_password"])
         lift_wrong_password_count(saved)
         return saved
 

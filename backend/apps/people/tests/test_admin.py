@@ -17,6 +17,7 @@ from django.views.debug import ExceptionReporter
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
+from apps.people.admin import ChooseOwnPasswordForm
 from apps.people.models import StaffMember, User
 from apps.people.services import add_staff
 from apps.shops.models import Shop, Side
@@ -275,6 +276,22 @@ def test_own_password_page_refuses_what_leaves_nothing(
     assert superuser_client.post("/admin/password_change/", sent).status_code == 200
     superuser.refresh_from_db()
     assert superuser.check_password(PASSWORD)
+
+
+def test_own_password_page_leaves_the_rest_of_the_row_alone(superuser: User) -> None:
+    # The visit read the person's row when it began, and someone takes the admin away from them a moment later. Django's
+    # own form saves the whole row, which would give it back with what it read.
+    read_by_the_visit = User.objects.get(pk=superuser.pk)
+    User.objects.filter(pk=superuser.pk).update(is_staff=False)
+
+    sent = {"old_password": PASSWORD, "new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD}
+    form = ChooseOwnPasswordForm(read_by_the_visit, data=sent)
+    assert form.is_valid()
+    form.save()
+
+    stored = User.objects.get(pk=superuser.pk)
+    assert stored.is_staff is False
+    assert stored.check_password(NEW_PASSWORD)
 
 
 def test_own_password_page_lifts_the_wrong_password_count(superuser_client: Client) -> None:

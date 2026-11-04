@@ -496,7 +496,7 @@ class NewPairing:
 _CODE_DRAWS = 5
 
 
-# Django's error reports, which a server with DEBUG off logs and sends, list each function's local variables when
+# Django's error reports, which a server will log and send (OPS-10), list each function's local variables when
 # something fails (its debug page, with DEBUG on, shows everything). This marks `key` and `replacing`, the new key and
 # the old, as ones to hide, here and in each function called from here that names them so (hash_device_key,
 # NewPairing): they show as stars, never the device's secret.

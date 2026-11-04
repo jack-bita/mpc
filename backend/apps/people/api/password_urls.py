@@ -57,7 +57,7 @@ class ChangeOwnPasswordView(ChangePasswordView):  # type: ignore[misc]
 
 def _route(address: str, view: Any, name: str) -> URLPattern:
     # allauth's view for the browser, with every variable hidden from Django's error reports, here and in everything it
-    # calls: a server with DEBUG off logs and sends those reports, which list each function's variables when something
+    # calls: a server will log and send those reports (OPS-10), which list each function's variables when something
     # fails. Wrapped at the route, as allauth's own frames hold what was sent, and the library at the bottom of the hash
     # names the password `secret`, so hiding one by its name wouldn't do. A crash here shows its lines, only not its
     # values. The login's checker needs its own wrapper (PasswordBackend, apps/people/accounts.py).

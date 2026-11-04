@@ -383,7 +383,7 @@ def test_a_failed_lift_undoes_the_password(baba: StaffMember, asha: StaffMember)
 
 
 def test_password_stays_out_of_error_reports(baba: StaffMember, asha: StaffMember) -> None:
-    # Django's error report, which a server with DEBUG off logs and sends, lists each function's local variables when
+    # Django's error report, which a server will log and send (OPS-10), lists each function's local variables when
     # something fails. The password and its hash show as stars.
     with audit_trail_down(), pytest.raises(RuntimeError) as crash:
         set_for(asha, by=baba)
