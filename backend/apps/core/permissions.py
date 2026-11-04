@@ -185,6 +185,17 @@ class HeldPermissions:
         # A side listed with no codes, as a role emptied by its owner leaves, opens nothing, so it isn't seen.
         return frozenset(side for side, codes in self.on_side.items() if codes)
 
+    def covers(self, other: HeldPermissions) -> bool:
+        """True when this person holds everything `other` holds, side by side. The giver rule of 02 §5 for acts that
+        hand over a whole person, such as setting their password: whoever does it could then act as them, so it must
+        give them no key they didn't already hold."""
+        # Side by side, not as one pile of codes: a key for Dawa alone doesn't cover the same key on every side, which
+        # opens Vyakula too, and any side added later. So `other`'s every-side codes are compared with this person's
+        # every-side codes alone, and each side's with what this person holds on that side.
+        return other.every_side <= self.every_side and all(
+            codes <= self.on(side_id) for side_id, codes in other.on_side.items()
+        )
+
 
 class Person(Actor, Protocol):
     # The staff member a visit's login names, as an Actor (apps/core/tenancy.py) who also answers for their own
