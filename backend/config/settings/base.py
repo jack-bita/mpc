@@ -63,6 +63,12 @@ INSTALLED_APPS = [
     "rest_framework",
     # Writes the API's OpenAPI description from the routes (ADR-0025, apps/core/api/schema.py).
     "drf_spectacular",
+    # django-allauth: the owner's and managers' password login (ADR-0038). `account` is the login itself, with its
+    # own table of email addresses; `headless` answers it as JSON at /_allauth/ for our own app, which draws its own
+    # screens (UI-5), so allauth's HTML pages stay off (HEADLESS_ONLY, below).
+    "allauth",
+    "allauth.account",
+    "allauth.headless",
     # Our domain apps, in layer order (ADR-0035; see apps/__init__.py).
     "apps.core",
     "apps.control",
@@ -91,7 +97,15 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # allauth's own: it keeps a login's steps together across requests, and refuses to start without it.
+    "allauth.account.middleware.AccountMiddleware",
 ]
+
+# Who may check a password: allauth's checker alone, for every login, the admin's too (it takes the admin form's email
+# as well as our own login by email or phone, ADR-0038). Never two: Django tries each in turn until one says yes, so a
+# wrong password would be hashed twice and a right one once. The answer's time would then show a right password, and
+# the admin's login has no limit, so a stranger could try passwords there past every limit we count.
+AUTHENTICATION_BACKENDS = ["allauth.account.auth_backends.AuthenticationBackend"]
 
 ROOT_URLCONF = "config.urls"
 
@@ -131,8 +145,22 @@ DATABASES = {
 # base classes in `core` instead (CORE-1), so this applies only to those infrastructure tables.
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# How a password is stored: the first hashes every new one (Argon2, at the cost in apps/people/hashers.py). The rest can
+# only read older hashes, which move to the first at that person's next login: every password set before AUTH-3 is
+# PBKDF2, Django's default, and must not lock its owner out.
+PASSWORD_HASHERS = [
+    "apps.people.hashers.ShopArgon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]
+
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    # A password too much like the person's own details is refused. Django's list names a username, first and last
+    # names, which our User doesn't have (PPL-1): it is told ours instead, so "Baba Mfano" can't pick "babamfano", nor
+    # their phone number.
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "OPTIONS": {"user_attributes": ("full_name", "email", "phone")},
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -153,11 +181,12 @@ STATIC_URL = "static/"
 REST_FRAMEWORK = {
     # Every refusal leaves in the API's one error shape, with a code the app translates (ADR-0032).
     "EXCEPTION_HANDLER": "apps.core.api.errors.handle_error",
-    # How the office routes log in: Django's session cookie (03 §5.9, ADR-0017). Only the session: a device's key
-    # logs in on the device routes alone, which name their own login (DeviceView, apps/people/api/base.py), so a
-    # device's cookie opens no office route (AUTH-2, CORE-6).
+    # How the office routes log in: Django's session cookie, read as the person's staff member at their shop, checked
+    # on every visit (apps/people/api/staff_session.py; 03 §5.9, ADR-0038). Only the session: a device's key logs in on
+    # the device routes alone, which name their own login (DeviceView, apps/people/api/base.py), so a device's cookie
+    # opens no office route (AUTH-2, CORE-6).
     # DRF's default also accepts a password sent with every request (Basic), which nothing here uses.
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["apps.people.api.staff_session.StaffSessionAuthentication"],
     # Closed unless a view says otherwise: a route open to everyone, like the health check, says so itself.
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     # JSON only, in and out (03 §5.10). DRF's browsable HTML pages would also build a form for each route,
@@ -196,13 +225,17 @@ CLIENT_IP_HEADER = env("CLIENT_IP_HEADER", "")
 # `manage.py createcachetable`, not by a migration: start-demo.sh runs it on the demo, `make migrate` on a laptop, and
 # the test database gets them by itself. 10,000 entries each *(default)*, one per caller and limit, far above Django's
 # 300.
-# One table per limit, and `default` for the rest, such as allauth's login limits (AUTH-3): past its 10,000, a table
-# loses a third of its rows, picked by their keys' ABC order, not their age, so in one shared table a flood of one kind
-# would clear every other kind's counts, the managers' among the first (apps/people/api/throttles.py). Apart, a flood
-# clears only its own kind.
+# One table per limit: past its 10,000, a table loses a third of its rows, picked by their keys' ABC order, not their
+# age, so in one shared table a flood of one kind would clear every other kind's counts, the managers' among the first
+# (apps/people/api/throttles.py). Apart, a flood clears only its own kind.
+# `default` is the login limits' own: allauth counts only in `default`, with no setting to change it (AUTH-3). Nothing
+# else may count there. 100,000 entries *(default)*: a guesser's own count sits in this table beside a flood's, so the
+# table is sized to be dear to fill, and a login's row counts for 5 minutes at most, so filling it takes about 2,000
+# networks at once. A row past its time stays until it is read again or the table fills: OPS-7 prunes them. A database
+# made before AUTH-3 keeps an empty, unused table, `django_cache`.
 _DATABASE_CACHE = {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "OPTIONS": {"MAX_ENTRIES": 10_000}}
 CACHES = {
-    "default": {**_DATABASE_CACHE, "LOCATION": "django_cache"},
+    "default": {**_DATABASE_CACHE, "LOCATION": "throttle_login", "OPTIONS": {"MAX_ENTRIES": 100_000}},
     "pairing_start": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_start"},
     "pairing_confirm": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_confirm"},
 }
@@ -238,6 +271,48 @@ SPECTACULAR_SETTINGS = {
     "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0",
     "SWAGGER_UI_FAVICON_HREF": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0/favicon-32x32.png",
 }
+
+# --- django-allauth: the owner's and managers' password login (03 §5.9, ADR-0038), at /_allauth/browser/v1/.
+# Our app draws its own screens (UI-5), so allauth answers only its JSON API, for a browser, with Django's session
+# cookie (ADR-0038): its HTML pages are off, and so are its tokens for mobile apps, which we don't have.
+HEADLESS_ONLY = True
+HEADLESS_CLIENTS = ("browser",)
+# How a person names themselves at login: their email, or their phone, which most of the shop's people have instead
+# (ADR-0038). allauth finds a person by phone through our adapter (apps/people/accounts.py).
+ACCOUNT_LOGIN_METHODS = {"email", "phone"}
+# allauth's check of a phone by an SMS code, off: the owner typed every phone face to face, and an SMS costs money
+# (ADR-0038).
+ACCOUNT_PHONE_VERIFICATION_ENABLED = False
+# No username: our User has none (PPL-1).
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+# The fields of allauth's sign-up form. Nobody signs up, as our adapter refuses it (apps/people/accounts.py), but
+# allauth checks at start-up that this list fits the login methods above.
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*"]
+# An email is typed by the owner, who knows the person, never by a stranger signing up: nobody is sent a link to
+# confirm it, which most of the shop's people couldn't open anyway.
+ACCOUNT_EMAIL_VERIFICATION = "none"
+# What allauth asks of our people: sign-up closed, the login by phone, and what its limits count by
+# (apps/people/accounts.py).
+ACCOUNT_ADAPTER = "apps.people.accounts.AccountAdapter"
+# A reset link opens the app (UI-5), at this path on the address the request came to. The key sits after the #, which a
+# browser never sends to a server: so it stays out of Caddy's and Django's logs, and out of any Referer header. A static
+# app (ADR-0016) can read it there with no route of its own for each key.
+HEADLESS_FRONTEND_URLS = {"account_reset_password_from_key": "/password-reset#{key}"}
+# Asked to reset an email nobody here has, allauth would send that address a note saying so: anyone could make us send
+# mail to any stranger. The answer to the asker stays the same either way, so nobody learns who has an account.
+ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False
+# Django's own reset key, not allauth's default. allauth's writes the person's email into its own table of addresses
+# whenever a link is made or checked, which anyone can cause with no login, and its login and reset both trust that
+# table. A copy there outlives a change of email: an old mailbox would still get working links, and a reused address
+# would open its old owner's account, perhaps at another shop. Our User holds the email and the table stays empty.
+# Django's key is made from the User's email too, so a change of email also ends a link already sent.
+ACCOUNT_PASSWORD_RESET_TOKEN_GENERATOR = "django.contrib.auth.tokens.PasswordResetTokenGenerator"
+# 3 reset emails an hour to one address. allauth's default, 5 a minute, would let a stranger who knows the address send
+# 7,200 a day. A stranger using these up can't keep the person out: each link goes to the person's own mailbox and
+# works. allauth's limit per caller stays as it was. Its other limits keep their defaults.
+ACCOUNT_RATE_LIMITS = {"reset_password": "20/m/ip,3/h/key"}
+# A reset link works for an hour, not Django's 3 days: one left in a mailbox is a way in for whoever opens it later.
+PASSWORD_RESET_TIMEOUT = 60 * 60
 
 # Whether the description and the docs page are open (apps/core/api/schema.py). False: closed to everyone,
 # the real server's rule. Off unless an environment turns it on: dev.py does, and the demo does (prod.py).

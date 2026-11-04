@@ -67,8 +67,8 @@ class UserManager(BaseUserManager["User"]):
         return self.create_user(full_name, email=email, password=password, **extra_fields)
 
     def get_by_natural_key(self, username: str | None) -> User:
-        # The admin login and createsuperuser find a person by login name. Emails are stored in lower
-        # case, so look up the lower-case form: "Admin@Example.com" finds admin@example.com.
+        # createsuperuser finds a person by login name. Emails are stored in lower case, so look up the
+        # lower-case form: "Admin@Example.com" finds admin@example.com.
         return self.get(email=(username or "").strip().lower())
 
 

@@ -24,6 +24,13 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 # other than "true", a typo included, keeps them closed.
 API_DOCS_PUBLIC = env("API_DOCS_PUBLIC", "false") == "true"
 
+# Where email goes. By default nowhere: the real server has no mail service yet, and most of the shop's people have no
+# email, so resets are face to face (ADR-0038). Without this, Django would try a mail server on this machine, and a
+# reset for a known email would crash where an unknown one wouldn't, telling a stranger who has an account. OPS-5 gives
+# the real server a mail service, or leaves this. The demo prints email to its log, as its data is fake (render.yaml).
+# The real server never may: a reset link in a log is a way into someone's account.
+MAILERS = {"default": {"BACKEND": env("MAIL_BACKEND", "django.core.mail.backends.dummy.EmailBackend")}}
+
 DATABASES["default"].update(
     NAME=env("DB_NAME"),
     USER=env("DB_USER"),

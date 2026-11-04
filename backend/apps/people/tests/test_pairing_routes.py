@@ -243,7 +243,7 @@ def test_paired_device_learns_its_shop_and_code(manager_a: StaffMember, side_a: 
 
 def test_me_hands_out_the_csrf_cookie() -> None:
     # The app asks `me` first, paired or not, and gets the CSRF token's cookie with the answer: it needs the token
-    # for its first change, the start of a pairing (ADR-0017).
+    # for its first change, the start of a pairing (ADR-0038).
     answer = APIClient().get(ME)
 
     assert answer.status_code == 401

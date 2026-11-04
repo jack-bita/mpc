@@ -11,9 +11,10 @@ the device's own route, `GET /api/devices/v1/me/`, and the start of a pairing, `
     a key still waiting           401 not_authenticated        a new key
     a paired device's key         200, its own shop            400 pairing.already_paired
     a blocked device's key        401 device.blocked           401 device.blocked
+    a suspended shop's device     401 shop.suspended           401 shop.suspended
 
 A device is a shop's machine, not a person, so its key opens no office route (CORE-6). Every change it sends needs
-the CSRF token (ADR-0017), so another website can't send one in its name. Fake data only: the repo is public (03 §10).
+the CSRF token (ADR-0038), so another website can't send one in its name. Fake data only: the repo is public (03 §10).
 """
 
 import secrets
@@ -24,9 +25,9 @@ from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import Device, PairingRequest, StaffMember
+from apps.people.models import Device, DeviceStatus, PairingRequest, StaffMember
 from apps.people.services import block, confirm_pairing, start_pairing, unblock
-from apps.shops.models import Shop, Side
+from apps.shops.models import Shop, ShopStatus, Side
 
 pytestmark = pytest.mark.django_db
 
@@ -113,8 +114,30 @@ def test_blocked_device_refused(manager_a: StaffMember, side_a: Side) -> None:
     assert client.get(ME).status_code == 200
 
 
+def test_device_of_suspended_shop_refused(manager_a: StaffMember, side_a: Side, shop_a: Shop) -> None:
+    # A suspended shop stops every way in, not only passwords (ADR-0038; AUTH-2 left this for the first card that checks
+    # a shop's status).
+    device, key = pair(manager_a, side_a)
+    client = holding(key)
+    assert client.get(ME).status_code == 200
+
+    Shop.objects.filter(pk=shop_a.pk).update(status=ShopStatus.SUSPENDED)
+    refused = client.get(ME)
+    assert refused.status_code == 401
+    assert refused.json()["code"] == "shop.suspended"
+    # Even a new pairing: a device whose key already opens a device can't ask for a new one, here as elsewhere.
+    asked_again = client.post(PAIRING)
+    assert asked_again.status_code == 401
+    assert asked_again.json()["code"] == "shop.suspended"
+    # The device was not blocked, and its key still holds: the shop back, it works again.
+    with shop_context(shop_a):
+        assert Device.objects.get(pk=device.pk).status == DeviceStatus.ACTIVE
+    Shop.objects.filter(pk=shop_a.pk).update(status=ShopStatus.ACTIVE)
+    assert client.get(ME).status_code == 200
+
+
 def test_device_requests_need_csrf(manager_a: StaffMember, side_a: Side) -> None:
-    # A paired device's change without the CSRF token is refused, as a session's is (ADR-0017): its cookie goes with
+    # A paired device's change without the CSRF token is refused, as a session's is (ADR-0038): its cookie goes with
     # every request to our address, even one another website makes the browser send.
     _, key = pair(manager_a, side_a)
     client = holding(key, csrf=True)

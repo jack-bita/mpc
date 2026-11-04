@@ -5,12 +5,19 @@ from the app's own staff screen (PPL-4), not here. It owns the add and edit form
 page's two rules: the id is shown but never typed in, and nobody is deleted.
 """
 
+from allauth.account.models import EmailAddress
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.http import HttpRequest
 
 from apps.people.models import User
+
+# allauth puts its own table of addresses on this site, and its login and reset trust that table. A row typed there
+# would be a login name for a person, set past the phone cleaner and the audit trail (PPL-2). Our User holds the email,
+# and the table stays empty (ACCOUNT_PASSWORD_RESET_TOKEN_GENERATOR, config/settings/base.py). allauth comes first in
+# INSTALLED_APPS, so it has registered by now; if that order ever changes, this line stops the start-up, loudly.
+admin.site.unregister(EmailAddress)
 
 
 class UserAddForm(AdminUserCreationForm[User]):

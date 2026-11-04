@@ -1,9 +1,10 @@
 ---
-status: accepted
+status: superseded
 date: 2026-10-18
 source: "03-architecture.md §2 — AD3"
 standing: confirmed
 cost-to-change: medium
+superseded-by: ADR-0038
 ---
 
 # ADR-0017 · One web address, session cookies, and django-allauth for passwords

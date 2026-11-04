@@ -23,7 +23,6 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.control.models import AuditAction, AuditEvent
@@ -463,7 +462,7 @@ def test_a_manager_who_may_not_work_gets_nothing(
     baba: StaffMember, shop_a: Shop, side_a: Side, give_role: GiveRole, how: str
 ) -> None:
     # A manager suspended for a while, or gone for good, holds no key (02 §5), and it takes effect at their next request
-    # (ADR-0017): the device list is empty, a waiting device can't be confirmed, its side "not found", and every device
+    # (ADR-0038): the device list is empty, a waiting device can't be confirmed, its side "not found", and every device
     # is "not found" too. The code still waits for someone who may.
     juma = person(shop_a, "Juma", RoleTemplate.MANAGER, None, give_role)
     laptop = pair(baba, side_a, "Laptop ya Dawa")
@@ -473,7 +472,7 @@ def test_a_manager_who_may_not_work_gets_nothing(
         if how == "suspended":
             suspend(juma, by=None, reason="Uchunguzi wa upotevu")
         else:
-            mark_left(juma, left_on=timezone.localdate(), by=None, reason="Amehama")
+            mark_left(juma, left_on=juma.started_on, by=None, reason="Amehama")
     code = start_pairing().request.code
 
     listed = client.get(DEVICES)

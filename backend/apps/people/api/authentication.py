@@ -1,11 +1,12 @@
 """apps/people/api/authentication.py — the device key login: a paired device's requests log in as that device, in its
-own shop (AUTH-2; 03 §5.4, §5.9; ADR-0017, ADR-0018).
+own shop (AUTH-2; 03 §5.4, §5.9; ADR-0038, ADR-0018).
 
 A paired device keeps its key in a cookie, `device_key`, which page scripts can't read (HttpOnly). Every request it
 sends carries the cookie, and DeviceKeyAuthentication, a DRF login class, turns it into the device:
 
     cookie ──hash──▶ the door: which shop? ──▶ that shop open ──▶ the device, through the guard
-                     (apps/people/login_doors.py)                   blocked? 401 device.blocked
+                     (apps/people/login_doors.py)                   shop suspended? 401 shop.suspended
+                                                                    blocked? 401 device.blocked
                                                                     a change? the CSRF token, or 403
                                                                     ──▶ request.auth = the device
 
@@ -35,6 +36,7 @@ from apps.core.tenancy import shop_context
 from apps.people.device_keys import hash_device_key
 from apps.people.login_doors import shop_of_device_key
 from apps.people.models import Device, DeviceStatus
+from apps.people.selectors import LoginRefused, check_shop_active
 from apps.people.services import note_device_seen
 
 # The cookie's name, a promise to every browser that holds one: it never changes. It holds "key" on purpose: Django's
@@ -55,7 +57,7 @@ DEVICE_KEY_MAX_AGE = timedelta(days=400)
 @sensitive_variables()
 def set_key_cookie(response: HttpResponseBase, key: str) -> None:
     """Put the device's key in its cookie, on the answer about to leave (03 §5.9):
-    - HttpOnly: page scripts can't read it, so a bad script in the page can't steal it (ADR-0017);
+    - HttpOnly: page scripts can't read it, so a bad script in the page can't steal it (ADR-0038);
     - Secure, where the session's is (production): it travels over HTTPS only;
     - SameSite Strict: the browser never sends it with a request another website starts. The app and the API share
       one address, so the app itself never needs that;
@@ -75,7 +77,7 @@ def enforce_csrf(request: Request) -> None:
     """Refuse a change (POST and the like) that doesn't carry the CSRF token, with DRF's own check: the one its session
     login runs, so a refusal reads the same on every route (403 permission_denied, "CSRF Failed: ..."). A browser sends
     the device's cookie with every request to our address, even one another website makes it send; only our own pages
-    can read the `csrftoken` cookie and send its value back in the X-CSRFToken header (ADR-0017)."""
+    can read the `csrftoken` cookie and send its value back in the X-CSRFToken header (ADR-0038)."""
     SessionAuthentication().enforce_csrf(request)
 
 
@@ -106,13 +108,21 @@ class DeviceKeyAuthentication(BaseAuthentication):
         # The device itself, read through the guard inside its shop, which the door named. Opened for this read only:
         # the route opens it again for the whole visit, together with who acts (DeviceView).
         with shop_context(shop_id):
-            device = Device.objects.filter(key_hash=key_hash).first()
+            # Its shop comes with it, in the same query, for the check below.
+            device = Device.objects.select_related("shop").filter(key_hash=key_hash).first()
             if device is None:
                 # Gone between the door and this read, which nothing in the app does: no login, as for no device.
                 return None
             # Seen, blocked or not: a stolen phone that keeps calling shows when (02 v1.12). At most every few
             # minutes, so most visits write nothing (note_device_seen, apps/people/services.py).
             self.seen = note_device_seen(device, at=timezone.now())
+        # A suspended shop stops every way in (check_shop_active), asked before the device's own status: it is the shop
+        # that stopped it. The key itself still holds, and works again once the shop does (ADR-0018). 401, as for a
+        # blocked device: the key opens nothing now.
+        try:
+            check_shop_active(device.shop)
+        except LoginRefused as refused:
+            raise exceptions.AuthenticationFailed(str(refused), code=refused.code) from refused
         if device.status != DeviceStatus.ACTIVE:
             # Only an active device works (02 §5). Asked as "not active", never as "blocked", so a status a later card
             # adds, such as a retired device, is refused until that card says otherwise: the login fails closed. Today

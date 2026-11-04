@@ -10,7 +10,7 @@ pairing and `me`; later sync (SYNC-2 on) and PIN login (AUTH-4).
 - No device. A route that needs one refuses the visit (401 not_authenticated). A route a new device calls before
   it has a working key says `device_optional = True`, and then runs with no shop open: it may read no shop's table.
 - CSRF. A device's change is checked by its login; a change sent with no device, such as the start of a pairing, is
-  checked here. So every change on every device route needs the token (ADR-0017).
+  checked here. So every change on every device route needs the token (ADR-0038).
 - The cookie. When a visit moves the device's last_seen_at, its answer sends the key's cookie again, so a browser
   never drops the cookie of a device in use (03 §5.9).
 

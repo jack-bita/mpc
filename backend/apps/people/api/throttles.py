@@ -1,4 +1,5 @@
-"""apps/people/api/throttles.py — pairing is slowed down for whoever asks too often (AUTH-5; 03 §5.10).
+"""apps/people/api/throttles.py — pairing is slowed down for whoever asks too often, and how every limit tells who a
+caller is, by the network they call from, never their address (AUTH-5, AUTH-3; 03 §5.10).
 
 Two limits, 10 an hour each *(default)* (DEFAULT_THROTTLE_RATES, config/settings/base.py):
 
@@ -25,12 +26,14 @@ Two honest limits:
 """
 
 import ipaddress
+from typing import cast
 
 from django.conf import settings
 from django.core.cache import caches
+from django.http import HttpRequest
 from django.utils.crypto import salted_hmac
 from rest_framework.request import Request
-from rest_framework.throttling import SimpleRateThrottle
+from rest_framework.throttling import BaseThrottle, SimpleRateThrottle
 from rest_framework.views import APIView
 
 
@@ -48,6 +51,29 @@ def caller_network(address: str) -> str:
             return str(ip.ipv4_mapped)
         return str(ipaddress.IPv6Network((ip, 64), strict=False))
     return str(ip)
+
+
+def caller_address(request: HttpRequest | Request) -> str:
+    """The caller's address as the proxy in front saw it, never as the caller says it."""
+    header = settings.CLIENT_IP_HEADER
+    if not header:
+        # On a laptop and on the real server: the entry Caddy added to X-Forwarded-For, NUM_PROXIES from its end (DRF's
+        # own reading); the entries before it are the caller's own words. cast: DRF's type stubs ask for its Request,
+        # and it reads only `META`, which allauth's plain Django request has too.
+        return BaseThrottle().get_ident(cast(Request, request))
+    # On the demo: the header Cloudflare writes over any the caller sent (render.yaml). A request without it, which
+    # Cloudflare would never pass on, counts with the address it came from: the proxy in front, shared by every such
+    # request, so it is slowed down sooner, never let through.
+    meta_name = "HTTP_" + header.upper().replace("-", "_")
+    return str(request.META.get(meta_name) or request.META.get("REMOTE_ADDR", ""))
+
+
+def caller_fingerprint(limit: str, request: HttpRequest | Request) -> str:
+    """Who a limit counts this caller as: a fingerprint of their network, never the address. The counts sit in a table,
+    and in its backups, long after their hour, and an address can name a person. An HMAC with the server's secret key,
+    so the same network always gives the same fingerprint, and nobody without the key can tell which it was; the
+    limit's name goes into it, so one limit's rows say nothing about another's."""
+    return salted_hmac(limit, caller_network(caller_address(request)), algorithm="sha256").hexdigest()
 
 
 class OwnTableThrottle(SimpleRateThrottle):
@@ -76,23 +102,7 @@ class PairingStartThrottle(OwnTableThrottle):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
     def get_ident(self, request: Request) -> str:
-        # Kept as a fingerprint of the caller's network, never the address: the counts sit in a table, and in its
-        # backups, long after their hour, and an address can name a person. An HMAC with the server's secret key, so
-        # the same network always gives the same fingerprint, and nobody without the key can tell which it was.
-        return salted_hmac(self.scope, caller_network(self._address(request)), algorithm="sha256").hexdigest()
-
-    def _address(self, request: Request) -> str:
-        # The caller's address as the proxy in front saw it, never as the caller says it.
-        header = settings.CLIENT_IP_HEADER
-        if not header:
-            # On a laptop and on the real server: the entry Caddy added to X-Forwarded-For, NUM_PROXIES from its end
-            # (DRF's own reading); the entries before it are the caller's own words.
-            return super().get_ident(request)
-        # On the demo: the header Cloudflare writes over any the caller sent (render.yaml). A request without it, which
-        # Cloudflare would never pass on, counts with the address it came from: the proxy in front, shared by every
-        # such request, so it is slowed down sooner, never let through.
-        meta_name = "HTTP_" + header.upper().replace("-", "_")
-        return str(request.META.get(meta_name) or request.META.get("REMOTE_ADDR", ""))
+        return caller_fingerprint(self.scope, request)
 
 
 class PairingConfirmThrottle(OwnTableThrottle):
