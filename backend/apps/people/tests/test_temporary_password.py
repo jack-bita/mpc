@@ -29,6 +29,7 @@ from unittest import mock
 
 import pytest
 from django.contrib.auth.hashers import make_password
+from django.core import mail
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.test import Client
@@ -55,6 +56,8 @@ pytestmark = pytest.mark.django_db
 
 LOGIN = "/_allauth/browser/v1/auth/login"
 SESSION = "/_allauth/browser/v1/auth/session"
+RESET_REQUEST = "/_allauth/browser/v1/auth/password/request"
+RESET = "/_allauth/browser/v1/auth/password/reset"
 
 PHONE = "+255712345678"
 EMAIL = "asha@example.com"
@@ -388,6 +391,23 @@ def test_temporary_password_ends_old_sessions(baba: StaffMember, asha: StaffMemb
     set_for(asha, by=baba)
 
     assert lost_phone.get(SESSION).status_code == 401
+
+
+def test_temporary_password_ends_a_reset_link_already_sent(baba: StaffMember, asha: StaffMember) -> None:
+    # Whoever holds her old mailbox's link can't set a password of their own over the one Baba just gave her. Django's
+    # reset key is made from the stored password, so a new password ends it, by itself: this pins that.
+    client = Client()
+    client.post(RESET_REQUEST, {"email": EMAIL}, content_type="application/json")
+    [link] = [word for word in mail.outbox[-1].body.split() if "/password-reset#" in word]
+    key = link.partition("#")[2]
+
+    set_for(asha, by=baba)
+
+    sent = {"key": key, "password": "mahindi-ya-njano-2028"}
+    answer = client.post(RESET, sent, content_type="application/json")
+    assert answer.status_code == 400
+    assert [error["code"] for error in answer.json()["errors"]] == ["invalid_password_reset"]
+    assert log_in(phone=PHONE, password=TEMPORARY)[0] == 200
 
 
 @pytest.mark.parametrize(("name", "login"), [("phone", PHONE), ("email", EMAIL)])

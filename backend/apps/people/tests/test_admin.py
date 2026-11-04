@@ -152,6 +152,18 @@ def test_admin_first_password_sets_the_mark(superuser_client: Client) -> None:
     assert baba.must_change_password is True
 
 
+def test_admin_first_password_on_the_persons_page_sets_the_mark(superuser_client: Client) -> None:
+    # A person added with no password, given one later on their own page. Django shows no "Disabled" switch there, as
+    # there is no password to disable yet, so the form sends less than a reset's: this pins that the mark still goes on.
+    juma = User.objects.create_user(full_name="Juma Demo", phone=PHONE)
+    assert not juma.has_usable_password()
+    sent = {"password1": NEW_PASSWORD, "password2": NEW_PASSWORD}
+    assert superuser_client.post(f"{USERS}{juma.pk}/password/", sent).status_code == 302
+    juma.refresh_from_db()
+    assert juma.check_password(NEW_PASSWORD)
+    assert juma.must_change_password is True
+
+
 def test_admin_adding_with_no_password_sets_no_mark(superuser_client: Client) -> None:
     # A PIN-only worker has no password to change, and the mark would say otherwise.
     sent = {"full_name": "Juma Demo", "phone": PHONE, "email": "", "language": "sw", "usable_password": "false"}
