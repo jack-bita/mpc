@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.19 · 4 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.20 · 4 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, and AD3 ADR-0038 **(v1.16)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.20** (4 Nov 2026, AUTH-4): choices by Jack, made while planning AUTH-4 (04 v1.33). A PIN lock's wait stops growing at an hour, and a new PIN lifts it. A person on a temporary password can still log in by PIN and sell, while the office routes stay closed. In the plan he approved, a PIN session names its device's shop and the person's job there, and logout and `me` read the session, not the device's key (§5.9, §5.10). The device joins the two books in AUTH-8 (§5.16). Marked **(v1.20)**.
 
 **Changes in v1.19** (4 Nov 2026, AUTH-6): a first or forgotten password is built: who may set one, the mark that closes the office routes, and the one route that ends it (§5.9, 02 v1.15). Marked **(v1.19)**.
 
@@ -364,9 +366,11 @@ Confirming a one-screen sale:
 **The device key's cookie** **(v1.14)** is `device_key`: HttpOnly, Secure, SameSite Strict (the app and the API share one address, so it never needs to go to another site), and sent only to `/api/`. Django's error pages hide a cookie whose name holds `KEY`. Browsers keep a cookie 400 days at most, so the server sends it again whenever the device's `last_seen_at` moves, at most every 5 minutes; that write skips the edit history. A blocked device is refused with `401 device.blocked`, and is still seen, so a stolen phone that keeps calling shows when.
 
 **Staff PIN sessions**
-- **Online:** device key + staff PIN → a Django session for that person on that device. Idle lock after 15 minutes *(default, a setting)*. Quick switch = another PIN.
+- **Online:** device key + staff PIN → a Django session for that person on that device. Idle lock after 15 minutes *(default, a setting)*. Quick switch = another PIN. Five wrong PINs lock that person on that device for a minute, doubling each time, up to an hour **(v1.20)**: someone typing wrong PINs on purpose can't keep a coworker out for days. A new PIN lifts the lock at once.
+- **Which job** **(v1.20)**: the session names the device's shop and the person's job there, so a person with jobs at two shops isn't asked to choose at the counter.
+- **On a temporary password** **(v1.20)**: the PIN still works and the person can sell. The office routes stay closed (`password.must_change`) until they choose their own, and `me` says so, so the app can tell them why.
 - **Offline verifier, made on the device** ✚: the first time a person logs in online on a device, the device stores its own check value for their PIN (PBKDF2 through the browser's WebCrypto, with a per-device salt). PIN hashes never travel from the server. Until a person's first online login on a device, they need the internet to log in there. When a PIN changes, devices drop the old check value.
-- **Offline:** the device checks the PIN against that value and starts a local session. Five wrong PINs lock that person on that device for a minute, doubling each time.
+- **Offline:** the device checks the PIN against that value and starts a local session. Five wrong PINs lock that person on that device for a minute, doubling each time, up to an hour **(v1.20)**.
 - PINs: 4 digits *(default)*, not 1234 and not four of a kind (0000, 1111…) **(v1.7)**, changed only online. On the server they are hashed with Argon2 plus a server secret, so a stolen database alone doesn't reveal them.
 - **Honest limit:** a 4-digit PIN check stored on a stolen device can be guessed by someone with the skills. That is accepted: PINs only work on registered devices, and the answer to a stolen device is blocking it. PINs stop coworkers using each other's names; they don't stop thieves.
 
@@ -393,7 +397,7 @@ Confirming a one-screen sale:
 | `/api/v1/<app>/…` | Office REST: products, prices, deliveries, counts, contacts, cash-up, reports, staff, settings, flags, devices (a manager confirms a pairing there, AUTH-5) **(v1.14)**, and lists, renames, blocks and unblocks them; the list shows a side's devices to whoever works on that side, and every change needs `device.manage` on the device's home side (Jack, AUTH-5) **(v1.15)** | Staff session |
 | `/api/sync/v1/bootstrap`, `/pull`, `/push`, `/attachments/{id}` | Sync (§6) | Device key |
 | `/_allauth/browser/v1/…` | Password login, logout, password reset, session (django-allauth): only these, and they answer in allauth's own shape, not the API's one error shape **(v1.17)** | — |
-| `/api/auth/…` | PIN login, logout, me (our own) | Device key |
+| `/api/auth/…` | PIN login, logout, me (our own) | PIN login: device key. Logout and me: the session, so logout works on a blocked device, and me serves a password login too **(v1.20)** |
 | `/api/devices/v1/pairing/`, `/api/devices/v1/me/` | A new device asks to join; a paired device learns its shop. Versioned like sync: devices are the slowest to update **(v1.14)** | Device key (none yet, to ask) |
 | `/api/health/` | Uptime check | Public |
 | `/api/schema/`, `/api/docs/` | The OpenAPI description, and its docs page | Open on the demo and on a laptop; closed in production, where the page would run a CDN's code beside the superuser's login **(v1.8)** |
@@ -443,7 +447,7 @@ The Foods cashier's queue and notifications must update within seconds. Start wi
 - **Business actions** (cancel, refund, approve, change a price, void; suspend a staff member, bring one back, mark one as left **(v1.11)**) write an `AuditEvent` in the service, with the reason and the approval. It is written in the action's own transaction, so the action and its line are kept together or not at all; the approval joins with the Approval table **(v1.11)**.
 - **Office edits** (products, contacts, staff, roles, devices, sides, payment accounts and stock locations) are captured by database triggers, so no change can skip the audit **(v1.11)**:
   - One trigger function of our own, `control_record_edit()`, runs after every UPDATE of an office table and writes one row of `control.EditEvent`: the shop, who, when (the edit's own time, `clock_timestamp()`), the row (a type code and its UUID, §5.1), and the columns that changed, before and after, every value as text. Nothing visible changed, nothing written. A PIN hash, or any column named as a secret, is never copied. Only that trigger writes the table: a guard refuses any other INSERT, `bulk_create` and SQL typed by hand included.
-  - Who: each office visit tells PostgreSQL the staff member acting and the visit's shop (`set_config`, `apps/core/acting.py`), and the trigger reads both: it names the person, and refuses an edit of another shop's row (T1). A service that passes its own `by` (`editing()`, the staff actions) tells PostgreSQL too, so the history names the same person as `updated_by` or the audit line. Outside a visit (a nightly job, the seed) nobody is named and no shop is checked: the system. The device joins in AUTH-4.
+  - Who: each office visit tells PostgreSQL the staff member acting and the visit's shop (`set_config`, `apps/core/acting.py`), and the trigger reads both: it names the person, and refuses an edit of another shop's row (T1). A service that passes its own `by` (`editing()`, the staff actions) tells PostgreSQL too, so the history names the same person as `updated_by` or the audit line. Outside a visit (a nightly job, the seed) nobody is named and no shop is checked: the system. The device joins in AUTH-8 **(v1.20)**.
   - Every shop table that is not a ledger gets the trigger in its migration (`RecordEdits`), unless `NO_EDIT_HISTORY` lists it with its reason (a flag keeps its notes; an account–side link is never edited). A test turns CI red for a table without it, built wrong, or copying a secret column. Its SQL is frozen once on `main`, as the ledgers' rules are (§5.6).
   - Not django-pghistory, the first default: its tables, one per tracked table, have no shop guard and no PROTECT links, and CORE-7's sweep refuses them (ADR-0036).
 

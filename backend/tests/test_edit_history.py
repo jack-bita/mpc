@@ -46,7 +46,7 @@ def office_tables() -> list[type[models.Model]]:
     return [table for table in changeable_tables() if table._meta.label not in NO_EDIT_HISTORY]
 
 
-# The function every office table's trigger runs (apps/control/operations.py). When AUTH-4 moves the tables to
+# The function every office table's trigger runs (apps/control/operations.py). When AUTH-8 moves the tables to
 # control_record_edit_v2(), for the device, this name moves with them, and the check finds any table left behind.
 RECORD_EDIT_FUNCTION = "control_record_edit"
 

@@ -309,7 +309,7 @@ PINNED_SQL = {
 def test_edit_trigger_sql_never_changes_once_on_main(name: str, fingerprint: str) -> None:
     # Rule 9: a migration on main is never edited. Every office table's migration runs these strings, so editing one
     # would edit those migrations from the outside: a fresh database would get the new rule, a live one would keep
-    # the old. A change is a new rule instead (control_record_edit_v2), as AUTH-4's device will be.
+    # the old. A change is a new rule instead (control_record_edit_v2), as AUTH-8's device will be.
     sql = getattr(operations, name)
     assert hashlib.sha256(sql.encode()).hexdigest() == fingerprint, (
         f"{name} was edited. Every office table's migration runs it, so don't edit it: write a new rule "
