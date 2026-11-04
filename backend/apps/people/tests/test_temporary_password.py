@@ -35,11 +35,13 @@ from django.test import Client
 from django.views.debug import ExceptionReporter
 
 from apps.control.models import AuditAction, AuditEvent
-from apps.core.permissions import Permission, RoleTemplate
+from apps.core.permissions import HeldPermissions, Permission, RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import StaffMember, User
+from apps.people.models import Role, StaffMember, User
+from apps.people.permissions import given_permissions
 from apps.people.services import (
     add_staff,
+    assign_role,
     grant_permission,
     mark_left,
     set_temporary_password,
@@ -438,6 +440,90 @@ def test_a_refused_try_pays_for_no_hash(baba: StaffMember, meneja: StaffMember) 
     with mock.patch("apps.people.services.make_password") as hashing:
         assert refusal(baba, by=meneja) == "password.superuser_only"
     hashing.assert_not_called()
+
+
+def give_key(staff: StaffMember, code: Permission = Permission.PAY_APPROVE, *, by: StaffMember | None) -> None:
+    with shop_context(staff.shop_id):
+        grant_permission(staff, code, side=None, by=by)
+
+
+def code_of_giving(staff: StaffMember, code: Permission = Permission.PAY_APPROVE, *, by: StaffMember | None) -> str:
+    with pytest.raises(ValidationError) as refused:
+        give_key(staff, code, by=by)
+    return str(refused.value.code)
+
+
+def test_a_key_the_setter_lacks_waits_for_the_persons_own_password(
+    shop_a: Shop, baba: StaffMember, meneja: StaffMember
+) -> None:
+    # The trap: Meneja set Juma's temporary password, and knows it. If Baba gives Juma the pay key now, Meneja could log
+    # in as Juma and hold it, a key the who-may rule kept from him. So "not yet": Juma chooses his own first.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    set_for(juma, by=meneja)
+
+    assert code_of_giving(juma, by=baba) == "staff.temporary_password_open"
+    with shop_context(shop_a):
+        assert given_permissions(juma) == HeldPermissions()
+        # A whole role is held back the same way, by the keys in it Meneja lacks.
+        owner_role = Role.objects.get(template=RoleTemplate.OWNER)
+        with pytest.raises(ValidationError) as refused:
+            assign_role(juma, owner_role, side=None, by=baba)
+    assert refused.value.code == "staff.temporary_password_open"
+
+    # Once Juma has chosen his own, Meneja knows nothing, and the key can be given.
+    User.objects.filter(pk=juma.user_id).update(must_change_password=False)
+    give_key(juma, by=baba)
+    with shop_context(shop_a):
+        assert Permission.PAY_APPROVE in given_permissions(juma).on(None)
+
+
+def test_a_key_the_setter_holds_is_given_at_once(shop_a: Shop, baba: StaffMember, meneja: StaffMember) -> None:
+    # Meneja could use this key himself anyway, so nothing is gained by knowing the password.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    set_for(juma, by=meneja)
+    give_key(juma, Permission.SALE_WRITE, by=baba)
+    with shop_context(shop_a):
+        assert Permission.SALE_WRITE in given_permissions(juma).on(None)
+
+
+def test_the_owner_who_set_it_may_give_anything(shop_a: Shop, baba: StaffMember) -> None:
+    # A new hire, in one sitting: Baba adds Juma, sets his password and gives him his keys, in whichever order.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    set_for(juma, by=baba)
+    give_key(juma, by=baba)
+    with shop_context(shop_a):
+        assert Permission.PAY_APPROVE in given_permissions(juma).on(None)
+
+
+def test_a_new_temporary_password_from_the_owner_opens_the_way(
+    shop_a: Shop, baba: StaffMember, meneja: StaffMember
+) -> None:
+    # Juma is away, and Baba can't wait: he sets a new one himself, so what Meneja knows opens nothing. The last line
+    # counts, not the first.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    set_for(juma, by=meneja)
+    assert code_of_giving(juma, by=baba) == "staff.temporary_password_open"
+    set_for(juma, by=baba, password="mahindi-ya-njano-2028")
+    give_key(juma, by=baba)
+
+
+def test_a_setter_who_stopped_working_holds_nothing(shop_a: Shop, baba: StaffMember, meneja: StaffMember) -> None:
+    # Meneja was suspended after he set it, and still knows it. His keys are gone, so every key waits: he must not gain
+    # one through Juma, even one he used to hold.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    set_for(juma, by=meneja)
+    with shop_context(shop_a):
+        suspend(meneja, by=None, reason="Uchunguzi")
+    assert code_of_giving(juma, Permission.SALE_WRITE, by=baba) == "staff.temporary_password_open"
+
+
+def test_a_password_typed_in_the_admin_holds_no_key_back(shop_a: Shop, baba: StaffMember) -> None:
+    # The superuser typed it, and holds every shop's rows anyway: there is no setter to compare, and no audit line.
+    juma = job(shop_a, "Juma", phone="+255712345674")
+    User.objects.filter(pk=juma.user_id).update(must_change_password=True)
+    give_key(juma, by=baba)
+    with shop_context(shop_a):
+        assert Permission.PAY_APPROVE in given_permissions(juma).on(None)
 
 
 def test_a_second_temporary_password_replaces_the_first(baba: StaffMember, asha: StaffMember) -> None:

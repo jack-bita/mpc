@@ -35,12 +35,13 @@ from django.db.models import Q
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
-from apps.control.models import AuditAction
+from apps.control.models import AuditAction, AuditEvent
 from apps.control.services import audit
 from apps.core.acting import acting_as
 from apps.core.editing import editing
+from apps.core.links import link_type_of
 from apps.core.models import SequenceName, ShopScoped
-from apps.core.permissions import ROLE_TEMPLATES, Permission, RoleTemplate
+from apps.core.permissions import ROLE_TEMPLATES, HeldPermissions, Permission, RoleTemplate
 from apps.core.sequences import next_number
 from apps.core.tenancy import ALL_SHOPS, current_shop, shop_context
 from apps.people.accounts import lift_wrong_password_count
@@ -394,9 +395,40 @@ def _locked_receiver(staff: StaffMember) -> StaffMember:
     return staff
 
 
+def _check_no_open_temporary_password(staff: StaffMember, codes: Collection[str], side: Side | None) -> None:
+    # The trap (Jack, 4 Nov 2026): Meneja set Juma's temporary password, and still knows it. If Baba gives Juma the pay
+    # key now, Meneja could log in as Juma and hold a key the who-may rule kept from him (_check_may_set_password). So
+    # while that password is open, a key its setter lacks waits: Juma chooses his own first, or the owner sets a new one
+    # himself. Called with the person locked, so set_temporary_password can't slip in between.
+    if not User.objects.filter(pk=staff.user_id, must_change_password=True).exists():
+        return
+    # Who set it is kept in the audit trail. The last line counts, as a later one replaced the password. No line, or
+    # nobody named: typed in the admin, by the superuser, who reads every shop's rows anyway.
+    set_by = (
+        AuditEvent.objects.filter(
+            action=AuditAction.STAFF_TEMPORARY_PASSWORD, subject_type=link_type_of(staff), subject_id=staff.pk
+        )
+        .order_by("-created_at", "-pk")
+        .values_list("created_by_id", flat=True)
+        .first()
+    )
+    if set_by is None:
+        return
+    # Only codes from the list, as _check_giver: a typo is reported as a typo, by the table's own rule.
+    given = frozenset(code for code in codes if code in Permission.values)
+    to_give = HeldPermissions(every_side=given) if side is None else HeldPermissions(on_side={side.pk: given})
+    # What the setter holds now: one suspended since holds nothing, so they gain nothing through this person.
+    if not held_permissions(StaffMember.objects.get(pk=set_by)).covers(to_give):
+        raise ValidationError(
+            "Who set this person's temporary password lacks this key: they choose their own first.",
+            code="staff.temporary_password_open",
+        )
+
+
 def assign_role(staff: StaffMember, role: Role, *, side: Side | None, by: StaffMember | None) -> RoleAssignment:
     """Give a person a role on one side, or on every side (`side=None`), a side added later included. `by`: who
-    gives it; None for the system or the superuser."""
+    gives it; None for the system or the superuser. Refused (staff.temporary_password_open) while a temporary password
+    someone without those keys set is still open."""
     _check_shop(staff.shop_id, by)
     _check_same_shop(staff, role, side)
     with transaction.atomic():
@@ -407,6 +439,7 @@ def assign_role(staff: StaffMember, role: Role, *, side: Side | None, by: StaffM
         # given, or this waits for them.
         role = Role.objects.select_for_update().get(pk=role.pk)
         _check_giver(by, role.permissions, side)
+        _check_no_open_temporary_password(staff, role.permissions, side)
         given = RoleAssignment(shop_id=staff.shop_id, staff=staff, role=role, side=side, created_by=by)
         # Every rule in Meta first: the same role twice on one side comes back as a code (role.already_given).
         given.full_clean()
@@ -424,6 +457,7 @@ def grant_permission(
     _check_giver(by, [permission], side)
     with transaction.atomic():
         staff = _locked_receiver(staff)
+        _check_no_open_temporary_password(staff, [permission], side)
         granted = PermissionGrant(shop_id=staff.shop_id, staff=staff, permission=permission, side=side, created_by=by)
         # A code from the list only (permission.unknown), and once per side (permission.already_given).
         granted.full_clean()
