@@ -3,15 +3,9 @@ member, at their shop (AUTH-3; 03 §5.9; ADR-0038).
 
 allauth's login starts a Django session, which remembers a person: a User, who belongs to no shop. An office route
 needs more (CORE-6): the job the person acts in, an Actor (apps/core/tenancy.py) in `request.auth`, which names the shop
-the visit works for. StaffSessionAuthentication turns one into the other, on every visit:
-
-    session ──▶ the person ──▶ the door: which shops?         (apps/people/login_doors.py)
-                                 none ──▶ no job: office routes refuse, 403 not_authenticated
-                                 two  ──▶ 403 staff.choose_shop, until AUTH-7 lets the person choose
-                                 one  ──▶ that shop open ──▶ the job, through the guard
-                                            shop suspended: 403 shop.suspended
-                                            person suspended: 403 staff.suspended
-                                            ──▶ request.auth = the staff member
+the visit works for. StaffSessionAuthentication turns one into the other, on every visit: which job counts, and who is
+refused, are rules that every login shares, so they live in job_of_person (apps/people/selectors.py). This class only
+turns its answer into DRF's.
 
 On every visit, never only at login: a suspension takes effect on the person's very next request, whatever session they
 hold (ADR-0038), and bringing them back needs no new login. The route then opens the shop again for the whole visit
@@ -27,10 +21,8 @@ from rest_framework import exceptions
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.request import Request
 
-from apps.core.tenancy import shop_context
-from apps.people.login_doors import shops_of_person
-from apps.people.models import StaffMember, StaffStatus, User
-from apps.shops.models import ShopStatus
+from apps.people.models import StaffMember, User
+from apps.people.selectors import LoginRefused, job_of_person
 
 
 class StaffSessionAuthentication(SessionAuthentication):
@@ -44,33 +36,12 @@ class StaffSessionAuthentication(SessionAuthentication):
             # Nobody logged in, or a person switched off since (User.is_active): no login, as for a stranger.
             return None
         user = logged_in[0]
-        shop_ids = shops_of_person(user.pk)
-        if not shop_ids:
-            # No current job: the superuser, who is nobody's staff, or someone who has left. Still logged in, but
-            # nobody at any shop: `request.auth` stays empty, and every office route refuses (CORE-6).
-            return user, None
-        if len(shop_ids) > 1:
-            # Which shop would this visit work for? Never a guess: the wrong shop's rows would look like the person's
-            # own. Refused safely until AUTH-7 lets them choose; nobody works at two shops today (Jack, 3 Nov 2026).
-            # English for the logs; the app translates the code (ADR-0032).
-            raise exceptions.AuthenticationFailed("This person works at two shops.", code="staff.choose_shop")
-        # The job itself, read through the guard inside its shop, which the door named. Opened for this read only: the
-        # route opens it again for the whole visit, together with who acts.
-        with shop_context(shop_ids[0]):
-            staff = (
-                StaffMember.objects.select_related("shop").filter(user=user).exclude(status=StaffStatus.LEFT).first()
-            )
-        if staff is None:
-            # Left between the door and this read: no job, as above.
-            return user, None
-        # Asked as "not active", never as "suspended", so a status a later card adds is refused until that card says
-        # otherwise: the login fails closed, as the device's does. The shop first: a suspended shop stops everyone,
-        # whatever each person's own status (ADR-0038).
-        if staff.shop.status != ShopStatus.ACTIVE:
-            raise exceptions.AuthenticationFailed("This shop is suspended.", code="shop.suspended")
-        if staff.status != StaffStatus.ACTIVE:
-            raise exceptions.AuthenticationFailed("This person is suspended.", code="staff.suspended")
-        return user, staff
+        try:
+            # None: no current job. Still logged in, but nobody at any shop: `request.auth` stays empty, and every
+            # office route refuses (CORE-6).
+            return user, job_of_person(user)
+        except LoginRefused as refused:
+            raise exceptions.AuthenticationFailed(str(refused), code=refused.code) from refused
 
 
 # drf-spectacular's extension base files each subclass in a registry, in an __init_subclass__ with no type hints, which
