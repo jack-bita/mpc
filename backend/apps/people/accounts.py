@@ -18,12 +18,15 @@ ACCOUNT_ADAPTER (config/settings/base.py). This file owns ours.
   five wrong passwords every five minutes. Every login limit has this cost; two-factor codes are *Later*.
 - A person who has an email may reset their password by a link sent to it; anyone else asks the owner (ADR-0038). A new
   password lifts the person's count of wrong passwords (see set_password).
+- A person who chooses a password, by the change route or by a link, has their "must change password" mark taken off,
+  and may not choose the temporary one they were given: the owner knows it (AUTH-6; see clean_password, set_password).
 """
 
 from typing import Any
 
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.core import ratelimit
+from django.core.exceptions import ValidationError
 from django.http import HttpRequest
 from django.utils.crypto import salted_hmac
 
@@ -54,7 +57,21 @@ class AccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
         # every login must start before it knows a shop.
         return User.objects.filter(phone=phone).first()
 
+    def clean_password(self, password: str, user: User | None = None) -> str:
+        # Every password a person chooses passes here, by the change route or by a link. While the mark is on, the
+        # current one is the one the owner typed (ADR-0038): choosing it again would leave the owner knowing it for
+        # good, with the mark off and nothing to show for it. An error code of our own, which UI-5's form translates
+        # (ADR-0032).
+        if user is not None and user.must_change_password and user.check_password(password):
+            raise ValidationError("Choose a password other than the temporary one.", code="password.same_as_temporary")
+        cleaned: str = super().clean_password(password, user)
+        return cleaned
+
     def set_password(self, user: User, password: str) -> None:
+        # Only a person choosing their own comes here: the change route and the reset link. A temporary password is set
+        # by our own service, past this method (set_temporary_password, apps/people/services.py). So the mark comes off
+        # here, in allauth's one save with the new password: never one without the other.
+        user.must_change_password = False
         # Someone who forgot their password has usually typed it wrong a few times: with a new one, they must not still
         # be told to wait. allauth lifts the count itself, but only for the emails in its own table of addresses, which
         # stays empty, as our User holds the email (ACCOUNT_PASSWORD_RESET_TOKEN_GENERATOR, config/settings/base.py). So

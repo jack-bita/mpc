@@ -198,7 +198,6 @@ def test_signup_closed() -> None:
     [
         "/_allauth/browser/v1/account/email",
         "/_allauth/browser/v1/account/phone",
-        "/_allauth/browser/v1/account/password/change",
         "/_allauth/browser/v1/account/authenticators",
         "/_allauth/browser/v1/auth/code/request",
         "/_allauth/browser/v1/auth/code/confirm",
@@ -229,6 +228,7 @@ def test_only_the_routes_on_our_list_are_mounted() -> None:
         "password-login",
         "password-reset-request",
         "password-reset",
+        "password-change",
     }
 
 

@@ -73,6 +73,26 @@ def test_password_reset_by_email(manager: User) -> None:
     assert post(Client(), LOGIN, phone=PHONE, password=NEW_PASSWORD) == (200, [])
 
 
+def test_reset_link_clears_the_mark(manager: User) -> None:
+    # Someone with a temporary password and an email may get back in by the link instead: what they set is their own, so
+    # the mark comes off, whichever way they chose it (ADR-0038).
+    User.objects.filter(pk=manager.pk).update(must_change_password=True)
+    post(Client(), REQUEST, email=EMAIL)
+    assert post(Client(), RESET, key=key_from_the_email(), password=NEW_PASSWORD) == (401, [])
+    manager.refresh_from_db()
+    assert manager.must_change_password is False
+
+
+def test_reset_link_cannot_keep_the_temporary_password(manager: User) -> None:
+    # The same rule by the link as by the change route: the owner knows that one, so it can't become the person's own.
+    User.objects.filter(pk=manager.pk).update(must_change_password=True)
+    post(Client(), REQUEST, email=EMAIL)
+    status, codes = post(Client(), RESET, key=key_from_the_email(), password=PASSWORD)
+    assert (status, codes) == (400, ["password.same_as_temporary"])
+    manager.refresh_from_db()
+    assert manager.must_change_password is True
+
+
 def test_password_reset_with_no_phone() -> None:
     # An email and no phone, as the superuser has: a person holds only some of the names they could log in by.
     User.objects.create_user(full_name="Msimamizi Mfano", email=EMAIL, password=PASSWORD)
