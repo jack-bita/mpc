@@ -22,6 +22,7 @@ import pytest
 from django.db import connection
 from django.test import Client
 from django.test.utils import CaptureQueriesContext
+from pytest_django import Settings
 from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
@@ -145,6 +146,22 @@ def test_two_shops_must_choose(owner: StaffMember, phone: APIClient, shop_b: Sho
     with shop_context(shop_b):
         mark_left(second, left_on=second.started_on, by=None, reason="Moved to another town")
     assert phone.get(SIDES).status_code == 200
+
+
+@pytest.mark.parametrize("route", ["/api/schema/", "/api/docs/"])
+def test_api_docs_answer_the_same_for_a_suspended_session(
+    owner: StaffMember, phone: APIClient, shop_a: Shop, settings: Settings, route: str
+) -> None:
+    # The docs hold no shop's data, and never read who is asking (DocsAccess). So a browser still holding a suspended
+    # person's session gets what any visitor gets: the page on the demo, and "not found" on the real server, not a 403
+    # that says the address is there.
+    with shop_context(shop_a):
+        suspend(owner, by=None, reason="Cash short for two weeks")
+
+    settings.API_DOCS_PUBLIC = True
+    assert phone.get(route).status_code == 200
+    settings.API_DOCS_PUBLIC = False
+    assert phone.get(route).status_code == 404
 
 
 def test_superuser_session_stays_out_of_office(superuser_client: Client) -> None:
