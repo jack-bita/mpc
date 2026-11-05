@@ -10,8 +10,8 @@
 #   6. the page is checked again on every visit (max-age=0), so a deploy reaches the browser at once;
 #   7. a file under /_next/static/, named after its content, is cached for good (immutable);
 #   8. the app's manifest is served as a manifest, so Chrome can offer to install the app (SPIKE-1);
-#   9. the service worker is served as JavaScript, checked again on every visit, with the app's files in
-#      its list (SPIKE-1);
+#   9. the service worker is served as JavaScript, checked again on every visit, with the app's files and
+#      both fonts in its list (SPIKE-1, UI-7);
 #  10. the page shows the version the image was built with, so a device's version can be checked (SPIKE-1);
 #  11. the container is removed afterwards, whether the checks passed or not.
 # A "smoke test": the quickest check that the thing starts and answers at all, before anything deeper.
@@ -127,7 +127,12 @@ sw="$(get --include "$base/sw.js")" || fail "/sw.js did not answer"
 [[ "${sw,,}" == *"cache-control: max-age=0, public"* ]] ||
   fail "/sw.js may be kept by the browser (want Cache-Control: max-age=0)"
 [[ "$sw" == *'url:"index.html"'* ]] || fail "/sw.js doesn't list index.html among the files it keeps"
-echo "ok: /sw.js is served as JavaScript, checked on every visit, and keeps index.html"
+# - Both fonts (frontend/src/fonts/): a font the worker doesn't keep is gone with the network, and the
+#   screen only falls back to another font, with no error to see (ADR-0039). Counted, not named, as
+#   Next.js makes up each file's name. `|| true`: finding none must reach the message below.
+fonts="$({ grep -oE '[^"]+\.woff2' <<<"$sw" || true; } | sort -u | wc -l)"
+[[ "$fonts" -eq 2 ]] || fail "/sw.js keeps $fonts font files, not the app's 2"
+echo "ok: /sw.js is served as JavaScript, checked on every visit, and keeps index.html and both fonts"
 
 # 10. The version on the page (frontend/src/lib/version.ts): the commit, cut to 7 characters as GitHub
 # shows it. The word is home.version in frontend/messages/sw.json: change it there, change it here. With

@@ -34,9 +34,11 @@ export function UpdatePrompt() {
   return (
     // role="status": a screen reader reads the bar out when it appears, without pulling the person away
     // from what they are doing. Fixed to the bottom of the screen, above the page.
+    // print:hidden: a new version can be waiting while a slip prints, and this bar sits above every
+    // page, so without it the customer's paper would carry it (SPIKE-2).
     <div
       role="status"
-      className="fixed inset-x-0 bottom-0 flex items-center justify-between gap-4 bg-primary p-4 text-primary-foreground"
+      className="fixed inset-x-0 bottom-0 flex items-center justify-between gap-4 bg-primary p-4 text-primary-foreground print:hidden"
     >
       <span>{sw.update.ready}</span>
       {/* A big tap target for phones (03 §7.3): at least 48 pixels high. */}

@@ -1,8 +1,8 @@
 // eslint.config.mjs — the lint rules for the frontend (`pnpm lint`).
 //
 // Lint finds likely bugs that type checks miss: a hook called inside an `if`, a missing
-// `key` in a list, an <img> without alt text. We use Next.js's own rule sets and add none
-// of our own yet; later cards add rules for our own boundaries.
+// `key` in a list, an <img> without alt text. We use Next.js's own rule sets, plus rules for
+// our own boundaries.
 //
 // `pnpm lint` runs ESLint with --max-warnings=0: Next's sets make some rules (an unused
 // variable) only warnings, and ESLint still exits 0 on warnings, so CI would stay green
@@ -17,8 +17,25 @@ export default defineConfig([
   ...nextVitals,
   // The same for TypeScript files, plus typescript-eslint's recommended rules.
   ...nextTs,
-  // Last, so it wins: switch off every rule about layout. Prettier owns layout, and two
-  // tools with opinions on spacing would only fight.
+  {
+    rules: {
+      // Our fonts live in the repo, so builds and devices never depend on another company's server.
+      // next/font/google is one easy line away, and it would look harmless in a review (ADR-0039).
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next/font/google",
+              message: "Fonts live inside the app, in src/fonts/ (ADR-0039).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // Last of the rule sets, so it wins: switch off every rule about layout. Prettier owns layout,
+  // and two tools with opinions on spacing would only fight.
   prettier,
   // Built or generated files: nobody writes them by hand, so nobody lints them. ESLint
   // doesn't read .gitignore, so this list repeats .prettierignore's on purpose.
