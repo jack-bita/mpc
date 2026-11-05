@@ -6,6 +6,7 @@
 //
 // It runs in plain Node, as manifest.test.ts does, because it reads files on disk and runs ESLint.
 // @vitest-environment node
+import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -14,15 +15,35 @@ import { describe, expect, it } from "vitest";
 
 const here = (name: string) => fileURLToPath(new URL(name, import.meta.url));
 
+// Each font's fingerprint is here, beside its name, so that swapping one font's file for the other's
+// fails too. These are the exact files whose digits were measured (src/fonts/fonts.ts).
 const FONTS = [
-  { font: "source-sans-3.woff2", licence: "source-sans-3-LICENSE.txt" },
+  {
+    font: "source-sans-3.woff2",
+    licence: "source-sans-3-LICENSE.txt",
+    sha256: "19143dca075972bc84e3fd9eab7416dd40cc565dccb2435a044bdfabe060c7d5",
+  },
   {
     font: "atkinson-hyperlegible-next.woff2",
     licence: "atkinson-hyperlegible-next-LICENSE.txt",
+    sha256: "18b2a1a39a2fa298b0ba5390aca68462669826c90925656f1c1f6796e0e1bbaf",
   },
 ];
 
-describe.each(FONTS)("$font", ({ font, licence }) => {
+describe.each(FONTS)("$font", ({ font, licence, sha256 }) => {
+  it("is the very file whose digits were measured", () => {
+    // Money must line up (04 UI-7), and only a real browser can measure digits, which a unit test
+    // doesn't have. So the measuring stays true only while the file stays the same. A new file is
+    // allowed, but it has to come through here, and that is the moment to measure again.
+    const actual = createHash("sha256")
+      .update(readFileSync(here(font)))
+      .digest("hex");
+    expect(
+      actual,
+      `${font} changed: measure its digits again (fonts.ts), then update its sha256 here`,
+    ).toBe(sha256);
+  });
+
   it("is a real font file, in its small Latin version", () => {
     // Every WOFF2 file starts with these four letters. A saved error page would not, and the browser
     // would only show the next font in line, with no error anyone sees.

@@ -133,7 +133,8 @@
   html {
     @apply font-sans;
     /* Every digit the same width, so money lines up in columns. On the whole page, so no screen can
-       forget it: Atkinson's normal digits run from 407 to 648 wide (src/fonts/fonts.ts). */
+       forget it: Atkinson's normal digits run from 407 to 648 wide, in units per 1,000 of the font's
+       size (src/fonts/fonts.ts). */
     font-variant-numeric: tabular-nums;
   }
 }
