@@ -138,16 +138,18 @@ def _check_reason(reason: str, *, code: str = "staff.reason_required") -> None:
 def _save(staff: StaffMember, *, by: StaffMember | None, fields: list[str]) -> None:
     # Saves the changed fields, with `by` told to PostgreSQL for the save: the history line its trigger writes then
     # names the same person as the action's audit line, even outside an office visit, as in a job or a command
-    # (02 v1.7: one fact, one answer; apps/core/acting.py). With `by` None, the system acts, and nobody is told.
+    # (02 v1.7: one fact, one answer; apps/core/acting.py). With `by` None, the system acts, and nobody is told. No
+    # device named here: the visit's stays as told (X3).
     with acting_as(by) if by is not None else nullcontext():
         staff.save(update_fields=fields)
 
 
 def _locked(staff: StaffMember) -> StaffMember:
-    # The row read again, and locked until the transaction ends (SELECT ... FOR UPDATE). Two managers
+    # The row read again, and locked until the transaction ends (SELECT ... FOR NO KEY UPDATE). Two managers
     # acting on Asha at the same moment take turns, and the second sees what the first one wrote, not
-    # the old copy on their screen.
-    return StaffMember.objects.select_for_update().get(pk=staff.pk)
+    # the old copy on their screen. no_key, as in _locked_pair: a line that only links to this person, such as an audit
+    # line naming them as who acted, doesn't wait, or two managers acting on each other would deadlock.
+    return StaffMember.objects.select_for_update(no_key=True).get(pk=staff.pk)
 
 
 def suspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> StaffMember:
@@ -561,8 +563,9 @@ def assign_role(staff: StaffMember, role: Role, *, side: Side | None, by: StaffM
         # The role as stored, read again and locked: the giver's check compares its saved codes, never those of the
         # copy handed in, which may have been changed in memory and never saved (the Owner role made to say
         # "sale.write" would pass as a Seller's). An owner changing the role at the same moment waits until it is
-        # given, or this waits for them.
-        role = Role.objects.select_for_update().get(pk=role.pk)
+        # given, or this waits for them. no_key, as every office row others link to (03 §5.5): this role's assignments
+        # link to it.
+        role = Role.objects.select_for_update(no_key=True).get(pk=role.pk)
         _check_giver(by, role.permissions, side)
         _check_no_open_temporary_password(staff, role.permissions, side)
         given = RoleAssignment(shop_id=staff.shop_id, staff=staff, role=role, side=side, created_by=by)
@@ -797,8 +800,9 @@ def _set_device_status(
     _check_reason(reason, code="device.reason_required")
     with transaction.atomic():
         # The device as stored, read again and locked: its status and home side are checked as they are now, not as
-        # the copy handed in says. Two managers blocking at once take turns, and the second finds it blocked.
-        current = Device.objects.select_for_update().get(pk=device.pk)
+        # the copy handed in says. Two managers blocking at once take turns, and the second finds it blocked. no_key, as
+        # in editing(), which locks it again below: a block made on this device names it, and must not wait for this.
+        current = Device.objects.select_for_update(no_key=True).get(pk=device.pk)
         # Who may: device.manage on the home side as stored (Jack, AUTH-1), as for pairing it. Refused before anything
         # changes; the transaction leaves the device as it was.
         require(by, Permission.DEVICE_MANAGE, current.home_side)

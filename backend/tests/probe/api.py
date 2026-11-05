@@ -257,14 +257,18 @@ class DeviceShopView(DeviceView):
     # POST that hands nothing back.
     def get(self, request: Request) -> Response:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT current_setting('mpc.shop_id', true), current_setting('mpc.staff_id', true)")
-            acting_shop, acting_staff = cursor.fetchone() or (None, None)
+            cursor.execute(
+                "SELECT current_setting('mpc.shop_id', true), current_setting('mpc.staff_id', true), "
+                "current_setting('mpc.device_id', true)"
+            )
+            acting_shop, acting_staff, acting_device = cursor.fetchone() or (None, None, None)
         return Response(
             {
                 "shop": str(current_shop()),
                 "sides": sorted(Side.objects.values_list("name", flat=True)),
                 "acting_shop": acting_shop,
                 "acting_staff": acting_staff,
+                "acting_device": acting_device,
             }
         )
 

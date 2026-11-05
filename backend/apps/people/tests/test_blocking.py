@@ -16,14 +16,17 @@ from collections.abc import Callable
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 
 from apps.control.models import AuditAction, AuditEvent, EditEvent
+from apps.core.editing import VersionConflict
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, DeviceStatus, StaffMember
-from apps.people.services import block, confirm_pairing, mark_left, start_pairing, suspend, unblock
+from apps.people.services import block, confirm_pairing, mark_left, rename_device, start_pairing, suspend, unblock
 from apps.shops.models import Side
 from apps.shops.services import add_side
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -52,6 +55,47 @@ def laptop(juma: StaffMember, side_a: Side) -> Device:
 def lines_about(device: Device) -> list[AuditEvent]:
     # Oldest first: ids are UUIDv7, which follow the order they were made in (ADR-0007).
     return list(AuditEvent.objects.filter(subject_type="device", subject_id=device.pk).order_by("id"))
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_edits_of_one_device_take_turns_the_second_is_refused(juma: StaffMember, laptop: Device) -> None:
+    # Two people have the same device open at one version, and both save. The lock in editing() makes them take turns,
+    # so the second finds the version moved on, and is refused. With no lock, the second would read the old version
+    # while the first was still open, pass the check, and overwrite the first with nobody told. The lighter lock
+    # (AUTH-8) must keep this promise; the thread tests in test_device_in_the_books.py only catch a lock too strong.
+    version = laptop.version
+
+    def second() -> Device:
+        with shop_context(juma.shop_id):
+            return rename_device(laptop, version=version, name="Wa Pili", by=juma)
+
+    with shop_context(juma.shop_id), transaction.atomic():
+        rename_device(laptop, version=version, name="Wa Kwanza", by=juma)
+        thread, ended = in_another_transaction(second)
+        wait_until_someone_waits_for_me()
+    thread.join(timeout=5)
+    assert isinstance(ended[0], VersionConflict)
+    with shop_context(juma.shop_id):
+        assert Device.objects.get(pk=laptop.pk).name == "Wa Kwanza"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_block_waits_for_a_rename_and_still_goes_through(juma: StaffMember, laptop: Device) -> None:
+    # A block is urgent, and is never refused because someone renamed the device a moment ago. It reads the device under
+    # its own lock, so it waits for the rename, then moves on from the version the rename left. With no lock there, it
+    # would read the old version, and editing() would refuse the block.
+    def second() -> Device:
+        with shop_context(juma.shop_id):
+            return block(laptop, by=juma, reason="Imeibiwa kaunta")
+
+    with shop_context(juma.shop_id), transaction.atomic():
+        rename_device(laptop, version=laptop.version, name="Wa Kwanza", by=juma)
+        thread, ended = in_another_transaction(second)
+        wait_until_someone_waits_for_me()
+    thread.join(timeout=5)
+    [blocked] = ended
+    assert isinstance(blocked, Device)
+    assert (blocked.status, blocked.name, blocked.version) == (DeviceStatus.BLOCKED, "Wa Kwanza", laptop.version + 2)
 
 
 def test_block_writes_audit_with_reason(juma: StaffMember, laptop: Device) -> None:

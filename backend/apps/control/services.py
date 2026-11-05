@@ -14,7 +14,9 @@ touches a closed one.
 
 audit() writes one line of the audit trail (03 §5.16): who did what to which row, what it changed, and why. The
 service that does the action calls it inside its own transaction, so the action and its line are kept together
-or not at all.
+or not at all. The line also names the device the visit came from (X3). No service passes it: audit() reads the note
+the edit history's trigger reads (apps/core/acting.py), so no service can forget it, and the two books can't name
+different devices for one action (Jack, AUTH-8; 02 v1.7: one fact, one answer).
 
 A broken rule is a ValidationError with a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) will turn into its error shape when the review screen comes (CTRL-4); a bug in the
@@ -39,6 +41,7 @@ from django.db import connection, models, transaction
 from django.db.transaction import TransactionManagementError
 
 from apps.control.models import AuditAction, AuditEvent, Flag, FlagKind, FlagNote, FlagPerson, FlagStatus, FlagStep
+from apps.core.acting import current_device_id
 from apps.core.links import link_type_of
 from apps.core.models import ShopScoped
 from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop
@@ -162,6 +165,7 @@ def audit(
             after=after,
             reason=reason,
             created_by_id=None if by is None else by.staff_id,
+            device_id=current_device_id(shop_id),
         )
     )
 
@@ -181,9 +185,10 @@ def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUI
     if not text:
         raise ValidationError({"text": ValidationError("A note is required.", code="flag.note_required")})
     with transaction.atomic():
-        # Read again and locked until the transaction ends (SELECT ... FOR UPDATE), as editing() does
-        # (apps/core/editing.py). Two managers closing the same flag at once take turns, and the second
-        # sees that the first has closed it, not the open copy still on their screen.
+        # Read again and locked until the transaction ends (SELECT ... FOR UPDATE). Two managers closing the same flag
+        # at once take turns, and the second sees that the first has closed it, not the open copy still on their screen.
+        # A full lock, unlike editing()'s (apps/core/editing.py): only a step of this flag links a note to it, and that
+        # step holds this very lock, so no other row is left waiting.
         fresh = Flag.objects.select_for_update().get(pk=flag.pk)
         # The same step sent again, after a double tap or a dropped network: its note is already here, so the
         # flag is handed back as it is, with no second note, which could never be deleted (03 §5.5). Asked

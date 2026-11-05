@@ -245,9 +245,22 @@ class AuditEvent(AppendOnly):
     # empty when the system did, or the superuser, who is nobody's staff). AppendOnly (CORE-3) refuses a second
     # save() and any delete() in Python, and the trigger in this table's migration refuses the same in PostgreSQL
     # (ADR-0021): the reason stays as written, whoever reads the trail later. Written only by audit()
-    # (apps/control/services.py), inside the action's own transaction. Two of 02's columns come later: `device`
-    # when a visit knows its device (AUTH-8), `approval` with the Approval table (02 v1.9).
+    # (apps/control/services.py), inside the action's own transaction. One of 02's columns comes later: `approval`,
+    # with the Approval table (02 v1.9).
 
+    # X3: the device the visit came from, the one the edit history names too. Empty for a visit with no device: a
+    # password on a person's own phone, a nightly job. Named, not imported: `control` is layer 0 (ADR-0035). PROTECT:
+    # nothing is deleted (rule 7). editable=False: no form or API field takes it. db_index=False: indexes lead with
+    # `shop`, and nothing is deleted, so PROTECT never has to search this column.
+    device = models.ForeignKey(
+        "people.Device",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        editable=False,
+        db_index=False,
+    )
     action = models.CharField(max_length=40, choices=AuditAction)
     # The row the action was done to: its table's code (apps/core/links.py) and its id, as a flag's subject. No
     # foreign key can point at rows of many tables, so the database can't check this link: audit() does.
@@ -302,14 +315,25 @@ class AuditEvent(AppendOnly):
 
 class EditEvent(AppendOnly):
     # One change to one office row (02 §13, 03 §5.16): the owner renames the side "Dawa" to "Dawa za Mifugo".
-    # Written only by the trigger control_record_edit(), after the row's UPDATE, in the same transaction
+    # Written only by the trigger control_record_edit_v2(), after the row's UPDATE, in the same transaction
     # (apps/control/operations.py, ADR-0036): never by Python, so no service, bulk update() or admin page can
     # change an office row without leaving one. ShopScoped (CORE-2) gives `id` (a UUIDv7 PostgreSQL makes),
     # `shop` (the edited row's), `created_at` (when) and `created_by` (who acted, as the visit told PostgreSQL:
     # apps/core/acting.py; empty outside a visit, when the system acted). AppendOnly (CORE-3) refuses a second
     # save() and any delete() in Python, and the trigger in this table's migration refuses the same in PostgreSQL
-    # (ADR-0021). The device joins in AUTH-8.
+    # (ADR-0021).
 
+    # X3: the device the visit came from, as AuditEvent's: empty for a visit with no device. Named, not imported, and
+    # PROTECT, editable=False and db_index=False, for the same reasons.
+    device = models.ForeignKey(
+        "people.Device",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        editable=False,
+        db_index=False,
+    )
     # The row that changed: its table's code (apps/core/links.py) and its id, as an audit line's subject.
     subject_type = models.CharField(max_length=TYPE_CODE_MAX_LENGTH)
     subject_id = models.UUIDField()

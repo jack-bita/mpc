@@ -6,9 +6,9 @@ After every UPDATE of an office table, a trigger writes one EditEvent with who c
     when          who       row         before            after
     29 Oct 11:02  Staff A   a card      name: "Dawa"      name: "Dawa za Mifugo"
 
-The test-only probe Card stands for an office record and has the trigger (its migration lists RecordEdits), so
-these tests edit cards; the real office tables switch theirs on in their own migrations, and
-backend/tests/test_edit_history.py checks that every one does. Who acts comes from the visit
+The test-only probe Card stands for an office record and has the trigger (its migrations list RecordEdits, then the
+move to the rule that names the device), so these tests edit cards; the real office tables switch theirs on in their
+own migrations, and backend/tests/test_edit_history.py checks that every one does. Who acts comes from the visit
 (apps/core/acting.py), opened here with acting_as() as a visit opens it. `control` may not import `people`
 (ADR-0035), so the staff come from backend/conftest.py, typed as Actors. Fake data only: the repo is public
 (03 §10).
@@ -20,14 +20,20 @@ import pytest
 from django.apps import apps
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.state import ProjectState
-from django.db.models import Model
+from django.db.models import Model, ProtectedError
 
 from apps.control import operations
 from apps.control.models import EditEvent
-from apps.control.operations import ChangeRecordEdits, EditsByTriggerOnly, RecordEdits
+from apps.control.operations import (
+    ChangeRecordEdits,
+    EditsByTriggerOnly,
+    MoveRecordEditsToV2,
+    RecordEdits,
+    RecordEditsV2,
+)
 from apps.core.acting import acting_as
 from apps.core.links import LINK_TYPES
-from apps.core.models import AppendOnlyError
+from apps.core.models import AppendOnlyError, ShopScoped
 from apps.core.tenancy import Actor, shop_context
 from tests.probe.models import Card
 
@@ -72,6 +78,26 @@ def test_edit_recorded_with_person_and_changes(shop_a: Model, card: Card, staff_
         ]
 
 
+def test_edit_history_names_the_device(shop_a: Model, card: Card, staff_a: Actor, device_a: ShopScoped) -> None:
+    # X3: every write records the person and the device. An edit made on Laptop ya Dawa says so, beside who made it,
+    # and from then on the laptop can't be deleted: the trail must never point at nothing (rule 7).
+    with shop_context(shop_a), acting_as(staff_a, device=device_a):
+        card.name = "Dawa za Mifugo"
+        card.save()
+        [edit] = history_of(card)
+        assert (edit.created_by_id, edit.device_id) == (staff_a.staff_id, device_a.pk)
+        with pytest.raises(ProtectedError):
+            device_a.delete()
+
+
+def test_edit_with_no_device_names_none(shop_a: Model, card: Card, staff_a: Actor) -> None:
+    # A password on a person's own phone: the person is named, and the link stays empty, not filled with a guess.
+    with shop_context(shop_a), acting_as(staff_a, device=None):
+        Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
+        [edit] = history_of(card)
+        assert (edit.created_by_id, edit.device_id) == (staff_a.staff_id, None)
+
+
 def test_each_edit_keeps_its_own_time(shop_a: Model, card: Card, staff_a: Actor) -> None:
     # The owner's trail (CTRL-5) shows a row's edits in the order they happened, by their time. Two edits in one
     # transaction, as editing() and the staff services make, must get two times, the second after the first;
@@ -105,6 +131,8 @@ def test_edit_outside_a_visit_names_nobody(shop_a: Model, card: Card) -> None:
         Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
         [edit] = history_of(card)
         assert edit.created_by_id is None
+        # And no device: nobody stood at one (X3).
+        assert edit.device_id is None
 
 
 def test_edit_that_changes_nothing_writes_no_history(shop_a: Model, card: Card, staff_a: Actor) -> None:
@@ -294,11 +322,121 @@ def test_change_record_edits_needs_an_atomic_migration(card: Card) -> None:
         assert len(history_of(card)) == 1
 
 
+def card_runs() -> str:
+    # The function the card's trigger runs, as PostgreSQL holds it.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT p.proname FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid "
+            "WHERE t.tgrelid = 'probe_card'::regclass AND t.tgname = 'record_edits'"
+        )
+        row = cursor.fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def test_record_edits_v2_puts_the_new_rule_on_a_table(
+    shop_a: Model, card: Card, staff_a: Actor, device_a: ShopScoped
+) -> None:
+    # What a new office table's migration lists. Here on the card, whose own trigger comes off first. Inside the test's
+    # transaction, which the rollback at the end undoes.
+    state = ProjectState.from_apps(apps)
+    step = RecordEditsV2("card", type_code="probe_card")
+    with connection.schema_editor() as editor:
+        step.database_backwards("probe", editor, state, state)
+        step.database_forwards("probe", editor, state, state)
+    assert card_runs() == "control_record_edit_v2"
+
+    with shop_context(shop_a), acting_as(staff_a, device=device_a):
+        Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
+        [edit] = history_of(card)
+        assert edit.device_id == device_a.pk
+
+
+def test_move_to_v2_undone_puts_the_old_rule_back(
+    shop_a: Model, card: Card, staff_a: Actor, device_a: ShopScoped
+) -> None:
+    # Stepping a database back leaves its tables as the older migrations made them, the old rule included: the old
+    # rule writes every edit still, and it knows no device. Moved forward again, the new one names it. Inside the test's
+    # transaction, which the rollback at the end undoes.
+    state = ProjectState.from_apps(apps)
+    move = MoveRecordEditsToV2("card", type_code="probe_card")
+    assert card_runs() == "control_record_edit_v2"
+
+    with connection.schema_editor() as editor:
+        move.database_backwards("probe", editor, state, state)
+    assert card_runs() == "control_record_edit"
+    with shop_context(shop_a), acting_as(staff_a, device=device_a):
+        Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
+        [edit] = history_of(card)
+        assert (edit.created_by_id, edit.device_id) == (staff_a.staff_id, None)
+
+    with connection.schema_editor() as editor:
+        move.database_forwards("probe", editor, state, state)
+    assert card_runs() == "control_record_edit_v2"
+    with shop_context(shop_a), acting_as(staff_a, device=device_a):
+        Card.objects.filter(pk=card.pk).update(name="Dawa ya Kuku")
+        _, second = history_of(card)
+        assert second.device_id == device_a.pk
+
+
+def test_move_to_v2_keeps_the_columns_it_skips(shop_a: Model, card: Card) -> None:
+    # A move changes the rule, never what the table's history leaves out. Each way, the list stays: here `name`, so an
+    # edit of the name writes nothing. (The real tables' lists are checked after their real move:
+    # test_the_move_to_v2_kept_each_skip_list.) Inside the test's transaction, which the rollback at the end undoes.
+    state = ProjectState.from_apps(apps)
+    move = MoveRecordEditsToV2("card", type_code="probe_card", skip=["name"])
+    with connection.schema_editor() as editor:
+        # The card as a table with a list stands before its move: on the old rule, skipping that column.
+        old = RecordEdits("card", type_code="probe_card", skip=["name"])
+        old.database_backwards("probe", editor, state, state)
+        old.database_forwards("probe", editor, state, state)
+        move.database_forwards("probe", editor, state, state)
+    with shop_context(shop_a):
+        Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
+        assert history_of(card) == []
+    with connection.schema_editor() as editor:
+        move.database_backwards("probe", editor, state, state)
+    with shop_context(shop_a):
+        Card.objects.filter(pk=card.pk).update(name="Dawa ya Kuku")
+        assert history_of(card) == []
+
+
+def test_move_to_v2_needs_an_atomic_migration(card: Card) -> None:
+    # The trigger comes off, then goes back on, as for ChangeRecordEdits: in a migration that isn't one transaction, a
+    # failure between the two would leave the table recording nothing. Refused either way, before any SQL is sent.
+    state = ProjectState.from_apps(apps)
+    move = MoveRecordEditsToV2("card", type_code="probe_card")
+    with connection.schema_editor(atomic=False) as editor:
+        with pytest.raises(ValueError, match="atomic"):
+            move.database_forwards("probe", editor, state, state)
+        with pytest.raises(ValueError, match="atomic"):
+            move.database_backwards("probe", editor, state, state)
+    assert card_runs() == "control_record_edit_v2"
+
+
+def test_move_to_v2_checks_its_names() -> None:
+    # The same checks as RecordEdits: a type code and a column's name go into the SQL.
+    with pytest.raises(ValueError, match="type code"):
+        MoveRecordEditsToV2("card", type_code="Probe Card")
+    with pytest.raises(ValueError, match="column"):
+        MoveRecordEditsToV2("card", type_code="probe_card", skip=["name'; --"])
+    # And a typo is found against the table as the migration sees it, before the old trigger comes off: a list with a
+    # word wrong would copy the column it meant to skip.
+    state = ProjectState.from_apps(apps)
+    with pytest.raises(ValueError, match="nmae"), connection.schema_editor() as editor:
+        MoveRecordEditsToV2("card", type_code="probe_card", skip=["nmae"]).database_forwards(
+            "probe", editor, state, state
+        )
+    assert card_runs() == "control_record_edit_v2"
+
+
 # Each SQL string of the rule, by its SHA-256 fingerprint, taken when the rule was written.
 PINNED_SQL = {
     "RECORD_EDIT_FUNCTION": "f304792db801aed85c04f1c6a9fec126232fb3c090c09929cde2540e868d25a9",
     "CREATE_RECORD_EDITS_TRIGGER": "3dabe4bacd3ea9c135e1e48a20030d74fe423948eed49e2d9bd1f9e5446aaa8e",
     "DROP_RECORD_EDITS_TRIGGER": "bcf9a1bf65eb27df33203fec7a0c45364b1379a3cc481273dd0ac381e2d59a9d",
+    "RECORD_EDIT_V2_FUNCTION": "58ef91f3cd3bb168f759e94b900e168f3417562341b43893b4ef94039524d3b8",
+    "CREATE_RECORD_EDITS_V2_TRIGGER": "a3682ae3e0202b382780c9c932bfaaec4f6ebb474a94f5a967caf02aef798013",
     "EDITS_BY_TRIGGER_ONLY_FUNCTION": "d7550bb29e00e98194c0c6d4f59ce12fbab1d3c3765c14473836adcc721be4c0",
     "CREATE_EDITS_BY_TRIGGER_ONLY_TRIGGER": "952c35c87f01c56dc67006f73666ac00f370898694638b974a50adea951fd9ef",
     "DROP_EDITS_BY_TRIGGER_ONLY_TRIGGER": "2887133fdc07dc1f30a5cf4a969f6260806fab33ad0a764352161ead73675341",
@@ -309,7 +447,7 @@ PINNED_SQL = {
 def test_edit_trigger_sql_never_changes_once_on_main(name: str, fingerprint: str) -> None:
     # Rule 9: a migration on main is never edited. Every office table's migration runs these strings, so editing one
     # would edit those migrations from the outside: a fresh database would get the new rule, a live one would keep
-    # the old. A change is a new rule instead (control_record_edit_v2), as AUTH-8's device will be.
+    # the old. A change is a new rule instead, as AUTH-8's device was (control_record_edit_v2).
     sql = getattr(operations, name)
     assert hashlib.sha256(sql.encode()).hexdigest() == fingerprint, (
         f"{name} was edited. Every office table's migration runs it, so don't edit it: write a new rule "

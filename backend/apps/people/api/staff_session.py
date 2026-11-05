@@ -24,7 +24,7 @@ from rest_framework.request import Request
 
 from apps.people.api.pin_session import PIN_SESSION, keep_pin_session_alive
 from apps.people.device_keys import DEVICE_KEY_COOKIE
-from apps.people.models import StaffMember, User
+from apps.people.models import Device, StaffMember, User
 from apps.people.selectors import LoginRefused, job_of_person, job_of_pin_session
 
 
@@ -35,6 +35,10 @@ class StaffSessionAuthentication(SessionAuthentication):
 
     # Does this route need a password of the person's own? Yes, on every route but one (MeSessionAuthentication below).
     own_password_needed = True
+    # The device this visit stands at, once its badge has passed its checks, for ShopViewSet to tell PostgreSQL (X3,
+    # apps/core/acting.py). None for a password's session, which shows no device: `request.auth` stays the staff member,
+    # who names the shop and the person. DRF makes a new login object for each visit, so this never reaches the next.
+    device: Device | None = None
 
     def authenticate(self, request: Request) -> tuple[User, StaffMember | None] | None:
         logged_in: tuple[User, Any] | None = super().authenticate(request)
@@ -50,14 +54,16 @@ class StaffSessionAuthentication(SessionAuthentication):
                 # A password's session, on a person's own phone.
                 return user, job_of_person(user, own_password_needed=self.own_password_needed)
             # The key goes straight from the cookie into the one function that hides it (AUTH-2).
-            staff = job_of_pin_session(
+            job = job_of_pin_session(
                 user, badge, request.COOKIES.get(DEVICE_KEY_COOKIE), own_password_needed=self.own_password_needed
             )
         except LoginRefused as refused:
             raise exceptions.AuthenticationFailed(str(refused), code=refused.code) from refused
-        if staff is not None:
-            # Only a visit that passes counts as use: a refused one mustn't keep the badge going.
-            keep_pin_session_alive(request._request.session)
+        if job is None:
+            return user, None
+        staff, self.device = job
+        # Only a visit that passes counts as use: a refused one mustn't keep the badge going.
+        keep_pin_session_alive(request._request.session)
         return user, staff
 
 

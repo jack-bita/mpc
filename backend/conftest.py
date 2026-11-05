@@ -17,7 +17,7 @@ from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import Role, RoleAssignment, StaffMember, User
+from apps.people.models import Device, Role, RoleAssignment, StaffMember, User
 from apps.people.services import add_staff, assign_role, copy_role_templates
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
@@ -89,6 +89,14 @@ def staff_b(shop_b: Shop) -> StaffMember:
     user = User.objects.create_user(full_name="Staff Demo B")
     with shop_context(shop_b):
         return add_staff(shop=shop_b, user=user, display_name="Staff B", by=None)
+
+
+@pytest.fixture
+def device_a(shop_a: Shop, side_a: Side) -> Device:
+    # A device of shop A, for the tests of a row that names one (X3). Only the row: its key's hash is made up, so it
+    # opens nothing. A test that logs in with a key pairs a device the way the app does (confirm_pairing).
+    with shop_context(shop_a):
+        return Device.objects.create(shop=shop_a, home_side=side_a, name="Laptop ya Dawa", code=1, key_hash="a" * 64)
 
 
 @pytest.fixture
