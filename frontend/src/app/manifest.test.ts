@@ -1,7 +1,9 @@
-// manifest.test.ts — the manifest gives Chrome what it needs before it offers to install the app (SPIKE-1).
+// manifest.test.ts — the manifest gives Chrome what it needs before it offers to install the app, and
+// carries the shop's look (SPIKE-1, UI-7).
 //
 // Chrome reads the manifest only in a real browser, so this test checks what we control: the fields
-// Chrome looks for, and that every icon the manifest names really exists in public/.
+// Chrome looks for, that every icon the manifest names really exists in public/, that the manifest's
+// colours equal the app's tokens, and what the icon files really hold, pixel by pixel.
 //
 // It runs in plain Node, not in jsdom's fake browser (vitest.config.mts): it needs no page, and it
 // reads files on disk. Under jsdom, Vite turns new URL(…, import.meta.url) into a web address,
@@ -19,10 +21,11 @@ import manifest from "./manifest";
 // public/ is served at the site's root, so the icon "/icons/icon-192.png" is public/icons/icon-192.png.
 const PUBLIC = fileURLToPath(new URL("../../public", import.meta.url));
 
+// Comments removed, because one could name a token and match first, and only rules count.
 const CSS = readFileSync(
   fileURLToPath(new URL("./globals.css", import.meta.url)),
   "utf8",
-);
+).replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** A colour token's value from globals.css, like "#15803d". */
 function token(name: string): string | undefined {
@@ -88,6 +91,9 @@ describe("manifest", () => {
     // the two could drift, and the app would open in one green and carry on in another (ADR-0039).
     expect(token("--primary")).toBeDefined();
     expect(app.theme_color).toBe(token("--primary"));
+    // The screen while the app starts. The icon's own green sits on it, so any other colour would
+    // show the icon's edge as a square.
+    expect(app.background_color).toBe(token("--primary"));
   });
 
   it("names only icons that exist in public/", () => {
