@@ -34,8 +34,8 @@ export default function manifest(): MetadataRoute.Manifest {
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-      // Android cuts icons into a circle or a rounded square; this one keeps its letters in the
-      // safe middle, so the cut never hides them.
+      // Android cuts icons into a circle or a rounded square; this one draws the godown smaller, in
+      // the safe middle, so the cut never reaches it.
       {
         src: "/icons/icon-maskable-512.png",
         sizes: "512x512",

@@ -9,6 +9,7 @@
 // @vitest-environment node
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { inflateSync } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
 
@@ -17,6 +18,38 @@ import manifest from "./manifest";
 
 // public/ is served at the site's root, so the icon "/icons/icon-192.png" is public/icons/icon-192.png.
 const PUBLIC = fileURLToPath(new URL("../../public", import.meta.url));
+
+const CSS = readFileSync(
+  fileURLToPath(new URL("./globals.css", import.meta.url)),
+  "utf8",
+);
+
+/** A colour token's value from globals.css, like "#15803d". */
+function token(name: string): string | undefined {
+  return new RegExp(`${name}:\\s*(#[0-9a-f]{6})`).exec(CSS)?.[1];
+}
+
+/**
+ * The size and pixels of a PNG as scripts/make-icons.mjs writes it: red, green and blue with no
+ * transparency, and no row filter. Enough for our own files; not a general PNG reader.
+ */
+function readIcon(src: string) {
+  const file = readFileSync(`${PUBLIC}${src}`);
+  const size = file.readUInt32BE(16);
+  // After the 8-byte signature, each chunk is: its length, its type, its data, a 4-byte checksum.
+  const data: Buffer[] = [];
+  for (let at = 8; at < file.length; at += 12 + file.readUInt32BE(at)) {
+    if (file.toString("latin1", at + 4, at + 8) === "IDAT")
+      data.push(file.subarray(at + 8, at + 8 + file.readUInt32BE(at)));
+  }
+  const raw = inflateSync(Buffer.concat(data));
+  // Each row is one filter byte, then 3 bytes per pixel.
+  const pixel = (x: number, y: number) => {
+    const start = y * (1 + size * 3) + 1 + x * 3;
+    return `#${raw.subarray(start, start + 3).toString("hex")}`;
+  };
+  return { size, pixel };
+}
 
 describe("manifest", () => {
   const app = manifest();
@@ -53,13 +86,8 @@ describe("manifest", () => {
   it("uses the same green as the app's main colour", () => {
     // The manifest is plain data, so it can't read the token and has to repeat it. Without this check
     // the two could drift, and the app would open in one green and carry on in another (ADR-0039).
-    const css = readFileSync(
-      fileURLToPath(new URL("./globals.css", import.meta.url)),
-      "utf8",
-    );
-    const primary = /--primary:\s*(#[0-9a-f]{6})/.exec(css)?.[1];
-    expect(primary).toBeDefined();
-    expect(app.theme_color).toBe(primary);
+    expect(token("--primary")).toBeDefined();
+    expect(app.theme_color).toBe(token("--primary"));
   });
 
   it("names only icons that exist in public/", () => {
@@ -67,5 +95,53 @@ describe("manifest", () => {
     expect(icons.length).toBeGreaterThan(0);
     for (const icon of icons)
       expect(existsSync(`${PUBLIC}${icon.src}`), icon.src).toBe(true);
+  });
+});
+
+describe("the godown icon", () => {
+  const icons = manifest().icons ?? [];
+
+  describe.each(icons)("$src", ({ src, sizes }) => {
+    it("really is the size the manifest says", () => {
+      // A file of the wrong size would pass every check above, and Chrome would refuse to install.
+      expect(`${readIcon(src).size}x${readIcon(src).size}`).toBe(sizes);
+    });
+
+    it("is a green square with a white building and a blue door", () => {
+      // Each point is a share of the width, so it holds at any size, and for the smaller drawing too.
+      const { size, pixel } = readIcon(src);
+      const last = size - 1;
+      for (const [x, y] of [
+        [0, 0],
+        [last, 0],
+        [0, last],
+        [last, last],
+      ] as const)
+        expect(pixel(x, y)).toBe(token("--primary"));
+      // The icon uses the same tokens as the app, so it can't drift from the screens (ADR-0039).
+      expect(pixel(size / 2, size / 2)).toBe(token("--secondary"));
+      // Whole pixels only: 30% of 192 is 57.6, and a fractional position would read the wrong bytes.
+      expect(pixel(Math.floor(size * 0.3), Math.floor(size * 0.6))).toBe(
+        "#ffffff",
+      );
+    });
+  });
+
+  it("keeps the whole godown inside Android's safe circle", () => {
+    // Android cuts an icon into a circle or a rounded square. Only the middle circle, 80% of the
+    // width, is sure to survive, so anything but plain green outside it could be cut.
+    const maskable = icons.find((icon) => icon.purpose === "maskable");
+    if (!maskable) throw new Error("the manifest lists no maskable icon");
+    const { size, pixel } = readIcon(maskable.src);
+    const safeRadius = size * 0.4;
+    let outside = 0;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const fromMiddle = Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2);
+        if (fromMiddle > safeRadius && pixel(x, y) !== token("--primary"))
+          outside++;
+      }
+    }
+    expect(outside).toBe(0);
   });
 });
