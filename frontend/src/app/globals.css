@@ -2,8 +2,8 @@
  *
  * A design token is a named value, like --primary or --radius, that every component reads.
  * Change a token here and every screen follows, and no screen can pick a green of its own
- * (ADR-0039). tokens.test.ts reads this file and checks every pair of colours by contrast, so a
- * value that is too pale fails a test instead of hurting at the counter.
+ * (ADR-0039). tokens.test.ts reads this file and checks every pair of colours a screen shows by
+ * contrast, so a value that is too pale fails a test instead of hurting at the counter.
  */
 
 /* Tailwind itself: its reset and every utility class. Only the classes our files use end up

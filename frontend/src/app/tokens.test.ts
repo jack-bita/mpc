@@ -107,6 +107,15 @@ describe("the shop's colours", () => {
   });
 });
 
+describe("the shop's shapes", () => {
+  it("keeps the card's corners and control heights", () => {
+    // Pinned here because no sum can judge them, and they set how every button feels under a finger.
+    expect(TOKENS.get("--radius")).toBe("8px");
+    expect(TOKENS.get("--control-big")).toBe("52px");
+    expect(TOKENS.get("--control-normal")).toBe("44px");
+  });
+});
+
 describe("page-wide defaults", () => {
   it("shows the hand pointer on a button", () => {
     // Tailwind 4 gives buttons the plain arrow. jsdom has no mouse, so this only checks the rule is
@@ -119,6 +128,31 @@ describe("what shadcn left behind", () => {
   it("leaves no placeholder colour", () => {
     // Every grey that `shadcn init` wrote is an oklch() value; the shop's colours are plain hex.
     expect(CSS).not.toContain("oklch(");
+  });
+
+  it("leaves no chart or sidebar tokens, whatever their colour", () => {
+    // `shadcn add` can write these back. No screen uses them, and a card that needs them gives them the
+    // shop's colours. Written in hex they would pass the oklch check above.
+    expect(CSS).not.toMatch(/--(color-)?(chart|sidebar)/);
+  });
+
+  it("writes every colour in hex", () => {
+    // Only the tokens in the pairs above get their contrast checked. This also covers --border, which
+    // no pair names, so a grey in another notation can't hide there.
+    const notColours = [
+      "--radius",
+      "--control-big",
+      "--control-normal",
+      "--font-body",
+    ];
+    for (const name of TOKENS.keys())
+      if (!notColours.includes(name)) colour(name);
+  });
+
+  it("keeps one list of tokens", () => {
+    // The checks read the first :root. A second one further down would win in the browser, and could
+    // bring back any colour these checks refuse.
+    expect(CSS.match(/:root\s*\{/g)).toHaveLength(1);
   });
 
   it("removes the dark colours", () => {
