@@ -54,6 +54,8 @@
   /* Tailwind makes its h-… and min-h-… classes from --spacing-… names: h-control-big is 52 px. */
   --spacing-control-big: var(--control-big);
   --spacing-control-normal: var(--control-normal);
+  /* Every font-sans class, and the whole page below, reads the one font token. */
+  --font-sans: var(--font-body);
 }
 
 /* The shop's look, from the shop itself (ADR-0039): green first, blue second, white as the
@@ -98,6 +100,16 @@
   /* Button and box heights: 52 px is the default, big enough for a finger at the counter. */
   --control-big: 52px;
   --control-normal: 44px;
+
+  /* Which font the page shows. layout.tsx hands both fonts to the page under these names, from
+     src/fonts/fonts.ts. */
+  --font-body: var(--font-source-sans);
+}
+
+/* The second font, chosen by role and not by name, so a person's saved choice stays true if the font
+   ever changes (ADR-0039). UI-9 sets this on <html> from the person's choice. */
+[data-font="second"] {
+  --font-body: var(--font-atkinson);
 }
 
 /* Page-wide defaults: borders and focus rings use the tokens, and the page takes the theme's
@@ -113,5 +125,8 @@
   }
   html {
     @apply font-sans;
+    /* Every digit the same width, so money lines up in columns. On the whole page, so no screen can
+       forget it: Atkinson's normal digits run from 407 to 648 wide (src/fonts/fonts.ts). */
+    font-variant-numeric: tabular-nums;
   }
 }

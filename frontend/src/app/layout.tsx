@@ -14,6 +14,8 @@ import sw from "../../messages/sw.json";
 // Starts the service worker, which keeps the app's files on the device so every page opens offline,
 // and shows the Toleo jipya bar when a new version is ready (SPIKE-1).
 import { UpdatePrompt } from "@/components/update-prompt";
+// The two fonts inside the app (ADR-0039).
+import { atkinson, sourceSans } from "@/fonts/fonts";
 
 // The one global stylesheet: Tailwind and the design tokens, loaded once for every page.
 import "./globals.css";
@@ -25,7 +27,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     // lang="sw": the app is Swahili first, so screen readers and spell checkers use Swahili.
-    <html lang="sw">
+    // The two classes hand both fonts to the page under their names; globals.css picks which one
+    // shows. Both are here because a person's choice changes the font with no new page (UI-9).
+    <html lang="sw" className={`${sourceSans.variable} ${atkinson.variable}`}>
       <body>
         {children}
         <UpdatePrompt />
