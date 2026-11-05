@@ -69,4 +69,4 @@ Each task gets one issue, one branch and one pull request. CI runs on the pull r
 
 ## Licence
 
-All rights reserved; see [ADR-0034](docs/adr/0034-no-open-source-licence-yet.md). You are welcome to read the code, but please ask before you reuse it.
+All rights reserved; see [ADR-0034](docs/adr/0034-no-open-source-licence-yet.md). You are welcome to read the code, but please ask before you reuse it. The two fonts in `frontend/src/fonts/` are not ours: each stays under the Open Font License in the file beside it.

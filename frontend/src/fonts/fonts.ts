@@ -9,6 +9,11 @@
 //   @fontsource-variable/source-sans-3@5.3.1
 //   @fontsource-variable/atkinson-hyperlegible-next@5.3.0
 //
+// Each licence file's first line is the owner's notice from the font's own record, because Fontsource's
+// copies said "Google Inc." for Source Sans and repeated the line for Atkinson. The text below it is
+// unchanged. Use the files as they come: the Source Sans licence reserves the name "Source", so a copy
+// we cut down or convert ourselves would have to take another name.
+//
 // Same-width digits, read from these files on 5 Nov 2026 (units per 1,000 of the font's size). Measure
 // again if a file changes, because money must line up (04 UI-7):
 //   Source Sans 3: even as they are, and it has no tnum feature, which it doesn't need. All 497 at weight

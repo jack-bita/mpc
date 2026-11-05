@@ -22,15 +22,19 @@ const FONTS = [
     font: "source-sans-3.woff2",
     licence: "source-sans-3-LICENSE.txt",
     sha256: "19143dca075972bc84e3fd9eab7416dd40cc565dccb2435a044bdfabe060c7d5",
+    copyright:
+      "Copyright 2023 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'",
   },
   {
     font: "atkinson-hyperlegible-next.woff2",
     licence: "atkinson-hyperlegible-next-LICENSE.txt",
     sha256: "18b2a1a39a2fa298b0ba5390aca68462669826c90925656f1c1f6796e0e1bbaf",
+    copyright:
+      "Copyright 2020-2024 The Atkinson Hyperlegible Next Project Authors (https://github.com/googlefonts/atkinson-hyperlegible-next)",
   },
 ];
 
-describe.each(FONTS)("$font", ({ font, licence, sha256 }) => {
+describe.each(FONTS)("$font", ({ font, licence, sha256, copyright }) => {
   it("is the very file whose digits were measured", () => {
     // Money must line up (04 UI-7), and only a real browser can measure digits, which a unit test
     // doesn't have. So the measuring stays true only while the file stays the same. A new file is
@@ -54,9 +58,11 @@ describe.each(FONTS)("$font", ({ font, licence, sha256 }) => {
 
   it("has its licence beside it", () => {
     // The Open Font License lets a public repo hold a font only if its licence stays with it.
-    expect(readFileSync(here(licence), "utf8")).toContain(
-      "SIL Open Font License",
-    );
+    const text = readFileSync(here(licence), "utf8");
+    expect(text).toContain("SIL Open Font License");
+    // The licence asks that the owner's notice stays too, so the file must name this font's real
+    // owner. The first line is the one from the font's own record, so the other font's licence fails.
+    expect(text.split("\n")[0]).toBe(copyright);
   });
 });
 
