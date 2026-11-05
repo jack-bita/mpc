@@ -151,8 +151,10 @@ def test_two_managers_suspending_each_other_both_go_through(staff_a: StaffMember
     # Each action locks the person it changes, and its audit line links to the manager who did it. PostgreSQL checks
     # that link at the commit, with a light lock on the manager's row. If each action held its person with a full lock,
     # each would wait for the other: PostgreSQL would cancel one after a second, and that manager would get a server
-    # error.
-    # So the second must finish while the first is still open.
+    # error. So the second must finish while the first is still open.
+    # Both end up suspended only because `suspend` has no check of who may yet. That is not the rule: Jack chose that
+    # the first wins, and the second is refused, as a suspended person can't act (AUTH-8's second review). PPL-4 adds
+    # that check, with `_locked_pair` as set_temporary_password does, and this test changes with it.
     def second_manager_suspends_the_first() -> StaffMember:
         with shop_context(staff_a.shop_id):
             return suspend(staff_a2, by=staff_a, reason="Hakuja kazini")

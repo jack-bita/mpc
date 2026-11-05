@@ -145,7 +145,7 @@ def _save(staff: StaffMember, *, by: StaffMember | None, fields: list[str]) -> N
 
 
 def _locked(staff: StaffMember) -> StaffMember:
-    # The row read again, and locked until the transaction ends (SELECT ... FOR UPDATE). Two managers
+    # The row read again, and locked until the transaction ends (SELECT ... FOR NO KEY UPDATE). Two managers
     # acting on Asha at the same moment take turns, and the second sees what the first one wrote, not
     # the old copy on their screen. no_key, as in _locked_pair: a line that only links to this person, such as an audit
     # line naming them as who acted, doesn't wait, or two managers acting on each other would deadlock.

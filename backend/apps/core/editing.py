@@ -55,13 +55,15 @@ def editing[M: Editable](row: M, *, version: int, by: Actor | None) -> Iterator[
     if by is not None and by.shop_id != row.shop_id:
         raise ShopMismatch("The one acting belongs to another shop.")
     with transaction.atomic():
-        # Read again and locked until the transaction ends (SELECT ... FOR UPDATE). Two edits of the same
+        # Read again and locked until the transaction ends (SELECT ... FOR NO KEY UPDATE). Two edits of the same
         # row take turns here: the second waits until the first is saved, then sees its new version, and is
         # refused. Compared before the lock, both could pass, and the second would undo the first.
         # no_key: two edits still take turns, but a row that only links to this one, such as a book line naming this
         # device (X3), doesn't wait. Its link is checked at its commit, with a light lock that a full lock here would
         # block: two managers blocking each other's devices would each wait for the other, and one would get a server
-        # error (AUTH-8, as _locked_pair found in apps/people/services.py).
+        # error (AUTH-8, as _locked_pair found in apps/people/services.py). One exception: a save that changes a plain
+        # unique column takes the full lock anyway, as PostgreSQL counts such a column as part of the row's key. No
+        # service does that today; a device's rename doesn't count, as its name's rule is on Lower("name").
         # cast: mypy reads the manager of type(row) as Editable's, though the row is a side, a product...
         fresh = cast(M, type(row)._default_manager.select_for_update(no_key=True).get(pk=row.pk))
         if fresh.version != version:

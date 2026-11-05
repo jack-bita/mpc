@@ -185,9 +185,10 @@ def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUI
     if not text:
         raise ValidationError({"text": ValidationError("A note is required.", code="flag.note_required")})
     with transaction.atomic():
-        # Read again and locked until the transaction ends (SELECT ... FOR UPDATE), as editing() does
-        # (apps/core/editing.py). Two managers closing the same flag at once take turns, and the second
-        # sees that the first has closed it, not the open copy still on their screen.
+        # Read again and locked until the transaction ends (SELECT ... FOR UPDATE). Two managers closing the same flag
+        # at once take turns, and the second sees that the first has closed it, not the open copy still on their screen.
+        # A full lock, unlike editing()'s (apps/core/editing.py): only a step of this flag links a note to it, and that
+        # step holds this very lock, so no other row is left waiting.
         fresh = Flag.objects.select_for_update().get(pk=flag.pk)
         # The same step sent again, after a double tap or a dropped network: its note is already here, so the
         # flag is handed back as it is, with no second note, which could never be deleted (03 §5.5). Asked
