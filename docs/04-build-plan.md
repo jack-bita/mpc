@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.39 · 5 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.40 · 5 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.40** (5 Nov 2026, the design-system cards): choices by Jack, made while trying a preview of the screens. The app gets its own look, taken from the shop, in three new cards: UI-7 (colours, fonts, shapes, icon), UI-8 (the pieces) and UI-9 (each person's language and font). UI-1 now comes after UI-8. SYNC-2 and SYNC-10 carry a person's language and font; until now nothing saved a person's language at all (ADR-0039, 03 v1.27, 02 v1.20). Marked **(v1.40)**.
 
 **Changes in v1.39** (5 Nov 2026, AUTH-8's second review): a choice by Jack. When two managers suspend each other, the first wins and the second is refused, as a suspended person can't act; PPL-4 builds it. A role takes the lighter lock too, and tests now fail if an office edit's locks are removed (03 v1.26). Marked **(v1.39)**.
 
@@ -705,9 +707,49 @@ Done in **portion 6**, in chat — not with Claude Code.
 **Tests:** `test_edit_history_names_the_device` · `test_audit_line_names_the_device` · `test_visit_without_a_device_names_none`. Built too **(v1.38)**: `test_pin_session_names_the_person_and_the_device_in_both_books` · `test_password_on_a_paired_laptop_names_no_device` · `test_visit_with_no_device_clears_one_left_on_the_connection` · `test_visit_leaves_no_device_on_the_connection` · `test_inner_block_keeps_the_visits_device` · `test_outer_device_survives_a_failed_inner_block` · `test_audit_line_of_another_shop_never_names_the_device` · `test_move_to_v2_undone_puts_the_old_rule_back` · `test_the_move_to_v2_kept_each_skip_list` · `test_two_managers_blocking_each_others_devices_both_go_through` · `test_two_managers_suspending_each_other_both_go_through` · `test_two_edits_of_one_device_take_turns_the_second_is_refused` · `test_block_waits_for_a_rename_and_still_goes_through` · `test_two_owners_giving_each_other_one_role_take_turns` **(v1.39)**
 **Commits:** `feat(control): the two books have a device link` → `feat(control): the edit trigger reads the device` → `feat(people): a visit tells postgres its device`. Built **(v1.37)**, each commit with its own tests: `feat(control): the two books have a device link` → `feat(core): acting_as tells postgres the device` → `feat(control): the edit trigger reads the device` → `feat(control): an audit line names the device` → `feat(people): a visit tells postgres its device` → `docs(plan): auth-8 names what it built`. From the review **(v1.38)**: `fix(core): a lock on a row no longer blocks rows that link to it` → `fix(people): two managers acting on each other no longer deadlock` → `test(people): a visit with no device clears a stale one` → `test(core): the device survives a failed step and leaves with the visit` → `docs(control): comments say what the review settled` → `docs(plan): auth-8 says what the review settled`. From the second review **(v1.39)**: `test(people): tests fail if an office edit's locks are removed` → `fix(people): a role takes the same lighter lock as other office rows` → `docs(people): comments name the lock each step really takes` → `docs(plan): auth-8 says what the second review settled`.
 
+### UI-7 · The look: colours, fonts, shapes and icon
+`M` · Jack-led · after REPO-3 **(v1.40)** · branch `feat/ui-7-the-look`
+**Learn:** what a design token is and how Tailwind turns it into classes; why an offline app keeps its fonts inside itself; what contrast means.
+**Build:** replace shadcn's placeholders in `globals.css` with the shop's own look (ADR-0039): the green godown and container, the blue at the godown's back, the white and faded-red Foods bags.
+
+| Token | Colour | Used for |
+|---|---|---|
+| `--primary` | green `#15803D` | main buttons, top bar |
+| `--secondary`, `--ring` | blue `#1E40AF` | links, what is selected, focus ring |
+| `--background`, `--card` | white `#FFFFFF` | screens |
+| `--destructive` | faded red `#AD5145` | warnings only |
+| `--foreground` | `#17231B` | text |
+| `--muted` / `--muted-foreground` | `#F3F7F4` / `#566559` | pale panels, quiet text |
+| `--border`, `--input` | `#D9E3DC` | lines |
+| `--radius` | 8 px | corners |
+| control heights | 52 px big, 44 px normal | buttons, inputs |
+
+Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, both Latin-only files in `src/fonts/` with their licence, loaded by `next/font/local`. `data-font="second"` on `<html>` changes the font; a lint rule refuses `next/font/google`. Buttons show the hand pointer. The dark colours are removed. `make-icons.mjs` draws the godown: a green square, a white building, a blue door, no letters.
+**Watch out:** keep the `@custom-variant dark` line. Without it, shadcn's `dark:` classes follow the device's setting, and a phone in dark mode gets half-dark screens. Check that both font files have same-width digits (`tnum`), which is not yet confirmed for Atkinson; if one fails, stop and bring the choice to Jack. Downloading the two font files (about 29 KB and 34 KB) needs Jack's yes first. `/spike/slip` takes the new font, so print it once and compare with SPIKE-2. The faded red is a touch darker than the first try (`#B3574B`), which read at only 4.43:1 on a pale panel.
+**Done when:**
+- [ ] No placeholder grey is left in `globals.css`.
+- [ ] Every text and background pair passes 4.5:1.
+- [ ] With the network off, both fonts still show, and no request goes to Google.
+- [ ] Money lines up in both fonts.
+- [ ] A button on a laptop shows the hand pointer.
+- [ ] Installed on a phone, the new icon isn't cut by Android's mask.
+**Tests:** `tokens.test.ts` (contrast, no placeholder left) · `manifest.test.ts` (theme colour equals `--primary`)
+**Commits:** `feat(frontend): the shop's colours and shapes` → `feat(frontend): two fonts inside the app` → `fix(frontend): buttons show the hand pointer` → `feat(frontend): the godown icon`
+
+### UI-8 · The pieces: button, input, label, card, alert
+`M` · Claude-led · after UI-7 **(v1.40)** · branch `feat/ui-8-the-pieces`
+**Build:** `pnpm shadcn add button input label card alert`, left untouched in `components/ui/`. One piece of ours in `components/design/` for each part, setting the look (ADR-0039): the button has kinds `main` (green), `second` (blue outline) and `danger` (faded-red outline), and sizes `big` (the default) and `normal`; a field ties its label and error to its input. `SideBand` is blue, or striped white and faded red. A lint rule lets only `components/design/` import `components/ui/`, so no screen can skip the look, and `.claude/rules/frontend.md` says so. A `/design` page shows every colour, both fonts and each piece in each state, with its text in `sw.json` and `en.json`.
+**Watch out:** shadcn's parts need `@base-ui/react`, a new dependency, so Jack's yes comes first (rule 12). Read what the shadcn command changes after each add.
+**Done when:**
+- [ ] `/design` shows each piece normal, hovered, focused, pressed, disabled and with an error.
+- [ ] Tabbing through the page shows a focus ring on every piece.
+- [ ] A screen importing `components/ui/` fails lint.
+**Tests:** `button.test.tsx` · `field.test.tsx` · `side-band.test.tsx` · `import-rule.test.ts`
+**Commits:** `build(frontend): shadcn's first components` → `feat(frontend): button in the shop's look` → `feat(frontend): field, card and alert` → `feat(frontend): side band` → `chore(frontend): screens import only our pieces` → `feat(frontend): design page`
+
 ### UI-1 · App foundations: Swahili, numbers, layout
-`M` · Claude-led · after REPO-3, CORE-5 · branch `feat/ui-1-foundations`
-**Build:** next-intl (Swahili by default, English switch) with `sw.json` and `en.json`; money and quantity formatting (`sw-TZ`, TZS without decimals, "26 mifuko + 35.5 kg"); big.js and a TypeScript `roundMoney` that pass the **same** `shared/test-vectors`; a layout with a counter area and an office area; the *Inahitaji mtandao* banner on office screens when offline.
+`M` · Claude-led · after REPO-3, CORE-5, UI-8 **(v1.40)** · branch `feat/ui-1-foundations`
+**Build:** next-intl (Swahili by default, English switch) with `sw.json` and `en.json`; money and quantity formatting (`sw-TZ`, TZS without decimals, "26 mifuko + 35.5 kg"); big.js and a TypeScript `roundMoney` that pass the **same** `shared/test-vectors`; a layout with a counter area and an office area, under a green top bar with `SideBand` **(v1.40)**; the *Inahitaji mtandao* banner on office screens when offline, built on the alert piece **(v1.40)**. The English switch keeps its choice on this browser until UI-9 saves it on the person **(v1.40)**.
 **Done when:**
 - [ ] The same vector files pass in pytest and in Vitest.
 - [ ] Switching to English changes every visible string.
@@ -751,6 +793,17 @@ Done in **portion 6**, in chat — not with Claude Code.
 - [ ] A manager logs in from a phone browser, resets a password through the console email and reaches the office area.
 **Commits:** `feat(frontend): password login and reset`
 
+### UI-9 · Each person's language and font
+`M` · Claude-led · after UI-4, UI-8 **(v1.40)** · branch `feat/ui-9-language-and-font`
+**Build:** `User.font` holds `default` or `second`, with a database rule like the one on language. `PATCH /api/auth/me/` changes only your own `language` and `font`, and `me` answers both. A screen *Mipangilio yangu* changes them at once; offline it shows *Inahitaji mtandao*. A login or a quick switch applies that person's choices (ADR-0039).
+**Watch out:** the font is stored by its role, not its name, so swapping a font later changes no rows. Office routes ask every change for a key, but your own settings need none: build this route beside `LogoutView`. The staff rows sent to a device must carry both, so an offline PIN login still shows the person's choices (SYNC-2, SYNC-10). A reload may show the default font for a moment; that is accepted.
+**Done when:**
+- [ ] Asha picks the second font, and it follows her to another device.
+- [ ] Juma logs in after her on the same laptop and sees his own choices.
+- [ ] Nobody can change another person's settings.
+**Tests:** `test_person_changes_own_language_and_font` · `test_unknown_font_refused` · `test_suspended_person_cannot_change_settings` · `my-settings.test.tsx`
+**Commits:** `feat(people): a person's font` → `feat(people): a person changes their own language and font` → `feat(frontend): my settings screen` → `feat(frontend): the app follows the person`
+
 ### UI-6 · End-to-end tests in CI
 `M` · Claude-led · after UI-4, OPS-1 · branch `test/ui-6-e2e`
 **Build:** Playwright in CI against the backend image and PostgreSQL in Docker (03 §11); the first test: pair a device → PIN login → idle lock → log in again → log out.
@@ -789,7 +842,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 
 ### SYNC-2 · Bootstrap
 `M` · Claude-led · after SYNC-1, AUTH-4 · branch `feat/sync-2-bootstrap`
-**Build:** a registry of syncable entities (a queryset plus the fields devices may see); `GET /api/sync/v1/bootstrap` (device key) → a snapshot of sides, payment accounts, staff (name, photo, status, `pin_changed_at`), permissions per side, and settings in force and future-dated — plus the cursor it is valid at, compressed.
+**Build:** a registry of syncable entities (a queryset plus the fields devices may see); `GET /api/sync/v1/bootstrap` (device key) → a snapshot of sides, payment accounts, staff (name, photo, status, `pin_changed_at`, `language` and `font` **(v1.40)**), permissions per side, and settings in force and future-dated — plus the cursor it is valid at, compressed.
 **Done when:**
 - [ ] A new device gets everything its counter needs in one response.
 - [ ] A test proves that no buying price, PIN hash or password ever leaves the server.
@@ -886,7 +939,7 @@ Done in **portion 6**, in chat — not with Claude Code.
 ### SYNC-10 · Offline PIN check
 `M` · Jack-led · after AUTH-4, SYNC-6 · branch `feat/sync-10-offline-pin`
 **Learn:** key derivation (PBKDF2) with WebCrypto; salts; lockouts (03 §5.9).
-**Build:** at a person's first online PIN login on this device, store a PBKDF2 check value with a per-device salt; offline, check the PIN against it and start a local session; five wrong PINs lock that person here for a minute, doubling, up to an hour **(v1.33)**; a PIN changed on the server (`pin_changed_at`) drops the check value at the next pull; a person suspended on the server can't log in offline once the device has pulled (X2).
+**Build:** at a person's first online PIN login on this device, store a PBKDF2 check value with a per-device salt; offline, check the PIN against it and start a local session; five wrong PINs lock that person here for a minute, doubling, up to an hour **(v1.33)**; a PIN changed on the server (`pin_changed_at`) drops the check value at the next pull; a person suspended on the server can't log in offline once the device has pulled (X2); a local session shows the person's own language and font, from their staff row (UI-9) **(v1.40)**.
 **Watch out** **(v1.34)**: the same three numbers as the server's, in `apps/people/pins.py`: 5 tries, a first lock of 1 minute, a longest of 60. The server counts a try before it checks it (AUTH-4), which the device should do too, so a crash in the check can't give a free try.
 **Done when:**
 - [ ] Someone who logged in once online can log in offline; someone who never did can't.
@@ -1263,6 +1316,9 @@ The project is also the portfolio, so showing it is part of the plan.
 15. An admin page for staff members, as its own task (Jack, 27 Oct). The first admin page of a shop table lists its rows through `all_shops`, but its add and change pages fill and check their form through `objects` (drop-downs, unique checks), so they raise `NoShopSelected` (CORE-2). It needs one admin base in `core` that runs those pages inside the row's own `shop_context`, with the shop picked first on an add page **(v1.14)**.
 16. The admin's *Add shop* page through `create_shop` (Jack, 27 Oct). Today it saves the Shop row alone: no sides, stock locations or cash drawers, so a shop added there can't work (SHOP-2). It needs the sides on the add form, or a management command instead. No shop exists yet, so none is missing its sides **(v1.15)**.
 17. A cash drawer serves exactly one side (ADR-0001), while a Lipa Namba may serve several. The database can't hold this: the link table has no `kind`. `create_shop` makes one drawer per side; the service that adds accounts (MONEY-2) checks it **(v1.15)**.
+18. Each shop's own colours: today every shop has the one look (ADR-0039). The tokens make a second look possible *(default: Later)* **(v1.40)**.
+19. Which side gets the striped band: `SideBand` draws both, but a side has no field that says which. Decide with the first screen that shows a side **(v1.40)**.
+20. Dark mode: off for now (ADR-0039). Every colour would need a second shade, and every screen a second check *(default: Later)* **(v1.40)**.
 
 ## Appendix A — Changes to the other docs
 
