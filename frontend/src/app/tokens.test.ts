@@ -107,6 +107,14 @@ describe("the shop's colours", () => {
   });
 });
 
+describe("page-wide defaults", () => {
+  it("shows the hand pointer on a button", () => {
+    // Tailwind 4 gives buttons the plain arrow. jsdom has no mouse, so this only checks the rule is
+    // there; that it works is on the card's Done list, checked in a real browser.
+    expect(CSS).toMatch(/button:not\(:disabled\)[^{]*\{\s*cursor:\s*pointer/);
+  });
+});
+
 describe("what shadcn left behind", () => {
   it("leaves no placeholder colour", () => {
     // Every grey that `shadcn init` wrote is an oklch() value; the shop's colours are plain hex.

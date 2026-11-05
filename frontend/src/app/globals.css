@@ -123,6 +123,13 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Tailwind 4 gives buttons the plain arrow, so on a laptop a button looks like plain text. Here
+     once, so no screen can forget it. Not on a disabled button: it does nothing, so it mustn't
+     invite a click. [role="button"] is for shadcn's parts that act as buttons without the tag. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
   html {
     @apply font-sans;
     /* Every digit the same width, so money lines up in columns. On the whole page, so no screen can
