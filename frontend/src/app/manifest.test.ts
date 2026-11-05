@@ -7,7 +7,7 @@
 // reads files on disk. Under jsdom, Vite turns new URL(…, import.meta.url) into a web address,
 // which fileURLToPath can't read; in Node it stays a file:// address.
 // @vitest-environment node
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -48,6 +48,18 @@ describe("manifest", () => {
       ),
     ).toBe(true);
     for (const icon of icons) expect(icon.type).toBe("image/png");
+  });
+
+  it("uses the same green as the app's main colour", () => {
+    // The manifest is plain data, so it can't read the token and has to repeat it. Without this check
+    // the two could drift, and the app would open in one green and carry on in another (ADR-0039).
+    const css = readFileSync(
+      fileURLToPath(new URL("./globals.css", import.meta.url)),
+      "utf8",
+    );
+    const primary = /--primary:\s*(#[0-9a-f]{6})/.exec(css)?.[1];
+    expect(primary).toBeDefined();
+    expect(app.theme_color).toBe(primary);
   });
 
   it("names only icons that exist in public/", () => {

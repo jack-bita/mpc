@@ -1,11 +1,9 @@
-/* globals.css — the app's one global stylesheet: Tailwind, shadcn's helpers and the design tokens.
+/* globals.css — the app's one global stylesheet: Tailwind, shadcn's helpers and the shop's look.
  *
  * A design token is a named value, like --primary or --radius, that every component reads.
- * Change a token here and every screen follows. The tokens below are shadcn's neutral
- * defaults, written by `shadcn init` (style "base-nova", base colour "neutral"). They are
- * PLACEHOLDERS: the design-system card replaces them with the app's own colours, fonts and
- * shapes. Until then no font is set, so Tailwind's system font stack is used: nothing is
- * downloaded at build time, and every shop device already has it.
+ * Change a token here and every screen follows, and no screen can pick a green of its own
+ * (ADR-0039). tokens.test.ts reads this file and checks every pair of colours by contrast, so a
+ * value that is too pale fails a test instead of hurting at the counter.
  */
 
 /* Tailwind itself: its reset and every utility class. Only the classes our files use end up
@@ -17,28 +15,17 @@
    keyframes its components use. */
 @import "shadcn/tailwind.css";
 
-/* dark: classes apply inside an element with class="dark". Whether the app gets a dark mode
-   at all is the design-system card's choice. */
+/* Keep this line, though the app has no dark colours (ADR-0039). shadcn's parts carry dark: classes.
+   Without this line those classes follow the device's setting, so a phone in dark mode gets
+   half-dark screens. With it they apply only inside class="dark", and no page has that class. */
 @custom-variant dark (&:is(.dark *));
 
 /* Turn each token into Tailwind classes: --color-primary makes bg-primary, text-primary…
    "inline" makes each class use var(--primary) itself, so the token is read on the element
-   that has the class: a class="dark" on any parent retints everything inside it. Without
-   "inline", --color-primary would be worked out once, at :root, and stay that colour. */
+   that has the class. Without "inline", --color-primary would be worked out once, at :root,
+   and a value set lower down the page could not reach it. There are no chart or sidebar tokens:
+   no screen uses them, and the card that needs them gives them the shop's colours. */
 @theme inline {
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -64,85 +51,62 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* Tailwind makes its h-… and min-h-… classes from --spacing-… names: h-control-big is 52 px. */
+  --spacing-control-big: var(--control-big);
+  --spacing-control-normal: var(--control-normal);
 }
 
-/* The light theme's values. Colours are oklch (lightness, chroma, hue): equal steps in
-   lightness look equal to the eye, which makes readable contrast easier to keep. */
+/* The shop's look, from the shop itself (ADR-0039): green first, blue second, white as the
+   background, and one faded red for warnings only. Light only for now, so there is no dark list.
+   The values are plain hex, because that is how people talk about a colour and how the contrast
+   test reads it. A "-foreground" token is the text that sits on the colour of the same name. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  /* The green godown and container: main buttons, top bar. */
+  --primary: #15803d;
+  --primary-foreground: #ffffff;
+  /* The blue at the godown's back: links, what is selected, the focus ring. */
+  --secondary: #1e40af;
+  --secondary-foreground: #ffffff;
+  --ring: #1e40af;
 
-/* The same tokens for the dark theme. */
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Screens, and the panels shadcn's parts draw on them. All are white with dark text today; they
+     stay separate tokens because shadcn's parts read them by these names. */
+  --background: #ffffff;
+  --foreground: #17231b;
+  --card: #ffffff;
+  --card-foreground: #17231b;
+  --popover: #ffffff;
+  --popover-foreground: #17231b;
+
+  /* Pale panels and quiet text. --accent is a menu row under the mouse: it reuses the pale panel,
+     so a menu brings no colour of its own. */
+  --muted: #f3f7f4;
+  --muted-foreground: #566559;
+  --accent: #f3f7f4;
+  --accent-foreground: #17231b;
+
+  /* The faded red of the Foods bags. A touch darker than the first try (#b3574b), which read at
+     only 4.43:1 on a pale panel. Warnings only: a colour that means danger can't also decorate. */
+  --destructive: #ad5145;
+
+  /* --border only decorates, so it may stay pale. --input is darker on purpose: a white box on a
+     white screen shows only its edge, so that edge must read at 3:1 (WCAG; Jack, 5 Nov 2026). */
+  --border: #d9e3dc;
+  --input: #7d8c83;
+
+  --radius: 8px;
+  /* Button and box heights: 52 px is the default, big enough for a finger at the counter. */
+  --control-big: 52px;
+  --control-normal: 44px;
 }
 
 /* Page-wide defaults: borders and focus rings use the tokens, and the page takes the theme's
    background, text colour and font. */
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    /* Full strength, not shadcn's outline-ring/50: at half strength the blue fades to 2.57:1, under
+       the 3:1 that someone on a keyboard needs to see where they are. */
+    @apply border-border outline-ring;
   }
   body {
     @apply bg-background text-foreground;
