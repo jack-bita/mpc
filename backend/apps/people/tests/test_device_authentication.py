@@ -146,12 +146,16 @@ def test_login_keeps_the_key_out_of_error_reports(
 PROBE_SHOP = "/api/devices/v1/probe/shop/"
 
 
-def acting_settings() -> tuple[str, str]:
-    # What PostgreSQL is told about who acts, on this test's connection: the shop and the staff member, "" for none.
+def acting_settings() -> tuple[str, str, str]:
+    # What PostgreSQL is told about who acts, on this test's connection: the shop, the staff member and the device, ""
+    # for none.
     with connection.cursor() as cursor:
-        cursor.execute("SELECT current_setting('mpc.shop_id', true), current_setting('mpc.staff_id', true)")
+        cursor.execute(
+            "SELECT current_setting('mpc.shop_id', true), current_setting('mpc.staff_id', true), "
+            "current_setting('mpc.device_id', true)"
+        )
         row = cursor.fetchone()
-    return (row[0] or "", row[1] or "") if row else ("", "")
+    return (row[0] or "", row[1] or "", row[2] or "") if row else ("", "", "")
 
 
 def test_device_visit_opens_its_own_shop(
@@ -184,7 +188,8 @@ def test_device_visit_opens_its_own_shop(
 
 def test_device_visit_closes_its_shop(settings: Settings, manager_a: StaffMember, side_a: Side) -> None:
     # However a device's visit ends, answered or refused, it leaves no shop open on this worker, and PostgreSQL is told
-    # nobody acts again, so the next visit, on the same connection, inherits nothing (as CORE-6's office routes).
+    # nobody acts again, on no device, so the next visit, on the same connection, inherits nothing (as CORE-6's office
+    # routes).
     settings.ROOT_URLCONF = "tests.probe.urls"
     device, key = pair(manager_a, side_a)
     client = APIClient()
@@ -197,7 +202,7 @@ def test_device_visit_closes_its_shop(settings: Settings, manager_a: StaffMember
 
     with pytest.raises(NoShopSelected):
         current_shop()
-    assert acting_settings() == ("", "")
+    assert acting_settings() == ("", "", "")
 
 
 def test_device_key_cookie_hidden_on_error_pages() -> None:

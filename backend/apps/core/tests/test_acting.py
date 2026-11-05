@@ -194,6 +194,32 @@ def test_acting_as_leaves_a_broken_atomic_block_to_its_rollback() -> None:
     assert told() == ("", "")
 
 
+def test_outer_device_survives_a_failed_inner_block(staff_a: Actor, device_a: ShopScoped) -> None:
+    # A step that fails mid-visit, inside its own savepoint, is undone with what it told PostgreSQL. The visit goes on,
+    # so its device must still be there for its next edit: both ways a transaction breaks, as in the two tests above.
+    with acting_as(staff_a, device=device_a):
+        with (
+            pytest.raises(DataError, match="division by zero"),
+            transaction.atomic(),
+            acting_as(staff_a, device=None),
+            connection.cursor() as cursor,
+        ):
+            assert told_device() == ""
+            cursor.execute("SELECT 1 / 0")
+        assert told_device() == str(device_a.pk)
+
+        with (
+            pytest.raises(RuntimeError, match="A step failed"),
+            transaction.atomic(),
+            acting_as(staff_a, device=None),
+            transaction.atomic(savepoint=False),
+        ):
+            assert told_device() == ""
+            raise RuntimeError("A step failed.")
+        assert told_device() == str(device_a.pk)
+    assert told_device() == ""
+
+
 class WhoActsViewSet(ShopViewSet[Note]):
     # An office route like any other, whose one answer is what PostgreSQL holds as who acts and the visit's shop,
     # while the visit runs.
