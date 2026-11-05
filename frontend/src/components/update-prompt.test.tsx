@@ -43,6 +43,14 @@ describe("UpdatePrompt", () => {
     expect(screen.getByRole("button", { name: "Sasisha" })).toBeTruthy();
   });
 
+  it("stays off the paper when a page is printed", () => {
+    render(<UpdatePrompt />);
+    newVersionReady(vi.fn());
+
+    // Checked by its class, because jsdom doesn't print. The slip's own button relies on the same class.
+    expect(screen.getByRole("status").className).toContain("print:hidden");
+  });
+
   it("switches to the new version when Sasisha is tapped", () => {
     render(<UpdatePrompt />);
     const apply = vi.fn();
