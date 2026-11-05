@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.25 · 5 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.26 · 5 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, and AD3 ADR-0038 **(v1.16)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.26** (5 Nov 2026, AUTH-8's second review): the lighter lock's one exception is written down (§5.5, 04 v1.39). Marked **(v1.26)**.
 
 **Changes in v1.25** (5 Nov 2026, AUTH-8's review): an office row other rows link to takes a lighter lock, so two managers acting on each other can't deadlock (§5.5, 04 v1.38). What services take is now said one way: the books read the device from the visit's note, and a counter document keeps its own (§5.2). Marked **(v1.25)**.
 
@@ -291,7 +293,7 @@ apps/sales/
 ```
 
 - Business logic lives only in services and calculations. Views and serializers stay thin; no logic in `save()`, serializer `create()` or signals.
-- Services take explicit arguments (who, which shop) and return results. A counter document's own `device` is a fact of the document, and arrives with it. The audit trail's two books name the visit's device from its note, not from an argument (§5.16) **(v1.25)**. They raise domain errors with codes (`sale.below_floor`), turned into API errors by one exception handler.
+- Services take explicit arguments (who, which shop) and return results. A counter document's own `device` is a fact of the document, and arrives with it. The audit trail's two books name the visit's device from its note, not from an argument (§5.16) **(v1.25)**. Services raise domain errors with codes (`sale.below_floor`), turned into API errors by one exception handler.
 - Every file starts with a short header comment saying what it is for; comments explain *why*.
 
 ### 5.3 Base models (in `core`)
@@ -333,7 +335,7 @@ Confirming a one-screen sale:
 - Cash posting locks the drawer's open session row, so cash can't land in a session being approved (M8, M9).
 - Repayment allocation locks the contact's open debts, so two repayments can't clear the same debt (B1).
 - Change-log numbers are taken last, from the shop's counter row (§6.4).
-- An office row other rows link to is locked with `select_for_update(no_key=True)` **(v1.25)**. Two edits of it still take turns, but a new row that only links to it doesn't wait. A link is checked at its commit with a light lock, which a full lock would block, so two managers acting on each other's devices or jobs would each wait for the other (`editing()`, `_locked`, AUTH-8).
+- An office row other rows link to is locked with `select_for_update(no_key=True)` **(v1.25)**. Two edits of it still take turns, but a new row that only links to it doesn't wait. A link is checked at its commit with a light lock, which a full lock would block, so two managers acting on each other's devices or jobs would each wait for the other (`editing()`, `_locked`, AUTH-8). One exception: a save that changes a plain unique column takes the full lock anyway, as PostgreSQL counts it as part of the row's key. No service does that today **(v1.26)**.
 
 **Idempotent:** a document UUID already posted in the same shop returns the stored result, exactly as the first time.
 

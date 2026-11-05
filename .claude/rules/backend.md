@@ -33,7 +33,7 @@ Every app may import `control`; `control` imports only `core`. A model may name 
 - Check that every record you link to belongs to the same shop (T1).
 - Record changes for sync with `record_change` inside the same transaction.
 - Posting one document is one transaction (03 §5.5): the document → rule checks (online: an error; from offline: accept and raise a Flag) → payments and allocations → stock movements + `StockBalance` → debt + `ContactBalance` → flags → change log and jobs → commit.
-- Locks: atomic increments for balances; lock the drawer's open session for cash; lock a contact's open debts for repayments; change-log numbers last, from the shop's `ShopSequence` row. Lock an office row other rows link to with `select_for_update(no_key=True)`, or two people acting on each other deadlock at commit (AUTH-8).
+- Locks: atomic increments for balances; lock the drawer's open session for cash; lock a contact's open debts for repayments; change-log numbers last, from the shop's `ShopSequence` row. Lock an office row other rows link to with `select_for_update(no_key=True)`, or two people acting on each other deadlock at commit (AUTH-8). A save that changes a plain unique column takes the full lock anyway, so don't let a service change one on an office row without thinking this through.
 - Rules come from `get_setting(key, shop, side=None, on=date)`. A new key goes in the registry in `core` with its type, default, scope and description. Copy the values a record used onto the record (T4).
 - Base classes from `core`: `ShopScoped`, `Editable` (a stale `version` → 409 `version_conflict`), `CounterRecord`, `AppendOnly`.
 
