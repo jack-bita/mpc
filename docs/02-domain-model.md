@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.18 · 4 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.19 · 5 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -41,6 +41,8 @@
 **Changes in v1.17** (4 Nov 2026, AUTH-4's review): a choice by Jack. A PIN logs in as the whole person, so who may set one follows the rule for a temporary password, and only the superuser sets an owner's (§5). Marked **(v1.17)**.
 
 **Changes in v1.18** (4 Nov 2026, AUTH-8): both books name the device a visit came from, and are empty for a visit with none (§13, X3; 03 v1.24, 04 v1.37). Marked **(v1.18)**.
+
+**Changes in v1.19** (5 Nov 2026, AUTH-8's review): X3 now says what §13 already allowed: a visit with no device names none (§16). Marked **(v1.19)**.
 
 ---
 
@@ -584,7 +586,7 @@ These become database constraints and automated tests.
 **Access and devices**
 - **X1** Permissions are checked per side.
 - **X2** PIN login works only on active registered devices. A suspended person can't log in once the device has synced; anything they did offline after suspension is flagged.
-- **X3** Every write records the person and the device.
+- **X3** Every write records the person and the device, when the visit has one: a password or a nightly job has none (§13) **(v1.19)**.
 
 ## 17. Offline and sync
 
