@@ -102,8 +102,8 @@ export default function SlipPage() {
     // space would push its right edge off the 80 mm roll.
     <main className="p-4 print:p-0">
       {/* The slip, 80 mm wide on screen too, so its height on screen is its height on paper.
-          Black, not the theme's grey: a receipt printer has only black dots, and grey comes
-          out speckled or faint. px-[4mm]: the printer can't print the roll's very edges. */}
+          Black, not the theme's colours: a receipt printer has only black dots, and any colour
+          comes out speckled or faint. px-[4mm]: the printer can't print the roll's very edges. */}
       <div
         ref={slipRef}
         className="w-[80mm] bg-white px-[4mm] py-[2mm] text-black"
@@ -116,7 +116,7 @@ export default function SlipPage() {
         {/* Idadi × @ (the price for each one) = Bei (the line's amount), as on printed receipts. */}
         <table className="my-2 w-full">
           <thead>
-            {/* Lines in black, not the theme's light grey, which prints faint (as the text). */}
+            {/* Lines in black, not the theme's pale line colour, which prints faint (as the text). */}
             <tr className="border-b border-black">
               <th className={`${CELL} text-left`}>{sw.slip.item}</th>
               <th className={NUMBER_CELL}>{sw.slip.quantity}</th>
@@ -152,7 +152,7 @@ export default function SlipPage() {
       <button
         type="button"
         onClick={() => window.print()}
-        className="mt-4 min-h-12 cursor-pointer rounded-md bg-primary px-5 font-semibold text-primary-foreground print:hidden"
+        className="mt-4 min-h-12 rounded-md bg-primary px-5 font-semibold text-primary-foreground print:hidden"
       >
         {sw.slip.print}
       </button>

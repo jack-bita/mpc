@@ -17,9 +17,6 @@ export default defineConfig([
   ...nextVitals,
   // The same for TypeScript files, plus typescript-eslint's recommended rules.
   ...nextTs,
-  // Last, so it wins: switch off every rule about layout. Prettier owns layout, and two
-  // tools with opinions on spacing would only fight.
-  prettier,
   {
     rules: {
       // Our fonts live in the repo, so builds and devices never depend on another company's server.
@@ -37,6 +34,9 @@ export default defineConfig([
       ],
     },
   },
+  // Last of the rule sets, so it wins: switch off every rule about layout. Prettier owns layout,
+  // and two tools with opinions on spacing would only fight.
+  prettier,
   // Built or generated files: nobody writes them by hand, so nobody lints them. ESLint
   // doesn't read .gitignore, so this list repeats .prettierignore's on purpose.
   globalIgnores([
