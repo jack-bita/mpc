@@ -67,6 +67,15 @@ describe("the font switch", () => {
     "",
   );
 
+  it("hands both fonts to the page", () => {
+    // Read as text, because layout.tsx imports fonts.ts, which only a Next.js build can run. Without
+    // these two classes the font names don't exist on the page, and it quietly falls back to another
+    // font. Both, because a person's choice changes the font with no new page (UI-9).
+    const layout = readFileSync(here("../app/layout.tsx"), "utf8");
+    expect(layout).toMatch(/<html[^>]*\$\{sourceSans\.variable\}/);
+    expect(layout).toMatch(/<html[^>]*\$\{atkinson\.variable\}/);
+  });
+
   it("uses the names fonts.ts gives the two fonts", () => {
     // next/font hands each font to the page under the name in `variable`. A typo on either side would
     // show no error: the page would only fall back to a system font.
