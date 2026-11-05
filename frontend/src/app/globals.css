@@ -63,6 +63,10 @@
    The values are plain hex, because that is how people talk about a colour and how the contrast
    test reads it. A "-foreground" token is the text that sits on the colour of the same name. */
 :root {
+  /* Asks browsers not to darken the page by themselves, as Chrome's Auto Dark Theme can. The contrast
+     checks only hold for the colours below. */
+  color-scheme: only light;
+
   /* The green godown and container: main buttons, top bar. */
   --primary: #15803d;
   --primary-foreground: #ffffff;

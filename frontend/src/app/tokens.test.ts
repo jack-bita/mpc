@@ -153,6 +153,12 @@ describe("what shadcn left behind", () => {
     expect(CSS).not.toMatch(/^\.dark\s*\{/m);
   });
 
+  it("asks browsers not to darken the page", () => {
+    // Chrome's Auto Dark Theme can darken a light page by itself. Light only means our colours are the
+    // ones on screen, and the contrast sums above only hold for those (ADR-0039).
+    expect(CSS).toMatch(/:root\s*\{[^}]*color-scheme:\s*only light/);
+  });
+
   it("keeps the dark: classes switched off", () => {
     // shadcn's parts carry dark: classes. Without this line those classes follow the device's setting,
     // and a phone in dark mode gets half-dark screens. With it, they wait for a class no page has.
