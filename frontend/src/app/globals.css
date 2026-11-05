@@ -125,9 +125,14 @@
   }
   /* Tailwind 4 gives buttons the plain arrow, so on a laptop a button looks like plain text. Here
      once, so no screen can forget it. Not on a disabled button: it does nothing, so it mustn't
-     invite a click. [role="button"] is for shadcn's parts that act as buttons without the tag. */
-  button:not(:disabled),
-  [role="button"]:not([aria-disabled="true"]) {
+     invite a click. A button can say disabled in two ways: Base UI keeps some focusable for the
+     keyboard, with aria-disabled instead. [role="button"] is for shadcn's parts that act as buttons
+     without the tag, and <summary> is the row that opens a <details>. pointer.test.ts checks this. */
+  button:not(:disabled, [aria-disabled="true"]),
+  input[type="button"]:not(:disabled),
+  input[type="submit"]:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary {
     cursor: pointer;
   }
   html {
