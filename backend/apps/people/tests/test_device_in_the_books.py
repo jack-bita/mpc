@@ -19,11 +19,11 @@ Fake data only: the repo is public (03 §10).
 from collections.abc import Callable
 
 import pytest
-from django.db import transaction
+from django.db import connection, transaction
 from rest_framework.test import APIClient
 
 from apps.control.models import AuditAction, AuditEvent, EditEvent
-from apps.core.acting import acting_as, current_device_id
+from apps.core.acting import DEVICE_SETTING, SHOP_SETTING, acting_as, current_device_id
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
@@ -139,6 +139,23 @@ def test_password_on_a_paired_laptop_names_no_device(
     # names no device. Pinned here so that changing it is a decision, not an accident.
     client = by_password(manager)
     client.cookies[KEY_COOKIE] = paired[1]
+    blocks(client, stolen_phone)
+    edit, line = both_books(stolen_phone)
+    assert (edit.device_id, line.device_id) == (None, None)
+
+
+def test_visit_with_no_device_clears_one_left_on_the_connection(
+    manager: StaffMember, paired: tuple[Device, str], stolen_phone: Device
+) -> None:
+    # A visit always says which device it has, even "none", and never trusts what the connection holds: both books are
+    # append-only, so a stale laptop on a password's line would stay there for good. acting_as() puts its values back as
+    # a visit ends, so this can't happen today; planted here by hand, the way a bug would leave it.
+    client = by_password(manager)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT set_config(%s, %s, false), set_config(%s, %s, false)",
+            [SHOP_SETTING, str(manager.shop_id), DEVICE_SETTING, str(paired[0].pk)],
+        )
     blocks(client, stolen_phone)
     edit, line = both_books(stolen_phone)
     assert (edit.device_id, line.device_id) == (None, None)
