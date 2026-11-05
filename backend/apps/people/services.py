@@ -798,8 +798,9 @@ def _set_device_status(
     _check_reason(reason, code="device.reason_required")
     with transaction.atomic():
         # The device as stored, read again and locked: its status and home side are checked as they are now, not as
-        # the copy handed in says. Two managers blocking at once take turns, and the second finds it blocked.
-        current = Device.objects.select_for_update().get(pk=device.pk)
+        # the copy handed in says. Two managers blocking at once take turns, and the second finds it blocked. no_key, as
+        # in editing(), which locks it again below: a block made on this device names it, and must not wait for this.
+        current = Device.objects.select_for_update(no_key=True).get(pk=device.pk)
         # Who may: device.manage on the home side as stored (Jack, AUTH-1), as for pairing it. Refused before anything
         # changes; the transaction leaves the device as it was.
         require(by, Permission.DEVICE_MANAGE, current.home_side)

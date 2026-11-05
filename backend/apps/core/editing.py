@@ -58,8 +58,12 @@ def editing[M: Editable](row: M, *, version: int, by: Actor | None) -> Iterator[
         # Read again and locked until the transaction ends (SELECT ... FOR UPDATE). Two edits of the same
         # row take turns here: the second waits until the first is saved, then sees its new version, and is
         # refused. Compared before the lock, both could pass, and the second would undo the first.
+        # no_key: two edits still take turns, but a row that only links to this one, such as a book line naming this
+        # device (X3), doesn't wait. Its link is checked at its commit, with a light lock that a full lock here would
+        # block: two managers blocking each other's devices would each wait for the other, and one would get a server
+        # error (AUTH-8, as _locked_pair found in apps/people/services.py).
         # cast: mypy reads the manager of type(row) as Editable's, though the row is a side, a product...
-        fresh = cast(M, type(row)._default_manager.select_for_update().get(pk=row.pk))
+        fresh = cast(M, type(row)._default_manager.select_for_update(no_key=True).get(pk=row.pk))
         if fresh.version != version:
             raise VersionConflict()
         yield fresh

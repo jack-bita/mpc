@@ -19,6 +19,7 @@ Fake data only: the repo is public (03 §10).
 from collections.abc import Callable
 
 import pytest
+from django.db import transaction
 from rest_framework.test import APIClient
 
 from apps.control.models import AuditAction, AuditEvent, EditEvent
@@ -26,8 +27,9 @@ from apps.core.acting import acting_as, current_device_id
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
-from apps.people.services import confirm_pairing, set_pin, start_pairing, suspend
+from apps.people.services import block, confirm_pairing, set_pin, start_pairing, suspend
 from apps.shops.models import Side
+from tests.concurrency import in_another_transaction
 
 pytestmark = pytest.mark.django_db
 
@@ -158,6 +160,37 @@ def test_visit_leaves_no_device_on_the_connection(
     with shop_context(manager.shop_id):
         block_edit, unblock_edit = EditEvent.objects.filter(subject_id=stolen_phone.pk).order_by("id")
     assert (block_edit.device_id, unblock_edit.device_id) == (paired[0].pk, None)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_managers_blocking_each_others_devices_both_go_through(
+    manager: StaffMember,
+    staff_a: StaffMember,
+    paired: tuple[Device, str],
+    stolen_phone: Device,
+    give_role: GiveRole,
+) -> None:
+    # A block is urgent. One manager, at the laptop, blocks the phone, while another, at the phone, blocks the laptop.
+    # Each book line links to the device it was made on, and at its commit PostgreSQL checks that link, which needs a
+    # light lock on that device's row. If each block held the row it changes with a full lock, each would wait for the
+    # other's: PostgreSQL would cancel one after a second, and that manager would get a server error. So the second must
+    # finish while the first is still open.
+    laptop = paired[0]
+    give_role(staff_a, RoleTemplate.MANAGER, None)
+
+    def second_manager_blocks_the_laptop() -> Device:
+        with shop_context(staff_a.shop_id), acting_as(staff_a, device=stolen_phone):
+            return block(laptop, by=staff_a, reason=REASON)
+
+    with shop_context(manager.shop_id), acting_as(manager, device=laptop), transaction.atomic():
+        block(stolen_phone, by=manager, reason=REASON)
+        second, ended = in_another_transaction(second_manager_blocks_the_laptop)
+        second.join(timeout=5)
+        assert not second.is_alive(), "The second block is waiting for the first: at its commit, they would deadlock."
+
+    assert isinstance(ended[0], Device)
+    assert both_books(stolen_phone)[0].device_id == laptop.pk
+    assert both_books(laptop)[0].device_id == stolen_phone.pk
 
 
 def test_staff_action_names_the_device(manager: StaffMember, staff_a: StaffMember, paired: tuple[Device, str]) -> None:
