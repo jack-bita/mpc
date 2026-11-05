@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.26 · 5 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.27 · 5 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, and AD3 ADR-0038 **(v1.16)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.27** (5 Nov 2026, the design-system cards): the app's look is one layer over shadcn, with two fonts inside the app, and a person's font follows them as their language does (ADR-0039, §7.2–§7.4, 04 v1.40). The staff rows on a device carry both. Marked **(v1.27)**.
 
 **Changes in v1.26** (5 Nov 2026, AUTH-8's second review): the lighter lock's one exception is written down (§5.5, 04 v1.39). Marked **(v1.26)**.
 
@@ -484,7 +486,7 @@ One IndexedDB database **per shop** on the device ✚, so a practice shop [R2] o
 | Store | Contents |
 |---|---|
 | `meta` | device id and code, shop, home side, app and schema versions, pull cursor, server-time offset, last server time seen, next `device_seq`, receipt counters |
-| Reference (pulled, read-only) | products, selling units, prices (current and future), product sides, tags, batches, stock balances, contacts, contact balances, staff (name, photo, status, PIN-changed time), permissions, settings, payment accounts, sides, open drawer sessions |
+| Reference (pulled, read-only) | products, selling units, prices (current and future), product sides, tags, batches, stock balances, contacts, contact balances, staff (name, photo, status, PIN-changed time, language and font **(v1.27)**), permissions, settings, payment accounts, sides, open drawer sessions |
 | `pin_checks` | the offline PIN check values this device made itself (§5.9) |
 | Documents (made here) | sales with lines and payments, repayments, quick customers, drawer money movements, drawer openings, attendance events [R1b], attachments with their image files |
 | `outbox` | one row per document to send: id, type, `device_seq`, status, attempts, last error, `posted_seq` |
@@ -599,6 +601,7 @@ frontend/src/
 ├── api/                      schema.d.ts (generated — never edited), client.ts
 ├── lib/                      decimal.ts, rounding.ts, units.ts, time.ts, ids.ts, format.ts, permissions.ts
 ├── components/ui/            shadcn components
+├── components/design/        our own pieces in the shop's look; screens use only these (v1.27)
 └── i18n/                     next-intl setup; the messages themselves are in frontend/messages/ (§4) (v1.2)
 ```
 
@@ -610,11 +613,13 @@ frontend/src/
 
 - **Laptops:** keyboard first — `/` jumps to search, Enter adds, number keys set the quantity *(default; settled while building)*.
 - **Phones:** big tap targets; a numeric keypad for cash and kg.
+- **The look (ADR-0039) (v1.27):** colours, corners and control heights are tokens in `src/app/globals.css`. Two fonts live inside the app, so they work offline. Screens use the pieces in `components/design/`, never shadcn's `components/ui/` directly. Light only for now.
 - **Supported shop devices:** Chrome (or Edge) on Android and Windows, installed as an app. iPhones work for the owner's office screens online, but aren't recommended as offline shop devices: offline storage is most dependable in installed Chrome apps.
 
 ### 7.4 Language
 
 - next-intl v4 on the client: the language follows the logged-in person (no language in the URL). Swahili by default, English switch.
+- The font follows the person too: `default` or `second`, and only the person changes it (UI-9, ADR-0039) **(v1.27)**.
 - Money with `Intl.NumberFormat('sw-TZ')`, TZS without decimals; stock as "26 mifuko + 35.5 kg".
 - API error codes map to translated messages. Jack reviews the Swahili (02 §21).
 

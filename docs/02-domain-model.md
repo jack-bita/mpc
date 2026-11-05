@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.19 · 5 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.20 · 5 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -43,6 +43,8 @@
 **Changes in v1.18** (4 Nov 2026, AUTH-8): both books name the device a visit came from, and are empty for a visit with none (§13, X3; 03 v1.24, 04 v1.37). Marked **(v1.18)**.
 
 **Changes in v1.19** (5 Nov 2026, AUTH-8's review): X3 now says what §13 already allowed: a visit with no device names none (§16). Marked **(v1.19)**.
+
+**Changes in v1.20** (5 Nov 2026, the design-system cards): a choice by Jack. A person's font is on `User`, beside their language, so it follows them to every device (§5, ADR-0039, 04 v1.40). Marked **(v1.20)**.
 
 ---
 
@@ -205,7 +207,7 @@ A full diagram for GitHub is in Appendix A.
 ## 5. People & access — module `people`
 
 **User** [R1] — one human, across shops (D12). Global.
-- `full_name`, `phone` (optional, unique, +255…), `email` (optional, for password users too: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link through django-allauth **(v1.14)**), `password` (optional: only for people who log in from their own phone), `must_change_password` (on while the password is one someone else typed: the person reaches no office screen until they choose their own **(v1.15)**), `language`
+- `full_name`, `phone` (optional, unique, +255…), `email` (optional, for password users too: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link through django-allauth **(v1.14)**), `password` (optional: only for people who log in from their own phone), `must_change_password` (on while the password is one someone else typed: the person reaches no office screen until they choose their own **(v1.15)**), `language`, `font` (`default` or `second`: the person's own choice, which follows them to every device, ADR-0039 **(v1.20)**)
 
 **StaffMember** [R1] → Shop, User — a person's job at one shop.
 - `display_name`, `photo` (optional: without one, the PIN login screen shows the full name in large letters with the nickname under it) **(v1.4)**, `pin` (hashed), `job_title`, `started_on`, `left_on`
