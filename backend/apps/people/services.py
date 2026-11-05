@@ -563,8 +563,9 @@ def assign_role(staff: StaffMember, role: Role, *, side: Side | None, by: StaffM
         # The role as stored, read again and locked: the giver's check compares its saved codes, never those of the
         # copy handed in, which may have been changed in memory and never saved (the Owner role made to say
         # "sale.write" would pass as a Seller's). An owner changing the role at the same moment waits until it is
-        # given, or this waits for them.
-        role = Role.objects.select_for_update().get(pk=role.pk)
+        # given, or this waits for them. no_key, as every office row others link to (03 §5.5): this role's assignments
+        # link to it.
+        role = Role.objects.select_for_update(no_key=True).get(pk=role.pk)
         _check_giver(by, role.permissions, side)
         _check_no_open_temporary_password(staff, role.permissions, side)
         given = RoleAssignment(shop_id=staff.shop_id, staff=staff, role=role, side=side, created_by=by)
