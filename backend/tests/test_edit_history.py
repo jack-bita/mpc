@@ -58,7 +58,7 @@ AFTER_UPDATE_FOR_EACH_ROW = 1 + 16
 
 # Column names that hold a secret: a PIN's hash today, and later a device's key (AUTH-1, AUTH-2), a password or a
 # token, as a whole word of the name (`pin_hash`, `key_hash`, `api_token`, never `monkey`). Such a column must be on
-# its table's skip list (RecordEdits(..., skip=[...])): a secret copied into the history could be read by anyone who
+# its table's skip list (RecordEditsV2(..., skip=[...])): a secret copied into the history could be read by anyone who
 # reads the trail. A table's skip list is frozen in its trigger, so a secret column added later needs a new migration
 # that rebuilds the trigger; this check says so the day the column is added.
 SECRET_COLUMN = re.compile(r"(^|_)(hash|key|secret|password|token)(_|$)")

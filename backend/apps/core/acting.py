@@ -157,9 +157,9 @@ def _write(staff: str, shop: str, device: str) -> None:
     # set_config(name, value, false): `false` means for the session, not only for the current transaction. A
     # visit runs most of its queries outside any transaction (autocommit), so a setting for one transaction
     # would be gone before the visit's edit. For the session, it stays on this database connection until it is
-    # changed: so acting_as() always puts the old values back, and a connection the server keeps open for the
-    # next visit (CONN_MAX_AGE) never carries this person or this device into it. All in one query; a value is a
-    # parameter, never pasted into the SQL.
+    # changed: so acting_as() always puts the old values back, and a connection the server may keep open for the
+    # next visit (CONN_MAX_AGE, not set today) never carries this person or this device into it. All in one query; a
+    # value is a parameter, never pasted into the SQL.
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT set_config(%s, %s, false), set_config(%s, %s, false), set_config(%s, %s, false)",

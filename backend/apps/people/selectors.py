@@ -27,7 +27,7 @@ every visit (AUTH-4):
                   person left, or a new PIN since: None, no job
                   person suspended: refused, staff.suspended
                   password someone else typed: refused, password.must_change
-                  ──▶ the staff member
+                  ──▶ the staff member, and the device the visit names in both books (X3)
 """
 
 from collections.abc import Mapping

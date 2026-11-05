@@ -164,9 +164,9 @@ def test_visit_with_no_device_clears_one_left_on_the_connection(
 def test_visit_leaves_no_device_on_the_connection(
     manager: StaffMember, paired: tuple[Device, str], stolen_phone: Device
 ) -> None:
-    # The server keeps a database connection open for the next visit (CONN_MAX_AGE), and the settings live on it. The
-    # next person on it, on their own phone, must not be recorded as standing at this laptop. Test clients share this
-    # test's one connection, so it stands in for that.
+    # The server may keep a database connection open for the next visit (CONN_MAX_AGE; not set today, so it closes each
+    # one), and the settings live on it. The next person on it, on their own phone, must not be recorded as standing at
+    # this laptop. Test clients share this test's one connection, so it stands in for that.
     blocks(by_pin(manager, paired[1]), stolen_phone)
     assert current_device_id(manager.shop_id) is None
 

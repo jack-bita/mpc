@@ -336,7 +336,10 @@ class RecordEdits(AppendOnlyTrigger):
 
 
 class ChangeRecordEdits(RecordEdits):
-    # The step a later migration lists to change which columns an office table's history skips:
+    # The step a later migration listed to change which columns an office table's history skips, until AUTH-8. It writes
+    # the old rule, which names no device, and keeps it on purpose, as migrations on main list it. So listed today, it
+    # would put a table back on the old rule, and backend/tests/test_edit_history.py turns red: SYNC-5, the next card to
+    # need one, adds a form of it that writes the new rule, as RecordEditsV2 does for RecordEdits.
     # ChangeRecordEdits("device", type_code="device", skip=["key_hash", "last_seen_at"], was=["key_hash"]), after the
     # step that adds `last_seen_at` (AUTH-2). A trigger's words are fixed when it is made, and the SQL that makes it is
     # frozen once on main (rule 9), so this takes the table's trigger off and puts it back with the new list, from the
@@ -405,8 +408,8 @@ class MoveRecordEditsToV2(RecordEditsV2, ChangeRecordEdits):
     # MoveRecordEditsToV2("staffmember", type_code="staff", skip=["pin_hash"]). A trigger's function is fixed when it is
     # made, so the trigger comes off and goes back on. That is what ChangeRecordEdits does, so its moves are used as
     # they are, each way, in one transaction, and a migration that isn't atomic is refused: no edit is ever unrecorded.
-    # RecordEditsV2 comes first, so the forward move writes the new rule. Undone, `was` puts the old rule back, with the
-    # same list.
+    # Two parents, each for one thing: the SQL it writes comes from RecordEditsV2, and the moves from ChangeRecordEdits.
+    # Undone, `was` puts the old rule back, with the same list.
     # A typo in `skip` would copy a column the table's history kept out: a PIN's hash, or a device's last_seen_at, which
     # moves every few minutes. So backend/tests/test_edit_history.py checks each list after the move.
 

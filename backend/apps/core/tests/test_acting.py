@@ -1,17 +1,17 @@
 """apps/core/tests/test_acting.py — tests for telling PostgreSQL who acts in a visit (apps/core/acting.py,
 ADR-0036).
 
-The trigger that records office edits names who made each one, and refuses an edit of another shop's row
-(CTRL-2). It reads both from two settings of the database session, `mpc.staff_id` and `mpc.shop_id`, which every
-office visit fills while it runs and empties as it ends:
+The trigger that records office edits names who made each one and from which device, and refuses an edit of another
+shop's row (CTRL-2, AUTH-8). It reads them from three settings of the database session, `mpc.staff_id`, `mpc.shop_id`
+and `mpc.device_id`, which every office visit fills while it runs and empties as it ends:
 
-    before the visit     during the visit (staff A of shop A)     after the visit
-    "", ""               A's id, shop A's id                      "", ""
+    before the visit     during the visit (staff A of shop A, laptop L)     after the visit
+    "", "", ""           A's id, shop A's id, L's id                        "", "", ""
 
-The second test serves its own small office route, built on the base view as every office route is, from this
-module's address list (`urlpatterns`, below; pytest-django's `urls` mark), so the shared probe routes stay as
-they are. `core` may not import `people` (ADR-0035), so the staff member comes from backend/conftest.py, typed
-as an Actor.
+The last test serves its own small office route, built on the base view as every office route is, from this module's
+address list (`urlpatterns`, below; pytest-django's `urls` mark), so the shared probe routes stay as they are. `core`
+may not import `people` (ADR-0035), so the staff member and the device come from backend/conftest.py, typed as an Actor
+and a ShopScoped row.
 """
 
 import uuid
