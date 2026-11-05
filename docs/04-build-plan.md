@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.40 · 5 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.41 · 5 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.41** (5 Nov 2026, UI-7): one choice by Jack, made while planning UI-7. The edge of a box you type in gets its own darker colour, `#7D8C83`, because a white box on a white screen shows only its edge, and the pale line read at 1.31:1 where WCAG asks 3:1. The UI-7 card says what it built: the tokens shadcn needs that its table left out, the chart and sidebar tokens gone, the digit widths read from the font files, and `fonts.test.ts`. From UI-7, for UI-8: a full-strength focus ring, a limit on the danger button's hover tint, and what to do if `shadcn add` writes greys back. Marked **(v1.41)**.
 
 **Changes in v1.40** (5 Nov 2026, the design-system cards): choices by Jack, made while trying a preview of the screens. The app gets its own look, taken from the shop, in three new cards: UI-7 (colours, fonts, shapes, icon), UI-8 (the pieces) and UI-9 (each person's language and font). UI-1 now comes after UI-8. SYNC-2 and SYNC-10 carry a person's language and font; until now nothing saved a person's language at all (ADR-0039, 03 v1.27, 02 v1.20). Marked **(v1.40)**.
 
@@ -720,12 +722,13 @@ Done in **portion 6**, in chat — not with Claude Code.
 | `--destructive` | faded red `#AD5145` | warnings only |
 | `--foreground` | `#17231B` | text |
 | `--muted` / `--muted-foreground` | `#F3F7F4` / `#566559` | pale panels, quiet text |
-| `--border`, `--input` | `#D9E3DC` | lines |
+| `--border` | `#D9E3DC` | lines |
+| `--input` | `#7D8C83` **(v1.41)** | the edge of a box you type in |
 | `--radius` | 8 px | corners |
 | control heights | 52 px big, 44 px normal | buttons, inputs |
 
 Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, both Latin-only files in `src/fonts/` with their licence, loaded by `next/font/local`. `data-font="second"` on `<html>` changes the font; a lint rule refuses `next/font/google`. Buttons show the hand pointer. The dark colours are removed. `make-icons.mjs` draws the godown: a green square, a white building, a blue door, no letters.
-**Watch out:** keep the `@custom-variant dark` line. Without it, shadcn's `dark:` classes follow the device's setting, and a phone in dark mode gets half-dark screens. Check that both font files have same-width digits (`tnum`), which is not yet confirmed for Atkinson; if one fails, stop and bring the choice to Jack. Downloading the two font files (about 29 KB and 34 KB) needs Jack's yes first. `/spike/slip` takes the new font, so print it once and compare with SPIKE-2. The faded red is a touch darker than the first try (`#B3574B`), which read at only 4.43:1 on a pale panel.
+**Watch out:** keep the `@custom-variant dark` line. Without it, shadcn's `dark:` classes follow the device's setting, and a phone in dark mode gets half-dark screens. Check that both font files have same-width digits (`tnum`), which is not yet confirmed for Atkinson; if one fails, stop and bring the choice to Jack. Downloading the two font files (about 29 KB and 34 KB) needs Jack's yes first. `/spike/slip` takes the new font, so print it once and compare with SPIKE-2. The faded red is a touch darker than the first try (`#B3574B`), which read at only 4.43:1 on a pale panel. Settled while planning (Jack, 5 Nov 2026) **(v1.41)**: `--input` is `#7D8C83`, not the pale line. A white box on a white screen shows only its edge, and the pale line read at 1.31:1, where WCAG asks 3:1 for the edge of a box. `tokens.test.ts` checks `--input` and `--ring` at 3:1; `--border` only decorates, so it isn't checked. Settled while building **(v1.41)**: the table leaves out seven tokens that shadcn's parts read. `--primary-foreground` and `--secondary-foreground` are white, `--card` and `--popover` are white with the normal text colour, and `--accent` is the pale panel with the normal text colour. The chart and sidebar tokens are gone, as no screen uses them; the card that needs them gives them the shop's colours. The page's default outline is `--ring` at full strength, as half strength reads at only 2.57:1. Digit widths, read from the files: Source Sans 3 is even as it stands (all 472, and it has no `tnum` feature, which it doesn't need); Atkinson runs from 407 to 648, and is all 632 with `tnum`. So `font-variant-numeric: tabular-nums` is on `<html>`, and no screen can forget it. Both were measured in Chrome at weights 400, 600 and 700. The files come from Fontsource at fixed versions, with their checksums in `fonts.ts`. Fontsource's Source Sans licence names Google Inc., while the font's own record says Adobe, so our copy carries Adobe's line above the unchanged licence text. Atkinson's Latin file lacks the modifier apostrophe (U+02BC); the plain `'` and `’` are in both. The Android icon draws the godown at 80%, as the preview's drawing reaches past the safe circle, and a test reads the file's pixels to keep it inside. Two checks wait for the real world. The demo deploys only from `main`, so the phone check comes after the merge, before the card is ticked. The slip passed print preview, and its real print joins SPIKE-2's next shop visit.
 **Done when:**
 - [ ] No placeholder grey is left in `globals.css`.
 - [ ] Every text and background pair passes 4.5:1.
@@ -733,13 +736,13 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 - [ ] Money lines up in both fonts.
 - [ ] A button on a laptop shows the hand pointer.
 - [ ] Installed on a phone, the new icon isn't cut by Android's mask.
-**Tests:** `tokens.test.ts` (contrast, no placeholder left) · `manifest.test.ts` (theme colour equals `--primary`)
-**Commits:** `feat(frontend): the shop's colours and shapes` → `feat(frontend): two fonts inside the app` → `fix(frontend): buttons show the hand pointer` → `feat(frontend): the godown icon`
+**Tests:** `tokens.test.ts` (contrast, no placeholder left) · `manifest.test.ts` (theme colour equals `--primary`; the icon files' pixels **(v1.41)**) · `fonts.test.ts` (the files and licences, the font switch, same-width digits, the lint rule) **(v1.41)**
+**Commits:** `feat(frontend): the shop's colours and shapes` → `feat(frontend): two fonts inside the app` → `fix(frontend): buttons show the hand pointer` → `feat(frontend): the godown icon` → `docs(plan): ui-7 says what it built` **(v1.41)**
 
 ### UI-8 · The pieces: button, input, label, card, alert
 `M` · Claude-led · after UI-7 **(v1.40)** · branch `feat/ui-8-the-pieces`
 **Build:** `pnpm shadcn add button input label card alert`, left untouched in `components/ui/`. One piece of ours in `components/design/` for each part, setting the look (ADR-0039): the button has kinds `main` (green), `second` (blue outline) and `danger` (faded-red outline), and sizes `big` (the default) and `normal`; a field ties its label and error to its input. `SideBand` is blue, or striped white and faded red. A lint rule lets only `components/design/` import `components/ui/`, so no screen can skip the look, and `.claude/rules/frontend.md` says so. A `/design` page shows every colour, both fonts and each piece in each state, with its text in `sw.json` and `en.json`.
-**Watch out:** shadcn's parts need `@base-ui/react`, a new dependency, so Jack's yes comes first (rule 12). Read what the shadcn command changes after each add.
+**Watch out:** shadcn's parts need `@base-ui/react`, a new dependency, so Jack's yes comes first (rule 12). Read what the shadcn command changes after each add. From UI-7 **(v1.41)**: if a part fades its focus ring with `ring-ring/50`, ours sets it to full strength, as half strength reads at only 2.57:1 on white. A hover tint on the danger button stays at 10% or less: `--destructive` on its own 10% tint reads at 4.55:1, and on 12% at 4.41:1. `h-control-big` and `h-control-normal` give the two heights. If `shadcn add` writes oklch greys or chart and sidebar tokens back into `globals.css`, `tokens.test.ts` fails: remove them.
 **Done when:**
 - [ ] `/design` shows each piece normal, hovered, focused, pressed, disabled and with an error.
 - [ ] Tabbing through the page shows a focus ring on every piece.
