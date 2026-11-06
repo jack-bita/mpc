@@ -20,6 +20,11 @@ const WORD_ATTRIBUTE =
 // Our fonts live in the repo, so builds and devices never depend on another company's server.
 // next/font/google is one easy line away, and it would look harmless in a review (ADR-0039). A
 // constant, as the counter screens' rule below must list it again (it says why).
+// What a counter screen is told when it reaches for the server (rule 5, ADR-0019): it reads Dexie and
+// saves to the outbox, so a sale goes through with the network down.
+const COUNTER_OFF_THE_SERVER =
+  "Counter screens never call the server: read Dexie with live queries, save with saveDocument() (rule 5, ADR-0019).";
+
 const NO_GOOGLE_FONTS = {
   name: "next/font/google",
   message: "Fonts live inside the app, in src/fonts/ (ADR-0039).",
@@ -69,8 +74,7 @@ export default defineConfig([
             {
               target: "./src/app/(counter)",
               from: "./src/api",
-              message:
-                "Counter screens never call the server: read Dexie and save with saveDocument() (rule 5, ADR-0019).",
+              message: COUNTER_OFF_THE_SERVER,
             },
           ],
         },
@@ -78,26 +82,43 @@ export default defineConfig([
     },
   },
   {
-    // TanStack Query is the office screens' store of server answers (UI-2), so the counter screens leave
-    // it alone too. A package, not a file of ours, so the import rule above can't see it: pnpm keeps
-    // packages under paths of its own. This rule reads the import's text, and a package has one name.
+    // The rest of the counter screens' lock, for what the import rule above can't see (UI-2, rule 5).
+    // - TanStack Query, the office screens' store of server answers, and openapi-fetch, from which a
+    //   screen could build a typed client of its own: packages, not files of ours, and pnpm keeps
+    //   packages under paths of its own. This rule reads the import's text, and a package has one name.
+    // - fetch, the browser's own way to call the server, also as window.fetch, globalThis.fetch or
+    //   self.fetch.
+    // Honest limit: a dynamic import("@tanstack/react-query") passes, as no-restricted-imports reads
+    // only import lines, and the rule that could catch it, no-restricted-syntax, is set again for every
+    // file by the text rule below, which would replace it here. Review catches that.
     //
-    // ESLint keeps only the last settings of a rule for a file, and this one is no-restricted-imports,
-    // like the font ban: listed again here, or counter screens would lose it (import-rule.test.ts).
+    // ESLint keeps only the last settings of a rule for a file, and no-restricted-imports is the font
+    // ban's rule too: listed again here, or counter screens would lose it (import-rule.test.ts).
     files: ["src/app/(counter)/**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          paths: [NO_GOOGLE_FONTS],
+          paths: [
+            NO_GOOGLE_FONTS,
+            { name: "openapi-fetch", message: COUNTER_OFF_THE_SERVER },
+          ],
           patterns: [
-            {
-              group: ["@tanstack/*"],
-              message:
-                "Counter screens never call the server: read Dexie with live queries (rule 5, ADR-0019).",
-            },
+            { group: ["@tanstack/*"], message: COUNTER_OFF_THE_SERVER },
           ],
         },
+      ],
+      "no-restricted-globals": [
+        "error",
+        { name: "fetch", message: COUNTER_OFF_THE_SERVER },
+      ],
+      "no-restricted-properties": [
+        "error",
+        ...["window", "globalThis", "self"].map((object) => ({
+          object,
+          property: "fetch",
+          message: COUNTER_OFF_THE_SERVER,
+        })),
       ],
     },
   },

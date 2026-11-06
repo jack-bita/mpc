@@ -146,6 +146,35 @@ describe("the counter rule", () => {
   );
 
   it(
+    "refuses openapi-fetch, so a counter screen can't build a client of its own",
+    async () => {
+      const own =
+        'import createClient from "openapi-fetch";\nexport const make = createClient;\n';
+      expect(await rulesFor(COUNTER, own)).toContain("no-restricted-imports");
+    },
+    SLOW,
+  );
+
+  it.each([
+    'export const ask = () => fetch("/api/v1/shops/sides/");\n',
+    'export const ask = () => window.fetch("/api/v1/shops/sides/");\n',
+    'export const ask = () => globalThis.fetch("/api/v1/shops/sides/");\n',
+  ])(
+    "refuses calling the server with fetch on a counter screen: %s",
+    async (code) => {
+      const rules = await rulesFor(COUNTER, code);
+      expect(
+        rules.some(
+          (rule) =>
+            rule === "no-restricted-globals" ||
+            rule === "no-restricted-properties",
+        ),
+      ).toBe(true);
+    },
+    SLOW,
+  );
+
+  it(
     "still refuses fonts from Google on a counter screen",
     async () => {
       // The counter's rule is no-restricted-imports, like the font ban, and ESLint keeps only the last
@@ -160,11 +189,15 @@ describe("the counter rule", () => {
   );
 
   it(
-    "lets an office screen use both",
+    "lets an office screen use all of them",
     async () => {
-      const rules = await rulesFor(OFFICE, API + QUERY);
+      const others =
+        'import createClient from "openapi-fetch";\nexport const make = createClient;\nexport const ask = () => fetch("/api/health/");\n';
+      const rules = await rulesFor(OFFICE, API + QUERY + others);
       expect(rules).not.toContain(RULE);
       expect(rules).not.toContain("no-restricted-imports");
+      expect(rules).not.toContain("no-restricted-globals");
+      expect(rules).not.toContain("no-restricted-properties");
     },
     SLOW,
   );
