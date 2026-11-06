@@ -88,12 +88,16 @@ describe("the design page", () => {
     expect(looks).toEqual(["blue", "striped"]);
   });
 
-  it("shows the second font where it can really change", () => {
-    // data-font changes the font only where font-sans is on the same element (UI-7).
-    const { container } = render(<DesignPage />);
-    const second = container.querySelector('[data-font="second"]');
-    expect(second?.classList.contains("font-sans")).toBe(true);
-  });
+  it.each(["default", "second"])(
+    "shows the %s font where it can really change",
+    (font) => {
+      // data-font changes the font only where font-sans is on the same element (UI-7). The default
+      // sample says so too, so it stays the default inside a page set to the second font (UI-9).
+      const { container } = render(<DesignPage />);
+      const sample = container.querySelector(`[data-font="${font}"]`);
+      expect(sample?.classList.contains("font-sans")).toBe(true);
+    },
+  );
 
   it("takes all its words from the message files", () => {
     // ADR-0032. A token's name, like --primary, is code and is shown as it is.

@@ -116,6 +116,12 @@
   --font-body: var(--font-atkinson);
 }
 
+/* The default font, set back inside a page that has the second one. /design shows the two side by side,
+   and without this its default sample would show whichever font the person chose (UI-8). */
+[data-font="default"] {
+  --font-body: var(--font-source-sans);
+}
+
 /* Page-wide defaults: borders and focus rings use the tokens, and the page takes the theme's
    background, text colour and font. */
 @layer base {
