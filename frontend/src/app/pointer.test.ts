@@ -3,17 +3,10 @@
 // jsdom has no mouse and doesn't work out a pointer from a stylesheet. It does run real selectors, so
 // this test takes the rule's selector from globals.css and asks real elements whether it matches them,
 // which says more than finding the rule's text. Seeing the hand itself is on the card's Done list.
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-
 import { describe, expect, it } from "vitest";
 
-// From the folder the tests run in: under jsdom, Vite turns new URL(…, import.meta.url) into a web
-// address, which a file read can't use (manifest.test.ts). Comments removed: only rules count.
-const CSS = readFileSync(
-  resolve(process.cwd(), "src/app/globals.css"),
-  "utf8",
-).replace(/\/\*[\s\S]*?\*\//g, "");
+// globals.css with its comments removed, as only rules count (src/test/look.ts).
+import { CSS } from "@/test/look";
 
 const selector = /([^{}]+)\{\s*cursor:\s*pointer/.exec(CSS)?.[1]?.trim() ?? "";
 
