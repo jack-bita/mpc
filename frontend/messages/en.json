@@ -115,5 +115,100 @@
         "striped": "Vyakula"
       }
     }
+  },
+  "apiError": {
+    "title": "It didn't go through"
+  },
+  "errors": {
+    "invalid": "Some fields are wrong. Check the marked ones.",
+    "version_conflict": "Someone else changed this at the same time. Reload it, then try again.",
+    "server_error": "The server has a problem. Try again later.",
+    "not_found": "It wasn't found.",
+    "not_authenticated": "Log in first.",
+    "authentication_failed": "The login failed. Log in again.",
+    "permission_denied": "You don't have permission to do this.",
+    "method_not_allowed": "This action isn't allowed here.",
+    "not_acceptable": "The server can't answer in this form.",
+    "unsupported_media_type": "The server couldn't read this request.",
+    "parse_error": "The request was damaged on the way. Try again.",
+    "throttled": "Too many tries. Wait a little, then try again.",
+    "required": "Fill in this field.",
+    "null": "Fill in this field.",
+    "blank": "This field can't be empty.",
+    "max_length": "This is too long.",
+    "min_length": "This is too short.",
+    "max_value": "This number is too big.",
+    "min_value": "This number is too small.",
+    "max_digits": "This number has too many digits.",
+    "max_decimal_places": "Too many digits after the point.",
+    "max_whole_digits": "Too many digits before the point.",
+    "invalid_choice": "This choice isn't on the list.",
+    "does_not_exist": "What you picked doesn't exist.",
+    "incorrect_type": "This value is the wrong kind.",
+    "unique": "This is already taken.",
+    "not_a_list": "A list is needed here.",
+    "empty": "This list can't be empty.",
+    "id": {
+      "taken": "This record's id is already in use. Try again.",
+      "not_uuid7": "This record's id is wrong. Update the app."
+    },
+    "device": {
+      "blocked": "This device is blocked. Ask a manager to unblock it.",
+      "name_blank": "Give the device a name.",
+      "name_taken": "Another device already has this name.",
+      "reason_required": "Write a reason.",
+      "not_active": "This device isn't active, so it can't be blocked.",
+      "not_blocked": "This device isn't blocked."
+    },
+    "session": {
+      "wrong_device": "This login belongs to another device. Log in again here."
+    },
+    "shop": {
+      "suspended": "This shop is suspended. Contact the owner."
+    },
+    "staff": {
+      "suspended": "You are suspended. Talk to a manager or the owner.",
+      "choose_shop": "You work at two shops. Choosing a shop isn't available yet.",
+      "left": "This person has left.",
+      "other_shop": "This belongs to another shop.",
+      "reason_required": "Write a reason.",
+      "temporary_password_open": "This person still has a temporary password. This permission waits until they choose their own."
+    },
+    "password": {
+      "must_change": "Choose your own password before you go on.",
+      "own": "You can't set your own password here.",
+      "superuser_only": "Only the system admin can set this person's password.",
+      "more_keys": "This person has permissions you don't, so you can't set their password.",
+      "no_login_name": "This person has no phone or email to log in with."
+    },
+    "pin": {
+      "wrong": "Wrong PIN.",
+      "locked": "Too many wrong PINs. Try again in {minutes} min.",
+      "own": "You can't set your own PIN here.",
+      "superuser_only": "Only the system admin can set this person's PIN.",
+      "more_keys": "This person has permissions you don't, so you can't set their PIN."
+    },
+    "password_too_short": "This password is too short.",
+    "password_too_common": "This password is too common. Choose another.",
+    "password_entirely_numeric": "A password can't be only numbers.",
+    "password_too_similar": "This password is too close to the person's name or phone.",
+    "pairing": {
+      "code_invalid": "This code isn't written right. Type it as the device shows it.",
+      "code_unknown": "No device is waiting with this code.",
+      "code_used": "This code was already used.",
+      "code_expired": "This code has expired. Ask the device for a new one.",
+      "already_paired": "This device is already registered."
+    },
+    "side": {
+      "code_invalid": "A side's letter is one capital letter, like D.",
+      "code_taken": "Another side of this shop already has this letter.",
+      "name_blank": "Give the side a name.",
+      "sale_flow_unknown": "This way of selling isn't known."
+    }
+  },
+  "errorFallback": {
+    "noConnection": "Couldn't reach the server. Check the internet, then try again.",
+    "unknownCode": "The server refused. Code: {code}",
+    "unexpected": "Something went wrong. Try again."
   }
 }
