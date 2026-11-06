@@ -3,8 +3,8 @@
 // This file stays a server component, but in a static export a server component runs
 // once, at build time, and becomes plain HTML in out/ — no server runs it later
 // (ADR-0016). That is also why it may export `metadata`, which only server components can.
-// The app's providers wrap every page here: today the word books; later data, session and
-// device (03 §7.2).
+// The app's providers wrap every page here: today the word books and the store of server answers;
+// later session and device (03 §7.2).
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -12,6 +12,8 @@ import type { ReactNode } from "react";
 // shop's short name, the same in both books.
 import sw from "../../messages/sw.json";
 
+// The store of server answers, which office screens ask through TanStack Query (UI-2).
+import { QueryProvider } from "@/api/provider";
 // Starts the service worker, which keeps the app's files on the device so every page opens offline,
 // and shows the Toleo jipya bar when a new version is ready (SPIKE-1).
 import { UpdatePrompt } from "@/components/update-prompt";
@@ -36,8 +38,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="sw" className={`${sourceSans.variable} ${atkinson.variable}`}>
       <body>
         <LanguageProvider>
-          {children}
-          <UpdatePrompt />
+          <QueryProvider>
+            {children}
+            <UpdatePrompt />
+          </QueryProvider>
         </LanguageProvider>
       </body>
     </html>
