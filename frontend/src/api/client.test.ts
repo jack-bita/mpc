@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CSRF_HEADER, createApiClient } from "./client";
+import { NoConnection } from "./refusal";
 
 const SIDE_ID = "01970000-0000-7000-8000-000000000001";
 
@@ -130,5 +131,44 @@ describe("the answers", () => {
     expect(error?.code).toBe("version_conflict");
     expect(data).toBeUndefined();
     expect(response.status).toBe(409);
+  });
+
+  it("throw NoConnection when no answer came at all", async () => {
+    // What fetch throws when the network drops, or the server can't be reached.
+    const dropped = new TypeError("Failed to fetch");
+    const client = createApiClient({
+      baseUrl: "http://shop.test",
+      fetch: () => Promise.reject(dropped),
+    });
+
+    const error: unknown = await client
+      .GET("/api/v1/shops/sides/")
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NoConnection);
+    // The browser's own error stays inside, for the console.
+    expect((error as NoConnection).cause).toBe(dropped);
+  });
+
+  it("leave a cancelled read as a cancel, not a lost connection", async () => {
+    // TanStack Query cancels a read a closed screen no longer needs; fetch then throws an AbortError.
+    const stop = new AbortController();
+    stop.abort();
+    const client = createApiClient({
+      baseUrl: "http://shop.test",
+      fetch: (request: Request) =>
+        Promise.reject(
+          request.signal.aborted
+            ? request.signal.reason
+            : new Error("not cancelled"),
+        ),
+    });
+
+    const error: unknown = await client
+      .GET("/api/v1/shops/sides/", { signal: stop.signal })
+      .catch((caught: unknown) => caught);
+
+    expect(error).not.toBeInstanceOf(NoConnection);
+    expect((error as Error).name).toBe("AbortError");
   });
 });

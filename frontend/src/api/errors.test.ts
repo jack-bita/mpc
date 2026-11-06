@@ -13,7 +13,7 @@ import { LANGUAGES, MESSAGES, type Language } from "@/i18n/language";
 import { sentences } from "@/test/language";
 
 import { apiErrorMessage, apiFieldMessages, type Words } from "./errors";
-import { ApiRefusal } from "./refusal";
+import { ApiRefusal, NoConnection } from "./refusal";
 
 const CODES_THE_API_SENDS = [
   // The one shape's own codes, and what every route can answer (apps/core/api/errors.py).
@@ -231,10 +231,20 @@ describe("apiErrorMessage", () => {
   });
 
   it("says the server couldn't be reached when no answer came", () => {
-    // What fetch throws when the network drops.
-    expect(apiErrorMessage(swahili, new TypeError("Failed to fetch"))).toBe(
+    // What the client throws when fetch got no answer at all (client.ts).
+    const dropped = new NoConnection(new TypeError("Failed to fetch"));
+
+    expect(apiErrorMessage(swahili, dropped)).toBe(
       "Imeshindwa kufika kwenye seva. Angalia mtandao, kisha ujaribu tena.",
     );
+  });
+
+  it("doesn't blame the network for a bug", () => {
+    // A bug in a screen throws a TypeError too, as fetch does when the network drops: only the client's
+    // NoConnection means no answer came.
+    const bug = new TypeError("ask is not a function");
+
+    expect(apiErrorMessage(swahili, bug)).toBe("Kuna hitilafu. Jaribu tena.");
   });
 
   it("still says something for anything else that was thrown", () => {
@@ -261,8 +271,6 @@ describe("apiFieldMessages", () => {
 
   it("gives nothing when no field was wrong", () => {
     expect(apiFieldMessages(swahili, refusal("pin.wrong"))).toEqual({});
-    expect(apiFieldMessages(swahili, new TypeError("Failed to fetch"))).toEqual(
-      {},
-    );
+    expect(apiFieldMessages(swahili, new NoConnection(undefined))).toEqual({});
   });
 });

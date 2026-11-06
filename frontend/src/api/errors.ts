@@ -14,7 +14,7 @@
 
 import { useTranslations } from "use-intl";
 
-import { ApiRefusal } from "./refusal";
+import { ApiRefusal, NoConnection } from "./refusal";
 
 type Values = Record<string, string | number | boolean | null>;
 
@@ -30,9 +30,9 @@ export type Words = {
 export function apiErrorMessage(t: Words, error: unknown): string {
   if (error instanceof ApiRefusal)
     return codeMessage(t, error.body.code, error.body.params);
-  // fetch throws a TypeError when no answer came at all: the network dropped, or the server can't be
-  // reached. Office screens also show Inahitaji mtandao while the device is offline (UI-1).
-  if (error instanceof TypeError) return t("errorFallback.noConnection");
+  // No answer came at all: the network dropped, or the server can't be reached (client.ts). Office
+  // screens also show Inahitaji mtandao while the device is offline (UI-1).
+  if (error instanceof NoConnection) return t("errorFallback.noConnection");
   return t("errorFallback.unexpected");
 }
 

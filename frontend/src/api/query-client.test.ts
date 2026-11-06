@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import { READ_RETRIES, shouldRetry } from "./query-client";
-import { ApiRefusal } from "./refusal";
+import { ApiRefusal, NoConnection } from "./refusal";
 
 function refusal(status: number, code: string) {
   return new ApiRefusal(status, { code, message: "", fields: {}, params: {} });
@@ -24,8 +24,8 @@ describe("shouldRetry", () => {
   });
 
   it("asks again a few times when the network dropped", () => {
-    // What fetch throws when the network drops.
-    const dropped = new TypeError("Failed to fetch");
+    // What the client throws when fetch got no answer at all (client.ts).
+    const dropped = new NoConnection(new TypeError("Failed to fetch"));
 
     expect(shouldRetry(0, dropped)).toBe(true);
     expect(shouldRetry(READ_RETRIES - 1, dropped)).toBe(true);
@@ -38,5 +38,10 @@ describe("shouldRetry", () => {
 
     expect(shouldRetry(0, restarting)).toBe(true);
     expect(shouldRetry(READ_RETRIES, restarting)).toBe(false);
+  });
+
+  it("never asks again after a bug, which the next try would only repeat", () => {
+    expect(shouldRetry(0, new TypeError("ask is not a function"))).toBe(false);
+    expect(shouldRetry(0, new Error("a bug"))).toBe(false);
   });
 });

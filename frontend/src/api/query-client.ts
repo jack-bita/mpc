@@ -5,7 +5,7 @@
 // worth asking again: that is shouldRetry() below.
 import { QueryClient } from "@tanstack/react-query";
 
-import { ApiRefusal } from "./refusal";
+import { ApiRefusal, NoConnection } from "./refusal";
 
 // How many times a failed read is asked again, after the first try.
 export const READ_RETRIES = 2;
@@ -13,12 +13,15 @@ export const READ_RETRIES = 2;
 /**
  * Whether a failed read is asked again. A refusal under 500 is the server saying no on purpose: a
  * missing key, a row that isn't there, a password to change. Asking again gets the same no, and the
- * person would wait for it: TanStack's default of 3 more tries takes about 7 seconds. Anything else, a
- * dropped network or a 5xx (often Caddy's 502 while the server restarts), may pass a moment later.
+ * person would wait for it: TanStack's default of 3 more tries takes about 7 seconds. A bug in the
+ * screen would only fail again. A dropped network, or a 5xx (often the proxy's 502 while the server
+ * restarts), may pass a moment later: those are asked again.
  */
 export function shouldRetry(failureCount: number, error: unknown): boolean {
-  if (error instanceof ApiRefusal && error.status < 500) return false;
-  return failureCount < READ_RETRIES;
+  const mayPass =
+    error instanceof NoConnection ||
+    (error instanceof ApiRefusal && error.status >= 500);
+  return mayPass && failureCount < READ_RETRIES;
 }
 
 /** A new store. One per page load (provider.tsx), and one per test, so no answer leaks between them. */

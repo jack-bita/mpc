@@ -3,7 +3,7 @@
 // openapi-fetch hands a refusal back as a value, `{ error, response }`, and throws only when the network
 // drops. TanStack Query sees a failure only when something is thrown. So office screens call the server
 // through answerOf(), which gives back the answer, or throws an ApiRefusal that keeps the status and the
-// one error shape (apps/core/api/errors.py). A dropped network still throws fetch's own TypeError.
+// one error shape (apps/core/api/errors.py). When no answer came at all, the client throws NoConnection.
 import type { components } from "./schema";
 
 /** The one error shape, as the server's description gives it: `{code, message, fields, params}`. */
@@ -19,6 +19,16 @@ export class ApiRefusal extends Error {
     this.name = "ApiRefusal";
     this.status = status;
     this.body = body;
+  }
+}
+
+/** No answer came at all: the network dropped, or the server can't be reached. The client throws it
+ * (client.ts) in place of fetch's own TypeError, which a bug in a screen throws too: so a bug isn't shown
+ * as "check the internet", nor asked again. fetch's error stays inside, as `cause`. */
+export class NoConnection extends Error {
+  constructor(cause: unknown) {
+    super("No answer from the server.", { cause });
+    this.name = "NoConnection";
   }
 }
 
