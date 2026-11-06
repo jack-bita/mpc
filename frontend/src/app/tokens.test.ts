@@ -22,6 +22,9 @@ const TEXT_PAIRS = [
   ["--muted-foreground", "--muted"],
   // What sits on the panels shadcn's parts draw.
   ["--card-foreground", "--card"],
+  // A card's footer: the card's text on the pale panel (components/design/card.tsx). The same colour as
+  // --foreground today, which is why it passed unchecked; a change to one alone must still be caught.
+  ["--card-foreground", "--muted"],
   ["--popover-foreground", "--popover"],
   ["--accent-foreground", "--accent"],
   // Text on a filled button.
