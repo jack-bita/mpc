@@ -34,6 +34,10 @@ const look = cva(
     // under the 3:1 that someone on a keyboard needs to see where they are (UI-7). It reads --ring, so
     // a green area can set --ring to white for what sits on it (UI-1's top bar).
     "focus-visible:ring-ring",
+    // shadcn's error ring (aria-invalid:ring-destructive/20) comes later in Tailwind's CSS than the one
+    // above, so a focused button with an error, like a date picker a form refused, would show only a
+    // faint pink ring. This comes later still, as on the box (input.tsx).
+    "aria-invalid:focus-visible:ring-ring",
     // Switched off, it looks and acts switched off, however it was switched off. shadcn fades only a
     // button with the real disabled attribute (disabled:opacity-50). One that stays reachable by Tab
     // (focusableWhenDisabled, so a screen reader can still find it) has aria-disabled instead, and

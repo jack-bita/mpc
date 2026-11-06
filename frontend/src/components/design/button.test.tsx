@@ -183,6 +183,8 @@ describe("the button's colours", () => {
     // shadcn's ring-ring/50 reads at only 2.57:1 on white; its danger ring is a faint red.
     const classes = classesOf({ kind });
     expect(classes).toContain("focus-visible:ring-ring");
+    // Also with an error: Tailwind writes shadcn's faint aria-invalid ring after the plain one.
+    expect(classes).toContain("aria-invalid:focus-visible:ring-ring");
     expect(
       classes.filter((name) => /^focus-visible:ring-.*\//.test(name)),
     ).toEqual([]);
