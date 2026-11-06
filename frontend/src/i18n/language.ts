@@ -1,5 +1,5 @@
 // language.ts — the two word books, which one is open on this browser, and the switch between them
-// (UI-1, ADR-0032).
+// (UI-1, ADR-0040).
 //
 // Every word a screen shows lives in messages/sw.json and messages/en.json, never in code. Swahili is
 // open unless someone switches. The choice is kept on this browser (localStorage), so it survives a

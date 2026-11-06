@@ -1,4 +1,4 @@
-// language.ts — finds Swahili left on a screen that should be in English (UI-1, ADR-0032). Tests only.
+// language.ts — finds Swahili left on a screen that should be in English (UI-1, ADR-0040). Tests only.
 //
 // "Switching to English changes every visible string" (the UI-1 card) is checked by showing a screen
 // in English and looking for any sentence from the Swahili book on it. Only sentences that English says

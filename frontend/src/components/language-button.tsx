@@ -1,5 +1,5 @@
 // language-button.tsx — the button on the top bar that switches the app between Swahili and English
-// (UI-1, ADR-0032).
+// (UI-1, ADR-0040).
 //
 // It names the other language, in that language: "English" while Swahili is open, "Kiswahili" while
 // English is. Someone who can't read the open language still finds their own, as bank apps and

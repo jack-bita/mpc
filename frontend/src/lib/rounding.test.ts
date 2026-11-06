@@ -23,7 +23,11 @@ describe("roundMoney", () => {
   });
 
   it("works the same on a value from another copy of big.js", () => {
-    // big.js's own copy cuts a division at 20 places and rounds it its own way; roundMoney uses ours.
-    expect(moneyText(roundMoney(new Big("458.5"), one))).toBe("459.00");
+    // big.js's own copy cuts a division at 20 places and rounds the cut half-up, so this 0.4999…, with
+    // 21 places, would become 0.5 there and then 1 shilling: rounded twice. roundMoney divides with our
+    // 40 places, so it stays below the half and rounds to 0.
+    expect(moneyText(roundMoney(new Big("0.499999999999999999999"), one))).toBe(
+      "0.00",
+    );
   });
 });

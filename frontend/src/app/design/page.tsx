@@ -104,7 +104,7 @@ function Swatch({ token, use }: { token: string; use: string }) {
 }
 
 export default function DesignPage() {
-  // The words come from the open book, Swahili or English (ADR-0032).
+  // The words come from the open book, Swahili or English (ADR-0040).
   const t = useTranslations("design");
 
   return (

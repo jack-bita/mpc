@@ -1,5 +1,5 @@
 // messages.test.ts — the two word books hold the same sentences, and every sentence can be filled in
-// (UI-1, ADR-0032).
+// (UI-1, ADR-0040).
 //
 // A key only one book has would show its key ("home.title") on screen in the other language. A part to
 // fill in that one book forgot would drop a value, like the number on "Namba ya mauzo: D2-0457".

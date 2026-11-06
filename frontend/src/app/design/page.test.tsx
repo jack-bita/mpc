@@ -115,7 +115,7 @@ describe("the design page", () => {
   );
 
   it("takes all its words from the message files", () => {
-    // ADR-0032. A token's name, like --primary, is code and is shown as it is. Besides the page's own
+    // ADR-0040. A token's name, like --primary, is code and is shown as it is. Besides the page's own
     // words, the top bars show the language button's word and their sample places, "MPC · Dawa".
     const { container } = render(<DesignPage />);
     const places = Object.values(t.topBar.sampleSides).map((side) =>

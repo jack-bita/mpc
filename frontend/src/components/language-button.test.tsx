@@ -1,5 +1,5 @@
 // language-button.test.tsx — the button on the top bar names the other language, in that language, and
-// switches the whole app to it (UI-1, ADR-0032).
+// switches the whole app to it (UI-1, ADR-0040).
 import { act, fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 

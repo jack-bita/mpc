@@ -10,7 +10,7 @@ import { useTranslations } from "use-intl";
 import { APP_VERSION } from "@/lib/version";
 
 export default function HomePage() {
-  // The words come from the open book, Swahili or English (ADR-0032).
+  // The words come from the open book, Swahili or English (ADR-0040).
   const t = useTranslations("home");
 
   return (

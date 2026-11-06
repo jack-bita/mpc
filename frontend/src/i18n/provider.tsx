@@ -1,4 +1,4 @@
-// provider.tsx — hands every screen the open word book (UI-1, ADR-0032). layout.tsx wraps the whole app
+// provider.tsx — hands every screen the open word book (UI-1, ADR-0040). layout.tsx wraps the whole app
 // in it, so any screen can ask for its words with use-intl's useTranslations().
 //
 // "use client": it reads the choice kept on this browser, and the build has no browser. The page is

@@ -45,7 +45,7 @@ const CELL = "py-[1mm] align-top";
 const NUMBER_CELL = `${CELL} pl-[3mm] text-right whitespace-nowrap`;
 
 export default function SlipPage() {
-  // The words come from the open book, Swahili or English (ADR-0032). The shop's name is in the
+  // The words come from the open book, Swahili or English (ADR-0040). The shop's name is in the
   // "app" part of the book, the slip's own words in its "slip" part.
   const app = useTranslations("app");
   const t = useTranslations("slip");

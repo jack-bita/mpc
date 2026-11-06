@@ -1,5 +1,5 @@
 // language.test.tsx — Swahili opens first, the English switch changes every word on every screen at
-// once, and this browser keeps the choice (UI-1, ADR-0032).
+// once, and this browser keeps the choice (UI-1, ADR-0040).
 //
 // The card's Done line, "switching to English changes every visible string", is checked on every page
 // of the app: Vite finds them all, so a new page is checked without being listed here. A word typed

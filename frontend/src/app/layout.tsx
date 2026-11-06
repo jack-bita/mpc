@@ -17,7 +17,7 @@ import sw from "../../messages/sw.json";
 import { UpdatePrompt } from "@/components/update-prompt";
 // The two fonts inside the app (ADR-0039).
 import { atkinson, sourceSans } from "@/fonts/fonts";
-// Hands every screen its words from the open book: Swahili, or English after the switch (ADR-0032).
+// Hands every screen its words from the open book: Swahili, or English after the switch (ADR-0040).
 import { LanguageProvider } from "@/i18n/provider";
 
 // The one global stylesheet: Tailwind and the design tokens, loaded once for every page.

@@ -1,5 +1,7 @@
 // decimal.ts — the one way the app holds money and quantities: exact decimals, never JavaScript numbers
-// (ADR-0024). The TypeScript twin of the reading and writing half of backend/apps/core/numbers.py.
+// (ADR-0024). It holds what rounding.ts and units.ts share with their twins in
+// backend/apps/core/numbers.py: our copy of big.js, the column check (Python's _fit), and the text a
+// value is stored and sent as.
 //
 // A JavaScript number is a float: 0.1 + 0.2 gives 0.30000000000000004, and 0.35 kg × 1,310 gives
 // 458.4999…, which rounds to 458, not 459. A counter device works out a sale offline and the server
@@ -23,9 +25,11 @@ export const Decimal = Big();
 Decimal.strict = true;
 
 // Places kept when dividing. A division is the only sum that can go on forever (1 ÷ 3), so big.js cuts
-// it at DP places. 40 is far more than any rounding here needs: amounts have two places and at most 14
-// digits, so a share that isn't exactly a half sits at least 0.000000000000005 away from one (15
-// places). The same 40 digits as Python's _EXACT, so both sides cut in the same place.
+// it at DP places. 40 is far more than any rounding here needs: with two places and 14 digits, a share
+// that isn't exactly a half sits at least 0.000000000000005 away from one (15 places), and an amount
+// with a few more places (a price × kg) moves that only a few places further. Python's _EXACT keeps 40
+// digits in all, not 40 places after the point, so the two sides don't cut in the same place; both cut
+// far past the place that decides the rounding, so they give the same answer.
 Decimal.DP = 40;
 // How the cut at DP places rounds: half away from zero, the one rounding rule (03 §8).
 Decimal.RM = Decimal.roundHalfUp;

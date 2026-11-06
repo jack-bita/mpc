@@ -6,8 +6,8 @@
 //
 // Counter screens (sale, payment, repayment, quick customer, drawer, clock-in) read the device's own
 // database and never call the server, so they work the same with or without the internet. That is why
-// this area has no Inahitaji mtandao banner: nothing here needs the network. The first screen comes
-// with the sale cards; until then the area is ready and empty.
+// this area has no Inahitaji mtandao banner: nothing here needs the network. The first screen is the
+// clock-in (SYNC-11); until then the area is ready and empty.
 import type { ReactNode } from "react";
 
 import { AppFrame } from "@/components/app-frame";

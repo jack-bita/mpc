@@ -2,7 +2,7 @@
 // The TypeScript twin of split_into_units in backend/apps/core/numbers.py: both pass
 // shared/test-vectors/units.json, so a device and the server show the same stock.
 //
-// format.ts writes the result as words: "26 mifuko + 35.5 kg".
+// format.ts writes the result as words: "mifuko 26 + kilo 35.5".
 import type Big from "big.js";
 
 import { Decimal, fit, QUANTITY_PLACES } from "./decimal";
