@@ -60,8 +60,8 @@ const csrfToken: Middleware = {
  * full address and a fake fetch, as Node can't call a relative address. */
 export function createApiClient(options: ClientOptions = {}) {
   const client = createClient<paths>({
-    // Same origin: Caddy serves the app and the API from one address (03 §12), so a call to /api/...
-    // goes to the server that sent the page. "same-origin" sends the session cookie there and nowhere
+    // Same origin: the app and the API come from one address, Caddy's on the real server and Django's own
+    // on the demo (03 §12, §13), so a call to /api/... goes to the server that sent the page. "same-origin" sends the session cookie there and nowhere
     // else. It is fetch's own default, written out so nobody changes it to "include" without a reason.
     baseUrl: "",
     credentials: "same-origin",

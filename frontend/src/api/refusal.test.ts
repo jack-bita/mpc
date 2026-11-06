@@ -46,7 +46,7 @@ describe("answerOf", () => {
   });
 
   it("reads a page of HTML from in front of Django as a server error", async () => {
-    // Caddy's answer while the server restarts: openapi-fetch hands back the text it couldn't read as JSON.
+    // The proxy's answer while the server restarts: openapi-fetch hands back the text it couldn't read as JSON.
     const html = "<html><body>502 Bad Gateway</body></html>";
     const refusal = await refusalOf(answerOf(answer(502, { error: html })));
 

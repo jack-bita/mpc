@@ -24,7 +24,9 @@ export function shouldRetry(failureCount: number, error: unknown): boolean {
   return mayPass && failureCount < READ_RETRIES;
 }
 
-/** A new store. One per page load (provider.tsx), and one per test, so no answer leaks between them. */
+/** A new store. One per page load (provider.tsx), and one per test, so no test sees another's answers.
+ * Within a page load, everyone who logs in on the device shares it: the login screens clear it at each
+ * login, logout and quick switch (UI-4, UI-5), or the next person would see the last one's rows. */
 export function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {

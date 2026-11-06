@@ -2,7 +2,8 @@
 (03 §5.10, ADR-0025).
 
 drf-spectacular reads every route and writes the OpenAPI schema: each address, what it takes and what it
-answers. The app's TypeScript types will be generated from it (UI-2), so it must build with no guesses.
+answers. The app's TypeScript types are generated from it (`pnpm gen:api`, UI-2), so it must build with no
+guesses.
 The docs page shows the same description to people: open to every visitor on the demo and on a laptop,
 closed on the real server (API_DOCS_PUBLIC, config/settings/).
 """
@@ -47,8 +48,9 @@ def test_docs_public_on_the_demo(settings: Settings, route: str) -> None:
 
 
 def _schema(folder: Path) -> dict[str, Any]:
-    # The description, written the way UI-2's `pnpm gen:api` will read it. --fail-on-warn turns every
-    # warning into a failure; --validate checks the result against the OpenAPI standard. drf-spectacular
+    # The description, written as `pnpm gen:api` writes it (UI-2). Its --skip-checks isn't needed here:
+    # call_command skips Django's checks by itself. --fail-on-warn turns every warning into a failure;
+    # --validate checks the result against the OpenAPI standard. drf-spectacular
     # keeps its warnings for the whole test run, so they are cleared first: this build is judged on its own.
     reset_generator_stats()
     target = folder / "schema.json"

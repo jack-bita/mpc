@@ -33,7 +33,7 @@ describe("shouldRetry", () => {
   });
 
   it("asks again a few times when the server broke", () => {
-    // Caddy's 502 while the server restarts, read as server_error (refusal.ts).
+    // The proxy's 502 while the server restarts, read as server_error (refusal.ts).
     const restarting = refusal(502, "server_error");
 
     expect(shouldRetry(0, restarting)).toBe(true);

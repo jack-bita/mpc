@@ -250,8 +250,9 @@ SPECTACULAR_SETTINGS = {
         "The routes of the MPC shop system. Every refusal has one shape: "
         '{"code", "message", "fields", "params"}; the app translates the code.'
     ),
-    # The description's own version, not the deploy's commit: CI will compare the app's generated types with
-    # the description (UI-2), and a version that changed with every commit would never match.
+    # The description's own version, not the deploy's commit: CI compares the committed description with the
+    # code (test_committed_schema_matches_the_code, UI-2), and a version that changed with every commit would
+    # never match.
     "VERSION": "1",
     # The description doesn't list its own route.
     "SERVE_INCLUDE_SCHEMA": False,
