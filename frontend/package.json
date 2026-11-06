@@ -13,7 +13,10 @@
     "typecheck": "next typegen && tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
     "lint": "eslint . --max-warnings=0 && prettier --check .",
     "format": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "gen:api": "pnpm gen:api:schema && pnpm gen:api:types",
+    "gen:api:schema": "cd ../backend && uv run python manage.py spectacular --skip-checks --validate --fail-on-warn --format openapi-json --file ../shared/openapi.json",
+    "gen:api:types": "openapi-typescript ../shared/openapi.json --output src/api/schema.d.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",
@@ -43,6 +46,7 @@
     "eslint-config-next": "16.4.2",
     "eslint-config-prettier": "10.1.8",
     "jsdom": "30.1.3",
+    "openapi-typescript": "7.13.0",
     "postcss": "^8.5.30",
     "prettier": "3.9.10",
     "shadcn": "4.22.0",
