@@ -78,9 +78,15 @@ describe("answerOf", () => {
       null,
       { detail: "Not found." },
       { code: "x" },
+      // Each of the four keys counts: with one missing, or of the wrong kind, a screen reading it could
+      // break, so it is no refusal of ours.
+      { code: "pin.wrong", fields: {}, params: {} },
+      { code: "pin.wrong", message: 5, fields: {}, params: {} },
+      { code: "pin.wrong", message: "", fields: [], params: {} },
+      { code: "pin.wrong", message: "", fields: {}, params: [] },
     ]) {
       const refusal = await refusalOf(answerOf(answer(404, { error })));
-      expect(refusal.body.code).toBe("server_error");
+      expect(refusal.body.code, JSON.stringify(error)).toBe("server_error");
     }
   });
 });

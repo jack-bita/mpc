@@ -60,14 +60,21 @@ function asApiError(body: unknown): ApiError {
   };
 }
 
+// All four keys, each of its kind, as the type promises: a screen reads `fields` by name and fills its
+// sentence from `params`, so a body that only looks close is no refusal of ours. Not every field's codes
+// nor every value is checked: the server writes them, and the shape is all this guards.
 function isApiError(body: unknown): body is ApiError {
-  if (typeof body !== "object" || body === null) return false;
-  const { code, fields, params } = body as Record<string, unknown>;
+  if (!isMap(body)) return false;
+  const { code, message, fields, params } = body;
   return (
     typeof code === "string" &&
-    typeof fields === "object" &&
-    fields !== null &&
-    typeof params === "object" &&
-    params !== null
+    typeof message === "string" &&
+    isMap(fields) &&
+    isMap(params)
   );
+}
+
+// A plain JSON object: not nothing, and not a list, which typeof also calls "object".
+function isMap(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
