@@ -125,6 +125,19 @@ def test_every_route_refuses_in_the_error_shape(tmp_path: Path) -> None:
     }
 
 
+def test_committed_schema_matches_the_code(tmp_path: Path, settings: Settings) -> None:
+    # The app's types are generated from shared/openapi.json (`pnpm gen:api`, UI-2), and CI's frontend job checks them
+    # against that file only: it has no Python to read the routes. So this test keeps the file true to the code. A
+    # serializer changed without regenerating turns CI red here, not at the shop (AD11, ADR-0025).
+    # Compared as text, not as parsed JSON: a change of order alone changes the generated types too.
+    committed = Path(settings.BASE_DIR).parent / "shared" / "openapi.json"
+    _schema(tmp_path)
+
+    assert (tmp_path / "schema.json").read_text() == committed.read_text(), (
+        "shared/openapi.json is out of date: run `cd frontend && pnpm gen:api`, and commit both files it writes."
+    )
+
+
 def test_docs_group_routes_by_app(tmp_path: Path) -> None:
     # The docs page groups routes by their first part after /api/ and the version: "shops" says whose
     # routes they are, where "v1" said nothing. The same part names each route in the app's generated client

@@ -16,7 +16,8 @@
     "test": "vitest run",
     "gen:api": "pnpm gen:api:schema && pnpm gen:api:types",
     "gen:api:schema": "cd ../backend && uv run python manage.py spectacular --skip-checks --validate --fail-on-warn --format openapi-json --file ../shared/openapi.json",
-    "gen:api:types": "openapi-typescript ../shared/openapi.json --output src/api/schema.d.ts"
+    "gen:api:types": "openapi-typescript ../shared/openapi.json --output src/api/schema.d.ts",
+    "check:api": "openapi-typescript ../shared/openapi.json --output src/api/schema.d.ts --check"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",
