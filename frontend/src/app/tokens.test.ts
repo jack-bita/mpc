@@ -5,61 +5,13 @@
 //
 // It reads globals.css as plain text, because jsdom applies no stylesheet and lays out nothing. So it
 // runs in plain Node, as manifest.test.ts does, and can only check what the file says.
+//
+// The file and the sums come from src/test/look.ts, which the pieces' tests share, so the tokens and the
+// pieces are judged by one formula (UI-8).
 // @vitest-environment node
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
 import { describe, expect, it } from "vitest";
 
-// The file with its comments removed: they may name old values on purpose, like the first faded red,
-// and only what the browser reads counts.
-const CSS = readFileSync(
-  fileURLToPath(new URL("./globals.css", import.meta.url)),
-  "utf8",
-).replace(/\/\*[\s\S]*?\*\//g, "");
-
-/** The value of every token in the first `:root` block, by name: "--primary" -> "#15803d". */
-function readTokens(css: string): Map<string, string> {
-  const block = /:root\s*\{([^}]*)\}/.exec(css)?.[1];
-  if (block === undefined) throw new Error("globals.css has no :root block");
-  return new Map(
-    [...block.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map(
-      (match): [string, string] => [match[1] ?? "", (match[2] ?? "").trim()],
-    ),
-  );
-}
-
-const TOKENS = readTokens(CSS);
-
-/** How bright a colour looks to the eye, from 0 (black) to 1 (white): the WCAG formula. */
-function brightness(hex: string): number {
-  // Screens store colours bent to suit the eye; the formula needs them straightened out first.
-  const channel = (start: number) => {
-    const value = Number.parseInt(hex.slice(start, start + 2), 16) / 255;
-    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  };
-  // Weighted because the eye is most sensitive to green and least to blue.
-  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
-}
-
-/** The contrast of two colours: 1 for the same colour, 21 for black on white. The order doesn't matter. */
-function contrast(first: string, second: string): number {
-  const lighter = Math.max(brightness(first), brightness(second));
-  const darker = Math.min(brightness(first), brightness(second));
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-/**
- * A token's colour; a token that isn't plain hex fails here, so the sums never run on a bad value.
- * Small letters only, because Prettier rewrites a CSS colour that way when it formats the file.
- */
-function colour(name: string): string {
-  const value = TOKENS.get(name);
-  expect(value, `${name} should be a colour like #15803d`).toMatch(
-    /^#[0-9a-f]{6}$/,
-  );
-  return value as string;
-}
+import { colour, contrast, CSS, TOKENS } from "@/test/look";
 
 // Each pair that a screen really shows: [the text, what is behind it].
 const TEXT_PAIRS = [
@@ -70,6 +22,9 @@ const TEXT_PAIRS = [
   ["--muted-foreground", "--muted"],
   // What sits on the panels shadcn's parts draw.
   ["--card-foreground", "--card"],
+  // A card's footer: the card's text on the pale panel (components/design/card.tsx). The same colour as
+  // --foreground today, which is why it passed unchecked; a change to one alone must still be caught.
+  ["--card-foreground", "--muted"],
   ["--popover-foreground", "--popover"],
   ["--accent-foreground", "--accent"],
   // Text on a filled button.

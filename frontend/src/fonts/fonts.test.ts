@@ -102,6 +102,14 @@ describe("the font switch", () => {
     );
   });
 
+  it("sets the default font back inside a page with the second", () => {
+    // /design shows both fonts side by side. Once a person's choice puts data-font="second" on <html>
+    // (UI-9), its default sample would show Atkinson without this rule.
+    expect(css).toMatch(
+      /\[data-font="default"\]\s*\{\s*--font-body:\s*var\(--font-source-sans\)/,
+    );
+  });
+
   it("reaches every Tailwind font class", () => {
     expect(css).toContain("--font-sans: var(--font-body)");
   });

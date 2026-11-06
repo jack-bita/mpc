@@ -21,5 +21,76 @@
     "total": "Jumla",
     "thanks": "Asante, karibu tena",
     "print": "Chapisha"
+  },
+  "design": {
+    "title": "Muonekano wa duka",
+    "intro": "Kila rangi, herufi na kipande cha programu, mahali pamoja. Pitisha kipanya juu ya kipande, kibonyeze, au tumia Tab, kuona hali zake nyingine.",
+    "colours": {
+      "title": "Rangi",
+      "primary": "Kijani: kitufe kikuu, upau wa juu",
+      "primaryForeground": "Maandishi juu ya kijani",
+      "secondary": "Bluu: kitufe cha pili, kilichochaguliwa",
+      "secondaryForeground": "Maandishi juu ya bluu",
+      "ring": "Mstari wa Tab: unaonyesha ulipo",
+      "background": "Skrini",
+      "foreground": "Maandishi",
+      "card": "Kadi",
+      "cardForeground": "Maandishi kwenye kadi",
+      "popover": "Menyu inayojitokeza",
+      "popoverForeground": "Maandishi kwenye menyu",
+      "muted": "Paneli hafifu",
+      "mutedForeground": "Maandishi hafifu",
+      "accent": "Mstari wa menyu chini ya kipanya",
+      "accentForeground": "Maandishi yake",
+      "destructive": "Nyekundu iliyofifia: maonyo tu",
+      "border": "Mistari",
+      "input": "Ukingo wa kisanduku cha kuandika"
+    },
+    "fonts": {
+      "title": "Herufi",
+      "default": "Herufi ya kawaida",
+      "second": "Herufi ya pili, rahisi kusoma",
+      "sample": "Pumba ya mahindi: mifuko 26 + kilo 35.5",
+      "digits": "TSh 1,234,560 · TSh 8,888,111"
+    },
+    "buttons": {
+      "title": "Vitufe",
+      "main": "Hifadhi",
+      "second": "Rudi",
+      "danger": "Batilisha",
+      "big": "Kikubwa",
+      "normal": "Cha kawaida",
+      "disabled": "Kimezimwa"
+    },
+    "fields": {
+      "title": "Visanduku vya kuandika",
+      "name": "Jina la mteja",
+      "nameHint": "Jina kamili, kama lilivyo kwenye kitambulisho",
+      "phone": "Namba ya simu",
+      "phoneError": "Namba si sahihi. Andika kama 0712 345 678.",
+      "kilo": "Kilo",
+      "disabled": "Kimezimwa",
+      "search": "Tafuta bidhaa",
+      "normal": "Kisanduku cha kawaida"
+    },
+    "cards": {
+      "title": "Kadi",
+      "cardTitle": "Jumla ya leo",
+      "cardDescription": "Mauzo ya upande wa Dawa",
+      "cardContent": "TSh 41,000",
+      "cardFooter": "Imehifadhiwa kwenye kifaa hiki"
+    },
+    "alerts": {
+      "title": "Ujumbe",
+      "infoTitle": "Inahitaji mtandao",
+      "infoDescription": "Ukurasa huu unafanya kazi ukiwa mtandaoni tu.",
+      "dangerTitle": "Mauzo hayajahifadhiwa",
+      "dangerDescription": "Bei iko chini ya kiwango cha chini. Muulize meneja."
+    },
+    "sideBands": {
+      "title": "Utepe wa upande",
+      "blue": "Bluu",
+      "striped": "Mistari nyeupe na nyekundu"
+    }
   }
 }

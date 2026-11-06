@@ -27,7 +27,14 @@ paths:
 ## Generated and vendored code
 
 - `src/api/schema.d.ts` comes from `pnpm gen:api` — never edit it.
-- `src/components/ui/` comes from shadcn: wrap a component rather than edit it, or say why.
+- `src/components/ui/` comes from shadcn (`pnpm shadcn add <name>`, a download: ask first). Never edit shadcn's files there (`guard.py` refuses it); Prettier skips the folder, and its `README.md` is its header.
+
+## The look (ADR-0039)
+
+- Screens use only our pieces in `src/components/design/` (Button, Field, Input, Label, Card, Alert, SideBand). Only `components/design/` imports `components/ui/`: a lint rule refuses it anywhere else (`import-rule.test.ts`).
+- A new shadcn part gets a piece of ours in `components/design/`, with its test, before a screen uses it. Read what `shadcn add` changed: if it writes greys or chart and sidebar tokens into `globals.css`, `tokens.test.ts` fails — remove them.
+- Colours, corners and heights come from the tokens in `globals.css`, never a value of a screen's own. Heights are written `h-(--control-big)`, a spelling `cn()` knows is a height.
+- Focus rings at full strength (`ring-ring`, never `ring-ring/50`); on green, the ring is white (UI-1).
 
 ## Screens
 

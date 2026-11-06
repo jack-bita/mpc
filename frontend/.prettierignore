@@ -14,3 +14,7 @@ pnpm-lock.yaml
 # Written by Next.js (next typegen) and by `pnpm gen:api` (ADR-0025).
 next-env.d.ts
 src/api/schema.d.ts
+
+# Written by shadcn (`pnpm shadcn add`) and kept exactly as it wrote them, so a later
+# `shadcn add --diff` shows only shadcn's own changes. Our look is in components/design/ (ADR-0039).
+src/components/ui/

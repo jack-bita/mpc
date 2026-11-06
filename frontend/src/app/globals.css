@@ -51,7 +51,9 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-  /* Tailwind makes its h-… and min-h-… classes from --spacing-… names: h-control-big is 52 px. */
+  /* Tailwind makes its h-… and min-h-… classes from --spacing-… names: h-control-big is 52 px. Our
+     pieces write h-(--control-big) instead, the same height in a spelling cn() knows is a height: with
+     h-control-big beside shadcn's h-8, cn() keeps both and CSS order decides (src/lib/utils.ts). */
   --spacing-control-big: var(--control-big);
   --spacing-control-normal: var(--control-normal);
   /* Every font-sans class, and the whole page below, reads the one font token. */
@@ -114,6 +116,12 @@
    ever changes (ADR-0039). UI-9 sets this on <html> from the person's choice. */
 [data-font="second"] {
   --font-body: var(--font-atkinson);
+}
+
+/* The default font, set back inside a page that has the second one. /design shows the two side by side,
+   and without this its default sample would show whichever font the person chose (UI-8). */
+[data-font="default"] {
+  --font-body: var(--font-source-sans);
 }
 
 /* Page-wide defaults: borders and focus rings use the tokens, and the page takes the theme's

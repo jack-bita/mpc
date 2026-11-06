@@ -19,6 +19,8 @@ guarantee — the same idea as the database triggers that protect the ledgers
 What it refuses
 ---------------
 1. Editing generated files: the API types, the changelog, the lock files.   (ADR-0025)
+   And shadcn's parts in frontend/src/components/ui/, kept as shadcn wrote
+   them, as our look wraps them in components/design/.                      (ADR-0039)
 2. Editing a migration that is already on main.                            (03 §9)
 3. `migrate` before the custom User's first migration exists (PPL-1).       (ADR-0012)
 4. Committing on main, force-pushing, pushing to main.                      (04 §3.4)
@@ -52,6 +54,11 @@ GENERATED = {
     "backend/uv.lock": "change dependencies with `uv add` or `uv remove`; they rewrite the lock file.",
     "frontend/pnpm-lock.yaml": "change dependencies with `pnpm add` or `pnpm remove`; they rewrite the lock file.",
 }
+
+# shadcn's parts: frontend/src/components/ui/button.tsx and the rest. `pnpm shadcn add` writes them, and they
+# stay as it wrote them, so a newer version from shadcn shows only shadcn's changes (ADR-0039). Not the
+# folder's README: it is ours, and it changes by hand each time a part is added.
+SHADCN_PART = re.compile(r"^frontend/src/components/ui/(?!README\.md$).+$")
 
 # backend/apps/<app>/migrations/0003_something.py
 MIGRATION = re.compile(r"^backend/apps/[^/]+/migrations/\d{4}_\w+\.py$")
@@ -99,6 +106,10 @@ def check_file_edit(root: Path, file_path: str) -> str | None:
         return None
     if rel in GENERATED:
         return f"{rel} is not edited by hand — {GENERATED[rel]}"
+    if SHADCN_PART.match(rel):
+        return (f"{rel} is shadcn's own file, kept as shadcn wrote it (ADR-0039). Change our piece in "
+                "frontend/src/components/design/ instead. For shadcn's newer version: "
+                "pnpm shadcn add <name> --overwrite, then read what it changed.")
     if MIGRATION.match(rel) and is_on_main(root, rel):
         return (f"{rel} is already on main, and a migration on main is never edited (03 §9). "
                 "Write a new migration instead.")

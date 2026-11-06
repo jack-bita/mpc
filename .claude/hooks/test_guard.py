@@ -73,6 +73,19 @@ class GuardTest(unittest.TestCase):
         self.assertEqual(self.edit("backend/uv.lock"), 2)
         self.assertEqual(self.edit("frontend/pnpm-lock.yaml"), 2)
 
+    def test_shadcn_part_refused(self) -> None:
+        # Kept as shadcn wrote it; our look wraps it in components/design/ (ADR-0039).
+        self.assertEqual(self.edit("frontend/src/components/ui/button.tsx"), 2)
+        part = str(self.repo / "frontend/src/components/ui/card.tsx")
+        self.assertEqual(self.run_guard("Write", file_path=part, content="x"), 2)
+
+    def test_shadcn_folder_readme_allowed(self) -> None:
+        # Ours: it changes by hand each time a part is added.
+        self.assertEqual(self.edit("frontend/src/components/ui/README.md"), 0)
+
+    def test_our_pieces_allowed(self) -> None:
+        self.assertEqual(self.edit("frontend/src/components/design/button.tsx"), 0)
+
     def test_ordinary_file_allowed(self) -> None:
         self.assertEqual(self.edit("backend/apps/sales/services.py"), 0)
 
