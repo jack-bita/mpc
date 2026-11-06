@@ -46,7 +46,9 @@ its server side, its routing and its middleware.
 ## Enforced by
 
 - UI-1: `language.test.tsx` (every page in English has no Swahili left), `messages.test.ts` (both books hold the same
-  keys and the same parts to fill in), and `text-rule.test.ts` (a lint rule refuses a word typed into a screen).
+  keys and the same parts to fill in), `text-rule.test.ts` (lint rules refuse a word typed into a screen, or into an
+  attribute a person sees or hears, like `aria-label`), and `use-client.test.ts` (a file that asks use-intl for words
+  says `"use client"`, or the build stops).
 - CORE-6: `test_error_shape`.
 - UI-2: an API error shows its Swahili message; 04 §3.2 Done #7.
 

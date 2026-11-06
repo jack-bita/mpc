@@ -11,6 +11,7 @@ paths:
 
 - `output: 'export'`: plain files, no Node server in production.
 - Every page is a client component. No server components at runtime, no server actions, no middleware, no route handlers, no image optimisation (`images.unoptimized`).
+- A file that asks use-intl for words (`useTranslations`) starts with `"use client"`. The area layouts are built as server components, and a part they import without the line stops `next build` at the first page in an area ("createContext is not a function"); no Vitest test sees it, so `use-client.test.ts` reads the files (UI-1).
 - No dynamic `[id]` pages for records: use a query string (`/sales/view?id=…`).
 
 ## Two data paths — the main rule
@@ -22,7 +23,7 @@ paths:
 
 - Money and quantities go through `src/lib/decimal.ts` (big.js); round only with `src/lib/rounding.ts`. Both pass `shared/test-vectors/`. No plain `number` arithmetic on money.
 - Money is shown with `formatMoney` (`Intl.NumberFormat('sw-TZ')`, TZS without decimals); stock with `formatStock`, in each book's order: "mifuko 26 + kilo 35.5" in Swahili, "26 mifuko + 35.5 kilo" in English (`src/lib/format.ts`).
-- No visible string literals: every string is a use-intl key (`useTranslations()`, ADR-0040) in `messages/sw.json` and `en.json`, Swahili first; a lint rule refuses a word typed into a screen, and `language.test.tsx` opens every page in English. API error codes map to translated messages. Tests render a screen with `src/test/render.tsx`, which gives it the word books.
+- No visible string literals: every string is a use-intl key (`useTranslations()`, ADR-0040) in `messages/sw.json` and `en.json`, Swahili first; lint rules refuse a word typed into a screen or into `aria-label`, `aria-description`, `placeholder`, `title` or `alt`, and `language.test.tsx` opens every page in English. API error codes map to translated messages. Tests render a screen with `src/test/render.tsx`, which gives it the word books.
 
 ## Generated and vendored code
 
