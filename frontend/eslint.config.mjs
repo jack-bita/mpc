@@ -34,6 +34,34 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // Screens use our pieces in components/design/, never shadcn's raw parts in components/ui/, so no
+    // screen can skip the shop's look (ADR-0039). Only our pieces wrap the parts, and the parts may use
+    // each other, so both folders are left out here. import-rule.test.ts checks it.
+    //
+    // eslint-plugin-import comes with Next's rule sets, which also teach it the "@/" path. Its rule
+    // follows the file an import really points to, so every spelling is caught: "@/components/ui/button"
+    // and "../../components/ui/button" alike. A rule that only read the import's text would miss some.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/components/design/**", "src/components/ui/**"],
+    rules: {
+      "import/no-restricted-paths": [
+        "error",
+        {
+          // Paths below are from this folder, wherever ESLint is started from.
+          basePath: import.meta.dirname,
+          zones: [
+            {
+              target: "./src",
+              from: "./src/components/ui",
+              message:
+                "Use our piece in @/components/design/: it gives shadcn's part the shop's look (ADR-0039).",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Last of the rule sets, so it wins: switch off every rule about layout. Prettier owns layout,
   // and two tools with opinions on spacing would only fight.
   prettier,
