@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.30 · 6 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.31 · 6 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.31** (6 Nov 2026, UI-2): the API's description is committed as `shared/openapi.json`, and CI checks it against the code and the types against it (AD11, §12). §7.1 says how the counter screens are kept off the server, and §7.2's map shows the new parts of `api/` and the error alert (04 v1.44). Marked **(v1.31)**.
 
 **Changes in v1.30** (6 Nov 2026, UI-1): choices by Jack, made while building UI-1 (04 v1.43). AD18 is now ADR-0040, which supersedes ADR-0032: the screens get their words through use-intl, next-intl's own core, as next-intl 4.x brings a code compiler and a file watcher that a static app with no language in its address never uses (§3, §7.2, §7.4). In Swahili, stock reads word first, "mifuko 26 + kilo 35.5", and in English number first; each word book holds its order, and the unit words are the shop's own (§7.4). §7.2's map shows the app's own parts in `components/`, each area's layout, `offline/network.ts` and the new test helpers. Marked **(v1.30)**.
 
@@ -159,7 +161,7 @@ Money and quantities travel as decimal strings in JSON, are `Decimal` in Python 
 *Why:* devices compute totals offline; device and server must agree to the shilling. *Cost:* high.
 
 **AD11 — The API contract is generated.**
-DRF → OpenAPI schema (drf-spectacular) → TypeScript types and a typed client. CI fails if either is out of date.
+DRF → OpenAPI schema (drf-spectacular) → TypeScript types and a typed client. CI fails if either is out of date. The schema is committed as `shared/openapi.json`, so a pull request shows any change to the API as a readable diff, and CI's frontend job, which has no Python, checks the types against it **(v1.31)**.
 *Why:* backend and frontend can't drift apart silently. *Cost:* low.
 
 **AD12 — Search runs on the device.** ✚
@@ -249,6 +251,7 @@ MPC/                          ← repo name follows the product name
 │   ├── public/               ← manifest, icons
 │   └── e2e/                  ← Playwright
 ├── shared/
+│   ├── openapi.json          ← the API's description, written by `pnpm gen:api`, read for the app's types (AD11) (v1.31)
 │   └── test-vectors/         ← JSON cases run by both pytest and Vitest (§8)
 ├── deploy/
 │   ├── Caddyfile
@@ -588,7 +591,7 @@ Cuts can last long enough to drain batteries, so the counter needs a plan beyond
 - **Counter screens** (sale, payment, repayment, quick customer, drawer, clock-in) read from Dexie with live queries and write documents to the outbox. They never call the API. They behave the same online and offline.
 - **Office screens** (products, prices, deliveries, counts, cash-up, reports, staff, settings, devices, flags) call the API through TanStack Query and the typed client. Offline, they show *Inahitaji mtandao*.
 
-This keeps all offline logic in one place.
+This keeps all offline logic in one place. A lint rule refuses the API client and TanStack Query in `app/(counter)/`; it reads a screen's own imports, so a shared part that calls the server still needs review **(v1.31)**.
 
 ### 7.2 Structure
 
@@ -606,10 +609,12 @@ frontend/src/
 ├── features/<module>/        components and hooks per domain module
 ├── offline/                  db.ts (schema + versions), outbox.ts, push.ts, pull.ts,
 │                             effects.ts, search.ts, pin.ts, clock.ts, storage.ts, network.ts (online or not) (v1.30)
-├── api/                      schema.d.ts (generated — never edited), client.ts
+├── api/                      schema.d.ts (generated — never edited), client.ts (the typed client and its CSRF token),
+│                             refusal.ts (a refusal thrown for TanStack Query), query-client.ts and provider.tsx (the store
+│                             of server answers), errors.ts (a code in the shop's words) (v1.31)
 ├── lib/                      decimal.ts, rounding.ts, units.ts, time.ts, ids.ts, format.ts, permissions.ts
 ├── components/               the app's own parts, built from our pieces: app-frame.tsx (the top bar and the page's <main>),
-│                             language-button.tsx, offline-banner.tsx, update-prompt.tsx (v1.30)
+│                             language-button.tsx, offline-banner.tsx, update-prompt.tsx (v1.30), api-error-alert.tsx (v1.31)
 ├── components/ui/            shadcn components
 ├── components/design/        our own pieces in the shop's look; screens use only these (v1.27)
 ├── fonts/                    the two font files and their licences, loaded by fonts.ts (v1.28)
@@ -702,7 +707,7 @@ Rules: tests run on real PostgreSQL, never SQLite. Every bug fix adds a test. Co
 
 ## 12. CI/CD
 
-- **`ci.yml`** on every pull request: backend (ruff, mypy, import-linter, `makemigrations --check`, schema up to date, pytest with PostgreSQL), frontend (lint, types, Vitest, production build with the service worker), types regenerated with no difference, Playwright end-to-end tests, Docker images build. GitHub Actions is free for public repositories.
+- **`ci.yml`** on every pull request: backend (ruff, mypy, import-linter, `makemigrations --check`, schema up to date, pytest with PostgreSQL), frontend (lint, types, Vitest, production build with the service worker), types regenerated with no difference (`test_committed_schema_matches_the_code` in the backend job, `pnpm check:api` in the frontend job, UI-2) **(v1.31)**, Playwright end-to-end tests, Docker images build. GitHub Actions is free for public repositories.
 - **`pr-title.yml`** ✚ **(v1.1)**: checks that every PR title is a conventional commit — it becomes the one squash commit on `main` and a changelog line (04 BP11). It is its own small workflow, so editing a title re-runs the check.
 - **Branch protection:** `main` changes only through pull requests with green CI, even working solo.
 - **`deploy-demo.yml`:** every merge to `main` → images to GitHub Container Registry → Render redeploys the demo (deploy hook) → smoke test. A nightly schedule redeploys it again, which resets the fake data.

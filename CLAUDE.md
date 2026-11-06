@@ -76,7 +76,7 @@ These protect money, history and each shop's privacy. If a task seems to need br
 5. **Two data paths.** Counter screens use Dexie only; office screens use the API client only. (ADR-0019, ADR-0020)
 6. **A new offline document type needs all four:** a server handler, a schema version, the device side, and tests on both sides.
 7. **Nothing is deleted.** Cancel, void, suspend or archive — always with who, when and why. Foreign keys use `on_delete=PROTECT`.
-8. **Generated files are never edited by hand:** `frontend/src/api/schema.d.ts` (`pnpm gen:api`), `CHANGELOG.md` (release-please), `uv.lock` and `pnpm-lock.yaml` (`uv add`, `pnpm add`). (ADR-0025) Nor are shadcn's parts in `frontend/src/components/ui/` (`pnpm shadcn add`): our look wraps them in `components/design/`. (ADR-0039)
+8. **Generated files are never edited by hand:** `shared/openapi.json` and `frontend/src/api/schema.d.ts` (`pnpm gen:api`), `CHANGELOG.md` (release-please), `uv.lock` and `pnpm-lock.yaml` (`uv add`, `pnpm add`). (ADR-0025) Nor are shadcn's parts in `frontend/src/components/ui/` (`pnpm shadcn add`): our look wraps them in `components/design/`. (ADR-0039)
 9. **Migrations** are read line by line, and once on `main` they are never edited — write a new one. No `migrate` on any database before PPL-1 is merged. (ADR-0012)
 10. **Real shop data never enters the repo:** no real names, phones, debts or prices in code, tests, seeds, docs or commits. Real sheets stay in `private/` (gitignored). Never read or print `.env`.
 11. **UI text** lives in `frontend/messages/sw.json` and `en.json`; the API sends error codes, not sentences. (ADR-0040)
