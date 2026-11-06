@@ -34,6 +34,7 @@ import { Input } from "@/components/design/input";
 import { SIDE_BAND_LOOKS } from "@/components/design/side-band";
 import { ON_GREEN, TopBar } from "@/components/design/top-bar";
 import { LanguageButton } from "@/components/language-button";
+import { OfflineBanner } from "@/components/offline-banner";
 import { cn } from "@/lib/utils";
 
 // Every colour token in globals.css, with the key of the words that say what it is for, in the
@@ -243,6 +244,10 @@ export default function DesignPage() {
             <AlertTitle>{t("alerts.dangerTitle")}</AlertTitle>
             <AlertDescription>{t("alerts.dangerDescription")}</AlertDescription>
           </Alert>
+          {/* The office screens' real banner, following this browser's network: switch the network
+              off in the browser's tools and it appears here, as on an office screen (UI-1). */}
+          <p className="text-sm text-muted-foreground">{t("alerts.live")}</p>
+          <OfflineBanner />
         </div>
       </Section>
 

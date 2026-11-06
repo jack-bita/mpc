@@ -10,6 +10,10 @@
     "ready": "A new version is ready",
     "apply": "Update"
   },
+  "offline": {
+    "title": "Needs the internet",
+    "description": "This page works only when online."
+  },
   "language": {
     "switch": "Kiswahili"
   },
@@ -96,7 +100,8 @@
       "infoTitle": "Needs the internet",
       "infoDescription": "This page works only when online.",
       "dangerTitle": "The sale wasn't saved",
-      "dangerDescription": "The price is below the lowest allowed. Ask the manager."
+      "dangerDescription": "The price is below the lowest allowed. Ask the manager.",
+      "live": "The office's real message: it appears when the network drops. Switch the browser's network off to see it."
     },
     "sideBands": {
       "blue": "Blue",

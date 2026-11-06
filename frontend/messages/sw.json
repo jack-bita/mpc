@@ -10,6 +10,10 @@
     "ready": "Toleo jipya liko tayari",
     "apply": "Sasisha"
   },
+  "offline": {
+    "title": "Inahitaji mtandao",
+    "description": "Ukurasa huu unafanya kazi ukiwa mtandaoni tu."
+  },
   "language": {
     "switch": "English"
   },
@@ -96,7 +100,8 @@
       "infoTitle": "Inahitaji mtandao",
       "infoDescription": "Ukurasa huu unafanya kazi ukiwa mtandaoni tu.",
       "dangerTitle": "Mauzo hayajahifadhiwa",
-      "dangerDescription": "Bei iko chini ya kiwango cha chini. Muulize meneja."
+      "dangerDescription": "Bei iko chini ya kiwango cha chini. Muulize meneja.",
+      "live": "Ujumbe halisi wa ofisini: hujitokeza mtandao ukikatika. Zima mtandao kwenye kivinjari kuuona."
     },
     "sideBands": {
       "blue": "Bluu",

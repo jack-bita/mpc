@@ -81,8 +81,9 @@ describe("the design page", () => {
 
   it("shows both messages, a card and the top bar with both side bands", () => {
     const { container } = render(<DesignPage />);
-    expect(screen.getByRole("status").textContent).toContain(
-      t.alerts.infoTitle,
+    // Two status boxes: the info sample, and the live banner, empty while online.
+    expect(screen.getAllByRole("status").map((box) => box.textContent)).toEqual(
+      [expect.stringContaining(t.alerts.infoTitle), ""],
     );
     expect(screen.getByRole("alert").textContent).toContain(
       t.alerts.dangerTitle,
