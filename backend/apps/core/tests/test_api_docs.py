@@ -96,6 +96,35 @@ def test_a_fields_choices_keep_a_name_of_their_own(tmp_path: Path) -> None:
     assert "StatusEnum" not in shapes
 
 
+def test_every_route_refuses_in_the_error_shape(tmp_path: Path) -> None:
+    # Every refusal has one shape (apps/core/api/errors.py), and the description must say so on every route:
+    # the app's typed client takes the type of an error from it (UI-2). `default` is OpenAPI's answer for any
+    # status a route doesn't list, so it covers a 400, a 403, a 409 and a 500 alike.
+    schema = _schema(tmp_path)
+    operations = [
+        (path, method, operation)
+        for path, route in schema["paths"].items()
+        for method, operation in route.items()
+        if method in {"get", "post", "patch", "put", "delete"}
+    ]
+
+    # More than the one route the test was written beside, so a broken loop can't pass on nothing.
+    assert len(operations) > 10
+    for path, method, operation in operations:
+        default = operation["responses"].get("default")
+        assert default is not None, f"{method.upper()} {path} has no error answer"
+        assert default["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/ApiError"}
+
+    # The shape's four keys, each typed as tightly as the handler makes it.
+    shape = schema["components"]["schemas"]["ApiError"]
+    assert set(shape["required"]) == {"code", "message", "fields", "params"}
+    assert shape["properties"]["fields"]["additionalProperties"] == {"type": "array", "items": {"type": "string"}}
+    assert shape["properties"]["params"]["additionalProperties"] == {
+        "oneOf": [{"type": "string"}, {"type": "integer"}, {"type": "boolean"}],
+        "nullable": True,
+    }
+
+
 def test_docs_group_routes_by_app(tmp_path: Path) -> None:
     # The docs page groups routes by their first part after /api/ and the version: "shops" says whose
     # routes they are, where "v1" said nothing. The same part names each route in the app's generated client
