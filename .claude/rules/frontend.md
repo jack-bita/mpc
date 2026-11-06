@@ -27,7 +27,7 @@ paths:
 ## Generated and vendored code
 
 - `src/api/schema.d.ts` comes from `pnpm gen:api` — never edit it.
-- `src/components/ui/` comes from shadcn (`pnpm shadcn add <name>`, a download: ask first). Never edit it; Prettier skips it, and its `README.md` is its header.
+- `src/components/ui/` comes from shadcn (`pnpm shadcn add <name>`, a download: ask first). Never edit shadcn's files there (`guard.py` refuses it); Prettier skips the folder, and its `README.md` is its header.
 
 ## The look (ADR-0039)
 
