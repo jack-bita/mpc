@@ -17,7 +17,8 @@ function renderAlert(kind?: (typeof ALERT_KINDS)[number]) {
 
 describe("the message box", () => {
   it("tells news politely, when the screen reader is free", () => {
-    // role="status": an offline note shouldn't cut into what is being read out.
+    // role="status": an offline note shouldn't cut into what is being read out. It is said when its
+    // text changes, so news that comes and goes keeps the box on the page (alert.tsx).
     renderAlert("info");
     expect(screen.getByRole("status").textContent).toContain(
       "Inahitaji mtandao",

@@ -2,10 +2,13 @@
 //
 // shadcn's alert (components/ui/alert.tsx) is plain <div>s; this piece sets the look, and how loudly a
 // screen reader says it. Two kinds:
-//   info    a blue edge. Something to know, like Inahitaji mtandao (UI-1). role="status": a screen
-//           reader says it when it has finished what it was saying.
+//   info    a blue edge. Something to know, like Inahitaji mtandao (UI-1). role="status": when its
+//           text changes, a screen reader says it once it has finished what it was saying. A box that
+//           appears with its text already in it may not be said at all (NVDA with Chrome, VoiceOver),
+//           so news that comes and goes needs its status area on the page first, and its text later.
 //   danger  faded red. Something went wrong, like a sale that was refused. role="alert": a screen
-//           reader stops and says it at once. The faded red is for warnings only (ADR-0039).
+//           reader stops and says it at once, also when the box appears with its text in it. The
+//           faded red is for warnings only (ADR-0039).
 // Its parts: Alert > (an icon, AlertTitle, AlertDescription).
 import { cva } from "class-variance-authority";
 
