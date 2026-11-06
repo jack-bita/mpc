@@ -2,7 +2,8 @@
 // whole app in it, so an office screen can ask for an answer with TanStack Query's useQuery().
 //
 // It wraps the counter screens too, as the device's registration and PIN login screens need the server
-// as well (UI-3, UI-4). Counter screens themselves never ask it: they read Dexie (rule 5, ADR-0019).
+// as well (UI-3, UI-4). Counter screens themselves never ask it: they read Dexie (rule 5, ADR-0019), and a
+// lint rule refuses TanStack Query in app/(counter)/ (eslint.config.mjs).
 //
 // "use client": the store lives in the browser, and the build has none.
 "use client";

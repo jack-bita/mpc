@@ -17,6 +17,14 @@ import prettier from "eslint-config-prettier/flat";
 const WORD_ATTRIBUTE =
   "JSXAttribute[name.name=/^(aria-label|aria-description|placeholder|title|alt)$/]";
 
+// Our fonts live in the repo, so builds and devices never depend on another company's server.
+// next/font/google is one easy line away, and it would look harmless in a review (ADR-0039). A
+// constant, as the counter screens' rule below must list it again (it says why).
+const NO_GOOGLE_FONTS = {
+  name: "next/font/google",
+  message: "Fonts live inside the app, in src/fonts/ (ADR-0039).",
+};
+
 export default defineConfig([
   // React, hooks, accessibility and Next.js rules, with the page-speed ones as errors.
   ...nextVitals,
@@ -24,19 +32,7 @@ export default defineConfig([
   ...nextTs,
   {
     rules: {
-      // Our fonts live in the repo, so builds and devices never depend on another company's server.
-      // next/font/google is one easy line away, and it would look harmless in a review (ADR-0039).
-      "no-restricted-imports": [
-        "error",
-        {
-          paths: [
-            {
-              name: "next/font/google",
-              message: "Fonts live inside the app, in src/fonts/ (ADR-0039).",
-            },
-          ],
-        },
-      ],
+      "no-restricted-imports": ["error", { paths: [NO_GOOGLE_FONTS] }],
     },
   },
   {
@@ -50,6 +46,11 @@ export default defineConfig([
     // Every kind of file a screen can be written in: tsconfig.json allows JavaScript, and Next.js routes
     // a page.jsx as readily as a page.tsx. The same list as Next's rule sets, which load the import plugin
     // only for these: .cjs isn't in it, and a CommonJS file can't be a Next.js page anyway.
+    //
+    // A second zone keeps the counter screens off the server (rule 5, ADR-0019): they read Dexie and save
+    // to the outbox, so a sale goes through with the network down. A counter screen that called the API
+    // client would work in testing, with the network up, and fail at the shop the day it drops. The same
+    // rule, so the same care: every spelling of the import is caught (import-rule.test.ts).
     files: ["src/**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
     ignores: ["src/components/design/**", "src/components/ui/**"],
     rules: {
@@ -64,6 +65,36 @@ export default defineConfig([
               from: "./src/components/ui",
               message:
                 "Use our piece in @/components/design/: it gives shadcn's part the shop's look (ADR-0039).",
+            },
+            {
+              target: "./src/app/(counter)",
+              from: "./src/api",
+              message:
+                "Counter screens never call the server: read Dexie and save with saveDocument() (rule 5, ADR-0019).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // TanStack Query is the office screens' store of server answers (UI-2), so the counter screens leave
+    // it alone too. A package, not a file of ours, so the import rule above can't see it: pnpm keeps
+    // packages under paths of its own. This rule reads the import's text, and a package has one name.
+    //
+    // ESLint keeps only the last settings of a rule for a file, and this one is no-restricted-imports,
+    // like the font ban: listed again here, or counter screens would lose it (import-rule.test.ts).
+    files: ["src/app/(counter)/**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [NO_GOOGLE_FONTS],
+          patterns: [
+            {
+              group: ["@tanstack/*"],
+              message:
+                "Counter screens never call the server: read Dexie with live queries (rule 5, ADR-0019).",
             },
           ],
         },

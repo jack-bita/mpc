@@ -7,7 +7,7 @@
 // thrown; a dropped network still throws, as fetch does.
 //
 // Only office screens use it. Counter screens read Dexie and never call the server, so they work the same
-// offline (rule 5, ADR-0019).
+// offline (rule 5, ADR-0019); a lint rule refuses this folder in app/(counter)/ (eslint.config.mjs).
 import createClient, {
   type ClientOptions,
   type Middleware,

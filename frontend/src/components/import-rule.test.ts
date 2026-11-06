@@ -1,6 +1,7 @@
-// import-rule.test.ts — no screen can skip the shop's look by importing shadcn's raw parts (UI-8, ADR-0039).
+// import-rule.test.ts — no screen can skip the shop's look by importing shadcn's raw parts (UI-8, ADR-0039),
+// and no counter screen can call the server (UI-2, rule 5, ADR-0019).
 //
-// The rule lives in eslint.config.mjs. These tests lint small made-up files, as if they sat at a given
+// The rules live in eslint.config.mjs. These tests lint small made-up files, as if they sat at a given
 // place in src/, and look for the rule's name in what ESLint reports. The imports point at real files
 // (components/ui/button.tsx, components/design/button.tsx), as the rule follows each import to its file.
 //
@@ -103,6 +104,67 @@ describe("the import rule", () => {
       expect(await rulesFor("./design/new-piece.tsx", google)).toContain(
         "no-restricted-imports",
       );
+    },
+    SLOW,
+  );
+});
+
+describe("the counter rule", () => {
+  // A counter screen sits in app/(counter)/. The brackets are Next's way to group routes without a part in
+  // the address; some path tools read brackets as a pattern, so these tests also prove the rules reach it.
+  const COUNTER = "../app/(counter)/sale/page.tsx";
+  const OFFICE = "../app/(office)/devices/page.tsx";
+  const API =
+    'import { api } from "@/api/client";\nexport const client = api;\n';
+  const QUERY =
+    'import { useQuery } from "@tanstack/react-query";\nexport const ask = useQuery;\n';
+
+  it(
+    "refuses the API client on a counter screen",
+    async () => {
+      expect(await rulesFor(COUNTER, API)).toContain(RULE);
+    },
+    SLOW,
+  );
+
+  it(
+    "refuses it by any path, not only by the @/ name",
+    async () => {
+      const relative =
+        'import { api } from "../../../api/client";\nexport const client = api;\n';
+      expect(await rulesFor(COUNTER, relative)).toContain(RULE);
+    },
+    SLOW,
+  );
+
+  it(
+    "refuses TanStack Query on a counter screen",
+    async () => {
+      expect(await rulesFor(COUNTER, QUERY)).toContain("no-restricted-imports");
+    },
+    SLOW,
+  );
+
+  it(
+    "still refuses fonts from Google on a counter screen",
+    async () => {
+      // The counter's rule is no-restricted-imports, like the font ban, and ESLint keeps only the last
+      // settings of a rule for a file: the ban must be listed again there (eslint.config.mjs).
+      const google =
+        'import { Inter } from "next/font/google";\nexport const font = Inter;\n';
+      expect(await rulesFor(COUNTER, google)).toContain(
+        "no-restricted-imports",
+      );
+    },
+    SLOW,
+  );
+
+  it(
+    "lets an office screen use both",
+    async () => {
+      const rules = await rulesFor(OFFICE, API + QUERY);
+      expect(rules).not.toContain(RULE);
+      expect(rules).not.toContain("no-restricted-imports");
     },
     SLOW,
   );
