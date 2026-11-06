@@ -31,10 +31,11 @@ paths:
 
 ## The look (ADR-0039)
 
-- Screens use only our pieces in `src/components/design/` (Button, Field, Input, Label, Card, Alert, SideBand). Only `components/design/` imports `components/ui/`: a lint rule refuses it anywhere else (`import-rule.test.ts`).
+- Screens use only our pieces in `src/components/design/` (Button, Field, Input, Label, Card, Alert, SideBand, TopBar). Only `components/design/` imports `components/ui/`: a lint rule refuses it anywhere else (`import-rule.test.ts`).
 - A new shadcn part gets a piece of ours in `components/design/`, with its test, before a screen uses it. Read what `shadcn add` changed: if it writes greys or chart and sidebar tokens into `globals.css`, `tokens.test.ts` fails — remove them.
 - Colours, corners and heights come from the tokens in `globals.css`, never a value of a screen's own. Heights are written `h-(--control-big)`, a spelling `cn()` knows is a height.
-- Focus rings at full strength (`ring-ring`, never `ring-ring/50`); on green, the ring is white (UI-1).
+- Focus rings at full strength (`ring-ring`, never `ring-ring/50`); on green, the ring is white: anything green uses `ON_GREEN` from `top-bar.tsx`, which sets `--ring`, and only the button's `bar` kind sits on it (UI-1).
+- Counter and office screens live in `src/app/(counter)/` and `src/app/(office)/`, whose layouts wrap them in `AppFrame` (the top bar and the page's one `<main>`): a screen there doesn't write its own `<main>`.
 
 ## Screens
 

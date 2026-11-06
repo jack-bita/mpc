@@ -10,6 +10,12 @@
     "ready": "Toleo jipya liko tayari",
     "apply": "Sasisha"
   },
+  "language": {
+    "switch": "English"
+  },
+  "topBar": {
+    "place": "{shop} · {side}"
+  },
   "stock": {
     "part": "{unit} {count}"
   },
@@ -93,9 +99,16 @@
       "dangerDescription": "Bei iko chini ya kiwango cha chini. Muulize meneja."
     },
     "sideBands": {
-      "title": "Utepe wa upande",
       "blue": "Bluu",
       "striped": "Mistari nyeupe na nyekundu"
+    },
+    "topBar": {
+      "title": "Upau wa juu",
+      "sampleShop": "MPC",
+      "sampleSides": {
+        "blue": "Dawa",
+        "striped": "Vyakula"
+      }
     }
   }
 }

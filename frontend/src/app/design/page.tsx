@@ -31,7 +31,10 @@ import {
 } from "@/components/design/card";
 import { Field } from "@/components/design/field";
 import { Input } from "@/components/design/input";
-import { SIDE_BAND_LOOKS, SideBand } from "@/components/design/side-band";
+import { SIDE_BAND_LOOKS } from "@/components/design/side-band";
+import { ON_GREEN, TopBar } from "@/components/design/top-bar";
+import { LanguageButton } from "@/components/language-button";
+import { cn } from "@/lib/utils";
 
 // Every colour token in globals.css, with the key of the words that say what it is for, in the
 // book's design.colours part. page.test.tsx fails if a token there has no swatch here. The token's
@@ -172,11 +175,16 @@ export default function DesignPage() {
             </Button>
           ))}
         </div>
-        {/* The bar kind, on a strip of the top bar's green, in both sizes and switched off. The strip
-            sets --ring to white, as the top bar does, so Tab shows a white ring here too (UI-1). */}
+        {/* The bar kind, on a strip of the top bar's green, in both sizes and switched off. ON_GREEN
+            sets --ring to white, as on the top bar, so Tab shows a white ring here too. */}
         <div className="grid gap-2">
           <p className="text-sm text-muted-foreground">{t("buttons.onBar")}</p>
-          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-primary p-4 [--ring:var(--primary-foreground)]">
+          <div
+            className={cn(
+              "flex flex-wrap items-center gap-3 rounded-lg p-4",
+              ON_GREEN,
+            )}
+          >
             {BUTTON_SIZES.map((size) => (
               <Button key={size} kind="bar" size={size}>
                 {t("buttons.bar")}
@@ -238,16 +246,21 @@ export default function DesignPage() {
         </div>
       </Section>
 
-      <Section title={t("sideBands.title")}>
+      <Section title={t("topBar.title")}>
+        {/* The top bar as every counter and office screen shows it, with each look of the side band
+            under it. The shop and side names are samples: which side gets which look is still open
+            (04 §20, item 19). The language button is the real one: pressing it switches the app. */}
         {SIDE_BAND_LOOKS.map((look) => (
           <div key={look} className="grid gap-2">
             <p className="text-sm text-muted-foreground">
               {t(`sideBands.${look}`)}
             </p>
-            {/* Under a strip of the top bar's green, as it will sit in UI-1. */}
             <div className="overflow-hidden rounded-lg border">
-              <div className="h-10 bg-primary" />
-              <SideBand look={look} />
+              <TopBar
+                shop={t("topBar.sampleShop")}
+                side={{ name: t(`topBar.sampleSides.${look}`), band: look }}
+                actions={<LanguageButton />}
+              />
               <div className="h-10" />
             </div>
           </div>

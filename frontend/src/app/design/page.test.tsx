@@ -79,7 +79,7 @@ describe("the design page", () => {
     expect(screen.getByLabelText(t.fields.search).tagName).toBe("INPUT");
   });
 
-  it("shows both messages, a card and both side bands", () => {
+  it("shows both messages, a card and the top bar with both side bands", () => {
     const { container } = render(<DesignPage />);
     expect(screen.getByRole("status").textContent).toContain(
       t.alerts.infoTitle,
@@ -92,6 +92,14 @@ describe("the design page", () => {
       band.getAttribute("data-look"),
     );
     expect(looks).toEqual(["blue", "striped"]);
+    // Each band under a real top bar that names its sample side in words.
+    const bars = [...container.querySelectorAll("[data-look]")].map(
+      (band) => band.closest("header")?.textContent,
+    );
+    expect(bars).toEqual([
+      expect.stringContaining(`MPC · ${t.topBar.sampleSides.blue}`),
+      expect.stringContaining(`MPC · ${t.topBar.sampleSides.striped}`),
+    ]);
   });
 
   it.each(["default", "second"])(
@@ -106,9 +114,15 @@ describe("the design page", () => {
   );
 
   it("takes all its words from the message files", () => {
-    // ADR-0032. A token's name, like --primary, is code and is shown as it is.
+    // ADR-0032. A token's name, like --primary, is code and is shown as it is. Besides the page's own
+    // words, the top bars show the language button's word and their sample places, "MPC · Dawa".
     const { container } = render(<DesignPage />);
-    const allowed = new Set(strings(t));
+    const places = Object.values(t.topBar.sampleSides).map((side) =>
+      sw.topBar.place
+        .replace("{shop}", t.topBar.sampleShop)
+        .replace("{side}", side),
+    );
+    const allowed = new Set([...strings(t), sw.language.switch, ...places]);
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
     const strays: string[] = [];
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {

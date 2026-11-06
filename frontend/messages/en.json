@@ -10,6 +10,12 @@
     "ready": "A new version is ready",
     "apply": "Update"
   },
+  "language": {
+    "switch": "Kiswahili"
+  },
+  "topBar": {
+    "place": "{shop} · {side}"
+  },
   "stock": {
     "part": "{count} {unit}"
   },
@@ -93,9 +99,16 @@
       "dangerDescription": "The price is below the lowest allowed. Ask the manager."
     },
     "sideBands": {
-      "title": "Side band",
       "blue": "Blue",
       "striped": "White and red stripes"
+    },
+    "topBar": {
+      "title": "Top bar",
+      "sampleShop": "MPC",
+      "sampleSides": {
+        "blue": "Dawa",
+        "striped": "Vyakula"
+      }
     }
   }
 }
