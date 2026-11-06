@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, and AD3 ADR-0038 **(v1.16)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
 
-**Changes in v1.29** (6 Nov 2026, UI-8): §7.2's map shows the `/design` page, which shows every colour, both fonts and every piece of the look, and `test/`, where the tests that keep the look true share one copy of the contrast sums (ADR-0039, 04 v1.42). Marked **(v1.29)**.
+**Changes in v1.29** (6 Nov 2026, UI-8): §7.2's map shows the `/design` page, which shows every colour, both fonts and every piece of the look, and `test/`, where the tests that keep the look true share one copy of the contrast sums (ADR-0039, 04 v1.42). §7.3 names the oldest browsers the look works in. Marked **(v1.29)**.
 
 **Changes in v1.28** (5 Nov 2026, UI-7): §7.2's map shows `fonts/`, where the two font files and their licences live (ADR-0039, 04 v1.41). Marked **(v1.28)**.
 
@@ -621,7 +621,7 @@ frontend/src/
 - **Laptops:** keyboard first — `/` jumps to search, Enter adds, number keys set the quantity *(default; settled while building)*.
 - **Phones:** big tap targets; a numeric keypad for cash and kg.
 - **The look (ADR-0039) (v1.27):** colours, corners and control heights are tokens in `src/app/globals.css`. Two fonts live inside the app, so they work offline. Screens use the pieces in `components/design/`, never shadcn's `components/ui/` directly. Light only for now.
-- **Supported shop devices:** Chrome (or Edge) on Android and Windows, installed as an app. iPhones work for the owner's office screens online, but aren't recommended as offline shop devices: offline storage is most dependable in installed Chrome apps.
+- **Supported shop devices:** Chrome (or Edge) on Android and Windows, installed as an app. Version 111 or newer (March 2023), and Safari 16.4 or newer, as Tailwind 4 draws the look's tints and darker hovers with a colour mix older browsers lack: there a 5% tint can show as the full colour, and blue words would sit on solid blue (UI-8) **(v1.29)**. iPhones work for the owner's office screens online, but aren't recommended as offline shop devices: offline storage is most dependable in installed Chrome apps.
 
 ### 7.4 Language
 
