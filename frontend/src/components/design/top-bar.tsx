@@ -5,6 +5,13 @@
 // know which side a screen is for (UI-8). On its right sit the bar's buttons (the language button,
 // later Toka), all of the bar kind. It only sets the look: what the buttons do, and which shop and side
 // to name, come from AppFrame (components/app-frame.tsx).
+//
+// "use client": it asks use-intl for its words, and use-intl's hooks run only in the browser's React.
+// The area layouts that show it are server components (they run once, at build time), and without
+// this line Next.js would build the bar as one too, and the build stops at the first page in an area
+// ("createContext is not a function"). use-client.test.ts checks every file that uses use-intl.
+"use client";
+
 import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
@@ -57,8 +64,10 @@ export function TopBar({
           ON_GREEN,
         )}
       >
-        {/* text-lg, semibold: read at a glance from where a seller stands. */}
-        <p className="text-lg font-semibold">{place}</p>
+        {/* text-lg, semibold: read at a glance from where a seller stands. While no shop is known, an
+            empty <div> keeps the buttons at the right end, with no empty paragraph for a screen
+            reader to land on. */}
+        {place ? <p className="text-lg font-semibold">{place}</p> : <div />}
         <div className="flex items-center gap-2">{actions}</div>
       </div>
       {side ? <SideBand look={side.band} /> : null}
