@@ -9,10 +9,11 @@
 import { createTranslator } from "use-intl/core";
 import { describe, expect, it } from "vitest";
 
+import type { Words } from "@/i18n/codes";
 import { LANGUAGES, MESSAGES, type Language } from "@/i18n/language";
 import { sentences } from "@/test/language";
 
-import { apiErrorMessage, apiFieldMessages, type Words } from "./errors";
+import { apiErrorMessage, apiFieldMessages } from "./errors";
 import { ApiRefusal, NoConnection } from "./refusal";
 
 const CODES_THE_API_SENDS = [
@@ -161,72 +162,12 @@ describe("apiErrorMessage", () => {
     );
   });
 
-  it("tells a PIN lock's wait in minutes, rounded up", () => {
-    const locked = (wait: number) =>
-      apiErrorMessage(swahili, refusal("pin.locked", { params: { wait } }));
-
-    expect(locked(300)).toBe(
-      "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika 5.",
-    );
-    // Half a minute still reads as one: never "dakika 0".
-    expect(locked(30)).toContain("dakika 1.");
-    expect(locked(0)).toContain("dakika 1.");
-    expect(locked(61)).toContain("dakika 2.");
-  });
-
-  it("reads a wait sent as text, as a newer server might send it", () => {
-    const locked = refusal("pin.locked", { params: { wait: "300" } });
+  it("fills in a refusal's values, as its code's sentence asks", () => {
+    // How a code's sentence is filled in is src/i18n/codes.test.ts's; here, that a refusal's params reach it.
+    const locked = refusal("pin.locked", { params: { wait: 300 } });
 
     expect(apiErrorMessage(swahili, locked)).toBe(
       "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika 5.",
-    );
-  });
-
-  it("never shows a key when the wait didn't come", () => {
-    // Without a number the sentence can't be filled in: the screen would show "errors.pin.locked", and
-    // while building, the provider would stop the screen. It says to wait, with no number.
-    const noWait: ApiRefusal["body"]["params"][] = [
-      {},
-      { wait: null },
-      { wait: "" },
-      { wait: "soon" },
-      { wait: -5 },
-    ];
-    for (const params of noWait) {
-      expect(apiErrorMessage(swahili, refusal("pin.locked", { params }))).toBe(
-        "Majaribio mengi mno. Subiri kidogo, kisha ujaribu tena.",
-      );
-    }
-  });
-
-  it("names the code when a sentence lacks any other value", () => {
-    // No sentence needs another value today; a later one might, and its code must still be readable.
-    const t = createTranslator({
-      locale: "sw",
-      messages: {
-        errors: { sale: { below_floor: "Bei ya chini ni {floor}." } },
-        errorFallback: MESSAGES.sw.errorFallback,
-      },
-      onError: (error) => {
-        throw error;
-      },
-    }) as unknown as Words;
-
-    expect(apiErrorMessage(t, refusal("sale.below_floor"))).toBe(
-      "Seva imekataa. Msimbo: sale.below_floor",
-    );
-  });
-
-  it("names a code it has no sentence for, so it can be read out to the owner", () => {
-    expect(apiErrorMessage(swahili, refusal("sale.below_floor"))).toBe(
-      "Seva imekataa. Msimbo: sale.below_floor",
-    );
-  });
-
-  it("reads a code that names a group of sentences as one it doesn't know", () => {
-    // errors.pin holds pin.wrong and the rest, but is no sentence itself.
-    expect(apiErrorMessage(swahili, refusal("pin"))).toBe(
-      "Seva imekataa. Msimbo: pin",
     );
   });
 

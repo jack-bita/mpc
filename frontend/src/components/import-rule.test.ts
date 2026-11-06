@@ -189,6 +189,20 @@ describe("the counter rule", () => {
   );
 
   it(
+    "lets a counter screen turn a code into its sentence",
+    async () => {
+      // Sync's refusals carry codes too (SYNC cards): the part that reads them sits beside the word
+      // books, outside the locked folder (src/i18n/codes.ts).
+      const words =
+        'import { codeMessage } from "@/i18n/codes";\nexport const say = codeMessage;\n';
+      const rules = await rulesFor(COUNTER, words);
+      expect(rules).not.toContain(RULE);
+      expect(rules).not.toContain("no-restricted-imports");
+    },
+    SLOW,
+  );
+
+  it(
     "lets an office screen use all of them",
     async () => {
       const others =

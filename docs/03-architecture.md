@@ -611,7 +611,7 @@ frontend/src/
 │                             effects.ts, search.ts, pin.ts, clock.ts, storage.ts, network.ts (online or not) (v1.30)
 ├── api/                      schema.d.ts (generated — never edited), client.ts (the typed client and its CSRF token),
 │                             refusal.ts (a refusal thrown for TanStack Query), query-client.ts and provider.tsx (the store
-│                             of server answers), errors.ts (a code in the shop's words) (v1.31)
+│                             of server answers), errors.ts (what a failed call shows) (v1.31)
 ├── lib/                      decimal.ts, rounding.ts, units.ts, time.ts, ids.ts, format.ts, permissions.ts
 ├── components/               the app's own parts, built from our pieces: app-frame.tsx (the top bar and the page's <main>),
 │                             language-button.tsx, offline-banner.tsx, update-prompt.tsx (v1.30), api-error-alert.tsx (v1.31)
@@ -621,7 +621,8 @@ frontend/src/
 ├── test/                     helpers for tests only: look.ts reads globals.css and does the contrast sums (v1.29);
 │                             render.tsx gives a screen the word books, language.ts finds Swahili left in English,
 │                             vectors.ts reads the answer books in shared/test-vectors/ (v1.30)
-└── i18n/                     the word books' setup and the language switch; the messages themselves are in frontend/messages/ (§4) (v1.2, v1.30)
+└── i18n/                     the word books' setup and the language switch; the messages themselves are in frontend/messages/ (§4) (v1.2, v1.30);
+                              codes.ts turns a server's code into its sentence, for office and counter screens alike (v1.31)
 ```
 
 - A static build can't pre-build pages for records that don't exist yet, so record pages use a query string (`/sales/view?id=…`).
