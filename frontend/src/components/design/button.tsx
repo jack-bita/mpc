@@ -14,12 +14,12 @@
 //
 // button.test.tsx does the sums on the classes the browser really gets: every kind's text reads at
 // 4.5:1 at rest, on hover and when pressed, on a white screen and on a pale panel.
-import type { ComponentProps } from "react";
-
 import { cva } from "class-variance-authority";
 
 import { Button as ShadcnButton } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+import type { PieceProps } from "./types";
 
 export const BUTTON_KINDS = ["main", "second", "danger"] as const;
 export const BUTTON_SIZES = ["big", "normal"] as const;
@@ -78,14 +78,9 @@ const look = cva(
   },
 );
 
-type ButtonProps = Omit<
-  ComponentProps<typeof ShadcnButton>,
-  "variant" | "size" | "className"
-> & {
+type ButtonProps = Omit<PieceProps<typeof ShadcnButton>, "variant" | "size"> & {
   kind?: ButtonKind;
   size?: ButtonSize;
-  // Only a string: Base UI also takes a function here, but our classes are joined with cn().
-  className?: string;
 };
 
 export function Button({
