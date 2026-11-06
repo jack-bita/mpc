@@ -21,5 +21,76 @@
     "total": "Total",
     "thanks": "Thank you, welcome again",
     "print": "Print"
+  },
+  "design": {
+    "title": "The shop's look",
+    "intro": "Every colour, font and piece of the app, in one place. Hover over a piece, press it, or use Tab, to see its other states.",
+    "colours": {
+      "title": "Colours",
+      "primary": "Green: main button, top bar",
+      "primaryForeground": "Text on green",
+      "secondary": "Blue: second button, what is selected",
+      "secondaryForeground": "Text on blue",
+      "ring": "Focus ring: shows where you are",
+      "background": "Screen",
+      "foreground": "Text",
+      "card": "Card",
+      "cardForeground": "Text on a card",
+      "popover": "Pop-up menu",
+      "popoverForeground": "Text on a menu",
+      "muted": "Pale panel",
+      "mutedForeground": "Quiet text",
+      "accent": "Menu row under the mouse",
+      "accentForeground": "Its text",
+      "destructive": "Faded red: warnings only",
+      "border": "Lines",
+      "input": "Edge of a box you type in"
+    },
+    "fonts": {
+      "title": "Fonts",
+      "default": "The default font",
+      "second": "The second font, easy to read",
+      "sample": "Maize bran: 26 bags + 35.5 kilos",
+      "digits": "TSh 1,234,560 · TSh 8,888,111"
+    },
+    "buttons": {
+      "title": "Buttons",
+      "main": "Save",
+      "second": "Back",
+      "danger": "Void",
+      "big": "Big",
+      "normal": "Normal",
+      "disabled": "Switched off"
+    },
+    "fields": {
+      "title": "Boxes to type in",
+      "name": "Customer's name",
+      "nameHint": "Full name, as on their ID",
+      "phone": "Phone number",
+      "phoneError": "Wrong number. Write it like 0712 345 678.",
+      "kilo": "Kilos",
+      "disabled": "Switched off",
+      "search": "Search products",
+      "normal": "A normal-size box"
+    },
+    "cards": {
+      "title": "Cards",
+      "cardTitle": "Today's total",
+      "cardDescription": "Sales on the Drugs side",
+      "cardContent": "TSh 41,000",
+      "cardFooter": "Saved on this device"
+    },
+    "alerts": {
+      "title": "Messages",
+      "infoTitle": "Needs the internet",
+      "infoDescription": "This page works only when online.",
+      "dangerTitle": "The sale wasn't saved",
+      "dangerDescription": "The price is below the lowest allowed. Ask the manager."
+    },
+    "sideBands": {
+      "title": "Side band",
+      "blue": "Blue",
+      "striped": "White and red stripes"
+    }
   }
 }
