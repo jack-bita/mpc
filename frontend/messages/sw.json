@@ -209,6 +209,7 @@
   "errorFallback": {
     "noConnection": "Imeshindwa kufika kwenye seva. Angalia mtandao, kisha ujaribu tena.",
     "unknownCode": "Seva imekataa. Msimbo: {code}",
-    "unexpected": "Kuna hitilafu. Jaribu tena."
+    "unexpected": "Kuna hitilafu. Jaribu tena.",
+    "waitAWhile": "Majaribio mengi mno. Subiri kidogo, kisha ujaribu tena."
   }
 }

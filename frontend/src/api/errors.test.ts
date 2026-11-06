@@ -169,7 +169,51 @@ describe("apiErrorMessage", () => {
     );
     // Half a minute still reads as one: never "dakika 0".
     expect(locked(30)).toContain("dakika 1.");
+    expect(locked(0)).toContain("dakika 1.");
     expect(locked(61)).toContain("dakika 2.");
+  });
+
+  it("reads a wait sent as text, as a newer server might send it", () => {
+    const locked = refusal("pin.locked", { params: { wait: "300" } });
+
+    expect(apiErrorMessage(swahili, locked)).toBe(
+      "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika 5.",
+    );
+  });
+
+  it("never shows a key when the wait didn't come", () => {
+    // Without a number the sentence can't be filled in: the screen would show "errors.pin.locked", and
+    // while building, the provider would stop the screen. It says to wait, with no number.
+    const noWait: ApiRefusal["body"]["params"][] = [
+      {},
+      { wait: null },
+      { wait: "" },
+      { wait: "soon" },
+      { wait: -5 },
+    ];
+    for (const params of noWait) {
+      expect(apiErrorMessage(swahili, refusal("pin.locked", { params }))).toBe(
+        "Majaribio mengi mno. Subiri kidogo, kisha ujaribu tena.",
+      );
+    }
+  });
+
+  it("names the code when a sentence lacks any other value", () => {
+    // No sentence needs another value today; a later one might, and its code must still be readable.
+    const t = createTranslator({
+      locale: "sw",
+      messages: {
+        errors: { sale: { below_floor: "Bei ya chini ni {floor}." } },
+        errorFallback: MESSAGES.sw.errorFallback,
+      },
+      onError: (error) => {
+        throw error;
+      },
+    }) as unknown as Words;
+
+    expect(apiErrorMessage(t, refusal("sale.below_floor"))).toBe(
+      "Seva imekataa. Msimbo: sale.below_floor",
+    );
   });
 
   it("names a code it has no sentence for, so it can be read out to the owner", () => {

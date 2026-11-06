@@ -53,18 +53,46 @@ export function apiFieldMessages(
 function codeMessage(t: Words, code: string, params: Values): string {
   const key = `errors.${code}`;
   // has() is also true for a group, like errors.pin, which holds sentences but is none: raw() tells.
-  if (!t.has(key) || typeof t.raw(key) !== "string")
+  const sentence = t.has(key) ? t.raw(key) : undefined;
+  if (typeof sentence !== "string")
     return t("errorFallback.unknownCode", { code });
-  return t(key, withMinutes(params));
+
+  // A sentence asks for values by name, "dakika {minutes}". One the server didn't send can't be filled
+  // in: the screen would show the key, and while building, the provider would stop the screen. So a
+  // sentence missing only its wait says to wait, with no number; missing anything else, it names the code.
+  const values = withMinutes(params);
+  const missing = blanks(sentence).filter((name) => !(name in values));
+  if (missing.length === 0) return t(key, values);
+  if (missing.every((name) => name === "minutes"))
+    return t("errorFallback.waitAWhile");
+  return t("errorFallback.unknownCode", { code });
 }
 
-// `wait` comes in seconds (pin.locked); people read minutes. Rounded up, so 30 seconds reads "1", never
-// "0". Plain numbers, not big.js: a wait is a count of seconds, not money or a quantity (ADR-0024).
+// The names a sentence fills in: "{minutes}", and "{count, plural, ...}" should a sentence ever count.
+function blanks(sentence: string): string[] {
+  return [...sentence.matchAll(/\{(\w+)[},]/g)].map((match) => match[1] ?? "");
+}
+
+// `wait` comes in seconds (pin.locked); people read minutes. Plain numbers, not big.js: a wait is a count
+// of seconds, not money or a quantity (ADR-0024).
 function withMinutes(params: Values): Values {
-  const { wait } = params;
-  return typeof wait === "number"
-    ? { ...params, minutes: Math.ceil(wait / 60) }
-    : params;
+  const seconds = asSeconds(params.wait);
+  // Rounded up, and at least 1: 30 seconds reads "dakika 1", never "dakika 0".
+  return seconds === undefined
+    ? params
+    : { ...params, minutes: Math.max(1, Math.ceil(seconds / 60)) };
+}
+
+// The server sends a number, but the shape allows text, which a newer server might send: "300" counts
+// too. Anything else, like nothing, "" (which Number() reads as 0), "soon" or a negative number, is no wait.
+function asSeconds(wait: Values[string] | undefined): number | undefined {
+  const seconds =
+    typeof wait === "number"
+      ? wait
+      : typeof wait === "string" && wait.trim() !== ""
+        ? Number(wait)
+        : NaN;
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
 }
 
 /** The two functions above, with the open word book. */

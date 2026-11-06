@@ -209,6 +209,7 @@
   "errorFallback": {
     "noConnection": "Couldn't reach the server. Check the internet, then try again.",
     "unknownCode": "The server refused. Code: {code}",
-    "unexpected": "Something went wrong. Try again."
+    "unexpected": "Something went wrong. Try again.",
+    "waitAWhile": "Too many tries. Wait a little, then try again."
   }
 }
