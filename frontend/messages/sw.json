@@ -10,6 +10,9 @@
     "ready": "Toleo jipya liko tayari",
     "apply": "Sasisha"
   },
+  "stock": {
+    "part": "{unit} {count}"
+  },
   "slip": {
     "saleNumber": "Namba ya mauzo: {number}",
     "date": "Tarehe: {date}",

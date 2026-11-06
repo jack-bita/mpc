@@ -30,9 +30,16 @@ function asPattern(sentence: string): RegExp {
 
 const english = sentences(en);
 
-// The Swahili sentences that English says differently, as patterns.
+/** Whether a sentence has words of its own, outside its parts to fill in: "{unit} {count}" has none. */
+const hasWords = (sentence: string) =>
+  /\p{L}/u.test(sentence.replace(/\{\w+\}/g, ""));
+
+// The Swahili sentences that English says differently, as patterns. Only those with words of their
+// own: "{unit} {count}" differs from English only in its order, and as a pattern it would match any
+// two words on a screen.
 const SWAHILI_ONLY = [...sentences(sw)]
   .filter(([key, sentence]) => english.get(key) !== sentence)
+  .filter(([, sentence]) => hasWords(sentence))
   .map(([, sentence]) => asPattern(sentence));
 
 // Attributes a person sees (placeholder, title, alt) or hears from a screen reader (aria-label).

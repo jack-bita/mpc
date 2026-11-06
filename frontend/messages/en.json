@@ -10,6 +10,9 @@
     "ready": "A new version is ready",
     "apply": "Update"
   },
+  "stock": {
+    "part": "{count} {unit}"
+  },
   "slip": {
     "saleNumber": "Sale number: {number}",
     "date": "Date: {date}",
