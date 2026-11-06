@@ -34,6 +34,11 @@ const look = cva(
     // under the 3:1 that someone on a keyboard needs to see where they are (UI-7). It reads --ring, so
     // a green area can set --ring to white for what sits on it (UI-1's top bar).
     "focus-visible:ring-ring",
+    // Switched off, it looks and acts switched off, however it was switched off. shadcn fades only a
+    // button with the real disabled attribute (disabled:opacity-50). One that stays reachable by Tab
+    // (focusableWhenDisabled, so a screen reader can still find it) has aria-disabled instead, and
+    // would look ready to press. Base UI marks both with data-disabled.
+    "data-disabled:pointer-events-none data-disabled:opacity-50",
   ],
   {
     variants: {

@@ -283,6 +283,24 @@ describe("the button's behaviour", () => {
     expect((button as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("looks switched off when it stays reachable by Tab", () => {
+    // focusableWhenDisabled keeps it in the Tab order with aria-disabled, and no disabled attribute,
+    // so shadcn's disabled:opacity-50 never matches it. Ours reads Base UI's data-disabled.
+    const pressed = vi.fn();
+    render(
+      <Button disabled focusableWhenDisabled onClick={pressed}>
+        Hifadhi
+      </Button>,
+    );
+    const button = screen.getByRole("button", { name: "Hifadhi" });
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    expect(button.getAttribute("aria-disabled")).toBe("true");
+    expect(button.hasAttribute("data-disabled")).toBe(true);
+    expect(button.className.split(/\s+/)).toContain("data-disabled:opacity-50");
+    fireEvent.click(button);
+    expect(pressed).not.toHaveBeenCalled();
+  });
+
   it("answers a press", () => {
     const pressed = vi.fn();
     render(<Button onClick={pressed}>Hifadhi</Button>);
