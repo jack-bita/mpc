@@ -24,10 +24,14 @@ export const CSRF_HEADER = "X-CSRFToken";
 // DELETE (03 §5.10), but they are listed so a route that ever takes one is covered too.
 const CHANGES = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
+// The cookie's value as it is, never decoded: Django's tokens are letters and digits, which need no
+// decoding, and decodeURIComponent() throws on a broken escape ("%E0%A4%A"), which another page on the
+// same domain could plant, so every change would throw. Sent as it is, a broken token is the server's
+// to refuse, with a clear 403.
 function readCookie(name: string): string | undefined {
   for (const pair of document.cookie.split(";")) {
     const [key, ...value] = pair.trim().split("=");
-    if (key === name) return decodeURIComponent(value.join("="));
+    if (key === name) return value.join("=");
   }
   return undefined;
 }

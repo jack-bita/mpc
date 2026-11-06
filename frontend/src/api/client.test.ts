@@ -76,6 +76,17 @@ describe("the CSRF token", () => {
     expect(theOneRequest(sent).headers.has(CSRF_HEADER)).toBe(false);
   });
 
+  it("is sent as it is, so a broken cookie can't stop every change", async () => {
+    // Django's tokens are letters and digits, but a cookie can hold anything another page put there,
+    // like this broken escape. Decoding it would throw on every change; the server judges it instead.
+    setCookie("%E0%A4%A");
+    const { sent, client } = fakeServer();
+
+    await client.POST("/api/auth/logout/");
+
+    expect(theOneRequest(sent).headers.get(CSRF_HEADER)).toBe("%E0%A4%A");
+  });
+
   it("is left out, not sent empty, before the server has given one", async () => {
     const { sent, client } = fakeServer();
 
