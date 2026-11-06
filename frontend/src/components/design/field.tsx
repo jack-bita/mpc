@@ -13,6 +13,9 @@
 //
 // The error and the hint arrive as text already in the person's language: a screen turns the API's
 // error code into words (ADR-0032), and Field only shows them.
+//
+// Everything else a screen gives Field goes to the box (inputMode, value, disabled…), except className:
+// that styles the field as a whole, label to box, as a screen widens or spaces a field, not the box.
 import { useId } from "react";
 
 import { cn } from "@/lib/utils";
@@ -44,7 +47,8 @@ export function Field({ label, hint, error, className, ...input }: FieldProps) {
     <div className={cn("grid gap-2", className)}>
       <Label htmlFor={id}>{label}</Label>
       {hint ? (
-        <p id={hintId} className="text-sm text-muted-foreground">
+        // 16 px like every other word in the shop: a hint says how to fill the box, so it must be read.
+        <p id={hintId} className="text-base text-muted-foreground">
           {hint}
         </p>
       ) : null}

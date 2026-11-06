@@ -72,6 +72,21 @@ describe("a field", () => {
     expect(describedBy(phone)).toEqual(["Weka namba ya simu"]);
   });
 
+  it("writes its hint at 16 px, like every other word", () => {
+    render(<Field label="Simu" hint="Kama 0712 345 678" />);
+    const hint = screen.getByText("Kama 0712 345 678").className.split(/\s+/);
+    expect(hint).toContain("text-base");
+    expect(hint).not.toContain("text-sm");
+  });
+
+  it("styles the whole field with className, not the box", () => {
+    // A screen widens or spaces a field as a whole; the box keeps the shop's look.
+    render(<Field label="Simu" className="max-w-md" />);
+    const box = screen.getByLabelText("Simu");
+    expect(box.className.split(/\s+/)).not.toContain("max-w-md");
+    expect(box.parentElement?.className.split(/\s+/)).toContain("max-w-md");
+  });
+
   it("hands the box what a screen tells it", () => {
     // The kilo box at the counter: a number keypad on a phone, a value, switched off.
     render(
