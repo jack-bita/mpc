@@ -63,7 +63,9 @@
       "danger": "Batilisha",
       "big": "Kikubwa",
       "normal": "Cha kawaida",
-      "disabled": "Kimezimwa"
+      "disabled": "Kimezimwa",
+      "onBar": "Kwenye upau wa kijani wa juu",
+      "bar": "Toka"
     },
     "fields": {
       "title": "Visanduku vya kuandika",

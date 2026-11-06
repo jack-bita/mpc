@@ -5,15 +5,19 @@
 // accident. This piece only sets the look. It hands shadcn's button our classes, and the cn() inside it
 // lets ours win wherever the two clash (shadcn's h-8 gives way to our height).
 //
-// Three kinds, by what pressing does:
+// Three kinds for screens, by what pressing does:
 //   main    green, filled: the one action a screen is for (Uza, Hifadhi).
 //   second  blue outline: another action beside it (Rudi, Ghairi).
 //   danger  faded-red outline: an action that takes something away (Batilisha). An outline, not a
 //           fill: it must never shout louder than the screen's main action.
+// And one for the green top bar (UI-1), where none of the three can sit: the green main button
+// vanishes into the green, and the blue outline reads at only 1.74:1 on it.
+//   bar     the main button with a white edge: green on green, so the edge is what shows it.
 // Two heights: big (52 px, the default, sized for a finger at the counter) and normal (44 px).
 //
 // button.test.tsx does the sums on the classes the browser really gets: every kind's text reads at
-// 4.5:1 at rest, on hover and when pressed, on a white screen and on a pale panel.
+// 4.5:1 at rest, on hover and when pressed, on what it sits on: a white screen and a pale panel, or
+// for the bar kind, the green bar.
 import { cva } from "class-variance-authority";
 
 import { Button as ShadcnButton } from "@/components/ui/button";
@@ -21,7 +25,9 @@ import { cn } from "@/lib/utils";
 
 import type { PieceProps } from "./types";
 
-export const BUTTON_KINDS = ["main", "second", "danger"] as const;
+export const BUTTON_KINDS = ["main", "second", "danger", "bar"] as const;
+// The kinds a screen uses, on a white screen or a pale panel. "bar" sits only on the green top bar.
+export const SCREEN_BUTTON_KINDS = ["main", "second", "danger"] as const;
 export const BUTTON_SIZES = ["big", "normal"] as const;
 
 export type ButtonKind = (typeof BUTTON_KINDS)[number];
@@ -70,6 +76,16 @@ const look = cva(
           "hover:bg-destructive/5 hover:text-destructive active:bg-destructive/5",
           "aria-expanded:bg-destructive/5 aria-expanded:text-destructive",
         ],
+        bar: [
+          // The main button's colours and hover, so its white text keeps the same sums: 5.02:1 on the
+          // green, 6.1:1 on hover. Its own green paint, not see-through: what it reads on is known.
+          "bg-primary text-primary-foreground",
+          "hover:bg-[color-mix(in_srgb,var(--primary)_88%,black)]",
+          "active:bg-[color-mix(in_srgb,var(--primary)_80%,black)]",
+          // The white edge is the button's outline on the green: 5.02:1, where WCAG asks 3:1 of the
+          // edge of a control. The focus ring reads --ring, which the top bar sets to white.
+          "border-primary-foreground",
+        ],
       },
       size: {
         // h-(--control-big), not h-control-big: cn() knows this spelling is a height and drops
@@ -103,8 +119,9 @@ export function Button({
   return (
     <ShadcnButton
       // The outlines start from shadcn's outline, not its "destructive": that one is a pink fill with
-      // a faint red focus ring (ring-destructive/20), and both would need undoing.
-      variant={kind === "main" ? "default" : "outline"}
+      // a faint red focus ring (ring-destructive/20), and both would need undoing. The two filled
+      // kinds start from its default, the filled one.
+      variant={kind === "main" || kind === "bar" ? "default" : "outline"}
       className={cn(look({ kind, size }), className)}
       {...props}
     />

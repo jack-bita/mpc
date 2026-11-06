@@ -6,7 +6,7 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { BUTTON_KINDS } from "@/components/design/button";
+import { SCREEN_BUTTON_KINDS } from "@/components/design/button";
 import { TOKENS } from "@/test/look";
 import { render } from "@/test/render";
 
@@ -40,15 +40,29 @@ describe("the design page", () => {
 
   it("shows every kind of button in both sizes, switched off and on a pale panel", () => {
     render(<DesignPage />);
-    // Each kind: big, normal, switched off, and once more on the pale panel.
-    for (const kind of BUTTON_KINDS)
+    // Each screen kind: big, normal, switched off, and once more on the pale panel.
+    for (const kind of SCREEN_BUTTON_KINDS)
       expect(
         screen.getAllByRole("button", { name: t.buttons[kind] }),
       ).toHaveLength(4);
+    // One switched off for each screen kind, and one of the bar kind.
     const switchedOff = screen
       .getAllByRole("button")
       .filter((button) => (button as HTMLButtonElement).disabled);
-    expect(switchedOff).toHaveLength(BUTTON_KINDS.length);
+    expect(switchedOff).toHaveLength(SCREEN_BUTTON_KINDS.length + 1);
+  });
+
+  it("shows the bar kind on the bar's green, with a white focus ring", () => {
+    render(<DesignPage />);
+    // Big, normal and switched off.
+    const onBar = screen.getAllByRole("button", { name: t.buttons.bar });
+    expect(onBar).toHaveLength(3);
+    // The strip they sit on sets --ring to white, as the top bar does (UI-1).
+    const strip = onBar[0]?.parentElement;
+    expect(strip?.classList.contains("bg-primary")).toBe(true);
+    expect(
+      strip?.classList.contains("[--ring:var(--primary-foreground)]"),
+    ).toBe(true);
   });
 
   it("shows a box with a hint, one with an error and one switched off", () => {

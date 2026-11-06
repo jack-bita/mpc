@@ -63,7 +63,9 @@
       "danger": "Void",
       "big": "Big",
       "normal": "Normal",
-      "disabled": "Switched off"
+      "disabled": "Switched off",
+      "onBar": "On the green top bar",
+      "bar": "Log out"
     },
     "fields": {
       "title": "Boxes to type in",

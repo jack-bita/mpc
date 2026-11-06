@@ -16,7 +16,11 @@ import { type ReactNode, useSyncExternalStore } from "react";
 import { useTranslations } from "use-intl";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
-import { Button, BUTTON_KINDS, BUTTON_SIZES } from "@/components/design/button";
+import {
+  Button,
+  BUTTON_SIZES,
+  SCREEN_BUTTON_KINDS,
+} from "@/components/design/button";
 import {
   Card,
   CardContent,
@@ -140,7 +144,7 @@ export default function DesignPage() {
               {t(`buttons.${size}`)}
             </p>
             <div className="flex flex-wrap gap-3">
-              {BUTTON_KINDS.map((kind) => (
+              {SCREEN_BUTTON_KINDS.map((kind) => (
                 <Button key={kind} kind={kind} size={size}>
                   {t(`buttons.${kind}`)}
                 </Button>
@@ -153,7 +157,7 @@ export default function DesignPage() {
             {t("buttons.disabled")}
           </p>
           <div className="flex flex-wrap gap-3">
-            {BUTTON_KINDS.map((kind) => (
+            {SCREEN_BUTTON_KINDS.map((kind) => (
               <Button key={kind} kind={kind} disabled>
                 {t(`buttons.${kind}`)}
               </Button>
@@ -162,11 +166,26 @@ export default function DesignPage() {
         </div>
         {/* The same buttons on a pale panel, where the hover tints were the hardest to keep readable. */}
         <div className="flex flex-wrap gap-3 rounded-lg bg-muted p-4">
-          {BUTTON_KINDS.map((kind) => (
+          {SCREEN_BUTTON_KINDS.map((kind) => (
             <Button key={kind} kind={kind}>
               {t(`buttons.${kind}`)}
             </Button>
           ))}
+        </div>
+        {/* The bar kind, on a strip of the top bar's green, in both sizes and switched off. The strip
+            sets --ring to white, as the top bar does, so Tab shows a white ring here too (UI-1). */}
+        <div className="grid gap-2">
+          <p className="text-sm text-muted-foreground">{t("buttons.onBar")}</p>
+          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-primary p-4 [--ring:var(--primary-foreground)]">
+            {BUTTON_SIZES.map((size) => (
+              <Button key={size} kind="bar" size={size}>
+                {t("buttons.bar")}
+              </Button>
+            ))}
+            <Button kind="bar" size="normal" disabled>
+              {t("buttons.bar")}
+            </Button>
+          </div>
         </div>
       </Section>
 
