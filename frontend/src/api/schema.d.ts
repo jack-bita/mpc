@@ -216,12 +216,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /**
-         * @description The one error shape, as the description shows it: `{"code", "message", "fields", "params"}`.
-         *
-         *     It only describes. The handler builds the shape itself (apps/core/api/errors.py, which says what each
-         *     key holds), so no refusal ever passes through this class.
-         */
         ApiError: {
             code: string;
             message: string;

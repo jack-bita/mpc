@@ -764,7 +764,6 @@
         "schemas": {
             "ApiError": {
                 "type": "object",
-                "description": "The one error shape, as the description shows it: `{\"code\", \"message\", \"fields\", \"params\"}`.\n\nIt only describes. The handler builds the shape itself (apps/core/api/errors.py, which says what each\nkey holds), so no refusal ever passes through this class.",
                 "properties": {
                     "code": {
                         "type": "string"

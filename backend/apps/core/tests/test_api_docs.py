@@ -117,6 +117,9 @@ def test_every_route_refuses_in_the_error_shape(tmp_path: Path) -> None:
 
     # The shape's four keys, each typed as tightly as the handler makes it.
     shape = schema["components"]["schemas"]["ApiError"]
+    # And no note of ours: drf-spectacular would copy the serializer's docstring here, onto the public docs
+    # page, and it is written for the code's readers, not the API's.
+    assert "description" not in shape
     assert set(shape["required"]) == {"code", "message", "fields", "params"}
     assert shape["properties"]["fields"]["additionalProperties"] == {"type": "array", "items": {"type": "string"}}
     assert shape["properties"]["params"]["additionalProperties"] == {

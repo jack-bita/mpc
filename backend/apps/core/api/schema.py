@@ -28,13 +28,11 @@ class ErrorParamField(serializers.JSONField):
     pass
 
 
+# The one error shape, as the description shows it: `{"code", "message", "fields", "params"}`. It only
+# describes: the handler builds the shape itself (apps/core/api/errors.py, which says what each key holds),
+# so no refusal ever passes through this class. A comment, not a docstring: drf-spectacular copies a
+# serializer's docstring into the description, onto the public docs page, and this note is for us.
 class ApiErrorSerializer(serializers.Serializer[Any]):
-    """The one error shape, as the description shows it: `{"code", "message", "fields", "params"}`.
-
-    It only describes. The handler builds the shape itself (apps/core/api/errors.py, which says what each
-    key holds), so no refusal ever passes through this class.
-    """
-
     # The four keys are listed here, not as class attributes as usual: one of them is named "fields", the
     # name a serializer already gives the list of its own fields, and the type checker would see a clash.
     def get_fields(self) -> dict[str, serializers.Field[Any, Any, Any, Any]]:
