@@ -57,7 +57,7 @@ function blanks(sentence: string): string[] {
   return [...sentence.matchAll(/\{(\w+)[},]/g)].map((match) => match[1] ?? "");
 }
 
-// `wait` comes in seconds (pin.locked); people read minutes. Plain numbers, not big.js: a wait is a count
+// `wait` comes in seconds (pin.locked, throttled); people read minutes. Plain numbers, not big.js: a wait is a count
 // of seconds, not money or a quantity (ADR-0024).
 function withMinutes(params: CodeValues): CodeValues {
   const seconds = asSeconds(params.wait);

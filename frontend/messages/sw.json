@@ -132,7 +132,7 @@
     "not_acceptable": "Seva haiwezi kujibu kwa namna hii.",
     "unsupported_media_type": "Seva haikuelewa ombi hili.",
     "parse_error": "Ombi limeharibika njiani. Jaribu tena.",
-    "throttled": "Majaribio mengi mno. Subiri kidogo, kisha ujaribu tena.",
+    "throttled": "Majaribio mengi mno. Jaribu tena baada ya dakika {minutes}.",
     "required": "Jaza sehemu hii.",
     "null": "Jaza sehemu hii.",
     "blank": "Sehemu hii haiwezi kuwa tupu.",

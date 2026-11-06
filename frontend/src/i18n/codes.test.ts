@@ -56,6 +56,16 @@ describe("codeMessage", () => {
     }
   });
 
+  it("tells a throttled person how long to wait, when the server says", () => {
+    // DRF sends `wait` with a throttle when it knows it, in whole seconds.
+    expect(codeMessage(swahili, "throttled", { wait: 45 })).toBe(
+      "Majaribio mengi mno. Jaribu tena baada ya dakika 1.",
+    );
+    expect(codeMessage(swahili, "throttled")).toBe(
+      "Majaribio mengi mno. Subiri kidogo, kisha ujaribu tena.",
+    );
+  });
+
   it("names the code when a sentence lacks any other value", () => {
     // No sentence needs another value today; a later one might, and its code must still be readable.
     const t = wordsFrom({

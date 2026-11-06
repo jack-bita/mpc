@@ -132,7 +132,7 @@
     "not_acceptable": "The server can't answer in this form.",
     "unsupported_media_type": "The server couldn't read this request.",
     "parse_error": "The request was damaged on the way. Try again.",
-    "throttled": "Too many tries. Wait a little, then try again.",
+    "throttled": "Too many tries. Try again in {minutes} min.",
     "required": "Fill in this field.",
     "null": "Fill in this field.",
     "blank": "This field can't be empty.",
