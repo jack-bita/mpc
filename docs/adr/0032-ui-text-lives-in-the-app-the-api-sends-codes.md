@@ -1,9 +1,10 @@
 ---
-status: accepted
+status: superseded
 date: 2026-10-18
 source: "03-architecture.md §2 — AD18"
 standing: decided
 cost-to-change: low
+superseded-by: ADR-0040
 ---
 
 # ADR-0032 · UI text lives in the app; the API sends codes

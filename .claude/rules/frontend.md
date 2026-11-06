@@ -21,8 +21,8 @@ paths:
 ## Numbers and text
 
 - Money and quantities go through `src/lib/decimal.ts` (big.js); round only with `src/lib/rounding.ts`. Both pass `shared/test-vectors/`. No plain `number` arithmetic on money.
-- Money is shown with `Intl.NumberFormat('sw-TZ')`, TZS without decimals; stock as "26 mifuko + 35.5 kg".
-- No visible string literals: every string is a next-intl key in `messages/sw.json` and `en.json`, Swahili first. API error codes map to translated messages.
+- Money is shown with `formatMoney` (`Intl.NumberFormat('sw-TZ')`, TZS without decimals); stock with `formatStock`, in each book's order: "mifuko 26 + kilo 35.5" in Swahili, "26 mifuko + 35.5 kilo" in English (`src/lib/format.ts`).
+- No visible string literals: every string is a use-intl key (`useTranslations()`, ADR-0040) in `messages/sw.json` and `en.json`, Swahili first; a lint rule refuses a word typed into a screen, and `language.test.tsx` opens every page in English. API error codes map to translated messages. Tests render a screen with `src/test/render.tsx`, which gives it the word books.
 
 ## Generated and vendored code
 
