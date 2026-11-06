@@ -41,7 +41,9 @@ const look = cva(
     // Switched off, it looks and acts switched off, however it was switched off. shadcn fades only a
     // button with the real disabled attribute (disabled:opacity-50). One that stays reachable by Tab
     // (focusableWhenDisabled, so a screen reader can still find it) has aria-disabled instead, and
-    // would look ready to press. Base UI marks both with data-disabled.
+    // would look ready to press. Base UI marks both with data-disabled. Faded to half on purpose: the
+    // main button's white then reads at about 2:1, but WCAG asks no contrast of a control that can't be
+    // used, and the fade is what says it can't.
     "data-disabled:pointer-events-none data-disabled:opacity-50",
   ],
   {

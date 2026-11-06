@@ -1,7 +1,8 @@
 // card.tsx — the shop's card: a white panel that groups one thing, like a sale's total (UI-8, ADR-0039).
 //
-// shadcn's card (components/ui/card.tsx) is plain <div>s; this piece sets the look. Its parts, in order:
-// Card > CardHeader (CardTitle, CardDescription) > CardContent > CardFooter.
+// shadcn's card (components/ui/card.tsx) is plain <div>s; this piece sets the look. Inside a Card, its
+// parts sit one under the other: CardHeader (holding CardTitle and CardDescription), then CardContent,
+// then CardFooter.
 import {
   Card as ShadcnCard,
   CardContent as ShadcnCardContent,

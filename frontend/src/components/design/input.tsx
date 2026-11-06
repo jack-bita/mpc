@@ -28,7 +28,9 @@ const look = cva(
     // This class comes later still, and keeps the blue ring on the box you are typing in.
     "aria-invalid:focus-visible:ring-ring",
     // Switched off: the pale panel. shadcn paints it with --input at half strength (bg-input/50), and
-    // --input is now the dark edge colour, so that would be a heavy grey (UI-7).
+    // --input is now the dark edge colour, so that would be a heavy grey (UI-7). shadcn's fade to half
+    // (disabled:opacity-50) stays on purpose: WCAG asks no contrast of a box that can't be used, and the
+    // fade is what says so.
     "disabled:bg-muted",
   ],
   {

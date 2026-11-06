@@ -4,8 +4,9 @@ Every file here comes from `pnpm shadcn add <name>`, in the `base-nova` style of
 They give the behaviour: Base UI (`@base-ui/react`) handles focus, the keyboard and screen readers.
 They are not the shop's look, and screens never import them (ADR-0039).
 
-- **Never edit a file here.** Our look lives in `components/design/`, where one piece of ours wraps
-  each part and sets its colours, sizes and focus ring. To change a part, change our piece.
+- **Never edit shadcn's files here.** Only this README changes, when a part is added. Our look lives
+  in `components/design/`, where one piece of ours wraps each part and sets its colours, sizes and
+  focus ring. To change a part, change our piece.
 - **This README is the folder's header.** shadcn's files carry no header comment of their own, and
   adding one would be an edit.
 - **Prettier skips this folder** (`.prettierignore`), so the files stay byte for byte as shadcn wrote
