@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.28 · 5 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.29 · 6 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, and AD3 ADR-0038 **(v1.16)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.29** (6 Nov 2026, UI-8): §7.2's map shows the `/design` page, which shows every colour, both fonts and every piece of the look, and `test/`, where the tests that keep the look true share one copy of the contrast sums (ADR-0039, 04 v1.42). Marked **(v1.29)**.
 
 **Changes in v1.28** (5 Nov 2026, UI-7): §7.2's map shows `fonts/`, where the two font files and their licences live (ADR-0039, 04 v1.41). Marked **(v1.28)**.
 
@@ -596,7 +598,8 @@ frontend/src/
 │   ├── (counter)/sale/  clock/  drawer/  customers/new/
 │   ├── (office)/products/  prices/  deliveries/  counts/  contacts/  cashup/
 │   │            reports/  staff/  settings/  devices/  flags/
-│   └── print/slip/  print/receipt/      print-only pages
+│   ├── print/slip/  print/receipt/      print-only pages
+│   └── design/               every colour, both fonts and every piece of the look, to check by eye (v1.29)
 ├── features/<module>/        components and hooks per domain module
 ├── offline/                  db.ts (schema + versions), outbox.ts, push.ts, pull.ts,
 │                             effects.ts, search.ts, pin.ts, clock.ts, storage.ts
@@ -605,6 +608,7 @@ frontend/src/
 ├── components/ui/            shadcn components
 ├── components/design/        our own pieces in the shop's look; screens use only these (v1.27)
 ├── fonts/                    the two font files and their licences, loaded by fonts.ts (v1.28)
+├── test/                     helpers for tests only: look.ts reads globals.css and does the contrast sums (v1.29)
 └── i18n/                     next-intl setup; the messages themselves are in frontend/messages/ (§4) (v1.2)
 ```
 
