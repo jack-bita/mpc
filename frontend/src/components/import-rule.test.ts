@@ -44,6 +44,16 @@ describe("the import rule", () => {
     SLOW,
   );
 
+  it.each(["page.jsx", "page.js", "page.mjs", "page.mts", "page.cts"])(
+    "refuses them in a screen written as %s",
+    async (file) => {
+      // tsconfig.json allows JavaScript, and Next.js routes a page.jsx as readily as a page.tsx. Not
+      // .cjs: Next's rule sets don't lint it, and a CommonJS file can't be a page (eslint.config.mjs).
+      expect(await rulesFor(`../app/sale/${file}`, RAW_BUTTON)).toContain(RULE);
+    },
+    SLOW,
+  );
+
   it(
     "refuses them by any path, not only by the @/ name",
     async () => {

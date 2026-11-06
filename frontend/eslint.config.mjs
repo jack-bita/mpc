@@ -42,7 +42,10 @@ export default defineConfig([
     // eslint-plugin-import comes with Next's rule sets, which also teach it the "@/" path. Its rule
     // follows the file an import really points to, so every spelling is caught: "@/components/ui/button"
     // and "../../components/ui/button" alike. A rule that only read the import's text would miss some.
-    files: ["src/**/*.{ts,tsx}"],
+    // Every kind of file a screen can be written in: tsconfig.json allows JavaScript, and Next.js routes
+    // a page.jsx as readily as a page.tsx. The same list as Next's rule sets, which load the import plugin
+    // only for these: .cjs isn't in it, and a CommonJS file can't be a Next.js page anyway.
+    files: ["src/**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
     ignores: ["src/components/design/**", "src/components/ui/**"],
     rules: {
       "import/no-restricted-paths": [
