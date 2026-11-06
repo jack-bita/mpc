@@ -1,15 +1,16 @@
 """config/urls.py — the root URL list: which path goes to which app.
 
 Each app keeps its own routes in `apps/<app>/api/urls.py`; this file mounts them (03 §5.10), and names
-the answers for an address no route matches and for a crash.
+the answers for an address no route matches, a request Django finds suspicious, and a crash.
 The Django admin, the creator's back room, sits at /admin/; later it gets its own address, admin.<domain>.
 """
 
 from django.contrib import admin
 from django.urls import URLPattern, URLResolver, include, path
 
-# An address no route matches, and a crash: under /api/, they answer in the API's one error shape too
-# (apps/core/api/errors.py); elsewhere, Django's own pages.
+# An address no route matches, a request Django finds suspicious, and a crash: under /api/, they answer in
+# the API's one error shape too (apps/core/api/errors.py); elsewhere, Django's own pages.
+handler400 = "apps.core.api.errors.bad_request_page"
 handler404 = "apps.core.api.errors.not_found_page"
 handler500 = "apps.core.api.errors.server_error_page"
 

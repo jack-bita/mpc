@@ -121,6 +121,7 @@
   },
   "errors": {
     "invalid": "Baadhi ya sehemu si sahihi. Angalia zilizowekwa alama.",
+    "bad_request": "Seva imekataa ombi hili.",
     "version_conflict": "Mtu mwingine amebadilisha hiki wakati huo huo. Fungua upya, kisha ujaribu tena.",
     "server_error": "Seva ina hitilafu. Jaribu tena baadaye.",
     "not_found": "Hakijapatikana.",

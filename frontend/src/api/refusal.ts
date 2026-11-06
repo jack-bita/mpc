@@ -34,11 +34,12 @@ export async function answerOf<D>(call: Promise<Answer<D>>): Promise<D> {
   throw new ApiRefusal(response.status, asApiError(error));
 }
 
-// openapi-fetch hands back whatever the body held. From Django under /api/ that is always the one shape,
-// a crash included (server_error_page). But a refusal can come from something in front of Django: Caddy
-// answers 502 with a page of HTML while the server restarts, during a deploy or as the demo wakes up.
-// Such a body has no code to translate, so it reads as `server_error`, which the screen shows as "the
-// server has a problem".
+// openapi-fetch hands back whatever the body held. From Django under /api/ that is the one shape, a crash
+// and a request Django finds suspicious included (apps/core/api/errors.py); only DEBUG's own page on a
+// laptop isn't. But a refusal can come from the proxy in front of Django, Caddy on the real server and
+// Render's on the demo, which answers 502 or 503 with a page of HTML while the server restarts, during a
+// deploy or as the demo wakes up. Such a body has no code to translate, so it reads as `server_error`,
+// which the screen shows as "the server has a problem".
 function asApiError(body: unknown): ApiError {
   if (isApiError(body)) return body;
   return {

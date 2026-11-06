@@ -18,6 +18,7 @@ import { ApiRefusal } from "./refusal";
 const CODES_THE_API_SENDS = [
   // The one shape's own codes, and what every route can answer (apps/core/api/errors.py).
   "invalid",
+  "bad_request",
   "version_conflict",
   "server_error",
   "not_found",

@@ -121,6 +121,7 @@
   },
   "errors": {
     "invalid": "Some fields are wrong. Check the marked ones.",
+    "bad_request": "The server refused this request.",
     "version_conflict": "Someone else changed this at the same time. Reload it, then try again.",
     "server_error": "The server has a problem. Try again later.",
     "not_found": "It wasn't found.",
