@@ -49,6 +49,13 @@ describe("the card", () => {
     expect(footer).not.toContain("bg-muted/50");
   });
 
+  it("keeps a two-line title close together", () => {
+    renderCard();
+    expect(screen.getByText("Jumla").className.split(/\s+/)).toContain(
+      "leading-snug",
+    );
+  });
+
   it("shows every part", () => {
     renderCard();
     for (const text of ["Jumla", "Mauzo ya leo", "41,000", "Imehifadhiwa"])

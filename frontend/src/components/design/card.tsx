@@ -44,7 +44,9 @@ export function CardTitle({
 }: Props<typeof ShadcnCardTitle>) {
   return (
     <ShadcnCardTitle
-      className={cn("text-lg font-semibold", className)}
+      // leading-snug again: cn() lets text-lg, which carries its own line height, drop shadcn's, and a
+      // long Swahili title on two lines would spread apart.
+      className={cn("text-lg leading-snug font-semibold", className)}
       {...props}
     />
   );
