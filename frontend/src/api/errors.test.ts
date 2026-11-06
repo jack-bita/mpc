@@ -2,9 +2,9 @@
 // shown in the shop's words (UI-2, ADR-0040).
 //
 // CODES_THE_API_SENDS is kept by hand: some codes are built as the server runs (`f"{secret}.own"`,
-// apps/people/services.py), so no test can find them all in the backend. It holds every code a route
-// can send today, and those the UI-2 card names for the next screens. Codes that only stop a bug, like
-// device.key_not_hashed, are left to the general sentence. A card that adds a code adds it here, with
+// apps/people/services.py), so no test can find them all in the backend. It holds every code a route,
+// or a model rule behind it, can send today, and those of the PIN screen to come (PPL-4). Codes that
+// only stop a bug, like device.key_not_hashed, are left to the general sentence. A card that adds a code adds it here, with
 // its two sentences; the second test fails on a sentence whose code left the list.
 import { createTranslator } from "use-intl/core";
 import { describe, expect, it } from "vitest";
@@ -48,6 +48,9 @@ const CODES_THE_API_SENDS = [
   "unique",
   "not_a_list",
   "empty",
+  "max_string_length",
+  "null_characters_not_allowed",
+  "surrogate_characters_not_allowed",
   // Ids the app makes for new rows (03 §5.10).
   "id.taken",
   "id.not_uuid7",
@@ -64,6 +67,8 @@ const CODES_THE_API_SENDS = [
   "pin.own",
   "pin.superuser_only",
   "pin.more_keys",
+  "pin.not_four_digits",
+  "pin.too_easy",
   // A temporary password (AUTH-6), and the password checker's codes.
   "password.own",
   "password.superuser_only",

@@ -149,6 +149,9 @@
     "unique": "This is already taken.",
     "not_a_list": "A list is needed here.",
     "empty": "This list can't be empty.",
+    "max_string_length": "This number is too long.",
+    "null_characters_not_allowed": "This text has a character that isn't allowed.",
+    "surrogate_characters_not_allowed": "This text has a character that isn't allowed.",
     "id": {
       "taken": "This record's id is already in use. Try again.",
       "not_uuid7": "This record's id is wrong. Update the app."
@@ -187,7 +190,9 @@
       "locked": "Too many wrong PINs. Try again in {minutes} min.",
       "own": "You can't set your own PIN here.",
       "superuser_only": "Only the system admin can set this person's PIN.",
-      "more_keys": "This person has permissions you don't, so you can't set their PIN."
+      "more_keys": "This person has permissions you don't, so you can't set their PIN.",
+      "not_four_digits": "A PIN is four digits.",
+      "too_easy": "This PIN is too easy to guess, like 1234 or 0000. Choose another."
     },
     "password_too_short": "This password is too short.",
     "password_too_common": "This password is too common. Choose another.",

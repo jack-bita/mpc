@@ -149,6 +149,9 @@
     "unique": "Hiki tayari kipo.",
     "not_a_list": "Orodha inahitajika hapa.",
     "empty": "Orodha hii haiwezi kuwa tupu.",
+    "max_string_length": "Namba ni ndefu mno.",
+    "null_characters_not_allowed": "Maandishi yana herufi isiyoruhusiwa.",
+    "surrogate_characters_not_allowed": "Maandishi yana herufi isiyoruhusiwa.",
     "id": {
       "taken": "Namba ya utambulisho imeshatumika. Jaribu tena.",
       "not_uuid7": "Namba ya utambulisho si sahihi. Sasisha programu."
@@ -187,7 +190,9 @@
       "locked": "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika {minutes}.",
       "own": "Huwezi kuweka PIN yako mwenyewe hapa.",
       "superuser_only": "PIN ya mtu huyu inawekwa na msimamizi wa mfumo tu.",
-      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kuweka PIN yake."
+      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kuweka PIN yake.",
+      "not_four_digits": "PIN iwe tarakimu nne.",
+      "too_easy": "PIN hii ni rahisi mno kukisia, kama 1234 au 0000. Chagua nyingine."
     },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",
