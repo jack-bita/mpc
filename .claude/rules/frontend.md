@@ -11,6 +11,7 @@ paths:
 
 - `output: 'export'`: plain files, no Node server in production.
 - Every page is a client component. No server components at runtime, no server actions, no middleware, no route handlers, no image optimisation (`images.unoptimized`).
+- A file that asks use-intl for words (`useTranslations`) starts with `"use client"`. The area layouts are built as server components, and a part they import without the line stops `next build` at the first page in an area ("createContext is not a function"); no Vitest test sees it, so `use-client.test.ts` reads the files (UI-1).
 - No dynamic `[id]` pages for records: use a query string (`/sales/view?id=…`).
 
 ## Two data paths — the main rule
@@ -21,8 +22,8 @@ paths:
 ## Numbers and text
 
 - Money and quantities go through `src/lib/decimal.ts` (big.js); round only with `src/lib/rounding.ts`. Both pass `shared/test-vectors/`. No plain `number` arithmetic on money.
-- Money is shown with `Intl.NumberFormat('sw-TZ')`, TZS without decimals; stock as "26 mifuko + 35.5 kg".
-- No visible string literals: every string is a next-intl key in `messages/sw.json` and `en.json`, Swahili first. API error codes map to translated messages.
+- Money is shown with `formatMoney` (`Intl.NumberFormat('sw-TZ')`, TZS without decimals); stock with `formatStock`, in each book's order: "mifuko 26 + kilo 35.5" in Swahili, "26 mifuko + 35.5 kilo" in English (`src/lib/format.ts`).
+- No visible string literals: every string is a use-intl key (`useTranslations()`, ADR-0040) in `messages/sw.json` and `en.json`, Swahili first; lint rules refuse a word typed into a screen or into `aria-label`, `aria-description`, `placeholder`, `title` or `alt`, and `language.test.tsx` opens every page in English. API error codes map to translated messages. Tests render a screen with `src/test/render.tsx`, which gives it the word books.
 
 ## Generated and vendored code
 
@@ -31,10 +32,11 @@ paths:
 
 ## The look (ADR-0039)
 
-- Screens use only our pieces in `src/components/design/` (Button, Field, Input, Label, Card, Alert, SideBand). Only `components/design/` imports `components/ui/`: a lint rule refuses it anywhere else (`import-rule.test.ts`).
+- Screens use only our pieces in `src/components/design/` (Button, Field, Input, Label, Card, Alert, SideBand, TopBar). Only `components/design/` imports `components/ui/`: a lint rule refuses it anywhere else (`import-rule.test.ts`).
 - A new shadcn part gets a piece of ours in `components/design/`, with its test, before a screen uses it. Read what `shadcn add` changed: if it writes greys or chart and sidebar tokens into `globals.css`, `tokens.test.ts` fails — remove them.
 - Colours, corners and heights come from the tokens in `globals.css`, never a value of a screen's own. Heights are written `h-(--control-big)`, a spelling `cn()` knows is a height.
-- Focus rings at full strength (`ring-ring`, never `ring-ring/50`); on green, the ring is white (UI-1).
+- Focus rings at full strength (`ring-ring`, never `ring-ring/50`); on green, the ring is white: anything green uses `ON_GREEN` from `top-bar.tsx`, which sets `--ring`, and only the button's `bar` kind sits on it (UI-1).
+- Counter and office screens live in `src/app/(counter)/` and `src/app/(office)/`, whose layouts wrap them in `AppFrame` (the top bar and the page's one `<main>`): a screen there doesn't write its own `<main>`.
 
 ## Screens
 

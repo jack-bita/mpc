@@ -4,21 +4,34 @@
   },
   "home": {
     "title": "Karibu",
-    "version": "Toleo"
+    "version": "Toleo {version}"
   },
   "update": {
     "ready": "Toleo jipya liko tayari",
     "apply": "Sasisha"
   },
+  "offline": {
+    "title": "Inahitaji mtandao",
+    "description": "Ukurasa huu unafanya kazi ukiwa mtandaoni tu."
+  },
+  "language": {
+    "switch": "English"
+  },
+  "topBar": {
+    "place": "{shop} · {side}"
+  },
+  "stock": {
+    "part": "{unit} {count}"
+  },
   "slip": {
-    "saleNumber": "Namba ya mauzo",
-    "date": "Tarehe",
-    "time": "Saa",
+    "saleNumber": "Namba ya mauzo: {number}",
+    "date": "Tarehe: {date}",
+    "time": "Saa: {time}",
     "item": "Bidhaa",
     "quantity": "Idadi",
     "unitPrice": "@",
     "price": "Bei",
-    "total": "Jumla",
+    "total": "Jumla: {amount}",
     "thanks": "Asante, karibu tena",
     "print": "Chapisha"
   },
@@ -60,7 +73,9 @@
       "danger": "Batilisha",
       "big": "Kikubwa",
       "normal": "Cha kawaida",
-      "disabled": "Kimezimwa"
+      "disabled": "Kimezimwa",
+      "onBar": "Kwenye upau wa kijani wa juu",
+      "bar": "Toka"
     },
     "fields": {
       "title": "Visanduku vya kuandika",
@@ -85,12 +100,20 @@
       "infoTitle": "Inahitaji mtandao",
       "infoDescription": "Ukurasa huu unafanya kazi ukiwa mtandaoni tu.",
       "dangerTitle": "Mauzo hayajahifadhiwa",
-      "dangerDescription": "Bei iko chini ya kiwango cha chini. Muulize meneja."
+      "dangerDescription": "Bei iko chini ya kiwango cha chini. Muulize meneja.",
+      "live": "Ujumbe halisi wa ofisini: hujitokeza mtandao ukikatika. Zima mtandao kwenye kivinjari kuuona."
     },
     "sideBands": {
-      "title": "Utepe wa upande",
       "blue": "Bluu",
       "striped": "Mistari nyeupe na nyekundu"
+    },
+    "topBar": {
+      "title": "Upau wa juu",
+      "sampleShop": "MPC",
+      "sampleSides": {
+        "blue": "Dawa",
+        "striped": "Vyakula"
+      }
     }
   }
 }

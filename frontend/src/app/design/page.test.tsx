@@ -3,13 +3,13 @@
 //
 // What the pieces look like is checked by eye on the page itself; these tests check that nothing is
 // missing from it, so a new colour or a new piece can't hide from that check.
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { BUTTON_KINDS } from "@/components/design/button";
+import { SCREEN_BUTTON_KINDS } from "@/components/design/button";
 import { TOKENS } from "@/test/look";
+import { render } from "@/test/render";
 
-import en from "../../../messages/en.json";
 import sw from "../../../messages/sw.json";
 
 import DesignPage from "./page";
@@ -22,14 +22,6 @@ function strings(value: unknown): string[] {
   if (value !== null && typeof value === "object")
     return Object.values(value).flatMap(strings);
   return [];
-}
-
-/** Every key under `value`, as a path like "fields.phoneError". */
-function keys(value: unknown, prefix = ""): string[] {
-  if (value === null || typeof value !== "object") return [prefix];
-  return Object.entries(value).flatMap(([key, inner]) =>
-    keys(inner, prefix ? `${prefix}.${key}` : key),
-  );
 }
 
 describe("the design page", () => {
@@ -48,15 +40,29 @@ describe("the design page", () => {
 
   it("shows every kind of button in both sizes, switched off and on a pale panel", () => {
     render(<DesignPage />);
-    // Each kind: big, normal, switched off, and once more on the pale panel.
-    for (const kind of BUTTON_KINDS)
+    // Each screen kind: big, normal, switched off, and once more on the pale panel.
+    for (const kind of SCREEN_BUTTON_KINDS)
       expect(
         screen.getAllByRole("button", { name: t.buttons[kind] }),
       ).toHaveLength(4);
+    // One switched off for each screen kind, and one of the bar kind.
     const switchedOff = screen
       .getAllByRole("button")
       .filter((button) => (button as HTMLButtonElement).disabled);
-    expect(switchedOff).toHaveLength(BUTTON_KINDS.length);
+    expect(switchedOff).toHaveLength(SCREEN_BUTTON_KINDS.length + 1);
+  });
+
+  it("shows the bar kind on the bar's green, with a white focus ring", () => {
+    render(<DesignPage />);
+    // Big, normal and switched off.
+    const onBar = screen.getAllByRole("button", { name: t.buttons.bar });
+    expect(onBar).toHaveLength(3);
+    // The strip they sit on sets --ring to white, as the top bar does (UI-1).
+    const strip = onBar[0]?.parentElement;
+    expect(strip?.classList.contains("bg-primary")).toBe(true);
+    expect(
+      strip?.classList.contains("[--ring:var(--primary-foreground)]"),
+    ).toBe(true);
   });
 
   it("shows a box with a hint, one with an error and one switched off", () => {
@@ -73,10 +79,11 @@ describe("the design page", () => {
     expect(screen.getByLabelText(t.fields.search).tagName).toBe("INPUT");
   });
 
-  it("shows both messages, a card and both side bands", () => {
+  it("shows both messages, a card and the top bar with both side bands", () => {
     const { container } = render(<DesignPage />);
-    expect(screen.getByRole("status").textContent).toContain(
-      t.alerts.infoTitle,
+    // Two status boxes: the info sample, and the live banner, empty while online.
+    expect(screen.getAllByRole("status").map((box) => box.textContent)).toEqual(
+      [expect.stringContaining(t.alerts.infoTitle), ""],
     );
     expect(screen.getByRole("alert").textContent).toContain(
       t.alerts.dangerTitle,
@@ -86,6 +93,14 @@ describe("the design page", () => {
       band.getAttribute("data-look"),
     );
     expect(looks).toEqual(["blue", "striped"]);
+    // Each band under a real top bar that names its sample side in words.
+    const bars = [...container.querySelectorAll("[data-look]")].map(
+      (band) => band.closest("header")?.textContent,
+    );
+    expect(bars).toEqual([
+      expect.stringContaining(`MPC · ${t.topBar.sampleSides.blue}`),
+      expect.stringContaining(`MPC · ${t.topBar.sampleSides.striped}`),
+    ]);
   });
 
   it.each(["default", "second"])(
@@ -100,9 +115,15 @@ describe("the design page", () => {
   );
 
   it("takes all its words from the message files", () => {
-    // ADR-0032. A token's name, like --primary, is code and is shown as it is.
+    // ADR-0040. A token's name, like --primary, is code and is shown as it is. Besides the page's own
+    // words, the top bars show the language button's word and their sample places, "MPC · Dawa".
     const { container } = render(<DesignPage />);
-    const allowed = new Set(strings(t));
+    const places = Object.values(t.topBar.sampleSides).map((side) =>
+      sw.topBar.place
+        .replace("{shop}", t.topBar.sampleShop)
+        .replace("{side}", side),
+    );
+    const allowed = new Set([...strings(t), sw.language.switch, ...places]);
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
     const strays: string[] = [];
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -111,10 +132,5 @@ describe("the design page", () => {
         strays.push(text);
     }
     expect(strays).toEqual([]);
-  });
-
-  it("has every word in English too", () => {
-    // The page shows Swahili until UI-1's English switch; the English must be ready when it comes.
-    expect(keys(en.design)).toEqual(keys(sw.design));
   });
 });

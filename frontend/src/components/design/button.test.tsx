@@ -9,13 +9,27 @@ import { describe, expect, it, vi } from "vitest";
 
 import { colour, contrast, mix, TOKENS } from "@/test/look";
 
-import { Button, BUTTON_KINDS, BUTTON_SIZES } from "./button";
+import {
+  Button,
+  BUTTON_KINDS,
+  BUTTON_SIZES,
+  type ButtonKind,
+  SCREEN_BUTTON_KINDS,
+} from "./button";
 
-// What a button can sit on: a white screen and a pale panel.
-const BEHIND = [
+// What a screen's button can sit on: a white screen and a pale panel.
+const ON_A_SCREEN = [
   ["white", colour("--background")],
   ["pale panel", colour("--muted")],
 ] as const;
+
+// What each kind sits on: the bar kind sits only on the green top bar (UI-1).
+const BEHIND: Record<ButtonKind, readonly (readonly [string, string])[]> = {
+  main: ON_A_SCREEN,
+  second: ON_A_SCREEN,
+  danger: ON_A_SCREEN,
+  bar: [["the green bar", colour("--primary")]],
+};
 
 /** The classes of one button, as the browser gets them. */
 function classesOf(props: Parameters<typeof Button>[0] = {}): string[] {
@@ -86,8 +100,11 @@ function colourStates(classes: string[]) {
   return states;
 }
 
-/** Every state's text reads at 4.5:1 on what it is painted on, on white and on a pale panel. */
-function expectReadable(classes: string[]) {
+/** Every state's text reads at 4.5:1 on what it is painted on, over everything it can sit on. */
+function expectReadable(
+  classes: string[],
+  behindAll: readonly (readonly [string, string])[] = ON_A_SCREEN,
+) {
   const states = colourStates(classes);
   const rest = states.get("");
   expect(rest?.text, "a colour for the text at rest").toHaveLength(1);
@@ -96,7 +113,7 @@ function expectReadable(classes: string[]) {
     const texts = own.text.length ? own.text : (rest?.text ?? []);
     const backgrounds = own.bg.length ? own.bg : (rest?.bg ?? []);
     for (const text of texts)
-      for (const [where, behind] of BEHIND)
+      for (const [where, behind] of behindAll)
         // No background at all: the button is see-through, and the screen shows.
         for (const background of backgrounds.length ? backgrounds : [null]) {
           const painted =
@@ -124,6 +141,7 @@ const OWN_TEXT = {
   main: "primary-foreground",
   second: "secondary",
   danger: "destructive",
+  bar: "primary-foreground",
 } as const;
 
 function expectOwnText(kind: (typeof BUTTON_KINDS)[number], classes: string[]) {
@@ -141,9 +159,9 @@ function backgroundsOf(classes: string[]): string[] {
 
 describe("the button's colours", () => {
   it.each(BUTTON_KINDS)(
-    "%s: the text reads at 4.5:1 in every state, on white and on a pale panel",
+    "%s: the text reads at 4.5:1 in every state, on what it sits on",
     (kind) => {
-      expectReadable(classesOf({ kind }));
+      expectReadable(classesOf({ kind }), BEHIND[kind]);
     },
   );
 
@@ -155,9 +173,9 @@ describe("the button's colours", () => {
     expectOwnText(kind, classesOf({ kind }));
   });
 
-  it("main darkens and never fades", () => {
+  it.each(["main", "bar"] as const)("%s darkens and never fades", (kind) => {
     // White on green faded to 90% reads at only 4.17:1 (UI-7). A fade is the bg-primary/N form.
-    const classes = classesOf({ kind: "main" });
+    const classes = classesOf({ kind });
     expect(
       backgroundsOf(classes).filter((value) => value.includes("/")),
     ).toEqual([]);
@@ -178,6 +196,17 @@ describe("the button's colours", () => {
       for (const share of tints) expect(Number(share)).toBeLessThanOrEqual(5);
     },
   );
+
+  it("bar: its white edge stands out from the green", () => {
+    // Green on green, the edge is all that shows the button: WCAG asks 3:1 of a control's edge.
+    // shadcn's own edge (border-transparent) must have given way to ours.
+    const classes = classesOf({ kind: "bar" });
+    expect(classes).toContain("border-primary-foreground");
+    expect(classes).not.toContain("border-transparent");
+    expect(
+      contrast(colour("--primary-foreground"), colour("--primary")),
+    ).toBeGreaterThanOrEqual(3);
+  });
 
   it.each(BUTTON_KINDS)("%s: the focus ring is at full strength", (kind) => {
     // shadcn's ring-ring/50 reads at only 2.57:1 on white; its danger ring is a faint red.
@@ -250,7 +279,8 @@ describe("the button's shape", () => {
   it("has the kinds and sizes the card names", () => {
     // Screens and /design use these names; a rename must change the card too.
     expect(BUTTON_SIZES).toEqual(["big", "normal"]);
-    expect(BUTTON_KINDS).toEqual(["main", "second", "danger"]);
+    expect(BUTTON_KINDS).toEqual(["main", "second", "danger", "bar"]);
+    expect(SCREEN_BUTTON_KINDS).toEqual(["main", "second", "danger"]);
   });
 
   it("keeps a screen's own classes", () => {

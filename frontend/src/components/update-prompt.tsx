@@ -7,16 +7,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "use-intl";
 
+import { Button } from "@/components/design/button";
+import { ON_GREEN } from "@/components/design/top-bar";
+import { cn } from "@/lib/utils";
 import {
   type ApplyUpdate,
   registerServiceWorker,
 } from "@/offline/service-worker";
 
-// Screen text comes from the message files (ADR-0032). UI-1 swaps this import for next-intl.
-import sw from "../../messages/sw.json";
-
 export function UpdatePrompt() {
+  // The words come from the open book, Swahili or English (ADR-0040).
+  const t = useTranslations("update");
   // null while there is no new version; the switch function once one is ready.
   const [apply, setApply] = useState<ApplyUpdate | null>(null);
 
@@ -28,27 +31,32 @@ export function UpdatePrompt() {
     void registerServiceWorker((next) => setApply(() => next));
   }, []);
 
-  // No new version: show nothing.
-  if (!apply) return null;
-
   return (
-    // role="status": a screen reader reads the bar out when it appears, without pulling the person away
-    // from what they are doing. Fixed to the bottom of the screen, above the page.
+    // Always on the page, hidden from the eye (sr-only) until a new version is ready. Its words sit in a
+    // role="status" box, which a screen reader says when its text changes, once it has finished what
+    // it was saying. A box that appears with its text already in it may not be said at all (alert.tsx),
+    // so the box is here from the start, empty, and the words arrive in it.
+    // Once ready: fixed to the bottom of the screen, above the page, on the shop's green (ON_GREEN, which
+    // also makes the focus ring white, as the blue one reads at only 1.74:1 on green).
     // print:hidden: a new version can be waiting while a slip prints, and this bar sits above every
     // page, so without it the customer's paper would carry it (SPIKE-2).
     <div
-      role="status"
-      className="fixed inset-x-0 bottom-0 flex items-center justify-between gap-4 bg-primary p-4 text-primary-foreground print:hidden"
+      className={cn(
+        apply
+          ? "fixed inset-x-0 bottom-0 flex items-center justify-between gap-4 p-4"
+          : "sr-only",
+        apply && ON_GREEN,
+        "print:hidden",
+      )}
     >
-      <span>{sw.update.ready}</span>
-      {/* A big tap target for phones (03 §7.3): at least 48 pixels high. */}
-      <button
-        type="button"
-        onClick={apply}
-        className="min-h-12 rounded-md bg-background px-5 font-semibold text-foreground"
-      >
-        {sw.update.apply}
-      </button>
+      <p role="status">{apply ? t("ready") : null}</p>
+      {/* The bar kind, the only button that can sit on the green (button.tsx). Big: 52 px high, a
+          finger's tap target on a phone (03 §7.3). */}
+      {apply ? (
+        <Button kind="bar" onClick={apply}>
+          {t("apply")}
+        </Button>
+      ) : null}
     </div>
   );
 }

@@ -12,6 +12,11 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import prettier from "eslint-config-prettier/flat";
 
+// The attributes that hold words a person reads or hears, for the text rule below. A selector: ESLint
+// finds the parts of the code it names, as CSS finds the parts of a page.
+const WORD_ATTRIBUTE =
+  "JSXAttribute[name.name=/^(aria-label|aria-description|placeholder|title|alt)$/]";
+
 export default defineConfig([
   // React, hooks, accessibility and Next.js rules, with the page-speed ones as errors.
   ...nextVitals,
@@ -62,6 +67,40 @@ export default defineConfig([
             },
           ],
         },
+      ],
+    },
+  },
+  {
+    // No word typed straight into a screen: every word a person reads comes from the books in messages/,
+    // so the English switch changes all of them (ADR-0040). text-rule.test.ts checks both rules here.
+    //
+    // jsx-no-literals catches text between tags, <p>Karibu</p>, and text put there as code, {"Karibu"}
+    // or {`Toleo ${version}`}. ignoreProps: it leaves attributes alone, as nearly all of them are class
+    // names, never words.
+    //
+    // The attributes that do hold words are caught by name: what a person reads (placeholder, title,
+    // alt) or hears from a screen reader (aria-label, aria-description). A word typed into one, as text,
+    // code or a template, is refused. An empty one, alt="" on a picture that only decorates, is fine.
+    //
+    // Not tests, which write the words they expect to see, nor shadcn's parts, which we never edit.
+    files: ["src/**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
+    ignores: ["src/**/*.test.*", "src/components/ui/**"],
+    rules: {
+      "react/jsx-no-literals": [
+        "error",
+        { noStrings: true, ignoreProps: true },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        ...[
+          `${WORD_ATTRIBUTE} > Literal[value=/\\S/]`,
+          `${WORD_ATTRIBUTE} > JSXExpressionContainer > Literal[value=/\\S/]`,
+          `${WORD_ATTRIBUTE} > JSXExpressionContainer > TemplateLiteral`,
+        ].map((selector) => ({
+          selector,
+          message:
+            'Words come from the books in messages/: use t("…") (ADR-0040).',
+        })),
       ],
     },
   },

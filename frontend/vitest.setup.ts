@@ -8,4 +8,7 @@ import { afterEach } from "vitest";
 
 afterEach(() => {
   cleanup();
+  // The language a test chose is kept in the browser's storage (src/i18n/language.ts): forget it, so
+  // the next test opens in Swahili, as a new device does. Tests that run in plain Node have no storage.
+  if (typeof window !== "undefined") window.localStorage.clear();
 });

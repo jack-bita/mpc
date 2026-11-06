@@ -4,21 +4,34 @@
   },
   "home": {
     "title": "Welcome",
-    "version": "Version"
+    "version": "Version {version}"
   },
   "update": {
     "ready": "A new version is ready",
     "apply": "Update"
   },
+  "offline": {
+    "title": "Needs the internet",
+    "description": "This page works only when online."
+  },
+  "language": {
+    "switch": "Kiswahili"
+  },
+  "topBar": {
+    "place": "{shop} · {side}"
+  },
+  "stock": {
+    "part": "{count} {unit}"
+  },
   "slip": {
-    "saleNumber": "Sale number",
-    "date": "Date",
-    "time": "Time",
+    "saleNumber": "Sale number: {number}",
+    "date": "Date: {date}",
+    "time": "Time: {time}",
     "item": "Item",
     "quantity": "Quantity",
     "unitPrice": "@",
     "price": "Price",
-    "total": "Total",
+    "total": "Total: {amount}",
     "thanks": "Thank you, welcome again",
     "print": "Print"
   },
@@ -50,7 +63,7 @@
       "title": "Fonts",
       "default": "The default font",
       "second": "The second font, easy to read",
-      "sample": "Maize bran: 26 bags + 35.5 kilos",
+      "sample": "Maize bran: 26 mifuko + 35.5 kilo",
       "digits": "TSh 1,234,560 · TSh 8,888,111"
     },
     "buttons": {
@@ -60,7 +73,9 @@
       "danger": "Void",
       "big": "Big",
       "normal": "Normal",
-      "disabled": "Switched off"
+      "disabled": "Switched off",
+      "onBar": "On the green top bar",
+      "bar": "Log out"
     },
     "fields": {
       "title": "Boxes to type in",
@@ -85,12 +100,20 @@
       "infoTitle": "Needs the internet",
       "infoDescription": "This page works only when online.",
       "dangerTitle": "The sale wasn't saved",
-      "dangerDescription": "The price is below the lowest allowed. Ask the manager."
+      "dangerDescription": "The price is below the lowest allowed. Ask the manager.",
+      "live": "The office's real message: it appears when the network drops. Switch the browser's network off to see it."
     },
     "sideBands": {
-      "title": "Side band",
       "blue": "Blue",
       "striped": "White and red stripes"
+    },
+    "topBar": {
+      "title": "Top bar",
+      "sampleShop": "MPC",
+      "sampleSides": {
+        "blue": "Dawa",
+        "striped": "Vyakula"
+      }
     }
   }
 }

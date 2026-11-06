@@ -4,8 +4,10 @@
 // shop's printer in one click? The spike's second pull request removes it, with these tests.
 // How the slip looks on paper can't be checked here: jsdom has no printer and lays nothing out,
 // so that check is Chrome's print preview and the shop's printer (docs/spikes/02-printing.md).
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { render } from "@/test/render";
 
 import SlipPage from "./page";
 

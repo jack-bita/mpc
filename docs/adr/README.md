@@ -42,7 +42,7 @@ An ADR is a short record of one big decision: the context, what we chose, what i
 | [0029](0029-demo-is-separate-with-fake-data-only.md) | The demo is a separate deployment with fake data only | AD15 | decided | low |
 | [0030](0030-foods-hand-off-cashier-only-offline.md) | Foods hand-off: through the server with a network, cashier-only without | AD16 | confirmed | low |
 | [0031](0031-web-address-fixed-before-first-device.md) | The web address is fixed before the first device is registered | AD17 | decided | high |
-| [0032](0032-ui-text-lives-in-the-app-the-api-sends-codes.md) | UI text lives in the app; the API sends codes | AD18 | decided | low |
+| [0032](0032-ui-text-lives-in-the-app-the-api-sends-codes.md) | UI text lives in the app; the API sends codes · *superseded by [0040](0040-ui-text-lives-in-the-app-through-use-intl.md)* | AD18 | decided | low |
 | [0033](0033-one-website-attendance-first.md) | One website with everything, built one part after another: attendance first | BP7 | confirmed | medium |
 | [0034](0034-no-open-source-licence-yet.md) | No open-source licence yet | BP16 | default | low |
 | [0035](0035-a-modular-monolith-with-control-beside-core.md) | A modular monolith, with control beside core | AD1 (REPO-6) | confirmed | high |
@@ -50,3 +50,4 @@ An ADR is a short record of one big decision: the context, what we chose, what i
 | [0037](0037-tenancy-in-one-place-with-named-doors.md) | Tenancy is enforced in one place, with named doors; row-level security comes later | AUTH-2 | confirmed | medium |
 | [0038](0038-passwords-without-email-reset-face-to-face.md) | One web address, session cookies, and django-allauth for passwords; a lost password is reset face to face | AD3 (AUTH-3) | confirmed | medium |
 | [0039](0039-the-apps-look-is-one-layer-over-shadcn.md) | The app's look is one layer over shadcn, with its fonts inside the app | UI-7 | confirmed | low |
+| [0040](0040-ui-text-lives-in-the-app-through-use-intl.md) | UI text lives in the app, through use-intl; the API sends codes | AD18 (UI-1) | confirmed | low |

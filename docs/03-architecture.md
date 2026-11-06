@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.29 · 6 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.30 · 6 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
-**Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, and AD3 ADR-0038 **(v1.16)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+**Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.30** (6 Nov 2026, UI-1): choices by Jack, made while building UI-1 (04 v1.43). AD18 is now ADR-0040, which supersedes ADR-0032: the screens get their words through use-intl, next-intl's own core, as next-intl 4.x brings a code compiler and a file watcher that a static app with no language in its address never uses (§3, §7.2, §7.4). In Swahili, stock reads word first, "mifuko 26 + kilo 35.5", and in English number first; each word book holds its order, and the unit words are the shop's own (§7.4). §7.2's map shows the app's own parts in `components/`, each area's layout, `offline/network.ts` and the new test helpers. Marked **(v1.30)**.
 
 **Changes in v1.29** (6 Nov 2026, UI-8): §7.2's map shows the `/design` page, which shows every colour, both fonts and every piece of the look, and `test/`, where the tests that keep the look true share one copy of the contrast sums (ADR-0039, 04 v1.42). §7.3 names the oldest browsers the look works in. Marked **(v1.29)**.
 
@@ -183,8 +185,8 @@ Power cuts switch off the router, and after a while mobile data and the devices 
 **AD17 — The app's web address is fixed before the first device is registered.** ✚
 *Why:* each device's offline data, service worker and device key belong to that address. Changing it later means emptying every outbox and registering every device again. *Cost:* high after go-live. The product name and domain must be chosen before R1 goes live.
 
-**AD18 — UI text lives in the app; the API sends codes.**
-Swahili first with next-intl, messages in `sw.json` and `en.json`. API errors carry a code and parameters that the app translates.
+**AD18 — UI text lives in the app; the API sends codes.** (ADR-0040 **(v1.30)**)
+Swahili first with use-intl, next-intl's own core **(v1.30)**, messages in `sw.json` and `en.json`. API errors carry a code and parameters that the app translates.
 *Why:* one place for translations, and it works offline. *Cost:* low.
 
 ## 3. Stack
@@ -210,7 +212,7 @@ Swahili first with next-intl, messages in `sw.json` and `en.json`. API errors ca
 | Offline | Dexie 4 (+ dexie-react-hooks), Serwist service worker, Web Locks | §6 |
 | Online data | TanStack Query + openapi-fetch (typed client from the schema) | Office screens |
 | Forms | React Hook Form + Zod | Typed form validation |
-| Translations | next-intl v4, client side | Swahili first (AD18) |
+| Translations | use-intl v4 (next-intl's core), client side **(v1.30)** | Swahili first (AD18) |
 | Decimals, IDs, search | big.js, `uuid` (v7), MiniSearch | Small, focused libraries |
 | Frontend tests | Vitest + Testing Library + fake-indexeddb; Playwright | Unit, component and offline end-to-end tests |
 | JS packages | pnpm | Fast and strict |
@@ -598,18 +600,23 @@ frontend/src/
 │   ├── (counter)/sale/  clock/  drawer/  customers/new/
 │   ├── (office)/products/  prices/  deliveries/  counts/  contacts/  cashup/
 │   │            reports/  staff/  settings/  devices/  flags/
+│   │            each area's layout.tsx puts its screens in AppFrame; the office one adds the offline banner (v1.30)
 │   ├── print/slip/  print/receipt/      print-only pages
 │   └── design/               every colour, both fonts and every piece of the look, to check by eye (v1.29)
 ├── features/<module>/        components and hooks per domain module
 ├── offline/                  db.ts (schema + versions), outbox.ts, push.ts, pull.ts,
-│                             effects.ts, search.ts, pin.ts, clock.ts, storage.ts
+│                             effects.ts, search.ts, pin.ts, clock.ts, storage.ts, network.ts (online or not) (v1.30)
 ├── api/                      schema.d.ts (generated — never edited), client.ts
 ├── lib/                      decimal.ts, rounding.ts, units.ts, time.ts, ids.ts, format.ts, permissions.ts
+├── components/               the app's own parts, built from our pieces: app-frame.tsx (the top bar and the page's <main>),
+│                             language-button.tsx, offline-banner.tsx, update-prompt.tsx (v1.30)
 ├── components/ui/            shadcn components
 ├── components/design/        our own pieces in the shop's look; screens use only these (v1.27)
 ├── fonts/                    the two font files and their licences, loaded by fonts.ts (v1.28)
-├── test/                     helpers for tests only: look.ts reads globals.css and does the contrast sums (v1.29)
-└── i18n/                     next-intl setup; the messages themselves are in frontend/messages/ (§4) (v1.2)
+├── test/                     helpers for tests only: look.ts reads globals.css and does the contrast sums (v1.29);
+│                             render.tsx gives a screen the word books, language.ts finds Swahili left in English,
+│                             vectors.ts reads the answer books in shared/test-vectors/ (v1.30)
+└── i18n/                     the word books' setup and the language switch; the messages themselves are in frontend/messages/ (§4) (v1.2, v1.30)
 ```
 
 - A static build can't pre-build pages for records that don't exist yet, so record pages use a query string (`/sales/view?id=…`).
@@ -625,9 +632,9 @@ frontend/src/
 
 ### 7.4 Language
 
-- next-intl v4 on the client: the language follows the logged-in person (no language in the URL). Swahili by default, English switch.
+- use-intl v4 on the client, next-intl's own core: the language follows the logged-in person (no language in the URL). Swahili by default, English switch, on the top bar. Until UI-9 the browser keeps the choice (ADR-0040) **(v1.30)**.
 - The font follows the person too: `default` or `second`, and only the person changes it (UI-9, ADR-0039) **(v1.27)**.
-- Money with `Intl.NumberFormat('sw-TZ')`, TZS without decimals; stock as "26 mifuko + 35.5 kg".
+- Money with `Intl.NumberFormat('sw-TZ')`, TZS without decimals; stock in selling units, in each language's order: Swahili word first, "mifuko 26 + kilo 35.5", English number first, "26 mifuko + 35.5 kilo". The unit words are the shop's own, from its catalog, so only the order changes **(v1.30)**.
 - API error codes map to translated messages. Jack reviews the Swahili (02 §21).
 
 ### 7.5 Printing [R1 receipts, R2 slips]
