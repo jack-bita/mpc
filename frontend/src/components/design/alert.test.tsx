@@ -51,14 +51,24 @@ describe("the message box", () => {
     expect(faded).toEqual([]);
   });
 
-  it("paints danger in the faded red", () => {
+  it("paints danger in the faded red, its description too", () => {
+    // Whole class names, not text inside the class string: "text-destructive" is also part of the
+    // description's rule, and a substring match would pass with the title's own red gone.
     renderAlert("danger");
-    expect(screen.getByRole("alert").className).toContain("border-destructive");
-    expect(screen.getByRole("alert").className).toContain("text-destructive");
+    const classes = screen.getByRole("alert").className.split(/\s+/);
+    expect(classes).toContain("border-destructive");
+    expect(classes).toContain("text-destructive");
+    // The description sets its own colour (alert.tsx), so the red reaches it only through this rule.
+    expect(classes).toContain(
+      "*:data-[slot=alert-description]:text-destructive",
+    );
   });
 
-  it("paints info with a blue edge", () => {
+  it("paints info with a blue edge and the normal text colour", () => {
     renderAlert("info");
-    expect(screen.getByRole("status").className).toContain("border-secondary");
+    const classes = screen.getByRole("status").className.split(/\s+/);
+    expect(classes).toContain("border-secondary");
+    expect(classes).toContain("text-foreground");
+    expect(classes).not.toContain("text-destructive");
   });
 });
