@@ -3,13 +3,16 @@
 //
 // The real registration is swapped for a fake (vi.mock), so these tests check only what the bar shows
 // and does. When a version counts as ready is checked in src/offline/service-worker.test.ts.
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { setLanguage } from "@/i18n/language";
 import {
   type ApplyUpdate,
   registerServiceWorker,
 } from "@/offline/service-worker";
+import { swahiliIn } from "@/test/language";
+import { render } from "@/test/render";
 
 import { UpdatePrompt } from "./update-prompt";
 
@@ -41,6 +44,17 @@ describe("UpdatePrompt", () => {
     // The words themselves, not the message keys: a wrong translation fails here too.
     expect(screen.getByText("Toleo jipya liko tayari")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sasisha" })).toBeTruthy();
+  });
+
+  it("speaks English when English is chosen", () => {
+    // The bar sits outside every page, so the check on every page (language.test.tsx) doesn't see it.
+    setLanguage("en");
+    render(<UpdatePrompt />);
+    newVersionReady(vi.fn());
+
+    expect(screen.getByText("A new version is ready")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Update" })).toBeTruthy();
+    expect(swahiliIn(document.body)).toEqual([]);
   });
 
   it("stays off the paper when a page is printed", () => {

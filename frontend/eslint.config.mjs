@@ -65,6 +65,25 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // No word typed straight into a screen: every word a person reads comes from the books in messages/,
+    // so the English switch changes all of them (ADR-0032). text-rule.test.ts checks it.
+    //
+    // It catches text between tags, <p>Karibu</p>, and text put there as code, {"Karibu"} or
+    // {`Toleo ${version}`}. ignoreProps: it leaves attributes alone, as nearly all of them are class
+    // names, never words. That leaves a gap: a word typed into aria-label or placeholder passes here,
+    // and only the English check on each page (src/i18n/language.test.tsx) finds it.
+    //
+    // Not tests, which write the words they expect to see, nor shadcn's parts, which we never edit.
+    files: ["src/**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
+    ignores: ["src/**/*.test.*", "src/components/ui/**"],
+    rules: {
+      "react/jsx-no-literals": [
+        "error",
+        { noStrings: true, ignoreProps: true },
+      ],
+    },
+  },
   // Last of the rule sets, so it wins: switch off every rule about layout. Prettier owns layout,
   // and two tools with opinions on spacing would only fight.
   prettier,

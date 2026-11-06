@@ -4,21 +4,21 @@
   },
   "home": {
     "title": "Karibu",
-    "version": "Toleo"
+    "version": "Toleo {version}"
   },
   "update": {
     "ready": "Toleo jipya liko tayari",
     "apply": "Sasisha"
   },
   "slip": {
-    "saleNumber": "Namba ya mauzo",
-    "date": "Tarehe",
-    "time": "Saa",
+    "saleNumber": "Namba ya mauzo: {number}",
+    "date": "Tarehe: {date}",
+    "time": "Saa: {time}",
     "item": "Bidhaa",
     "quantity": "Idadi",
     "unitPrice": "@",
     "price": "Bei",
-    "total": "Jumla",
+    "total": "Jumla: {amount}",
     "thanks": "Asante, karibu tena",
     "print": "Chapisha"
   },

@@ -9,12 +9,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTranslations } from "use-intl";
 
 import { pageSizeFor } from "./page-size";
-
-// The text lives in the message files, not here (ADR-0032). UI-1 swaps this direct import
-// for next-intl's useTranslations().
-import sw from "../../../../messages/sw.json";
 
 // A made-up sale: no real customers, products or prices ever enter the repo (rule 10). In the
 // real app these come from the sale itself, so they are data, not screen text for the message
@@ -48,6 +45,10 @@ const CELL = "py-[1mm] align-top";
 const NUMBER_CELL = `${CELL} pl-[3mm] text-right whitespace-nowrap`;
 
 export default function SlipPage() {
+  // The words come from the open book, Swahili or English (ADR-0032). The shop's name is in the
+  // "app" part of the book, the slip's own words in its "slip" part.
+  const app = useTranslations("app");
+  const t = useTranslations("slip");
   // The slip on screen, measured just before printing.
   const slipRef = useRef<HTMLDivElement>(null);
 
@@ -108,20 +109,21 @@ export default function SlipPage() {
         ref={slipRef}
         className="w-[80mm] bg-white px-[4mm] py-[2mm] text-black"
       >
-        <h1 className="text-center text-2xl font-bold">{sw.app.title}</h1>
-        {/* One string (a template literal), so each line is one piece of text, as on the home page. */}
-        <p>{`${sw.slip.saleNumber}: ${SALE.number}`}</p>
-        <p>{`${sw.slip.date}: ${SALE.date}`}</p>
-        <p>{`${sw.slip.time}: ${SALE.time}`}</p>
+        <h1 className="text-center text-2xl font-bold">{app("title")}</h1>
+        {/* The book places each value ("Namba ya mauzo: {number}"), so each line is one piece of
+            text, as on the home page, and each language picks its own word order. */}
+        <p>{t("saleNumber", { number: SALE.number })}</p>
+        <p>{t("date", { date: SALE.date })}</p>
+        <p>{t("time", { time: SALE.time })}</p>
         {/* Idadi × @ (the price for each one) = Bei (the line's amount), as on printed receipts. */}
         <table className="my-2 w-full">
           <thead>
             {/* Lines in black, not the theme's pale line colour, which prints faint (as the text). */}
             <tr className="border-b border-black">
-              <th className={`${CELL} text-left`}>{sw.slip.item}</th>
-              <th className={NUMBER_CELL}>{sw.slip.quantity}</th>
-              <th className={NUMBER_CELL}>{sw.slip.unitPrice}</th>
-              <th className={NUMBER_CELL}>{sw.slip.price}</th>
+              <th className={`${CELL} text-left`}>{t("item")}</th>
+              <th className={NUMBER_CELL}>{t("quantity")}</th>
+              <th className={NUMBER_CELL}>{t("unitPrice")}</th>
+              <th className={NUMBER_CELL}>{t("price")}</th>
             </tr>
           </thead>
           <tbody>
@@ -143,9 +145,9 @@ export default function SlipPage() {
         {/* <strong>: the total is what the customer pays, so it stands out (the card's Build line).
             The solid line above it closes the list of items. */}
         <p className="border-t border-black pt-[1mm] text-xl">
-          <strong>{`${sw.slip.total}: ${SALE.total}`}</strong>
+          <strong>{t("total", { amount: SALE.total })}</strong>
         </p>
-        <p className="mt-2 text-center">{sw.slip.thanks}</p>
+        <p className="mt-2 text-center">{t("thanks")}</p>
       </div>
       {/* Screen only: on paper the button would only waste paper. print:hidden is
           Tailwind's short way to write @media print { display: none }. */}
@@ -154,7 +156,7 @@ export default function SlipPage() {
         onClick={() => window.print()}
         className="mt-4 min-h-12 rounded-md bg-primary px-5 font-semibold text-primary-foreground print:hidden"
       >
-        {sw.slip.print}
+        {t("print")}
       </button>
     </main>
   );

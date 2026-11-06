@@ -7,16 +7,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "use-intl";
 
 import {
   type ApplyUpdate,
   registerServiceWorker,
 } from "@/offline/service-worker";
 
-// Screen text comes from the message files (ADR-0032). UI-1 swaps this import for next-intl.
-import sw from "../../messages/sw.json";
-
 export function UpdatePrompt() {
+  // The words come from the open book, Swahili or English (ADR-0032).
+  const t = useTranslations("update");
   // null while there is no new version; the switch function once one is ready.
   const [apply, setApply] = useState<ApplyUpdate | null>(null);
 
@@ -40,14 +40,14 @@ export function UpdatePrompt() {
       role="status"
       className="fixed inset-x-0 bottom-0 flex items-center justify-between gap-4 bg-primary p-4 text-primary-foreground print:hidden"
     >
-      <span>{sw.update.ready}</span>
+      <span>{t("ready")}</span>
       {/* A big tap target for phones (03 §7.3): at least 48 pixels high. */}
       <button
         type="button"
         onClick={apply}
         className="min-h-12 rounded-md bg-background px-5 font-semibold text-foreground"
       >
-        {sw.update.apply}
+        {t("apply")}
       </button>
     </div>
   );

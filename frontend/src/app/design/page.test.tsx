@@ -3,13 +3,13 @@
 //
 // What the pieces look like is checked by eye on the page itself; these tests check that nothing is
 // missing from it, so a new colour or a new piece can't hide from that check.
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { BUTTON_KINDS } from "@/components/design/button";
 import { TOKENS } from "@/test/look";
+import { render } from "@/test/render";
 
-import en from "../../../messages/en.json";
 import sw from "../../../messages/sw.json";
 
 import DesignPage from "./page";
@@ -22,14 +22,6 @@ function strings(value: unknown): string[] {
   if (value !== null && typeof value === "object")
     return Object.values(value).flatMap(strings);
   return [];
-}
-
-/** Every key under `value`, as a path like "fields.phoneError". */
-function keys(value: unknown, prefix = ""): string[] {
-  if (value === null || typeof value !== "object") return [prefix];
-  return Object.entries(value).flatMap(([key, inner]) =>
-    keys(inner, prefix ? `${prefix}.${key}` : key),
-  );
 }
 
 describe("the design page", () => {
@@ -111,10 +103,5 @@ describe("the design page", () => {
         strays.push(text);
     }
     expect(strays).toEqual([]);
-  });
-
-  it("has every word in English too", () => {
-    // The page shows Swahili until UI-1's English switch; the English must be ready when it comes.
-    expect(keys(en.design)).toEqual(keys(sw.design));
   });
 });

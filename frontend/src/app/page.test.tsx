@@ -1,10 +1,12 @@
 // page.test.tsx — the home page greets the user in Swahili and shows the app's version.
 //
 // The first Vitest test: it proves the test setup works end to end (TypeScript and JSX,
-// the JSON message files, jsdom, Testing Library). Later cards (REPO-4, OPS-1) check for
-// this same word in the real browser.
-import { render, screen } from "@testing-library/react";
+// the word books, jsdom, Testing Library). Later cards (REPO-4, OPS-1) check for
+// this same word in the real browser. The English switch is checked in src/i18n/language.test.tsx.
+import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
+import { render } from "@/test/render";
 
 import HomePage from "./page";
 

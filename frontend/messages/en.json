@@ -4,21 +4,21 @@
   },
   "home": {
     "title": "Welcome",
-    "version": "Version"
+    "version": "Version {version}"
   },
   "update": {
     "ready": "A new version is ready",
     "apply": "Update"
   },
   "slip": {
-    "saleNumber": "Sale number",
-    "date": "Date",
-    "time": "Time",
+    "saleNumber": "Sale number: {number}",
+    "date": "Date: {date}",
+    "time": "Time: {time}",
     "item": "Item",
     "quantity": "Quantity",
     "unitPrice": "@",
     "price": "Price",
-    "total": "Total",
+    "total": "Total: {amount}",
     "thanks": "Thank you, welcome again",
     "print": "Print"
   },
