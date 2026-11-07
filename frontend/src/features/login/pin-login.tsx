@@ -47,8 +47,9 @@ export function PinLogin({
   const login = useMutation({
     mutationFn: (sent: { staff: string; pin: string }) =>
       answerOf(api.POST("/api/auth/pin-login/", { body: sent })),
-    // Waited for: the keys stay off until the store has forgotten the last person and `me` has answered
-    // for this one, so nothing typed meanwhile sends a second PIN.
+    // Waited for: the keys stay off until the store has forgotten the last person, so nothing typed
+    // meanwhile sends a second PIN. The forgetting empties `me`, and the home page then says to wait
+    // (Subiri kidogo…) until it answers for this person.
     onSuccess: () => forgetTheLastPerson(store),
     // Let go of the moment no screen holds it, not after TanStack's 5 minutes: a wrong PIN may be someone's
     // real one, typed on a coworker's tile (UI-4's review).

@@ -92,7 +92,8 @@
     "welcome": "Karibu, {name}",
     "switch": "Badilisha mtu",
     "logout": "Toka",
-    "leaving": "Unatoka…"
+    "leaving": "Unatoka…",
+    "waiting": "Subiri kidogo…"
   },
   "stock": {
     "part": "{unit} {count}"

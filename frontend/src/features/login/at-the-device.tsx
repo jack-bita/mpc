@@ -114,6 +114,9 @@ export function AtTheDevice({
   // here: while leaving, or with nobody, there is nothing to lock.
   useIdleLock(here?.idle_minutes, leave);
 
+  // The status line's words: leaving, or waiting for `me` with nothing to show yet; else nothing.
+  const status = leaving ? t("leaving") : me.isPending ? t("waiting") : null;
+
   function whatShows() {
     // While the logout is on its way: neither the person nor the tiles yet, only the status line below. A
     // PIN login sent meanwhile could be ended by her logout, if it landed after his login.
@@ -168,9 +171,10 @@ export function AtTheDevice({
     >
       {/* role="status": a screen reader says its words as they change. Always on the page, empty and hidden
           from the eye (sr-only) while there is nothing to say: a status line that comes with its words in it
-          often goes unsaid (NVDA, JAWS), as the offline banner's comment says (UI-4's review). */}
-      <p role="status" className={leaving ? "text-lg" : "sr-only"}>
-        {leaving ? t("leaving") : null}
+          often goes unsaid (NVDA, JAWS), as the offline banner's comment says (UI-4's review). It says the
+          laptop is logging out, or to wait while it asks who is here, as it opens and after each login. */}
+      <p role="status" className={status ? "text-lg" : "sr-only"}>
+        {status}
       </p>
       {whatShows()}
       {children}

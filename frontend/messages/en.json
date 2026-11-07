@@ -92,7 +92,8 @@
     "welcome": "Welcome, {name}",
     "switch": "Switch person",
     "logout": "Log out",
-    "leaving": "Logging out…"
+    "leaving": "Logging out…",
+    "waiting": "One moment…"
   },
   "stock": {
     "part": "{count} {unit}"

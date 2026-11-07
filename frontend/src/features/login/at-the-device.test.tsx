@@ -298,6 +298,19 @@ describe("leaving the laptop", () => {
     }
   });
 
+  it("says to wait while it asks who is here, in both languages", async () => {
+    // A slow 3G answer, as the app opens and after each login: a blank screen would look broken.
+    saveDevice(DAWA_LAPTOP);
+    answer("GET", ME, () => new Promise<Response>(() => {}));
+    const { unmount } = render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    expect(screen.getByText("Subiri kidogo…")).toBeDefined();
+    unmount();
+    setLanguage("en");
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    expect(screen.getByText("One moment…")).toBeDefined();
+  });
+
   it("shows neither button while nobody is logged in", async () => {
     theLaptop(null);
     render(<AtTheDevice device={DAWA_LAPTOP} />);
