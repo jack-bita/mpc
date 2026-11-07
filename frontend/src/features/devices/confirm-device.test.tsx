@@ -148,8 +148,8 @@ describe("Sajili kifaa", () => {
       ),
     ).toBeDefined();
     // The network is back; the first send had reached the server after all, which answers the
-    // repeat with the device it made (CreateOnceMixin).
-    answer("POST", DEVICES, { status: 200, body: MADE });
+    // repeat with the device it made, as a create: 201 (CreateOnceMixin, apps/core/api/base.py).
+    answer("POST", DEVICES, { status: 201, body: MADE });
     send();
 
     expect(

@@ -238,7 +238,7 @@ describe("the device list", () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(unblock));
   });
 
-  it("says when someone else renamed it meanwhile, and asks the list again", async () => {
+  it("says when someone else renamed it meanwhile, and the next try sends the new version", async () => {
     listAnswers(LAPTOP);
     answer(
       "PATCH",
@@ -249,6 +249,8 @@ describe("the device list", () => {
 
     const laptop = await card("Laptop Dawa");
     fireEvent.click(laptop.getByRole("button", { name: "Badilisha jina" }));
+    // Meanwhile, on another phone, someone renames it: the server now holds version 2.
+    listAnswers({ ...LAPTOP, name: "Laptop ya Neema", version: 2 });
     fireEvent.click(laptop.getByRole("button", { name: "Hifadhi" }));
 
     expect(
@@ -256,9 +258,16 @@ describe("the device list", () => {
         "Mtu mwingine amebadilisha hiki wakati huo huo. Fungua upya, kisha ujaribu tena.",
       ),
     ).toBeDefined();
-    // Asked again, so the next try sends the new version.
+    // The list is asked again, and shows the other person's name.
     await vi.waitFor(() =>
       expect(sent.filter((request) => request.method === "GET").length).toBe(2),
+    );
+    await laptop.findByText("Laptop ya Neema");
+
+    // The next try carries the version the list now holds, so it can pass.
+    fireEvent.click(laptop.getByRole("button", { name: "Hifadhi" }));
+    await vi.waitFor(async () =>
+      expect(await lastChange()).toEqual({ name: "Laptop Dawa", version: 2 }),
     );
   });
 

@@ -196,18 +196,26 @@ describe("Sajili kifaa hiki", () => {
   });
 
   it("asks the device's check for a CSRF token first when it has none", async () => {
-    // A tap faster than the app's first answer, on a slow network.
+    // A tap faster than the app's first answer, on a slow network. The device's check brings the
+    // cookie, as the server's answer does (DeviceMeView): here the fake server sets it as it answers.
     document.cookie = "csrftoken=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    answer("GET", ME, () => {
+      document.cookie = "csrftoken=fr3sh";
+      return Response.json(
+        { code: "not_authenticated", message: "", fields: {}, params: {} },
+        { status: 401 },
+      );
+    });
     answer("POST", PAIRING, codeAnswer("K7QM4RXT"));
     render(<RegisterThisDevice />);
 
     getACode();
     await screen.findByText("K7QM-4RXT");
 
-    expect(sent.map((request) => request.method)).toEqual(
-      expect.arrayContaining(["GET", "POST"]),
-    );
     expect(sent[0]?.url.endsWith(ME)).toBe(true);
+    // The token the check brought goes with the start.
+    const start = sent.find((request) => request.method === "POST");
+    expect(start?.headers.get("X-CSRFToken")).toBe("fr3sh");
   });
 
   it("shows a registered device its name, and no way to get a code", () => {
