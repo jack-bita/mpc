@@ -6,7 +6,8 @@ The app asks this after any login, and each time it opens: `GET /api/auth/me/`.
     the session                                   the answer
     a PIN's badge                                 200: person, job, shop, device, home side, permissions per side,
                                                   and the minutes it lasts unused
-    a password, on a person's own phone           200: the same, with no device, no home side and no minutes
+    a password, on a person's own phone           200: the same, with no device and no home side, and the shop's
+                                                  minutes, for a shared laptop's screen
     on a temporary password, either way           200, saying so, though the office routes stay closed
     a suspended person, a blocked device,
     a copied badge                                403, each with its code
@@ -239,9 +240,14 @@ def test_me_keeps_the_idle_minutes_its_session_began_with(asha: StaffMember, lap
     assert logged_in(asha, laptop_key).get(ME).data["idle_minutes"] == 5
 
 
-def test_me_has_no_idle_minutes_for_a_password(asha: StaffMember) -> None:
-    # A manager's own phone isn't shared, so it has no idle lock of the screen's: its session lasts as Django's do.
-    assert on_a_phone(asha).get(ME).data["idle_minutes"] is None
+def test_me_gives_a_password_the_shops_idle_minutes(asha: StaffMember, shop_a: Shop) -> None:
+    # A password names no device (ADR-0038), so the server can't tell a manager's own phone from the shop's shared
+    # laptop. The laptop locks its screen after the shop's minutes, whoever logged in there and however; a phone that
+    # is only the person's own never shows that screen. The session itself lasts as Django's do (UI-4's review).
+    with shop_context(shop_a):
+        Setting.objects.create(shop=shop_a, key=IDLE_MINUTES.key, value="5", effective_from=date(2020, 1, 1))
+
+    assert on_a_phone(asha).get(ME).data["idle_minutes"] == 5
 
 
 def test_me_tells_about_the_temporary_password(asha: StaffMember, laptop_key: str, give_role: GiveRole) -> None:

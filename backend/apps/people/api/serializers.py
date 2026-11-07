@@ -192,10 +192,11 @@ class WhoIsHereSerializer(serializers.Serializer[Any]):
     device = MeDeviceSerializer(allow_null=True)
     home_side = MeSideSerializer(allow_null=True)
     must_change_password = serializers.BooleanField()
-    # How long a PIN's session lasts unused, in minutes; empty for a password. Selling uses the device's key, not the
-    # session, so it never pushes the server's idle time forward: the screen keeps a timer of its own, and locks when
-    # the badge ends (UI-4).
-    idle_minutes = serializers.IntegerField(allow_null=True)
+    # How long a shared device's screen may sit unused, in minutes: a PIN's badge's own, or for a password, the shop's
+    # setting. Selling uses the device's key, not the session, so it never pushes the server's idle time forward: the
+    # screen keeps a lock of its own, as long as the badge lasts (UI-4). A phone that is only the person's own never
+    # shows that screen.
+    idle_minutes = serializers.IntegerField()
     permissions = MePermissionsSerializer(source="*")
 
     def to_internal_value(self, data: Any) -> Any:

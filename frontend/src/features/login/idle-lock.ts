@@ -17,8 +17,8 @@ import { useEffect, useEffectEvent } from "react";
 export const IDLE_CHECK_EVERY = 10 * 1000;
 
 /**
- * Calls `onIdle` once nobody has tapped or pressed a key for `minutes`. No minutes, no lock: a password on
- * a person's own phone, which isn't shared, has none (`me`, AUTH-4). Once more only after the next use.
+ * Calls `onIdle` once nobody has tapped or pressed a key for `minutes`. No minutes, no lock: nobody is
+ * here, or they are leaving. Once more only after the next use.
  */
 export function useIdleLock(
   minutes: number | null | undefined,

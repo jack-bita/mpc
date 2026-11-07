@@ -187,7 +187,7 @@ class WhoIsHere:
     device: Device | None
     home_side: Side | None
     must_change_password: bool
-    idle_minutes: int | None
+    idle_minutes: int
     whole_shop: list[str]
     sides: list[SideKeys]
 
@@ -195,7 +195,8 @@ class WhoIsHere:
 def who_is_here(staff: StaffMember, *, device_id: str | None, idle_minutes: int | None) -> WhoIsHere:
     """Everything the app needs to know about who is logged in here (03 §5.10). `device_id`: the one a PIN's badge
     names; None for a password on a person's own phone. `idle_minutes`: how long that badge lasts unused, which the
-    session knows (pin_session_idle_minutes); None for a password. The person's shop must be open."""
+    session knows (pin_session_idle_minutes); None for a password, which gets the shop's setting today. The person's
+    shop must be open."""
     device = None
     if device_id is not None:
         device = Device.objects.select_related("home_side").filter(pk=device_id).first()
@@ -211,7 +212,10 @@ def who_is_here(staff: StaffMember, *, device_id: str | None, idle_minutes: int 
         device=device,
         home_side=None if device is None else device.home_side,
         must_change_password=staff.user.must_change_password,
-        idle_minutes=idle_minutes,
+        # A PIN's badge: its own minutes. A password: the shop's setting today. A password names no device (ADR-0038),
+        # so the server can't tell a person's own phone from the shop's shared laptop, and the laptop locks its screen
+        # by these minutes, whoever logged in there and however (UI-4's review).
+        idle_minutes=idle_minutes if idle_minutes is not None else idle_lock_minutes(staff.shop),
         whole_shop=sorted(held.on(None)),
         sides=[SideKeys(side=side, permissions=sorted(held.on(side.pk))) for side in sides],
     )

@@ -1465,8 +1465,7 @@
                         "type": "boolean"
                     },
                     "idle_minutes": {
-                        "type": "integer",
-                        "nullable": true
+                        "type": "integer"
                     },
                     "permissions": {
                         "$ref": "#/components/schemas/MePermissions"

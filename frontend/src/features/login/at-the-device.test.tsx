@@ -264,6 +264,27 @@ describe("leaving the laptop", () => {
     expect(screen.queryByText("Huna ruhusa ya kufanya hili.")).toBeNull();
   });
 
+  it("logs out a password's session on the shared laptop after the idle minutes too", async () => {
+    // A manager logged in with a password at the Dawa laptop, as UI-3's hand test did through the Console:
+    // `me` names no device for a password (ADR-0038), but the laptop is shared, and locks the same.
+    const manager: WhoIsHere = { ...NEEMA, device: null, home_side: null };
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      theLaptop(manager);
+      render(<AtTheDevice device={DAWA_LAPTOP} />);
+      await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 10 * 1000);
+
+      expect(
+        await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+      ).toBeDefined();
+      expect(logouts()).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("shows neither button while nobody is logged in", async () => {
     theLaptop(null);
     render(<AtTheDevice device={DAWA_LAPTOP} />);

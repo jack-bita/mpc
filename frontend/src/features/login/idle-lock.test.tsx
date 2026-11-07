@@ -72,7 +72,7 @@ describe("the idle lock", () => {
     expect(idle).toHaveBeenCalledOnce();
   });
 
-  it("never locks without idle minutes: a password on a person's own phone", () => {
+  it("never locks without idle minutes: nobody is here", () => {
     const idle = vi.fn();
     render(<Locked minutes={null} onIdle={idle} />);
 
