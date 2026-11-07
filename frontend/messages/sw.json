@@ -4,8 +4,7 @@
   },
   "home": {
     "title": "Karibu",
-    "version": "Toleo {version}",
-    "thisDevice": "{device} · {shop}"
+    "version": "Toleo {version}"
   },
   "update": {
     "ready": "Toleo jipya liko tayari",
@@ -89,7 +88,8 @@
     "pin": {
       "typePin": "Andika PIN yako",
       "back": "Rudi"
-    }
+    },
+    "welcome": "Karibu, {name}"
   },
   "stock": {
     "part": "{unit} {count}"

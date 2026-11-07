@@ -35,3 +35,15 @@ export function useWhoIsHere() {
 export function sidesWhere(me: WhoIsHere, key: string): SideKeys[] {
   return me.permissions.sides.filter((side) => side.permissions.includes(key));
 }
+
+/** The side a person works on at this device, for the top bar (UI-4): the device's home side if they
+ * hold a key there, or else the first side they hold one on; none if they hold none. */
+export function sideAt(
+  me: WhoIsHere,
+  homeSideId: string,
+): SideKeys | undefined {
+  const sides = me.permissions.sides;
+  // A Vyakula seller at the Dawa laptop sells Vyakula's goods: the bar says where she works, so nobody
+  // has to guess which side a sale will go to.
+  return sides.find((side) => side.id === homeSideId) ?? sides[0];
+}

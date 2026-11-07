@@ -4,8 +4,7 @@
   },
   "home": {
     "title": "Welcome",
-    "version": "Version {version}",
-    "thisDevice": "{device} · {shop}"
+    "version": "Version {version}"
   },
   "update": {
     "ready": "A new version is ready",
@@ -89,7 +88,8 @@
     "pin": {
       "typePin": "Type your PIN",
       "back": "Back"
-    }
+    },
+    "welcome": "Welcome, {name}"
   },
   "stock": {
     "part": "{count} {unit}"
