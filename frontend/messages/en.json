@@ -4,7 +4,8 @@
   },
   "home": {
     "title": "Welcome",
-    "version": "Version {version}"
+    "version": "Version {version}",
+    "thisDevice": "{device} · {shop}"
   },
   "update": {
     "ready": "A new version is ready",
@@ -26,6 +27,20 @@
       "which": "{device} · {shop}",
       "ask": "Ask a manager to unblock it. The work on this device isn't lost.",
       "tryAgain": "Try again"
+    },
+    "register": {
+      "title": "Register this device",
+      "intro": "This device isn't registered with a shop yet. Get a code, then give it to a manager to type on their phone.",
+      "start": "Get a code",
+      "giveCode": "Give this code to a manager",
+      "where": "The manager types it on their phone, on the Devices page.",
+      "timeLeft": "The code expires in {time}",
+      "waiting": "Waiting for the manager…",
+      "expired": "This code has expired.",
+      "newCode": "Get a new code",
+      "done": "This device is registered",
+      "which": "Its name is {device}, on the {side} side of {shop}.",
+      "continue": "Continue"
     }
   },
   "stock": {

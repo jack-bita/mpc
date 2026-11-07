@@ -4,7 +4,8 @@
   },
   "home": {
     "title": "Karibu",
-    "version": "Toleo {version}"
+    "version": "Toleo {version}",
+    "thisDevice": "{device} · {shop}"
   },
   "update": {
     "ready": "Toleo jipya liko tayari",
@@ -26,6 +27,20 @@
       "which": "{device} · {shop}",
       "ask": "Mwombe meneja akifungue. Kazi iliyo kwenye kifaa hiki haijapotea.",
       "tryAgain": "Jaribu tena"
+    },
+    "register": {
+      "title": "Sajili kifaa hiki",
+      "intro": "Kifaa hiki bado hakijasajiliwa kwenye duka. Pata namba, kisha mpe meneja aiandike kwenye simu yake.",
+      "start": "Pata namba",
+      "giveCode": "Mpe meneja namba hii",
+      "where": "Meneja ataiandika kwenye simu yake, kwenye ukurasa wa Vifaa.",
+      "timeLeft": "Namba inaisha baada ya {time}",
+      "waiting": "Inasubiri meneja…",
+      "expired": "Muda wa namba hii umekwisha.",
+      "newCode": "Pata namba mpya",
+      "done": "Kifaa hiki kimesajiliwa",
+      "which": "Jina lake ni {device}, upande wa {side}, duka la {shop}.",
+      "continue": "Endelea"
     }
   },
   "stock": {

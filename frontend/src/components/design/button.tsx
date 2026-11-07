@@ -15,12 +15,17 @@
 //   bar     the main button with a white edge: green on green, so the edge is what shows it.
 // Two heights: big (52 px, the default, sized for a finger at the counter) and normal (44 px).
 //
+// ButtonLink, below, is the same look on a link: for a step that opens another page, like Sajili kifaa
+// hiki on the home page (UI-3). A real link, so a screen reader says "link" and Enter follows it.
+//
 // button.test.tsx does the sums on the classes the browser really gets: every kind's text reads at
 // 4.5:1 at rest, on hover and when pressed, on what it sits on: a white screen and a pale panel, or
 // for the bar kind, the green bar.
 import { cva } from "class-variance-authority";
+import Link from "next/link";
+import type { ComponentProps } from "react";
 
-import { Button as ShadcnButton } from "@/components/ui/button";
+import { buttonVariants, Button as ShadcnButton } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import type { PieceProps } from "./types";
@@ -110,6 +115,13 @@ type ButtonProps = Omit<PieceProps<typeof ShadcnButton>, "variant" | "size"> & {
   size?: ButtonSize;
 };
 
+// The outlines start from shadcn's outline, not its "destructive": that one is a pink fill with a faint
+// red focus ring (ring-destructive/20), and both would need undoing. The two filled kinds start from its
+// default, the filled one.
+function shadcnVariant(kind: ButtonKind): "default" | "outline" {
+  return kind === "main" || kind === "bar" ? "default" : "outline";
+}
+
 export function Button({
   kind = "main",
   size = "big",
@@ -118,11 +130,39 @@ export function Button({
 }: ButtonProps) {
   return (
     <ShadcnButton
-      // The outlines start from shadcn's outline, not its "destructive": that one is a pink fill with
-      // a faint red focus ring (ring-destructive/20), and both would need undoing. The two filled
-      // kinds start from its default, the filled one.
-      variant={kind === "main" || kind === "bar" ? "default" : "outline"}
+      variant={shadcnVariant(kind)}
       className={cn(look({ kind, size }), className)}
+      {...props}
+    />
+  );
+}
+
+/**
+ * A link that looks like the button of its kind. Not Base UI's button with a link inside: its docs say
+ * it must not be used for links, as it tells a screen reader "button" and takes the Space key. So this
+ * is Next's own Link, a real <a>, given exactly the classes shadcn's button would get, joined the same
+ * way, so every colour sum in button.test.tsx holds for it too (the test compares the two). No `bar`
+ * kind and no switched-off look: a link on the green bar, or a link that can't be followed, waits for
+ * a screen that needs one.
+ */
+export function ButtonLink({
+  kind = "main",
+  size = "big",
+  className,
+  ...props
+}: Omit<ComponentProps<typeof Link>, "className"> & {
+  kind?: (typeof SCREEN_BUTTON_KINDS)[number];
+  size?: ButtonSize;
+  className?: string;
+}) {
+  return (
+    <Link
+      className={cn(
+        buttonVariants({
+          variant: shadcnVariant(kind),
+          className: cn(look({ kind, size }), className),
+        }),
+      )}
       {...props}
     />
   );

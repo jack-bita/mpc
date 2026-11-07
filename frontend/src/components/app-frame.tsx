@@ -1,6 +1,7 @@
-// app-frame.tsx — the frame around every counter and office screen: the green top bar, the side band
-// under it, and the screen itself (UI-1, 03 §7.1). Both areas' layouts use it, (counter)/layout.tsx and
-// (office)/layout.tsx, so the shop, the side and the bar's buttons are wired in one place.
+// app-frame.tsx — the frame around every counter, office and setup screen: the green top bar, the side
+// band under it, and the screen itself (UI-1, 03 §7.1). Each area's layout uses it, (counter)/layout.tsx,
+// (office)/layout.tsx and (setup)/layout.tsx, so the shop, the side and the bar's buttons are wired in
+// one place.
 //
 // The bar names the device's shop and home side, "MPC · Dawa", once the device is registered (UI-3):
 // a laptop shows where it belongs before anyone logs in at it. A phone that is only a manager's own
@@ -16,8 +17,9 @@ import { TopBar } from "@/components/design/top-bar";
 import { LanguageButton } from "@/components/language-button";
 import { useThisDevice } from "@/features/devices/this-device";
 
-/** The two areas (03 §7.1): the counter works offline; the office needs the internet. */
-export type Area = "counter" | "office";
+/** The areas (03 §7.1, §7.2): the counter works offline; the office needs the internet; setup is where a
+ * device registers, before it belongs to a shop, and needs the internet too (UI-3). */
+export type Area = "counter" | "office" | "setup";
 
 export function AppFrame({
   area,

@@ -14,6 +14,7 @@ import {
   BUTTON_KINDS,
   BUTTON_SIZES,
   type ButtonKind,
+  ButtonLink,
   SCREEN_BUTTON_KINDS,
 } from "./button";
 
@@ -338,5 +339,32 @@ describe("the button's behaviour", () => {
     render(<Button onClick={pressed}>Hifadhi</Button>);
     fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
     expect(pressed).toHaveBeenCalledOnce();
+  });
+});
+
+describe("the link that looks like a button", () => {
+  it.each(
+    SCREEN_BUTTON_KINDS.flatMap((kind) =>
+      BUTTON_SIZES.map((size) => [kind, size] as const),
+    ),
+  )("%s, %s: has exactly the button's classes", (kind, size) => {
+    // The same classes, so every sum above holds for the link too.
+    const buttonClasses = classesOf({ kind, size });
+    render(
+      <ButtonLink kind={kind} size={size} href="/register-device/">
+        Sajili
+      </ButtonLink>,
+    );
+    const link = screen.getByRole("link", { name: "Sajili" });
+    expect(link.className.split(/\s+/).sort()).toEqual(buttonClasses.sort());
+  });
+
+  it("is a real link, which a screen reader calls a link", () => {
+    render(<ButtonLink href="/register-device/">Sajili</ButtonLink>);
+    const link = screen.getByRole("link", { name: "Sajili" });
+    expect(link.tagName).toBe("A");
+    // The end slash comes from next.config.ts (trailingSlash), which a test doesn't read.
+    expect(link.getAttribute("href")).toMatch(/^\/register-device\/?$/);
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });
