@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
 
-**Changes in v1.31** (6 Nov 2026, UI-2): the API's description is committed as `shared/openapi.json`, and CI checks it against the code and the types against it (AD11, §12). §7.1 says how the counter screens are kept off the server, and §7.2's map shows the new parts of `api/`, `i18n/codes.ts` and the error alert (04 v1.44). From its review, a suspicious request answers `bad_request` in the one shape (§5.10). Marked **(v1.31)**.
+**Changes in v1.31** (6 Nov 2026, UI-2): the API's description is committed as `shared/openapi.json`, and CI checks it against the code and the types against it (AD11, §12). §7.1 says how the counter screens are kept off the server, and §7.2's map shows the new parts of `api/`, `i18n/codes.ts` and the error alert (04 v1.44). From its review, a suspicious request answers `bad_request` in the one shape (§5.10), and §7.1 names every way the counter lock refuses. Marked **(v1.31)**.
 
 **Changes in v1.30** (6 Nov 2026, UI-1): choices by Jack, made while building UI-1 (04 v1.43). AD18 is now ADR-0040, which supersedes ADR-0032: the screens get their words through use-intl, next-intl's own core, as next-intl 4.x brings a code compiler and a file watcher that a static app with no language in its address never uses (§3, §7.2, §7.4). In Swahili, stock reads word first, "mifuko 26 + kilo 35.5", and in English number first; each word book holds its order, and the unit words are the shop's own (§7.4). §7.2's map shows the app's own parts in `components/`, each area's layout, `offline/network.ts` and the new test helpers. Marked **(v1.30)**.
 
@@ -591,7 +591,7 @@ Cuts can last long enough to drain batteries, so the counter needs a plan beyond
 - **Counter screens** (sale, payment, repayment, quick customer, drawer, clock-in) read from Dexie with live queries and write documents to the outbox. They never call the API. They behave the same online and offline.
 - **Office screens** (products, prices, deliveries, counts, cash-up, reports, staff, settings, devices, flags) call the API through TanStack Query and the typed client. Offline, they show *Inahitaji mtandao*.
 
-This keeps all offline logic in one place. A lint rule refuses the API client and TanStack Query in `app/(counter)/`; it reads a screen's own imports, so a shared part that calls the server still needs review **(v1.31)**.
+This keeps all offline logic in one place. A lint rule refuses, in `app/(counter)/`, the API client, TanStack Query, `openapi-fetch`, and the browser's own ways to call a server (`fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `navigator.sendBeacon`); tests there may still watch `fetch`. It reads a screen's own code, so a shared part that calls the server, and a dynamic `import()` of a package, still need review **(v1.31)**.
 
 ### 7.2 Structure
 
@@ -622,7 +622,7 @@ frontend/src/
 │                             render.tsx gives a screen the word books, language.ts finds Swahili left in English,
 │                             vectors.ts reads the answer books in shared/test-vectors/ (v1.30)
 └── i18n/                     the word books' setup and the language switch; the messages themselves are in frontend/messages/ (§4) (v1.2, v1.30);
-                              codes.ts turns a server's code into its sentence, for office and counter screens alike (v1.31)
+                              codes.ts turns a server's code into its sentence, for office and counter screens alike, and blanks.ts reads which values a sentence fills in (v1.31)
 ```
 
 - A static build can't pre-build pages for records that don't exist yet, so record pages use a query string (`/sales/view?id=…`).

@@ -18,7 +18,7 @@ paths:
 
 - **Counter screens** (`src/app/(counter)/…`: sale, payment, repayment, quick customer, drawer, clock-in) read Dexie with live queries and save documents with `saveDocument()`. They never call the API, and they behave the same online and offline.
 - **Office screens** (`src/app/(office)/…`) use TanStack Query and the typed client in `src/api/client.ts`, through `answerOf()` (`src/api/refusal.ts`), which throws a refusal so TanStack sees it; `ApiErrorAlert` shows it. Offline they show *Inahitaji mtandao*.
-- A lint rule refuses `src/api/`, `@tanstack/*`, `openapi-fetch` and `fetch` in `src/app/(counter)/` (`import-rule.test.ts`). It reads a screen's own code only: a shared part that calls the server, imported by a counter screen, and a dynamic `import()` of a package, need review to catch them (UI-2). Screens that log in call the server, so they live outside `(counter)/`. The store of server answers is shared by everyone on a device: clear it at each login, logout and quick switch.
+- A lint rule refuses `src/api/`, `@tanstack/*`, `openapi-fetch`, `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` and `navigator.sendBeacon` in `src/app/(counter)/` (`import-rule.test.ts`); tests there may watch `fetch`, never import `src/api/`. It reads a screen's own code only: a shared part that calls the server, imported by a counter screen, and a dynamic `import()` of a package, need review to catch them (UI-2). Screens that log in call the server, so they live outside `(counter)/`. The store of server answers is shared by everyone on a device: clear it at each login, logout and quick switch.
 
 ## Numbers and text
 
