@@ -3,8 +3,11 @@
 import { createTranslator } from "use-intl/core";
 import { describe, expect, it } from "vitest";
 
+import { sentences } from "@/test/language";
+
+import { blanks } from "./blanks";
 import { codeMessage, type CodeValues, type Words } from "./codes";
-import { MESSAGES } from "./language";
+import { LANGUAGES, MESSAGES } from "./language";
 
 function wordsFrom(messages: object): Words {
   // onError throws, as the provider does while building: a sentence that can't be filled in fails here.
@@ -104,5 +107,44 @@ describe("codeMessage", () => {
   it("reads a code that names a group of sentences as one it doesn't know", () => {
     // errors.pin holds pin.wrong and the rest, but is no sentence itself.
     expect(codeMessage(swahili, "pin")).toBe("Seva imekataa. Msimbo: pin");
+  });
+});
+
+// The sentence a code shows when its minutes didn't come says "too many tries, wait a little"
+// (errorFallback.waitAWhile). True for every sentence that counts minutes today; a new one that isn't
+// about tries must get a fallback of its own, so this list names them all.
+const TRIES_WITH_MINUTES = ["errors.pin.locked", "errors.throttled"];
+
+/** The keys of a book's code sentences that fill in `minutes`. */
+function sentencesWithMinutes(book: object): string[] {
+  return [...sentences(book)]
+    .filter(
+      ([key, sentence]) =>
+        key.startsWith("errors.") && blanks(sentence).includes("minutes"),
+    )
+    .map(([key]) => key)
+    .sort();
+}
+
+describe("the wait-a-little sentence", () => {
+  it.each(LANGUAGES)(
+    "%s: stands in only for sentences about tries",
+    (language) => {
+      expect(sentencesWithMinutes(MESSAGES[language])).toEqual(
+        TRIES_WITH_MINUTES,
+      );
+    },
+  );
+
+  it("would catch a new sentence that counts minutes", () => {
+    // The check itself, fed a book with one more: it must see it.
+    const book = {
+      errors: {
+        ...MESSAGES.sw.errors,
+        sale: { held: "Mauzo yamesimamishwa kwa dakika {minutes}." },
+      },
+    };
+
+    expect(sentencesWithMinutes(book)).toContain("errors.sale.held");
   });
 });

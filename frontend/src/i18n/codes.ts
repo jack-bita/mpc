@@ -49,6 +49,8 @@ export function codeMessage(
   const values = withMinutes(params);
   const missing = blanks(sentence).filter((name) => !(name in values));
   if (missing.length === 0) return t(key, values);
+  // "Too many tries, wait a little": true for every sentence that counts minutes today, pin.locked and
+  // throttled; codes.test.ts fails on a new one, which then needs a fallback of its own.
   if (missing.every((name) => name === "minutes"))
     return t("errorFallback.waitAWhile");
   return t("errorFallback.unknownCode", { code });
