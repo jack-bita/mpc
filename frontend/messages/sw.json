@@ -77,6 +77,12 @@
       "unblockConfirm": "Fungua kifaa"
     }
   },
+  "login": {
+    "pinPad": {
+      "typed": "Umeandika tarakimu {count} kati ya {length}",
+      "erase": "Futa"
+    }
+  },
   "stock": {
     "part": "{unit} {count}"
   },

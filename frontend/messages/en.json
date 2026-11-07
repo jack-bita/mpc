@@ -77,6 +77,12 @@
       "unblockConfirm": "Unblock the device"
     }
   },
+  "login": {
+    "pinPad": {
+      "typed": "{count} of {length} digits typed",
+      "erase": "Delete"
+    }
+  },
   "stock": {
     "part": "{count} {unit}"
   },
