@@ -267,8 +267,22 @@
       "own": "Huwezi kuweka nenosiri lako mwenyewe hapa.",
       "superuser_only": "Nenosiri la mtu huyu linawekwa na msimamizi wa mfumo tu.",
       "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kuweka nenosiri lake.",
-      "no_login_name": "Mtu huyu hana simu wala barua pepe ya kuingilia."
+      "no_login_name": "Mtu huyu hana simu wala barua pepe ya kuingilia.",
+      "same_as_temporary": "Chagua nenosiri tofauti na lile la muda."
     },
+    "phone": {
+      "invalid": "Namba hii ya simu si sahihi."
+    },
+    "login": {
+      "already_in": "Kuna mtu ameingia tayari kwenye kifaa hiki. Toka kwanza, kisha ujaribu tena.",
+      "switched_off": "Huwezi kuingia kwa sasa. Ongea na mmiliki."
+    },
+    "email_password_mismatch": "Barua pepe au nenosiri si sahihi.",
+    "phone_password_mismatch": "Simu au nenosiri si sahihi.",
+    "invalid_phone": "Andika namba ya simu kamili, kama 0712 345 678.",
+    "too_many_login_attempts": "Umekosea mara nyingi mno. Subiri dakika chache, kisha ujaribu tena.",
+    "invalid_password_reset": "Kiungo hiki hakifanyi kazi tena. Omba kingine.",
+    "enter_current_password": "Nenosiri la sasa si sahihi.",
     "pin": {
       "wrong": "PIN si sahihi.",
       "locked": "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika {minutes}.",

@@ -267,8 +267,22 @@
       "own": "You can't set your own password here.",
       "superuser_only": "Only the system admin can set this person's password.",
       "more_keys": "This person has permissions you don't, so you can't set their password.",
-      "no_login_name": "This person has no phone or email to log in with."
+      "no_login_name": "This person has no phone or email to log in with.",
+      "same_as_temporary": "Choose a password other than the temporary one."
     },
+    "phone": {
+      "invalid": "This phone number isn't right."
+    },
+    "login": {
+      "already_in": "Someone is already logged in on this device. Log out first, then try again.",
+      "switched_off": "You can't log in right now. Talk to the owner."
+    },
+    "email_password_mismatch": "The email or the password is wrong.",
+    "phone_password_mismatch": "The phone or the password is wrong.",
+    "invalid_phone": "Write the whole phone number, like 0712 345 678.",
+    "too_many_login_attempts": "Too many wrong tries. Wait a few minutes, then try again.",
+    "invalid_password_reset": "This link doesn't work any more. Ask for a new one.",
+    "enter_current_password": "The current password is wrong.",
     "pin": {
       "wrong": "Wrong PIN.",
       "locked": "Too many wrong PINs. Try again in {minutes} min.",
