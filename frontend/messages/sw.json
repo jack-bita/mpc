@@ -81,6 +81,10 @@
     "pinPad": {
       "typed": "Umeandika tarakimu {count} kati ya {length}",
       "erase": "Futa"
+    },
+    "picker": {
+      "title": "Wewe ni nani?",
+      "empty": "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze."
     }
   },
   "stock": {

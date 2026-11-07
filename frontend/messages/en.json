@@ -81,6 +81,10 @@
     "pinPad": {
       "typed": "{count} of {length} digits typed",
       "erase": "Delete"
+    },
+    "picker": {
+      "title": "Who are you?",
+      "empty": "No one works here yet. Ask the shop's owner to add the staff."
     }
   },
   "stock": {
