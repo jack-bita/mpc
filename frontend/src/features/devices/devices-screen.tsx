@@ -73,7 +73,12 @@ export function DevicesScreen() {
                 // The list asks again, so the new laptop is on it.
                 void client.invalidateQueries({ queryKey: DEVICE_LIST });
               }}
-              onCancel={closeTheForm}
+              onCancel={() => {
+                closeTheForm();
+                // Asked again here too: a send whose answer was lost may have made the device, and
+                // the manager who gives up should still see it on the list.
+                void client.invalidateQueries({ queryKey: DEVICE_LIST });
+              }}
             />
           </CardContent>
         </Card>

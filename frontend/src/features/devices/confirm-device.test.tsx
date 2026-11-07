@@ -159,6 +159,30 @@ describe("Sajili kifaa", () => {
     expect(second?.id).toBe(first?.id);
   });
 
+  it("asks the list again when the manager gives up after a lost answer", async () => {
+    // The send may have reached the server and made the device, though no answer came back.
+    asOwner();
+    answer("POST", DEVICES, () => {
+      throw new TypeError("Failed to fetch");
+    });
+    await openTheForm();
+    fillIn("K7QM4RXT", "Laptop Dawa");
+    fireEvent.click(screen.getByText("Dawa"));
+    send();
+    await screen.findByText(
+      "Imeshindwa kufika kwenye seva. Angalia mtandao, kisha ujaribu tena.",
+    );
+    const listReads = () =>
+      sent.filter(
+        (request) => request.method === "GET" && request.url.endsWith(DEVICES),
+      ).length;
+    const before = listReads();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ghairi" }));
+
+    await vi.waitFor(() => expect(listReads()).toBe(before + 1));
+  });
+
   it("gives the next form a new id", async () => {
     asOwner();
     answer("POST", DEVICES, { status: 201, body: MADE });
