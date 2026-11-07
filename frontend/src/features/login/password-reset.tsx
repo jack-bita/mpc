@@ -91,21 +91,49 @@ function aboutTheKey(error: unknown): boolean {
 
 export function PasswordReset() {
   const t = useTranslations("password");
-  const words = useCodeWords();
-  const { fieldMessages } = useApiErrorWords();
   const key = useTheLinksKey();
 
-  // Asked once: a key stays good or dead, and its answer isn't worth keeping. The store's name for it
-  // leaves the key out, so it shows nowhere but in the request.
+  function whatShows() {
+    // Not read yet: nothing, for the moment until the page has looked at its address.
+    if (key === undefined) return null;
+    if (key === null)
+      return (
+        <WayForward
+          text={t("reset.noKey")}
+          href="/forgot-password/"
+          label={t("reset.askAgain")}
+        />
+      );
+    // Drawn afresh for each key (React's `key`): a new link pasted into the same tab changes only what
+    // follows the #, so the browser doesn't reload the page, and the old link's check, form and answer
+    // would stay on show (UI-5's hand test).
+    return <WithTheKey key={key} linkKey={key} />;
+  }
+
+  return (
+    <div className="flex max-w-md flex-col gap-6">
+      <h1 className="text-2xl font-semibold">{t("reset.title")}</h1>
+      {whatShows()}
+    </div>
+  );
+}
+
+/** One link's key: its check, the form, and the answer. */
+function WithTheKey({ linkKey }: { linkKey: string }) {
+  const t = useTranslations("password");
+  const words = useCodeWords();
+  const { fieldMessages } = useApiErrorWords();
+
+  // Asked once for each key: a key stays good or dead, and its answer isn't worth keeping once the page
+  // is gone. The key is in the answer's name, so one link's answer never stands in for another's.
   const check = useQuery({
-    queryKey: ["auth", "password-reset"],
+    queryKey: ["auth", "password-reset", linkKey],
     queryFn: () =>
       callAllauth({
         method: "GET",
         route: "auth/password/reset",
-        headers: { "X-Password-Reset-Key": key ?? "" },
+        headers: { "X-Password-Reset-Key": linkKey },
       }),
-    enabled: Boolean(key),
     staleTime: Infinity,
     gcTime: 0,
   });
@@ -121,7 +149,7 @@ export function PasswordReset() {
         method: "POST",
         route: "auth/password/reset",
         // Not trimmed: sent as typed, as the login sends it.
-        body: { key: key ?? "", password: fresh },
+        body: { key: linkKey, password: fresh },
         // Done, and nobody logged in (401); or done on a browser already logged in (200).
         done: [200, 401],
       }),
@@ -140,99 +168,75 @@ export function PasswordReset() {
     if (reset.isSuccess || dead) outcome.current?.focus();
   }, [reset.isSuccess, dead]);
 
-  function whatShows() {
-    // Not read yet: nothing, for the moment until the page has looked at its address.
-    if (key === undefined) return null;
-    if (key === null)
-      return (
-        <WayForward
-          text={t("reset.noKey")}
-          href="/forgot-password/"
-          label={t("reset.askAgain")}
-        />
-      );
-    if (dead)
-      return (
-        <WayForward
-          outcome={outcome}
-          text={codeMessage(words, "invalid_password_reset")}
-          href="/forgot-password/"
-          label={t("reset.askAgain")}
-        />
-      );
-    if (reset.isSuccess)
-      return (
-        <WayForward
-          outcome={outcome}
-          text={t("reset.done")}
-          href="/login/"
-          label={t("reset.login")}
-          kind="main"
-        />
-      );
-    // The check on its way: a status line; no answer, or the server's problem: why.
-    if (!check.isSuccess)
-      return check.isPending ? (
-        <p role="status">{t("reset.checking")}</p>
-      ) : (
-        <ApiErrorAlert error={check.error} />
-      );
-    return theForm();
-  }
+  if (dead)
+    return (
+      <WayForward
+        outcome={outcome}
+        text={codeMessage(words, "invalid_password_reset")}
+        href="/forgot-password/"
+        label={t("reset.askAgain")}
+      />
+    );
+  if (reset.isSuccess)
+    return (
+      <WayForward
+        outcome={outcome}
+        text={t("reset.done")}
+        href="/login/"
+        label={t("reset.login")}
+        kind="main"
+      />
+    );
+  // The check on its way: a status line; no answer, or the server's problem: why.
+  if (!check.isSuccess)
+    return check.isPending ? (
+      <p role="status">{t("reset.checking")}</p>
+    ) : (
+      <ApiErrorAlert error={check.error} />
+    );
 
   // Where each refusal shows: the form's own beside its box, the server's beside the new box, and
-  // anything else in the alert (a key's refusal replaces the form, above). Called, not drawn as a
-  // component of its own: one made inside this one would be new at every redraw, and React would
-  // empty its boxes as the person types.
-  function theForm() {
-    const own = (code: string | undefined) => {
-      if (!code) return undefined;
-      return code === NOT_THE_SAME ? t("notTheSame") : codeMessage(words, code);
-    };
-    const server = fieldMessages(reset.error);
-    const { errors } = form.formState;
-    return (
-      // noValidate: the browser's own checks would speak its language, not the shop's.
-      <form
-        noValidate
-        onSubmit={(event) =>
-          void form.handleSubmit((values) => reset.mutate(values))(event)
-        }
-        className="grid gap-6"
-      >
-        <Field
-          label={t("new")}
-          hint={t("newHint")}
-          error={own(errors.fresh?.message) ?? server.password}
-          type="password"
-          // "new-password": the phone's password manager offers to make one, and saves it.
-          autoComplete="new-password"
-          {...form.register("fresh")}
-          autoFocus
-        />
-        <Field
-          label={t("again")}
-          error={own(errors.again?.message)}
-          type="password"
-          autoComplete="new-password"
-          {...form.register("again")}
-        />
-        {/* What no box can show: too many tries, no network. */}
-        <ApiErrorAlert error={server.password ? null : reset.error} />
-        <div>
-          <Button type="submit" disabled={reset.isPending}>
-            {t("save")}
-          </Button>
-        </div>
-      </form>
-    );
-  }
-
+  // anything else in the alert (a key's refusal replaces the form, above).
+  const own = (code: string | undefined) => {
+    if (!code) return undefined;
+    return code === NOT_THE_SAME ? t("notTheSame") : codeMessage(words, code);
+  };
+  const server = fieldMessages(reset.error);
+  const { errors } = form.formState;
   return (
-    <div className="flex max-w-md flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("reset.title")}</h1>
-      {whatShows()}
-    </div>
+    // noValidate: the browser's own checks would speak its language, not the shop's.
+    <form
+      noValidate
+      onSubmit={(event) =>
+        void form.handleSubmit((values) => reset.mutate(values))(event)
+      }
+      className="grid gap-6"
+    >
+      <Field
+        label={t("new")}
+        hint={t("newHint")}
+        error={own(errors.fresh?.message) ?? server.password}
+        type="password"
+        // "new-password": the phone's password manager offers to make one, and saves it.
+        autoComplete="new-password"
+        {...form.register("fresh")}
+        autoFocus
+      />
+      <Field
+        label={t("again")}
+        error={own(errors.again?.message)}
+        type="password"
+        autoComplete="new-password"
+        {...form.register("again")}
+      />
+      {/* What no box can show: too many tries, no network. */}
+      <ApiErrorAlert error={server.password ? null : reset.error} />
+      <div>
+        <Button type="submit" disabled={reset.isPending}>
+          {t("save")}
+        </Button>
+      </div>
+    </form>
   );
 }
 

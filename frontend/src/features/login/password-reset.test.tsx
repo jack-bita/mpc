@@ -1,6 +1,6 @@
 // password-reset.test.tsx — the email link's page: it reads the key after the #, clears it from the
 // browser, checks it, and sets the new password with it (UI-5, AUTH-3).
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ALLAUTH } from "@/api/allauth";
@@ -173,6 +173,36 @@ describe("the email link's page", () => {
       await screen.findByText("Andika nenosiri lile lile mara zote mbili."),
     ).toBeTruthy();
     expect(resets("POST")).toEqual([]);
+  });
+
+  it("follows a new link pasted into the same tab, with nothing kept from the old one", async () => {
+    // The hand test: the page said an old link was dead, and a new link was pasted over it. Only the part
+    // after the # changed, so the browser didn't reload the page, and the old answer stayed on show.
+    const fresh = "3-d0y3l2-6a1c8f9e0b2d3c4e5f6a";
+    answer("GET", RESET, (request) =>
+      request.headers.get("X-Password-Reset-Key") === fresh
+        ? Response.json({ status: 200, data: {} })
+        : Response.json(
+            {
+              status: 400,
+              errors: [{ code: "invalid_password_reset", param: "key" }],
+            },
+            { status: 400 },
+          ),
+    );
+    openTheLink();
+    await screen.findByText("Kiungo hiki hakifanyi kazi tena. Omba kingine.");
+
+    act(() => {
+      window.history.replaceState(null, "", `/password-reset/#${fresh}`);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+
+    expect(await screen.findByLabelText("Nenosiri jipya")).toBeTruthy();
+    expect(
+      screen.queryByText("Kiungo hiki hakifanyi kazi tena. Omba kingine."),
+    ).toBeNull();
+    expect(window.location.hash).toBe("");
   });
 
   it("says what to do when the link has no key, and sends nothing", async () => {
