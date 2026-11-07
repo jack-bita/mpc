@@ -58,7 +58,7 @@ describe("Sajili kifaa hiki", () => {
 
     expect(await screen.findByText("K7QM-4RXT")).toBeDefined();
     expect(screen.getByText("Namba inaisha baada ya 9:59")).toBeDefined();
-    expect(screen.getByText("Inasubiri meneja…")).toBeDefined();
+    expect(screen.getByText("Kinasubiri meneja…")).toBeDefined();
     // Focus moves to what to do next, as the button that asked is gone.
     expect(document.activeElement?.textContent).toBe("Mpe meneja namba hii");
   });

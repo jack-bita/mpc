@@ -92,7 +92,7 @@ describe("Sajili kifaa", () => {
 
     expect(
       await screen.findByText(
-        "Laptop Dawa imesajiliwa. Kifaa hicho kitaonyesha jina la duka baada ya sekunde chache.",
+        "Kifaa Laptop Dawa kimesajiliwa. Kitaonyesha jina la duka baada ya sekunde chache.",
       ),
     ).toBeDefined();
     const [body] = await confirms();
@@ -126,7 +126,7 @@ describe("Sajili kifaa", () => {
     fillIn("K7QM4RXT", "Laptop Dawa");
     fireEvent.click(screen.getByText("Dawa"));
     send();
-    await screen.findByText(/Laptop Dawa imesajiliwa/);
+    await screen.findByText(/Kifaa Laptop Dawa kimesajiliwa/);
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Sajili kifaa" }),
     );
@@ -152,7 +152,9 @@ describe("Sajili kifaa", () => {
     answer("POST", DEVICES, { status: 200, body: MADE });
     send();
 
-    expect(await screen.findByText(/Laptop Dawa imesajiliwa/)).toBeDefined();
+    expect(
+      await screen.findByText(/Kifaa Laptop Dawa kimesajiliwa/),
+    ).toBeDefined();
     const [first, second] = await confirms();
     expect(second?.id).toBe(first?.id);
   });
@@ -164,7 +166,7 @@ describe("Sajili kifaa", () => {
     fillIn("K7QM4RXT", "Laptop Dawa");
     fireEvent.click(screen.getByText("Dawa"));
     send();
-    await screen.findByText(/Laptop Dawa imesajiliwa/);
+    await screen.findByText(/Kifaa Laptop Dawa kimesajiliwa/);
 
     fireEvent.click(screen.getByRole("button", { name: "Sajili kifaa" }));
     fillIn("ABCD2345", "Laptop Vyakula");
