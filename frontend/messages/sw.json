@@ -95,7 +95,8 @@
       "name": "Simu au barua pepe",
       "nameHint": "Kama 0712 345 678",
       "password": "Nenosiri",
-      "send": "Ingia"
+      "send": "Ingia",
+      "forgot": "Umesahau nenosiri?"
     },
     "welcome": "Karibu, {name}",
     "switch": "Badilisha mtu",
@@ -111,7 +112,17 @@
     "newHint": "Herufi 8 au zaidi, si namba tu, na lisifanane na jina wala simu yako.",
     "again": "Andika nenosiri jipya tena",
     "notTheSame": "Andika nenosiri lile lile mara zote mbili.",
-    "save": "Hifadhi"
+    "save": "Hifadhi",
+    "forgot": {
+      "title": "Umesahau nenosiri?",
+      "noEmail": "Huna barua pepe? Mwombe mmiliki akuwekee nenosiri la muda, ana kwa ana.",
+      "withEmail": "Una barua pepe? Tutakutumia kiungo cha kuweka nenosiri jipya.",
+      "email": "Barua pepe",
+      "notAnEmail": "Andika barua pepe kamili, kama jina@mfano.com.",
+      "send": "Tuma kiungo",
+      "sent": "Kama barua pepe hii ina akaunti hapa, tumetuma kiungo. Kifungue ndani ya saa moja.",
+      "back": "Rudi kuingia"
+    }
   },
   "office": {
     "welcome": "Karibu, {name}",

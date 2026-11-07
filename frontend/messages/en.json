@@ -95,7 +95,8 @@
       "name": "Phone or email",
       "nameHint": "Like 0712 345 678",
       "password": "Password",
-      "send": "Log in"
+      "send": "Log in",
+      "forgot": "Forgot your password?"
     },
     "welcome": "Welcome, {name}",
     "switch": "Switch person",
@@ -111,7 +112,17 @@
     "newHint": "8 letters or more, not only numbers, and not like your name or phone.",
     "again": "Type the new password again",
     "notTheSame": "Type the same password both times.",
-    "save": "Save"
+    "save": "Save",
+    "forgot": {
+      "title": "Forgot your password?",
+      "noEmail": "No email? Ask the owner to set you a temporary password, face to face.",
+      "withEmail": "Have an email? We will send you a link to set a new password.",
+      "email": "Email",
+      "notAnEmail": "Write the whole email, like name@example.com.",
+      "send": "Send the link",
+      "sent": "If this email has an account here, we have sent a link. Open it within an hour.",
+      "back": "Back to log in"
+    }
   },
   "office": {
     "welcome": "Welcome, {name}",

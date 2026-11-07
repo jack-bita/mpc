@@ -33,7 +33,7 @@ import { useApiErrorWords } from "@/api/errors";
 import { forgetTheLastPerson } from "@/api/query-client";
 import { ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
-import { Button } from "@/components/design/button";
+import { Button, ButtonLink } from "@/components/design/button";
 import { Field } from "@/components/design/field";
 import { useWhoIsHere } from "@/features/people/who-is-here";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
@@ -154,6 +154,13 @@ export function PasswordLogin() {
           </Button>
         </div>
       </form>
+      {/* Both ways back in: the owner face to face, or an email link (forgot-password.tsx). The second
+          kind, as it leads away from the form's one action. */}
+      <div>
+        <ButtonLink href="/forgot-password/" kind="second" size="normal">
+          {t("forgot")}
+        </ButtonLink>
+      </div>
     </div>
   );
 }

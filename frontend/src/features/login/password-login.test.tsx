@@ -200,6 +200,14 @@ describe("the password login", () => {
     expect(logins()).toEqual([]);
   });
 
+  it("shows the way back in after a forgotten password", () => {
+    render(<PasswordLogin />);
+
+    const link = screen.getByRole("link", { name: "Umesahau nenosiri?" });
+    // The end slash comes from next.config.ts (trailingSlash), which a test doesn't read.
+    expect(link.getAttribute("href")).toMatch(/^\/forgot-password\/?$/);
+  });
+
   it("shows the form when the store still holds a session that has ended", async () => {
     // Neema's session ended at its idle time while the office showed her, and the store kept her last
     // answer. Read as "already here", the office would send her back, and back again (office-frame.tsx).
