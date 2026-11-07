@@ -53,7 +53,11 @@ export function makeQueryClient(): QueryClient {
  * rows from her last screen, offline either, where a new read waits for the network.
  */
 export async function forgetTheLastPerson(store: QueryClient): Promise<void> {
-  // The changes sent, a PIN login among them: each keeps what it was sent with, the PIN too.
+  // The changes sent, a PIN login among them: each keeps what it was sent with, the PIN too. A change
+  // waiting for the network goes too: TanStack sends again only what this list holds when the network is
+  // back (resumePausedMutations), so its screen would wait for it for ever. None can be waiting at a PIN
+  // login today, as the home page shows only "Unatoka…" while a logout waits (UI-4's review); a screen
+  // that sends changes offline and then logs people in must send them first (UI-5).
   store.getMutationCache().clear();
   // Every answer back to nothing, and the screens showing one told, so those on show ask again, for the
   // new person. Not store.clear(): it drops the answers without telling the screens that show them,
