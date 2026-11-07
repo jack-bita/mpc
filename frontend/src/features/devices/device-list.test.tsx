@@ -84,6 +84,8 @@ describe("the device list", () => {
     expect(phone.getByText("Na. 2 · Vyakula")).toBeDefined();
     expect(phone.getByText("Kimezuiwa")).toBeDefined();
     expect(phone.getByText("Hakijaonekana bado")).toBeDefined();
+    // A list for every screen reader, Safari's included (device-list.tsx says why it is written out).
+    expect(screen.getByRole("list").getAttribute("role")).toBe("list");
     // The first laptop first, though the server sent the newest first.
     const names = screen
       .getAllByRole("listitem")

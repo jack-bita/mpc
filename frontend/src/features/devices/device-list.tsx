@@ -84,8 +84,9 @@ export function DeviceList({ me }: { me: WhoIsHere }) {
       {list.data.length === 0 ? (
         <p>{t("empty")}</p>
       ) : (
-        // A list, so a screen reader says how many devices there are.
-        <ul className="grid gap-4">
+        // A list, so a screen reader says how many devices there are. role="list" written out: Safari
+        // with VoiceOver stops calling a <ul> a list once its bullets are styled away, as Tailwind does.
+        <ul role="list" className="grid gap-4">
           {list.data.map((device) => (
             <li key={device.id}>
               <DeviceCard
