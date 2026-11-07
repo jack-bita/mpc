@@ -19,10 +19,17 @@ export const READ_RETRIES = 2;
  * restarts), may pass a moment later: those are asked again.
  */
 export function shouldRetry(failureCount: number, error: unknown): boolean {
-  const mayPass =
+  return mayPassLater(error) && failureCount < READ_RETRIES;
+}
+
+/** Whether a failure may pass if asked again a moment later: a dropped network, or a 5xx. Never a
+ * refusal the server meant, nor a bug. Reads ask again a few times (shouldRetry); a logout, until the
+ * server hears it (UI-4). */
+export function mayPassLater(error: unknown): boolean {
+  return (
     error instanceof NoConnection ||
-    (error instanceof ApiRefusal && error.status >= 500);
-  return mayPass && failureCount < READ_RETRIES;
+    (error instanceof ApiRefusal && error.status >= 500)
+  );
 }
 
 /** A new store. One per page load (provider.tsx), and one per test, so no test sees another's answers.

@@ -89,7 +89,10 @@
       "typePin": "Type your PIN",
       "back": "Back"
     },
-    "welcome": "Welcome, {name}"
+    "welcome": "Welcome, {name}",
+    "switch": "Switch person",
+    "logout": "Log out",
+    "leaving": "Logging out…"
   },
   "stock": {
     "part": "{count} {unit}"

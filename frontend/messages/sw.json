@@ -89,7 +89,10 @@
       "typePin": "Andika PIN yako",
       "back": "Rudi"
     },
-    "welcome": "Karibu, {name}"
+    "welcome": "Karibu, {name}",
+    "switch": "Badilisha mtu",
+    "logout": "Toka",
+    "leaving": "Unatoka…"
   },
   "stock": {
     "part": "{unit} {count}"
