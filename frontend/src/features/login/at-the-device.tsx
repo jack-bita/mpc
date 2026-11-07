@@ -16,7 +16,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -31,6 +31,13 @@ import { sideAt, useWhoIsHere } from "@/features/people/who-is-here";
 
 import { useIdleLock } from "./idle-lock";
 import { PinLogin } from "./pin-login";
+
+/** What a logout is about: who pressed Toka or Badilisha mtu, or whom the idle lock logged out; and, for a
+ * session the server refused, why, to say once. */
+interface Leaving {
+  by: string | null;
+  notice: ApiRefusal | null;
+}
 
 export function AtTheDevice({
   device,
@@ -49,7 +56,7 @@ export function AtTheDevice({
   // Toka and Badilisha mtu: the session ends on the server first, then the store forgets the person,
   // which asks `me` again, for whoever is next. POST /api/auth/logout/ needs only the session and the
   // CSRF token, so it works on a blocked laptop and for a suspended person too (AUTH-4).
-  const logout = useMutation({
+  const logout = useMutation<unknown, unknown, Leaving>({
     mutationFn: () => answerOf(api.POST("/api/auth/logout/")),
     // Sent again while no answer comes, with no limit, until the server hears it. Offline, TanStack waits
     // for the network by itself, then sends it. Given up, the session would outlive the press: a network
@@ -60,31 +67,43 @@ export function AtTheDevice({
   });
   // True from the press until the server has heard, offline too: the person is hidden meanwhile.
   const leaving = logout.isPending;
+  // What the last logout was about, kept by the screen's hold on it: forgetTheLastPerson empties the
+  // store's list of changes, but this hold keeps what it was sent with, and its error (UI-4's review).
+  const leaver = logout.variables?.by ?? null;
+  const notice = logout.variables?.notice ?? null;
 
   // The server refused this browser's session: nobody is logged in here, or a session ended, as when the
   // person was suspended or a new PIN was set. Under 500 only: a 5xx is the server broken, and says
   // nothing about who is here.
   const ended =
     me.error instanceof ApiRefusal && me.error.status < 500 ? me.error : null;
-  // The server ended a session it had shown, and the person's last answer is still in the store beside
-  // the refusal. Forget them at once: TanStack keeps that answer through every failed refresh after it,
-  // so a 5xx or a dropped network would bring them back, with Toka and the idle lock (UI-4's review).
-  const endedWithAnAnswer = ended !== null && me.data !== undefined;
+  // Ended for a reason, as a suspension or a new PIN: the server refuses that session with the same
+  // reason at every visit until its idle time, so the next person at the counter would be told it.
+  const endedFor =
+    ended && ended.body.code !== "not_authenticated" ? ended : null;
+  // This very refusal went with the last logout: never sent again for it, even if the server refused that
+  // logout, or the screen would send one after another.
+  const alreadySent =
+    endedFor !== null && logout.variables?.notice === endedFor;
+  const hasAnswer = me.data !== undefined;
+  const { mutate: sendLogout } = logout;
   useEffect(() => {
-    if (endedWithAnAnswer) void forgetTheLastPerson(store);
-  }, [endedWithAnAnswer, store]);
+    // A reason: end that session on the server, and keep the reason with the logout, to say once.
+    if (endedFor && !alreadySent) sendLogout({ by: null, notice: endedFor });
+    // Ended by itself, at its idle time, with the person's last answer still in the store beside the
+    // refusal: forget them at once. TanStack keeps that answer through every failed refresh after it, so a
+    // 5xx or a dropped network would bring them back, with Toka and the idle lock (UI-4's review).
+    else if (ended && !endedFor && hasAnswer) void forgetTheLastPerson(store);
+  }, [endedFor, alreadySent, ended, hasAnswer, sendLogout, store]);
   // Who is logged in, as `me` last said. TanStack keeps the last answer through a failed refresh, so a
   // dropped network leaves the person where they are. Nobody while they are leaving: hidden at the press.
   const here = ended || leaving ? undefined : me.data;
   const side = here ? sideAt(here, device.homeSide.id) : undefined;
 
-  // Who pressed Toka or Badilisha mtu, or whom the idle lock logged out: a refused logout's reason is
-  // theirs, and shows only while they are here. The store can't forget it for us: forgetTheLastPerson
-  // empties its list of changes, but the screen's own hold on the logout keeps its error (UI-4's review).
-  const [leaver, setLeaver] = useState<string | null>(null);
+  // Toka, Badilisha mtu and the idle lock: the logout names who leaves, so a refused one's reason shows
+  // only while they are here.
   function leave() {
-    setLeaver(here?.staff.id ?? null);
-    logout.mutate();
+    logout.mutate({ by: here?.staff.id ?? null, notice: null });
   }
 
   // A seller who walks away is logged out by herself, as if she had pressed Toka. Only while someone is
@@ -113,12 +132,11 @@ export function AtTheDevice({
           </h1>
         </>
       );
-    // Plain "nobody is logged in" is no error to show: only a session that ended for a reason says why.
+    // Plain "nobody is logged in" is no error to show: only a session that ended for a reason says why,
+    // and only until the first tile is tapped, which forgets it for good, Rudi included.
     if (ended)
       return (
-        <PinLogin
-          notice={ended.body.code === "not_authenticated" ? undefined : ended}
-        />
+        <PinLogin notice={notice ?? undefined} onPick={() => logout.reset()} />
       );
     // Nothing while `me` is on its way; the reason once it failed with no answer at all.
     return <ApiErrorAlert error={me.error} />;

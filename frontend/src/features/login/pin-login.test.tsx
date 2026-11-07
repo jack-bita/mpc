@@ -193,6 +193,18 @@ describe("the pin login", () => {
     ).toBeNull();
   });
 
+  it("tells the home page when a tile is tapped, so it can drop the notice for good", async () => {
+    theShop({ status: 204 });
+    const picked = vi.fn();
+    render(<PinLogin onPick={picked} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Juma Mfano Juma" }),
+    );
+
+    expect(picked).toHaveBeenCalledOnce();
+  });
+
   it("locks the app when the server says this laptop is blocked", async () => {
     // Sent through the store, so the device's check hears of the block and the lock comes at once
     // (noticeBlock, UI-3): a call sent around the store would leave the laptop open.

@@ -30,10 +30,14 @@ import { type PinScreenStaff, StaffPicker } from "./staff-picker";
 
 export function PinLogin({
   notice,
+  onPick,
 }: {
   /** Why the last session ended, when it didn't end by itself: `me` refused it, as when the person was
    * suspended while logged in. Shown above the tiles until someone is picked. */
   notice?: unknown;
+  /** Called as a tile is tapped: the home page then drops the notice for good, so Rudi doesn't bring the
+   * last person's reason back for the next one (UI-4's review). */
+  onPick?: () => void;
 }) {
   const t = useTranslations("login.pin");
   const store = useQueryClient();
@@ -59,7 +63,12 @@ export function PinLogin({
     return (
       <div className="grid gap-6">
         <ApiErrorAlert error={notice} />
-        <StaffPicker onPick={setPerson} />
+        <StaffPicker
+          onPick={(picked) => {
+            onPick?.();
+            setPerson(picked);
+          }}
+        />
       </div>
     );
 

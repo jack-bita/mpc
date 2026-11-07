@@ -149,9 +149,17 @@ describe("HomePage", () => {
   });
 
   it("asks for a PIN again when the server ends the session, saying why", async () => {
-    // Neema was suspended while logged in: `me` refuses her session (AUTH-4).
+    // Neema was suspended while logged in: `me` refuses her session (AUTH-4), until the laptop ends it.
     saveDevice(DAWA_LAPTOP);
-    answer("GET", ME, refusal(403, "staff.suspended"));
+    let ended = false;
+    answer("GET", ME, () => {
+      const why = refusal(403, ended ? "not_authenticated" : "staff.suspended");
+      return Response.json(why.body, { status: why.status });
+    });
+    answer("POST", "/api/auth/logout/", () => {
+      ended = true;
+      return new Response(null, { status: 204 });
+    });
     answer("GET", STAFF, { status: 200, body: [] });
 
     render(<HomePage />);

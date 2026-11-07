@@ -272,6 +272,51 @@ describe("leaving the laptop", () => {
 });
 
 describe("a session the server ends", () => {
+  it("says why once, ends that session on the server, and tells nobody after", async () => {
+    // Neema was suspended while logged in: `me` refuses her session with the reason (AUTH-4). The server
+    // keeps refusing it, with the same reason, until it is ended, and the next person at the counter
+    // must not be told she was suspended.
+    saveDevice(DAWA_LAPTOP);
+    let ended = false;
+    const suspended = refusal(403, "staff.suspended");
+    const nobody = refusal(403, "not_authenticated");
+    answer("GET", ME, () => {
+      const why = ended ? nobody : suspended;
+      return Response.json(why.body, { status: why.status });
+    });
+    answer("GET", STAFF, {
+      status: 200,
+      body: [
+        {
+          id: JUMA.staff.id,
+          full_name: JUMA.user.full_name,
+          display_name: JUMA.staff.display_name,
+        },
+      ],
+    });
+    answer("POST", LOGOUT, () => {
+      ended = true;
+      return new Response(null, { status: 204 });
+    });
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    const why = "Umesimamishwa. Ongea na meneja au mmiliki.";
+    expect(await screen.findByText(why)).toBeDefined();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+    ).toBeDefined();
+    expect(logouts()).toHaveLength(1);
+    // Juma taps his tile, then Rudi: the reason was for her, and is gone.
+    fireEvent.click(screen.getByRole("button", { name: "Juma Mfano Juma" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rudi" }));
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+    ).toBeDefined();
+    // TanStack tells the screen of the forgetting at its next turn, not in the same moment.
+    await vi.waitFor(() => expect(screen.queryByText(why)).toBeNull());
+    expect(logouts()).toHaveLength(1);
+  });
+
   it("stays ended through a failed refresh after it", async () => {
     // Neema's session ends on the server by itself, at its idle time, and the next refresh of `me` meets
     // a deploy's 502. TanStack keeps her last answer beside that error: read again, it would put her back
