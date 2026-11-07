@@ -115,6 +115,22 @@ describe("leaving the laptop", () => {
     expect(bar().queryByText("Neema")).toBeNull();
   });
 
+  it("moves the keyboard to the welcome, and back to the question after Toka", async () => {
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { level: 1, name: "Karibu, Neema" }),
+    );
+
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+
+    await screen.findByRole("heading", { name: "Wewe ni nani?" });
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+    );
+  });
+
   it("Badilisha mtu lets Juma log in after Neema, and he sees only his own", async () => {
     // The quick switch: Juma steps up to the counter while Neema is still logged in.
     theLaptop(NEEMA);

@@ -16,7 +16,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -60,6 +60,14 @@ export function PinLogin({
     },
   });
 
+  // The pad's step: focus on the person's name as it comes, and again once an answer is in, as a key
+  // switched off while the PIN was away lets go of the focus. A screen reader says whose PIN it asks for;
+  // the tiles' step focuses its own question (staff-picker.tsx).
+  const padHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (!login.isPending) padHeading.current?.focus();
+  }, [person, login.isPending]);
+
   // Back to the tiles, with the last refusal forgotten: the next person starts clean.
   function back() {
     login.reset();
@@ -83,7 +91,13 @@ export function PinLogin({
   // Step 2: the pad, under the name of the person picked.
   return (
     <div className="grid justify-items-center gap-6">
-      <h1 className="text-3xl font-semibold">{person.full_name}</h1>
+      <h1
+        ref={padHeading}
+        tabIndex={-1}
+        className="text-3xl font-semibold outline-none"
+      >
+        {person.full_name}
+      </h1>
       <p className="text-lg">{t("typePin")}</p>
       {/* The server's no: a wrong PIN, a lock with its minutes, a suspension. */}
       <ApiErrorAlert error={login.error} />

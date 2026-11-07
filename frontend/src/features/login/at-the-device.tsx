@@ -16,7 +16,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -99,6 +99,10 @@ export function AtTheDevice({
   // dropped network leaves the person where they are. Nobody while they are leaving: hidden at the press.
   const here = ended || leaving ? undefined : me.data;
   const side = here ? sideAt(here, device.homeSide.id) : undefined;
+  // Focus on the welcome as each person arrives: the pad they typed on has gone, and focus with it.
+  const welcome = useRef<HTMLHeadingElement>(null);
+  const hereId = here?.staff.id;
+  useEffect(() => welcome.current?.focus(), [hereId]);
 
   // Toka, Badilisha mtu and the idle lock: the logout names who leaves, so a refused one's reason shows
   // only while they are here.
@@ -127,7 +131,11 @@ export function AtTheDevice({
           <ApiErrorAlert
             error={leaver === here.staff.id ? logout.error : null}
           />
-          <h1 className="text-3xl font-semibold">
+          <h1
+            ref={welcome}
+            tabIndex={-1}
+            className="text-3xl font-semibold outline-none"
+          >
             {t("welcome", { name: here.staff.display_name })}
           </h1>
         </>

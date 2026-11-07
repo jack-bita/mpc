@@ -11,6 +11,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -43,11 +44,23 @@ export function StaffPicker({
   const staff = useShopStaff();
   // Empty while the answer is on its way, and when the read failed with nothing read before it.
   const people = staff.data;
+  // The tiles' step has come, and whatever had focus (a tapped tile, Rudi, Toka) left with the last one:
+  // focus moves to the question, so a screen reader says it, and Tab goes on from here (as UI-3's forms
+  // do).
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus(), []);
 
   return (
     <div className="grid gap-6">
       {/* The heading of this step of the login screen: the PIN pad's step has the person's name. */}
-      <h1 className="text-3xl font-semibold">{t("title")}</h1>
+      {/* tabIndex -1: code may focus it, and Tab passes it by. No ring: it isn't anything to press. */}
+      <h1
+        ref={heading}
+        tabIndex={-1}
+        className="text-3xl font-semibold outline-none"
+      >
+        {t("title")}
+      </h1>
       {/* Nothing while there is no error. Above the tiles, not in their place: if a refresh fails, the
           people last read stay, with the reason above them. */}
       <ApiErrorAlert error={staff.error} />

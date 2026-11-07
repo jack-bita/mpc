@@ -57,6 +57,17 @@ describe("the staff picker", () => {
     expect(within(asha).getByText("Asha")).toBeDefined();
   });
 
+  it("puts the keyboard on its question as it shows", async () => {
+    // A screen reader says where the person is; Tab goes on from the question to the tiles.
+    answer("GET", STAFF, { status: 200, body: [ASHA, JUMA] });
+    render(<StaffPicker onPick={vi.fn()} />);
+
+    // The heading itself, not only its words: the page's <body> holds the same words until the tiles come.
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+    );
+  });
+
   it("picks the person whose tile is tapped", async () => {
     answer("GET", STAFF, { status: 200, body: [ASHA, JUMA] });
     const picked = vi.fn();

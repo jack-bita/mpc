@@ -69,6 +69,24 @@ describe("the pin login", () => {
     expect(screen.queryByRole("heading", { name: "Wewe ni nani?" })).toBeNull();
   });
 
+  it("moves the keyboard to each step's heading, and back to it after a refusal", async () => {
+    // The tile tapped, Rudi and a key switched off while the PIN is away all leave the page: focus would
+    // fall to nothing, and a screen reader would say nothing of the new step (UI-3 did this for its forms).
+    theShop(refusal(400, "pin.wrong"));
+    render(<PinLogin />);
+
+    await ashaTypes("4830");
+    await screen.findByText("PIN si sahihi.");
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { level: 1, name: "Asha Mfano" }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Rudi" }));
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+    );
+  });
+
   it("sends who and the PIN, then forgets the last person's answers", async () => {
     theShop({ status: 204 });
     // The store as the last person left it: a list from their last screen (UI-2's note on UI-4).
