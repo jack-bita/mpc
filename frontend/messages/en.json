@@ -85,6 +85,10 @@
     "picker": {
       "title": "Who are you?",
       "empty": "No one works here yet. Ask the shop's owner to add the staff."
+    },
+    "pin": {
+      "typePin": "Type your PIN",
+      "back": "Back"
     }
   },
   "stock": {

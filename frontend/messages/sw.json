@@ -85,6 +85,10 @@
     "picker": {
       "title": "Wewe ni nani?",
       "empty": "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze."
+    },
+    "pin": {
+      "typePin": "Andika PIN yako",
+      "back": "Rudi"
     }
   },
   "stock": {
