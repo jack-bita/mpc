@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.32 · 7 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.33 · 7 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.33** (7 Nov 2026, UI-4): the PIN login's screens are built (§5.9, §7.2, 04 v1.46). A paired device asks for its shop's people online, until sync carries them (§5.10); `me` says how long a PIN's session lasts unused, so the screen keeps an idle lock of its own; each login, logout and quick switch makes the store forget the last person; the logout is sent again until the server hears it. Marked **(v1.33)**.
 
 **Changes in v1.32** (7 Nov 2026, UI-3): the device's side of registering is built (§5.9, 04 v1.45). The app asks the device's `me` as it opens and every few minutes, keeps the answer on the device, and names the shop and the home side in the top bar. Until sync exists, a block shows at the device's next request of any kind, and the lock stays through a reload offline. §7.2's map shows the setup area, `features/devices/` and `features/people/`. From its review, §6.1 says where the device's own identity lives: outside the shop's database, in one place. Marked **(v1.32)**.
 
@@ -393,6 +395,7 @@ Confirming a one-screen sale:
 
 **Staff PIN sessions**
 - **Online:** device key + staff PIN → a Django session for that person on that device. Idle lock after 15 minutes *(default, a setting)*. Quick switch = another PIN. Five wrong PINs lock that person on that device for a minute, doubling each time, up to an hour **(v1.20)**: someone typing wrong PINs on purpose can't keep a coworker out for days. A new PIN lifts the lock at once.
+- **On the screen** **(v1.33)**: the home page of a registered device asks "Wewe ni nani?" with a tile for each person who can log in today, from `GET /api/devices/v1/staff/` (names only, A to Z, never whether a person has a PIN), until sync carries the staff rows (SYNC-10); the 4th digit of the PIN sends it. Selling uses the device's key, not the session, so it never pushes the server's idle time forward: the screen keeps an idle lock of its own, for `me`'s `idle_minutes`, which come from the session itself, so both end together; it looks at the clock, not a countdown, so a laptop that slept locks as it opens. *Badilisha mtu*, *Toka* and the idle lock all end the session on the server first, sent again until the server hears it, with the person hidden from the press. Each login, logout and quick switch makes the store of server answers forget the last person: every read reset and every change dropped, the PIN among them (`forgetTheLastPerson`).
 - **Which job** **(v1.20)**: the session names the device's shop and the person's job there, so a person with jobs at two shops isn't asked to choose at the counter.
 - **On a temporary password** **(v1.20)**: the PIN still works and the person can sell. The office routes stay closed (`password.must_change`) until they choose their own, and `me` says so, so the app can tell them why.
 - **What a session holds** **(v1.21)**: the shop, the person's job, the device, and when the PIN was set. A new login always starts a new session, and deletes the one this browser held, whoever's it was. Each visit checks, in this order: this device's key is beside it, and the device key's door names the shop the session names (`session.wrong_device`, first, so someone who copied its number reads no row and learns nothing about the person) **(v1.22)**; the shop is active; the device isn't blocked; the person still has that job, with that PIN; they aren't suspended; they have a password of their own. So a suspension, a block or a new PIN stops the very next click. Use pushes the idle time forward, at most once a minute, or at half a short idle time **(v1.23)**. Logout needs only the session and the CSRF token, so it works whatever has happened to the person or the device. These checks run on `/api/`, and the device's cookie goes nowhere else, so elsewhere a PIN's session is treated as nobody **(v1.22, v1.23)**. The Django admin refuses it, whoever's it is; its login page names no one, and a password typed there, with its CSRF token, starts a clean session. allauth's `auth/session` and reset route, which answer with a name and an email, name no one. `auth/login` answers 409 and changes nothing. The change of one's own password still takes it, and always asks for the current password. Honest limit: a PIN login moves the person's `last_login`, which Django's reset key is made from, so a reset link already sent stops working; it fails safe **(v1.23)**.
@@ -427,7 +430,7 @@ Confirming a one-screen sale:
 | `/api/sync/v1/bootstrap`, `/pull`, `/push`, `/attachments/{id}` | Sync (§6) | Device key |
 | `/_allauth/browser/v1/…` | Password login, logout, password reset, session (django-allauth): only these, and they answer in allauth's own shape, not the API's one error shape **(v1.17)** | — |
 | `/api/auth/…` | PIN login, logout, me (our own) | PIN login: device key. Logout and me: the session, so logout works on a blocked device, and me serves a password login too **(v1.20)** |
-| `/api/devices/v1/pairing/`, `/api/devices/v1/me/` | A new device asks to join; a paired device learns its shop. Versioned like sync: devices are the slowest to update **(v1.14)** | Device key (none yet, to ask) |
+| `/api/devices/v1/pairing/`, `/api/devices/v1/me/`, `/api/devices/v1/staff/` | A new device asks to join; a paired device learns its shop. Versioned like sync: devices are the slowest to update **(v1.14)**. A paired device lists its shop's people for the PIN screen, names only, until sync carries them (UI-4) **(v1.33)** | Device key (none yet, to ask) |
 | `/api/health/` | Uptime check | Public |
 | `/api/schema/`, `/api/docs/` | The OpenAPI description, and its docs page | Open on the demo and on a laptop; closed in production, where the page would run a CDN's code beside the superuser's login **(v1.8)** |
 
@@ -603,6 +606,7 @@ This keeps all offline logic in one place. A lint rule refuses, in `app/(counter
 frontend/src/
 ├── app/                      routes; every page is a client component
 │   ├── layout.tsx            providers: translations, data, session, device (the device's check and lock, v1.32)
+│   ├── page.tsx              Karibu on a new device; on a registered one, the PIN login, in AppFrame's login area (v1.33)
 │   ├── (setup)/register-device/   Sajili kifaa hiki, in AppFrame with the offline banner, outside the counter lock (v1.32)
 │   ├── (counter)/sale/  clock/  drawer/  customers/new/
 │   ├── (office)/products/  prices/  deliveries/  counts/  contacts/  cashup/
@@ -611,12 +615,13 @@ frontend/src/
 │   ├── print/slip/  print/receipt/      print-only pages
 │   └── design/               every colour, both fonts and every piece of the look, to check by eye (v1.29)
 ├── features/<module>/        components and hooks per domain module: devices/ (the device's check, its saved copy and
-│                             lock, and the registration screens), people/ (who is logged in) (v1.32)
+│                             lock, and the registration screens), people/ (who is logged in) (v1.32), login/ (the PIN
+│                             screen on a registered device's home page: picker, pad, logout, idle lock) (v1.33)
 ├── offline/                  db.ts (schema + versions), outbox.ts, push.ts, pull.ts,
 │                             effects.ts, search.ts, pin.ts, clock.ts, storage.ts, network.ts (online or not) (v1.30)
 ├── api/                      schema.d.ts (generated — never edited), client.ts (the typed client and its CSRF token),
 │                             refusal.ts (a refusal, or no answer at all, thrown for TanStack Query), query-client.ts and provider.tsx (the store
-│                             of server answers), errors.ts (what a failed call shows) (v1.31)
+│                             of server answers, and forgetting the last person at a login, v1.33), errors.ts (what a failed call shows) (v1.31)
 ├── lib/                      decimal.ts, rounding.ts, units.ts, time.ts, ids.ts, format.ts, permissions.ts
 ├── components/               the app's own parts, built from our pieces: app-frame.tsx (the top bar and the page's <main>),
 │                             language-button.tsx, offline-banner.tsx, update-prompt.tsx (v1.30), api-error-alert.tsx (v1.31)
