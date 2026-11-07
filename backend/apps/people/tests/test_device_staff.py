@@ -6,6 +6,7 @@ this list onto the device (SYNC-2, SYNC-10), but it comes later: until then the 
 
     the cookie holds              GET /api/devices/v1/staff/
     nothing, or a made-up key     401 not_authenticated
+    a person's session, no key    401 not_authenticated: a manager's own phone is no shop device
     a blocked device's key        401 device.blocked
     a paired device's key         200: its own shop's people at work, A to Z, as id, full name and nickname
 
@@ -125,11 +126,23 @@ def test_blocked_device_gets_no_staff_list(manager: StaffMember, paired: tuple[D
 
 @pytest.mark.parametrize("key", [None, "not-a-key"])
 def test_no_device_gets_no_staff_list(key: str | None, paired: tuple[Device, str]) -> None:
-    # A browser that isn't a paired device: a stranger's, or a manager's own phone. A shop's people are only for its
+    # A browser that isn't a paired device: a stranger's, with no key or a made-up one. A shop's people are only for its
     # devices.
     client = APIClient() if key is None else a_browser(key)
 
     response = client.get(STAFF)
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "not_authenticated"
+
+
+def test_a_password_session_alone_gets_no_staff_list(manager: StaffMember, paired: tuple[Device, str]) -> None:
+    # A manager's own phone: logged in as a person, with no device's key. The route takes a device's key only
+    # (DeviceView), so a person's session opens it nowhere, however many keys the person holds.
+    phone = APIClient()
+    phone.force_login(manager.user)
+
+    response = phone.get(STAFF)
 
     assert response.status_code == 401
     assert response.json()["code"] == "not_authenticated"
