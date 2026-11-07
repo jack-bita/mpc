@@ -1,8 +1,8 @@
 // device-lock.test.tsx — a blocked device's app locks on its next request, with a clear message (the
 // UI-3 card's second Done line), stays locked offline, and opens again after an unblock.
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { fireEvent, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/api/client";
 import { QueryProvider } from "@/api/provider";
@@ -61,6 +61,15 @@ function PinLogin() {
 }
 
 const lockTitle = () => screen.findByText("Kifaa hiki kimezuiwa");
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  // TanStack keeps one online switch for the whole file, and a test that went offline would leave
+  // the next ones waiting for a network: the browser says it is back.
+  act(() => {
+    window.dispatchEvent(new Event("online"));
+  });
+});
 
 /** The Jaribu tena button, once the check that brought the lock is over: it is switched off while a
  * check runs, so a second tap can't send a second one. */
@@ -141,6 +150,23 @@ describe("the lock", () => {
         "Imeshindwa kufika kwenye seva. Angalia mtandao, kisha ujaribu tena.",
       ),
     ).toBeDefined();
+  });
+
+  it("says the network is gone when the browser knows it, as Jaribu tena then asks nothing", async () => {
+    saveDevice(DAWA_LAPTOP);
+    saveBlocked();
+    answer("GET", ME, refusal(401, "device.blocked"));
+    renderApp();
+    expect(await lockTitle()).toBeDefined();
+
+    // The browser says it is offline (offline-banner.test.tsx plays it the same way).
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    act(() => {
+      window.dispatchEvent(new Event("offline"));
+    });
+    fireEvent.click(await readyToTryAgain());
+
+    expect(await screen.findByText("Inahitaji mtandao")).toBeDefined();
   });
 
   it("locks a device it never knew, with no names", async () => {

@@ -25,6 +25,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
 import { TopBar } from "@/components/design/top-bar";
 import { LanguageButton } from "@/components/language-button";
+import { OfflineBanner } from "@/components/offline-banner";
 
 import { checkThisDevice, DEVICE_CHECK } from "./device-check";
 import { useDeviceBlocked, useThisDevice } from "./this-device";
@@ -47,9 +48,11 @@ function LockScreen() {
     enabled: false,
   });
   // A failed check that is the block itself says nothing new: the lock already says it. Anything else,
-  // like no network, is shown, so a tap that changes nothing still says why. failureReason, not error:
-  // a lost network is tried twice more, about 3 seconds in all (query-client.ts), and `error` stays
-  // empty until the last try; failureReason holds each try's failure at once, and empties on success.
+  // like a server that can't be reached, is shown, so a tap that changes nothing still says why.
+  // failureReason, not error: a lost answer is tried twice more, about 3 seconds in all
+  // (query-client.ts), and `error` stays empty until the last try; failureReason holds each try's
+  // failure at once, and empties on success. While the browser itself says it is offline, no try is
+  // made at all (TanStack pauses it), so no failure comes: the offline banner under the bar says why.
   const failure =
     check.failureReason instanceof ApiRefusal &&
     check.failureReason.body.code === "device.blocked"
@@ -65,6 +68,9 @@ function LockScreen() {
         side={device ? { name: device.homeSide.name } : undefined}
         actions={<LanguageButton />}
       />
+      {/* Inahitaji mtandao while the network is gone, as on office screens: a tap on Jaribu tena then
+          asks nothing, and without it the lock would say nothing either. */}
+      <OfflineBanner />
       {/* The page's one <main>: the lock takes the place of the page, and of its <main>. */}
       <main className="flex flex-1 flex-col gap-4 p-4">
         <Alert kind="danger">
