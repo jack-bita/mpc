@@ -53,8 +53,8 @@ export function codeMessage(
   return t("errorFallback.unknownCode", { code });
 }
 
-// `wait` comes in seconds (pin.locked, throttled); people read minutes. Plain numbers, not big.js: a wait is a count
-// of seconds, not money or a quantity (ADR-0024).
+// `wait` comes in seconds (pin.locked, throttled); people read minutes. Plain numbers, not big.js: a wait
+// is a count of seconds, not money or a quantity (ADR-0024).
 function withMinutes(params: CodeValues): CodeValues {
   const seconds = asSeconds(params.wait);
   // Rounded up, and at least 1: 30 seconds reads "dakika 1", never "dakika 0".
