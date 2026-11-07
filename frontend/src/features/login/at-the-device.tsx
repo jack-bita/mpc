@@ -115,15 +115,9 @@ export function AtTheDevice({
   useIdleLock(here?.idle_minutes, leave);
 
   function whatShows() {
-    // While the logout is on its way: neither the person nor the tiles yet. A PIN login sent meanwhile
-    // could be ended by her logout, if it landed after his login.
-    if (leaving)
-      return (
-        // role="status": a screen reader says it, as the screen empties.
-        <p role="status" className="text-lg">
-          {t("leaving")}
-        </p>
-      );
+    // While the logout is on its way: neither the person nor the tiles yet, only the status line below. A
+    // PIN login sent meanwhile could be ended by her logout, if it landed after his login.
+    if (leaving) return null;
     if (here)
       return (
         <>
@@ -172,6 +166,12 @@ export function AtTheDevice({
       side={side ? { name: side.name } : undefined}
       actions={buttons}
     >
+      {/* role="status": a screen reader says its words as they change. Always on the page, empty and hidden
+          from the eye (sr-only) while there is nothing to say: a status line that comes with its words in it
+          often goes unsaid (NVDA, JAWS), as the offline banner's comment says (UI-4's review). */}
+      <p role="status" className={leaving ? "text-lg" : "sr-only"}>
+        {leaving ? t("leaving") : null}
+      </p>
       {whatShows()}
       {children}
     </AppFrame>

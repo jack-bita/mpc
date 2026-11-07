@@ -172,6 +172,19 @@ describe("leaving the laptop", () => {
     expect(screen.queryByRole("heading", { name: "Wewe ni nani?" })).toBeNull();
   });
 
+  it("says it is leaving in a status line that was on the page already", async () => {
+    // A status line that comes with its words in it often goes unsaid (NVDA, JAWS): it must be there, empty,
+    // before its words arrive, as the offline banner's is.
+    theLaptop(NEEMA, () => new Promise<Response>(() => {}));
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    const lines = screen.getAllByRole("status");
+
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+
+    expect(lines).toContain(await screen.findByText("Unatoka…"));
+  });
+
   it("sends the logout again when no answer came, until the server hears it", async () => {
     // The network dropped as she pressed Toka. Left there, her session would outlive the press: when the
     // network came back before its idle time, `me` would bring her back on the screen.
