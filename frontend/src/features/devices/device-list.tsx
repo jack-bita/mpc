@@ -141,8 +141,14 @@ function DeviceCard({
 
   // The browser writes some of these with a capital ("Sekunde 10 zilizopita"), and the phrase sits
   // mid-sentence. No English one starts with a name, so lowering the first letter is safe in both.
+  // Never later than now: the time is the server's, and a phone whose clock runs behind it would read
+  // a device seen a moment ago as "baada ya dakika 2", seen in two minutes. Held at now, it reads
+  // "sasa hivi".
   const seen = device.last_seen_at
-    ? format.relativeTime(new Date(device.last_seen_at), now)
+    ? format.relativeTime(
+        Math.min(Date.parse(device.last_seen_at), now.getTime()),
+        now,
+      )
     : null;
   const seenText = seen
     ? t("seen", { when: seen.charAt(0).toLowerCase() + seen.slice(1) })

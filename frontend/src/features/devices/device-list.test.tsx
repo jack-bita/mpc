@@ -93,6 +93,19 @@ describe("the device list", () => {
     expect(names).toEqual(["Laptop Dawa", "Simu Vyakula"]);
   });
 
+  it("reads a time ahead of the phone's clock as now, never as later", async () => {
+    // The server's clock is ahead of this phone's by 2 minutes.
+    listAnswers({
+      ...LAPTOP,
+      last_seen_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+    });
+
+    render(<DeviceList me={OWNER} />);
+
+    const laptop = await card("Laptop Dawa");
+    expect(laptop.getByText("Kilionekana sasa hivi")).toBeDefined();
+  });
+
   it("follows the pages to the last", async () => {
     answer("GET", DEVICES, (request) => {
       const cursor = new URL(request.url).searchParams.get("cursor");
