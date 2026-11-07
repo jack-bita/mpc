@@ -913,7 +913,7 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 `M` · Jack-led · after UI-1 · branch `feat/sync-6-dexie`
 **Learn:** IndexedDB, Dexie and database versions inside the browser (03 §6.1).
 **Build:** `offline/db.ts`: one database per shop with the stores `meta`, the reference stores, `pin_checks`, documents, `outbox`, `pending_effects` and `sent_archive`; typed tables; version 1; Vitest with fake-indexeddb.
-**Watch out:** `dexie` and `dexie-react-hooks` (03 §3) are new dependencies again. SPIKE-1 added Dexie for its test page and removed it with the page, so both need Jack's yes before `pnpm add` **(v1.10)**.
+**Watch out:** `dexie` and `dexie-react-hooks` (03 §3) are new dependencies again. SPIKE-1 added Dexie for its test page and removed it with the page, so both need Jack's yes before `pnpm add` **(v1.10)**. From UI-3 **(v1.45)**: which device this is (its id, name, code, shop, home side, and a block) already lives in `mpc.device` (`src/features/devices/this-device.ts`), outside every shop's database, as the shop must be known before its database opens (03 §6.1). `meta` keeps no copy of it, so receipt numbers read the device's code from one place.
 **Done when:**
 - [ ] Two shops in one browser get two separate databases.
 - [ ] A version bump runs its upgrade.

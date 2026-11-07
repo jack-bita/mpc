@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
 
-**Changes in v1.32** (7 Nov 2026, UI-3): the device's side of registering is built (§5.9, 04 v1.45). The app asks the device's `me` as it opens and every few minutes, keeps the answer on the device, and names the shop and the home side in the top bar. Until sync exists, a block shows at the device's next request of any kind, and the lock stays through a reload offline. §7.2's map shows the setup area, `features/devices/`, `features/people/` and `lib/ids.ts`. Marked **(v1.32)**.
+**Changes in v1.32** (7 Nov 2026, UI-3): the device's side of registering is built (§5.9, 04 v1.45). The app asks the device's `me` as it opens and every few minutes, keeps the answer on the device, and names the shop and the home side in the top bar. Until sync exists, a block shows at the device's next request of any kind, and the lock stays through a reload offline. §7.2's map shows the setup area, `features/devices/` and `features/people/`. From its review, §6.1 says where the device's own identity lives: outside the shop's database, in one place. Marked **(v1.32)**.
 
 **Changes in v1.31** (6 Nov 2026, UI-2): the API's description is committed as `shared/openapi.json`, and CI checks it against the code and the types against it (AD11, §12). §7.1 says how the counter screens are kept off the server, and §7.2's map shows the new parts of `api/`, `i18n/codes.ts` and the error alert (04 v1.44). From its review, a suspicious request answers `bad_request` in the one shape (§5.10), and §7.1 names every way the counter lock refuses. Marked **(v1.31)**.
 
@@ -496,13 +496,15 @@ One IndexedDB database **per shop** on the device ✚, so a practice shop [R2] o
 
 | Store | Contents |
 |---|---|
-| `meta` | device id and code, shop, home side, app and schema versions, pull cursor, server-time offset, last server time seen, next `device_seq`, receipt counters |
+| `meta` | app and schema versions, pull cursor, server-time offset, last server time seen, next `device_seq`, receipt counters; the device's own id, code, shop and home side live outside, below **(v1.32)** |
 | Reference (pulled, read-only) | products, selling units, prices (current and future), product sides, tags, batches, stock balances, contacts, contact balances, staff (name, photo, status, PIN-changed time, language and font **(v1.27)**), permissions, settings, payment accounts, sides, open drawer sessions |
 | `pin_checks` | the offline PIN check values this device made itself (§5.9) |
 | Documents (made here) | sales with lines and payments, repayments, quick customers, drawer money movements, drawer openings, attendance events [R1b], attachments with their image files |
 | `outbox` | one row per document to send: id, type, `device_seq`, status, attempts, last error, `posted_seq` |
 | `pending_effects` | the stock and balance changes of documents the server hasn't confirmed yet, so screens include them |
 | `sent_archive` ✚ | sent documents, kept 30 days *(default)* for replay after a server restore |
+
+**Which device this is** **(v1.32)** lives outside every shop's database, in the browser's own storage (`mpc.device`, `src/features/devices/this-device.ts`): the device's id, name and code, its shop and home side, as `GET /api/devices/v1/me/` last said, and whether it is blocked. Outside, because the shop must be known before its database can be opened, and the lock must hold before any shop's data is read. It is kept in one place only: receipt numbers read the device's code from there, and `meta` keeps no copy (SYNC-6).
 
 Buying prices and payslips never go to shared devices.
 
