@@ -108,6 +108,35 @@ describe("the pin login", () => {
     );
   });
 
+  it("keeps no PIN once the server has answered", async () => {
+    // Juma tapped Asha's tile by mistake and typed his own PIN: wrong for her, but his real one. Kept, it
+    // would sit in the laptop's memory, readable in the browser's tools, after he walks away.
+    theShop(refusal(400, "pin.wrong"));
+    const store = makeQueryClient();
+    render(
+      <QueryClientProvider client={store}>
+        <PinLogin />
+      </QueryClientProvider>,
+    );
+
+    await ashaTypes("4830");
+    await screen.findByText("PIN si sahihi.");
+
+    const held = () =>
+      JSON.stringify(
+        store
+          .getMutationCache()
+          .getAll()
+          .map((change) => change.state.variables),
+      );
+    expect(held()).not.toContain("4830");
+    // Rudi, and the try itself is let go of: the store's list of changes is empty.
+    fireEvent.click(screen.getByRole("button", { name: "Rudi" }));
+    await vi.waitFor(() =>
+      expect(store.getMutationCache().getAll()).toEqual([]),
+    );
+  });
+
   it("says how many minutes a locked person waits", async () => {
     // The fifth wrong PIN locks her on this laptop for a minute, doubling each time (AUTH-4): the server
     // sends the wait in seconds, the screen says minutes.

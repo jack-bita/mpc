@@ -50,6 +50,14 @@ export function PinLogin({
     // Waited for: the keys stay off until the store has forgotten the last person and `me` has answered
     // for this one, so nothing typed meanwhile sends a second PIN.
     onSuccess: () => forgetTheLastPerson(store),
+    // Let go of the moment no screen holds it, not after TanStack's 5 minutes: a wrong PIN may be someone's
+    // real one, typed on a coworker's tile (UI-4's review).
+    gcTime: 0,
+    // Once the server has answered, right or wrong, the PIN is rubbed off what was sent: the try stays on
+    // the screen to show its answer, but holds no PIN, in the store or in the browser's tools.
+    onSettled: (_answer, _error, sent) => {
+      sent.pin = "";
+    },
   });
 
   // Back to the tiles, with the last refusal forgotten: the next person starts clean.
