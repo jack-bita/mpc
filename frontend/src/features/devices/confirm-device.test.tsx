@@ -1,7 +1,7 @@
 // confirm-device.test.tsx — Sajili kifaa on the manager's phone: what it sends, one device for a tap
 // sent again, each refusal where the manager will fix it, and only the sides they may manage (UI-3).
 import { fireEvent, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setLanguage } from "@/i18n/language";
 import { DAWA, DAWA_LAPTOP, VYAKULA, whoIsHere } from "@/test/devices";
@@ -20,6 +20,14 @@ const DEVICES = "/api/v1/people/devices/";
 const MANAGE = ["device.manage", "sale.make"];
 const UUID7 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+beforeEach(() => {
+  // The list under the form, empty: device-list.test.tsx covers it.
+  answer("GET", DEVICES, {
+    status: 200,
+    body: { next: null, previous: null, results: [] },
+  });
+});
 
 /** The device the server made, as it answers a confirm. */
 const MADE = {
@@ -232,7 +240,8 @@ describe("Sajili kifaa", () => {
     render(<DevicesScreen />);
 
     expect(await screen.findByRole("heading", { name: "Vifaa" })).toBeDefined();
-    await vi.waitFor(() => expect(sent.length).toBe(1));
+    // Once `me` has answered, and the list with it.
+    await vi.waitFor(() => expect(sent.length).toBe(2));
     expect(screen.queryByRole("button", { name: "Sajili kifaa" })).toBeNull();
   });
 

@@ -55,6 +55,26 @@
       "confirm": "Sajili",
       "cancel": "Ghairi",
       "registered": "{device} imesajiliwa. Kifaa hicho kitaonyesha jina la duka baada ya sekunde chache."
+    },
+    "list": {
+      "empty": "Bado hakuna kifaa kilichosajiliwa.",
+      "number": "Na. {code} · {side}",
+      "active": "Kinafanya kazi",
+      "blocked": "Kimezuiwa",
+      "seen": "Kilionekana {when}",
+      "neverSeen": "Hakijaonekana bado",
+      "rename": "Badilisha jina",
+      "newName": "Jina jipya",
+      "save": "Hifadhi",
+      "cancel": "Ghairi",
+      "block": "Zuia",
+      "blockReason": "Kwa nini unakizuia?",
+      "blockHint": "Mfano: kimeibiwa, au kimepotea.",
+      "blockConfirm": "Zuia kifaa",
+      "unblock": "Fungua",
+      "unblockReason": "Kwa nini unakifungua?",
+      "unblockHint": "Mfano: kimepatikana.",
+      "unblockConfirm": "Fungua kifaa"
     }
   },
   "stock": {

@@ -1,14 +1,16 @@
 // devices-screen.tsx — Vifaa, the shop's devices, on the manager's phone: Sajili kifaa, for a laptop
-// waiting with its code (UI-3, 03 §5.9).
+// waiting with its code, and the list of the shop's devices, with rename, block and unblock (UI-3,
+// 03 §5.9).
 //
 // An office screen: it asks the server through the store of server answers (rule 5), and needs the
 // internet, which the office area says while it is gone. It reads who is logged in first, to offer
 // Sajili kifaa only to someone who holds device.manage on some side; anyone else, a seller included,
-// never sees the button. Not logged in, it says to log in first.
+// never sees the button, and sees the list without its buttons. Not logged in, it says to log in first.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslations } from "use-intl";
 
@@ -19,10 +21,12 @@ import { Card, CardContent } from "@/components/design/card";
 import { sidesWhere, useWhoIsHere } from "@/features/people/who-is-here";
 
 import { ConfirmDevice, type Device } from "./confirm-device";
+import { DEVICE_LIST, DeviceList } from "./device-list";
 
 export function DevicesScreen() {
   const t = useTranslations("device.office");
   const who = useWhoIsHere();
+  const client = useQueryClient();
   const [registering, setRegistering] = useState(false);
   const [registered, setRegistered] = useState<Device | null>(null);
 
@@ -53,6 +57,8 @@ export function DevicesScreen() {
               onDone={(device) => {
                 setRegistered(device);
                 setRegistering(false);
+                // The list asks again, so the new laptop is on it.
+                void client.invalidateQueries({ queryKey: DEVICE_LIST });
               }}
               onCancel={() => setRegistering(false)}
             />
@@ -70,6 +76,7 @@ export function DevicesScreen() {
           </Button>
         </div>
       ) : null}
+      {who.data ? <DeviceList me={who.data} /> : null}
     </div>
   );
 }

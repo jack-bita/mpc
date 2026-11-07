@@ -55,6 +55,26 @@
       "confirm": "Register",
       "cancel": "Cancel",
       "registered": "{device} is registered. It will show the shop's name within a few seconds."
+    },
+    "list": {
+      "empty": "No device is registered yet.",
+      "number": "No. {code} · {side}",
+      "active": "Working",
+      "blocked": "Blocked",
+      "seen": "Seen {when}",
+      "neverSeen": "Not seen yet",
+      "rename": "Rename",
+      "newName": "New name",
+      "save": "Save",
+      "cancel": "Cancel",
+      "block": "Block",
+      "blockReason": "Why are you blocking it?",
+      "blockHint": "For example: stolen, or lost.",
+      "blockConfirm": "Block the device",
+      "unblock": "Unblock",
+      "unblockReason": "Why are you unblocking it?",
+      "unblockHint": "For example: found.",
+      "unblockConfirm": "Unblock the device"
     }
   },
   "stock": {
