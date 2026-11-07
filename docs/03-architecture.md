@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.31 · 6 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.32 · 7 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.32** (7 Nov 2026, UI-3): the device's side of registering is built (§5.9, 04 v1.45). The app asks the device's `me` as it opens and every few minutes, keeps the answer on the device, and names the shop and the home side in the top bar. Until sync exists, a block shows at the device's next request of any kind, and the lock stays through a reload offline. §7.2's map shows the setup area, `features/devices/`, `features/people/` and `lib/ids.ts`. Marked **(v1.32)**.
 
 **Changes in v1.31** (6 Nov 2026, UI-2): the API's description is committed as `shared/openapi.json`, and CI checks it against the code and the types against it (AD11, §12). §7.1 says how the counter screens are kept off the server, and §7.2's map shows the new parts of `api/`, `i18n/codes.ts` and the error alert (04 v1.44). From its review, a suspicious request answers `bad_request` in the one shape (§5.10), and §7.1 names every way the counter lock refuses. Marked **(v1.31)**.
 
@@ -381,8 +383,8 @@ Confirming a one-screen sale:
 **Registering a device** ✚
 1. A new device opens the app and taps *Sajili kifaa hiki*. The server makes a **pairing request**, which belongs to no shop yet, with an 8-character pairing code (valid 10 minutes, no look-alikes such as 0/O or 1/I). The device gets its **device key** at once, as an HttpOnly, Secure cookie; the key opens nothing until a manager says yes **(v1.13)**. The start is CSRF-checked, and refused when the device's cookie already opens a device (`pairing.already_paired`): otherwise another website could make a paired laptop ask again, and the new cookie would wipe its working key for good **(v1.14)**.
 2. The owner or a manager (`device.manage` on the home side they pick), logged in on their own phone, types the code, names the device and picks its home side. The device is made in their shop, with the next device code from the shop's counter (`ShopSequence`), and its key works from then on **(v1.13)**. The key's hash moves from the request to the device, so it lives in one place **(v1.14)**.
-3. The device learns its shop and its device code for receipt numbers (`GET /api/devices/v1/me/`), and shows the shop's name, so a code claimed by the wrong shop's manager is seen at once **(v1.14)**.
-4. **Blocking** a device from the owner's phone stops its key at once; its next sync fails and the app locks. Unsent records stay on it, and unblocking brings back the same key, so they can still be delivered. Both need a reason, written in the audit trail **(v1.13)**.
+3. The device learns its shop and its device code for receipt numbers (`GET /api/devices/v1/me/`), and shows the shop's name, so a code claimed by the wrong shop's manager is seen at once **(v1.14)**. The app asks it as it opens, when its window comes back to the front, when the network returns and every 5 minutes, keeps the answer on the device, so the top bar names the shop and the home side offline too, and forgets it when the key opens no device **(v1.32)**.
+4. **Blocking** a device from the owner's phone stops its key at once; its next sync fails and the app locks. Until sync exists, its next request of any kind does: the device's own check, or any read or change the app sends through its store of server answers. The block is kept on the device, so a reload with no network stays locked; honest limit: a device kept offline from before its block learns of it only at its next request **(v1.32)**. Unsent records stay on it, and unblocking brings back the same key, so they can still be delivered. Both need a reason, written in the audit trail **(v1.13)**.
 5. A device that loses its storage registers again and always gets a **new** device code, so receipt numbers stay unique (D7).
 
 **The device key is stored as its SHA-256 hash** **(v1.13)**. It is 32 random bytes: nobody can guess it, so a fast hash is safe, and each request finds its device in one index lookup. A slow hash such as Argon2 is for what people choose and others can guess, PINs and passwords; on every request it would cost about 40 ms and 19 MiB **(v1.23)**.
@@ -598,15 +600,16 @@ This keeps all offline logic in one place. A lint rule refuses, in `app/(counter
 ```
 frontend/src/
 ├── app/                      routes; every page is a client component
-│   ├── layout.tsx            providers: translations, data, session, device
-│   ├── (setup)/register-device/
+│   ├── layout.tsx            providers: translations, data, session, device (the device's check and lock, v1.32)
+│   ├── (setup)/register-device/   Sajili kifaa hiki, in AppFrame with the offline banner, outside the counter lock (v1.32)
 │   ├── (counter)/sale/  clock/  drawer/  customers/new/
 │   ├── (office)/products/  prices/  deliveries/  counts/  contacts/  cashup/
-│   │            reports/  staff/  settings/  devices/  flags/
+│   │            reports/  staff/  settings/  devices/  flags/   (devices/ is the first, v1.32)
 │   │            each area's layout.tsx puts its screens in AppFrame; the office one adds the offline banner (v1.30)
 │   ├── print/slip/  print/receipt/      print-only pages
 │   └── design/               every colour, both fonts and every piece of the look, to check by eye (v1.29)
-├── features/<module>/        components and hooks per domain module
+├── features/<module>/        components and hooks per domain module: devices/ (the device's check, its saved copy and
+│                             lock, and the registration screens), people/ (who is logged in) (v1.32)
 ├── offline/                  db.ts (schema + versions), outbox.ts, push.ts, pull.ts,
 │                             effects.ts, search.ts, pin.ts, clock.ts, storage.ts, network.ts (online or not) (v1.30)
 ├── api/                      schema.d.ts (generated — never edited), client.ts (the typed client and its CSRF token),
