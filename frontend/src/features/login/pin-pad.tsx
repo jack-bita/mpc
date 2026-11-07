@@ -11,7 +11,7 @@
 "use client";
 
 import { Delete } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/design/button";
@@ -59,20 +59,20 @@ export function PinPad({
 
   // The laptop's keyboard (03 §7: laptops are keyboard first): a number key types its digit, Backspace
   // takes one back. Not a key held down, which repeats by itself, nor one pressed with Ctrl, Alt or
-  // Cmd: Ctrl+1 is the browser's own, for its first tab.
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.repeat || event.ctrlKey || event.altKey || event.metaKey)
-        return;
-      if (/^[0-9]$/.test(event.key)) press(event.key);
-      else if (event.key === "Backspace") erase();
-    }
-    window.addEventListener("keydown", onKey);
-    // Taken off as the pad leaves the screen, and before each new draw puts on a fresh one.
-    return () => window.removeEventListener("keydown", onKey);
-    // No list of what it depends on, on purpose: it runs again after every draw, so the listener always
-    // reads today's digits. One kept from the first draw would still see nothing typed.
+  // Cmd: Ctrl+1 is the browser's own, for its first tab. Nor one a phone's keyboard is still composing
+  // into a character: it isn't typed yet. useEffectEvent: the listener below is put on once, and still
+  // reads today's digits each time, as the idle lock's does (idle-lock.ts).
+  const onKey = useEffectEvent((event: KeyboardEvent) => {
+    if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+    if (event.isComposing) return;
+    if (/^[0-9]$/.test(event.key)) press(event.key);
+    else if (event.key === "Backspace") erase();
   });
+  useEffect(() => {
+    window.addEventListener("keydown", onKey);
+    // Taken off as the pad leaves the screen.
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="flex flex-col items-center gap-6">

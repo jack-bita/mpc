@@ -74,11 +74,13 @@ describe("the pin pad", () => {
     expect(sent).toHaveBeenCalledWith("4297");
   });
 
-  it("ignores other keys, a key held down, and keys pressed with Ctrl, Alt or Cmd", () => {
-    // Ctrl+1 opens the browser's first tab, and a held key repeats by itself: neither is a digit typed.
+  it("ignores other keys, a key held down, keys pressed with Ctrl, Alt or Cmd, and one still being composed", () => {
+    // Ctrl+1 opens the browser's first tab, and a held key repeats by itself: neither is a digit typed. A
+    // phone's keyboard may still be putting a character together (composing): its keys aren't typed yet.
     const sent = vi.fn();
     render(<PinPad onPin={sent} />);
 
+    press("7", { isComposing: true });
     press("a");
     press("Enter");
     press("1", { repeat: true });
