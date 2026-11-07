@@ -122,6 +122,14 @@
       "send": "Tuma kiungo",
       "sent": "Kama barua pepe hii ina akaunti hapa, tumetuma kiungo. Kifungue ndani ya saa moja.",
       "back": "Rudi kuingia"
+    },
+    "reset": {
+      "title": "Weka nenosiri jipya",
+      "checking": "Tunaangalia kiungo…",
+      "noKey": "Kiungo hiki hakijakamilika. Kifungue tena kutoka kwenye barua pepe, au omba kingine.",
+      "askAgain": "Omba kiungo kingine",
+      "done": "Nenosiri lako jipya limewekwa. Ingia nalo sasa.",
+      "login": "Ingia"
     }
   },
   "office": {

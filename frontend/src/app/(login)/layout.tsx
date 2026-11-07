@@ -1,5 +1,5 @@
-// layout.tsx — the password pages of the owner and managers: Ingia, Umesahau nenosiri?, and later the new
-// password from the email link (UI-5, 03 §5.9).
+// layout.tsx — the password pages of the owner and managers: Ingia, Umesahau nenosiri?, and Weka nenosiri
+// jipya, which the email's reset link opens (UI-5, 03 §5.9).
 //
 // (login) in brackets is a route group: its folder's name stays out of the web address, so
 // login/page.tsx opens at /login/. These pages sit in AppFrame's login area, beside the home page's PIN

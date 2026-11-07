@@ -35,22 +35,16 @@ import { Field } from "@/components/design/field";
 import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 
-// The form's own word for a new password typed differently twice. Not a server's code, so its sentence is
-// in the form's book, not beside the server's (errors.test.ts lists only those).
-const NOT_THE_SAME = "not_the_same";
+import { NEW_PASSWORD, NOT_THE_SAME, TYPED_THE_SAME } from "./new-password";
 
-// Only what the form can know: each box filled, and the new one typed the same twice. Whether the
-// temporary one is right, and the new one good enough, is the server's checker's to say.
+// Only what the form can know: each box filled, and the new one typed the same twice (new-password.ts).
+// Whether the temporary one is right, and the new one good enough, is the server's checker's to say.
 const CHOOSE_FORM = z
   .object({
     temporary: z.string().min(1, { error: "required" }),
-    fresh: z.string().min(1, { error: "required" }),
-    again: z.string().min(1, { error: "required" }),
+    ...NEW_PASSWORD,
   })
-  .refine((form) => form.fresh === form.again, {
-    path: ["again"],
-    error: NOT_THE_SAME,
-  });
+  .refine(...TYPED_THE_SAME);
 type ChooseForm = z.infer<typeof CHOOSE_FORM>;
 
 export function ChoosePassword() {

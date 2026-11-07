@@ -122,6 +122,14 @@
       "send": "Send the link",
       "sent": "If this email has an account here, we have sent a link. Open it within an hour.",
       "back": "Back to log in"
+    },
+    "reset": {
+      "title": "Set a new password",
+      "checking": "Checking the link…",
+      "noKey": "This link is incomplete. Open it again from the email, or ask for a new one.",
+      "askAgain": "Ask for a new link",
+      "done": "Your new password is set. Log in with it now.",
+      "login": "Log in"
     }
   },
   "office": {
