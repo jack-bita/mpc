@@ -41,6 +41,20 @@
       "done": "Kifaa hiki kimesajiliwa",
       "which": "Jina lake ni {device}, upande wa {side}, duka la {shop}.",
       "continue": "Endelea"
+    },
+    "office": {
+      "title": "Vifaa",
+      "register": "Sajili kifaa",
+      "code": "Namba ya kifaa",
+      "codeHint": "Namba inayoonekana kwenye kifaa kipya, kama K7QM-4RXT.",
+      "name": "Jina la kifaa",
+      "nameHint": "Jina litakaloonekana kwenye orodha, kama Laptop Dawa.",
+      "side": "Upande wa kifaa",
+      "sideHint": "Upande ambao kifaa kitahudumia zaidi.",
+      "pickSide": "Chagua upande.",
+      "confirm": "Sajili",
+      "cancel": "Ghairi",
+      "registered": "{device} imesajiliwa. Kifaa hicho kitaonyesha jina la duka baada ya sekunde chache."
     }
   },
   "stock": {

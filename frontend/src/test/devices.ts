@@ -40,3 +40,41 @@ export const DAWA_LAPTOP: ThisDevice = {
     name: "Dawa",
   },
 };
+
+/** The Dawa and Vyakula sides, as `me` names them. */
+export const DAWA = { id: DAWA_LAPTOP.homeSide.id, code: "D", name: "Dawa" };
+export const VYAKULA = {
+  id: "019a5e00-0000-7000-8000-0000000000f1",
+  code: "F",
+  name: "Vyakula",
+};
+
+/** What GET /api/auth/me/ answers for someone at MPC on their own phone, holding `keys` on each side
+ * named. Fake people: made-up names. */
+export function whoIsHere(
+  keys: {
+    side: { id: string; code: string; name: string };
+    permissions: string[];
+  }[],
+): components["schemas"]["WhoIsHere"] {
+  return {
+    user: {
+      id: "019a5e00-0000-7000-8000-0000000000b1",
+      full_name: "Neema Mollel",
+      language: "sw",
+    },
+    staff: {
+      id: "019a5e00-0000-7000-8000-0000000000c1",
+      display_name: "Neema",
+      job_title: "Meneja",
+    },
+    shop: DAWA_LAPTOP_ANSWER.shop,
+    device: null,
+    home_side: null,
+    must_change_password: false,
+    permissions: {
+      whole_shop: [],
+      sides: keys.map(({ side, permissions }) => ({ ...side, permissions })),
+    },
+  };
+}

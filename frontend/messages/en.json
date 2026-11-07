@@ -41,6 +41,20 @@
       "done": "This device is registered",
       "which": "Its name is {device}, on the {side} side of {shop}.",
       "continue": "Continue"
+    },
+    "office": {
+      "title": "Devices",
+      "register": "Register a device",
+      "code": "Device code",
+      "codeHint": "The code the new device shows, like K7QM-4RXT.",
+      "name": "Device name",
+      "nameHint": "The name the list will show, like Laptop Dawa.",
+      "side": "The device's side",
+      "sideHint": "The side the device will serve most.",
+      "pickSide": "Pick a side.",
+      "confirm": "Register",
+      "cancel": "Cancel",
+      "registered": "{device} is registered. It will show the shop's name within a few seconds."
     }
   },
   "stock": {
