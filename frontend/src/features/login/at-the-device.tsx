@@ -6,7 +6,8 @@
 //   refused, under 500            the PIN login: nobody here, or a session the server ended, with why
 //   no answer, or the server down  the reason, and Inahitaji mtandao: the PIN login needs the network
 // A PIN login, a logout and a quick switch forget the last person, which asks `me` again
-// (forgetTheLastPerson), so this follows each by itself.
+// (forgetTheLastPerson), so this follows each by itself. After `me`'s idle minutes untouched, the laptop
+// logs the person out by itself (idle-lock.ts).
 //
 // Until the counter screens come, someone logged in sees only the welcome (UI-4's plan). It calls the
 // server, so it lives outside the counter lock (rule 5, ADR-0019).
@@ -28,6 +29,7 @@ import { OfflineBanner } from "@/components/offline-banner";
 import type { ThisDevice } from "@/features/devices/this-device";
 import { sideAt, useWhoIsHere } from "@/features/people/who-is-here";
 
+import { useIdleLock } from "./idle-lock";
 import { PinLogin } from "./pin-login";
 
 export function AtTheDevice({
@@ -68,6 +70,9 @@ export function AtTheDevice({
   // dropped network leaves the person where they are. Nobody while they are leaving: hidden at the press.
   const here = ended || leaving ? undefined : me.data;
   const side = here ? sideAt(here, device.homeSide.id) : undefined;
+  // A seller who walks away is logged out by herself, as if she had pressed Toka. Only while someone is
+  // here: while leaving, or with nobody, there is nothing to lock.
+  useIdleLock(here?.idle_minutes, () => logout.mutate());
 
   function whatShows() {
     // While the logout is on its way: neither the person nor the tiles yet. A PIN login sent meanwhile

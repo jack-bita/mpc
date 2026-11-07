@@ -197,6 +197,26 @@ describe("leaving the laptop", () => {
     expect(logouts()).toHaveLength(1);
   });
 
+  it("logs the person out by itself after the idle minutes untouched", async () => {
+    // Neema walks away from the counter. Her `me` says 15 minutes (AUTH-4's setting, UI-4's step 2).
+    // shouldAdvanceTime: the fake clock still moves on its own, so the fake server's answers arrive.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      theLaptop(NEEMA);
+      render(<AtTheDevice device={DAWA_LAPTOP} />);
+      await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 10 * 1000);
+
+      expect(
+        await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+      ).toBeDefined();
+      expect(logouts()).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("shows neither button while nobody is logged in", async () => {
     theLaptop(null);
     render(<AtTheDevice device={DAWA_LAPTOP} />);
