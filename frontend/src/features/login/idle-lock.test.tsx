@@ -72,6 +72,34 @@ describe("the idle lock", () => {
     expect(idle).toHaveBeenCalledOnce();
   });
 
+  it("arms again at the next use after a lock, and locks again", () => {
+    // A logout the server refused leaves the person on the screen (at-the-device.tsx): her next tap starts
+    // the watch again, and an idle laptop locks again.
+    const idle = vi.fn();
+    render(<Locked minutes={15} onIdle={idle} />);
+    vi.advanceTimersByTime(15 * MINUTE);
+    expect(idle).toHaveBeenCalledOnce();
+
+    fireEvent.pointerDown(window);
+    vi.advanceTimersByTime(15 * MINUTE);
+
+    expect(idle).toHaveBeenCalledTimes(2);
+  });
+
+  it("starts the watch over when the minutes change", () => {
+    // A new person logs in, or the shop's minutes changed: the wait counts from then, by the new minutes.
+    const idle = vi.fn();
+    const { rerender } = render(<Locked minutes={15} onIdle={idle} />);
+    vi.advanceTimersByTime(10 * MINUTE);
+
+    rerender(<Locked minutes={10} onIdle={idle} />);
+    vi.advanceTimersByTime(10 * MINUTE - IDLE_CHECK_EVERY);
+    expect(idle).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(IDLE_CHECK_EVERY);
+
+    expect(idle).toHaveBeenCalledOnce();
+  });
+
   it("never locks without idle minutes: nobody is here", () => {
     const idle = vi.fn();
     render(<Locked minutes={null} onIdle={idle} />);
