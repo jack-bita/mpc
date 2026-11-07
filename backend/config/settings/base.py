@@ -300,8 +300,10 @@ ACCOUNT_EMAIL_VERIFICATION = "none"
 ACCOUNT_ADAPTER = "apps.people.accounts.AccountAdapter"
 # A reset link opens the app (UI-5), at this path on the address the request came to. The key sits after the #, which a
 # browser never sends to a server: so it stays out of Caddy's and Django's logs, and out of any Referer header. A static
-# app (ADR-0016) can read it there with no route of its own for each key.
-HEADLESS_FRONTEND_URLS = {"account_reset_password_from_key": "/password-reset#{key}"}
+# app (ADR-0016) can read it there with no route of its own for each key. The path ends in a slash, as the app's page
+# does (trailingSlash, frontend/next.config.ts): it opens that page itself, rather than leaning on the server's redirect
+# from /password-reset to carry the key along.
+HEADLESS_FRONTEND_URLS = {"account_reset_password_from_key": "/password-reset/#{key}"}
 # Asked to reset an email nobody here has, allauth would send that address a note saying so: anyone could make us send
 # mail to any stranger. The answer to the asker stays the same either way, so nobody learns who has an account.
 ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False

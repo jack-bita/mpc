@@ -611,7 +611,7 @@ def test_allauths_reset_route_names_no_badge(asha: StaffMember, laptop_key: str)
     User.objects.create_user(full_name="Juma Demo", email="juma@example.com", password=ADMIN_PASSWORD)
     client = logged_in(asha, laptop_key)
     assert client.post(RESET_REQUEST, {"email": "juma@example.com"}, format="json").status_code == 200
-    [link] = [word for word in mail.outbox[-1].body.split() if "/password-reset#" in word]
+    [link] = [word for word in mail.outbox[-1].body.split() if "/password-reset/#" in word]
 
     answer = client.post(RESET, {"key": link.partition("#")[2], "password": NEW_PASSWORD}, format="json")
 
