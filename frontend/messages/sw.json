@@ -20,6 +20,14 @@
   "topBar": {
     "place": "{shop} · {side}"
   },
+  "device": {
+    "lock": {
+      "title": "Kifaa hiki kimezuiwa",
+      "which": "{device} · {shop}",
+      "ask": "Mwombe meneja akifungue. Kazi iliyo kwenye kifaa hiki haijapotea.",
+      "tryAgain": "Jaribu tena"
+    }
+  },
   "stock": {
     "part": "{unit} {count}"
   },

@@ -17,8 +17,10 @@ import { QueryProvider } from "@/api/provider";
 // Starts the service worker, which keeps the app's files on the device so every page opens offline,
 // and shows the Toleo jipya bar when a new version is ready (SPIKE-1).
 import { UpdatePrompt } from "@/components/update-prompt";
-// Asks the server which device this is, and keeps the answer for the top bar (UI-3).
+// Asks the server which device this is, and keeps the answer for the top bar and the lock (UI-3).
 import { DeviceCheck } from "@/features/devices/device-check";
+// A blocked device shows the lock in place of every page (UI-3).
+import { DeviceLock } from "@/features/devices/device-lock";
 // The two fonts inside the app (ADR-0039).
 import { atkinson, sourceSans } from "@/fonts/fonts";
 // Hands every screen its words from the open book: Swahili, or English after the switch (ADR-0040).
@@ -41,7 +43,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <LanguageProvider>
           <QueryProvider>
-            {children}
+            <DeviceLock>{children}</DeviceLock>
+            {/* Outside the lock, so a blocked device still asks, and learns of its unblock. */}
             <DeviceCheck />
             <UpdatePrompt />
           </QueryProvider>

@@ -1,13 +1,19 @@
-// device-check.tsx — the device asks the server who it is, and keeps the answer (UI-3, 03 §5.9, step 3).
+// device-check.tsx — the device asks the server who it is, and keeps the answer, a block included
+// (UI-3, 03 §5.9, steps 3 and 4).
 //
 // GET /api/devices/v1/me/ sends the device's key, in its cookie, and answers with the device, its shop
-// and its home side, once a manager has said yes to it. Asked when the app opens, when its window comes
-// back to the front, when the network comes back, and every 5 minutes while the app is open, so a rename
-// or a new home side shows soon. The answer is saved in this-device.ts, which the top bar reads.
+// and its home side, once a manager has said yes to it; a blocked device gets 401 device.blocked. Asked
+// when the app opens, when its window comes back to the front, when the network comes back, and every 5
+// minutes while the app is open, so a rename, a block or an unblock shows soon. The answer is saved in
+// this-device.ts, which the top bar and the lock read.
 //
-// The root layout puts it around every page, the counter's included. That is not a counter screen asking
-// the server for the shop's data (rule 5): it is the device asking about itself, and offline it simply
-// fails and keeps the last answer, so a counter screen works the same either way. It shows nothing.
+// A block also shows at the device's next request of any kind: every answer in the store of server
+// answers is watched for device.blocked. A PIN session's office routes send it as a 403 (AUTH-4), and so
+// will sync's routes (SYNC-2 on), which the lock will then follow too.
+//
+// The root layout puts it on every page, the counter's included. That is not a counter screen asking the
+// server for the shop's data (rule 5): it is the device asking about itself, and offline it simply fails
+// and keeps the last answer, so a counter screen works the same either way. It shows nothing.
 //
 // It also gives the browser its CSRF token: the server sends the cookie with every answer of this route
 // (DeviceMeView), so the first change the app sends, a pairing's start or a manager's confirm, has it.
@@ -15,13 +21,14 @@
 // "use client": it runs in the browser, and the build has none.
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import { api } from "@/api/client";
 import { answerOf, ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
 
-import { saveDevice, type ThisDevice } from "./this-device";
+import { saveBlocked, saveDevice, type ThisDevice } from "./this-device";
 
 type DeviceMe = components["schemas"]["DeviceMe"];
 
@@ -30,7 +37,7 @@ type DeviceMe = components["schemas"]["DeviceMe"];
 export const DEVICE_CHECK_EVERY = 5 * 60 * 1000;
 
 /** The check's place in the store of server answers. The registration screen asks the same, faster,
- * while it waits for the manager (UI-3), so both share one answer. */
+ * while it waits for the manager (UI-3), and the lock asks it again on a tap; all share one answer. */
 export const DEVICE_CHECK = ["devices", "me"] as const;
 
 // The API's answer, in our own shape (this-device.ts says why).
@@ -48,15 +55,23 @@ function fromAnswer(me: DeviceMe): ThisDevice {
   };
 }
 
+/** Keeps a block, from whichever request the server refused with it: 401 on the device's own routes,
+ * 403 on a PIN session's (AUTH-4). Anything else changes nothing. */
+export function noticeBlock(error: unknown): void {
+  if (error instanceof ApiRefusal && error.body.code === "device.blocked")
+    saveBlocked();
+}
+
 /**
  * Asks the server who this device is, saves the answer, and gives it back: the device, or null when the
- * server knows no working device by this browser's key. Anything else (no network, a server down) is
- * thrown, and the saved copy stays as it was: the device was registered a moment ago, and a dropped
- * network doesn't change that.
+ * server knows no working device by this browser's key. Anything else (a block, no network, a server
+ * down) is thrown. A block is kept first; otherwise the saved copy stays as it was: the device was
+ * registered a moment ago, and a dropped network doesn't change that.
  */
 export async function checkThisDevice(): Promise<ThisDevice | null> {
   try {
     const device = fromAnswer(await answerOf(api.GET("/api/devices/v1/me/")));
+    // A working device, so no longer blocked, if it was: an unblock opens the lock here.
     saveDevice(device);
     return device;
   } catch (error) {
@@ -70,12 +85,15 @@ export async function checkThisDevice(): Promise<ThisDevice | null> {
       saveDevice(null);
       return null;
     }
+    noticeBlock(error);
     throw error;
   }
 }
 
 /** Keeps the device's saved copy up to date. Shows nothing; the root layout puts it on every page. */
 export function DeviceCheck() {
+  const client = useQueryClient();
+
   useQuery({
     queryKey: DEVICE_CHECK,
     queryFn: checkThisDevice,
@@ -85,5 +103,25 @@ export function DeviceCheck() {
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
+
+  // Every read and every change through the store, any screen's, is watched for a block, so the lock
+  // comes at the device's very next request, not at the next check. Each store tells its watchers of
+  // every change to an answer; only a failure is looked at. The store is made once per page (provider.tsx),
+  // so this runs once; the returned functions stop the watching if the page ever drops it.
+  useEffect(() => {
+    const stopReads = client.getQueryCache().subscribe((event) => {
+      if (event.type === "updated" && event.action.type === "error")
+        noticeBlock(event.action.error);
+    });
+    const stopChanges = client.getMutationCache().subscribe((event) => {
+      if (event.type === "updated" && event.action.type === "error")
+        noticeBlock(event.action.error);
+    });
+    return () => {
+      stopReads();
+      stopChanges();
+    };
+  }, [client]);
+
   return null;
 }

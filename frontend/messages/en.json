@@ -20,6 +20,14 @@
   "topBar": {
     "place": "{shop} · {side}"
   },
+  "device": {
+    "lock": {
+      "title": "This device is blocked",
+      "which": "{device} · {shop}",
+      "ask": "Ask a manager to unblock it. The work on this device isn't lost.",
+      "tryAgain": "Try again"
+    }
+  },
   "stock": {
     "part": "{count} {unit}"
   },

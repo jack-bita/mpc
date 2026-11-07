@@ -15,7 +15,12 @@ import {
   DEVICE_CHECK_EVERY,
   DeviceCheck,
 } from "./device-check";
-import { saveDevice, savedDevice } from "./this-device";
+import {
+  saveBlocked,
+  savedBlocked,
+  saveDevice,
+  savedDevice,
+} from "./this-device";
 
 vi.mock("@/api/client", async (importOriginal) =>
   (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
@@ -42,6 +47,26 @@ describe("checkThisDevice", () => {
 
     expect(await checkThisDevice()).toBeNull();
     expect(savedDevice()).toBeNull();
+  });
+
+  it("keeps a block, and the device it was known as", async () => {
+    saveDevice(DAWA_LAPTOP);
+    answer("GET", ME, refusal(401, "device.blocked"));
+
+    await expect(checkThisDevice()).rejects.toBeInstanceOf(ApiRefusal);
+    expect(savedBlocked()).toBe(true);
+    expect(savedDevice()).toEqual(DAWA_LAPTOP);
+  });
+
+  it("lifts a block when the server names the device again", async () => {
+    // The manager unblocked it: the same key works again (AUTH-1).
+    saveDevice(DAWA_LAPTOP);
+    saveBlocked();
+    answer("GET", ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
+
+    await checkThisDevice();
+
+    expect(savedBlocked()).toBe(false);
   });
 
   it("keeps the saved copy when no answer comes", async () => {
