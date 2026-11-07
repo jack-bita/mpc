@@ -6,8 +6,8 @@ and whatever it says about who stands here can't be changed by the browser. It i
 starts (ADR-0038), so allauth and DRF both recognise it; a mark inside it, PIN_SESSION, is what makes it a PIN's.
 
 What each visit checks of a badge lives with the other rules of who may act (job_of_pin_session,
-apps/people/selectors.py). This file owns the badge's mark, the one function that starts a badge, and the one that keeps
-it alive.
+apps/people/selectors.py). This file owns the badge's mark, the one function that starts a badge, the one that keeps
+it alive, and the one that says how long it lasts unused, for the screen's own idle timer (UI-4).
 """
 
 import time
@@ -58,3 +58,13 @@ def keep_pin_session_alive(session: SessionBase) -> None:
         # Changing the session makes Django save it at the end of the visit, with a new end date, and send the cookie
         # again with a whole idle time.
         session[PIN_SESSION_USED] = now
+
+
+def pin_session_idle_minutes(session: SessionBase) -> int | None:
+    """How long this browser's badge lasts unused, in minutes; None if it holds no PIN's badge, as a password on a
+    person's own phone doesn't. `me` sends it, so a shared laptop's screen locks when the badge ends (UI-4)."""
+    if session.get(PIN_SESSION) is None:
+        return None
+    # The badge's own life, as start_pin_session set it and every save since has kept it: not the shop's setting today,
+    # which the owner may have changed since. The server ends this badge by this number, so the screen must too.
+    return session.get_expiry_age() // 60

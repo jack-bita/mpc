@@ -72,6 +72,8 @@ export function whoIsHere(
     device: null,
     home_side: null,
     must_change_password: false,
+    // A password on a phone that is the person's own: no idle lock of a shared screen's (UI-4).
+    idle_minutes: null,
     permissions: {
       whole_shop: [],
       sides: keys.map(({ side, permissions }) => ({ ...side, permissions })),

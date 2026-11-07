@@ -419,6 +419,7 @@ export interface components {
             device: components["schemas"]["MeDevice"] | null;
             home_side: components["schemas"]["MeSide"] | null;
             must_change_password: boolean;
+            idle_minutes: number | null;
             permissions: components["schemas"]["MePermissions"];
         };
     };

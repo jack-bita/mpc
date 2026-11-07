@@ -1464,6 +1464,10 @@
                     "must_change_password": {
                         "type": "boolean"
                     },
+                    "idle_minutes": {
+                        "type": "integer",
+                        "nullable": true
+                    },
                     "permissions": {
                         "$ref": "#/components/schemas/MePermissions"
                     }
@@ -1471,6 +1475,7 @@
                 "required": [
                     "device",
                     "home_side",
+                    "idle_minutes",
                     "must_change_password",
                     "permissions",
                     "shop",

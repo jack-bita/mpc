@@ -53,7 +53,7 @@ from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin, ShopVi
 from apps.core.permissions import Permission
 from apps.people.api.authentication import set_key_cookie
 from apps.people.api.base import DeviceView
-from apps.people.api.pin_session import PIN_SESSION, start_pin_session
+from apps.people.api.pin_session import PIN_SESSION, pin_session_idle_minutes, start_pin_session
 from apps.people.api.serializers import (
     DeviceConfirmSerializer,
     DeviceEditSerializer,
@@ -249,8 +249,13 @@ class MeViewSet(ShopViewSet[StaffMember]):
     # `auth` as on LogoutView: the same cookie as the office routes, described by the same name.
     @extend_schema(responses=WhoIsHereSerializer, auth=[{"cookieAuth": []}])  # type: ignore[list-item]
     def me(self, request: Request) -> Response:
-        badge = request._request.session.get(PIN_SESSION) or {}
-        here = who_is_here(cast(StaffMember, self.actor), device_id=badge.get("device"))
+        session = request._request.session
+        badge = session.get(PIN_SESSION) or {}
+        here = who_is_here(
+            cast(StaffMember, self.actor),
+            device_id=badge.get("device"),
+            idle_minutes=pin_session_idle_minutes(session),
+        )
         return Response(self.get_serializer(here).data)
 
 
