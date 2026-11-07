@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.30 · 6 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.31 · 6 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.31** (6 Nov 2026, UI-2): the API's description is committed as `shared/openapi.json`, and CI checks it against the code and the types against it (AD11, §12). §7.1 says how the counter screens are kept off the server, and §7.2's map shows the new parts of `api/`, `i18n/codes.ts` and the error alert (04 v1.44). From its review, a suspicious request answers `bad_request` in the one shape (§5.10), and §7.1 names every way the counter lock refuses. Marked **(v1.31)**.
 
 **Changes in v1.30** (6 Nov 2026, UI-1): choices by Jack, made while building UI-1 (04 v1.43). AD18 is now ADR-0040, which supersedes ADR-0032: the screens get their words through use-intl, next-intl's own core, as next-intl 4.x brings a code compiler and a file watcher that a static app with no language in its address never uses (§3, §7.2, §7.4). In Swahili, stock reads word first, "mifuko 26 + kilo 35.5", and in English number first; each word book holds its order, and the unit words are the shop's own (§7.4). §7.2's map shows the app's own parts in `components/`, each area's layout, `offline/network.ts` and the new test helpers. Marked **(v1.30)**.
 
@@ -159,7 +161,7 @@ Money and quantities travel as decimal strings in JSON, are `Decimal` in Python 
 *Why:* devices compute totals offline; device and server must agree to the shilling. *Cost:* high.
 
 **AD11 — The API contract is generated.**
-DRF → OpenAPI schema (drf-spectacular) → TypeScript types and a typed client. CI fails if either is out of date.
+DRF → OpenAPI schema (drf-spectacular) → TypeScript types and a typed client. CI fails if either is out of date. The schema is committed as `shared/openapi.json`, so a pull request shows any change to the API as a readable diff, and CI's frontend job, which has no Python, checks the types against it **(v1.31)**.
 *Why:* backend and frontend can't drift apart silently. *Cost:* low.
 
 **AD12 — Search runs on the device.** ✚
@@ -249,6 +251,7 @@ MPC/                          ← repo name follows the product name
 │   ├── public/               ← manifest, icons
 │   └── e2e/                  ← Playwright
 ├── shared/
+│   ├── openapi.json          ← the API's description, written by `pnpm gen:api`, read for the app's types (AD11) (v1.31)
 │   └── test-vectors/         ← JSON cases run by both pytest and Vitest (§8)
 ├── deploy/
 │   ├── Caddyfile
@@ -431,7 +434,7 @@ Conventions:
 - Money and quantities as strings (`"65000.00"`, `"12.500"`); times in ISO 8601 UTC; `business_date` as `YYYY-MM-DD` in shop time; IDs as UUIDv7 strings.
 - **Creates are idempotent:** the client sends the new record's UUID, so a retry can't make a duplicate. The UUID must be a UUIDv7 (`id.not_uuid7`). A retry gets the stored row as it is now, with the same `201`, whatever else it carries; an id already used in another shop is refused as `id.taken` **(v1.8)**.
 - **Edits** (`PATCH`) send the `version` they read; stale → `409 version_conflict`. No `PUT`, which could send old values back for fields the person never touched, and no `DELETE`: nothing is deleted **(v1.8)**.
-- **One error shape:** `{"code": "sale.below_floor", "message": "…", "fields": {…}, "params": {…}}`. `code` is the first problem with the whole request, or `invalid` when only fields are wrong; `fields` maps each wrong field to its codes (`lines.1.quantity` inside a list); `params` holds what the message needs; `message` is English, for developers and logs. A bug stays a 500, so it is logged. Under `/api/`, an address no route matches answers `not_found` and a crash `server_error`, in the same shape **(v1.8)**.
+- **One error shape:** `{"code": "sale.below_floor", "message": "…", "fields": {…}, "params": {…}}`. `code` is the first problem with the whole request, or `invalid` when only fields are wrong; `fields` maps each wrong field to its codes (`lines.1.quantity` inside a list); `params` holds what the message needs; `message` is English, for developers and logs. A bug stays a 500, so it is logged. Under `/api/`, an address no route matches answers `not_found` and a crash `server_error`, in the same shape **(v1.8)**, and a request Django finds suspicious, like a host it doesn't serve, `bad_request` **(v1.31)**.
 - Cursor pagination for long lists, newest first, 50 rows a page *(default)* **(v1.8)**; throttling on login, PIN and pairing.
 - **Throttles** **(v1.15)** count in Django's database cache, tables in PostgreSQL shared by every server worker, with no Redis (ADR-0023); `manage.py createcachetable` makes them on each deploy. Each limit has a table of its own, and `default` is the login limits' own, as allauth counts only there, 100,000 rows *(default)* **(v1.17)**: a full table loses a third of its rows by their keys' ABC order, not their age, so in a shared one a flood of one kind would clear every other kind's counts. Pairing allows 10 starts an hour per caller's network (its IPv4 address, or its IPv6 `/64`) and 10 tries of a code an hour per person *(default)*. PIN login allows 30 tries a minute per device *(default)*, as each costs a full check and a flood of made-up people meets no lock **(v1.21)**. What counts: a start the shop really sent (a POST that passed its CSRF check) and a new try of a code, a wrong one included; never a confirm sent again, nor a send with no code. Over the limit, `429 throttled` with `wait`. A device's other calls are never slowed down **(v1.21)**. The network is the one the proxy in front saw, never one the caller wrote: Caddy's entry at the end of `X-Forwarded-For` (`NUM_PROXIES`, 1), or, on the demo, where Render puts two proxies in front, Cloudflare's `CF-Connecting-IP` (`CLIENT_IP_HEADER`); the tables keep a fingerprint of it, made with the server's secret key, never the address. The login limits read the same network, and count a person by a fingerprint of their login name, so that table holds no address and no phone **(v1.17)**.
 - Breaking changes get `v2` routes beside `v1` while devices update.
@@ -588,7 +591,7 @@ Cuts can last long enough to drain batteries, so the counter needs a plan beyond
 - **Counter screens** (sale, payment, repayment, quick customer, drawer, clock-in) read from Dexie with live queries and write documents to the outbox. They never call the API. They behave the same online and offline.
 - **Office screens** (products, prices, deliveries, counts, cash-up, reports, staff, settings, devices, flags) call the API through TanStack Query and the typed client. Offline, they show *Inahitaji mtandao*.
 
-This keeps all offline logic in one place.
+This keeps all offline logic in one place. A lint rule refuses, in `app/(counter)/`, the API client, TanStack Query, `openapi-fetch`, and the browser's own ways to call a server (`fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `navigator.sendBeacon`); tests there may still watch `fetch`. It reads a screen's own code, so a shared part that calls the server, and a dynamic `import()` of a package, still need review **(v1.31)**.
 
 ### 7.2 Structure
 
@@ -606,17 +609,20 @@ frontend/src/
 ├── features/<module>/        components and hooks per domain module
 ├── offline/                  db.ts (schema + versions), outbox.ts, push.ts, pull.ts,
 │                             effects.ts, search.ts, pin.ts, clock.ts, storage.ts, network.ts (online or not) (v1.30)
-├── api/                      schema.d.ts (generated — never edited), client.ts
+├── api/                      schema.d.ts (generated — never edited), client.ts (the typed client and its CSRF token),
+│                             refusal.ts (a refusal, or no answer at all, thrown for TanStack Query), query-client.ts and provider.tsx (the store
+│                             of server answers), errors.ts (what a failed call shows) (v1.31)
 ├── lib/                      decimal.ts, rounding.ts, units.ts, time.ts, ids.ts, format.ts, permissions.ts
 ├── components/               the app's own parts, built from our pieces: app-frame.tsx (the top bar and the page's <main>),
-│                             language-button.tsx, offline-banner.tsx, update-prompt.tsx (v1.30)
+│                             language-button.tsx, offline-banner.tsx, update-prompt.tsx (v1.30), api-error-alert.tsx (v1.31)
 ├── components/ui/            shadcn components
 ├── components/design/        our own pieces in the shop's look; screens use only these (v1.27)
 ├── fonts/                    the two font files and their licences, loaded by fonts.ts (v1.28)
 ├── test/                     helpers for tests only: look.ts reads globals.css and does the contrast sums (v1.29);
 │                             render.tsx gives a screen the word books, language.ts finds Swahili left in English,
 │                             vectors.ts reads the answer books in shared/test-vectors/ (v1.30)
-└── i18n/                     the word books' setup and the language switch; the messages themselves are in frontend/messages/ (§4) (v1.2, v1.30)
+└── i18n/                     the word books' setup and the language switch; the messages themselves are in frontend/messages/ (§4) (v1.2, v1.30);
+                              codes.ts turns a server's code into its sentence, for office and counter screens alike, and blanks.ts reads which values a sentence fills in (v1.31)
 ```
 
 - A static build can't pre-build pages for records that don't exist yet, so record pages use a query string (`/sales/view?id=…`).
@@ -702,7 +708,7 @@ Rules: tests run on real PostgreSQL, never SQLite. Every bug fix adds a test. Co
 
 ## 12. CI/CD
 
-- **`ci.yml`** on every pull request: backend (ruff, mypy, import-linter, `makemigrations --check`, schema up to date, pytest with PostgreSQL), frontend (lint, types, Vitest, production build with the service worker), types regenerated with no difference, Playwright end-to-end tests, Docker images build. GitHub Actions is free for public repositories.
+- **`ci.yml`** on every pull request: backend (ruff, mypy, import-linter, `makemigrations --check`, schema up to date, pytest with PostgreSQL), frontend (lint, types, Vitest, production build with the service worker), types regenerated with no difference (`test_committed_schema_matches_the_code` in the backend job, `pnpm check:api` in the frontend job, UI-2) **(v1.31)**, Playwright end-to-end tests, Docker images build. GitHub Actions is free for public repositories.
 - **`pr-title.yml`** ✚ **(v1.1)**: checks that every PR title is a conventional commit — it becomes the one squash commit on `main` and a changelog line (04 BP11). It is its own small workflow, so editing a title re-runs the check.
 - **Branch protection:** `main` changes only through pull requests with green CI, even working solo.
 - **`deploy-demo.yml`:** every merge to `main` → images to GitHub Container Registry → Render redeploys the demo (deploy hook) → smoke test. A nightly schedule redeploys it again, which resets the fake data.

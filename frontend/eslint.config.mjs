@@ -17,6 +17,22 @@ import prettier from "eslint-config-prettier/flat";
 const WORD_ATTRIBUTE =
   "JSXAttribute[name.name=/^(aria-label|aria-description|placeholder|title|alt)$/]";
 
+// The browser's own ways to call the server, refused on counter screens with the message below.
+const SERVER_CALLS = ["fetch", "XMLHttpRequest", "WebSocket", "EventSource"];
+
+// What a counter screen is told when it reaches for the server (rule 5, ADR-0019): it reads Dexie and
+// saves to the outbox, so a sale goes through with the network down.
+const COUNTER_OFF_THE_SERVER =
+  "Counter screens never call the server: read Dexie with live queries, save with saveDocument() (rule 5, ADR-0019).";
+
+// Our fonts live in the repo, so builds and devices never depend on another company's server.
+// next/font/google is one easy line away, and it would look harmless in a review (ADR-0039). A
+// constant, as the counter screens' rule below must list it again (it says why).
+const NO_GOOGLE_FONTS = {
+  name: "next/font/google",
+  message: "Fonts live inside the app, in src/fonts/ (ADR-0039).",
+};
+
 export default defineConfig([
   // React, hooks, accessibility and Next.js rules, with the page-speed ones as errors.
   ...nextVitals,
@@ -24,19 +40,7 @@ export default defineConfig([
   ...nextTs,
   {
     rules: {
-      // Our fonts live in the repo, so builds and devices never depend on another company's server.
-      // next/font/google is one easy line away, and it would look harmless in a review (ADR-0039).
-      "no-restricted-imports": [
-        "error",
-        {
-          paths: [
-            {
-              name: "next/font/google",
-              message: "Fonts live inside the app, in src/fonts/ (ADR-0039).",
-            },
-          ],
-        },
-      ],
+      "no-restricted-imports": ["error", { paths: [NO_GOOGLE_FONTS] }],
     },
   },
   {
@@ -50,6 +54,11 @@ export default defineConfig([
     // Every kind of file a screen can be written in: tsconfig.json allows JavaScript, and Next.js routes
     // a page.jsx as readily as a page.tsx. The same list as Next's rule sets, which load the import plugin
     // only for these: .cjs isn't in it, and a CommonJS file can't be a Next.js page anyway.
+    //
+    // A second zone keeps the counter screens off the server (rule 5, ADR-0019): they read Dexie and save
+    // to the outbox, so a sale goes through with the network down. A counter screen that called the API
+    // client would work in testing, with the network up, and fail at the shop the day it drops. The same
+    // rule, so the same care: every spelling of the import is caught (import-rule.test.ts).
     files: ["src/**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
     ignores: ["src/components/design/**", "src/components/ui/**"],
     rules: {
@@ -65,7 +74,68 @@ export default defineConfig([
               message:
                 "Use our piece in @/components/design/: it gives shadcn's part the shop's look (ADR-0039).",
             },
+            {
+              target: "./src/app/(counter)",
+              from: "./src/api",
+              message: COUNTER_OFF_THE_SERVER,
+            },
           ],
+        },
+      ],
+    },
+  },
+  {
+    // The rest of the counter screens' lock, for what the import rule above can't see (UI-2, rule 5).
+    // - TanStack Query, the office screens' store of server answers, and openapi-fetch, from which a
+    //   screen could build a typed client of its own: packages, not files of ours, and pnpm keeps
+    //   packages under paths of its own. This rule reads the import's text, and a package has one name.
+    // - The browser's own ways to call the server: fetch, XMLHttpRequest, WebSocket and EventSource,
+    //   also through window., globalThis. or self., and navigator.sendBeacon.
+    // Honest limit: a dynamic import("@tanstack/react-query") passes, as no-restricted-imports reads
+    // only import lines, and the rule that could catch it, no-restricted-syntax, is set again for every
+    // file by the text rule below, which would replace it here. Review catches that.
+    //
+    // ESLint keeps only the last settings of a rule for a file, and no-restricted-imports is the font
+    // ban's rule too: listed again here, or counter screens would lose it (import-rule.test.ts).
+    //
+    // Not tests, which aren't screens: the natural proof that a sale works offline watches fetch,
+    // expect(globalThis.fetch).not.toHaveBeenCalled(). The import rule above still keeps them off
+    // src/api/, and the first block's font ban still reaches them.
+    files: ["src/app/(counter)/**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
+    ignores: ["src/**/*.test.*"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            NO_GOOGLE_FONTS,
+            { name: "openapi-fetch", message: COUNTER_OFF_THE_SERVER },
+          ],
+          patterns: [
+            { group: ["@tanstack/*"], message: COUNTER_OFF_THE_SERVER },
+          ],
+        },
+      ],
+      "no-restricted-globals": [
+        "error",
+        ...SERVER_CALLS.map((name) => ({
+          name,
+          message: COUNTER_OFF_THE_SERVER,
+        })),
+      ],
+      "no-restricted-properties": [
+        "error",
+        ...["window", "globalThis", "self"].flatMap((object) =>
+          SERVER_CALLS.map((property) => ({
+            object,
+            property,
+            message: COUNTER_OFF_THE_SERVER,
+          })),
+        ),
+        {
+          object: "navigator",
+          property: "sendBeacon",
+          message: COUNTER_OFF_THE_SERVER,
         },
       ],
     },

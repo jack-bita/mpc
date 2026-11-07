@@ -17,17 +17,18 @@ paths:
 ## Two data paths — the main rule
 
 - **Counter screens** (`src/app/(counter)/…`: sale, payment, repayment, quick customer, drawer, clock-in) read Dexie with live queries and save documents with `saveDocument()`. They never call the API, and they behave the same online and offline.
-- **Office screens** (`src/app/(office)/…`) use TanStack Query and the typed client in `src/api/client.ts`. Offline they show *Inahitaji mtandao*.
+- **Office screens** (`src/app/(office)/…`) use TanStack Query and the typed client in `src/api/client.ts`, through `answerOf()` (`src/api/refusal.ts`), which throws a refusal so TanStack sees it; `ApiErrorAlert` shows it. Offline they show *Inahitaji mtandao*.
+- A lint rule refuses `src/api/`, `@tanstack/*`, `openapi-fetch`, `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` and `navigator.sendBeacon` in `src/app/(counter)/` (`import-rule.test.ts`); tests there may watch `fetch`, never import `src/api/`. It reads a screen's own code only: a shared part that calls the server, imported by a counter screen, and a dynamic `import()` of a package, need review to catch them (UI-2). Screens that log in call the server, so they live outside `(counter)/`. The store of server answers is shared by everyone on a device: clear it at each login, logout and quick switch.
 
 ## Numbers and text
 
 - Money and quantities go through `src/lib/decimal.ts` (big.js); round only with `src/lib/rounding.ts`. Both pass `shared/test-vectors/`. No plain `number` arithmetic on money.
 - Money is shown with `formatMoney` (`Intl.NumberFormat('sw-TZ')`, TZS without decimals); stock with `formatStock`, in each book's order: "mifuko 26 + kilo 35.5" in Swahili, "26 mifuko + 35.5 kilo" in English (`src/lib/format.ts`).
-- No visible string literals: every string is a use-intl key (`useTranslations()`, ADR-0040) in `messages/sw.json` and `en.json`, Swahili first; lint rules refuse a word typed into a screen or into `aria-label`, `aria-description`, `placeholder`, `title` or `alt`, and `language.test.tsx` opens every page in English. API error codes map to translated messages. Tests render a screen with `src/test/render.tsx`, which gives it the word books.
+- No visible string literals: every string is a use-intl key (`useTranslations()`, ADR-0040) in `messages/sw.json` and `en.json`, Swahili first; lint rules refuse a word typed into a screen or into `aria-label`, `aria-description`, `placeholder`, `title` or `alt`, and `language.test.tsx` opens every page in English. API error codes map to translated messages: `errors.<code>` in both books, nested by the code's dots (`errors.pin.locked`), turned into its sentence by `codeMessage()` (`src/i18n/codes.ts`, outside the counter lock, so sync's codes can use it too); office screens show a failed call with `useApiErrorWords()` (`src/api/errors.ts`). `errors.test.ts` lists every code the API sends: a new code adds its line there and its two sentences (UI-2). Tests render a screen with `src/test/render.tsx`, which gives it the word books.
 
 ## Generated and vendored code
 
-- `src/api/schema.d.ts` comes from `pnpm gen:api` — never edit it.
+- `shared/openapi.json` and `src/api/schema.d.ts` come from `pnpm gen:api` — never edit them; commit both. CI fails if either is stale (`pnpm check:api`, and a backend test).
 - `src/components/ui/` comes from shadcn (`pnpm shadcn add <name>`, a download: ask first). Never edit shadcn's files there (`guard.py` refuses it); Prettier skips the folder, and its `README.md` is its header.
 
 ## The look (ADR-0039)
@@ -46,4 +47,4 @@ paths:
 ## Tests and commands
 
 - Vitest + Testing Library + fake-indexeddb, next to the code (`*.test.ts(x)`); Playwright in `frontend/e2e/`, against the backend image — it can switch the browser offline.
-- Scripts: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint` (ESLint with no warnings allowed, then a Prettier check), `pnpm format`, `pnpm typecheck` (REPO-3); `pnpm gen:api` (UI-2); `pnpm e2e` (UI-6).
+- Scripts: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint` (ESLint with no warnings allowed, then a Prettier check), `pnpm format`, `pnpm typecheck` (REPO-3); `pnpm gen:api` and `pnpm check:api` (UI-2); `pnpm e2e` (UI-6).

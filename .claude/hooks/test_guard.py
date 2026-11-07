@@ -66,6 +66,10 @@ class GuardTest(unittest.TestCase):
     def test_generated_api_types_refused(self) -> None:
         self.assertEqual(self.edit("frontend/src/api/schema.d.ts"), 2)
 
+    def test_api_description_refused(self) -> None:
+        # The routes' description, which the types are made from (UI-2): written by `pnpm gen:api`.
+        self.assertEqual(self.edit("shared/openapi.json"), 2)
+
     def test_changelog_refused_for_write_too(self) -> None:
         self.assertEqual(self.run_guard("Write", file_path=str(self.repo / "CHANGELOG.md"), content="x"), 2)
 

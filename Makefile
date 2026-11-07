@@ -63,6 +63,8 @@ check: check-backend check-frontend check-image ## run everything CI runs; it mu
 #   settings: they install every app the dev settings do, plus the test-only probe app (CORE-2),
 #   whose tables build on ShopScoped, so their migrations must follow when ShopScoped changes.
 # - pytest prints a coverage report here (pyproject.toml says what is measured), so CI shows it too.
+#   Among its tests, test_committed_schema_matches_the_code fails when shared/openapi.json, which the
+#   app's types are made from, no longer matches the routes (UI-2): run `cd frontend && pnpm gen:api`.
 # - The guard's tests: the guard refuses the costly mistakes, so a broken guard must turn this red.
 # - The GitHub sync script's tests (docs/runbooks/github-setup.md). The guard and the script are
 #   not backend code, but they are Python, and the backend job is the one that has Python.
@@ -81,8 +83,13 @@ check-backend: ## only the backend and the Python tools (CI's backend job)
 # The frontend half: CI's `frontend` job.
 # First, `pnpm install --frozen-lockfile`, for the same reason as `uv sync --locked` above: it fails
 # when pnpm-lock.yaml no longer matches package.json, instead of quietly writing a new one.
+# - check:api fails when src/api/schema.d.ts no longer matches shared/openapi.json, the routes'
+#   description it is made from (ADR-0025). This job has no Python, so it trusts that file; the
+#   backend job's test_committed_schema_matches_the_code keeps the file true to the code. Together:
+#   a serializer changed without `pnpm gen:api` turns one of the two red (UI-2).
 check-frontend: ## only the frontend (CI's frontend job)
 	cd frontend && pnpm install --frozen-lockfile
+	cd frontend && pnpm check:api
 	cd frontend && pnpm lint
 	cd frontend && pnpm typecheck
 	cd frontend && pnpm test

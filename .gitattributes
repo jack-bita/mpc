@@ -25,3 +25,6 @@ frontend/src/api/schema.d.ts linguist-generated=true
 backend/uv.lock linguist-generated=true
 frontend/pnpm-lock.yaml linguist-generated=true
 CHANGELOG.md linguist-generated=true
+# Not folded, on purpose: shared/openapi.json, the routes' description the types are made from. It is
+# written by `pnpm gen:api` too, but a pull request should show a change to the API as a readable diff
+# (03 AD11).

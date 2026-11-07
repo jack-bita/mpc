@@ -115,5 +115,107 @@
         "striped": "Vyakula"
       }
     }
+  },
+  "apiError": {
+    "title": "Imeshindikana"
+  },
+  "errors": {
+    "invalid": "Baadhi ya sehemu si sahihi. Angalia zilizowekwa alama.",
+    "bad_request": "Seva imekataa ombi hili.",
+    "version_conflict": "Mtu mwingine amebadilisha hiki wakati huo huo. Fungua upya, kisha ujaribu tena.",
+    "server_error": "Seva ina hitilafu. Jaribu tena baadaye.",
+    "not_found": "Hakijapatikana.",
+    "not_authenticated": "Ingia kwanza.",
+    "authentication_failed": "Kuingia kumeshindikana. Ingia tena.",
+    "permission_denied": "Huna ruhusa ya kufanya hili.",
+    "method_not_allowed": "Kitendo hiki hakiruhusiwi hapa.",
+    "not_acceptable": "Seva haiwezi kujibu kwa namna hii.",
+    "unsupported_media_type": "Seva haikuelewa ombi hili.",
+    "parse_error": "Ombi limeharibika njiani. Jaribu tena.",
+    "throttled": "Majaribio mengi mno. Jaribu tena baada ya dakika {minutes}.",
+    "required": "Jaza sehemu hii.",
+    "null": "Jaza sehemu hii.",
+    "blank": "Sehemu hii haiwezi kuwa tupu.",
+    "max_length": "Maandishi ni marefu mno.",
+    "min_length": "Maandishi ni mafupi mno.",
+    "max_value": "Namba ni kubwa mno.",
+    "min_value": "Namba ni ndogo mno.",
+    "max_digits": "Namba ina tarakimu nyingi mno.",
+    "max_decimal_places": "Kuna tarakimu nyingi mno baada ya nukta.",
+    "max_whole_digits": "Kuna tarakimu nyingi mno kabla ya nukta.",
+    "invalid_choice": "Chaguo hili halipo kwenye orodha.",
+    "does_not_exist": "Ulichochagua hakipo.",
+    "incorrect_type": "Thamani hii si ya aina sahihi.",
+    "unique": "Hiki tayari kipo.",
+    "not_a_list": "Orodha inahitajika hapa.",
+    "empty": "Orodha hii haiwezi kuwa tupu.",
+    "max_string_length": "Namba ni ndefu mno.",
+    "null_characters_not_allowed": "Maandishi yana herufi isiyoruhusiwa.",
+    "surrogate_characters_not_allowed": "Maandishi yana herufi isiyoruhusiwa.",
+    "id": {
+      "taken": "Namba ya utambulisho imeshatumika. Jaribu tena.",
+      "not_uuid7": "Namba ya utambulisho si sahihi. Sasisha programu."
+    },
+    "device": {
+      "blocked": "Kifaa hiki kimezuiwa. Mwombe meneja akifungue.",
+      "name_blank": "Kipe kifaa jina.",
+      "name_taken": "Kifaa kingine tayari kina jina hili.",
+      "reason_required": "Andika sababu.",
+      "not_active": "Kifaa hiki hakitumiki sasa, kwa hiyo hakiwezi kuzuiwa.",
+      "not_blocked": "Kifaa hiki hakijazuiwa."
+    },
+    "session": {
+      "wrong_device": "Kuingia huku ni kwa kifaa kingine. Ingia tena hapa."
+    },
+    "shop": {
+      "suspended": "Duka hili limesimamishwa. Wasiliana na mmiliki."
+    },
+    "staff": {
+      "suspended": "Umesimamishwa. Ongea na meneja au mmiliki.",
+      "choose_shop": "Una kazi kwenye maduka mawili. Kuchagua duka bado hakupo.",
+      "left": "Mtu huyu ameshaacha kazi.",
+      "other_shop": "Hiki ni cha duka jingine.",
+      "reason_required": "Andika sababu.",
+      "temporary_password_open": "Mtu huyu bado ana nenosiri la muda. Ruhusa hii itasubiri hadi achague nenosiri lake."
+    },
+    "password": {
+      "must_change": "Chagua nenosiri lako mwenyewe kabla ya kuendelea.",
+      "own": "Huwezi kuweka nenosiri lako mwenyewe hapa.",
+      "superuser_only": "Nenosiri la mtu huyu linawekwa na msimamizi wa mfumo tu.",
+      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kuweka nenosiri lake.",
+      "no_login_name": "Mtu huyu hana simu wala barua pepe ya kuingilia."
+    },
+    "pin": {
+      "wrong": "PIN si sahihi.",
+      "locked": "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika {minutes}.",
+      "own": "Huwezi kuweka PIN yako mwenyewe hapa.",
+      "superuser_only": "PIN ya mtu huyu inawekwa na msimamizi wa mfumo tu.",
+      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kuweka PIN yake.",
+      "not_four_digits": "PIN iwe tarakimu nne.",
+      "too_easy": "PIN hii ni rahisi mno kukisia, kama 1234 au 0000. Chagua nyingine."
+    },
+    "password_too_short": "Nenosiri ni fupi mno.",
+    "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",
+    "password_entirely_numeric": "Nenosiri haliwezi kuwa namba tu.",
+    "password_too_similar": "Nenosiri linafanana mno na jina au simu ya mtu huyu.",
+    "pairing": {
+      "code_invalid": "Namba hii haijaandikwa sawa. Iandike kama inavyoonekana kwenye kifaa.",
+      "code_unknown": "Hakuna kifaa kinachosubiri kwa namba hii.",
+      "code_used": "Namba hii imeshatumika.",
+      "code_expired": "Muda wa namba hii umekwisha. Omba kifaa kionyeshe namba mpya.",
+      "already_paired": "Kifaa hiki tayari kimesajiliwa."
+    },
+    "side": {
+      "code_invalid": "Herufi ya upande iwe herufi kubwa moja, kama D.",
+      "code_taken": "Upande mwingine wa duka hili tayari una herufi hii.",
+      "name_blank": "Upe upande jina.",
+      "sale_flow_unknown": "Njia hii ya kuuza haijulikani."
+    }
+  },
+  "errorFallback": {
+    "noConnection": "Imeshindwa kufika kwenye seva. Angalia mtandao, kisha ujaribu tena.",
+    "unknownCode": "Seva imekataa. Msimbo: {code}",
+    "unexpected": "Kuna hitilafu. Jaribu tena.",
+    "waitAWhile": "Majaribio mengi mno. Subiri kidogo, kisha ujaribu tena."
   }
 }

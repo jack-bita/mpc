@@ -9,12 +9,10 @@ import { describe, expect, it } from "vitest";
 
 import { sentences } from "@/test/language";
 
+// The names of the parts to fill in: "Namba ya mauzo: {number}" -> ["number"]. The same reading as
+// codes.ts's, so the books and the screens agree on what a sentence needs.
+import { blanks } from "./blanks";
 import { LANGUAGES, MESSAGES } from "./language";
-
-/** The names of the parts to fill in: "Namba ya mauzo: {number}" -> ["number"]. */
-function blanks(sentence: string): string[] {
-  return [...sentence.matchAll(/\{(\w+)\}/g)].map((match) => match[1] ?? "");
-}
 
 const swahili = sentences(MESSAGES.sw);
 const english = sentences(MESSAGES.en);

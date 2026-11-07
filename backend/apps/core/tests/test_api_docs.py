@@ -2,7 +2,8 @@
 (03 §5.10, ADR-0025).
 
 drf-spectacular reads every route and writes the OpenAPI schema: each address, what it takes and what it
-answers. The app's TypeScript types will be generated from it (UI-2), so it must build with no guesses.
+answers. The app's TypeScript types are generated from it (`pnpm gen:api`, UI-2), so it must build with no
+guesses.
 The docs page shows the same description to people: open to every visitor on the demo and on a laptop,
 closed on the real server (API_DOCS_PUBLIC, config/settings/).
 """
@@ -47,8 +48,9 @@ def test_docs_public_on_the_demo(settings: Settings, route: str) -> None:
 
 
 def _schema(folder: Path) -> dict[str, Any]:
-    # The description, written the way UI-2's `pnpm gen:api` will read it. --fail-on-warn turns every
-    # warning into a failure; --validate checks the result against the OpenAPI standard. drf-spectacular
+    # The description, written as `pnpm gen:api` writes it (UI-2). Its --skip-checks isn't needed here:
+    # call_command skips Django's checks by itself. --fail-on-warn turns every warning into a failure;
+    # --validate checks the result against the OpenAPI standard. drf-spectacular
     # keeps its warnings for the whole test run, so they are cleared first: this build is judged on its own.
     reset_generator_stats()
     target = folder / "schema.json"
@@ -94,6 +96,51 @@ def test_a_fields_choices_keep_a_name_of_their_own(tmp_path: Path) -> None:
 
     assert shapes["Device"]["properties"]["status"]["allOf"][0]["$ref"] == "#/components/schemas/DeviceStatusEnum"
     assert "StatusEnum" not in shapes
+
+
+def test_every_route_refuses_in_the_error_shape(tmp_path: Path) -> None:
+    # Every refusal has one shape (apps/core/api/errors.py), and the description must say so on every route:
+    # the app's typed client takes the type of an error from it (UI-2). `default` is OpenAPI's answer for any
+    # status a route doesn't list, so it covers a 400, a 403, a 409 and a 500 alike.
+    schema = _schema(tmp_path)
+    operations = [
+        (path, method, operation)
+        for path, route in schema["paths"].items()
+        for method, operation in route.items()
+        if method in {"get", "post", "patch", "put", "delete"}
+    ]
+
+    # More than the one route the test was written beside, so a broken loop can't pass on nothing.
+    assert len(operations) > 10
+    for path, method, operation in operations:
+        default = operation["responses"].get("default")
+        assert default is not None, f"{method.upper()} {path} has no error answer"
+        assert default["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/ApiError"}
+
+    # The shape's four keys, each typed as tightly as the handler makes it.
+    shape = schema["components"]["schemas"]["ApiError"]
+    # And no note of ours: drf-spectacular would copy the serializer's docstring here, onto the public docs
+    # page, and it is written for the code's readers, not the API's.
+    assert "description" not in shape
+    assert set(shape["required"]) == {"code", "message", "fields", "params"}
+    assert shape["properties"]["fields"]["additionalProperties"] == {"type": "array", "items": {"type": "string"}}
+    assert shape["properties"]["params"]["additionalProperties"] == {
+        "oneOf": [{"type": "string"}, {"type": "integer"}, {"type": "boolean"}],
+        "nullable": True,
+    }
+
+
+def test_committed_schema_matches_the_code(tmp_path: Path, settings: Settings) -> None:
+    # The app's types are generated from shared/openapi.json (`pnpm gen:api`, UI-2), and CI's frontend job checks them
+    # against that file only: it has no Python to read the routes. So this test keeps the file true to the code. A
+    # serializer changed without regenerating turns CI red here, not at the shop (AD11, ADR-0025).
+    # Compared as text, not as parsed JSON: a change of order alone changes the generated types too.
+    committed = Path(settings.BASE_DIR).parent / "shared" / "openapi.json"
+    _schema(tmp_path)
+
+    assert (tmp_path / "schema.json").read_text() == committed.read_text(), (
+        "shared/openapi.json is out of date: run `cd frontend && pnpm gen:api`, and commit both files it writes."
+    )
 
 
 def test_docs_group_routes_by_app(tmp_path: Path) -> None:

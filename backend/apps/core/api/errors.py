@@ -22,9 +22,10 @@ It shapes three kinds of refusal: Django's ValidationError, which the services a
 not logged in, a serializer's checks, a throttle). Anything else is a bug, left to Django, which answers
 500 and logs it.
 
-Two answers never reach a view, so DRF never sees them: an address no route matches, and a crash. Django
-answers those through not_found_page() and server_error_page() (config/urls.py), which give the same shape
-under /api/, so the app reads every answer from /api/ the same way.
+Three answers never reach a view, so DRF never sees them: an address no route matches, a request Django
+finds suspicious, and a crash. Django answers those through not_found_page(), bad_request_page() and
+server_error_page() (config/urls.py), which give the same shape under /api/, so the app reads every answer
+from /api/ the same way.
 """
 
 import uuid
@@ -186,6 +187,16 @@ def not_found_page(request: HttpRequest, exception: Exception) -> HttpResponse:
     if _is_api(request):
         return JsonResponse(_shape([_Problem(None, "not_found", "No route at this address.")]), status=404)
     return defaults.page_not_found(request, exception)
+
+
+def bad_request_page(request: HttpRequest, exception: Exception) -> HttpResponse:
+    """Django's answer for a request it finds suspicious before any view runs (handler400 in config/urls.py):
+    a host it doesn't serve, a body far too big, too many fields. Django has already logged it, as a security
+    event. Under /api/, the one error shape, saying nothing of what Django found; anywhere else, Django's own
+    page. With DEBUG on, as on a laptop, Django shows its debug page instead and never calls this."""
+    if _is_api(request):
+        return JsonResponse(_shape([_Problem(None, "bad_request", "Bad request.")]), status=400)
+    return defaults.bad_request(request, exception)
 
 
 def server_error_page(request: HttpRequest) -> HttpResponse:
