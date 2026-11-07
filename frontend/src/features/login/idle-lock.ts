@@ -4,7 +4,8 @@
 // The server ends a PIN's session after the same minutes with no use of its own (AUTH-4), but selling at
 // the counter uses the device's key, not the session, so the server's clock alone would never lock the
 // screen. So the screen keeps a lock of its own, as long as `me` says (idle_minutes, read from the session
-// itself, so the two end together).
+// itself). The two last as long, not to the same moment: the server counts from the session's last visit,
+// the screen from the last tap or key press.
 //
 // A watch, not an egg timer: it writes down when the laptop was last touched, and looks at the clock every
 // few seconds, and as the laptop wakes or the tab comes back. A timer counting down would sleep with a
