@@ -5,7 +5,8 @@
 //
 // The bar names the device's shop and home side, "MPC · Dawa", once the device is registered (UI-3):
 // a laptop shows where it belongs before anyone logs in at it. A phone that is only a manager's own
-// knows no device, and its bar names nothing until the manager logs in (UI-5). No band yet: no side
+// knows no device, and its bar names nothing until the manager logs in: then the office's frame hands in
+// the shop of whoever is logged in (office-frame.tsx, UI-5). No band yet: no side
 // says which look it gets (04 §20, item 19). Once someone logs in at the device, the bar names them, and
 // the side they work on in place of the device's (UI-4): a screen that knows who is here hands both in.
 //
@@ -27,6 +28,7 @@ export type Area = "counter" | "office" | "setup" | "login";
 export function AppFrame({
   area,
   notice,
+  shop,
   person,
   side,
   actions,
@@ -35,6 +37,9 @@ export function AppFrame({
   area: Area;
   /** A message under the bar, for the whole area, like the office's Inahitaji mtandao. */
   notice?: ReactNode;
+  /** The shop of whoever is logged in, by its name: "MPC". Left out, the device's shop, as before anyone
+   * logs in; a phone that is only a manager's own knows no device, so only a login names its shop (UI-5). */
+  shop?: string;
   /** Who is logged in at this device, by the name the shop calls them: "Asha". Left out while nobody
    * is (UI-4). */
   person?: string;
@@ -53,7 +58,7 @@ export function AppFrame({
     // min-h-svh: the full height of the phone's visible screen, browser bars excluded.
     <div data-area={area} className="flex min-h-svh flex-col">
       <TopBar
-        shop={device?.shop.name}
+        shop={shop ?? device?.shop.name}
         side={side ?? homeSide}
         actions={
           <>

@@ -103,6 +103,10 @@
     "leaving": "Unatoka…",
     "waiting": "Subiri kidogo…"
   },
+  "office": {
+    "welcome": "Karibu, {name}",
+    "nothingYet": "Bado hakuna kazi ya ofisi unayoweza kufungua hapa."
+  },
   "stock": {
     "part": "{unit} {count}"
   },

@@ -40,8 +40,9 @@ import { codeMessage, useCodeWords } from "@/i18n/codes";
 
 import { loginName } from "./login-name";
 
-/** Where a person goes once logged in. */
-export const AFTER_LOGIN = "/devices/";
+/** Where a person goes once logged in: the office's home page, with a button for each screen they may
+ * open (office-home.tsx). */
+export const AFTER_LOGIN = "/office/";
 
 // The form's own rules, checked before anything is sent. Each names what is wrong by a code, as the
 // server does, so its sentence comes from the same book ("required": Jaza sehemu hii). Only "not empty":
