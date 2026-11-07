@@ -125,6 +125,22 @@ describe("Sajili kifaa hiki", () => {
     expect(await screen.findByText("ABCD-2345")).toBeDefined();
   });
 
+  it("shows the device registered when the manager said yes in the code's last second", async () => {
+    answer("POST", PAIRING, codeAnswer("K7QM4RXT"));
+    render(<RegisterThisDevice />);
+    getACode();
+    await screen.findByText("K7QM-4RXT");
+    await act(() => vi.advanceTimersByTimeAsync(TEN_MINUTES));
+    await screen.findByText("Muda wa namba hii umekwisha.");
+
+    // The yes came after the laptop stopped asking: its key now opens a device.
+    answer("GET", ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
+    answer("POST", PAIRING, refusal(409, "pairing.already_paired"));
+    fireEvent.click(screen.getByRole("button", { name: "Pata namba mpya" }));
+
+    expect(await screen.findByText("Kifaa hiki kimesajiliwa")).toBeDefined();
+  });
+
   it("keeps the old code's view while a new code comes, never the first screen", async () => {
     answer("POST", PAIRING, codeAnswer("K7QM4RXT"));
     render(<RegisterThisDevice />);

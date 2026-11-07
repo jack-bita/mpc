@@ -17,10 +17,11 @@
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
+import { ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button, ButtonLink } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
@@ -49,9 +50,23 @@ export function RegisterThisDevice() {
   const [pairing, setPairing] = useState<Pairing | null>(null);
   // A start is a change: never sent again by itself (query-client.ts). A tap sends a new one, and the
   // server retires the old code then, so only the newest code can be confirmed (AUTH-2).
+  const client = useQueryClient();
   const start = useMutation({
     mutationFn: startPairing,
     onSuccess: setPairing,
+    // pairing.already_paired: this browser's key opens a device now. The manager said yes in the code's
+    // last second, after the laptop had stopped asking. The device's check, asked once more, saves the
+    // device, and the screen shows it registered. Fetched, not refetched: no screen is watching the
+    // check while the code shows as expired.
+    onError: (error) => {
+      if (
+        error instanceof ApiRefusal &&
+        error.body.code === "pairing.already_paired"
+      )
+        void client
+          .fetchQuery({ queryKey: DEVICE_CHECK, queryFn: checkThisDevice })
+          .catch(() => undefined);
+    },
   });
 
   if (device) return <Registered device={device} />;
