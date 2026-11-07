@@ -27,11 +27,13 @@ import { SideBand, type SideBandLook } from "./side-band";
 export const ON_GREEN =
   "bg-primary text-primary-foreground [--ring:var(--primary-foreground)]";
 
-/** A side, as the bar shows it: its name in words, and its band's look. */
+/** A side, as the bar shows it: its name in words, and its band's look, when known. */
 export interface BarSide {
   name: string;
-  // Which side gets which look is still open (04 §20, item 19), so it is always given, never guessed.
-  band: SideBandLook;
+  // Which side gets which look is still open (04 §20, item 19): no side says yet. Until one does, the
+  // app gives no look, and the bar shows the side's name in words and no band (Jack, 7 Nov 2026), so
+  // a look is never guessed. /design gives both looks by hand.
+  band?: SideBandLook;
 }
 
 export function TopBar({
@@ -39,9 +41,11 @@ export function TopBar({
   side,
   actions,
 }: {
-  /** The shop's name. Left out until the app knows it (UI-3). */
+  /** The shop's name. Left out while the app knows none: on a device not yet registered, or a phone
+   * that is only a manager's own (UI-3). */
   shop?: string;
-  /** The side this screen is for. Left out until the app knows it (UI-3, UI-4). */
+  /** The side this screen is for: the device's home side for now (UI-3), the person's once someone
+   * logs in (UI-4). Left out while the app knows none. */
   side?: BarSide;
   /** The bar's buttons, at its right end. */
   actions?: ReactNode;
@@ -70,7 +74,7 @@ export function TopBar({
         {place ? <p className="text-lg font-semibold">{place}</p> : <div />}
         <div className="flex items-center gap-2">{actions}</div>
       </div>
-      {side ? <SideBand look={side.band} /> : null}
+      {side?.band ? <SideBand look={side.band} /> : null}
     </header>
   );
 }

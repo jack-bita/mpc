@@ -3,8 +3,8 @@
 // This file stays a server component, but in a static export a server component runs
 // once, at build time, and becomes plain HTML in out/ — no server runs it later
 // (ADR-0016). That is also why it may export `metadata`, which only server components can.
-// The app's providers wrap every page here: today the word books and the store of server answers;
-// later session and device (03 §7.2).
+// The app's providers wrap every page here: today the word books, the store of server answers, and the
+// device's check of who it is; later the session (03 §7.2).
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -17,6 +17,8 @@ import { QueryProvider } from "@/api/provider";
 // Starts the service worker, which keeps the app's files on the device so every page opens offline,
 // and shows the Toleo jipya bar when a new version is ready (SPIKE-1).
 import { UpdatePrompt } from "@/components/update-prompt";
+// Asks the server which device this is, and keeps the answer for the top bar (UI-3).
+import { DeviceCheck } from "@/features/devices/device-check";
 // The two fonts inside the app (ADR-0039).
 import { atkinson, sourceSans } from "@/fonts/fonts";
 // Hands every screen its words from the open book: Swahili, or English after the switch (ADR-0040).
@@ -40,6 +42,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <LanguageProvider>
           <QueryProvider>
             {children}
+            <DeviceCheck />
             <UpdatePrompt />
           </QueryProvider>
         </LanguageProvider>

@@ -27,7 +27,7 @@ describe("the top bar", () => {
   });
 
   it("names nothing while the app knows neither, and still shows its buttons", () => {
-    // UI-1 to UI-3: no device knows its shop yet.
+    // A device not yet registered, or a phone that is only a manager's own (UI-3).
     render(<TopBar actions={<Button kind="bar">Toka</Button>} />);
     expect(screen.getByRole("banner").textContent).toBe("Toka");
   });
@@ -40,6 +40,13 @@ describe("the top bar", () => {
     expect(band?.getAttribute("data-look")).toBe("striped");
     // Decoration: the side's name is already said in words (UI-8).
     expect(band?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("shows no band for a side whose look isn't known", () => {
+    // No side says which look it gets yet (04 §20, item 19): words only (Jack, 7 Nov 2026).
+    const { container } = render(<TopBar shop="MPC" side={{ name: "Dawa" }} />);
+    expect(screen.getByRole("banner").textContent).toBe("MPC · Dawa");
+    expect(container.querySelector("[data-look]")).toBeNull();
   });
 
   it("shows no band while no side is known", () => {
