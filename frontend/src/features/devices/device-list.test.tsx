@@ -1,6 +1,6 @@
 // device-list.test.tsx — the shop's devices on the manager's phone: what each card says, who sees its
 // buttons, and rename, block and unblock, each refusal where the manager will see it (UI-3).
-import { fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { setLanguage } from "@/i18n/language";
@@ -109,6 +109,21 @@ describe("the device list", () => {
 
     expect(await screen.findByText("Laptop Dawa")).toBeDefined();
     expect(screen.getByText("Simu Vyakula")).toBeDefined();
+  });
+
+  it("keeps the devices on screen when a refresh fails, with the reason above them", async () => {
+    listAnswers(LAPTOP);
+    render(<DeviceList me={OWNER} />);
+    await card("Laptop Dawa");
+
+    // The session ended meanwhile; the window comes back to the front, and the list asks again.
+    answer("GET", DEVICES, refusal(403, "not_authenticated"));
+    act(() => {
+      window.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(await screen.findByText("Ingia kwanza.")).toBeDefined();
+    expect(screen.getByText("Laptop Dawa")).toBeDefined();
   });
 
   it("says when no device is registered yet", async () => {

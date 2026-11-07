@@ -73,22 +73,31 @@ export function DeviceList({ me }: { me: WhoIsHere }) {
     sidesWhere(me, "device.manage").map((side) => side.id),
   );
 
-  if (list.error) return <ApiErrorAlert error={list.error} />;
-  if (!list.data) return null;
-  if (list.data.length === 0) return <p>{t("empty")}</p>;
+  // A failed read shows above the list, not in its place: when a refresh fails (the window came back
+  // to the front after the session ended, or the network dropped), the devices last read stay on the
+  // screen, with the reason above them. TanStack keeps the last answer beside the new error.
+  const failure = <ApiErrorAlert error={list.error} />;
+  if (!list.data) return failure;
   return (
-    // A list, so a screen reader says how many devices there are.
-    <ul className="grid gap-4">
-      {list.data.map((device) => (
-        <li key={device.id}>
-          <DeviceCard
-            device={device}
-            side={sideNames.get(device.home_side) ?? ""}
-            mayChange={managed.has(device.home_side)}
-          />
-        </li>
-      ))}
-    </ul>
+    <>
+      {failure}
+      {list.data.length === 0 ? (
+        <p>{t("empty")}</p>
+      ) : (
+        // A list, so a screen reader says how many devices there are.
+        <ul className="grid gap-4">
+          {list.data.map((device) => (
+            <li key={device.id}>
+              <DeviceCard
+                device={device}
+                side={sideNames.get(device.home_side) ?? ""}
+                mayChange={managed.has(device.home_side)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 
