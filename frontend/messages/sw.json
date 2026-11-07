@@ -103,6 +103,16 @@
     "leaving": "Unatoka…",
     "waiting": "Subiri kidogo…"
   },
+  "password": {
+    "chooseTitle": "Chagua nenosiri lako",
+    "chooseIntro": "Nenosiri ulilopewa ni la muda. Chagua lako mwenyewe, kisha uendelee.",
+    "temporary": "Nenosiri la muda",
+    "new": "Nenosiri jipya",
+    "newHint": "Herufi 8 au zaidi, si namba tu, na lisifanane na jina wala simu yako.",
+    "again": "Andika nenosiri jipya tena",
+    "notTheSame": "Andika nenosiri lile lile mara zote mbili.",
+    "save": "Hifadhi"
+  },
   "office": {
     "welcome": "Karibu, {name}",
     "nothingYet": "Bado hakuna kazi ya ofisi unayoweza kufungua hapa."

@@ -103,6 +103,16 @@
     "leaving": "Logging out…",
     "waiting": "One moment…"
   },
+  "password": {
+    "chooseTitle": "Choose your password",
+    "chooseIntro": "The password you were given is temporary. Choose your own, then go on.",
+    "temporary": "Temporary password",
+    "new": "New password",
+    "newHint": "8 letters or more, not only numbers, and not like your name or phone.",
+    "again": "Type the new password again",
+    "notTheSame": "Type the same password both times.",
+    "save": "Save"
+  },
   "office": {
     "welcome": "Welcome, {name}",
     "nothingYet": "There is nothing in the office you can open here yet."

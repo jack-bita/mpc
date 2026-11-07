@@ -9,6 +9,12 @@
 //                              a registered laptop, whose home page it is (UI-4)
 //   refused for a reason        stays: each screen shows why (a suspension, a shop switched off)
 //   no answer, or a 5xx         stays, as it was: the offline banner says Inahitaji mtandao
+//   on a temporary password     Chagua nenosiri lako in place of the screen (choose-password.tsx), as
+//                              every office route refuses them until they choose (password.must_change)
+//
+// `me` alone says whether the password is temporary, as every other office route answers 403 then
+// (AUTH-4). A temporary password set later ends the person's sessions (AUTH-6), so every session meets
+// the mark at its login, where `me` is asked: the frame never needs to watch the other routes' refusals.
 //
 // Toka ends the session on the server first, sent again until the server hears it, with the screen
 // hidden from the press; then the store forgets the person (forgetTheLastPerson), and they go to the way
@@ -30,6 +36,7 @@ import { AppFrame } from "@/components/app-frame";
 import { Button } from "@/components/design/button";
 import { OfflineBanner } from "@/components/offline-banner";
 import { useThisDevice } from "@/features/devices/this-device";
+import { ChoosePassword } from "@/features/login/choose-password";
 import { useIdleLock } from "@/features/login/idle-lock";
 import { sideAt, useWhoIsHere } from "@/features/people/who-is-here";
 
@@ -118,7 +125,11 @@ export function OfficeFrame({ children }: { children: ReactNode }) {
       </p>
       {/* A logout the server refused: why, and the person stays where they are. */}
       <ApiErrorAlert error={logout.error} />
-      {leaving ? null : children}
+      {leaving ? null : here?.must_change_password ? (
+        <ChoosePassword />
+      ) : (
+        children
+      )}
     </AppFrame>
   );
 }
