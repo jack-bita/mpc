@@ -52,6 +52,13 @@ describe("the design page", () => {
     expect(switchedOff).toHaveLength(SCREEN_BUTTON_KINDS.length + 1);
   });
 
+  it("shows the link that looks like a button, in each screen kind", () => {
+    render(<DesignPage />);
+    const links = screen.getAllByRole("link", { name: t.buttons.link });
+    expect(links).toHaveLength(SCREEN_BUTTON_KINDS.length);
+    for (const link of links) expect(link.tagName).toBe("A");
+  });
+
   it("shows the bar kind on the bar's green, with a white focus ring", () => {
     render(<DesignPage />);
     // Big, normal and switched off.
@@ -77,6 +84,17 @@ describe("the design page", () => {
       (screen.getByLabelText(t.fields.kilo) as HTMLInputElement).disabled,
     ).toBe(true);
     expect(screen.getByLabelText(t.fields.search).tagName).toBe("INPUT");
+  });
+
+  it("shows a choice with a hint, one with an error and one switched off", () => {
+    render(<DesignPage />);
+    const groups = screen.getAllByRole("radiogroup", {
+      name: t.choices.label,
+    });
+    expect(groups).toHaveLength(3);
+    expect(groups[0]?.getAttribute("aria-describedby")).toBeTruthy();
+    expect(groups[1]?.getAttribute("aria-invalid")).toBe("true");
+    expect(groups[2]?.hasAttribute("data-disabled")).toBe(true);
   });
 
   it("shows both messages, a card and the top bar with both side bands", () => {

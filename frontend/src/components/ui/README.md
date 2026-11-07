@@ -16,4 +16,4 @@ They are not the shop's look, and screens never import them (ADR-0039).
   remove them (UI-7).
 - shadcn's files import `cn` from the `cn` package itself, not from `src/lib/utils.ts`.
 
-Added in UI-8: `button`, `input`, `label`, `card`, `alert`.
+Added in UI-8: `button`, `input`, `label`, `card`, `alert`. In UI-3: `radio-group`, worn by `Choice`.

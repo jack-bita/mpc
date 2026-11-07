@@ -12,13 +12,14 @@
 // colour's value from the browser.
 "use client";
 
-import { type ReactNode, useSyncExternalStore } from "react";
+import { type ReactNode, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "use-intl";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
 import {
   Button,
   BUTTON_SIZES,
+  ButtonLink,
   SCREEN_BUTTON_KINDS,
 } from "@/components/design/button";
 import {
@@ -29,6 +30,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/design/card";
+import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
 import { Input } from "@/components/design/input";
 import { SIDE_BAND_LOOKS } from "@/components/design/side-band";
@@ -61,6 +63,29 @@ const COLOURS = [
   ["--border", "border"],
   ["--input", "input"],
 ] as const;
+
+/** A choice that keeps its pick, as a form does, so it can be tried here by hand: tap, arrows, Tab. */
+function ChoiceSample(props: {
+  hint?: string;
+  error?: string;
+  disabled?: boolean;
+}) {
+  const t = useTranslations("design");
+  const [side, setSide] = useState<string | null>(null);
+  return (
+    <Choice
+      label={t("choices.label")}
+      // The sample sides the top bars name below.
+      options={[
+        { value: "blue", label: t("topBar.sampleSides.blue") },
+        { value: "striped", label: t("topBar.sampleSides.striped") },
+      ]}
+      value={side}
+      onValueChange={setSide}
+      {...props}
+    />
+  );
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -176,6 +201,19 @@ export default function DesignPage() {
             </Button>
           ))}
         </div>
+        {/* The link that looks like a button (ButtonLink), in each screen kind: a step to another page,
+            like Sajili kifaa hiki on the home page (UI-3). These lead back here, as a sample has nowhere
+            else to go. */}
+        <div className="grid gap-2">
+          <p className="text-sm text-muted-foreground">{t("buttons.links")}</p>
+          <div className="flex flex-wrap gap-3">
+            {SCREEN_BUTTON_KINDS.map((kind) => (
+              <ButtonLink key={kind} kind={kind} href="/design/">
+                {t("buttons.link")}
+              </ButtonLink>
+            ))}
+          </div>
+        </div>
         {/* The bar kind, on a strip of the top bar's green, in both sizes and switched off. ON_GREEN
             sets --ring to white, as on the top bar, so Tab shows a white ring here too. */}
         <div className="grid gap-2">
@@ -218,6 +256,14 @@ export default function DesignPage() {
             placeholder={t("fields.search")}
             type="search"
           />
+        </div>
+      </Section>
+
+      <Section title={t("choices.title")}>
+        <div className="grid max-w-md gap-6">
+          <ChoiceSample hint={t("choices.hint")} />
+          <ChoiceSample error={t("choices.error")} />
+          <ChoiceSample hint={t("choices.disabled")} disabled />
         </div>
       </Section>
 

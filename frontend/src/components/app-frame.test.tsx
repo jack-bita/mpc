@@ -1,16 +1,18 @@
-// app-frame.test.tsx — the counter and office areas put every screen under the green top bar, with the
-// language button, and give the page its one <main> (UI-1, 03 §7.1).
+// app-frame.test.tsx — the counter, office and setup areas put every screen under the green top bar,
+// with the language button, and give the page its one <main> (UI-1, UI-3, 03 §7.1).
 import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import CounterLayout from "@/app/(counter)/layout";
 import OfficeLayout from "@/app/(office)/layout";
+import SetupLayout from "@/app/(setup)/layout";
 import { swahiliIn } from "@/test/language";
 import { render } from "@/test/render";
 
 const AREAS = [
   ["counter", CounterLayout],
   ["office", OfficeLayout],
+  ["setup", SetupLayout],
 ] as const;
 
 describe.each(AREAS)("the %s area", (area, Layout) => {

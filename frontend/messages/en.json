@@ -4,7 +4,8 @@
   },
   "home": {
     "title": "Welcome",
-    "version": "Version {version}"
+    "version": "Version {version}",
+    "thisDevice": "{device} · {shop}"
   },
   "update": {
     "ready": "A new version is ready",
@@ -19,6 +20,62 @@
   },
   "topBar": {
     "place": "{shop} · {side}"
+  },
+  "device": {
+    "lock": {
+      "title": "This device is blocked",
+      "which": "{device} · {shop}",
+      "ask": "Ask a manager to unblock it. The work on this device isn't lost.",
+      "tryAgain": "Try again"
+    },
+    "register": {
+      "title": "Register this device",
+      "intro": "This device isn't registered with a shop yet. Get a code, then give it to a manager to type on their phone.",
+      "start": "Get a code",
+      "giveCode": "Give this code to a manager",
+      "where": "The manager types it on their phone, on the Devices page.",
+      "timeLeft": "The code expires in {time}",
+      "waiting": "Waiting for the manager…",
+      "expired": "This code has expired.",
+      "newCode": "Get a new code",
+      "done": "This device is registered",
+      "which": "Its name is {device}, on the {side} side of {shop}.",
+      "continue": "Continue"
+    },
+    "office": {
+      "title": "Devices",
+      "register": "Register a device",
+      "code": "Device code",
+      "codeHint": "The code the new device shows, like K7QM-4RXT.",
+      "name": "Device name",
+      "nameHint": "The name the list will show, like Laptop Dawa.",
+      "side": "The device's side",
+      "sideHint": "The side the device will serve most.",
+      "pickSide": "Pick a side.",
+      "confirm": "Register",
+      "cancel": "Cancel",
+      "registered": "{device} is registered. It will show the shop's name within a few seconds."
+    },
+    "list": {
+      "empty": "No device is registered yet.",
+      "number": "No. {code} · {side}",
+      "active": "Working",
+      "blocked": "Blocked",
+      "seen": "Seen {when}",
+      "neverSeen": "Not seen yet",
+      "rename": "Rename",
+      "newName": "New name",
+      "save": "Save",
+      "cancel": "Cancel",
+      "block": "Block",
+      "blockReason": "Why are you blocking it?",
+      "blockHint": "For example: stolen, or lost.",
+      "blockConfirm": "Block the device",
+      "unblock": "Unblock",
+      "unblockReason": "Why are you unblocking it?",
+      "unblockHint": "For example: found.",
+      "unblockConfirm": "Unblock the device"
+    }
   },
   "stock": {
     "part": "{count} {unit}"
@@ -74,6 +131,8 @@
       "big": "Big",
       "normal": "Normal",
       "disabled": "Switched off",
+      "links": "Links that look like buttons: they open another page",
+      "link": "Open a page",
       "onBar": "On the green top bar",
       "bar": "Log out"
     },
@@ -87,6 +146,13 @@
       "disabled": "Switched off",
       "search": "Search products",
       "normal": "A normal-size box"
+    },
+    "choices": {
+      "title": "Choices",
+      "label": "The device's side",
+      "hint": "The side the device will serve most",
+      "error": "Pick a side.",
+      "disabled": "Switched off"
     },
     "cards": {
       "title": "Cards",

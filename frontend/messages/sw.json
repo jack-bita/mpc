@@ -4,7 +4,8 @@
   },
   "home": {
     "title": "Karibu",
-    "version": "Toleo {version}"
+    "version": "Toleo {version}",
+    "thisDevice": "{device} · {shop}"
   },
   "update": {
     "ready": "Toleo jipya liko tayari",
@@ -19,6 +20,62 @@
   },
   "topBar": {
     "place": "{shop} · {side}"
+  },
+  "device": {
+    "lock": {
+      "title": "Kifaa hiki kimezuiwa",
+      "which": "{device} · {shop}",
+      "ask": "Mwombe meneja akifungue. Kazi iliyo kwenye kifaa hiki haijapotea.",
+      "tryAgain": "Jaribu tena"
+    },
+    "register": {
+      "title": "Sajili kifaa hiki",
+      "intro": "Kifaa hiki bado hakijasajiliwa kwenye duka. Pata namba, kisha mpe meneja aiandike kwenye simu yake.",
+      "start": "Pata namba",
+      "giveCode": "Mpe meneja namba hii",
+      "where": "Meneja ataiandika kwenye simu yake, kwenye ukurasa wa Vifaa.",
+      "timeLeft": "Namba inaisha baada ya {time}",
+      "waiting": "Kinasubiri meneja…",
+      "expired": "Muda wa namba hii umekwisha.",
+      "newCode": "Pata namba mpya",
+      "done": "Kifaa hiki kimesajiliwa",
+      "which": "Jina lake ni {device}, upande wa {side}, duka la {shop}.",
+      "continue": "Endelea"
+    },
+    "office": {
+      "title": "Vifaa",
+      "register": "Sajili kifaa",
+      "code": "Namba ya kifaa",
+      "codeHint": "Namba inayoonekana kwenye kifaa kipya, kama K7QM-4RXT.",
+      "name": "Jina la kifaa",
+      "nameHint": "Jina litakaloonekana kwenye orodha, kama Laptop Dawa.",
+      "side": "Upande wa kifaa",
+      "sideHint": "Upande ambao kifaa kitahudumia zaidi.",
+      "pickSide": "Chagua upande.",
+      "confirm": "Sajili",
+      "cancel": "Ghairi",
+      "registered": "Kifaa {device} kimesajiliwa. Kitaonyesha jina la duka baada ya sekunde chache."
+    },
+    "list": {
+      "empty": "Bado hakuna kifaa kilichosajiliwa.",
+      "number": "Na. {code} · {side}",
+      "active": "Kinafanya kazi",
+      "blocked": "Kimezuiwa",
+      "seen": "Kilionekana {when}",
+      "neverSeen": "Hakijaonekana bado",
+      "rename": "Badilisha jina",
+      "newName": "Jina jipya",
+      "save": "Hifadhi",
+      "cancel": "Ghairi",
+      "block": "Zuia",
+      "blockReason": "Kwa nini unakizuia?",
+      "blockHint": "Mfano: kimeibiwa, au kimepotea.",
+      "blockConfirm": "Zuia kifaa",
+      "unblock": "Fungua",
+      "unblockReason": "Kwa nini unakifungua?",
+      "unblockHint": "Mfano: kimepatikana.",
+      "unblockConfirm": "Fungua kifaa"
+    }
   },
   "stock": {
     "part": "{unit} {count}"
@@ -74,6 +131,8 @@
       "big": "Kikubwa",
       "normal": "Cha kawaida",
       "disabled": "Kimezimwa",
+      "links": "Viungo vinavyofanana na vitufe: vinafungua ukurasa mwingine",
+      "link": "Fungua ukurasa",
       "onBar": "Kwenye upau wa kijani wa juu",
       "bar": "Toka"
     },
@@ -87,6 +146,13 @@
       "disabled": "Kimezimwa",
       "search": "Tafuta bidhaa",
       "normal": "Kisanduku cha kawaida"
+    },
+    "choices": {
+      "title": "Chaguo",
+      "label": "Upande wa kifaa",
+      "hint": "Upande ambao kifaa kitahudumia zaidi",
+      "error": "Chagua upande.",
+      "disabled": "Kimezimwa"
     },
     "cards": {
       "title": "Kadi",
