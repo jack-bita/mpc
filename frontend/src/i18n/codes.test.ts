@@ -104,6 +104,21 @@ describe("codeMessage", () => {
     );
   });
 
+  it("reads a code that names something JavaScript built into the book as one it doesn't know", () => {
+    // Every JavaScript object carries hidden names of its own (constructor, toString...): a lookup that
+    // followed them would show "Object" or a piece of code. Only the book's own sentences count.
+    for (const code of [
+      "constructor",
+      "constructor.name",
+      "pin.constructor.name",
+      "toString",
+      "__proto__",
+    ])
+      expect(codeMessage(swahili, code), code).toBe(
+        `Seva imekataa. Msimbo: ${code}`,
+      );
+  });
+
   it("reads a code that names a group of sentences as one it doesn't know", () => {
     // errors.pin holds pin.wrong and the rest, but is no sentence itself.
     expect(codeMessage(swahili, "pin")).toBe("Seva imekataa. Msimbo: pin");

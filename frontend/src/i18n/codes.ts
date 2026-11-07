@@ -24,10 +24,9 @@ import { blanks } from "./blanks";
 export type CodeValues = Record<string, string | number | boolean | null>;
 
 /** What these functions need of use-intl's t(). The codes come from the server, so the type check can't
- * know them as keys: has() and raw() ask the book itself. */
+ * know them as keys: raw() hands over the book itself. */
 export type Words = {
   (key: string, values?: CodeValues): string;
-  has(key: string): boolean;
   raw(key: string): unknown;
 };
 
@@ -38,10 +37,8 @@ export function codeMessage(
   params: CodeValues = {},
 ): string {
   const key = `errors.${code}`;
-  // has() is also true for a group, like errors.pin, which holds sentences but is none: raw() tells.
-  const sentence = t.has(key) ? t.raw(key) : undefined;
-  if (typeof sentence !== "string")
-    return t("errorFallback.unknownCode", { code });
+  const sentence = ownSentence(t, code);
+  if (sentence === undefined) return t("errorFallback.unknownCode", { code });
 
   // A sentence asks for values by name, "dakika {minutes}". One the server didn't send can't be filled
   // in: the screen would show the key, and while building, the provider would stop the screen. So a
@@ -76,6 +73,24 @@ function asSeconds(wait: CodeValues[string] | undefined): number | undefined {
         ? Number(wait)
         : NaN;
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
+}
+
+// The code's sentence, walked to one part at a time through the book's `errors`: pin.locked is
+// errors → pin → locked. Only the book's own entries count (Object.hasOwn): every JavaScript object also
+// carries hidden names, so "constructor.name" would otherwise find "Object". A part that leads to a group,
+// like errors.pin, which holds sentences but is none, isn't a sentence either.
+function ownSentence(t: Words, code: string): string | undefined {
+  let entry: unknown = t.raw("errors");
+  for (const part of code.split(".")) {
+    if (
+      typeof entry !== "object" ||
+      entry === null ||
+      !Object.hasOwn(entry, part)
+    )
+      return undefined;
+    entry = (entry as Record<string, unknown>)[part];
+  }
+  return typeof entry === "string" ? entry : undefined;
 }
 
 /** The open word book, as codeMessage() needs it. */
