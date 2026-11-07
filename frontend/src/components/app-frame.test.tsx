@@ -1,13 +1,18 @@
 // app-frame.test.tsx — the counter, office and setup areas put every screen under the green top bar,
-// with the language button, and give the page its one <main> (UI-1, UI-3, 03 §7.1).
-import { fireEvent, screen } from "@testing-library/react";
+// with the language button, and give the page its one <main> (UI-1, UI-3, 03 §7.1); and once someone
+// logs in at a device, the bar names them and the side they work on (UI-4).
+import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import CounterLayout from "@/app/(counter)/layout";
 import OfficeLayout from "@/app/(office)/layout";
 import SetupLayout from "@/app/(setup)/layout";
+import { saveDevice } from "@/features/devices/this-device";
+import { DAWA_LAPTOP } from "@/test/devices";
 import { swahiliIn } from "@/test/language";
 import { render } from "@/test/render";
+
+import { AppFrame } from "./app-frame";
 
 const AREAS = [
   ["counter", CounterLayout],
@@ -45,5 +50,50 @@ describe.each(AREAS)("the %s area", (area, Layout) => {
 
     expect(screen.getByRole("button", { name: "Kiswahili" })).toBeTruthy();
     expect(swahiliIn(container)).toEqual([]);
+  });
+});
+
+describe("the bar once someone logs in", () => {
+  it("names the device's shop and home side while nobody is logged in", () => {
+    saveDevice(DAWA_LAPTOP);
+
+    render(
+      <AppFrame area="login">
+        <p>screen</p>
+      </AppFrame>,
+    );
+
+    expect(
+      within(screen.getByRole("banner")).getByText("MPC · Dawa"),
+    ).toBeTruthy();
+  });
+
+  it("names the person, and the side they work on in place of the device's", () => {
+    // Neema works on Vyakula, and logs in at the Dawa laptop.
+    saveDevice(DAWA_LAPTOP);
+
+    render(
+      <AppFrame area="login" person="Neema" side={{ name: "Vyakula" }}>
+        <p>screen</p>
+      </AppFrame>,
+    );
+
+    const bar = within(screen.getByRole("banner"));
+    expect(bar.getByText("MPC · Vyakula")).toBeTruthy();
+    expect(bar.getByText("Neema")).toBeTruthy();
+  });
+
+  it("puts a screen's own buttons in the bar, before the language button", () => {
+    render(
+      <AppFrame area="login" actions={<button type="button">Toka</button>}>
+        <p>screen</p>
+      </AppFrame>,
+    );
+
+    const buttons = within(screen.getByRole("banner")).getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      "Toka",
+      "English",
+    ]);
   });
 });

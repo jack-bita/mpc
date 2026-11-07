@@ -19,6 +19,7 @@ And the routes a device calls with its key, built on DeviceView (apps/people/api
 
     POST /api/devices/v1/pairing/   a new device asks to join a shop: a code to show, and its key in a cookie
     GET  /api/devices/v1/me/        a paired device learns its shop, its name, its code and its home side
+    GET  /api/devices/v1/staff/     a paired device learns who works there, for its PIN screen's tiles (UI-4)
     POST /api/auth/pin-login/       someone at a paired device types their PIN, and gets a session (AUTH-4)
 
 And what a session itself may ask, built on neither (AUTH-4):
@@ -52,7 +53,7 @@ from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin, ShopVi
 from apps.core.permissions import Permission
 from apps.people.api.authentication import set_key_cookie
 from apps.people.api.base import DeviceView
-from apps.people.api.pin_session import PIN_SESSION, start_pin_session
+from apps.people.api.pin_session import PIN_SESSION, pin_session_idle_minutes, start_pin_session
 from apps.people.api.serializers import (
     DeviceConfirmSerializer,
     DeviceEditSerializer,
@@ -61,6 +62,7 @@ from apps.people.api.serializers import (
     DeviceSerializer,
     PairingStartSerializer,
     PinLoginSerializer,
+    PinScreenStaffSerializer,
     TemporaryPasswordSerializer,
     WhoIsHereSerializer,
 )
@@ -68,7 +70,7 @@ from apps.people.api.staff_session import MeSessionAuthentication
 from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle, PinLoginThrottle
 from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import Device, StaffMember
-from apps.people.selectors import LoginRefused, idle_lock_minutes, who_is_here
+from apps.people.selectors import LoginRefused, idle_lock_minutes, pin_screen_staff, who_is_here
 from apps.people.services import block as block_device
 from apps.people.services import confirm_pairing, pin_login, rename_device, set_temporary_password, start_pairing
 from apps.people.services import unblock as unblock_device
@@ -247,8 +249,13 @@ class MeViewSet(ShopViewSet[StaffMember]):
     # `auth` as on LogoutView: the same cookie as the office routes, described by the same name.
     @extend_schema(responses=WhoIsHereSerializer, auth=[{"cookieAuth": []}])  # type: ignore[list-item]
     def me(self, request: Request) -> Response:
-        badge = request._request.session.get(PIN_SESSION) or {}
-        here = who_is_here(cast(StaffMember, self.actor), device_id=badge.get("device"))
+        session = request._request.session
+        badge = session.get(PIN_SESSION) or {}
+        here = who_is_here(
+            cast(StaffMember, self.actor),
+            device_id=badge.get("device"),
+            idle_minutes=pin_session_idle_minutes(session),
+        )
         return Response(self.get_serializer(here).data)
 
 
@@ -289,3 +296,16 @@ class DeviceMeView(DeviceView):
     def get(self, request: Request) -> Response:
         # cast: DeviceView has refused any visit with no device; mypy can't see that.
         return Response(DeviceMeSerializer(cast(Device, request.auth)).data)
+
+
+class DeviceStaffView(DeviceView):
+    # Who works at the device's shop, for the PIN screen's tiles (UI-4): a shared laptop shows a tile for each person,
+    # and the person taps their own, then types their PIN. Sync will carry this list onto the device, so the screen
+    # works offline too (SYNC-2, SYNC-10); until then the device asks here, online. Its key opens the shop for the
+    # visit (DeviceView), and a blocked one never gets here.
+    #
+    # One plain list, with no pages: a shop has a handful of people, and the screen needs every one of them at once.
+
+    @extend_schema(responses=PinScreenStaffSerializer(many=True))
+    def get(self, request: Request) -> Response:
+        return Response(PinScreenStaffSerializer(pin_screen_staff(), many=True).data)

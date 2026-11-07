@@ -1,8 +1,14 @@
 // query-client.test.ts — which failed reads the store asks again: never a refusal the server meant,
-// a few times a dropped network or a broken server (UI-2).
-import { describe, expect, it } from "vitest";
+// a few times a dropped network or a broken server (UI-2); and what a login forgets (UI-4).
+import { MutationObserver, QueryObserver } from "@tanstack/react-query";
+import { describe, expect, it, vi } from "vitest";
 
-import { READ_RETRIES, shouldRetry } from "./query-client";
+import {
+  forgetTheLastPerson,
+  makeQueryClient,
+  READ_RETRIES,
+  shouldRetry,
+} from "./query-client";
 import { ApiRefusal, NoConnection } from "./refusal";
 
 function refusal(status: number, code: string) {
@@ -43,5 +49,38 @@ describe("shouldRetry", () => {
   it("never asks again after a bug, which the next try would only repeat", () => {
     expect(shouldRetry(0, new TypeError("ask is not a function"))).toBe(false);
     expect(shouldRetry(0, new Error("a bug"))).toBe(false);
+  });
+});
+
+describe("forgetTheLastPerson", () => {
+  it("forgets every answer and every change, and asks again for what a screen shows", async () => {
+    // Asha has just used the laptop; Juma logs in after her (UI-4).
+    const store = makeQueryClient();
+    // A list from her last screen, which no screen shows now.
+    store.setQueryData(["devices", "list"], ["Laptop Dawa"]);
+    // A change she sent: a PIN login keeps its PIN among what it was sent with.
+    await new MutationObserver(store, {
+      mutationFn: (pin: string) => Promise.resolve(pin),
+    }).mutate("4829");
+    // A screen on show, which reads who is here: asked once for her.
+    let asked = 0;
+    const screen = new QueryObserver(store, {
+      queryKey: ["auth", "me"],
+      queryFn: () => Promise.resolve(`answer ${++asked}`),
+    });
+    const stop = screen.subscribe(() => {});
+    await vi.waitFor(() =>
+      expect(screen.getCurrentResult().data).toBe("answer 1"),
+    );
+
+    await forgetTheLastPerson(store);
+
+    expect(store.getQueryData(["devices", "list"])).toBeUndefined();
+    expect(store.getMutationCache().getAll()).toEqual([]);
+    // The screen heard of it and asked again, for Juma. Removed without a word, as clear() removes
+    // answers, it would go on showing Asha's.
+    expect(asked).toBe(2);
+    expect(screen.getCurrentResult().data).toBe("answer 2");
+    stop();
   });
 });

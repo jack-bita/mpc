@@ -7,7 +7,8 @@
 // checks every change itself (PPL-5); this only keeps a button nobody may press off the screen.
 //
 // One place in the store of server answers, so every office screen shares one answer. UI-4 and UI-5,
-// which log people in and out, clear the store then, so the next person never reads the last one's keys.
+// which log people in and out, empty the store then (forgetTheLastPerson, src/api/query-client.ts), so
+// the next person never reads the last one's keys.
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
@@ -33,4 +34,16 @@ export function useWhoIsHere() {
  * counted on every side (HeldPermissions.on, backend/apps/core/permissions.py). */
 export function sidesWhere(me: WhoIsHere, key: string): SideKeys[] {
   return me.permissions.sides.filter((side) => side.permissions.includes(key));
+}
+
+/** The side a person works on at this device, for the top bar (UI-4): the device's home side if they
+ * hold a key there, or else the first side they hold one on; none if they hold none. */
+export function sideAt(
+  me: WhoIsHere,
+  homeSideId: string,
+): SideKeys | undefined {
+  const sides = me.permissions.sides;
+  // A Vyakula seller at the Dawa laptop sells Vyakula's goods: the bar says where she works, so nobody
+  // has to guess which side a sale will go to.
+  return sides.find((side) => side.id === homeSideId) ?? sides[0];
 }

@@ -3,9 +3,9 @@
 Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a
 shop's devices on the office routes (AUTH-5): a device as the device list shows it, and what a manager sends to say
 yes to a waiting one, to rename one, and to block or unblock one; what the owner sends to set a temporary password
-(AUTH-6); what a device sends for a PIN login, and what `me` answers (AUTH-4); and the answers of the two routes a
-device calls with its key (apps/people/api/views.py). A key, a key's hash or a PIN's hash is never among the fields:
-they never leave the server (03 §5.9).
+(AUTH-6); what a device sends for a PIN login, and what `me` answers (AUTH-4); and the answers of the routes a device
+calls with its key (apps/people/api/views.py), the PIN screen's list of people among them (UI-4). A key, a key's hash
+or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
 """
 
 from typing import Any
@@ -138,6 +138,18 @@ class DeviceMeSerializer(serializers.Serializer[Device]):
         raise NotImplementedError
 
 
+class PinScreenStaffSerializer(serializers.ModelSerializer[StaffMember]):
+    # One tile on a shared device's PIN screen (UI-4): the full name in large letters, the nickname under it, and the id
+    # the PIN login sends back. A photo joins with PPL-4. Names only: no phone or email, which the next person at the
+    # laptop could read, and nothing that says whether a person has a PIN (03 §5.9).
+    full_name = serializers.CharField(source="user.full_name", read_only=True)
+
+    class Meta:
+        model = StaffMember
+        fields = ["id", "full_name", "display_name"]
+        read_only_fields = fields
+
+
 class MeUserSerializer(serializers.ModelSerializer[User]):
     # The person, as the screens greet them, in their own language (03 §7.4). No phone and no email: a screen on a
     # shared laptop doesn't need them, and the next person could read them there.
@@ -180,6 +192,11 @@ class WhoIsHereSerializer(serializers.Serializer[Any]):
     device = MeDeviceSerializer(allow_null=True)
     home_side = MeSideSerializer(allow_null=True)
     must_change_password = serializers.BooleanField()
+    # How long a shared device's screen may sit unused, in minutes: a PIN's badge's own, or for a password, the shop's
+    # setting. Selling uses the device's key, not the session, so it never pushes the server's idle time forward: the
+    # screen keeps a lock of its own, as long as the badge lasts (UI-4). A phone that is only the person's own never
+    # shows that screen.
+    idle_minutes = serializers.IntegerField()
     permissions = MePermissionsSerializer(source="*")
 
     def to_internal_value(self, data: Any) -> Any:

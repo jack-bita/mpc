@@ -84,6 +84,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/devices/v1/staff/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["devices_v1_staff_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health/": {
         parameters: {
             query?: never;
@@ -356,6 +372,12 @@ export interface components {
             staff: string;
             pin: string;
         };
+        PinScreenStaff: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly full_name: string;
+            readonly display_name: string;
+        };
         /**
          * @description * `one_screen` - One screen
          *     * `writer_cashier_loader` - Writer, cashier, loader
@@ -397,6 +419,7 @@ export interface components {
             device: components["schemas"]["MeDevice"] | null;
             home_side: components["schemas"]["MeSide"] | null;
             must_change_password: boolean;
+            idle_minutes: number;
             permissions: components["schemas"]["MePermissions"];
         };
     };
@@ -533,6 +556,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PairingStart"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    devices_v1_staff_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PinScreenStaff"][];
                 };
             };
             default: {

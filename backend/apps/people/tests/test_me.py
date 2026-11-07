@@ -4,8 +4,10 @@
 The app asks this after any login, and each time it opens: `GET /api/auth/me/`.
 
     the session                                   the answer
-    a PIN's badge                                 200: person, job, shop, device, home side, permissions per side
-    a password, on a person's own phone           200: the same, with no device and no home side
+    a PIN's badge                                 200: person, job, shop, device, home side, permissions per side,
+                                                  and the minutes it lasts unused
+    a password, on a person's own phone           200: the same, with no device and no home side, and the shop's
+                                                  minutes, for a shared laptop's screen
     on a temporary password, either way           200, saying so, though the office routes stay closed
     a suspended person, a blocked device,
     a copied badge                                403, each with its code
@@ -16,6 +18,7 @@ It holds no phone, no email and no hash. The tenancy sweep finds this route by i
 """
 
 from collections.abc import Callable
+from datetime import date
 
 import pytest
 from django.test import Client
@@ -23,12 +26,13 @@ from rest_framework.test import APIClient
 
 from apps.core.api.base import SEES_THE_SIDE
 from apps.core.permissions import Permission, RoleTemplate
+from apps.core.settings_registry import IDLE_MINUTES
 from apps.core.tenancy import shop_context
 from apps.people.api.views import MeViewSet
 from apps.people.models import Device, StaffMember, User
 from apps.people.permissions import effective_permissions
 from apps.people.services import block, confirm_pairing, grant_permission, set_pin, start_pairing, suspend
-from apps.shops.models import Shop, Side
+from apps.shops.models import Setting, Shop, Side
 from apps.shops.services import add_side
 
 pytestmark = pytest.mark.django_db
@@ -175,7 +179,16 @@ def test_me_names_who_and_where(asha: StaffMember, laptop: Device, laptop_key: s
 
     assert answer.status_code == 200
     data = answer.data
-    assert set(data) == {"user", "staff", "shop", "device", "home_side", "must_change_password", "permissions"}
+    assert set(data) == {
+        "user",
+        "staff",
+        "shop",
+        "device",
+        "home_side",
+        "must_change_password",
+        "idle_minutes",
+        "permissions",
+    }
     assert data["user"] == {"id": str(asha.user_id), "full_name": asha.user.full_name, "language": asha.user.language}
     assert data["staff"] == {"id": str(asha.pk), "display_name": asha.display_name, "job_title": asha.job_title}
     assert data["shop"] == {"id": str(asha.shop_id), "name": asha.shop.name, "code": asha.shop.code}
@@ -203,6 +216,38 @@ def test_me_on_a_phone_has_no_device(asha: StaffMember, laptop: Device) -> None:
     assert answer.data["staff"]["id"] == str(asha.pk)
     assert answer.data["device"] is None
     assert answer.data["home_side"] is None
+
+
+def test_me_says_a_pin_sessions_idle_minutes(asha: StaffMember, laptop_key: str, shop_a: Shop) -> None:
+    # The laptop's screen keeps an idle timer of its own (UI-4): selling uses the device's key, not the session, so the
+    # server's clock alone would never lock the screen. `me` tells it how long, as the shop's setting gave the badge at
+    # its login.
+    with shop_context(shop_a):
+        Setting.objects.create(shop=shop_a, key=IDLE_MINUTES.key, value="5", effective_from=date(2020, 1, 1))
+
+    assert logged_in(asha, laptop_key).get(ME).data["idle_minutes"] == 5
+
+
+def test_me_keeps_the_idle_minutes_its_session_began_with(asha: StaffMember, laptop_key: str, shop_a: Shop) -> None:
+    # The owner changes the setting while Asha is logged in. Her badge keeps the minutes it began with, and the server
+    # ends it then, so the screen's timer must say the same: the badge's own, not the setting's new value. From her
+    # next login, the new value.
+    client = logged_in(asha, laptop_key)
+    with shop_context(shop_a):
+        Setting.objects.create(shop=shop_a, key=IDLE_MINUTES.key, value="5", effective_from=date(2020, 1, 1))
+
+    assert client.get(ME).data["idle_minutes"] == IDLE_MINUTES.default
+    assert logged_in(asha, laptop_key).get(ME).data["idle_minutes"] == 5
+
+
+def test_me_gives_a_password_the_shops_idle_minutes(asha: StaffMember, shop_a: Shop) -> None:
+    # A password names no device (ADR-0038), so the server can't tell a manager's own phone from the shop's shared
+    # laptop. The laptop locks its screen after the shop's minutes, whoever logged in there and however; a phone that
+    # is only the person's own never shows that screen. The session itself lasts as Django's do (UI-4's review).
+    with shop_context(shop_a):
+        Setting.objects.create(shop=shop_a, key=IDLE_MINUTES.key, value="5", effective_from=date(2020, 1, 1))
+
+    assert on_a_phone(asha).get(ME).data["idle_minutes"] == 5
 
 
 def test_me_tells_about_the_temporary_password(asha: StaffMember, laptop_key: str, give_role: GiveRole) -> None:

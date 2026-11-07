@@ -4,8 +4,7 @@
   },
   "home": {
     "title": "Karibu",
-    "version": "Toleo {version}",
-    "thisDevice": "{device} · {shop}"
+    "version": "Toleo {version}"
   },
   "update": {
     "ready": "Toleo jipya liko tayari",
@@ -76,6 +75,25 @@
       "unblockHint": "Mfano: kimepatikana.",
       "unblockConfirm": "Fungua kifaa"
     }
+  },
+  "login": {
+    "pinPad": {
+      "typed": "Umeandika tarakimu {count} kati ya {length}",
+      "erase": "Futa"
+    },
+    "picker": {
+      "title": "Wewe ni nani?",
+      "empty": "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze."
+    },
+    "pin": {
+      "typePin": "Andika PIN yako",
+      "back": "Rudi"
+    },
+    "welcome": "Karibu, {name}",
+    "switch": "Badilisha mtu",
+    "logout": "Toka",
+    "leaving": "Unatoka…",
+    "waiting": "Subiri kidogo…"
   },
   "stock": {
     "part": "{unit} {count}"

@@ -4,8 +4,7 @@
   },
   "home": {
     "title": "Welcome",
-    "version": "Version {version}",
-    "thisDevice": "{device} · {shop}"
+    "version": "Version {version}"
   },
   "update": {
     "ready": "A new version is ready",
@@ -76,6 +75,25 @@
       "unblockHint": "For example: found.",
       "unblockConfirm": "Unblock the device"
     }
+  },
+  "login": {
+    "pinPad": {
+      "typed": "{count} of {length} digits typed",
+      "erase": "Delete"
+    },
+    "picker": {
+      "title": "Who are you?",
+      "empty": "No one works here yet. Ask the shop's owner to add the staff."
+    },
+    "pin": {
+      "typePin": "Type your PIN",
+      "back": "Back"
+    },
+    "welcome": "Welcome, {name}",
+    "switch": "Switch person",
+    "logout": "Log out",
+    "leaving": "Logging out…",
+    "waiting": "One moment…"
   },
   "stock": {
     "part": "{count} {unit}"
