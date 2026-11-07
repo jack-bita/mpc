@@ -111,6 +111,13 @@
       "search": "Tafuta bidhaa",
       "normal": "Kisanduku cha kawaida"
     },
+    "choices": {
+      "title": "Chaguo",
+      "label": "Upande wa kifaa",
+      "hint": "Upande ambao kifaa kitahudumia zaidi",
+      "error": "Chagua upande.",
+      "disabled": "Kimezimwa"
+    },
     "cards": {
       "title": "Kadi",
       "cardTitle": "Jumla ya leo",

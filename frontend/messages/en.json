@@ -111,6 +111,13 @@
       "search": "Search products",
       "normal": "A normal-size box"
     },
+    "choices": {
+      "title": "Choices",
+      "label": "The device's side",
+      "hint": "The side the device will serve most",
+      "error": "Pick a side.",
+      "disabled": "Switched off"
+    },
     "cards": {
       "title": "Cards",
       "cardTitle": "Today's total",

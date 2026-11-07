@@ -79,6 +79,17 @@ describe("the design page", () => {
     expect(screen.getByLabelText(t.fields.search).tagName).toBe("INPUT");
   });
 
+  it("shows a choice with a hint, one with an error and one switched off", () => {
+    render(<DesignPage />);
+    const groups = screen.getAllByRole("radiogroup", {
+      name: t.choices.label,
+    });
+    expect(groups).toHaveLength(3);
+    expect(groups[0]?.getAttribute("aria-describedby")).toBeTruthy();
+    expect(groups[1]?.getAttribute("aria-invalid")).toBe("true");
+    expect(groups[2]?.hasAttribute("data-disabled")).toBe(true);
+  });
+
   it("shows both messages, a card and the top bar with both side bands", () => {
     const { container } = render(<DesignPage />);
     // Two status boxes: the info sample, and the live banner, empty while online.

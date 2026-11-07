@@ -12,7 +12,7 @@
 // colour's value from the browser.
 "use client";
 
-import { type ReactNode, useSyncExternalStore } from "react";
+import { type ReactNode, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "use-intl";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
@@ -29,6 +29,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/design/card";
+import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
 import { Input } from "@/components/design/input";
 import { SIDE_BAND_LOOKS } from "@/components/design/side-band";
@@ -61,6 +62,29 @@ const COLOURS = [
   ["--border", "border"],
   ["--input", "input"],
 ] as const;
+
+/** A choice that keeps its pick, as a form does, so it can be tried here by hand: tap, arrows, Tab. */
+function ChoiceSample(props: {
+  hint?: string;
+  error?: string;
+  disabled?: boolean;
+}) {
+  const t = useTranslations("design");
+  const [side, setSide] = useState<string | null>(null);
+  return (
+    <Choice
+      label={t("choices.label")}
+      // The sample sides the top bars name below.
+      options={[
+        { value: "blue", label: t("topBar.sampleSides.blue") },
+        { value: "striped", label: t("topBar.sampleSides.striped") },
+      ]}
+      value={side}
+      onValueChange={setSide}
+      {...props}
+    />
+  );
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -218,6 +242,14 @@ export default function DesignPage() {
             placeholder={t("fields.search")}
             type="search"
           />
+        </div>
+      </Section>
+
+      <Section title={t("choices.title")}>
+        <div className="grid max-w-md gap-6">
+          <ChoiceSample hint={t("choices.hint")} />
+          <ChoiceSample error={t("choices.error")} />
+          <ChoiceSample hint={t("choices.disabled")} disabled />
         </div>
       </Section>
 
