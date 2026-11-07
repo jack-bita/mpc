@@ -42,18 +42,26 @@ export const WAIT_CHECK_EVERY = 3000;
 export function RegisterThisDevice() {
   const t = useTranslations("device.register");
   const device = useThisDevice();
+  // The code on show, kept here, not read from the start's own answer: TanStack empties that the moment
+  // a new start is sent, and the screen would flash back to "not registered" while Pata namba mpya asks.
+  // Kept, the old code's view stays, its button switched off, until the new code arrives; if the new
+  // start is refused, the old view stays too, with the reason under it.
+  const [pairing, setPairing] = useState<Pairing | null>(null);
   // A start is a change: never sent again by itself (query-client.ts). A tap sends a new one, and the
   // server retires the old code then, so only the newest code can be confirmed (AUTH-2).
-  const start = useMutation({ mutationFn: startPairing });
+  const start = useMutation({
+    mutationFn: startPairing,
+    onSuccess: setPairing,
+  });
 
   if (device) return <Registered device={device} />;
 
   return (
     <div className="flex max-w-xl flex-col gap-4">
       <h1 className="text-2xl font-semibold">{t("title")}</h1>
-      {start.data ? (
+      {pairing ? (
         <Waiting
-          pairing={start.data}
+          pairing={pairing}
           onNewCode={() => start.mutate()}
           asking={start.isPending}
         />

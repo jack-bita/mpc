@@ -125,6 +125,36 @@ describe("Sajili kifaa hiki", () => {
     expect(await screen.findByText("ABCD-2345")).toBeDefined();
   });
 
+  it("keeps the old code's view while a new code comes, never the first screen", async () => {
+    answer("POST", PAIRING, codeAnswer("K7QM4RXT"));
+    render(<RegisterThisDevice />);
+    getACode();
+    await screen.findByText("K7QM-4RXT");
+    await act(() => vi.advanceTimersByTimeAsync(TEN_MINUTES));
+
+    // The new code is slow to come: the start waits until the test lets it answer.
+    let answerNow = () => {};
+    answer(
+      "POST",
+      PAIRING,
+      () =>
+        new Promise<Response>((resolve) => {
+          answerNow = () => resolve(codeAnswer("ABCD2345")());
+        }),
+    );
+    const newCode = screen.getByRole("button", { name: "Pata namba mpya" });
+    fireEvent.click(newCode);
+
+    await vi.waitFor(() =>
+      expect((newCode as HTMLButtonElement).disabled).toBe(true),
+    );
+    expect(screen.queryByText(/bado hakijasajiliwa/)).toBeNull();
+    expect(screen.getByText("Muda wa namba hii umekwisha.")).toBeDefined();
+
+    answerNow();
+    expect(await screen.findByText("ABCD-2345")).toBeDefined();
+  });
+
   it("says how long to wait after too many tries from the shop's network", async () => {
     answer("POST", PAIRING, refusal(429, "throttled", { wait: 300 }));
     render(<RegisterThisDevice />);
