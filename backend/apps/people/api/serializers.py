@@ -3,9 +3,9 @@
 Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a
 shop's devices on the office routes (AUTH-5): a device as the device list shows it, and what a manager sends to say
 yes to a waiting one, to rename one, and to block or unblock one; what the owner sends to set a temporary password
-(AUTH-6); what a device sends for a PIN login, and what `me` answers (AUTH-4); and the answers of the two routes a
-device calls with its key (apps/people/api/views.py). A key, a key's hash or a PIN's hash is never among the fields:
-they never leave the server (03 §5.9).
+(AUTH-6); what a device sends for a PIN login, and what `me` answers (AUTH-4); and the answers of the routes a device
+calls with its key (apps/people/api/views.py), the PIN screen's list of people among them (UI-4). A key, a key's hash
+or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
 """
 
 from typing import Any
@@ -136,6 +136,18 @@ class DeviceMeSerializer(serializers.Serializer[Device]):
     def to_internal_value(self, data: Any) -> Any:
         # Only ever an answer: nothing is sent to this route.
         raise NotImplementedError
+
+
+class PinScreenStaffSerializer(serializers.ModelSerializer[StaffMember]):
+    # One tile on a shared device's PIN screen (UI-4): the full name in large letters, the nickname under it, and the id
+    # the PIN login sends back. A photo joins with PPL-4. Names only: no phone or email, which the next person at the
+    # laptop could read, and nothing that says whether a person has a PIN (03 §5.9).
+    full_name = serializers.CharField(source="user.full_name", read_only=True)
+
+    class Meta:
+        model = StaffMember
+        fields = ["id", "full_name", "display_name"]
+        read_only_fields = fields
 
 
 class MeUserSerializer(serializers.ModelSerializer[User]):
