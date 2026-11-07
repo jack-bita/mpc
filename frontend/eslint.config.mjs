@@ -97,7 +97,12 @@ export default defineConfig([
     //
     // ESLint keeps only the last settings of a rule for a file, and no-restricted-imports is the font
     // ban's rule too: listed again here, or counter screens would lose it (import-rule.test.ts).
+    //
+    // Not tests, which aren't screens: the natural proof that a sale works offline watches fetch,
+    // expect(globalThis.fetch).not.toHaveBeenCalled(). The import rule above still keeps them off
+    // src/api/, and the first block's font ban still reaches them.
     files: ["src/app/(counter)/**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
+    ignores: ["src/**/*.test.*"],
     rules: {
       "no-restricted-imports": [
         "error",

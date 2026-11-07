@@ -195,6 +195,34 @@ describe("the counter rule", () => {
   );
 
   it(
+    "lets a counter screen's test check that nothing called the server",
+    async () => {
+      // A test isn't a screen: the natural proof that a sale works offline names fetch to watch it.
+      const watch =
+        'import { expect, it } from "vitest";\nit("sells offline", () => {\n  expect(globalThis.fetch).not.toHaveBeenCalled();\n  expect(fetch).not.toHaveBeenCalled();\n});\n';
+      const rules = await rulesFor(
+        "../app/(counter)/sale/page.test.tsx",
+        watch,
+      );
+      expect(rules).not.toContain("no-restricted-globals");
+      expect(rules).not.toContain("no-restricted-properties");
+    },
+    SLOW,
+  );
+
+  it(
+    "still keeps a counter screen's test off the API client and Google's fonts",
+    async () => {
+      const test = "../app/(counter)/sale/page.test.tsx";
+      expect(await rulesFor(test, API)).toContain(RULE);
+      const google =
+        'import { Inter } from "next/font/google";\nexport const font = Inter;\n';
+      expect(await rulesFor(test, google)).toContain("no-restricted-imports");
+    },
+    SLOW,
+  );
+
+  it(
     "lets a counter screen turn a code into its sentence",
     async () => {
       // Sync's refusals carry codes too (SYNC cards): the part that reads them sits beside the word
