@@ -60,7 +60,7 @@ export function whoIsHere(
   return {
     user: {
       id: "019a5e00-0000-7000-8000-0000000000b1",
-      full_name: "Neema Mollel",
+      full_name: "Neema Mfano",
       language: "sw",
     },
     staff: {
