@@ -11,8 +11,11 @@
 // device whose saved copy was wiped. The next check puts it right if the server knows otherwise.
 //
 // A block is kept too, so the lock stays on through a reload with no network: a stolen laptop taken
-// offline after it saw its block still shows nothing of the shop's work. Honest limit: one kept offline
-// from before its block never hears of it, until its next request reaches the server (03 §5.9).
+// offline after it saw its block still shows nothing of the shop's work. Honest limits (03 §5.9): one
+// kept offline from before its block never hears of it, until its next request reaches the server; and
+// someone who deletes the device's key cookie in the browser's own tools gets "not registered" at the
+// next check, which forgets the block. Whoever can open those tools can read the shop's data on the
+// device there too: the lock is for a laptop's screen, not against its owner's tools.
 import { useSyncExternalStore } from "react";
 
 /** This device, as the top bar and the screens need it. Our own shape, not the API's: a later change to

@@ -34,8 +34,9 @@ import { saveBlocked, saveDevice, type ThisDevice } from "./this-device";
 
 type DeviceMe = components["schemas"]["DeviceMe"];
 
-/** How often the app asks, while it is open: 5 minutes, as often as the server notes the device was
- * seen (last_seen_at, AUTH-2), so each check keeps the manager's list up to date and costs no more. */
+/** How often the app asks, while it is open: every 5 minutes. The server notes the device seen at most
+ * every 5 minutes too (last_seen_at, LAST_SEEN_EVERY, AUTH-2), and a check that lands just short of that
+ * notes nothing, so on the manager's list an open laptop reads as seen up to about 10 minutes ago. */
 export const DEVICE_CHECK_EVERY = 5 * 60 * 1000;
 
 /** The check's place in the store of server answers. The registration screen asks the same, faster,
@@ -69,6 +70,11 @@ export function noticeBlock(error: unknown): void {
  * server knows no working device by this browser's key. Anything else (a block, no network, a server
  * down) is thrown. A block is kept first; otherwise the saved copy stays as it was: the device was
  * registered a moment ago, and a dropped network doesn't change that.
+ *
+ * Honest limits: a slow answer from before a block, landing after another request's device.blocked,
+ * clears the block until the next request, a moment later. And a suspended shop's device gets 401
+ * shop.suspended, which is none of the answers above: the app keeps its copy and is neither locked nor
+ * told, until the card that checks a shop's status for devices decides what it shows.
  */
 export async function checkThisDevice(): Promise<ThisDevice | null> {
   try {

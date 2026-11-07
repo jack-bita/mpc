@@ -37,7 +37,9 @@ export function lifetime(
 ): number {
   const serverNow = serverDate === null ? NaN : Date.parse(serverDate);
   // A Date header holds whole seconds, cut down: the server's real time was up to a second later. It is
-  // counted as that second later, so the countdown ends at most a second early, never after the code.
+  // counted as that second later, so the countdown ends up to a second early, less the time the answer
+  // took to arrive: it ends after the code only on an answer slower than a second, and then by a
+  // moment, which the manager's own confirm, refused as expired, says plainly.
   const from = Number.isNaN(serverNow) ? receivedAt : serverNow + 1000;
   return Math.max(0, Date.parse(expiresAt) - from);
 }
