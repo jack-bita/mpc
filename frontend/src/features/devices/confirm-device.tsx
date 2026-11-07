@@ -114,6 +114,9 @@ export function ConfirmDevice({
         error={codeError}
         value={code}
         onChange={(event) => setCode(event.target.value)}
+        // The person just asked for this form: the keyboard starts in its first box, where the button
+        // that opened it was (devices-screen.tsx sends it back there when the form closes).
+        autoFocus
         // A code, not a word: no capital letter added, no spelling fixed, nothing remembered from before.
         autoCapitalize="characters"
         autoComplete="off"

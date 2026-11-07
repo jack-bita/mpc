@@ -11,7 +11,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -29,6 +29,19 @@ export function DevicesScreen() {
   const client = useQueryClient();
   const [registering, setRegistering] = useState(false);
   const [registered, setRegistered] = useState<Device | null>(null);
+
+  // Where the keyboard goes when the form closes: back to the button that opened it, as the form and
+  // the box that had focus are gone. Without it, focus falls to the page's start, and someone on a
+  // keyboard or a screen reader is lost (laptops are keyboard first). Counted, so each close moves it.
+  const opener = useRef<HTMLButtonElement>(null);
+  const [closes, setCloses] = useState(0);
+  useEffect(() => {
+    if (closes > 0) opener.current?.focus();
+  }, [closes]);
+  function closeTheForm() {
+    setRegistering(false);
+    setCloses((count) => count + 1);
+  }
 
   const manageable = who.data ? sidesWhere(who.data, "device.manage") : [];
 
@@ -56,17 +69,18 @@ export function DevicesScreen() {
               sides={manageable}
               onDone={(device) => {
                 setRegistered(device);
-                setRegistering(false);
+                closeTheForm();
                 // The list asks again, so the new laptop is on it.
                 void client.invalidateQueries({ queryKey: DEVICE_LIST });
               }}
-              onCancel={() => setRegistering(false)}
+              onCancel={closeTheForm}
             />
           </CardContent>
         </Card>
       ) : manageable.length > 0 ? (
         <div>
           <Button
+            ref={opener}
             onClick={() => {
               setRegistered(null);
               setRegistering(true);

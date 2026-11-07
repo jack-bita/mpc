@@ -14,7 +14,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useFormatter, useNow, useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -109,6 +109,24 @@ function DeviceCard({
   // The clock "Kilionekana dakika 3 zilizopita" counts from, moved on every minute.
   const now = useNow({ updateInterval: 60_000 });
   const [mode, setMode] = useState<Mode>("view");
+
+  // Where the keyboard goes when a form closes: back to the button that opened it, as the form and the
+  // box that had focus are gone (laptops are keyboard first). After a block it lands on Zuia, which
+  // becomes Fungua when the list answers again: React keeps the one <button> in that place and changes
+  // its words, so the focus stays. A new object each time, so each close moves it.
+  const renameButton = useRef<HTMLButtonElement>(null);
+  const statusButton = useRef<HTMLButtonElement>(null);
+  const [backTo, setBackTo] = useState<{ button: "rename" | "status" } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (backTo === null) return;
+    (backTo.button === "rename" ? renameButton : statusButton).current?.focus();
+  }, [backTo]);
+  function close(button: "rename" | "status") {
+    setMode("view");
+    setBackTo({ button });
+  }
   const blocked = device.status === "blocked";
 
   // The browser writes some of these with a capital ("Sekunde 10 zilizopita"), and the phrase sits
@@ -144,16 +162,17 @@ function DeviceCard({
         </p>
         <p className="text-muted-foreground">{seenText}</p>
         {mode === "rename" ? (
-          <RenameForm device={device} onClose={() => setMode("view")} />
+          <RenameForm device={device} onClose={() => close("rename")} />
         ) : mode === "block" || mode === "unblock" ? (
           <StatusForm
             device={device}
             change={mode}
-            onClose={() => setMode("view")}
+            onClose={() => close("status")}
           />
         ) : mayChange ? (
           <div className="flex flex-wrap gap-3">
             <Button
+              ref={renameButton}
               kind="second"
               size="normal"
               onClick={() => setMode("rename")}
@@ -162,6 +181,7 @@ function DeviceCard({
             </Button>
             {blocked ? (
               <Button
+                ref={statusButton}
                 kind="second"
                 size="normal"
                 onClick={() => setMode("unblock")}
@@ -170,6 +190,7 @@ function DeviceCard({
               </Button>
             ) : (
               <Button
+                ref={statusButton}
                 kind="danger"
                 size="normal"
                 onClick={() => setMode("block")}
@@ -241,6 +262,8 @@ function RenameForm({
         error={nameError}
         value={name}
         onChange={(event) => setName(event.target.value)}
+        // The person just asked for this form: the keyboard starts in its box.
+        autoFocus
         autoComplete="off"
         maxLength={40}
       />
@@ -312,6 +335,8 @@ function StatusForm({
         error={reasonError}
         value={reason}
         onChange={(event) => setReason(event.target.value)}
+        // The person just asked for this form: the keyboard starts in its box.
+        autoFocus
         maxLength={500}
       />
       <ApiErrorAlert error={reasonError ? null : send.error} />

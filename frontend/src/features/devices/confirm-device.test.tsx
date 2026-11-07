@@ -107,6 +107,31 @@ describe("Sajili kifaa", () => {
     expect(screen.getByRole("button", { name: "Sajili kifaa" })).toBeDefined();
   });
 
+  it("puts the keyboard in the code box, and back on Sajili kifaa when the form closes", async () => {
+    // Laptops are keyboard first: the place mustn't fall to the page's start.
+    asOwner();
+    answer("POST", DEVICES, { status: 201, body: MADE });
+    await openTheForm();
+    expect(document.activeElement).toBe(
+      screen.getByLabelText("Namba ya kifaa"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Ghairi" }));
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Sajili kifaa" }),
+    );
+
+    // And after a device is made.
+    fireEvent.click(screen.getByRole("button", { name: "Sajili kifaa" }));
+    fillIn("K7QM4RXT", "Laptop Dawa");
+    fireEvent.click(screen.getByText("Dawa"));
+    send();
+    await screen.findByText(/Laptop Dawa imesajiliwa/);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Sajili kifaa" }),
+    );
+  });
+
   it("sends the same id again after a lost answer, so the shop gets one device", async () => {
     asOwner();
     answer("POST", DEVICES, () => {

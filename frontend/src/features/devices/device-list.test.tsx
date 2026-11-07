@@ -177,6 +177,37 @@ describe("the device list", () => {
     expect(await lastChange()).toEqual({ name: "Laptop ya Dawa", version: 1 });
   });
 
+  it("puts the keyboard in each form's box, and back on its button when it closes", async () => {
+    // Laptops are keyboard first: the place mustn't fall to the page's start.
+    listAnswers(LAPTOP);
+    answer("POST", `${DEVICES}${LAPTOP.id}/block/`, {
+      status: 200,
+      body: { ...LAPTOP, status: "blocked", version: 2 },
+    });
+    render(<DeviceList me={OWNER} />);
+    const laptop = await card("Laptop Dawa");
+
+    fireEvent.click(laptop.getByRole("button", { name: "Badilisha jina" }));
+    expect(document.activeElement).toBe(laptop.getByLabelText("Jina jipya"));
+    fireEvent.click(laptop.getByRole("button", { name: "Ghairi" }));
+    expect(document.activeElement).toBe(
+      laptop.getByRole("button", { name: "Badilisha jina" }),
+    );
+
+    fireEvent.click(laptop.getByRole("button", { name: "Zuia" }));
+    expect(document.activeElement).toBe(
+      laptop.getByLabelText("Kwa nini unakizuia?"),
+    );
+    listAnswers({ ...LAPTOP, status: "blocked", version: 2 });
+    fireEvent.change(laptop.getByLabelText("Kwa nini unakizuia?"), {
+      target: { value: "Kimeibiwa" },
+    });
+    fireEvent.click(laptop.getByRole("button", { name: "Zuia kifaa" }));
+    // Blocked, the same place now holds Fungua.
+    const unblock = await laptop.findByRole("button", { name: "Fungua" });
+    await vi.waitFor(() => expect(document.activeElement).toBe(unblock));
+  });
+
   it("says when someone else renamed it meanwhile, and asks the list again", async () => {
     listAnswers(LAPTOP);
     answer(
