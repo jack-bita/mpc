@@ -1,9 +1,12 @@
 // password-login.test.tsx — the owner and managers log in on their own phones, by phone or email and a
 // password, through allauth (UI-5, ADR-0038).
+import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ALLAUTH } from "@/api/allauth";
+import { makeQueryClient } from "@/api/query-client";
+import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { DAWA, whoIsHere } from "@/test/devices";
 import {
   allauthRefusal,
@@ -195,5 +198,27 @@ describe("the password login", () => {
       expect(router.replace).toHaveBeenCalledWith(AFTER_LOGIN),
     );
     expect(logins()).toEqual([]);
+  });
+
+  it("shows the form when the store still holds a session that has ended", async () => {
+    // Neema's session ended at its idle time while the office showed her, and the store kept her last
+    // answer. Read as "already here", the office would send her back, and back again (office-frame.tsx).
+    const store = makeQueryClient();
+    store.setQueryData(
+      WHO_IS_HERE,
+      whoIsHere([{ side: DAWA, permissions: ["device.manage"] }]),
+    );
+
+    render(
+      <QueryClientProvider client={store}>
+        <PasswordLogin />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(store.getQueryState(WHO_IS_HERE)?.status).toBe("error"),
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Nenosiri")).toBeTruthy();
   });
 });

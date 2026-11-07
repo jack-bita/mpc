@@ -93,8 +93,10 @@ export function PasswordLogin() {
   });
 
   // Already logged in on this phone: straight on, as a login would send them. `me` refuses everyone
-  // else, which is no error to show here.
-  const here = me.data !== undefined;
+  // else, which is no error to show here. Only an answer asked since this page opened, and not refused
+  // since: the store may still hold the last person's answer, from a session that has ended since, and
+  // the office would send them straight back here (office-frame.tsx).
+  const here = me.isSuccess && me.isFetchedAfterMount;
   useEffect(() => {
     if (here) router.replace(AFTER_LOGIN);
   }, [here, router]);
