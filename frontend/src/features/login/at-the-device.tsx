@@ -16,7 +16,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -66,6 +66,13 @@ export function AtTheDevice({
   // nothing about who is here.
   const ended =
     me.error instanceof ApiRefusal && me.error.status < 500 ? me.error : null;
+  // The server ended a session it had shown, and the person's last answer is still in the store beside
+  // the refusal. Forget them at once: TanStack keeps that answer through every failed refresh after it,
+  // so a 5xx or a dropped network would bring them back, with Toka and the idle lock (UI-4's review).
+  const endedWithAnAnswer = ended !== null && me.data !== undefined;
+  useEffect(() => {
+    if (endedWithAnAnswer) void forgetTheLastPerson(store);
+  }, [endedWithAnAnswer, store]);
   // Who is logged in, as `me` last said. TanStack keeps the last answer through a failed refresh, so a
   // dropped network leaves the person where they are. Nobody while they are leaving: hidden at the press.
   const here = ended || leaving ? undefined : me.data;

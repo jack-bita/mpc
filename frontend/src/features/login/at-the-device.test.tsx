@@ -1,11 +1,14 @@
 // at-the-device.test.tsx — leaving a shared laptop: Toka and Badilisha mtu end the session on the server,
 // forget the person, and show the tiles for whoever is next (UI-4, 03 §5.9). The fake server keeps one
 // session, as Django does for this browser: a PIN login starts it, a logout ends it, and `me` answers for it.
-import { fireEvent, screen, within } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { makeQueryClient } from "@/api/query-client";
 import type { components } from "@/api/schema";
 import { saveDevice } from "@/features/devices/this-device";
+import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { setLanguage } from "@/i18n/language";
 import {
   DAWA,
@@ -237,5 +240,47 @@ describe("leaving the laptop", () => {
     expect(bar().getByRole("button", { name: "Switch person" })).toBeDefined();
     expect(bar().getByRole("button", { name: "Log out" })).toBeDefined();
     expect(swahiliIn(container)).toEqual([]);
+  });
+});
+
+describe("a session the server ends", () => {
+  it("stays ended through a failed refresh after it", async () => {
+    // Neema's session ends on the server by itself, at its idle time, and the next refresh of `me` meets
+    // a deploy's 502. TanStack keeps her last answer beside that error: read again, it would put her back
+    // in the bar, with Toka and an idle lock armed for another 15 minutes.
+    saveDevice(DAWA_LAPTOP);
+    let server: "her" | "nobody" | "broken" = "her";
+    const nobody = refusal(403, "not_authenticated");
+    const broken = refusal(502, "server_error");
+    answer("GET", ME, () =>
+      server === "her"
+        ? Response.json(NEEMA)
+        : server === "nobody"
+          ? Response.json(nobody.body, { status: nobody.status })
+          : Response.json(broken.body, { status: broken.status }),
+    );
+    answer("GET", STAFF, { status: 200, body: [] });
+    const store = makeQueryClient();
+    // A 502 isn't asked again here: the store's own rule would ask twice more, a second and two apart.
+    store.setDefaultOptions({ queries: { retry: false } });
+    render(
+      <QueryClientProvider client={store}>
+        <AtTheDevice device={DAWA_LAPTOP} />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    server = "nobody";
+    await act(() => store.refetchQueries({ queryKey: WHO_IS_HERE }));
+    await screen.findByRole("heading", { name: "Wewe ni nani?" });
+    server = "broken";
+    await act(() => store.refetchQueries({ queryKey: WHO_IS_HERE }));
+
+    expect(
+      await screen.findByText("Seva ina hitilafu. Jaribu tena baadaye."),
+    ).toBeDefined();
+    expect(screen.queryByRole("heading", { name: "Karibu, Neema" })).toBeNull();
+    expect(bar().queryByText("Neema")).toBeNull();
+    expect(bar().queryByRole("button", { name: "Toka" })).toBeNull();
   });
 });
