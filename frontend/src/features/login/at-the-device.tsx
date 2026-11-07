@@ -16,7 +16,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -77,9 +77,19 @@ export function AtTheDevice({
   // dropped network leaves the person where they are. Nobody while they are leaving: hidden at the press.
   const here = ended || leaving ? undefined : me.data;
   const side = here ? sideAt(here, device.homeSide.id) : undefined;
+
+  // Who pressed Toka or Badilisha mtu, or whom the idle lock logged out: a refused logout's reason is
+  // theirs, and shows only while they are here. The store can't forget it for us: forgetTheLastPerson
+  // empties its list of changes, but the screen's own hold on the logout keeps its error (UI-4's review).
+  const [leaver, setLeaver] = useState<string | null>(null);
+  function leave() {
+    setLeaver(here?.staff.id ?? null);
+    logout.mutate();
+  }
+
   // A seller who walks away is logged out by herself, as if she had pressed Toka. Only while someone is
   // here: while leaving, or with nobody, there is nothing to lock.
-  useIdleLock(here?.idle_minutes, () => logout.mutate());
+  useIdleLock(here?.idle_minutes, leave);
 
   function whatShows() {
     // While the logout is on its way: neither the person nor the tiles yet. A PIN login sent meanwhile
@@ -94,8 +104,10 @@ export function AtTheDevice({
     if (here)
       return (
         <>
-          {/* A logout the server refused: why, and the person stays where they are. */}
-          <ApiErrorAlert error={logout.error} />
+          {/* A logout the server refused: why, and the person stays where they are. Only to them. */}
+          <ApiErrorAlert
+            error={leaver === here.staff.id ? logout.error : null}
+          />
           <h1 className="text-3xl font-semibold">
             {t("welcome", { name: here.staff.display_name })}
           </h1>
@@ -117,10 +129,10 @@ export function AtTheDevice({
   // The bar kind: the only kind that can sit on the green; normal height, as the language button's.
   const buttons = here ? (
     <>
-      <Button kind="bar" size="normal" onClick={() => logout.mutate()}>
+      <Button kind="bar" size="normal" onClick={leave}>
         {t("switch")}
       </Button>
-      <Button kind="bar" size="normal" onClick={() => logout.mutate()}>
+      <Button kind="bar" size="normal" onClick={leave}>
         {t("logout")}
       </Button>
     </>

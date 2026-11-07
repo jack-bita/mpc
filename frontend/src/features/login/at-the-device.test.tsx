@@ -220,6 +220,34 @@ describe("leaving the laptop", () => {
     }
   });
 
+  it("shows a refused logout's reason only to the person who pressed", async () => {
+    // Neema's Toka is refused. Her session later ends at its idle time, and Juma logs in: the reason was
+    // hers, and must not greet him.
+    const laptop = theLaptop(NEEMA, refusal(403, "permission_denied"));
+    const store = makeQueryClient();
+    render(
+      <QueryClientProvider client={store}>
+        <AtTheDevice device={DAWA_LAPTOP} />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+    await screen.findByText("Huna ruhusa ya kufanya hili.");
+
+    laptop.end();
+    await act(() => store.refetchQueries({ queryKey: WHO_IS_HERE }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Juma Mfano Juma" }),
+    );
+    for (const digit of "4829")
+      fireEvent.click(screen.getByRole("button", { name: digit }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Karibu, Juma" }),
+    ).toBeDefined();
+    expect(screen.queryByText("Huna ruhusa ya kufanya hili.")).toBeNull();
+  });
+
   it("shows neither button while nobody is logged in", async () => {
     theLaptop(null);
     render(<AtTheDevice device={DAWA_LAPTOP} />);
