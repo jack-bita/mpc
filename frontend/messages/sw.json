@@ -4,7 +4,8 @@
   },
   "home": {
     "title": "Karibu",
-    "version": "Toleo {version}"
+    "version": "Toleo {version}",
+    "login": "Ingia"
   },
   "update": {
     "ready": "Toleo jipya liko tayari",
@@ -88,6 +89,13 @@
     "pin": {
       "typePin": "Andika PIN yako",
       "back": "Rudi"
+    },
+    "password": {
+      "title": "Ingia",
+      "name": "Simu au barua pepe",
+      "nameHint": "Kama 0712 345 678",
+      "password": "Nenosiri",
+      "send": "Ingia"
     },
     "welcome": "Karibu, {name}",
     "switch": "Badilisha mtu",

@@ -107,6 +107,14 @@ describe("HomePage", () => {
     expect(link.getAttribute("href")).toMatch(/^\/register-device\/?$/);
   });
 
+  it("shows a manager's own phone the way to log in", () => {
+    // A phone that is only the person's own never registers: it opens on Karibu, with Ingia (UI-5).
+    render(<HomePage />);
+
+    const link = screen.getByRole("link", { name: "Ingia" });
+    expect(link.getAttribute("href")).toMatch(/^\/login\/?$/);
+  });
+
   it("asks who you are on a registered laptop, under the shop and the laptop's side", async () => {
     theLaptop(neemaAtTheLaptop([{ side: DAWA, permissions: ["sale.make"] }]));
 

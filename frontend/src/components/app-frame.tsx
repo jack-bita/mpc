@@ -20,8 +20,8 @@ import { useThisDevice } from "@/features/devices/this-device";
 
 /** The areas (03 §7.1, §7.2): the counter works offline; the office needs the internet; setup is where a
  * device registers, before it belongs to a shop, and needs the internet too (UI-3); login is the home
- * page's PIN login on a registered device, which calls the server, so it is outside the counter lock too
- * (UI-4). */
+ * page's PIN login on a registered device (UI-4), and the owner's and managers' password pages
+ * (app/(login)/, UI-5), which call the server, so they are outside the counter lock too. */
 export type Area = "counter" | "office" | "setup" | "login";
 
 export function AppFrame({

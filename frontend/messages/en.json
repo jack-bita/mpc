@@ -4,7 +4,8 @@
   },
   "home": {
     "title": "Welcome",
-    "version": "Version {version}"
+    "version": "Version {version}",
+    "login": "Log in"
   },
   "update": {
     "ready": "A new version is ready",
@@ -88,6 +89,13 @@
     "pin": {
       "typePin": "Type your PIN",
       "back": "Back"
+    },
+    "password": {
+      "title": "Log in",
+      "name": "Phone or email",
+      "nameHint": "Like 0712 345 678",
+      "password": "Password",
+      "send": "Log in"
     },
     "welcome": "Welcome, {name}",
     "switch": "Switch person",
