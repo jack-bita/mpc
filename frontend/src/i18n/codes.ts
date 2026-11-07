@@ -18,6 +18,8 @@
 
 import { useTranslations } from "use-intl";
 
+import { blanks } from "./blanks";
+
 /** The values a code's sentence may need, as the server sends them in `params`. */
 export type CodeValues = Record<string, string | number | boolean | null>;
 
@@ -50,11 +52,6 @@ export function codeMessage(
   if (missing.every((name) => name === "minutes"))
     return t("errorFallback.waitAWhile");
   return t("errorFallback.unknownCode", { code });
-}
-
-// The names a sentence fills in: "{minutes}", and "{count, plural, ...}" should a sentence ever count.
-function blanks(sentence: string): string[] {
-  return [...sentence.matchAll(/\{(\w+)[},]/g)].map((match) => match[1] ?? "");
 }
 
 // `wait` comes in seconds (pin.locked, throttled); people read minutes. Plain numbers, not big.js: a wait is a count

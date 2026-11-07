@@ -78,6 +78,23 @@ describe("codeMessage", () => {
     );
   });
 
+  it("fills in a sentence that counts, as use-intl does", () => {
+    // A plural's branches hold words, not values: "minute" is no value the server must send.
+    const t = wordsFrom({
+      errors: {
+        pin: {
+          locked:
+            "Try again in {minutes} {minutes, plural, one {minute} other {minutes}}.",
+        },
+      },
+      errorFallback: MESSAGES.sw.errorFallback,
+    });
+
+    expect(codeMessage(t, "pin.locked", { wait: 300 })).toBe(
+      "Try again in 5 minutes.",
+    );
+  });
+
   it("names a code it has no sentence for, so it can be read out to the owner", () => {
     expect(codeMessage(swahili, "sale.below_floor")).toBe(
       "Seva imekataa. Msimbo: sale.below_floor",
