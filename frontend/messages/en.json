@@ -131,6 +131,8 @@
       "big": "Big",
       "normal": "Normal",
       "disabled": "Switched off",
+      "links": "Links that look like buttons: they open another page",
+      "link": "Open a page",
       "onBar": "On the green top bar",
       "bar": "Log out"
     },

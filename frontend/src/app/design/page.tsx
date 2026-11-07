@@ -19,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
 import {
   Button,
   BUTTON_SIZES,
+  ButtonLink,
   SCREEN_BUTTON_KINDS,
 } from "@/components/design/button";
 import {
@@ -199,6 +200,19 @@ export default function DesignPage() {
               {t(`buttons.${kind}`)}
             </Button>
           ))}
+        </div>
+        {/* The link that looks like a button (ButtonLink), in each screen kind: a step to another page,
+            like Sajili kifaa hiki on the home page (UI-3). These lead back here, as a sample has nowhere
+            else to go. */}
+        <div className="grid gap-2">
+          <p className="text-sm text-muted-foreground">{t("buttons.links")}</p>
+          <div className="flex flex-wrap gap-3">
+            {SCREEN_BUTTON_KINDS.map((kind) => (
+              <ButtonLink key={kind} kind={kind} href="/design/">
+                {t("buttons.link")}
+              </ButtonLink>
+            ))}
+          </div>
         </div>
         {/* The bar kind, on a strip of the top bar's green, in both sizes and switched off. ON_GREEN
             sets --ring to white, as on the top bar, so Tab shows a white ring here too. */}

@@ -52,6 +52,13 @@ describe("the design page", () => {
     expect(switchedOff).toHaveLength(SCREEN_BUTTON_KINDS.length + 1);
   });
 
+  it("shows the link that looks like a button, in each screen kind", () => {
+    render(<DesignPage />);
+    const links = screen.getAllByRole("link", { name: t.buttons.link });
+    expect(links).toHaveLength(SCREEN_BUTTON_KINDS.length);
+    for (const link of links) expect(link.tagName).toBe("A");
+  });
+
   it("shows the bar kind on the bar's green, with a white focus ring", () => {
     render(<DesignPage />);
     // Big, normal and switched off.
