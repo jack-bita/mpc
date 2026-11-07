@@ -38,7 +38,7 @@ paths:
 - Colours, corners and heights come from the tokens in `globals.css`, never a value of a screen's own. Heights are written `h-(--control-big)`, a spelling `cn()` knows is a height.
 - Focus rings at full strength (`ring-ring`, never `ring-ring/50`); on green, the ring is white: anything green uses `ON_GREEN` from `top-bar.tsx`, which sets `--ring`, and only the button's `bar` kind sits on it (UI-1).
 - Counter, office and setup screens live in `src/app/(counter)/`, `src/app/(office)/` and `src/app/(setup)/`, whose layouts wrap them in `AppFrame` (the top bar and the page's one `<main>`): a screen there doesn't write its own `<main>`. The setup area holds what a device does before it belongs to a shop (Sajili kifaa hiki); it calls the server, so it is outside the counter lock (UI-3).
-- The device knows itself through `src/features/devices/this-device.ts` (its saved copy, `mpc.device`, which never calls the server, so any screen may read it) and `device-check.tsx` (which asks the server, on every page). A `device.blocked` from any call through the store locks the app (`DeviceLock`), so send every call through TanStack Query (UI-3).
+- The device knows itself through `src/features/devices/this-device.ts` (its saved copy, `mpc.device`, which never calls the server, so any screen may read it) and `device-check.tsx` (which asks the server, on every page). A `device.blocked` from any call through the store locks the app (`DeviceLock`), so send every screen's call through TanStack Query; sync's pull and push run outside the store, so each calls `saveBlocked()` itself (UI-3, SYNC-7 to SYNC-9).
 
 ## Screens
 

@@ -923,6 +923,7 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 ### SYNC-7 · Device pull and bootstrap
 `M` · Claude-led · after SYNC-3, SYNC-6 · branch `feat/sync-7-device-pull`
 **Build:** bootstrap on a new device; each pull page applied in one Dexie transaction before the cursor moves; the server-time offset kept in `meta`; live-query hooks for reference data.
+**Watch out:** From UI-3 **(v1.45)**: a bootstrap or pull refused with `device.blocked` must lock the app (03 §5.9, step 4). Sync's calls run outside TanStack Query, so the store's watcher (`noticeBlock`, `src/features/devices/device-check.tsx`) never sees them: call `saveBlocked()` (`src/features/devices/this-device.ts`) on that code. On `not_authenticated`, the key opens no device: `saveDevice(null)`.
 **Done when:**
 - [ ] A fresh device fills itself; a change made in the office shows on the device after the next pull.
 - [ ] Closing the tab in the middle of a page leaves the cursor where it was.
@@ -933,6 +934,7 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 `M` · Jack-led · after SYNC-4, SYNC-7 · branch `feat/sync-8-outbox`
 **Learn:** the outbox pattern; one local transaction per document (03 §6.2).
 **Build:** `saveDocument()` writes the document, the next `device_seq` and the outbox row in one Dexie transaction; the push loop sends in order, handles the four answers, retries with backoff and stops on `retry`; a *needs attention* list for invalid documents.
+**Watch out:** From UI-3 **(v1.45)**: a push refused with `device.blocked` calls `saveBlocked()`, as a pull does (SYNC-7), and leaves the outbox as it is: an unblock brings back the same key, so its records can still arrive (03 §5.9, step 4).
 **Done when:**
 - [ ] Documents saved offline go out in order when the push runs.
 - [ ] An invalid document goes to *needs attention* and the rest continue.
@@ -943,6 +945,7 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 ### SYNC-9 · When sync runs
 `M` · Claude-led · after SYNC-8, SPIKE-1 · branch `feat/sync-9-sync-triggers`
 **Build:** sync runs on app start, when the network comes back, 2 s after a new document, every 30 s while online, and from *Tuma sasa* (03 §6.5); one sync at a time across tabs (Web Locks); Background Sync on Chrome for Android, so records leave even after the app is closed.
+**Watch out:** From UI-3 **(v1.45)**: Background Sync runs in the service worker, which has no `localStorage`, so it can't call `saveBlocked()`: a block it meets must reach the page another way, a message to the open pages, or a mark in Dexie that `this-device.ts` reads too. Decide here.
 **Done when:**
 - [ ] Two tabs never push at once.
 - [ ] On the shop Android phone, a record saved offline, with the app then closed, reaches the server when the network returns.

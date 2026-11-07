@@ -8,8 +8,10 @@
 // this-device.ts, which the top bar and the lock read.
 //
 // A block also shows at the device's next request of any kind: every answer in the store of server
-// answers is watched for device.blocked. A PIN session's office routes send it as a 403 (AUTH-4), and so
-// will sync's routes (SYNC-2 on), which the lock will then follow too.
+// answers is watched for device.blocked. A PIN session's office routes send it as a 403 (AUTH-4). Sync's
+// pull and push (SYNC-7, SYNC-8) won't go through the store, so nothing here sees their answers: each
+// calls saveBlocked() itself, and Background Sync, in the service worker, which has no localStorage,
+// finds its own way to tell the page (SYNC-9).
 //
 // The root layout puts it on every page, the counter's included. That is not a counter screen asking the
 // server for the shop's data (rule 5): it is the device asking about itself, and offline it simply fails
