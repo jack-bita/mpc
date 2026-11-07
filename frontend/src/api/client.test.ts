@@ -150,6 +150,36 @@ describe("the answers", () => {
     expect((error as NoConnection).cause).toBe(dropped);
   });
 
+  it("throw NoConnection when the network drops halfway through an answer", async () => {
+    // A long list on 3G: the answer starts, then the signal goes. The first piece arrives, and reading
+    // the rest fails, as the browser's fetch fails it.
+    let pieces = 0;
+    const halfAnswer = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pieces += 1;
+        if (pieces === 1)
+          controller.enqueue(new TextEncoder().encode('{"results": ['));
+        else controller.error(new TypeError("network error"));
+      },
+    });
+    const client = createApiClient({
+      baseUrl: "http://shop.test",
+      fetch: () =>
+        Promise.resolve(
+          new Response(halfAnswer, {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+    });
+
+    const error: unknown = await client
+      .GET("/api/v1/shops/sides/")
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NoConnection);
+  });
+
   it("leave a cancelled read as a cancel, not a lost connection", async () => {
     // TanStack Query cancels a read a closed screen no longer needs; fetch then throws an AbortError.
     const stop = new AbortController();

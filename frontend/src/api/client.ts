@@ -74,15 +74,26 @@ export function createApiClient(options: ClientOptions = {}) {
 
 // fetch throws a TypeError when no answer comes at all, and so does a bug in a screen ("x is not a
 // function"): told apart here, where only fetch can have thrown, so the screen says "check the internet"
-// only when that is true, and the store asks again only then (query-client.ts). A read the store
-// cancelled, as its screen closed, throws too: that stays a cancel, as TanStack Query expects.
+// only when that is true, and the store asks again only then (query-client.ts).
+//
+// The whole answer is read here too, not only its start: fetch hands back the answer once its first
+// bytes arrive, and openapi-fetch reads the rest later, outside this check. A long list on 3G whose
+// signal drops halfway would then throw a plain TypeError, and read as a bug. The answer is read on a
+// copy (clone()), so openapi-fetch still reads it as usual; our answers are small JSON, kept whole anyway.
+//
+// A read the store cancelled, as its screen closed, throws too: that stays a cancel, as TanStack Query
+// expects. Any aborted signal counts as a cancel, so a time limit added later (AbortSignal.timeout())
+// would read as a bug: map it to NoConnection then. And a single call given its own fetch
+// (api.GET(path, { fetch })) skips this check, as openapi-fetch takes that one over the client's.
 function noConnectionWhenNoAnswer(
   given: ClientOptions["fetch"],
 ): (request: Request) => Promise<Response> {
   return async (request) => {
     try {
       // globalThis.fetch looked up on each call, not kept, so a test's stand-in is the one used.
-      return await (given ?? globalThis.fetch)(request);
+      const response = await (given ?? globalThis.fetch)(request);
+      await response.clone().arrayBuffer();
+      return response;
     } catch (cause) {
       if (request.signal.aborted) throw cause;
       throw new NoConnection(cause);
