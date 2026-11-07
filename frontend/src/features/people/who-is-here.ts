@@ -7,7 +7,8 @@
 // checks every change itself (PPL-5); this only keeps a button nobody may press off the screen.
 //
 // One place in the store of server answers, so every office screen shares one answer. UI-4 and UI-5,
-// which log people in and out, clear the store then, so the next person never reads the last one's keys.
+// which log people in and out, empty the store then (forgetTheLastPerson, src/api/query-client.ts), so
+// the next person never reads the last one's keys.
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
