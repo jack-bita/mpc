@@ -159,8 +159,14 @@ describe("the counter rule", () => {
     'export const ask = () => fetch("/api/v1/shops/sides/");\n',
     'export const ask = () => window.fetch("/api/v1/shops/sides/");\n',
     'export const ask = () => globalThis.fetch("/api/v1/shops/sides/");\n',
+    'export const ask = () => self.fetch("/api/v1/shops/sides/");\n',
+    "export const ask = () => new XMLHttpRequest();\n",
+    'export const ask = () => new WebSocket("wss://shop.example/live");\n',
+    'export const ask = () => new window.WebSocket("wss://shop.example/live");\n',
+    'export const ask = () => new EventSource("/api/live/");\n',
+    'export const ask = () => navigator.sendBeacon("/api/v1/seen/");\n',
   ])(
-    "refuses calling the server with fetch on a counter screen: %s",
+    "refuses calling the server on a counter screen: %s",
     async (code) => {
       const rules = await rulesFor(COUNTER, code);
       expect(

@@ -17,14 +17,17 @@ import prettier from "eslint-config-prettier/flat";
 const WORD_ATTRIBUTE =
   "JSXAttribute[name.name=/^(aria-label|aria-description|placeholder|title|alt)$/]";
 
-// Our fonts live in the repo, so builds and devices never depend on another company's server.
-// next/font/google is one easy line away, and it would look harmless in a review (ADR-0039). A
-// constant, as the counter screens' rule below must list it again (it says why).
+// The browser's own ways to call the server, refused on counter screens with the message below.
+const SERVER_CALLS = ["fetch", "XMLHttpRequest", "WebSocket", "EventSource"];
+
 // What a counter screen is told when it reaches for the server (rule 5, ADR-0019): it reads Dexie and
 // saves to the outbox, so a sale goes through with the network down.
 const COUNTER_OFF_THE_SERVER =
   "Counter screens never call the server: read Dexie with live queries, save with saveDocument() (rule 5, ADR-0019).";
 
+// Our fonts live in the repo, so builds and devices never depend on another company's server.
+// next/font/google is one easy line away, and it would look harmless in a review (ADR-0039). A
+// constant, as the counter screens' rule below must list it again (it says why).
 const NO_GOOGLE_FONTS = {
   name: "next/font/google",
   message: "Fonts live inside the app, in src/fonts/ (ADR-0039).",
@@ -86,8 +89,8 @@ export default defineConfig([
     // - TanStack Query, the office screens' store of server answers, and openapi-fetch, from which a
     //   screen could build a typed client of its own: packages, not files of ours, and pnpm keeps
     //   packages under paths of its own. This rule reads the import's text, and a package has one name.
-    // - fetch, the browser's own way to call the server, also as window.fetch, globalThis.fetch or
-    //   self.fetch.
+    // - The browser's own ways to call the server: fetch, XMLHttpRequest, WebSocket and EventSource,
+    //   also through window., globalThis. or self., and navigator.sendBeacon.
     // Honest limit: a dynamic import("@tanstack/react-query") passes, as no-restricted-imports reads
     // only import lines, and the rule that could catch it, no-restricted-syntax, is set again for every
     // file by the text rule below, which would replace it here. Review catches that.
@@ -110,15 +113,25 @@ export default defineConfig([
       ],
       "no-restricted-globals": [
         "error",
-        { name: "fetch", message: COUNTER_OFF_THE_SERVER },
+        ...SERVER_CALLS.map((name) => ({
+          name,
+          message: COUNTER_OFF_THE_SERVER,
+        })),
       ],
       "no-restricted-properties": [
         "error",
-        ...["window", "globalThis", "self"].map((object) => ({
-          object,
-          property: "fetch",
+        ...["window", "globalThis", "self"].flatMap((object) =>
+          SERVER_CALLS.map((property) => ({
+            object,
+            property,
+            message: COUNTER_OFF_THE_SERVER,
+          })),
+        ),
+        {
+          object: "navigator",
+          property: "sendBeacon",
           message: COUNTER_OFF_THE_SERVER,
-        })),
+        },
       ],
     },
   },
