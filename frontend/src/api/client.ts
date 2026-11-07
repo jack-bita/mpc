@@ -46,12 +46,19 @@ function readCookie(name: string): string | undefined {
 //
 // With no cookie yet, the change goes without the header and the server refuses it. The app asks
 // /api/devices/v1/me/ first, which sets the cookie (DeviceMeView).
+/** The CSRF header for a change, from its cookie: `{"X-CSRFToken": …}`, or nothing before the server
+ * has given a token. The client adds it to every change itself; a route outside the API's description,
+ * like allauth's password routes (UI-5), puts it on by hand. */
+export function csrfHeader(): Record<string, string> {
+  const token = readCookie(CSRF_COOKIE);
+  return token ? { [CSRF_HEADER]: token } : {};
+}
+
 const csrfToken: Middleware = {
   onRequest({ request }) {
-    if (CHANGES.has(request.method)) {
-      const token = readCookie(CSRF_COOKIE);
-      if (token) request.headers.set(CSRF_HEADER, token);
-    }
+    if (CHANGES.has(request.method))
+      for (const [name, value] of Object.entries(csrfHeader()))
+        request.headers.set(name, value);
     return request;
   },
 };
@@ -100,5 +107,10 @@ function noConnectionWhenNoAnswer(
     }
   };
 }
+
+/** fetch for a route the typed client can't call, like allauth's password routes (UI-5): it throws
+ * NoConnection when no answer came, as the client does, so a login form offline says "check the
+ * internet", not "something went wrong". */
+export const fetchOrNoConnection = noConnectionWhenNoAnswer(undefined);
 
 export const api = createApiClient();

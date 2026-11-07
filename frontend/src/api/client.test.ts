@@ -2,7 +2,12 @@
 // cookie, and a refusal comes back in the one error shape (UI-2, 03 §5.9, §5.10).
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { CSRF_HEADER, createApiClient } from "./client";
+import {
+  CSRF_HEADER,
+  createApiClient,
+  csrfHeader,
+  fetchOrNoConnection,
+} from "./client";
 import { NoConnection } from "./refusal";
 
 const SIDE_ID = "01970000-0000-7000-8000-000000000001";
@@ -200,5 +205,51 @@ describe("the answers", () => {
 
     expect(error).not.toBeInstanceOf(NoConnection);
     expect((error as Error).name).toBe("AbortError");
+  });
+});
+
+// For routes outside the API's description, like allauth's password routes (UI-5), which the typed
+// client can't call: the same two guards, by hand.
+describe("the helpers for routes the client can't call", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("csrfHeader gives the token from its cookie, read as it is", () => {
+    setCookie("token-from-django");
+
+    expect(csrfHeader()).toEqual({ [CSRF_HEADER]: "token-from-django" });
+  });
+
+  it("csrfHeader gives nothing before the server has given a token", () => {
+    expect(csrfHeader()).toEqual({});
+  });
+
+  it("fetchOrNoConnection throws NoConnection when no answer came", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))),
+    );
+
+    const error: unknown = await fetchOrNoConnection(
+      new Request("http://shop.test/_allauth/browser/v1/auth/login", {
+        method: "POST",
+      }),
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NoConnection);
+  });
+
+  it("fetchOrNoConnection hands back the answer when one came", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(Response.json({ status: 200 }))),
+    );
+
+    const response = await fetchOrNoConnection(
+      new Request("http://shop.test/_allauth/browser/v1/auth/session"),
+    );
+
+    expect(await response.json()).toEqual({ status: 200 });
   });
 });
