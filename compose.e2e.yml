@@ -53,6 +53,9 @@ services:
       DB_PASSWORD: e2e-only-not-a-secret
       # The postgres service, by its name on Compose's network.
       DB_HOST: postgres
+      # The mark that lets backend/tests/e2e_shop.py make the tests' shop, whose manager's password is public. Set
+      # here alone: the demo and the real server never have it, so the file refuses to run there.
+      E2E_SHOP: "yes"
     ports:
       # 127.0.0.1 only: no other computer reaches it. 8090 is free beside `make dev`.
       - "127.0.0.1:8090:8000"

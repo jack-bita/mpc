@@ -10,8 +10,11 @@ changes this shop with it.
 
 Here, not in the image: it is test data. The image's build sees backend/apps and backend/config, never this folder
 (Dockerfile.dockerignore), so the file is handed to the container's shell as text. As `--command`, not on stdin:
-`shell` reads stdin only if it is ready the moment it looks, and would otherwise open its prompt. Run once per empty
-database; a second run is refused (the shop's code is taken).
+`shell` reads stdin only if it is ready the moment it looks, and would otherwise open its prompt.
+
+It refuses to run anywhere else: only where the container marks itself as the tests' (E2E_SHOP=yes, set in
+compose.e2e.yml alone) and the database holds no shop yet. The manager's password is public here, so a shop made with
+it on the demo or the real server would be one anyone could log in to (test_e2e_shop.py proves both refusals).
 
 DATA-1's demo seed (`manage.py seed_demo`) replaces this file: its card says the end-to-end tests use that seed too.
 
@@ -19,11 +22,13 @@ Fake data only (rule 10). The PIN and the password are written again in frontend
 change both together. If they ever differ, the test's login fails at once, so the mismatch can't hide.
 """
 
+import os
+
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Role, User
 from apps.people.services import add_staff, assign_role, set_pin, set_up_shop
-from apps.shops.models import Side
+from apps.shops.models import Shop, Side
 from apps.shops.services import NewSide
 
 # The manager's login (an email, so the test types it as it is) and the seller's PIN. Not secrets: they open only a
@@ -33,7 +38,22 @@ MANAGER_PASSWORD = "e2e-only-not-a-secret"
 SELLER_PIN = "2580"
 
 
+def refuse_unless_an_empty_test_database() -> None:
+    # Both checks, before anything is written. The mark: compose.e2e.yml alone sets E2E_SHOP, so the demo (render.yaml)
+    # and the real server never pass it, whoever pastes this file into their shell. No shop yet: Shop has no tenancy
+    # guard (it is the shop itself, rule 1), so this looks across every shop. The tests' database is new on every
+    # run, and any shop at all means a database somebody uses. SystemExit: `shell` prints the reason and stops, with
+    # no traceback, and the run script stops with it.
+    if os.environ.get("E2E_SHOP") != "yes":
+        raise SystemExit(
+            "Refused: E2E_SHOP=yes is not set. This file makes the browser tests' shop, in their own container only."
+        )
+    if Shop.objects.exists():
+        raise SystemExit("Refused: the database already holds a shop. This file runs only on the tests' empty one.")
+
+
 def make_the_shop() -> None:
+    refuse_unless_an_empty_test_database()
     # The shop, its side with its stock place and cash drawer, and its own copy of the six roles (set_up_shop).
     shop = set_up_shop(name="Duka la Majaribio", code="JARIBIO", sides=[NewSide("D", "Dawa")])
     # create_user first: a person's account has no shop (rule 1). Then their job, inside the shop, because the
