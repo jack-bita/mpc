@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ALLAUTH } from "@/api/allauth";
 import { makeQueryClient } from "@/api/query-client";
 import { WHO_IS_HERE } from "@/features/people/who-is-here";
-import { DAWA, whoIsHere } from "@/test/devices";
+import { DAWA, DAWA_LAPTOP_ANSWER, whoIsHere } from "@/test/devices";
 import {
   allauthRefusal,
   answer,
@@ -26,6 +26,33 @@ vi.mock("@/api/client", async (importOriginal) =>
 
 const ME = "/api/auth/me/";
 const LOGIN = `${ALLAUTH}auth/login`;
+const LOGOUT = "/api/auth/logout/";
+
+/** Juma, logged in by PIN at the Dawa laptop: a PIN's `me` names the laptop it was made at (AUTH-4). */
+const JUMA_AT_THE_LAPTOP = {
+  ...whoIsHere([{ side: DAWA, permissions: ["sale.create"] }]),
+  staff: {
+    id: "019a5e00-0000-7000-8000-0000000000c2",
+    display_name: "Juma",
+    job_title: "Muuzaji",
+  },
+  device: DAWA_LAPTOP_ANSWER.device,
+  home_side: DAWA_LAPTOP_ANSWER.home_side,
+};
+
+/** A session holds this browser, and `me` answers `held` for it, until a logout ends it: then nobody. */
+function aSessionHolds(held: { status: number; body: unknown }) {
+  let standing = true;
+  answer("GET", ME, () => {
+    const nobody = refusal(403, "not_authenticated");
+    const now = standing ? held : nobody;
+    return Response.json(now.body, { status: now.status });
+  });
+  answer("POST", LOGOUT, () => {
+    standing = false;
+    return new Response(null, { status: 204 });
+  });
+}
 
 beforeEach(() => {
   // allauth's routes go through the browser's own fetch (src/api/allauth.ts).
@@ -199,6 +226,66 @@ describe("the password login", () => {
       expect(router.replace).toHaveBeenCalledWith(AFTER_LOGIN),
     );
     expect(logins()).toEqual([]);
+  });
+
+  it("offers Toka when someone is logged in by PIN at this laptop, then the form", async () => {
+    // Asha comes to the Dawa laptop, where Juma is logged in by PIN. Her login would meet his session
+    // (409), and before, after a reset on this laptop, Ingia sent her into his office session.
+    aSessionHolds({ status: 200, body: JUMA_AT_THE_LAPTOP });
+    render(<PasswordLogin />);
+
+    expect(
+      await screen.findByText(
+        "Juma ameingia kwenye kifaa hiki. Mtoe kwanza, kisha uingie.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText("Nenosiri")).toBeNull();
+    expect(router.replace).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toka" }));
+
+    expect(await screen.findByLabelText("Nenosiri")).toBeTruthy();
+    expect(
+      sent.filter((request) => new URL(request.url).pathname === LOGOUT),
+    ).toHaveLength(1);
+  });
+
+  it("offers Toka when this browser's session was refused for a reason, then the form", async () => {
+    // A suspended manager's phone still holds the session: a new login there would be refused (409).
+    aSessionHolds(refusal(403, "staff.suspended"));
+    render(<PasswordLogin />);
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Umesimamishwa",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Toka" }));
+
+    expect(await screen.findByLabelText("Nenosiri")).toBeTruthy();
+  });
+
+  it("asks who is here again when the login answers 409, and offers Toka", async () => {
+    // Juma logged in by PIN in another tab after this page opened.
+    let juma = false;
+    answer("GET", ME, () => {
+      const nobody = refusal(403, "not_authenticated");
+      return juma
+        ? Response.json(JUMA_AT_THE_LAPTOP)
+        : Response.json(nobody.body, { status: nobody.status });
+    });
+    answer("POST", LOGIN, () => {
+      juma = true;
+      return Response.json({ status: 409 }, { status: 409 });
+    });
+    render(<PasswordLogin />);
+
+    await logIn("0712345678", "siri-ya-asha");
+
+    expect(
+      await screen.findByText(
+        "Juma ameingia kwenye kifaa hiki. Mtoe kwanza, kisha uingie.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Toka" })).toBeTruthy();
   });
 
   it("waits for who is here before it shows the form, so nothing flashes", async () => {

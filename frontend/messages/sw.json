@@ -96,7 +96,8 @@
       "nameHint": "Kama 0712 345 678",
       "password": "Nenosiri",
       "send": "Ingia",
-      "forgot": "Umesahau nenosiri?"
+      "forgot": "Umesahau nenosiri?",
+      "someoneHere": "{name} ameingia kwenye kifaa hiki. Mtoe kwanza, kisha uingie."
     },
     "welcome": "Karibu, {name}",
     "switch": "Badilisha mtu",

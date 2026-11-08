@@ -96,7 +96,8 @@
       "nameHint": "Like 0712 345 678",
       "password": "Password",
       "send": "Log in",
-      "forgot": "Forgot your password?"
+      "forgot": "Forgot your password?",
+      "someoneHere": "{name} is logged in on this device. Log them out first, then log in."
     },
     "welcome": "Welcome, {name}",
     "switch": "Switch person",

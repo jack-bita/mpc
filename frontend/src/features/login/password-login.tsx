@@ -8,12 +8,19 @@
 // What can go wrong, and where it shows:
 //   a box left empty                                   beside it, and nothing is sent
 //   a wrong password, a phone that is no real number   beside the box allauth names
-//   this browser holds a session already (409)         the alert: log out first
+//   this browser holds a session already (409)         the alert: log out first; and `me`, asked
+//                                                      again, says whose, with Toka (below)
 //   the right password, for someone switched off (401)  the alert: talk to the owner
 //   too many tries (allauth's count, or a 429)         the alert: wait a little
 //   no answer at all                                   the alert: check the internet
 //
-// Someone already logged in on this phone, whom `me` answers for, goes straight on, with no form.
+// `me` says whether a session already holds this browser, and the page acts on it:
+//   the person's own password login       straight on to the office, with no form
+//   someone's PIN login, at a laptop       their name, and Toka: a login would meet their session (409),
+//                                           and after a reset on that laptop Ingia went into it (UI-5's review)
+//   a session refused for a reason          why, and Toka, as the office says it (office-frame.tsx)
+// Toka ends that session on the server, sent again until it is heard, and the store forgets the person;
+// the form shows then. A login answered 409 asks `me` again, to learn whose session it met.
 //
 // Its page, /login/, is outside the counter's lock (rule 5): logging in calls the server.
 //
@@ -29,14 +36,15 @@ import { useTranslations } from "use-intl";
 import { z } from "zod";
 
 import { callAllauth } from "@/api/allauth";
+import { api } from "@/api/client";
 import { useApiErrorWords } from "@/api/errors";
-import { forgetTheLastPerson } from "@/api/query-client";
-import { ApiRefusal } from "@/api/refusal";
+import { forgetTheLastPerson, mayPassLater } from "@/api/query-client";
+import { answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button, ButtonLink } from "@/components/design/button";
 import { Field } from "@/components/design/field";
 import { PasswordField } from "@/components/design/password-field";
-import { useWhoIsHere } from "@/features/people/who-is-here";
+import { useWhoIsHere, WHO_IS_HERE } from "@/features/people/who-is-here";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 
 import { loginName } from "./login-name";
@@ -87,19 +95,47 @@ export function PasswordLogin() {
       // replace, not push: Back from the office shouldn't open the login again.
       router.replace(AFTER_LOGIN);
     },
-    // A refusal beside a box: the keyboard goes back to that box, to type again at once.
     onError: (error) => {
+      // A session holds this browser after all, as one made in another tab after this page opened: `me`
+      // is asked again, to say whose, and the page offers Toka.
+      if (error instanceof ApiRefusal && error.status === 409)
+        void store.invalidateQueries({ queryKey: WHO_IS_HERE });
+      // A refusal beside a box: the keyboard goes back to that box, to type again at once.
       const fields = error instanceof ApiRefusal ? error.body.fields : {};
       if (fields.password) form.setFocus("password");
       else if (fields.email ?? fields.phone) form.setFocus("name");
     },
   });
 
-  // Already logged in on this phone: straight on, as a login would send them. `me` refuses everyone
-  // else, which is no error to show here. Only an answer asked since this page opened, and not refused
-  // since: the store may still hold the last person's answer, from a session that has ended since, and
-  // the office would send them straight back here (office-frame.tsx).
-  const here = me.isSuccess && me.isFetchedAfterMount;
+  // Toka, for a session that holds this browser: it ends on the server first, then the store forgets
+  // the person, which asks `me` again, and the form shows. Needs only the session and the CSRF token, so
+  // it works for a suspended person too (AUTH-4).
+  const logout = useMutation({
+    mutationFn: () => answerOf(api.POST("/api/auth/logout/")),
+    // Sent again while no answer comes, until the server hears it, as every Toka is (office-frame.tsx).
+    retry: (_tries, error) => mayPassLater(error),
+    onSuccess: () => forgetTheLastPerson(store),
+  });
+  const leaving = logout.isPending;
+
+  // Only an answer asked since this page opened, and not refused since: the store may still hold the
+  // last person's answer, from a session that has ended since, and the office would send them straight
+  // back here (office-frame.tsx).
+  const fresh = me.isSuccess && me.isFetchedAfterMount ? me.data : undefined;
+  // The person's own password login: straight on, as a login would send them. A password's `me` names
+  // no device (AUTH-4).
+  const here = fresh !== undefined && fresh.device === null;
+  // Someone's PIN login at this laptop: theirs, not the person's at the keyboard.
+  const someoneElse =
+    fresh !== undefined && fresh.device !== null ? fresh : null;
+  // A session refused for a reason, as a suspension: it still stands, and a login would meet it. Plain
+  // "nobody is here" is no reason, and a 5xx says nothing about who is here.
+  const refusedFor =
+    me.error instanceof ApiRefusal &&
+    me.error.status < 500 &&
+    me.error.body.code !== "not_authenticated"
+      ? me.error
+      : null;
   useEffect(() => {
     if (here) router.replace(AFTER_LOGIN);
   }, [here, router]);
@@ -118,7 +154,7 @@ export function PasswordLogin() {
   // Until `me` first answers, and while someone already here is sent on: no form, only "Subiri
   // kidogo…". Shown at once, the form flashed for a moment before the office opened (UI-5's hand test).
   // A first failure ends the wait: offline, `me` is asked again a few times, and the form needn't wait.
-  const waiting = (me.isPending && me.failureCount === 0) || here;
+  const waiting = (me.isPending && me.failureCount === 0) || here || leaving;
 
   return (
     <div className="flex max-w-md flex-col gap-6">
@@ -127,11 +163,35 @@ export function PasswordLogin() {
           hidden from the eye while there is nothing to say, as one that comes with its words in it often
           goes unsaid (offline-banner.tsx). */}
       <p role="status" className={waiting ? "text-lg" : "sr-only"}>
-        {waiting ? loginWords("waiting") : null}
+        {leaving
+          ? loginWords("leaving")
+          : waiting
+            ? loginWords("waiting")
+            : null}
       </p>
-      {waiting ? null : theForm()}
+      {waiting ? null : someoneElse || refusedFor ? aSessionHolds() : theForm()}
     </div>
   );
+
+  // A session holds this browser: whose, or why it was refused, and Toka to end it. A refused logout says
+  // why under it, and the session stays.
+  function aSessionHolds() {
+    return (
+      <div className="grid gap-4">
+        {someoneElse ? (
+          <p>{t("someoneHere", { name: someoneElse.staff.display_name })}</p>
+        ) : (
+          <ApiErrorAlert error={refusedFor} />
+        )}
+        <div>
+          <Button onClick={() => logout.mutate()}>
+            {loginWords("logout")}
+          </Button>
+        </div>
+        <ApiErrorAlert error={logout.error} />
+      </div>
+    );
+  }
 
   // The form and the way back in. Called, not drawn as a component of its own: one made inside this one
   // would be new at every redraw, and React would empty its boxes as the person types.
