@@ -3,7 +3,7 @@
 #
 # It owns one run, which `make check-e2e` starts, and so CI's e2e job too:
 #   1. start compose.e2e.yml: an empty database, then the image, which runs its migrations and serves on :8090;
-#   2. make the tests' made-up shop in it (backend/tests/e2e_shop.py);
+#   2. make the demo's shop in it, with the demo seed (`manage.py seed_demo`, backend/apps/demo/services.py);
 #   3. run Playwright (`pnpm e2e`, frontend/playwright.config.ts) against it;
 #   4. on a failure, print the server's log: a test that met an error page usually finds its reason there;
 #   5. stop both and delete the database, whether the tests passed or not, so the next run starts empty.
@@ -49,9 +49,10 @@ fi
 # after its migrations (compose.e2e.yml). --wait-timeout: fail after 4 minutes, rather than wait forever.
 "${compose[@]}" up --detach --wait --wait-timeout 240
 
-# The made-up shop the tests log in to, made through the services on the empty database (backend/tests/e2e_shop.py,
-# which says why it is passed as --command). -T: no terminal, as nobody types into it.
-"${compose[@]}" exec -T backend python manage.py shell --command "$(cat "$root/backend/tests/e2e_shop.py")"
+# The demo's shop, which the tests log in to, made on the empty database by the demo seed, inside the image as on
+# the demo. The container carries the seed's sign (DEMO_SEED, compose.e2e.yml). -T: no terminal, as nobody types
+# into it.
+"${compose[@]}" exec -T backend python manage.py seed_demo
 
 # In brackets, a subshell: the move into frontend/ ends with it, and the cleanup above runs from the root.
 (cd "$root/frontend" && pnpm e2e)

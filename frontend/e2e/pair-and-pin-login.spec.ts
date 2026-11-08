@@ -5,8 +5,9 @@
 // laptop locks itself when nobody touches it; she logs in again, and logs out. A change that breaks any
 // of it fails here, before the merge, instead of at the counter. Stage 1's own goal is this test (04).
 //
-// The shop it logs in to is made by backend/tests/e2e_shop.py on an empty database, before the tests
-// (scripts/run_e2e.sh). The words come from the Swahili book (messages/sw.json), the app's default
+// The shop it logs in to is the demo's, made by the demo seed (`manage.py seed_demo`, backend/apps/demo/services.py)
+// on an empty database, before the tests (scripts/run_e2e.sh): the same shop and people a visitor of the demo
+// meets. The words come from the Swahili book (messages/sw.json), the app's default
 // language, never typed here: a reworded button moves the test with it, and a word the screen lost fails
 // the test.
 import {
@@ -19,12 +20,13 @@ import {
 import sw from "../messages/sw.json";
 import type { components } from "../src/api/schema";
 
-// The made-up shop's logins, as backend/tests/e2e_shop.py makes them: change both together. If they ever
-// differ, a login below fails at once, so the mismatch can't hide.
+// The demo's logins, as the demo seed makes them (PEOPLE in backend/apps/demo/services.py), public on purpose:
+// change both together. If they ever differ, a login below fails at once, so the mismatch can't hide.
 const MANAGER_EMAIL = "meneja@example.com";
-const MANAGER_PASSWORD = "e2e-only-not-a-secret";
+const MANAGER_PASSWORD = "jaribu-demo";
 const SELLER_PIN = "2580";
-// Names the shop file gives: Asha's tile shows her full name, her welcome her short one.
+// Names the seed gives: Asha's tile shows her full name, her welcome her short one. Asha sells on Dawa, one of
+// the demo's two sides, the one the manager gives the new laptop.
 const SELLER_FULL_NAME = "Asha Mfano";
 const SELLER = "Asha";
 const SIDE = "Dawa";
