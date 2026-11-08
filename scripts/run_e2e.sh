@@ -22,8 +22,10 @@ compose=(docker compose --file "$root/compose.e2e.yml")
 finish() {
   local status=$?
   if [[ $status -ne 0 ]]; then
-    echo "FAIL: the browser tests did not pass; the server's log follows." >&2
-    "${compose[@]}" logs --no-color backend >&2 || true
+    # Any step may be the one that stopped: a container that didn't start, the shop, or a test. So the message
+    # blames none of them, and both logs follow: PostgreSQL's says why a database refused, the server's the rest.
+    echo "FAIL: the browser tests' run stopped (exit $status): a container, the shop or a test. The logs follow." >&2
+    "${compose[@]}" logs --no-color >&2 || true
   fi
   # --volumes: no volume is ever left behind. The database lives in memory, so nothing lasting is lost.
   # A cleanup that fails says so, rather than leave two containers running unseen; it never hides the
@@ -37,7 +39,11 @@ trap finish EXIT
 
 # Anything an earlier run left behind (a closed terminal skips the cleanup) goes first, so the tests always
 # meet an empty database: `up` would otherwise keep containers that are already running, rows and all.
-"${compose[@]}" down --volumes >/dev/null 2>&1
+# Docker's progress lines are kept out of sight, but if it refuses, its own words say why before the run stops.
+if ! leftovers="$("${compose[@]}" down --volumes 2>&1)"; then
+  echo "$leftovers" >&2
+  exit 1
+fi
 
 # --wait: until both are healthy, PostgreSQL accepting connections and the image answering /api/health/
 # after its migrations (compose.e2e.yml). --wait-timeout: fail after 4 minutes, rather than wait forever.
