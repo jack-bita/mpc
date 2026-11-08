@@ -1,9 +1,12 @@
 // my-settings.test.tsx — Mipangilio yangu: a person sees their own language and font, and changes either
 // with one tap; offline both wait for the network (UI-9, ADR-0039).
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { makeQueryClient } from "@/api/query-client";
 import { OfficeFrame } from "@/features/office/office-frame";
+import { WHO_IS_HERE, type WhoIsHere } from "@/features/people/who-is-here";
 import { DAWA, DAWA_LAPTOP_ANSWER, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
@@ -88,6 +91,45 @@ describe("Mipangilio yangu", () => {
     await waitFor(async () =>
       expect(await changesSent()).toEqual([{ language: "en" }]),
     );
+  });
+
+  it("keeps a saved choice when a slower answer to who is here lands after it", async () => {
+    // On 3G: Asha comes back to the tab, which asks who is here again, and the server reads her old row
+    // for it. She taps the second font, which the server saves and answers first. The slower answer, with
+    // her old font, must not undo it: the dot and the page would go back while the server holds "second".
+    let reads = 0;
+    let late: (answer: Response) => void = () => undefined;
+    answer("GET", ME, () => {
+      reads += 1;
+      if (reads === 1) return Response.json(NEEMA);
+      return new Promise<Response>((resolve) => {
+        late = resolve;
+      });
+    });
+    savesAsTheServerDoes();
+    const store = makeQueryClient();
+    render(
+      <QueryClientProvider client={store}>
+        <MySettings />
+      </QueryClientProvider>,
+    );
+    await screen.findByText("Herufi ya pili, rahisi kusoma");
+    void store.refetchQueries({ queryKey: WHO_IS_HERE });
+    await waitFor(() => expect(reads).toBe(2));
+
+    fireEvent.click(screen.getByText("Herufi ya pili, rahisi kusoma"));
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe("Imehifadhiwa."),
+    );
+    await act(async () => {
+      late(Response.json(NEEMA));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(store.getQueryData<WhoIsHere>(WHO_IS_HERE)?.user.font).toBe(
+      "second",
+    );
+    expect(picked("Herufi ya pili, rahisi kusoma")).toBe("true");
   });
 
   it("keeps the saved answer, so every screen asking who is here sees the new choice", async () => {

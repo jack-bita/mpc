@@ -64,12 +64,18 @@ export function MySettings() {
     // Into `me`, for the person who tapped: never into the next person's answer. The changes wait in one
     // queue, a logout after them, so this lands before anyone else logs in (CHANGES_IN_ORDER), but the
     // check costs nothing and keeps it true if that ever changes.
-    onSuccess: (saved, { person }) =>
+    onSuccess: async (saved, { person }) => {
+      // First, any read of `me` still on its way: the server may have read the person's row before this
+      // change was saved, and on a slow network its answer can land after this one, putting the old choice
+      // back while the server holds the new (UI-9's review). Cancelled, its answer is dropped, and `me`
+      // keeps what it held; a read sent after this moment finds the change saved.
+      await store.cancelQueries({ queryKey: WHO_IS_HERE });
       store.setQueryData<WhoIsHere>(WHO_IS_HERE, (here) =>
         here && here.user.id === person
           ? { ...here, user: { ...here.user, ...saved } }
           : here,
-      ),
+      );
+    },
   });
   // Every tap still on its way, oldest first: a font and then a language, tapped quickly, wait one after
   // the other, and both dots show what was tapped meanwhile, not only the last one.
