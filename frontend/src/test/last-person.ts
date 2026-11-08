@@ -27,3 +27,17 @@ export function stillHoldsTheirs(store: QueryClient): boolean {
     .some((mutation) => mutation.options.mutationKey?.[1] === THEIR_CHANGE[1]);
   return store.getQueryData(THEIR_ANSWER) !== undefined || change;
 }
+
+/** Whether any change in the store still holds `secret` among what it was sent with: a password, once
+ * its form has its answer, must be gone, on a laptop the next person uses (UI-5's review). */
+export function stillHoldsTheSecret(
+  store: QueryClient,
+  secret: string,
+): boolean {
+  return store
+    .getMutationCache()
+    .getAll()
+    .some((mutation) =>
+      JSON.stringify(mutation.state.variables ?? null).includes(secret),
+    );
+}

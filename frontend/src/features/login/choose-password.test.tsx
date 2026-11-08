@@ -1,12 +1,15 @@
 // choose-password.test.tsx — a person on a temporary password chooses their own before the office opens,
 // with no second login (UI-5, AUTH-6, ADR-0038).
+import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ALLAUTH } from "@/api/allauth";
+import { makeQueryClient } from "@/api/query-client";
 import { OfficeFrame } from "@/features/office/office-frame";
 import { DAWA, whoIsHere } from "@/test/devices";
 import { allauthRefusal, answer, fakeFetch, sent } from "@/test/fake-server";
+import { stillHoldsTheSecret } from "@/test/last-person";
 import { render } from "@/test/render";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -99,6 +102,27 @@ describe("choosing your own password", () => {
     expect(await change?.json()).toEqual({
       current_password: "muda-wa-baba-1",
       new_password: "siri-ya-neema-2026",
+    });
+  });
+
+  it("keeps neither password in the store once the office opens", async () => {
+    onATemporaryPassword();
+    const store = makeQueryClient();
+    render(
+      <QueryClientProvider client={store}>
+        <OfficeFrame>
+          <p>screen</p>
+        </OfficeFrame>
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("heading", { name: "Chagua nenosiri lako" });
+
+    choose("muda-wa-baba-1", "siri-ya-neema-2026");
+
+    await screen.findByText("screen");
+    await waitFor(() => {
+      expect(stillHoldsTheSecret(store, "muda-wa-baba-1")).toBe(false);
+      expect(stillHoldsTheSecret(store, "siri-ya-neema-2026")).toBe(false);
     });
   });
 

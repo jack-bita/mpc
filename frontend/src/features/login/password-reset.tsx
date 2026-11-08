@@ -24,13 +24,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  type RefObject,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "use-intl";
 import { z } from "zod";
@@ -112,6 +106,9 @@ function aboutTheKey(error: unknown): boolean {
 export function PasswordReset() {
   const t = useTranslations("password");
   const key = useTheLinksKey();
+  // The key whose new password is set. Shown in place of that key's form, which closes, and takes the
+  // password typed with it: its boxes, and its change in the store (UI-5's review).
+  const [doneWith, setDoneWith] = useState<string | null>(null);
 
   function whatShows() {
     // Not read yet: nothing, for the moment until the page has looked at its address.
@@ -124,10 +121,22 @@ export function PasswordReset() {
           label={t("reset.askAgain")}
         />
       );
+    if (doneWith === key)
+      return (
+        <WayForward
+          text={t("reset.done")}
+          href="/login/"
+          label={t("reset.login")}
+          kind="main"
+          focus
+        />
+      );
     // Drawn afresh for each key (React's `key`): a new link pasted into the same tab changes only what
     // follows the #, so the browser doesn't reload the page, and the old link's check, form and answer
     // would stay on show (UI-5's hand test).
-    return <WithTheKey key={key} linkKey={key} />;
+    return (
+      <WithTheKey key={key} linkKey={key} onDone={() => setDoneWith(key)} />
+    );
   }
 
   return (
@@ -138,8 +147,14 @@ export function PasswordReset() {
   );
 }
 
-/** One link's key: its check, the form, and the answer. */
-function WithTheKey({ linkKey }: { linkKey: string }) {
+/** One link's key: its check, and the form, until the new password is set (onDone). */
+function WithTheKey({
+  linkKey,
+  onDone,
+}: {
+  linkKey: string;
+  onDone: () => void;
+}) {
   const t = useTranslations("password");
   const words = useCodeWords();
   const { fieldMessages } = useApiErrorWords();
@@ -173,6 +188,11 @@ function WithTheKey({ linkKey }: { linkKey: string }) {
         // Done, and nobody logged in (401); or done on a browser already logged in (200).
         done: [200, 401],
       }),
+    // What it was sent with is the new password: dropped from the store the moment nothing shows it,
+    // not kept TanStack's 5 minutes, on a laptop the next person uses (UI-4 kept no PIN either).
+    gcTime: 0,
+    // Done: this form closes (PasswordReset shows "log in with it now"), and the password with it.
+    onSuccess: onDone,
     // A refusal beside the new box: the keyboard goes back to it, to type again at once.
     onError: (error) => {
       if (error instanceof ApiRefusal && error.body.fields.password)
@@ -180,31 +200,13 @@ function WithTheKey({ linkKey }: { linkKey: string }) {
     },
   });
 
-  // The sentence that replaces the form, once it is done or the link is dead: focus moves to it, as the
-  // button that had it is gone, so a screen reader says it, and Tab goes on to the way forward.
-  const outcome = useRef<HTMLParagraphElement>(null);
-  const dead = aboutTheKey(check.error) || aboutTheKey(reset.error);
-  useEffect(() => {
-    if (reset.isSuccess || dead) outcome.current?.focus();
-  }, [reset.isSuccess, dead]);
-
-  if (dead)
+  if (aboutTheKey(check.error) || aboutTheKey(reset.error))
     return (
       <WayForward
-        outcome={outcome}
         text={codeMessage(words, "invalid_password_reset")}
         href="/forgot-password/"
         label={t("reset.askAgain")}
-      />
-    );
-  if (reset.isSuccess)
-    return (
-      <WayForward
-        outcome={outcome}
-        text={t("reset.done")}
-        href="/login/"
-        label={t("reset.login")}
-        kind="main"
+        focus
       />
     );
   // The check on its way: a status line; no answer, or the server's problem: why.
@@ -260,22 +262,27 @@ function WithTheKey({ linkKey }: { linkKey: string }) {
 
 /** A sentence in place of the form, and the one way forward from it. */
 function WayForward({
-  outcome,
   text,
   href,
   label,
   kind = "second",
+  focus = false,
 }: {
-  /** Where focus goes as the sentence replaces the form. */
-  outcome?: RefObject<HTMLParagraphElement | null>;
   text: string;
   href: string;
   label: string;
   kind?: "main" | "second";
+  /** It replaces a form whose button had focus, now gone: focus moves to the sentence, so a screen reader
+   * says it, and Tab goes on to the way forward. */
+  focus?: boolean;
 }) {
+  const line = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (focus) line.current?.focus();
+  }, [focus]);
   return (
     <>
-      <p ref={outcome} tabIndex={-1} className="outline-none">
+      <p ref={line} tabIndex={-1} className="outline-none">
         {text}
       </p>
       <div>

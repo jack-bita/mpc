@@ -88,6 +88,9 @@ export function PasswordLogin() {
         // allauth's two answers with no code of their own (AUTH-3, AUTH-4).
         bare: { 401: "login.switched_off", 409: "login.already_in" },
       }),
+    // What it was sent with holds the password: dropped from the store the moment nothing shows it,
+    // not kept TanStack's 5 minutes after a wrong try, on a laptop the next person uses (UI-5's review).
+    gcTime: 0,
     onSuccess: async () => {
       // A phone may be lent and a laptop is shared: the next person must never see the last one's
       // answers (UI-4). No change can be waiting to be sent: this page sends none but the login.

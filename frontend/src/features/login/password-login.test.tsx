@@ -18,6 +18,7 @@ import {
 import {
   leaveTheLastPersonsAnswers,
   stillHoldsTheirs,
+  stillHoldsTheSecret,
 } from "@/test/last-person";
 import { render } from "@/test/render";
 import { router } from "@/test/router";
@@ -147,6 +148,31 @@ describe("the password login", () => {
     // Said once, beside its box: not in an alert under the form too.
     expect(screen.queryByRole("alert")).toBeNull();
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("keeps no password in the store once the page is left", async () => {
+    // A wrong try, then the person walks away from the laptop.
+    answer(
+      "POST",
+      LOGIN,
+      allauthRefusal(400, [
+        { code: "phone_password_mismatch", param: "password" },
+      ]),
+    );
+    const store = makeQueryClient();
+    const { unmount } = render(
+      <QueryClientProvider client={store}>
+        <PasswordLogin />
+      </QueryClientProvider>,
+    );
+    await logIn("0712345678", "si-yenyewe");
+    await screen.findByText("Simu au nenosiri si sahihi.");
+
+    unmount();
+
+    await waitFor(() =>
+      expect(stillHoldsTheSecret(store, "si-yenyewe")).toBe(false),
+    );
   });
 
   it("says beside the first box when the phone is not a real number", async () => {

@@ -68,6 +68,9 @@ export function ChoosePassword() {
         // The session ended meanwhile, as when the owner set yet another temporary password.
         bare: { 401: "not_authenticated" },
       }),
+    // What it was sent with holds both passwords: dropped from the store once the office opens and this
+    // form is gone, not kept TanStack's 5 minutes, on a laptop the next person uses (UI-5's review).
+    gcTime: 0,
     // The same person, the same session: nobody to forget. `me` is asked again, says the mark is off, and
     // the frame opens the screen in place of this form.
     onSuccess: () => store.invalidateQueries({ queryKey: WHO_IS_HERE }),

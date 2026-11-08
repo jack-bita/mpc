@@ -1,10 +1,13 @@
 // password-reset.test.tsx — the email link's page: it reads the key after the #, clears it from the
 // browser, checks it, and sets the new password with it (UI-5, AUTH-3).
+import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ALLAUTH } from "@/api/allauth";
+import { makeQueryClient } from "@/api/query-client";
 import { allauthRefusal, answer, fakeFetch, sent } from "@/test/fake-server";
+import { stillHoldsTheSecret } from "@/test/last-person";
 import { render } from "@/test/render";
 
 import { PasswordReset } from "./password-reset";
@@ -96,6 +99,26 @@ describe("the email link's page", () => {
     expect(
       screen.getByRole("link", { name: "Ingia" }).getAttribute("href"),
     ).toMatch(/^\/login\/?$/);
+  });
+
+  it("keeps no password in the store once it is set", async () => {
+    // A shared laptop: the next person at it must find nothing of the new password.
+    aWorkingKey();
+    window.history.replaceState(null, "", `/password-reset/#${KEY}`);
+    const store = makeQueryClient();
+    render(
+      <QueryClientProvider client={store}>
+        <PasswordReset />
+      </QueryClientProvider>,
+    );
+    await screen.findByLabelText("Nenosiri jipya");
+
+    setPassword("siri-ya-neema-2026");
+
+    await screen.findByText("Nenosiri lako jipya limewekwa. Ingia nalo sasa.");
+    await waitFor(() =>
+      expect(stillHoldsTheSecret(store, "siri-ya-neema-2026")).toBe(false),
+    );
   });
 
   it("takes a 200 as done too, as a browser logged in already may get", async () => {
