@@ -30,6 +30,15 @@ from apps.people.pins import FIRST_LOCK_MINUTES, LONGEST_LOCK_MINUTES, PIN_TRIES
 from apps.shops.models import Side
 
 
+class Font(models.TextChoices):
+    # The fonts a person can read the app in, by role, never by name (ADR-0039): the font behind a role can change in
+    # the app (src/fonts/fonts.ts) and no row has to. Each model's check constraint copies these values into its
+    # migration, as Language's do (apps/core/languages.py). Here, not in core: only a person has a font, and a shop
+    # doesn't, so no lower app needs the list.
+    DEFAULT = "default", "Default (Source Sans 3)"
+    SECOND = "second", "Second, easy to read (Atkinson Hyperlegible Next)"
+
+
 class UserManager(BaseUserManager["User"]):
     # Not written into the migrations (no `use_in_migrations`): inside a migration, User is a bare copy
     # without set_password or full_clean, so this manager couldn't run there, and 0001 would import it forever.
@@ -88,6 +97,9 @@ class User(UUIDModel, TimeStamped, AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True, null=True, blank=True)
     # The screens follow the logged-in person's language (03 §7.4). Swahili first.
     language = models.CharField(max_length=2, choices=Language, default=Language.SWAHILI)
+    # And the person's font, which follows them the same way: on a shared laptop, one person's choice must not change
+    # the screen for the next (ADR-0039). Only the person changes it (03 §7.4). Room for a longer role's name later.
+    font = models.CharField(max_length=10, choices=Font, default=Font.DEFAULT)
     # Nothing is deleted: a person who must never log in again is switched off instead.
     is_active = models.BooleanField(default=True)
     # May open the Django admin. In practice only the superuser.
@@ -135,6 +147,12 @@ class User(UUIDModel, TimeStamped, AbstractBaseUser, PermissionsMixin):
                 condition=models.Q(language__in=Language.values),
                 name="people_user_language_known",
                 violation_error_code="user.language_unknown",
+            ),
+            # ADR-0039: only a role's value, so no font's name is ever stored.
+            models.CheckConstraint(
+                condition=models.Q(font__in=Font.values),
+                name="people_user_font_known",
+                violation_error_code="user.font_unknown",
             ),
             # The superuser logs in to the admin by email, so one without an email could never log in.
             models.CheckConstraint(

@@ -183,9 +183,11 @@ class UserAdmin(DjangoUserAdmin[User]):
     # `id` is shown but can't be typed in. It stays editable in the model, so DRF keeps the id a device
     # sends (ADR-0007, CORE-1); changed here, it would save a copy of the person instead. The mark is shown, so the
     # superuser sees whether a person has chosen their own password yet, but only choosing one takes it off (ADR-0038).
-    readonly_fields = ("id", "created_at", "last_login", "must_change_password")
+    # The font is shown, so the superuser can help someone find their way back to the default one, but only the person
+    # changes it (03 §7.4, ADR-0039). The add form doesn't ask for it: everyone starts on the default one.
+    readonly_fields = ("id", "created_at", "last_login", "must_change_password", "font")
     fieldsets = (
-        (None, {"fields": ("id", "full_name", "phone", "email", "language", "password")}),
+        (None, {"fields": ("id", "full_name", "phone", "email", "language", "font", "password")}),
         (
             "Access",
             {"fields": ("is_active", "must_change_password", "is_staff", "is_superuser", "groups", "user_permissions")},

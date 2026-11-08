@@ -137,12 +137,13 @@ def test_createsuperuser_by_email(monkeypatch: pytest.MonkeyPatch) -> None:
         pytest.param({"email": "Asha@Example.com"}, id="email_lower_case"),
         pytest.param({"email": ""}, id="email_not_blank"),
         pytest.param({"language": "fr"}, id="language_known"),
+        pytest.param({"font": "atkinson"}, id="font_known"),
         pytest.param({"is_superuser": True}, id="superuser_has_email"),
     ],
 )
 def test_database_refuses_a_row_that_breaks_a_rule(fields: dict[str, object]) -> None:
     # The database is the last guard (03 §5.6): code that skips create_user and saves a User directly
-    # still can't store a row that breaks one of the five rules in User.Meta. One run per rule.
+    # still can't store a row that breaks one of the six rules in User.Meta. One run per rule.
     with pytest.raises(IntegrityError):
         User(full_name="Juma Demo", **fields).save()
 
@@ -157,3 +158,25 @@ def test_broken_rule_comes_back_as_a_code() -> None:
         superuser.full_clean()
 
     assert [error.code for error in refused.value.error_dict["__all__"]] == ["user.superuser_needs_email"]
+
+
+def test_new_person_gets_the_default_font() -> None:
+    # Nobody has to choose: a new person reads the default font until they pick the second one themselves (UI-9).
+    juma = User.objects.create_user(full_name="Juma Demo")
+    assert juma.font == "default"
+
+    asha = User.objects.create_user(full_name="Asha Demo", font="second")
+    asha.refresh_from_db()
+    assert asha.font == "second"
+
+
+def test_unknown_font_refused() -> None:
+    # ADR-0039: a font is stored by its role, "default" or "second", never by its name, so swapping a font later
+    # changes no rows. A name is refused by the checks every new person goes through, under the field, with a code...
+    with pytest.raises(ValidationError) as refused:
+        User.objects.create_user(full_name="Asha Demo", font="atkinson")
+    assert [error.code for error in refused.value.error_dict["font"]] == ["invalid_choice"]
+
+    # ...and by the database's own rule, for code that skips those checks.
+    with pytest.raises(IntegrityError, match="people_user_font_known"):
+        User(full_name="Asha Demo", font="atkinson").save()
