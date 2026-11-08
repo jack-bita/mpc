@@ -120,7 +120,9 @@ check-image: build-image ## only the backend image: build it, start it, check it
 #   Only the headless shell (a Chromium with no window), all a test needs. Once there, this does nothing.
 #   On a fresh clone or a new Playwright version, it is a download of about 100-150 MB.
 # The system libraries that Chromium needs come with apt, which needs sudo: CI's job installs them in a
-# step of its own, and a laptop once by hand (`cd frontend && sudo pnpm exec playwright install-deps chromium`).
+# step of its own, and a laptop once by hand (`cd frontend && pnpm exec playwright install-deps chromium`).
+# No `sudo` in front: Playwright calls sudo for apt itself and asks for the password, and `sudo pnpm`
+# would fail on most laptops, where pnpm lives in the user's own folders, which sudo's PATH leaves out.
 check-e2e: build-image ## only the browser tests: the image and a fresh database, driven by Playwright (CI's e2e job)
 	cd frontend && pnpm install --frozen-lockfile
 	cd frontend && pnpm exec playwright install --only-shell chromium

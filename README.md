@@ -42,6 +42,8 @@ The app and its API answer at one address, `http://localhost:8080`, as in produc
 
 **You need:** Git, make, Docker with Compose v2 (on Windows: Docker Desktop with WSL integration turned on for your Linux distro), [uv](https://docs.astral.sh/uv/) 0.11.33 exactly (any other version refuses to run here; it installs Python 3.14 itself), and Node.js 24 or newer with pnpm.
 
+**For `make check`, once:** the browser tests drive a real Chromium (Playwright). `make check` downloads it the first time (about 100–150 MB, outside the repo). The Linux libraries it needs come with apt: run `cd frontend && pnpm exec playwright install-deps chromium` once, after `pnpm install`. It asks for your password itself, so don't put `sudo` in front.
+
 ```bash
 git clone https://github.com/jack-bita/mpc.git
 cd mpc
