@@ -45,6 +45,9 @@ frontend/next-env.d.ts
 coverage/
 *.tsbuildinfo
 .pnpm-store/
+# Playwright's output (UI-6): each run's traces and screenshots, and the HTML report CI keeps on a failure.
+frontend/test-results/
+frontend/playwright-report/
 
 # --- Logs, editors and operating systems.
 *.log

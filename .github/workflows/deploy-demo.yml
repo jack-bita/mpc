@@ -9,7 +9,7 @@
 # `demo` environment with the hook and the address) is in docs/runbooks/demo.md. The nightly redeploy
 # that resets the fake data (03 §12) comes with DATA-1's seed: until then there is no data to reset.
 #
-# No job here is named `backend`, `frontend`, `pr-title` or `image`: those are the required checks
+# No job here is named `backend`, `frontend`, `pr-title`, `image` or `e2e`: those are the required checks
 # (ci.yml and pr-title.yml), and a second job with one of those names would make the ruleset ambiguous
 # (04 OPS-1).
 
