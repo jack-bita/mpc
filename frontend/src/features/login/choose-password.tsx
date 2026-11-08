@@ -94,7 +94,9 @@ export function ChoosePassword() {
   };
   const server = fieldMessages(choose.error);
   const { errors } = form.formState;
-  const onABox = Object.keys(server).length > 0;
+  // Only the boxes on show: a refusal naming a box this form hasn't got would otherwise hide the alert,
+  // and say itself nowhere.
+  const onABox = Boolean(server.current_password ?? server.new_password);
 
   return (
     <div className="flex max-w-md flex-col gap-6">

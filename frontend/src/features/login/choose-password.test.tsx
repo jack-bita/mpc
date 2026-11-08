@@ -203,6 +203,20 @@ describe("choosing your own password", () => {
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login/"));
   });
 
+  it("shows a refusal about a box the form doesn't have in the alert, not nowhere", async () => {
+    onATemporaryPassword(
+      allauthRefusal(400, [{ code: "invalid", param: "username" }]),
+    );
+    renderTheOffice();
+    await screen.findByRole("heading", { name: "Chagua nenosiri lako" });
+
+    choose("muda-wa-baba-1", "siri-ya-neema-2026");
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Baadhi ya sehemu si sahihi.",
+    );
+  });
+
   it("says too many tries when the limit answers", async () => {
     // 5 changes a minute per person (AUTH-6).
     onATemporaryPassword(allauthRefusal(429));

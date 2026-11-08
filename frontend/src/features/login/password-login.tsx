@@ -152,7 +152,9 @@ export function PasswordLogin() {
     own(form.formState.errors.name?.message) ?? server.email ?? server.phone;
   const passwordError =
     own(form.formState.errors.password?.message) ?? server.password;
-  const onABox = Object.keys(server).length > 0;
+  // Only the boxes on show: a refusal naming a box this form hasn't got (allauth's username, say) would
+  // otherwise hide the alert, and say itself nowhere.
+  const onABox = Boolean(server.email ?? server.phone ?? server.password);
 
   // Until `me` first answers, and while someone already here is sent on: no form, only "Subiri
   // kidogo…". Shown at once, the form flashed for a moment before the office opened (UI-5's hand test).

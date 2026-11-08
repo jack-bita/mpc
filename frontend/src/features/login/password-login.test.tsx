@@ -194,6 +194,22 @@ describe("the password login", () => {
     ).toBe("true");
   });
 
+  it("shows a refusal about a box the form doesn't have in the alert, not nowhere", async () => {
+    // allauth's form has a username box ours doesn't show: its refusal must still be seen.
+    answer(
+      "POST",
+      LOGIN,
+      allauthRefusal(400, [{ code: "invalid", param: "username" }]),
+    );
+    render(<PasswordLogin />);
+
+    await logIn("0712345678", "siri-ya-neema");
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Baadhi ya sehemu si sahihi.",
+    );
+  });
+
   it("asks for both boxes before it sends anything", async () => {
     render(<PasswordLogin />);
 
