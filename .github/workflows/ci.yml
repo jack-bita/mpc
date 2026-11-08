@@ -8,10 +8,9 @@
 # Makefile, not here: this file only prepares a clean machine and calls the same target a laptop
 # runs, so the two can't drift apart (ops rule).
 #
-# Each job's name is also the name of its check on a pull request, and the ruleset requires the
-# first three by those names (.github/rulesets/main.json); e2e joins them once it has run on a pull
-# request (docs/runbooks/github-setup.md). Rename a job only together with the ruleset, or every
-# merge waits for a check that never comes.
+# Each job's name is also the name of its check on a pull request, and the ruleset requires all
+# four by those names (.github/rulesets/main.json). Rename a job only together with the ruleset,
+# or every merge waits for a check that never comes.
 
 name: CI
 
