@@ -6,8 +6,8 @@
 #     wait until the demo answers with this commit's version and shows Karibu over HTTPS
 #     (scripts/smoke_demo.sh). A demo that doesn't come up turns this workflow red.
 # The demo itself is described in render.yaml. What a person sets up once (the Render account, the
-# `demo` environment with the hook and the address) is in docs/runbooks/demo.md. The nightly redeploy
-# that resets the fake data (03 §12) comes with DATA-1's seed: until then there is no data to reset.
+# `demo` environment with the hook and the address) is in docs/runbooks/demo.md. Every night it runs
+# again, which resets the fake data (03 §12, DATA-1): see `schedule` below.
 #
 # No job here is named `backend`, `frontend`, `pr-title`, `image` or `e2e`: those are the required checks
 # (ci.yml and pr-title.yml), and a second job with one of those names would make the ruleset ambiguous
@@ -18,6 +18,16 @@ name: Deploy demo
 on:
   push:
     branches: [main]
+  # Every night, the same run as a merge's: build, push, deploy, smoke test. The new start meets a demo shop
+  # made on an earlier day, so the demo seed makes it again (backend/start-demo.sh, apps/demo/services.py),
+  # and whatever visitors changed is gone. Without this, a demo kept awake by visitors would never restart,
+  # so it would never be reset. A wake-up from the free plan's sleep the same day keeps the shop as it is.
+  # 21:30 UTC is 00:30 in Arusha (EAT, UTC+3 all year): just after the shop's midnight, when the seed's day
+  # has turned. GitHub may start a scheduled run late, by up to an hour when it is busy; any time before
+  # the morning does. It runs on main's latest commit, so the image it builds is main's, as after a merge.
+  # GitHub pauses the schedules of a public repo after 60 days with no commit (docs/runbooks/demo.md).
+  schedule:
+    - cron: "30 21 * * *"
 
 # The default token gets nothing here; each job asks for only what it needs.
 permissions: {}
