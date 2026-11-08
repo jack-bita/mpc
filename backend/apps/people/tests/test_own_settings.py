@@ -130,11 +130,15 @@ def test_settings_refuse_an_unknown_choice(staff_a: StaffMember, sent: dict[str,
 
 def test_the_service_refuses_an_unknown_font_too(staff_a: StaffMember) -> None:
     # The route's form checks first, but the service keeps the rule itself, for whatever calls it next (ADR-0015).
+    person = row(staff_a)
     with pytest.raises(ValidationError) as refused:
-        change_own_settings(row(staff_a), font="atkinson")
+        change_own_settings(person, language="en", font="atkinson")
 
     assert [error.code for error in refused.value.error_dict["font"]] == ["invalid_choice"]
     assert row(staff_a).font == "default"
+    # Nothing of the refused change stays on the person in hand either, the good half included: whatever reads them
+    # next sees them as saved (UI-9's review).
+    assert (person.language, person.font) == ("sw", "default")
 
 
 def test_suspended_person_cannot_change_settings(staff_a: StaffMember) -> None:

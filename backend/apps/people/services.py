@@ -461,11 +461,20 @@ def change_own_settings(user: User, *, language: str | None = None, font: str | 
     guard (people_user_language_known, people_user_font_known). Returns the person as saved."""
     sent = {"language": language, "font": font}
     changed = [name for name in OWN_SETTINGS if sent[name] is not None]
+    # Each changed field's own checks, its list of choices above all, and nothing else of the row: the rest of the
+    # person isn't this action's to judge. Checked before anything is set, so a refusal leaves the person in hand as
+    # saved, the good half of a change included (UI-9's review).
+    columns = {column.name: column for column in User._meta.concrete_fields}
+    refused: dict[str, list[ValidationError]] = {}
+    for name in changed:
+        try:
+            columns[name].clean(sent[name], user)
+        except ValidationError as error:
+            refused[name] = error.error_list
+    if refused:
+        raise ValidationError(refused)
     for name in changed:
         setattr(user, name, sent[name])
-    # Each changed field's own checks, its list of choices above all, and nothing else of the row: the rest of the
-    # person isn't this action's to judge.
-    user.clean_fields(exclude=[f.name for f in User._meta.concrete_fields if f.name not in changed])
     if changed:
         # Only the changed columns: a change to her font in one tab never writes back an old language from another. No
         # lock and no version: each choice is one value, and the last one tapped is the one she meant. No line in the
