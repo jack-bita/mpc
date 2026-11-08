@@ -26,12 +26,13 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import connection
+from django.db import OperationalError, connection
 from django.test import Client
 from django.utils import timezone
 from pytest_django import Settings
 
 from apps.core.tenancy import shop_context
+from apps.demo import services
 from apps.demo.services import SHOP_CODE, Seeded, seed_demo
 from apps.people.models import RoleAssignment, StaffMember, User
 from apps.people.pins import pin_matches
@@ -317,3 +318,55 @@ def test_seed_demo_command_stops_with_the_reason(settings: Settings) -> None:
 
     with pytest.raises(CommandError, match="DEMO_SEED=yes is not set"):
         call_command("seed_demo", stdout=StringIO())
+
+
+class _Deadlock(Exception):
+    # Stands in for psycopg's own error, which Django wraps in its OperationalError: the code is all the seed reads.
+    sqlstate = "40P01"
+
+
+def flush_that_clashes(monkeypatch: pytest.MonkeyPatch, times: int, sqlstate: str = "40P01") -> list[str]:
+    # The seed's flush, failing as PostgreSQL ends it the first `times` calls, then running for real. Returns the calls.
+    # Django's own call_command, the one the seed imports, so the real flush runs after the clashes.
+    real = call_command
+    calls: list[str] = []
+
+    def flush(*args: Any, **kwargs: Any) -> None:
+        calls.append(args[0])
+        if len(calls) <= times:
+            cause = _Deadlock()
+            cause.sqlstate = sqlstate
+            raise OperationalError("deadlock detected") from cause
+        real(*args, **kwargs)
+
+    monkeypatch.setattr(services, "call_command", flush)
+    return calls
+
+
+def test_seed_demo_tries_again_once_after_a_deadlock(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The nightly deploy: the old demo's request and the new start's wipe met halfway, and PostgreSQL ended the wipe.
+    # One more try makes the shop, as if nothing happened.
+    calls = flush_that_clashes(monkeypatch, times=1)
+
+    assert seed_demo(fresh=True) == Seeded.MADE
+    assert calls == ["flush", "flush"]
+    assert the_demo_shop().kind == ShopKind.DEMO
+
+
+def test_seed_demo_stops_after_a_second_deadlock(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Twice in a row is no passing clash: the start stops, and the deploy's smoke test shows it red.
+    calls = flush_that_clashes(monkeypatch, times=2)
+
+    with pytest.raises(OperationalError):
+        seed_demo(fresh=True)
+    assert calls == ["flush", "flush"]
+    assert not Shop.objects.exists()
+
+
+def test_seed_demo_stops_at_once_on_another_database_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Any other database error (here, permission denied) isn't a clash that passes: no second try.
+    calls = flush_that_clashes(monkeypatch, times=1, sqlstate="42501")
+
+    with pytest.raises(OperationalError):
+        seed_demo(fresh=True)
+    assert calls == ["flush"]

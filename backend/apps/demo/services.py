@@ -39,7 +39,7 @@ from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.db import connection, transaction
+from django.db import OperationalError, connection, transaction
 from django.utils import timezone
 
 from apps.core.permissions import RoleTemplate
@@ -59,6 +59,10 @@ SIDES = (NewSide("D", "Dawa"), NewSide("F", "Vyakula"))
 # password is public: it opens only the demo's fake shop, which is made again every day.
 MANAGER_EMAIL = "meneja@example.com"
 MANAGER_PASSWORD = "jaribu-demo"
+
+
+# PostgreSQL's code for "deadlock detected": two transactions each waiting for the other, one of which it ends.
+DEADLOCK = "40P01"
 
 
 @dataclass(frozen=True)
@@ -105,6 +109,22 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
     _check_may_seed()
     if not fresh and _made_today():
         return Seeded.KEPT
+    try:
+        _wipe_and_make()
+    except OperationalError as clash:
+        # A deploy on Render starts the new demo while the old one still serves, on the same database. The wipe needs
+        # every table to itself; a visitor's request on the old one that holds one table and waits for another can
+        # meet it halfway, each waiting for the other, and PostgreSQL ends one of the two (a deadlock). If it ended the
+        # seed, its transaction was taken back whole, so one more try finds the request gone. Once only: a second clash,
+        # or any other database error, stops the start, which the deploy's smoke test then shows red.
+        if getattr(clash.__cause__, "sqlstate", None) != DEADLOCK:
+            raise
+        ContentType.objects.clear_cache()
+        _wipe_and_make()
+    return Seeded.MADE
+
+
+def _wipe_and_make() -> None:
     # One transaction around the wipe and the new shop: if any step of the shop is refused, the wipe is taken back
     # too, so a failed start leaves yesterday's demo as it was, never an empty one.
     with transaction.atomic():
@@ -122,7 +142,6 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
         # forgotten, or this process could hand out an id that no longer exists.
         ContentType.objects.clear_cache()
         _make_the_shop()
-    return Seeded.MADE
 
 
 def _check_may_seed() -> None:
