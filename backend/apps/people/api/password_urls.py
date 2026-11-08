@@ -39,6 +39,7 @@ from django.urls import URLPattern, path
 from django.views.decorators.debug import sensitive_variables
 
 from apps.people.api.pin_session import PIN_SESSION
+from apps.people.services import check_logins_may_change
 
 
 # allauth ships no types, so mypy knows both base classes below only as `Any`, and strict mode refuses a class built on
@@ -75,6 +76,14 @@ class ChangeOwnPasswordInput(ChangePasswordInput):  # type: ignore[misc]
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.fields["current_password"].required = True
+
+    def clean(self) -> dict[str, Any]:
+        # On the demo, the manager's password is public and every visitor shares it: one who changed it would lock out
+        # all the others (check_logins_may_change, the people services' rule). Refused as the form's own error, with its
+        # code, which allauth sends in its own shape.
+        check_logins_may_change()
+        cleaned: dict[str, Any] = super().clean()
+        return cleaned
 
 
 class ChangeOwnPasswordView(ChangePasswordView):  # type: ignore[misc]

@@ -356,6 +356,9 @@
       "not_four_digits": "PIN iwe tarakimu nne.",
       "too_easy": "PIN hii ni rahisi mno kukisia, kama 1234 au 0000. Chagua nyingine."
     },
+    "demo": {
+      "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia."
+    },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",
     "password_entirely_numeric": "Nenosiri haliwezi kuwa namba tu.",

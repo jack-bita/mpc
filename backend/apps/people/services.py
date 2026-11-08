@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import cast
 
+from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -229,14 +230,30 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
     return staff
 
 
+def check_logins_may_change() -> None:
+    """Refuse any change to a password or a PIN on the demo (Jack, 8 Nov 2026). Its logins are public, so every visitor
+    shares them: a visitor who changed the manager's password would lock out everyone after them, and without the
+    manager nobody can confirm a laptop, until the next day's seed (apps/demo/services.py). Read from the demo's sign,
+    DEMO_SEED (config/settings/base.py), not from a shop's kind: the sign is set only where demo shops are the only
+    shops (the seed refuses any other), and the own-password form has no shop open to read a kind from. The system
+    still sets them: the seed passes no `by`."""
+    if settings.DEMO_SEED:
+        raise ValidationError(
+            "On the demo, passwords and PINs stay as they are, so every visitor can log in.", code="demo.logins_fixed"
+        )
+
+
 # Every variable shows as stars in Django's error reports, here and in everything this calls: `pin` is the PIN itself.
 @sensitive_variables()
 def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMember:
     """Give a person a new PIN, online only (03 §5.9). Devices see the new `pin_changed_at` at their next
     sync and drop their old offline check. A PIN logs in as the whole person, so who may is the rule for a password,
     with codes of its own (_check_may_act_as; Jack, 4 Nov 2026). `by` None: the system, or the superuser, who is
-    nobody's staff, and the only one who sets an owner's."""
+    nobody's staff, and the only one who sets an owner's. On the demo, only the system may (check_logins_may_change)."""
     _check_shop(staff.shop_id, by)
+    # A person never changes a PIN on the demo, where visitors share the seed's; the seed itself passes no `by`.
+    if by is not None:
+        check_logins_may_change()
     # Who may, first, before anything else: a refused try pays for no slow hash. Asked again under the locks below, as
     # this copy can be out of date by then.
     if by is not None:
@@ -351,11 +368,13 @@ def set_temporary_password(staff: StaffMember, password: str, *, by: StaffMember
     """Set a first or forgotten password, face to face (ADR-0038): Baba types one for Asha and tells it to her. She logs
     in with it, and every office route but `me` refuses her until she chooses her own (apps/people/selectors.py). `by`
     is always a person, who needs staff.manage on the whole shop, as a password opens the whole person. Refusals, each a
-    code the screen translates: the password's checks, under `password`; staff.reason_required; staff.left; and who may
-    (_check_may_set_password). Her older logins end, as each holds a fingerprint of the password it started with, so a
-    lost phone is logged out. Returns nothing: the password goes no further than this function (no answer, log or audit
-    line holds it)."""
+    code the screen translates: the password's checks, under `password`; staff.reason_required; staff.left; who may
+    (_check_may_set_password); and demo.logins_fixed on the demo, whose logins visitors share (check_logins_may_change).
+    Her older logins end, as each holds a fingerprint of the password it started with, so a lost phone is logged out.
+    Returns nothing: the password goes no further than this function (no answer, log or audit line holds it)."""
     _check_shop(staff.shop_id, by)
+    # Never on the demo, before anything else: a temporary password would lock its visitors out of a shared login.
+    check_logins_may_change()
     _check_reason(reason)
     # Who may, first, before the password is even looked at: a refused try pays for no slow hash, and this route has no
     # limit to slow one down. Asked again under the locks below, as this copy can be out of date by then.
