@@ -154,12 +154,12 @@ jobs:
   # against the backend image and a fresh PostgreSQL, both in Docker (compose.e2e.yml). A change that
   # breaks pairing or the PIN login turns this red before the merge, instead of at the counter.
   # A job of its own, not steps of `image`: its name says what broke, and the two run side by side.
-  # The cost: this job builds the image again on its own machine, a few minutes, in parallel.
+  # The cost: this job builds the image again on its own machine, side by side with the others: about
+  # 1.5 minutes in all, build and tests, on its first pull request (#164).
   e2e:
-    # Pinned like the other jobs. 20 minutes, not 15: the image build alone takes most of `image`'s
-    # time, and the tests come after it.
+    # Pinned, with a time limit, for the same reasons as the backend job.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

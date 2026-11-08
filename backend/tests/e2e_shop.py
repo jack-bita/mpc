@@ -64,7 +64,7 @@ def make_the_shop() -> None:
     seller = User.objects.create_user(full_name="Asha Mfano")
     with shop_context(shop):
         dawa = Side.objects.get(code="D")
-        # by=None everywhere: the system sets up a new shop, which has nobody yet to name as the giver (02 §1).
+        # by=None everywhere: the system sets the shop up, not one of its people, so no giver is named (02 §1).
         meneja = add_staff(shop=shop, user=manager, display_name="Meneja", by=None)
         asha = add_staff(shop=shop, user=seller, display_name="Asha", by=None)
         # The manager on every side, as a shop's manager is: device.manage among the role's keys lets them confirm

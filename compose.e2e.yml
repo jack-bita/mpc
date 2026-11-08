@@ -7,8 +7,9 @@
 # Every value below is a throwaway for this one test database on this one machine. None is a secret, and
 # real shop data never comes near it (ops rule).
 #
-# Start: docker compose -f compose.e2e.yml up --detach --wait
-# Stop:  docker compose -f compose.e2e.yml down --volumes
+# Start it with scripts/run_e2e.sh (`make check-e2e`), which also makes the tests' shop in it and always
+# wipes it after. By hand: `docker compose -f compose.e2e.yml up --detach --wait`, then that script's shop
+# step, and `docker compose -f compose.e2e.yml down --volumes` to wipe it.
 
 # Its own project name: these containers never touch mpc-dev's, nor its database volume.
 name: mpc-e2e

@@ -39,8 +39,9 @@ export default defineConfig({
     // says (src/i18n/language.ts), but dates and times read the browser's zone.
     locale: "sw-TZ",
     timezoneId: "Africa/Dar_es_Salaam",
-    // On a failure only: a trace (each step, the page at that moment, the network) and a screenshot, to
-    // see what the robot saw. Kept on every run, they would only slow it down.
+    // Kept on a failure only: a trace (each step, the page at that moment, the network) and a screenshot,
+    // to see what the robot saw. The trace is recorded on every run and thrown away on a pass, which costs
+    // a little time each run; a pass then leaves no files behind.
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
