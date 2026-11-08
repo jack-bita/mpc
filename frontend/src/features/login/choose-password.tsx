@@ -74,8 +74,12 @@ export function ChoosePassword() {
     // The same person, the same session: nobody to forget. `me` is asked again, says the mark is off, and
     // the frame opens the screen in place of this form.
     onSuccess: () => store.invalidateQueries({ queryKey: WHO_IS_HERE }),
-    // A refusal beside a box: the keyboard goes back to that box, to type again at once.
     onError: (error) => {
+      // The session ended meanwhile: `me` is asked again, says nobody is here, and the office's frame
+      // sends the person to the way in (office-frame.tsx), rather than leaving this form on show.
+      if (error instanceof ApiRefusal && error.status === 401)
+        void store.invalidateQueries({ queryKey: WHO_IS_HERE });
+      // A refusal beside a box: the keyboard goes back to that box, to type again at once.
       const fields = error instanceof ApiRefusal ? error.body.fields : {};
       if (fields.current_password) form.setFocus("temporary");
       else if (fields.new_password) form.setFocus("fresh");

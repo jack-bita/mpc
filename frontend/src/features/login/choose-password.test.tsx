@@ -11,6 +11,7 @@ import { DAWA, whoIsHere } from "@/test/devices";
 import { allauthRefusal, answer, fakeFetch, sent } from "@/test/fake-server";
 import { stillHoldsTheSecret } from "@/test/last-person";
 import { render } from "@/test/render";
+import { router } from "@/test/router";
 
 vi.mock("@/api/client", async (importOriginal) =>
   (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
@@ -176,6 +177,30 @@ describe("choosing your own password", () => {
       await screen.findByText("Andika nenosiri lile lile mara zote mbili."),
     ).toBeTruthy();
     expect(changes()).toEqual([]);
+  });
+
+  it("sends the person to the login when their session ends while they choose", async () => {
+    // Baba sets yet another temporary password meanwhile, which ends her sessions (AUTH-6): the change
+    // answers 401, and `me`, asked again, says nobody is here.
+    let ended = false;
+    answer("GET", ME, () => {
+      if (!ended)
+        return Response.json({ ...NEEMA, must_change_password: true });
+      return Response.json(
+        { code: "not_authenticated", message: "", fields: {}, params: {} },
+        { status: 403 },
+      );
+    });
+    answer("POST", CHANGE, () => {
+      ended = true;
+      return Response.json({ status: 401 }, { status: 401 });
+    });
+    renderTheOffice();
+    await screen.findByRole("heading", { name: "Chagua nenosiri lako" });
+
+    choose("muda-wa-baba-1", "siri-ya-neema-2026");
+
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login/"));
   });
 
   it("says too many tries when the limit answers", async () => {
