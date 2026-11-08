@@ -57,6 +57,8 @@ type LoginForm = z.infer<typeof LOGIN_FORM>;
 
 export function PasswordLogin() {
   const t = useTranslations("login.password");
+  // The PIN login's book, for its "Subiri kidogo…", which this page says the same way.
+  const loginWords = useTranslations("login");
   const words = useCodeWords();
   const { fieldMessages } = useApiErrorWords();
   const store = useQueryClient();
@@ -112,55 +114,76 @@ export function PasswordLogin() {
     own(form.formState.errors.password?.message) ?? server.password;
   const onABox = Object.keys(server).length > 0;
 
+  // Until `me` first answers, and while someone already here is sent on: no form, only "Subiri
+  // kidogo…". Shown at once, the form flashed for a moment before the office opened (UI-5's hand test).
+  // A first failure ends the wait: offline, `me` is asked again a few times, and the form needn't wait.
+  const waiting = (me.isPending && me.failureCount === 0) || here;
+
   return (
     <div className="flex max-w-md flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("title")}</h1>
-      {/* noValidate: the browser's own checks would speak its language, not the shop's. */}
-      <form
-        noValidate
-        onSubmit={(event) =>
-          void form.handleSubmit((values) => login.mutate(values))(event)
-        }
-        className="grid gap-6"
-      >
-        <Field
-          label={t("name")}
-          hint={t("nameHint")}
-          error={nameError}
-          {...form.register("name")}
-          // The person came here to log in: the keyboard starts in the first box.
-          autoFocus
-          // "username": the phone's password manager fills the box it saved, a phone or an email.
-          autoComplete="username"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-        />
-        <Field
-          label={t("password")}
-          error={passwordError}
-          type="password"
-          autoComplete="current-password"
-          {...form.register("password")}
-        />
-        {/* What no box can show: log out first, switched off, too many tries, no network. */}
-        <ApiErrorAlert error={onABox ? null : login.error} />
-        <div>
-          {/* Switched off while it is sent, and after it worked while the office opens: a second tap
-              would meet the session the first one started, and get a 409. The boxes stay on, so a
-              refusal can put the keyboard back in its box. */}
-          <Button type="submit" disabled={login.isPending || login.isSuccess}>
-            {t("send")}
-          </Button>
-        </div>
-      </form>
-      {/* Both ways back in: the owner face to face, or an email link (forgot-password.tsx). The second
-          kind, as it leads away from the form's one action. */}
-      <div>
-        <ButtonLink href="/forgot-password/" kind="second" size="normal">
-          {t("forgot")}
-        </ButtonLink>
-      </div>
+      {/* role="status": a screen reader says its words as they change. Always on the page, empty and
+          hidden from the eye while there is nothing to say, as one that comes with its words in it often
+          goes unsaid (offline-banner.tsx). */}
+      <p role="status" className={waiting ? "text-lg" : "sr-only"}>
+        {waiting ? loginWords("waiting") : null}
+      </p>
+      {waiting ? null : theForm()}
     </div>
   );
+
+  // The form and the way back in. Called, not drawn as a component of its own: one made inside this one
+  // would be new at every redraw, and React would empty its boxes as the person types.
+  function theForm() {
+    return (
+      <>
+        {/* noValidate: the browser's own checks would speak its language, not the shop's. */}
+        <form
+          noValidate
+          onSubmit={(event) =>
+            void form.handleSubmit((values) => login.mutate(values))(event)
+          }
+          className="grid gap-6"
+        >
+          <Field
+            label={t("name")}
+            hint={t("nameHint")}
+            error={nameError}
+            {...form.register("name")}
+            // The person came here to log in: the keyboard starts in the first box.
+            autoFocus
+            // "username": the phone's password manager fills the box it saved, a phone or an email.
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <Field
+            label={t("password")}
+            error={passwordError}
+            type="password"
+            autoComplete="current-password"
+            {...form.register("password")}
+          />
+          {/* What no box can show: log out first, switched off, too many tries, no network. */}
+          <ApiErrorAlert error={onABox ? null : login.error} />
+          <div>
+            {/* Switched off while it is sent, and after it worked while the office opens: a second tap
+              would meet the session the first one started, and get a 409. The boxes stay on, so a
+              refusal can put the keyboard back in its box. */}
+            <Button type="submit" disabled={login.isPending || login.isSuccess}>
+              {t("send")}
+            </Button>
+          </div>
+        </form>
+        {/* Both ways back in: the owner face to face, or an email link (forgot-password.tsx). The second
+          kind, as it leads away from the form's one action. */}
+        <div>
+          <ButtonLink href="/forgot-password/" kind="second" size="normal">
+            {t("forgot")}
+          </ButtonLink>
+        </div>
+      </>
+    );
+  }
 }

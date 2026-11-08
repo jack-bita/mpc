@@ -1,7 +1,7 @@
 // password-login.test.tsx — the owner and managers log in on their own phones, by phone or email and a
 // password, through allauth (UI-5, ADR-0038).
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ALLAUTH } from "@/api/allauth";
@@ -40,8 +40,9 @@ afterEach(() => {
   document.cookie = "csrftoken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
 });
 
-function logIn(name: string, password: string) {
-  fireEvent.change(screen.getByLabelText("Simu au barua pepe"), {
+/** Types and sends, once the form shows: it waits for `me`'s first answer (no flash, UI-5's hand test). */
+async function logIn(name: string, password: string) {
+  fireEvent.change(await screen.findByLabelText("Simu au barua pepe"), {
     target: { value: name },
   });
   fireEvent.change(screen.getByLabelText("Nenosiri"), {
@@ -61,7 +62,7 @@ describe("the password login", () => {
     render(<PasswordLogin />);
     await waitFor(() => expect(askedWhoIsHere()).toBe(1));
 
-    logIn("0712 345 678", "siri-ya-neema");
+    await logIn("0712 345 678", "siri-ya-neema");
 
     await waitFor(() =>
       expect(router.replace).toHaveBeenCalledWith(AFTER_LOGIN),
@@ -79,7 +80,7 @@ describe("the password login", () => {
     answer("POST", LOGIN, { status: 200, body: { status: 200 } });
     render(<PasswordLogin />);
 
-    logIn("neema@example.com", "siri-ya-neema");
+    await logIn("neema@example.com", "siri-ya-neema");
 
     await waitFor(() => expect(logins()).toHaveLength(1));
     expect(await logins()[0]?.json()).toEqual({
@@ -98,7 +99,7 @@ describe("the password login", () => {
     );
     render(<PasswordLogin />);
 
-    logIn("0712345678", "si-yenyewe");
+    await logIn("0712345678", "si-yenyewe");
 
     expect(await screen.findByText("Simu au nenosiri si sahihi.")).toBeTruthy();
     expect(screen.getByLabelText("Nenosiri").getAttribute("aria-invalid")).toBe(
@@ -118,7 +119,7 @@ describe("the password login", () => {
     );
     render(<PasswordLogin />);
 
-    logIn("0123", "siri-ya-neema");
+    await logIn("0123", "siri-ya-neema");
 
     expect(
       await screen.findByText("Namba hii ya simu si sahihi."),
@@ -131,7 +132,7 @@ describe("the password login", () => {
   it("asks for both boxes before it sends anything", async () => {
     render(<PasswordLogin />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Ingia" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ingia" }));
 
     expect(await screen.findAllByText("Jaza sehemu hii.")).toHaveLength(2);
     expect(logins()).toEqual([]);
@@ -142,7 +143,7 @@ describe("the password login", () => {
     answer("POST", LOGIN, allauthRefusal(409));
     render(<PasswordLogin />);
 
-    logIn("0712345678", "siri-ya-neema");
+    await logIn("0712345678", "siri-ya-neema");
 
     expect((await screen.findByRole("alert")).textContent).toContain(
       "Toka kwanza",
@@ -154,7 +155,7 @@ describe("the password login", () => {
     answer("POST", LOGIN, allauthRefusal(401));
     render(<PasswordLogin />);
 
-    logIn("0712345678", "siri-ya-neema");
+    await logIn("0712345678", "siri-ya-neema");
 
     expect((await screen.findByRole("alert")).textContent).toContain(
       "Ongea na mmiliki",
@@ -165,7 +166,7 @@ describe("the password login", () => {
     answer("POST", LOGIN, allauthRefusal(429));
     render(<PasswordLogin />);
 
-    logIn("0712345678", "siri-ya-neema");
+    await logIn("0712345678", "siri-ya-neema");
 
     expect((await screen.findByRole("alert")).textContent).toContain(
       "Majaribio mengi mno",
@@ -179,7 +180,7 @@ describe("the password login", () => {
       vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))),
     );
 
-    logIn("0712345678", "siri-ya-neema");
+    await logIn("0712345678", "siri-ya-neema");
 
     expect((await screen.findByRole("alert")).textContent).toContain(
       "Angalia mtandao",
@@ -200,10 +201,51 @@ describe("the password login", () => {
     expect(logins()).toEqual([]);
   });
 
-  it("shows the way back in after a forgotten password", () => {
+  it("waits for who is here before it shows the form, so nothing flashes", async () => {
+    // The hand test: the Meneja, logged in already, tapped Ingia, and the form came for a moment before
+    // the office did. Until `me` first answers, only a status line shows.
+    let answerMe: (response: Response) => void = () => undefined;
+    answer(
+      "GET",
+      ME,
+      () =>
+        new Promise<Response>((resolve) => {
+          answerMe = resolve;
+        }),
+    );
     render(<PasswordLogin />);
 
-    const link = screen.getByRole("link", { name: "Umesahau nenosiri?" });
+    expect(
+      (await screen.findByText("Subiri kidogo…")).getAttribute("role"),
+    ).toBe("status");
+    expect(screen.queryByLabelText("Nenosiri")).toBeNull();
+
+    const nobody = refusal(403, "not_authenticated");
+    await act(async () =>
+      answerMe(Response.json(nobody.body, { status: nobody.status })),
+    );
+
+    expect(await screen.findByLabelText("Nenosiri")).toBeTruthy();
+    expect(screen.queryByText("Subiri kidogo…")).toBeNull();
+  });
+
+  it("shows the form at once when no answer comes about who is here", async () => {
+    // Offline, `me` is asked again a few times (query-client.ts); the form doesn't wait for those.
+    answer("GET", ME, () => {
+      throw new TypeError("Failed to fetch");
+    });
+
+    render(<PasswordLogin />);
+
+    expect(await screen.findByLabelText("Nenosiri")).toBeTruthy();
+  });
+
+  it("shows the way back in after a forgotten password", async () => {
+    render(<PasswordLogin />);
+
+    const link = await screen.findByRole("link", {
+      name: "Umesahau nenosiri?",
+    });
     // The end slash comes from next.config.ts (trailingSlash), which a test doesn't read.
     expect(link.getAttribute("href")).toMatch(/^\/forgot-password\/?$/);
   });
