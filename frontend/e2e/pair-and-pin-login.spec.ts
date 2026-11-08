@@ -9,7 +9,12 @@
 // (scripts/run_e2e.sh). The words come from the Swahili book (messages/sw.json), the app's default
 // language, never typed here: a reworded button moves the test with it, and a word the screen lost fails
 // the test.
-import { devices, expect, test } from "@playwright/test";
+import {
+  type BrowserContext,
+  test as base,
+  devices,
+  expect,
+} from "@playwright/test";
 
 import sw from "../messages/sw.json";
 import type { components } from "../src/api/schema";
@@ -38,19 +43,37 @@ function words(sentence: string, values: Record<string, string>): string {
   );
 }
 
+// The story's two browsers, as fixtures: Playwright opens each before a test that names it, and closes it
+// after that test, passed or failed. After, not inside the test: Playwright takes a failed test's screenshots
+// and trace first, so a red run keeps its pictures. Each is a context, a browser that never saw the site: no
+// cookie, no saved device. By hand that took a second browser (UI-4: Incognito windows share one session).
+// `provide`, the name Playwright's own docs call `use`: hands the fixture to the test and waits for it to end.
+const test = base.extend<{
+  laptop: BrowserContext;
+  managersPhone: BrowserContext;
+}>({
+  // The shop's new laptop, with a clock the test can move: the idle lock waits 15 minutes, and a test can't.
+  // Put in before the first page, so every timer the app starts runs on it. It keeps normal time until moved.
+  laptop: async ({ browser }, provide) => {
+    const laptop = await browser.newContext();
+    await laptop.clock.install();
+    await provide(laptop);
+    await laptop.close();
+  },
+  // The manager's own phone, at a phone's size and with touch, as UI-5's hand test could only pretend with a
+  // laptop's Chrome.
+  managersPhone: async ({ browser }, provide) => {
+    const phone = await browser.newContext({ ...devices["Pixel 7"] });
+    await provide(phone);
+    await phone.close();
+  },
+});
+
 test("pair a laptop, log in by PIN, lock when idle, log in again, log out", async ({
-  browser,
+  laptop,
+  managersPhone,
 }) => {
-  // Two browsers that never saw the site: the shop's new laptop, and the manager's own phone, at a phone's
-  // size and with touch, as UI-5's hand test could only pretend with a laptop's Chrome. A context has no
-  // cookie and no saved device; by hand that took a second browser (UI-4: Incognito windows share one
-  // session).
-  const laptop = await browser.newContext();
-  // The laptop's clock, which the test can move: the idle lock waits 15 minutes, and a test can't. Put in
-  // before the first page, so every timer the app starts runs on it. It keeps normal time until moved.
-  await laptop.clock.install();
   const counter = await laptop.newPage();
-  const managersPhone = await browser.newContext({ ...devices["Pixel 7"] });
   const phone = await managersPhone.newPage();
 
   const welcome = counter.getByRole("heading", {
@@ -155,7 +178,7 @@ test("pair a laptop, log in by PIN, lock when idle, log in again, log out", asyn
     // As if the laptop sat untouched for the shop's idle minutes: the clock jumps, and every timer due
     // on the way fires once, the lock's look at the clock among them (idle-lock.ts). The same as a lid
     // closed and opened again, which is why the lock is a watch, not an egg timer.
-    await counter.clock.fastForward(`${IDLE_MINUTES}:00`);
+    await laptop.clock.fastForward(`${IDLE_MINUTES}:00`);
     // The lock logged her out on the server too: the tiles are back, and her welcome is gone.
     await expect(tiles).toBeVisible();
     await expect(welcome).toBeHidden();
@@ -169,7 +192,4 @@ test("pair a laptop, log in by PIN, lock when idle, log in again, log out", asyn
     await expect(tiles).toBeVisible();
     await expect(welcome).toBeHidden();
   });
-
-  await laptop.close();
-  await managersPhone.close();
 });
