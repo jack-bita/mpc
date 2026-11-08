@@ -3,9 +3,10 @@
 #
 # It owns one run, which `make check-e2e` starts, and so CI's e2e job too:
 #   1. start compose.e2e.yml: an empty database, then the image, which runs its migrations and serves on :8090;
-#   2. run Playwright (`pnpm e2e`, frontend/playwright.config.ts) against it;
-#   3. on a failure, print the server's log: a test that met an error page usually finds its reason there;
-#   4. stop both and delete the database, whether the tests passed or not, so the next run starts empty.
+#   2. make the tests' made-up shop in it (backend/tests/e2e_shop.py);
+#   3. run Playwright (`pnpm e2e`, frontend/playwright.config.ts) against it;
+#   4. on a failure, print the server's log: a test that met an error page usually finds its reason there;
+#   5. stop both and delete the database, whether the tests passed or not, so the next run starts empty.
 # The image must exist already: `make check-e2e` builds it first (mpc-backend:check), as check-image does.
 #
 # Usage:  bash scripts/run_e2e.sh
@@ -41,6 +42,10 @@ trap finish EXIT
 # --wait: until both are healthy, PostgreSQL accepting connections and the image answering /api/health/
 # after its migrations (compose.e2e.yml). --wait-timeout: fail after 4 minutes, rather than wait forever.
 "${compose[@]}" up --detach --wait --wait-timeout 240
+
+# The made-up shop the tests log in to, made through the services on the empty database (backend/tests/e2e_shop.py,
+# which says why it is passed as --command). -T: no terminal, as nobody types into it.
+"${compose[@]}" exec -T backend python manage.py shell --command "$(cat "$root/backend/tests/e2e_shop.py")"
 
 # In brackets, a subshell: the move into frontend/ ends with it, and the cleanup above runs from the root.
 (cd "$root/frontend" && pnpm e2e)
