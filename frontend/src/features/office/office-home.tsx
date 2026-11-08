@@ -25,6 +25,8 @@ import {
 export function OfficeHome() {
   const t = useTranslations("office");
   const devices = useTranslations("device.office");
+  // The PIN login's book, for its "Subiri kidogo…", which the office says the same way.
+  const loginWords = useTranslations("login");
   const me = useWhoIsHere();
   // Focus on the welcome as each person arrives: after a login, or Chagua nenosiri lako's Hifadhi, the
   // button that had it is gone. A screen reader then says where the person is, and Tab goes on to the
@@ -48,32 +50,52 @@ export function OfficeHome() {
   // dropped network leaves the answer as it was. Nobody logged in, the office's frame sends them to the
   // way in (office-frame.tsx), so "Ingia kwanza" shows only for that moment.
   const refused = me.error instanceof ApiRefusal && me.error.status < 500;
-  if (refused || !me.data) return <ApiErrorAlert error={me.error} />;
+  // Until `me` first answers: "Subiri kidogo…", never a blank page (CI's every-page-in-English test found
+  // one, UI-5's PR). The line is on the page from the start and only its words change, as one that comes
+  // with its words in it often goes unsaid (offline-banner.tsx).
+  const waiting = me.isPending && me.failureCount === 0;
 
-  const open = screens(me.data);
   return (
     <div className="grid max-w-md gap-6">
-      <h1
-        ref={welcome}
-        tabIndex={-1}
-        className="text-2xl font-semibold outline-none"
-      >
-        {t("welcome", { name: me.data.staff.display_name })}
-      </h1>
-      {open.length > 0 ? (
-        // One under the other, as wide as the column: a finger finds each at once on a phone.
-        <ul className="grid gap-3">
-          {open.map((screen) => (
-            <li key={screen.href}>
-              <ButtonLink href={screen.href} className="w-full">
-                {screen.label}
-              </ButtonLink>
-            </li>
-          ))}
-        </ul>
+      <p role="status" className={waiting ? "text-lg" : "sr-only"}>
+        {waiting ? loginWords("waiting") : null}
+      </p>
+      {refused || !me.data ? (
+        <ApiErrorAlert error={me.error} />
       ) : (
-        <p>{t("nothingYet")}</p>
+        theWelcome(me.data)
       )}
     </div>
   );
+
+  // The welcome and the screen's buttons. Called, not drawn as a component of its own, so the heading
+  // keeps its place, and its focus, across redraws.
+  function theWelcome(here: WhoIsHere) {
+    const open = screens(here);
+    return (
+      <>
+        <h1
+          ref={welcome}
+          tabIndex={-1}
+          className="text-2xl font-semibold outline-none"
+        >
+          {t("welcome", { name: here.staff.display_name })}
+        </h1>
+        {open.length > 0 ? (
+          // One under the other, as wide as the column: a finger finds each at once on a phone.
+          <ul className="grid gap-3">
+            {open.map((screen) => (
+              <li key={screen.href}>
+                <ButtonLink href={screen.href} className="w-full">
+                  {screen.label}
+                </ButtonLink>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>{t("nothingYet")}</p>
+        )}
+      </>
+    );
+  }
 }

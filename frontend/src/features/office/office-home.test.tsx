@@ -51,6 +51,16 @@ describe("the office's home page", () => {
     expect(document.activeElement).toBe(welcome);
   });
 
+  it("says to wait while it asks who is here, so the page is never blank", () => {
+    // Drawn before `me` answers, the page was empty: CI's every-page-in-English test caught it (UI-5's PR).
+    answer("GET", ME, () => new Promise<Response>(() => undefined));
+
+    render(<OfficeHome />);
+
+    const line = screen.getByText("Subiri kidogo…");
+    expect(line.getAttribute("role")).toBe("status");
+  });
+
   it("offers no screen someone may not open, and says so", async () => {
     // A seller logged in by password sees no Vifaa: registering and blocking devices isn't theirs.
     answer("GET", ME, {
