@@ -16,7 +16,7 @@
 //
 // Everything else a screen gives Field goes to the box (inputMode, value, disabled…), except className:
 // that styles the field as a whole, label to box, as a screen widens or spaces a field, not the box.
-import { useId } from "react";
+import { type ReactNode, useId } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -30,9 +30,19 @@ export type FieldProps = Omit<
   label: string;
   hint?: string;
   error?: string;
+  /** A control inside the box, at its end, as wide as the box is high: the password's eye
+   * (password-field.tsx, UI-5). The box leaves room for it, so the typing never runs under it. */
+  end?: ReactNode;
 };
 
-export function Field({ label, hint, error, className, ...input }: FieldProps) {
+export function Field({
+  label,
+  hint,
+  error,
+  end,
+  className,
+  ...input
+}: FieldProps) {
   const id = useId();
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
@@ -42,6 +52,24 @@ export function Field({ label, hint, error, className, ...input }: FieldProps) {
     [hint ? hintId : null, error ? errorId : null]
       .filter((part) => part !== null)
       .join(" ") || undefined;
+
+  const box = (
+    <Input
+      id={id}
+      // undefined, not false, when all is well: aria-invalid="false" is noise for a screen reader.
+      aria-invalid={error ? true : undefined}
+      aria-describedby={describedBy}
+      // Room at the end for the control: a square as high as the box.
+      className={
+        end
+          ? input.size === "normal"
+            ? "pr-(--control-normal)"
+            : "pr-(--control-big)"
+          : undefined
+      }
+      {...input}
+    />
+  );
 
   return (
     <div className={cn("grid gap-2", className)}>
@@ -57,13 +85,15 @@ export function Field({ label, hint, error, className, ...input }: FieldProps) {
           {error}
         </p>
       ) : null}
-      <Input
-        id={id}
-        // undefined, not false, when all is well: aria-invalid="false" is noise for a screen reader.
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy}
-        {...input}
-      />
+      {end ? (
+        // The control sits over the box's end: the box's own edge, focus ring and red stay whole.
+        <div className="relative">
+          {box}
+          {end}
+        </div>
+      ) : (
+        box
+      )}
     </div>
   );
 }

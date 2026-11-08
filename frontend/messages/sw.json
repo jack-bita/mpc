@@ -4,7 +4,8 @@
   },
   "home": {
     "title": "Karibu",
-    "version": "Toleo {version}"
+    "version": "Toleo {version}",
+    "login": "Ingia"
   },
   "update": {
     "ready": "Toleo jipya liko tayari",
@@ -89,11 +90,56 @@
       "typePin": "Andika PIN yako",
       "back": "Rudi"
     },
+    "password": {
+      "title": "Ingia",
+      "name": "Simu au barua pepe",
+      "nameHint": "Kama 0712 345 678",
+      "password": "Nenosiri",
+      "send": "Ingia",
+      "forgot": "Umesahau nenosiri?",
+      "someoneHere": "{name} ameingia kwenye kifaa hiki. Mtoe kwanza, kisha uingie."
+    },
     "welcome": "Karibu, {name}",
     "switch": "Badilisha mtu",
     "logout": "Toka",
     "leaving": "Unatoka…",
-    "waiting": "Subiri kidogo…"
+    "waiting": "Subiri kidogo…",
+    "withPassword": "Ingia kwa nenosiri"
+  },
+  "passwordField": {
+    "show": "Onyesha nenosiri"
+  },
+  "password": {
+    "chooseTitle": "Chagua nenosiri lako",
+    "chooseIntro": "Nenosiri ulilopewa ni la muda. Chagua lako mwenyewe, kisha uendelee.",
+    "temporary": "Nenosiri la muda",
+    "new": "Nenosiri jipya",
+    "newHint": "Herufi 8 au zaidi, si namba tu, na lisifanane na jina wala simu yako.",
+    "again": "Andika nenosiri jipya tena",
+    "notTheSame": "Andika nenosiri lile lile mara zote mbili.",
+    "save": "Hifadhi",
+    "forgot": {
+      "title": "Umesahau nenosiri?",
+      "noEmail": "Huna barua pepe? Mwombe mmiliki akuwekee nenosiri la muda, ana kwa ana.",
+      "withEmail": "Una barua pepe? Tutakutumia kiungo cha kuweka nenosiri jipya.",
+      "email": "Barua pepe",
+      "notAnEmail": "Andika barua pepe kamili, kama jina@mfano.com.",
+      "send": "Tuma kiungo",
+      "sent": "Kama barua pepe hii ina akaunti hapa, tumetuma kiungo. Kifungue ndani ya saa moja.",
+      "back": "Rudi kuingia"
+    },
+    "reset": {
+      "title": "Weka nenosiri jipya",
+      "checking": "Tunaangalia kiungo…",
+      "noKey": "Kiungo hiki hakijakamilika. Kifungue tena kutoka kwenye barua pepe, au omba kingine.",
+      "askAgain": "Omba kiungo kingine",
+      "done": "Nenosiri lako jipya limewekwa. Ingia nalo sasa.",
+      "login": "Ingia"
+    }
+  },
+  "office": {
+    "welcome": "Karibu, {name}",
+    "nothingYet": "Bado hakuna kazi ya ofisi unayoweza kufungua hapa."
   },
   "stock": {
     "part": "{unit} {count}"
@@ -163,7 +209,8 @@
       "kilo": "Kilo",
       "disabled": "Kimezimwa",
       "search": "Tafuta bidhaa",
-      "normal": "Kisanduku cha kawaida"
+      "normal": "Kisanduku cha kawaida",
+      "password": "Nenosiri"
     },
     "choices": {
       "title": "Chaguo",
@@ -267,8 +314,22 @@
       "own": "Huwezi kuweka nenosiri lako mwenyewe hapa.",
       "superuser_only": "Nenosiri la mtu huyu linawekwa na msimamizi wa mfumo tu.",
       "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kuweka nenosiri lake.",
-      "no_login_name": "Mtu huyu hana simu wala barua pepe ya kuingilia."
+      "no_login_name": "Mtu huyu hana simu wala barua pepe ya kuingilia.",
+      "same_as_temporary": "Chagua nenosiri tofauti na lile la muda."
     },
+    "phone": {
+      "invalid": "Namba hii ya simu si sahihi."
+    },
+    "login": {
+      "already_in": "Kuna mtu ameingia tayari kwenye kifaa hiki. Toka kwanza, kisha ujaribu tena.",
+      "switched_off": "Huwezi kuingia kwa sasa. Ongea na mmiliki."
+    },
+    "email_password_mismatch": "Barua pepe au nenosiri si sahihi.",
+    "phone_password_mismatch": "Simu au nenosiri si sahihi.",
+    "invalid_phone": "Andika namba ya simu kamili, kama 0712 345 678.",
+    "too_many_login_attempts": "Umekosea mara nyingi mno. Subiri dakika chache, kisha ujaribu tena.",
+    "invalid_password_reset": "Kiungo hiki hakifanyi kazi tena. Omba kingine.",
+    "enter_current_password": "Nenosiri la sasa si sahihi.",
     "pin": {
       "wrong": "PIN si sahihi.",
       "locked": "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika {minutes}.",

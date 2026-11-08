@@ -1,6 +1,10 @@
 // query-client.test.ts — which failed reads the store asks again: never a refusal the server meant,
 // a few times a dropped network or a broken server (UI-2); and what a login forgets (UI-4).
-import { MutationObserver, QueryObserver } from "@tanstack/react-query";
+import {
+  MutationObserver,
+  onlineManager,
+  QueryObserver,
+} from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -82,5 +86,49 @@ describe("forgetTheLastPerson", () => {
     expect(asked).toBe(2);
     expect(screen.getCurrentResult().data).toBe("answer 2");
     stop();
+  });
+});
+
+describe("changes", () => {
+  it("go one at a time, in the order they were made, offline too", async () => {
+    // Asha renames a laptop with no network, then presses Toka. Back online, TanStack would send both
+    // at once, and a logout that landed first would leave the rename refused, and lost (UI-5's review).
+    const store = makeQueryClient();
+    store.mount();
+    const order: string[] = [];
+    let finishRename = () => undefined as void;
+    const rename = new MutationObserver(store, {
+      mutationFn: () => {
+        order.push("rename starts");
+        return new Promise<void>((resolve) => {
+          finishRename = () => {
+            order.push("rename ends");
+            resolve();
+          };
+        });
+      },
+    });
+    const logout = new MutationObserver(store, {
+      mutationFn: () => {
+        order.push("logout");
+        return Promise.resolve();
+      },
+    });
+    try {
+      onlineManager.setOnline(false);
+      const renaming = rename.mutate();
+      const leaving = logout.mutate();
+      expect(order).toEqual([]);
+
+      onlineManager.setOnline(true);
+      await vi.waitFor(() => expect(order).toEqual(["rename starts"]));
+      finishRename();
+      await Promise.all([renaming, leaving]);
+
+      expect(order).toEqual(["rename starts", "rename ends", "logout"]);
+    } finally {
+      onlineManager.setOnline(true);
+      store.unmount();
+    }
   });
 });

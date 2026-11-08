@@ -84,6 +84,10 @@ describe("the design page", () => {
       (screen.getByLabelText(t.fields.kilo) as HTMLInputElement).disabled,
     ).toBe(true);
     expect(screen.getByLabelText(t.fields.search).tagName).toBe("INPUT");
+    // The password box, with its eye (UI-5).
+    expect(
+      (screen.getByLabelText(t.fields.password) as HTMLInputElement).type,
+    ).toBe("password");
   });
 
   it("shows a choice with a hint, one with an error and one switched off", () => {

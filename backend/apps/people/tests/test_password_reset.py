@@ -51,7 +51,7 @@ def post(client: Client, path: str, **sent: str) -> tuple[int, list[str]]:
 
 def key_from_the_email() -> str:
     # The key, from the link in the last email, as the app reads it from the address bar: after the #.
-    [link] = [word for word in mail.outbox[-1].body.split() if "/password-reset#" in word]
+    [link] = [word for word in mail.outbox[-1].body.split() if "/password-reset/#" in word]
     return link.partition("#")[2]
 
 
@@ -63,7 +63,7 @@ def test_password_reset_by_email(manager: User) -> None:
     # after the #, so no server's log ever sees it.
     [email] = mail.outbox
     assert email.to == [EMAIL]
-    assert "http://testserver/password-reset#" in email.body
+    assert "http://testserver/password-reset/#" in email.body
     key = key_from_the_email()
     assert client.get(RESET, headers={"X-Password-Reset-Key": key}).status_code == 200
 

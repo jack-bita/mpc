@@ -9,7 +9,8 @@
 //     (await import("@/test/fake-server")).withFakeServer(await importOriginal()));
 //
 // The real client still does the work, with its CSRF header and its network check (createApiClient):
-// only the far end is fake. vitest.setup.ts empties the server after each test.
+// only the far end is fake. vitest.setup.ts empties the server after each test. allauth's password routes,
+// outside the typed client, reach the same server through fakeFetch (UI-5).
 import type * as ClientModule from "@/api/client";
 
 type Handler = (request: Request) => Response | Promise<Response>;
@@ -48,13 +49,30 @@ export function refusal(
   return { status, body: { code, message: code, fields, params } };
 }
 
+/** A refusal in allauth's own shape (src/api/allauth.ts), for answer(): its status, and its errors, each
+ * with the box it names in `param`, or none for the whole form. An empty list, as allauth sends for a 409
+ * or a 429, leaves `errors` out, as allauth does. */
+export function allauthRefusal(
+  status: number,
+  errors: { code: string; param?: string }[] = [],
+): { status: number; body: unknown } {
+  const listed = errors.map((error) => ({ ...error, message: error.code }));
+  return {
+    status,
+    body: listed.length > 0 ? { status, errors: listed } : { status },
+  };
+}
+
 /** Forgets every route and every request: vitest.setup.ts calls it after each test. */
 export function resetFakeServer(): void {
   routes.clear();
   sent.length = 0;
 }
 
-async function fakeFetch(request: Request): Promise<Response> {
+/** The server's fetch. `api` calls it through withFakeServer below; allauth's routes, which the app calls
+ * with the browser's own fetch (src/api/allauth.ts), reach it once a test file says
+ * `vi.stubGlobal("fetch", fakeFetch)`. */
+export async function fakeFetch(request: Request): Promise<Response> {
   sent.push(request.clone());
   const handler = routes.get(
     `${request.method} ${new URL(request.url).pathname}`,

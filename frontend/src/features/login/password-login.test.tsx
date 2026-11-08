@@ -1,0 +1,415 @@
+// password-login.test.tsx — the owner and managers log in on their own phones, by phone or email and a
+// password, through allauth (UI-5, ADR-0038).
+import { QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ALLAUTH } from "@/api/allauth";
+import { makeQueryClient } from "@/api/query-client";
+import { WHO_IS_HERE } from "@/features/people/who-is-here";
+import { DAWA, DAWA_LAPTOP_ANSWER, whoIsHere } from "@/test/devices";
+import {
+  allauthRefusal,
+  answer,
+  fakeFetch,
+  refusal,
+  sent,
+} from "@/test/fake-server";
+import {
+  leaveTheLastPersonsAnswers,
+  stillHoldsTheirs,
+  stillHoldsTheSecret,
+} from "@/test/last-person";
+import { render } from "@/test/render";
+import { router } from "@/test/router";
+
+import { AFTER_LOGIN, PasswordLogin } from "./password-login";
+
+vi.mock("@/api/client", async (importOriginal) =>
+  (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
+);
+
+const ME = "/api/auth/me/";
+const LOGIN = `${ALLAUTH}auth/login`;
+const LOGOUT = "/api/auth/logout/";
+
+/** Juma, logged in by PIN at the Dawa laptop: a PIN's `me` names the laptop it was made at (AUTH-4). */
+const JUMA_AT_THE_LAPTOP = {
+  ...whoIsHere([{ side: DAWA, permissions: ["sale.create"] }]),
+  staff: {
+    id: "019a5e00-0000-7000-8000-0000000000c2",
+    display_name: "Juma",
+    job_title: "Muuzaji",
+  },
+  device: DAWA_LAPTOP_ANSWER.device,
+  home_side: DAWA_LAPTOP_ANSWER.home_side,
+};
+
+/** A session holds this browser, and `me` answers `held` for it, until a logout ends it: then nobody. */
+function aSessionHolds(held: { status: number; body: unknown }) {
+  let standing = true;
+  answer("GET", ME, () => {
+    const nobody = refusal(403, "not_authenticated");
+    const now = standing ? held : nobody;
+    return Response.json(now.body, { status: now.status });
+  });
+  answer("POST", LOGOUT, () => {
+    standing = false;
+    return new Response(null, { status: 204 });
+  });
+}
+
+beforeEach(() => {
+  // allauth's routes go through the browser's own fetch (src/api/allauth.ts).
+  vi.stubGlobal("fetch", fakeFetch);
+  document.cookie = "csrftoken=token-from-django; path=/";
+  // Nobody is logged in on this phone yet.
+  answer("GET", ME, refusal(403, "not_authenticated"));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  document.cookie = "csrftoken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+});
+
+/** Types and sends, once the form shows: it waits for `me`'s first answer (no flash, UI-5's hand test). */
+async function logIn(name: string, password: string) {
+  fireEvent.change(await screen.findByLabelText("Simu au barua pepe"), {
+    target: { value: name },
+  });
+  fireEvent.change(screen.getByLabelText("Nenosiri"), {
+    target: { value: password },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Ingia" }));
+}
+
+const logins = () =>
+  sent.filter((request) => new URL(request.url).pathname === LOGIN);
+const askedWhoIsHere = () =>
+  sent.filter((request) => new URL(request.url).pathname === ME).length;
+
+describe("the password login", () => {
+  it("sends the phone written in full, forgets the last person, and opens the office", async () => {
+    answer("POST", LOGIN, { status: 200, body: { status: 200 } });
+    const store = makeQueryClient();
+    leaveTheLastPersonsAnswers(store);
+    render(
+      <QueryClientProvider client={store}>
+        <PasswordLogin />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(askedWhoIsHere()).toBe(1));
+
+    await logIn("0712 345 678", "siri-ya-neema");
+
+    await waitFor(() =>
+      expect(router.replace).toHaveBeenCalledWith(AFTER_LOGIN),
+    );
+    const [login] = logins();
+    expect(await login?.json()).toEqual({
+      phone: "+255712345678",
+      password: "siri-ya-neema",
+    });
+    // The store forgot whoever was here before: their answer and their change are gone, and `me` was
+    // asked again, for the new person (UI-4).
+    expect(stillHoldsTheirs(store)).toBe(false);
+    expect(askedWhoIsHere()).toBe(2);
+  });
+
+  it("sends an email as an email", async () => {
+    answer("POST", LOGIN, { status: 200, body: { status: 200 } });
+    render(<PasswordLogin />);
+
+    await logIn("neema@example.com", "siri-ya-neema");
+
+    await waitFor(() => expect(logins()).toHaveLength(1));
+    expect(await logins()[0]?.json()).toEqual({
+      email: "neema@example.com",
+      password: "siri-ya-neema",
+    });
+  });
+
+  it("says beside the password box when the password is wrong", async () => {
+    answer(
+      "POST",
+      LOGIN,
+      allauthRefusal(400, [
+        { code: "phone_password_mismatch", param: "password" },
+      ]),
+    );
+    render(<PasswordLogin />);
+
+    await logIn("0712345678", "si-yenyewe");
+
+    expect(await screen.findByText("Simu au nenosiri si sahihi.")).toBeTruthy();
+    expect(screen.getByLabelText("Nenosiri").getAttribute("aria-invalid")).toBe(
+      "true",
+    );
+    // Said once, beside its box: not in an alert under the form too.
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("keeps no password in the store once the page is left", async () => {
+    // A wrong try, then the person walks away from the laptop.
+    answer(
+      "POST",
+      LOGIN,
+      allauthRefusal(400, [
+        { code: "phone_password_mismatch", param: "password" },
+      ]),
+    );
+    const store = makeQueryClient();
+    const { unmount } = render(
+      <QueryClientProvider client={store}>
+        <PasswordLogin />
+      </QueryClientProvider>,
+    );
+    await logIn("0712345678", "si-yenyewe");
+    await screen.findByText("Simu au nenosiri si sahihi.");
+
+    unmount();
+
+    await waitFor(() =>
+      expect(stillHoldsTheSecret(store, "si-yenyewe")).toBe(false),
+    );
+  });
+
+  it("says beside the first box when the phone is not a real number", async () => {
+    // Our cleaner's code, beside allauth's phone field (apps/people/accounts.py).
+    answer(
+      "POST",
+      LOGIN,
+      allauthRefusal(400, [{ code: "phone.invalid", param: "phone" }]),
+    );
+    render(<PasswordLogin />);
+
+    await logIn("0123", "siri-ya-neema");
+
+    expect(
+      await screen.findByText("Namba hii ya simu si sahihi."),
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText("Simu au barua pepe").getAttribute("aria-invalid"),
+    ).toBe("true");
+  });
+
+  it("shows a refusal about a box the form doesn't have in the alert, not nowhere", async () => {
+    // allauth's form has a username box ours doesn't show: its refusal must still be seen.
+    answer(
+      "POST",
+      LOGIN,
+      allauthRefusal(400, [{ code: "invalid", param: "username" }]),
+    );
+    render(<PasswordLogin />);
+
+    await logIn("0712345678", "siri-ya-neema");
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Baadhi ya sehemu si sahihi.",
+    );
+  });
+
+  it("asks for both boxes before it sends anything", async () => {
+    render(<PasswordLogin />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Ingia" }));
+
+    expect(await screen.findAllByText("Jaza sehemu hii.")).toHaveLength(2);
+    expect(logins()).toEqual([]);
+  });
+
+  it("says to log out first when this browser already holds a session", async () => {
+    // A PIN's session on the shared laptop: allauth's session says nobody, its login says 409 (AUTH-4).
+    answer("POST", LOGIN, allauthRefusal(409));
+    render(<PasswordLogin />);
+
+    await logIn("0712345678", "siri-ya-neema");
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Toka kwanza",
+    );
+  });
+
+  it("tells a switched-off person to talk to the owner", async () => {
+    // The right password for a person switched off: allauth starts no session, and says only 401.
+    answer("POST", LOGIN, allauthRefusal(401));
+    render(<PasswordLogin />);
+
+    await logIn("0712345678", "siri-ya-neema");
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Ongea na mmiliki",
+    );
+  });
+
+  it("says too many tries when a limit answers", async () => {
+    answer("POST", LOGIN, allauthRefusal(429));
+    render(<PasswordLogin />);
+
+    await logIn("0712345678", "siri-ya-neema");
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Majaribio mengi mno",
+    );
+  });
+
+  it("says to check the internet when no answer comes", async () => {
+    render(<PasswordLogin />);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))),
+    );
+
+    await logIn("0712345678", "siri-ya-neema");
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Angalia mtandao",
+    );
+  });
+
+  it("sends someone already logged in on this phone straight to the office", async () => {
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: ["device.manage"] }]),
+    });
+
+    render(<PasswordLogin />);
+
+    await waitFor(() =>
+      expect(router.replace).toHaveBeenCalledWith(AFTER_LOGIN),
+    );
+    expect(logins()).toEqual([]);
+  });
+
+  it("offers Toka when someone is logged in by PIN at this laptop, then the form", async () => {
+    // Asha comes to the Dawa laptop, where Juma is logged in by PIN. Her login would meet his session
+    // (409), and before, after a reset on this laptop, Ingia sent her into his office session.
+    aSessionHolds({ status: 200, body: JUMA_AT_THE_LAPTOP });
+    render(<PasswordLogin />);
+
+    expect(
+      await screen.findByText(
+        "Juma ameingia kwenye kifaa hiki. Mtoe kwanza, kisha uingie.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText("Nenosiri")).toBeNull();
+    expect(router.replace).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toka" }));
+
+    expect(await screen.findByLabelText("Nenosiri")).toBeTruthy();
+    expect(
+      sent.filter((request) => new URL(request.url).pathname === LOGOUT),
+    ).toHaveLength(1);
+  });
+
+  it("offers Toka when this browser's session was refused for a reason, then the form", async () => {
+    // A suspended manager's phone still holds the session: a new login there would be refused (409).
+    aSessionHolds(refusal(403, "staff.suspended"));
+    render(<PasswordLogin />);
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Umesimamishwa",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Toka" }));
+
+    expect(await screen.findByLabelText("Nenosiri")).toBeTruthy();
+  });
+
+  it("asks who is here again when the login answers 409, and offers Toka", async () => {
+    // Juma logged in by PIN in another tab after this page opened.
+    let juma = false;
+    answer("GET", ME, () => {
+      const nobody = refusal(403, "not_authenticated");
+      return juma
+        ? Response.json(JUMA_AT_THE_LAPTOP)
+        : Response.json(nobody.body, { status: nobody.status });
+    });
+    answer("POST", LOGIN, () => {
+      juma = true;
+      return Response.json({ status: 409 }, { status: 409 });
+    });
+    render(<PasswordLogin />);
+
+    await logIn("0712345678", "siri-ya-asha");
+
+    expect(
+      await screen.findByText(
+        "Juma ameingia kwenye kifaa hiki. Mtoe kwanza, kisha uingie.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Toka" })).toBeTruthy();
+  });
+
+  it("waits for who is here before it shows the form, so nothing flashes", async () => {
+    // The hand test: the Meneja, logged in already, tapped Ingia, and the form came for a moment before
+    // the office did. Until `me` first answers, only a status line shows.
+    let answerMe: (response: Response) => void = () => undefined;
+    answer(
+      "GET",
+      ME,
+      () =>
+        new Promise<Response>((resolve) => {
+          answerMe = resolve;
+        }),
+    );
+    render(<PasswordLogin />);
+
+    expect(
+      (await screen.findByText("Subiri kidogo…")).getAttribute("role"),
+    ).toBe("status");
+    expect(screen.queryByLabelText("Nenosiri")).toBeNull();
+
+    const nobody = refusal(403, "not_authenticated");
+    await act(async () =>
+      answerMe(Response.json(nobody.body, { status: nobody.status })),
+    );
+
+    expect(await screen.findByLabelText("Nenosiri")).toBeTruthy();
+    expect(screen.queryByText("Subiri kidogo…")).toBeNull();
+  });
+
+  it("shows the form at once when no answer comes about who is here", async () => {
+    // Offline, `me` is asked again a few times (query-client.ts); the form doesn't wait for those.
+    answer("GET", ME, () => {
+      throw new TypeError("Failed to fetch");
+    });
+
+    render(<PasswordLogin />);
+
+    expect(await screen.findByLabelText("Nenosiri")).toBeTruthy();
+  });
+
+  it("shows the way back in after a forgotten password", async () => {
+    render(<PasswordLogin />);
+
+    const link = await screen.findByRole("link", {
+      name: "Umesahau nenosiri?",
+    });
+    // The end slash comes from next.config.ts (trailingSlash), which a test doesn't read.
+    expect(link.getAttribute("href")).toMatch(/^\/forgot-password\/?$/);
+  });
+
+  it("shows the form when the store still holds a session that has ended", async () => {
+    // Neema's session ended at its idle time while the office showed her, and the store kept her last
+    // answer. Read as "already here", the office would send her back, and back again (office-frame.tsx).
+    const store = makeQueryClient();
+    store.setQueryData(
+      WHO_IS_HERE,
+      whoIsHere([{ side: DAWA, permissions: ["device.manage"] }]),
+    );
+
+    render(
+      <QueryClientProvider client={store}>
+        <PasswordLogin />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(store.getQueryState(WHO_IS_HERE)?.status).toBe("error"),
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Nenosiri")).toBeTruthy();
+  });
+});

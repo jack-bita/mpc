@@ -1,5 +1,6 @@
-// page.tsx — the home page at "/": on a new device, the Karibu welcome and the way to Sajili kifaa hiki
-// (UI-3); on a registered one, the PIN login, and who is logged in (UI-4). The app's version on both.
+// page.tsx — the home page at "/": on a new device, the Karibu welcome, with Ingia for a manager's own
+// phone (UI-5) and the way to Sajili kifaa hiki for a new laptop (UI-3); on a registered one, the PIN
+// login, and who is logged in (UI-4). The app's version on both.
 //
 // "use client": every page in this app is a client component (ADR-0016), because pages
 // will read the device's own data (Dexie) and must work with no server. Next.js still
@@ -32,12 +33,16 @@ export default function HomePage() {
   // registered device swaps it for the login at once.
   if (device) return <AtTheDevice device={device}>{version}</AtTheDevice>;
 
-  // A new device: the welcome, and the way to register it.
+  // A new device: the welcome, and its two ways on. A manager's own phone never registers, and logs in
+  // often: Ingia is the main button. A laptop registers once, and then opens on the PIN login instead.
   return (
     // min-h-svh: the full height of the phone's visible screen, browser bars excluded.
     <main className="flex min-h-svh flex-col items-center justify-center gap-4 p-4">
       <h1 className="text-4xl font-semibold tracking-tight">{t("title")}</h1>
-      <ButtonLink href="/register-device/">{register("title")}</ButtonLink>
+      <ButtonLink href="/login/">{t("login")}</ButtonLink>
+      <ButtonLink href="/register-device/" kind="second">
+        {register("title")}
+      </ButtonLink>
       {version}
     </main>
   );

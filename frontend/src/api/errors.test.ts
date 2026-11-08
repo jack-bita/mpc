@@ -98,6 +98,21 @@ const CODES_THE_API_SENDS = [
   "side.code_taken",
   "side.name_blank",
   "side.sale_flow_unknown",
+  // allauth's password routes (AUTH-3, AUTH-6), read into the one shape by src/api/allauth.ts. Beside
+  // `required` and the checker's codes above: the login's, the reset link's, the change's, and our
+  // adapter's two (apps/people/accounts.py).
+  "email_password_mismatch",
+  "phone_password_mismatch",
+  "invalid_phone",
+  "phone.invalid",
+  "too_many_login_attempts",
+  "invalid_password_reset",
+  "enter_current_password",
+  "password.same_as_temporary",
+  // Two the app names itself, for a status allauth sends with no code (UI-5): a login while this
+  // browser holds a session (409), and a switched-off person with the right password (401).
+  "login.already_in",
+  "login.switched_off",
 ];
 
 function wordsIn(language: Language): Words {

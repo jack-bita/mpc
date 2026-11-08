@@ -99,15 +99,16 @@ describe("the areas", () => {
       </OfficeLayout>,
     );
 
-    expect(screen.getByRole("status").textContent).toContain(
-      "Inahitaji mtandao",
-    );
+    // Found by its words: the office's frame keeps a status line of its own in the screen, empty until
+    // a logout is on its way (office-frame.tsx, UI-5).
+    const banner = screen
+      .getAllByRole("status")
+      .find((status) => status.textContent?.includes("Inahitaji mtandao"));
+    if (!banner) throw new Error("No Inahitaji mtandao banner on the page.");
     // Under the top bar, before the screen: the first thing read after the bar.
-    expect(
-      screen
-        .getByRole("status")
-        .compareDocumentPosition(screen.getByRole("main")),
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(banner.compareDocumentPosition(screen.getByRole("main"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 
   it("show no banner on counter screens, which work offline", () => {

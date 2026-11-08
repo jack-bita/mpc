@@ -24,7 +24,7 @@ import { forgetTheLastPerson, mayPassLater } from "@/api/query-client";
 import { answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { AppFrame } from "@/components/app-frame";
-import { Button } from "@/components/design/button";
+import { Button, ButtonLink } from "@/components/design/button";
 import { OfflineBanner } from "@/components/offline-banner";
 import type { ThisDevice } from "@/features/devices/this-device";
 import { sideAt, useWhoIsHere } from "@/features/people/who-is-here";
@@ -141,7 +141,20 @@ export function AtTheDevice({
     // and only until the first tile is tapped, which forgets it for good, Rudi included.
     if (ended)
       return (
-        <PinLogin notice={notice ?? undefined} onPick={() => logout.reset()} />
+        <>
+          <PinLogin
+            notice={notice ?? undefined}
+            onPick={() => logout.reset()}
+          />
+          {/* The way in for someone with a password and no PIN, as the owner may be: the password login
+              (/login/). The second kind, under the tiles, which are what the counter is for (Jack,
+              8 Nov 2026, at UI-5's review). A seller who taps it still needs a password. */}
+          <div>
+            <ButtonLink href="/login/" kind="second" size="normal">
+              {t("withPassword")}
+            </ButtonLink>
+          </div>
+        </>
       );
     // Nothing while `me` is on its way; the reason once it failed with no answer at all.
     return <ApiErrorAlert error={me.error} />;

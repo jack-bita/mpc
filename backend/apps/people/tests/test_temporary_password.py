@@ -410,7 +410,7 @@ def test_temporary_password_ends_a_reset_link_already_sent(baba: StaffMember, as
     # reset key is made from the stored password, so a new password ends it, by itself: this pins that.
     client = Client()
     client.post(RESET_REQUEST, {"email": EMAIL}, content_type="application/json")
-    [link] = [word for word in mail.outbox[-1].body.split() if "/password-reset#" in word]
+    [link] = [word for word in mail.outbox[-1].body.split() if "/password-reset/#" in word]
     key = link.partition("#")[2]
 
     set_for(asha, by=baba)

@@ -4,7 +4,8 @@
   },
   "home": {
     "title": "Welcome",
-    "version": "Version {version}"
+    "version": "Version {version}",
+    "login": "Log in"
   },
   "update": {
     "ready": "A new version is ready",
@@ -89,11 +90,56 @@
       "typePin": "Type your PIN",
       "back": "Back"
     },
+    "password": {
+      "title": "Log in",
+      "name": "Phone or email",
+      "nameHint": "Like 0712 345 678",
+      "password": "Password",
+      "send": "Log in",
+      "forgot": "Forgot your password?",
+      "someoneHere": "{name} is logged in on this device. Log them out first, then log in."
+    },
     "welcome": "Welcome, {name}",
     "switch": "Switch person",
     "logout": "Log out",
     "leaving": "Logging out…",
-    "waiting": "One moment…"
+    "waiting": "One moment…",
+    "withPassword": "Log in with a password"
+  },
+  "passwordField": {
+    "show": "Show password"
+  },
+  "password": {
+    "chooseTitle": "Choose your password",
+    "chooseIntro": "The password you were given is temporary. Choose your own, then go on.",
+    "temporary": "Temporary password",
+    "new": "New password",
+    "newHint": "8 letters or more, not only numbers, and not like your name or phone.",
+    "again": "Type the new password again",
+    "notTheSame": "Type the same password both times.",
+    "save": "Save",
+    "forgot": {
+      "title": "Forgot your password?",
+      "noEmail": "No email? Ask the owner to set you a temporary password, face to face.",
+      "withEmail": "Have an email? We will send you a link to set a new password.",
+      "email": "Email",
+      "notAnEmail": "Write the whole email, like name@example.com.",
+      "send": "Send the link",
+      "sent": "If this email has an account here, we have sent a link. Open it within an hour.",
+      "back": "Back to log in"
+    },
+    "reset": {
+      "title": "Set a new password",
+      "checking": "Checking the link…",
+      "noKey": "This link is incomplete. Open it again from the email, or ask for a new one.",
+      "askAgain": "Ask for a new link",
+      "done": "Your new password is set. Log in with it now.",
+      "login": "Log in"
+    }
+  },
+  "office": {
+    "welcome": "Welcome, {name}",
+    "nothingYet": "There is nothing in the office you can open here yet."
   },
   "stock": {
     "part": "{count} {unit}"
@@ -163,7 +209,8 @@
       "kilo": "Kilos",
       "disabled": "Switched off",
       "search": "Search products",
-      "normal": "A normal-size box"
+      "normal": "A normal-size box",
+      "password": "Password"
     },
     "choices": {
       "title": "Choices",
@@ -267,8 +314,22 @@
       "own": "You can't set your own password here.",
       "superuser_only": "Only the system admin can set this person's password.",
       "more_keys": "This person has permissions you don't, so you can't set their password.",
-      "no_login_name": "This person has no phone or email to log in with."
+      "no_login_name": "This person has no phone or email to log in with.",
+      "same_as_temporary": "Choose a password other than the temporary one."
     },
+    "phone": {
+      "invalid": "This phone number isn't right."
+    },
+    "login": {
+      "already_in": "Someone is already logged in on this device. Log out first, then try again.",
+      "switched_off": "You can't log in right now. Talk to the owner."
+    },
+    "email_password_mismatch": "The email or the password is wrong.",
+    "phone_password_mismatch": "The phone or the password is wrong.",
+    "invalid_phone": "Write the whole phone number, like 0712 345 678.",
+    "too_many_login_attempts": "Too many wrong tries. Wait a few minutes, then try again.",
+    "invalid_password_reset": "This link doesn't work any more. Ask for a new one.",
+    "enter_current_password": "The current password is wrong.",
     "pin": {
       "wrong": "Wrong PIN.",
       "locked": "Too many wrong PINs. Try again in {minutes} min.",

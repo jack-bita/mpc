@@ -83,6 +83,19 @@ describe("the bar once someone logs in", () => {
     expect(bar.getByText("Neema")).toBeTruthy();
   });
 
+  it("names the shop of who is logged in, on a phone that knows no device", () => {
+    // A manager's own phone never registers, so only the login says which shop it is at (UI-5).
+    render(
+      <AppFrame area="office" shop="MPC" person="Neema">
+        <p>screen</p>
+      </AppFrame>,
+    );
+
+    const bar = within(screen.getByRole("banner"));
+    expect(bar.getByText("MPC")).toBeTruthy();
+    expect(bar.getByText("Neema")).toBeTruthy();
+  });
+
   it("puts a screen's own buttons in the bar, before the language button", () => {
     render(
       <AppFrame area="login" actions={<button type="button">Toka</button>}>
