@@ -12,6 +12,7 @@
 import { devices, expect, test } from "@playwright/test";
 
 import sw from "../messages/sw.json";
+import type { components } from "../src/api/schema";
 
 // The made-up shop's logins, as backend/tests/e2e_shop.py makes them: change both together. If they ever
 // differ, a login below fails at once, so the mismatch can't hide.
@@ -24,7 +25,9 @@ const SELLER = "Asha";
 const SIDE = "Dawa";
 // The name the manager gives the new laptop.
 const LAPTOP = "Laptop Dawa";
-// The shop's idle minutes when it sets none (idle_lock_minutes, backend/apps/people/selectors.py).
+// The shop's idle minutes when it sets none: `session.idle_minutes` (backend/apps/core/settings_registry.py),
+// which a PIN's session takes at its login and `me` sends as `idle_minutes`. The test checks the server says
+// this number, then jumps the clock by it.
 const IDLE_MINUTES = 15;
 
 /** A sentence from the word book with its {names} filled in, as use-intl fills them on the screen. */
@@ -131,7 +134,22 @@ test("pair a laptop, log in by PIN, lock when idle, log in again, log out", asyn
     await expect(tiles).toBeVisible();
   });
 
-  await test.step("Asha logs in with her PIN", ashaLogsIn);
+  await test.step("Asha logs in with her PIN", async () => {
+    // `me`'s first yes after her PIN: who is here, and how long her screen may sit untouched. Read here, as
+    // the jump below would lock the laptop just as well if the server said 1 minute by mistake, which
+    // would lock Asha out in the middle of a sale. Before the PIN, `me` answers "not logged in", never ok.
+    const here = counter.waitForResponse(
+      (answer) =>
+        new URL(answer.url()).pathname === "/api/auth/me/" &&
+        answer.request().method() === "GET" &&
+        answer.ok(),
+    );
+    await ashaLogsIn();
+    const asha = (await (
+      await here
+    ).json()) as components["schemas"]["WhoIsHere"];
+    expect(asha.idle_minutes).toBe(IDLE_MINUTES);
+  });
 
   await test.step("the laptop locks itself when nobody touches it", async () => {
     // As if the laptop sat untouched for the shop's idle minutes: the clock jumps, and every timer due
