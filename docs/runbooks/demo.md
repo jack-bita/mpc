@@ -2,7 +2,7 @@
 
 **What:** the public demo at <https://mabatinipumba-demo.onrender.com>: the same code as the real shop, with fake data only (ADR-0029). Every merge to `main` updates it with no manual step (OPS-2).
 **When:** the first setup once, after OPS-2 merges; the database every 30 days; and whenever a deploy turns red.
-**Files:** `render.yaml` (the demo on Render), `backend/start-demo.sh` (how the demo starts), `.github/workflows/deploy-demo.yml` (the deploy), `scripts/smoke_demo.sh` (the check after it). Each file's header explains it.
+**Files:** `render.yaml` (the demo on Render), `backend/start-demo.sh` (how the demo starts), `backend/apps/demo/services.py` (the demo seed: the demo's shop and people, DATA-1), `.github/workflows/deploy-demo.yml` (the deploy, and the nightly reset), `scripts/smoke_demo.sh` (the check after it). Each file's header explains it.
 
 Two words used below:
 - **Blueprint:** Render's name for a `render.yaml` file in a repo. Render reads it and creates, or changes, the services and databases it describes.
@@ -16,6 +16,8 @@ Two words used below:
 | The backend image | `backend/Dockerfile` | `deploy-demo.yml`, job `publish`, to `ghcr.io/jack-bita/mpc-backend` |
 | The secret key, the PIN pepper, the database's details | Render | Render, by itself (`generateValue`, `fromDatabase` in `render.yaml`) |
 | `DJANGO_ALLOWED_HOSTS` | Render: the service's *Environment* page | Jack, once, when the Blueprint is created |
+| `DEMO_SEED=yes`, the demo seed's sign (DATA-1) | `render.yaml` | Render, when it syncs the Blueprint |
+| The demo's shop and people | `backend/apps/demo/services.py` | The demo's start, which runs the seed |
 | The deploy hook and the demo's address | GitHub: the `demo` environment | Jack, by hand, once (*First setup*, below) |
 
 No secret is in the repo. The deploy hook is the only one GitHub holds. Never regenerate `PIN_PEPPER` on Render: every PIN on the demo would stop working, and each person would need a new one.
@@ -25,12 +27,35 @@ No secret is in the repo. The deploy hook is the only one GitHub holds. Never re
 ## How a deploy happens
 
 1. A pull request is squash-merged into `main`. *Deploy demo* starts in the repo's **Actions** tab.
-2. **`publish`** builds the image and checks it (`make check-image`, the same as CI), with the merge's commit as its version. It pushes the image to GitHub Container Registry as `:main` and `:<commit>`, then reads its digest.
-3. **`deploy`** calls Render's deploy hook with that digest. Render pulls exactly that image and starts it with `backend/start-demo.sh`, which runs `migrate` and `createcachetable` (the pairing limits' cache tables, AUTH-5) first, then gunicorn. Render keeps the old version running until the new one is up.
+2. **`publish`** builds the image and checks it (`make check-image`, the same as CI), with the merge's commit as its version. It pushes the image to GitHub Container Registry as `:main` and `:<commit>`, then reads its digest. A nightly run's version is the commit, `-nightly-` and the run's number, and its image is pushed under that name, so the night's check waits for the restarted demo, and a merge's image keeps its own name.
+3. **`deploy`** calls Render's deploy hook with that digest. Render pulls exactly that image and starts it with `backend/start-demo.sh`, which runs `migrate` and `createcachetable` (the pairing limits' cache tables, AUTH-5) first, then the demo seed (`seed_demo`, below), then gunicorn. Render keeps the old version running until the new one is up.
 4. **`deploy`** then runs `scripts/smoke_demo.sh`. It asks `/api/health/` every 10 seconds until the answer carries the merge's commit (up to 15 minutes). Then it checks that `/` shows *Karibu* over HTTPS, and that `http://` is redirected to `https://`.
 5. Green: the demo runs the merge. Red: see *Troubleshooting*.
 
 One deploy runs at a time. A merge that arrives meanwhile waits for it. If a third merge arrives too, it takes the waiting one's place, and the skipped run shows as cancelled. Nothing is lost: the demo only needs the newest `main`.
+
+## The demo's people, and the nightly reset
+
+The demo seed (`manage.py seed_demo`, DATA-1) makes one made-up shop, *Duka la Mfano*, with the sides Dawa and Vyakula. Its logins are public on purpose: visitors need them, and they open fake data only.
+
+| Who | Logs in with | Where |
+|---|---|---|
+| Meneja, the manager, on every side | `meneja@example.com` and the password `jaribu-demo` | `/login/`, on a phone or a second browser |
+| Asha, a seller on Dawa | PIN `2580` | a registered laptop's PIN screen |
+| Baraka, a seller on Vyakula | PIN `1470` | a registered laptop's PIN screen |
+
+None of them can open the admin: nobody the seed makes is `is_staff`. And nobody can change a password or a PIN on the demo (`demo.logins_fixed`), as every visitor shares them: a visitor who changed Meneja's password would otherwise lock out everyone after them until the next day.
+
+**When it is made again.** The seed runs on every start of the demo, after the migrations:
+- on a new database (the first setup, or every 30 days) it makes the shop;
+- on the first start of a new day, in Arusha's time, it wipes the database and makes the shop again, so whatever visitors changed is gone;
+- on a wake-up from the free plan's sleep the same day, it keeps the shop as visitors left it.
+
+A deploy during the day keeps the day's shop too, so a merge that changes the seed shows the next morning. Every night at 00:30 in Arusha (21:30 UTC), *Deploy demo* runs by itself (`schedule` in `deploy-demo.yml`), and its start is the one that finds yesterday's shop. There is no button to reset it during the day: the free plan has no shell, and the night does it.
+
+**Check, the morning after DATA-1 merges** (*not yet tried*): the evening before, log in as Meneja and rename the demo's laptop, or register one. The next morning: Actions → *Deploy demo* shows a green run started by `schedule`; `/api/health/` shows a version ending in `-nightly-` and a number; the change is gone; and Meneja still logs in. A night whose new start fails turns that run red, as a merge's does.
+
+**GitHub pauses a public repo's schedules after 60 days with no commit.** It sends an email. Actions → *Deploy demo* → **Enable workflow** starts the nightly runs again.
 
 ## First setup (once, after OPS-2 merges)
 
@@ -65,15 +90,15 @@ Render's free PostgreSQL expires 30 days after it is created, and Render deletes
 
 1. Render → `mabatinipumba-demo-db` → **Settings** → **Delete Database**.
 2. Render → **Blueprints** → the demo's Blueprint → **Manual Sync**. Render creates the database again from `render.yaml`, and the service's `DB_*` values follow it.
-3. The service → **Manual Deploy** → **Deploy latest reference**. The start command runs every migration on the empty database, and makes its cache tables.
+3. The service → **Manual Deploy** → **Deploy latest reference**. The start command runs every migration on the empty database, makes its cache tables, and the demo seed makes the demo's shop.
 4. Check <https://mabatinipumba-demo.onrender.com/api/health/>.
 
 *Not yet tried:* these steps are checked the first time they are needed, about 30 days after the first setup. Correct this list then, with what Render really showed.
 
 ## What the free plan means
 
-- **It sleeps** after 15 minutes with no visitor. The next visit wakes it, which takes about a minute. The smoke test waits for that.
-- **No shell, no one-off jobs.** Nobody can run `createsuperuser` there, so the demo has no accounts at all until DATA-1's seed. That is also why the admin's login page, which has no rate limit yet, has nothing to guess.
+- **It sleeps** after 15 minutes with no visitor. The next visit wakes it, which takes about a minute. The smoke test waits for that. A wake-up keeps the day's demo shop as visitors left it.
+- **No shell, no one-off jobs.** Nobody can run `createsuperuser` or any other command there: the demo's people come from the seed at the start, and none of them can open the admin. So the admin's login page, which has no rate limit yet, has nothing to guess.
 - **No files survive a restart.** The app keeps nothing on disk; everything is in the database.
 - **One instance, 512 MB.** The image's two gunicorn workers fit.
 
@@ -87,5 +112,8 @@ Render's free PostgreSQL expires 30 days after it is created, and Render deletes
   - `DisallowedHost` / `Invalid HTTP_HOST header`: `DJANGO_ALLOWED_HOSTS` doesn't hold the demo's host (step 5). A line about `localhost:10000` is Render's own port check and does no harm.
   - Database connection errors: the free database expired (*Every 30 days*).
 - **The new version stops at start with `The environment variable PIN_PEPPER is not set`** (or another variable `render.yaml` names): the deploy reached Render before the Blueprint sync added it. The old version keeps running. Render → **Blueprints** → the demo's Blueprint → **Manual Sync**; check the service's **Environment** page lists the variable; then re-run the newest *Deploy demo* run.
+- **The demo doesn't wake up** (a visit waits, then fails) and no run is red: a wake-up runs the seed too, with no smoke test after it, and the first wake-up of a day is the one that wipes and makes the shop again. Render → the service → **Events** and **Logs** say why: a seed's `Refused: …` line, or a database error. Fix the cause, then **Manual Deploy** → **Deploy latest reference**.
+- **The new version stops at start with `Refused: DEMO_SEED=yes is not set`:** the deploy reached Render before the Blueprint sync added the seed's sign (the first deploy after DATA-1, or after the sign changed). The old version keeps running. The same fix as for `PIN_PEPPER`, above: **Manual Sync**, check the **Environment** page lists `DEMO_SEED`, then re-run the newest *Deploy demo* run.
+- **The start stops with `Refused: the database holds a shop that isn't a demo`:** the demo's database holds a live or practice shop, which nothing on the demo can make. The seed refuses to wipe it, and the old version keeps running. Don't force anything: find out how it got there first.
 - **The demo shows an older commit than `main`:** an older run was re-run after a newer one. Re-run the newest *Deploy demo* run, or merge again.
 - **The hook leaked:** the service → **Settings** → **Deploy Hook** → regenerate, then put the new one into the `demo` environment's secret. The old one stops working at once.

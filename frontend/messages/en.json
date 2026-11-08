@@ -356,6 +356,9 @@
       "not_four_digits": "A PIN is four digits.",
       "too_easy": "This PIN is too easy to guess, like 1234 or 0000. Choose another."
     },
+    "demo": {
+      "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in."
+    },
     "password_too_short": "This password is too short.",
     "password_too_common": "This password is too common. Choose another.",
     "password_entirely_numeric": "A password can't be only numbers.",

@@ -14,6 +14,7 @@ import pytest
 from allauth.core.context import request_context
 from django.test import RequestFactory
 from django.views.debug import ExceptionReporter
+from pytest_django import Settings
 from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
@@ -205,3 +206,13 @@ def test_a_change_with_no_mark_is_an_ordinary_change(asha: StaffMember, phone: A
     assert change(phone, current_password=TEMPORARY, new_password=OWN) == (200, [])
     assert mark_of(asha) is False
     assert phone.get(SIDES).status_code == 200
+
+
+def test_own_password_stays_on_the_demo(asha: StaffMember, phone: APIClient, settings: Settings) -> None:
+    # On the demo, every visitor logs in as the same manager: one who changed the password would lock out all the others
+    # until the next day's seed (Jack, 8 Nov 2026). Refused with its own code, and the old password still opens.
+    settings.DEMO_SEED = True
+
+    assert change(phone, current_password=TEMPORARY, new_password=OWN) == (400, ["demo.logins_fixed"])
+    assert log_in(TEMPORARY)[1] == 200
+    assert log_in(OWN)[1] == 400

@@ -27,7 +27,7 @@ services:
     # Render's region closest to Tanzania. The database must be in the same one: the service reaches it
     # over Render's private network, which only joins services of one region.
     region: frankfurt
-    # The migrations first, then gunicorn: backend/start-demo.sh, inside the image, explains why. It
+    # The migrations and the demo seed first, then gunicorn: backend/start-demo.sh, inside the image, explains why. It
     # replaces the image's CMD, which stays migration-free for the real server (OPS-6). Two plain words on
     # purpose: Render may split this line at its spaces without honouring quotes.
     dockerCommand: sh start-demo.sh
@@ -48,6 +48,12 @@ services:
       # or the name Render gave instead. Not written here, so a name with extra letters needs no commit.
       - key: DJANGO_ALLOWED_HOSTS
         sync: false
+      # The demo seed's sign (DATA-1, config/settings/base.py): this database holds demo data alone, so the start's
+      # `manage.py seed_demo` may wipe it once a day and make the demo shop again. The real server never sets it, so
+      # the seed refuses there. A deploy that reaches Render before the Blueprint sync adds it stops at the seed, and
+      # the old version keeps running (docs/runbooks/demo.md, Troubleshooting).
+      - key: DEMO_SEED
+        value: "yes"
       # The API's description and docs page (/api/schema/, /api/docs/) are open to every visitor on the demo:
       # the API is part of what the demo shows (ADR-0029). The real server leaves this out (prod.py).
       - key: API_DOCS_PUBLIC

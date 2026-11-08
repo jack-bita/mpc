@@ -57,10 +57,12 @@ $$;
 # - The name `append_only` only has to be unique per table, so every ledger's trigger can share it.
 # - BEFORE: it runs before the change is written, so a refused change never touches the table.
 # - UPDATE OR DELETE: INSERT is not listed, so new rows are still written. TRUNCATE (emptying the
-#   whole table at once) is not refused either: tests and `manage.py flush` empty tables that way.
+#   whole table at once) is not refused either: tests and `manage.py flush` empty tables that way,
+#   and so does the demo seed every day (apps/demo/services.py), which needs it to reset the demo.
 #   Today only care stops it: the app connects as the database user that owns the tables, the same
 #   one that runs the migrations. Before shop #2 the app gets a database user of its own (03 §5.4);
-#   that user won't own the tables, so it can't TRUNCATE them unless it is given the right.
+#   that user won't own the tables, so it can't TRUNCATE them unless it is given the right. On the
+#   demo, whatever user the seed runs as keeps that right, or every day's first start stops there.
 # - FOR EACH ROW: the rule runs once for each row the command touches, with that row's OLD and NEW.
 #   The void rule needs them; the plain one is built the same way. A command that touches no row runs
 #   no rule, so an update() that matches nothing passes, harmlessly.

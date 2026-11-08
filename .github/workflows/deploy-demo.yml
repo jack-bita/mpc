@@ -1,13 +1,14 @@
 # deploy-demo.yml: every merge to main updates the public demo, then checks it (OPS-2, 03 §12, ADR-0029).
 # It owns the demo's deploy, in two jobs:
-#   - publish: build and check the backend image (the same `make check-image` as CI, with this commit as
-#     the version it carries), then push it to GitHub Container Registry, ghcr.io/jack-bita/mpc-backend.
+#   - publish: build and check the backend image (the same `make check-image` as CI, with this run's
+#     version: the commit, or on a night the commit and the run's number), then push it to GitHub
+#     Container Registry, ghcr.io/jack-bita/mpc-backend.
 #   - deploy:  ask Render to run exactly that image (its digest) through the service's deploy hook, then
-#     wait until the demo answers with this commit's version and shows Karibu over HTTPS
-#     (scripts/smoke_demo.sh). A demo that doesn't come up turns this workflow red.
+#     wait until the demo answers with this run's version and shows Karibu over HTTPS
+#     (scripts/smoke_demo.sh). A demo that doesn't come up turns this workflow red, a night's too.
 # The demo itself is described in render.yaml. What a person sets up once (the Render account, the
-# `demo` environment with the hook and the address) is in docs/runbooks/demo.md. The nightly redeploy
-# that resets the fake data (03 §12) comes with DATA-1's seed: until then there is no data to reset.
+# `demo` environment with the hook and the address) is in docs/runbooks/demo.md. Every night it runs
+# again, which resets the fake data (03 §12, DATA-1): see `schedule` below.
 #
 # No job here is named `backend`, `frontend`, `pr-title`, `image` or `e2e`: those are the required checks
 # (ci.yml and pr-title.yml), and a second job with one of those names would make the ruleset ambiguous
@@ -18,6 +19,19 @@ name: Deploy demo
 on:
   push:
     branches: [main]
+  # Every night, the same run as a merge's: build, push, deploy, smoke test. The new start meets a demo shop
+  # made on an earlier day, so the demo seed makes it again (backend/start-demo.sh, apps/demo/services.py),
+  # and whatever visitors changed is gone. Without this, a demo kept awake by visitors would never restart,
+  # so it would never be reset. A wake-up from the free plan's sleep the same day keeps the shop as it is.
+  # 21:30 UTC is 00:30 in Arusha (EAT, UTC+3 all year): just after the shop's midnight, when the seed's day
+  # has turned. GitHub may start a scheduled run late, by up to an hour when it is busy; any time before
+  # the morning does. It runs on main's latest commit, so the image it builds is main's, as after a merge.
+  # A night's image carries a version of its own, the commit plus `-nightly-` and the run's number: the
+  # demo already shows the commit, so with the commit alone the smoke test would pass at once, before the
+  # new start and its seed had run, and a night whose seed failed would still be green.
+  # GitHub pauses the schedules of a public repo after 60 days with no commit (docs/runbooks/demo.md).
+  schedule:
+    - cron: "30 21 * * *"
 
 # The default token gets nothing here; each job asks for only what it needs.
 permissions: {}
@@ -41,6 +55,7 @@ jobs:
       packages: write
     outputs:
       image: ${{ steps.push.outputs.image }}
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       # Pinned to a release's commit, as in ci.yml; Dependabot updates both.
@@ -48,10 +63,30 @@ jobs:
         with:
           persist-credentials: false
 
+      # The version this run's image carries, which /api/health/ shows and the smoke test waits for. A
+      # merge's is its commit. A night's is the commit, `-nightly-` and this run's number (unique for good):
+      # the demo already answers with the commit, so the night needs a name no running image has yet, or
+      # its smoke test would pass before Render had started the new image. Read from env, never pasted
+      # into the script by ${{ }}, as GitHub's advice for anything a run is handed.
+      - name: Name this run's version
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT" == "schedule" ]]; then
+            version="$GITHUB_SHA-nightly-$GITHUB_RUN_ID"
+          else
+            version="$GITHUB_SHA"
+          fi
+          echo "this run's version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       # CI already passed on the pull request, but main may have moved since; this proves the very image
-      # we push. Its version is this commit, which the smoke test waits for after the deploy.
+      # we push, with the version the smoke test waits for after the deploy.
       - name: Build and check the image
-        run: make check-image APP_VERSION=${{ github.sha }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: make check-image APP_VERSION="$VERSION"
 
       - name: Push the image to GitHub Container Registry
         id: push
@@ -59,22 +94,24 @@ jobs:
           # This run's own token: it works for this repo only and expires when the job ends, so no
           # long-lived password is stored anywhere.
           REGISTRY_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           # Registry names must be lower case; ${VAR,,} lowers it.
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/mpc-backend"
           # --password-stdin: the token goes in through a pipe, never on the command line, where the
           # process list could show it.
           echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          # Two names for the same image: the commit, to find any version later, and `main`, the one
-          # render.yaml starts from.
-          docker tag mpc-backend:check "$image:$GITHUB_SHA"
+          # Two names for the same image: this run's version, to find any version later, and `main`, the
+          # one render.yaml starts from. A merge's version is its commit; a night's has its own name, so a
+          # night never moves a merge's tag to a rebuilt image.
+          docker tag mpc-backend:check "$image:$VERSION"
           docker tag mpc-backend:check "$image:main"
-          docker push "$image:$GITHUB_SHA"
+          docker push "$image:$VERSION"
           docker push "$image:main"
           # Ask the registry for the digest of what it now holds. A tag can later point at another image;
           # the digest names this one for good, so Render runs exactly what was checked above.
-          digest="$(docker buildx imagetools inspect "$image:$GITHUB_SHA" --format '{{.Manifest.Digest}}')"
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no digest for $image:$GITHUB_SHA (got: $digest)"; exit 1; }
+          digest="$(docker buildx imagetools inspect "$image:$VERSION" --format '{{.Manifest.Digest}}')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no digest for $image:$VERSION (got: $digest)"; exit 1; }
           echo "pushed $image@$digest"
           echo "image=$image@$digest" >> "$GITHUB_OUTPUT"
 
@@ -122,7 +159,10 @@ jobs:
           echo
           echo "Render is deploying $IMAGE"
 
-      - name: Wait for this commit on the demo, then check it
+      # This run's version, not the commit alone: on a night the demo already shows the commit, and only
+      # the new image, which serves once its start and the demo seed have run, answers with this one.
+      - name: Wait for this run's version on the demo, then check it
         env:
           DEMO_URL: ${{ vars.DEMO_URL }}
-        run: bash scripts/smoke_demo.sh "$DEMO_URL" "$GITHUB_SHA"
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: bash scripts/smoke_demo.sh "$DEMO_URL" "$VERSION"

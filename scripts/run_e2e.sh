@@ -2,11 +2,11 @@
 # run_e2e.sh — runs the browser tests against the backend image and a fresh PostgreSQL, and always cleans up (UI-6).
 #
 # It owns one run, which `make check-e2e` starts, and so CI's e2e job too:
-#   1. start compose.e2e.yml: an empty database, then the image, which runs its migrations and serves on :8090;
-#   2. make the tests' made-up shop in it (backend/tests/e2e_shop.py);
-#   3. run Playwright (`pnpm e2e`, frontend/playwright.config.ts) against it;
-#   4. on a failure, print the server's log: a test that met an error page usually finds its reason there;
-#   5. stop both and delete the database, whether the tests passed or not, so the next run starts empty.
+#   1. start compose.e2e.yml: an empty database, then the image, which starts as the demo does: its migrations,
+#      then the demo seed, which makes the demo's shop (backend/start-demo.sh), then it serves on :8090;
+#   2. run Playwright (`pnpm e2e`, frontend/playwright.config.ts) against it;
+#   3. on a failure, print the server's log: a test that met an error page usually finds its reason there;
+#   4. stop both and delete the database, whether the tests passed or not, so the next run starts empty.
 # The image must exist already: `make check-e2e` builds it first (mpc-backend:check), as check-image does.
 #
 # Usage:  bash scripts/run_e2e.sh
@@ -22,9 +22,10 @@ compose=(docker compose --file "$root/compose.e2e.yml")
 finish() {
   local status=$?
   if [[ $status -ne 0 ]]; then
-    # Any step may be the one that stopped: a container that didn't start, the shop, or a test. So the message
-    # blames none of them, and both logs follow: PostgreSQL's says why a database refused, the server's the rest.
-    echo "FAIL: the browser tests' run stopped (exit $status): a container, the shop or a test. The logs follow." >&2
+    # Any step may be the one that stopped: a container that didn't start (its migrations, or the demo seed), or a
+    # test. So the message blames none of them, and both logs follow: PostgreSQL's says why a database refused, the
+    # server's the rest, the seed's refusal among them.
+    echo "FAIL: the browser tests' run stopped (exit $status): a container, the seed or a test. The logs follow." >&2
     "${compose[@]}" logs --no-color >&2 || true
   fi
   # --volumes: no volume is ever left behind. The database lives in memory, so nothing lasting is lost.
@@ -46,12 +47,9 @@ if ! leftovers="$("${compose[@]}" down --volumes 2>&1)"; then
 fi
 
 # --wait: until both are healthy, PostgreSQL accepting connections and the image answering /api/health/
-# after its migrations (compose.e2e.yml). --wait-timeout: fail after 4 minutes, rather than wait forever.
+# after its migrations and the demo seed (compose.e2e.yml), so the demo's shop is there when the tests start.
+# --wait-timeout: fail after 4 minutes, rather than wait forever.
 "${compose[@]}" up --detach --wait --wait-timeout 240
-
-# The made-up shop the tests log in to, made through the services on the empty database (backend/tests/e2e_shop.py,
-# which says why it is passed as --command). -T: no terminal, as nobody types into it.
-"${compose[@]}" exec -T backend python manage.py shell --command "$(cat "$root/backend/tests/e2e_shop.py")"
 
 # In brackets, a subshell: the move into frontend/ ends with it, and the cleanup above runs from the root.
 (cd "$root/frontend" && pnpm e2e)

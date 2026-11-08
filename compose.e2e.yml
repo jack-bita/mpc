@@ -2,14 +2,15 @@
 # It owns two services, which scripts/run_e2e.sh starts and wipes on every run:
 #   - postgres: a fresh, empty PostgreSQL 18, kept in memory, so each run starts from nothing;
 #   - backend:  the backend image that `make build-image` makes (mpc-backend:check), started the way the
-#               demo starts: migrations, cache tables, then gunicorn (backend/start-demo.sh). It serves the
+#               demo starts: migrations, cache tables, the demo seed, then gunicorn (backend/start-demo.sh),
+#               so the tests meet the demo's own shop and people. It serves the
 #               API and the built app from one address, http://localhost:8090, as on the demo (03 §13).
 # Every value below is a throwaway for this one test database on this one machine. None is a secret, and
 # real shop data never comes near it (ops rule).
 #
-# Start it with scripts/run_e2e.sh (`make check-e2e`), which also makes the tests' shop in it and always
-# wipes it after. By hand: `docker compose -f compose.e2e.yml up --detach --wait`, then that script's shop
-# step, and `docker compose -f compose.e2e.yml down --volumes` to wipe it.
+# Start it with scripts/run_e2e.sh (`make check-e2e`), which always wipes it after. By hand:
+# `docker compose -f compose.e2e.yml up --detach --wait`, and `docker compose -f compose.e2e.yml down
+# --volumes` to wipe it. Either way the backend makes the demo's shop itself as it starts.
 
 # Its own project name: these containers never touch mpc-dev's, nor its database volume.
 name: mpc-e2e
@@ -41,8 +42,9 @@ services:
     # send Compose to Docker Hub for a name that isn't there.
     image: mpc-backend:check
     pull_policy: never
-    # The demo's start (backend/start-demo.sh): the migrations and the cache tables first, then gunicorn.
-    # The database is new on every run, as the demo's is every 30 days, so the migrations run in full.
+    # The demo's start (backend/start-demo.sh): the migrations, the cache tables and the demo seed first,
+    # then gunicorn. The database is new on every run, as the demo's is every 30 days, so the migrations
+    # run in full and the seed makes the shop.
     command: ["sh", "start-demo.sh"]
     environment:
       DJANGO_SECRET_KEY: e2e-only-not-a-secret
@@ -54,9 +56,10 @@ services:
       DB_PASSWORD: e2e-only-not-a-secret
       # The postgres service, by its name on Compose's network.
       DB_HOST: postgres
-      # The mark that lets backend/tests/e2e_shop.py make the tests' shop, whose manager's password is public. Set
-      # here alone: the demo and the real server never have it, so the file refuses to run there.
-      E2E_SHOP: "yes"
+      # The demo seed's sign (DATA-1, config/settings/base.py): this database holds demo data alone, so
+      # `manage.py seed_demo` may wipe it and make the demo's shop, whose logins are public. The real server
+      # never has the sign, so the seed refuses there.
+      DEMO_SEED: "yes"
     ports:
       # 127.0.0.1 only: no other computer reaches it. 8090 is free beside `make dev`.
       - "127.0.0.1:8090:8000"
@@ -64,7 +67,7 @@ services:
       postgres:
         condition: service_healthy
     # "Healthy" once gunicorn answers /api/health/, so `up --wait` returns only when the tests can start.
-    # start-demo.sh runs the migrations before gunicorn, so an answer means they are done. Python, not
+    # start-demo.sh runs the migrations and the seed before gunicorn, so an answer means both are done. Python, not
     # curl: the slim image has no curl. localhost, not 127.0.0.1, which Django would refuse as a Host.
     healthcheck:
       test:

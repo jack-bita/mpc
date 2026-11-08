@@ -1,12 +1,15 @@
 ---
-status: accepted
+status: superseded
 date: 2026-10-21
 source: "REPO-6, confirmed with Jack in chat; supersedes ADR-0015 (03 §2 — AD1)"
 standing: confirmed
 cost-to-change: high
+superseded-by: ADR-0041
 ---
 
 # ADR-0035 · A modular monolith, with control beside core
+
+> Superseded by [ADR-0041](0041-a-modular-monolith-with-the-demo-seed-on-top.md) on 2026-11-08 (DATA-1): a 14th app, `demo`, the demo seed's, on a layer of its own above every other.
 
 > Supersedes [ADR-0015](0015-a-modular-monolith.md). What changed: `control` moves from layer 2 to layer 0, beside `core`.
 

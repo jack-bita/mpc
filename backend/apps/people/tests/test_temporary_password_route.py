@@ -12,6 +12,7 @@ from unittest import mock
 
 import pytest
 from django.views.debug import ExceptionReporter
+from pytest_django import Settings
 from rest_framework.test import APIClient
 
 from apps.control.models import AuditAction, AuditEvent
@@ -281,3 +282,14 @@ def test_password_stays_out_of_error_reports(baba: StaffMember, asha: StaffMembe
         value for function, name, value in shown if (function, name) == ("set_temporary_password", "password")
     ]
     assert set(password) == {"*"}
+
+
+def test_no_temporary_password_on_the_demo(baba: StaffMember, asha: StaffMember, settings: Settings) -> None:
+    # On the demo, a visitor with the owner's keys could hand any person a password of their own and lock the next
+    # visitors out of that login (Jack, 8 Nov 2026). Refused before anything is checked or written.
+    settings.DEMO_SEED = True
+
+    answer = send(logged_in(BABA_PHONE), asha, password=TEMPORARY, reason="Amesahau")
+
+    assert (answer.status_code, answer.json()["code"]) == (400, "demo.logins_fixed")
+    assert_unchanged(asha)

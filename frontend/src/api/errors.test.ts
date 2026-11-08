@@ -78,6 +78,8 @@ const CODES_THE_API_SENDS = [
   "password_too_common",
   "password_entirely_numeric",
   "password_too_similar",
+  // The demo's logins stay as the seed made them (DATA-1): a PIN, a temporary password and a person's own.
+  "demo.logins_fixed",
   "staff.left",
   "staff.other_shop",
   "staff.reason_required",

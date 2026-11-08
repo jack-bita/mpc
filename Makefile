@@ -3,7 +3,7 @@
 # Run `make` alone to list the commands. Recipe lines start with a real tab (.editorconfig).
 
 # These names are jobs, not files: without this line, a file called `test` would stop `make test`.
-.PHONY: help dev dev-backend dev-frontend down test check check-backend check-frontend build-image check-image check-e2e fmt hooks migrate
+.PHONY: help dev dev-backend dev-frontend down test check check-backend check-frontend build-image check-image check-e2e fmt hooks migrate seed
 # Plain `make` shows the list of commands instead of starting something.
 .DEFAULT_GOAL := help
 # `make dev` starts a second make; this hides its "Entering directory" lines.
@@ -57,7 +57,7 @@ check: check-backend check-frontend check-image check-e2e ## run everything CI r
 # - First, `uv sync --locked`: it fails when uv.lock no longer matches pyproject.toml, instead of
 #   quietly writing a new lock that nobody committed (ADR-0025). It also installs the packages,
 #   which is all CI needs before the checks.
-# - lint-imports checks the layer contracts in pyproject.toml (ADR-0035): an import that climbs a
+# - lint-imports checks the layer contracts in pyproject.toml (ADR-0041): an import that climbs a
 #   layer fails here. Like ruff and mypy it needs no database, so it runs with them, before the
 #   slower checks. --no-logo: no banner, so the last lines printed are the result.
 # - makemigrations --check fails when a model changed without a migration. It runs with the test
@@ -157,3 +157,11 @@ migrate: ## apply migrations to the dev database (refused before PPL-1) and make
 	@test -f backend/apps/people/migrations/0001_initial.py || { echo "Refused: no migrate before PPL-1 (ADR-0012)." >&2; exit 1; }
 	cd backend && $(UV_RUN) python manage.py migrate
 	cd backend && $(UV_RUN) python manage.py createcachetable
+
+# The demo shop on this laptop's database (DATA-1, apps/demo/services.py): wipes every table of the apps (the cache
+# tables and the list of migrations stay), then makes Duka la Mfano
+# and its people again. DEMO_SEED=yes is the sign the seed asks for: typing `make seed` is how a laptop gives it, as
+# the seed never runs where nobody put the sign. --fresh: made again now, even if today's is there. The seed still
+# refuses a database holding any shop that isn't a demo, such as one made by hand to try something.
+seed: ## wipe the dev database and make the demo shop (refused if it holds a shop that isn't a demo)
+	cd backend && DEMO_SEED=yes $(UV_RUN) python manage.py seed_demo --fresh

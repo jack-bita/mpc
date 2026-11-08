@@ -24,6 +24,7 @@ import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from pytest_django import Settings
 
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
@@ -222,3 +223,26 @@ def test_a_key_given_during_the_hash_counts(baba: StaffMember, meneja: StaffMemb
         set_for(asha, by=meneja)
     assert refused.value.code == "pin.more_keys"
     assert_no_pin(asha)
+
+
+def test_nobody_sets_a_pin_on_the_demo(meneja: StaffMember, asha: StaffMember, settings: Settings) -> None:
+    # On the demo, visitors share the PINs the seed gave: a visitor acting as the manager can't change Asha's (Jack,
+    # 8 Nov 2026), even with every key a PIN needs.
+    settings.DEMO_SEED = True
+
+    with pytest.raises(ValidationError) as refused:
+        set_for(asha, by=meneja)
+
+    assert refused.value.code == "demo.logins_fixed"
+    assert_no_pin(asha)
+
+
+def test_the_system_still_sets_pins_on_the_demo(asha: StaffMember, settings: Settings) -> None:
+    # The demo seed sets the PINs itself, with no `by`: the rule stops people, not the seed.
+    settings.DEMO_SEED = True
+
+    set_for(asha, by=None)
+
+    with shop_context(asha.shop_id):
+        asha.refresh_from_db()
+    assert pin_matches(PIN, asha.pin_hash)
