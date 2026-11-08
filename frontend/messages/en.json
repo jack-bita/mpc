@@ -104,6 +104,9 @@
     "leaving": "Logging out…",
     "waiting": "One moment…"
   },
+  "passwordField": {
+    "show": "Show password"
+  },
   "password": {
     "chooseTitle": "Choose your password",
     "chooseIntro": "The password you were given is temporary. Choose your own, then go on.",
@@ -204,7 +207,8 @@
       "kilo": "Kilos",
       "disabled": "Switched off",
       "search": "Search products",
-      "normal": "A normal-size box"
+      "normal": "A normal-size box",
+      "password": "Password"
     },
     "choices": {
       "title": "Choices",

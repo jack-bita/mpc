@@ -35,6 +35,7 @@ import { ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button, ButtonLink } from "@/components/design/button";
 import { Field } from "@/components/design/field";
+import { PasswordField } from "@/components/design/password-field";
 import { useWhoIsHere } from "@/features/people/who-is-here";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 
@@ -158,10 +159,9 @@ export function PasswordLogin() {
             autoCorrect="off"
             spellCheck={false}
           />
-          <Field
+          <PasswordField
             label={t("password")}
             error={passwordError}
-            type="password"
             autoComplete="current-password"
             {...form.register("password")}
           />

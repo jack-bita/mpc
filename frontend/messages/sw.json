@@ -104,6 +104,9 @@
     "leaving": "Unatoka…",
     "waiting": "Subiri kidogo…"
   },
+  "passwordField": {
+    "show": "Onyesha nenosiri"
+  },
   "password": {
     "chooseTitle": "Chagua nenosiri lako",
     "chooseIntro": "Nenosiri ulilopewa ni la muda. Chagua lako mwenyewe, kisha uendelee.",
@@ -204,7 +207,8 @@
       "kilo": "Kilo",
       "disabled": "Kimezimwa",
       "search": "Tafuta bidhaa",
-      "normal": "Kisanduku cha kawaida"
+      "normal": "Kisanduku cha kawaida",
+      "password": "Nenosiri"
     },
     "choices": {
       "title": "Chaguo",

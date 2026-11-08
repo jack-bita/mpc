@@ -31,7 +31,7 @@ import { useApiErrorWords } from "@/api/errors";
 import { ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button } from "@/components/design/button";
-import { Field } from "@/components/design/field";
+import { PasswordField } from "@/components/design/password-field";
 import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 
@@ -101,28 +101,25 @@ export function ChoosePassword() {
         }
         className="grid gap-6"
       >
-        <Field
+        <PasswordField
           label={t("temporary")}
           error={own(errors.temporary?.message) ?? server.current_password}
-          type="password"
           autoComplete="current-password"
           {...form.register("temporary")}
           // The person came straight from the login: the keyboard starts in the first box.
           autoFocus
         />
-        <Field
+        <PasswordField
           label={t("new")}
           hint={t("newHint")}
           error={own(errors.fresh?.message) ?? server.new_password}
-          type="password"
           // "new-password": the phone's password manager offers to make one, and saves it.
           autoComplete="new-password"
           {...form.register("fresh")}
         />
-        <Field
+        <PasswordField
           label={t("again")}
           error={own(errors.again?.message)}
-          type="password"
           autoComplete="new-password"
           {...form.register("again")}
         />

@@ -32,6 +32,7 @@ import {
 } from "@/components/design/card";
 import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
+import { PasswordField } from "@/components/design/password-field";
 import { Input } from "@/components/design/input";
 import { SIDE_BAND_LOOKS } from "@/components/design/side-band";
 import { ON_GREEN, TopBar } from "@/components/design/top-bar";
@@ -250,6 +251,8 @@ export default function DesignPage() {
             disabled
           />
           <Field label={t("fields.normal")} size="normal" />
+          {/* A password box: its eye shows and hides what is typed (UI-5). */}
+          <PasswordField label={t("fields.password")} />
           {/* A box with no visible label, like a search box: it still has a name for screen readers. */}
           <Input
             aria-label={t("fields.search")}

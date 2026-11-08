@@ -35,7 +35,7 @@ import { useApiErrorWords } from "@/api/errors";
 import { ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button, ButtonLink } from "@/components/design/button";
-import { Field } from "@/components/design/field";
+import { PasswordField } from "@/components/design/password-field";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 
 import { NEW_PASSWORD, NOT_THE_SAME, TYPED_THE_SAME } from "./new-password";
@@ -212,20 +212,18 @@ function WithTheKey({ linkKey }: { linkKey: string }) {
       }
       className="grid gap-6"
     >
-      <Field
+      <PasswordField
         label={t("new")}
         hint={t("newHint")}
         error={own(errors.fresh?.message) ?? server.password}
-        type="password"
         // "new-password": the phone's password manager offers to make one, and saves it.
         autoComplete="new-password"
         {...form.register("fresh")}
         autoFocus
       />
-      <Field
+      <PasswordField
         label={t("again")}
         error={own(errors.again?.message)}
-        type="password"
         autoComplete="new-password"
         {...form.register("again")}
       />
