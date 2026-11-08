@@ -18,6 +18,11 @@ export default defineConfig({
   // No second tries: a test that passes only on its second go hides a real fault, a race in the app or in
   // the test. It must fail, and be fixed.
   retries: 0,
+  // 90 seconds for one test, not Playwright's 30. A story is long on purpose: the pairing story takes about
+  // 13 seconds on a laptop and 6 on GitHub, with two slow PIN checks (Argon2), up to 3 seconds' wait for the
+  // manager's yes, and cold first pages. A slow runner, or a longer story (SYNC-11's offline clock-in), must
+  // not fail for time alone. A test that truly hangs still stops, at 90 seconds.
+  timeout: 90_000,
   // A `test.only` left in by mistake would quietly skip every other test, and the run would still pass. So it
   // fails the run, on a laptop as on CI, as `make check` must run exactly what CI runs (ops rule). To run
   // one test while working on it, name its file instead: `pnpm exec playwright test e2e/<file>`.
