@@ -205,6 +205,44 @@ describe("the email link's page", () => {
     expect(window.location.hash).toBe("");
   });
 
+  it("takes the key out of the address again when the same link is pasted twice", async () => {
+    // The page keeps the key it already has, so nothing else changes, but the address must not keep it.
+    aWorkingKey();
+    openTheLink();
+    await screen.findByLabelText("Nenosiri jipya");
+    expect(window.location.hash).toBe("");
+
+    act(() => {
+      window.history.replaceState(null, "", `/password-reset/#${KEY}`);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+
+    await waitFor(() => expect(window.location.hash).toBe(""));
+  });
+
+  it("takes the key out with no history state of its own, so Next.js's router forgets it too", async () => {
+    // Next.js patches replaceState: a call carrying its own state (__NA) is taken as its own, and its router
+    // keeps the old address, key and all, to write back at its next change. With null, it copies its
+    // state itself and takes the new address (next/dist/client/components/app-router.js).
+    aWorkingKey();
+    // The state Next.js keeps in a page's history entry, as a real page has it.
+    window.history.replaceState(
+      { __NA: true, __PRIVATE_NEXTJS_INTERNALS_TREE: {} },
+      "",
+      `/password-reset/#${KEY}`,
+    );
+    const replace = vi.spyOn(window.history, "replaceState");
+    render(<PasswordReset />);
+    await screen.findByLabelText("Nenosiri jipya");
+
+    const takingTheKeyOut = replace.mock.calls.filter(
+      ([, , url]) => url === "/password-reset/",
+    );
+    expect(takingTheKeyOut).toHaveLength(1);
+    expect(takingTheKeyOut[0]?.[0]).toBeNull();
+    replace.mockRestore();
+  });
+
   it("says what to do when the link has no key, and sends nothing", async () => {
     // A link cut short as it was copied from the email.
     window.history.replaceState(null, "", "/password-reset/");

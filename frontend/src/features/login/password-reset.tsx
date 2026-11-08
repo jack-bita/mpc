@@ -3,8 +3,13 @@
 //
 // The key sits after the #, which a browser never sends to a server, so no log ever holds it
 // (HEADLESS_FRONTEND_URLS, backend/config/settings/base.py). The page reads it from the address, then
-// takes it out of the address bar and the browser's history at once: the key sets the person's password
-// for the hour it works, and the next person at this browser, or its history, must not get it.
+// takes it out of the address bar and the tab's own entry at once, every time a link brings it, and
+// Next.js's router forgets it too: the key sets the person's password for the hour it works, and the next
+// person at this tab must not find it there, nor by Back.
+//
+// Honest limit: the browser's own list of pages visited, and its suggestions as an address is typed,
+// keep the link as it was opened, key and all. No page can reach those. The key still works only once,
+// for an hour, and a new password ends it (AUTH-3); on a shared laptop, use a private window.
 //
 // Then, in turn:
 //   the key is checked    GET auth/password/reset, with the key in X-Password-Reset-Key: a dead one
@@ -49,15 +54,24 @@ function addressKey(): string {
   return window.location.hash.slice(1);
 }
 
-// A link pasted into the same tab changes only what follows the #: the page follows it.
+// Said by the page itself once it has taken the key out: replaceState fires no event, so without it the
+// page would go on reading the old address, and the same link pasted again would look like no change.
+const KEY_TAKEN_OUT = "mpc:reset-key-taken-out";
+
+// A link pasted into the same tab changes only what follows the #: the page follows it, and its own
+// taking out of the key.
 function onNewKey(listener: () => void): () => void {
   window.addEventListener("hashchange", listener);
-  return () => window.removeEventListener("hashchange", listener);
+  window.addEventListener(KEY_TAKEN_OUT, listener);
+  return () => {
+    window.removeEventListener("hashchange", listener);
+    window.removeEventListener(KEY_TAKEN_OUT, listener);
+  };
 }
 
 /** The key the link brought: undefined while the page is built (no address exists then), null when the
- * link held none. Once read, it is taken out of the address bar and the history, and the page keeps its
- * own copy. */
+ * link held none. Each time the address holds one, it is taken out of the address bar and the tab's entry,
+ * and the page keeps its own copy. */
 function useTheLinksKey(): string | null | undefined {
   // useSyncExternalStore: React's way to read something kept outside React, as this-device.ts reads the
   // device's saved copy. The build knows no address (the last argument).
@@ -71,15 +85,21 @@ function useTheLinksKey(): string | null | undefined {
   // longer holds it once taken out below.
   if (inTheAddress && inTheAddress !== kept) setKept(inTheAddress);
   useEffect(() => {
-    if (!kept || !addressKey()) return;
-    // replaceState, not a new entry: Back must not bring the key back either. history.state is kept, as
-    // Next.js's router keeps its own in it.
+    // Every time the address holds a key: the same link pasted twice changes nothing the page keeps, and
+    // would leave the key in the address bar (UI-5's review).
+    if (!inTheAddress) return;
+    // replaceState, not a new entry: Back must not bring the key back either. null, not history.state:
+    // Next.js patches replaceState, and a call carrying its own state (__NA) is taken for its own, so its
+    // router would keep the old address, key and all, and write it back at its next change. Given null,
+    // it copies its state into the entry itself and takes the new address
+    // (next/dist/client/components/app-router.js).
     window.history.replaceState(
-      window.history.state,
+      null,
       "",
       window.location.pathname + window.location.search,
     );
-  }, [kept]);
+    window.dispatchEvent(new Event(KEY_TAKEN_OUT));
+  }, [inTheAddress, kept]);
   if (kept) return kept;
   return inTheAddress === undefined ? undefined : null;
 }
