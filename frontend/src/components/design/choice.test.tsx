@@ -148,4 +148,54 @@ describe("the choice", () => {
       contrast(colour("--ring"), colour("--background")),
     ).toBeGreaterThanOrEqual(3);
   });
+
+  it("says a row in its own language, for a screen reader", () => {
+    // Mipangilio yangu names each language in that language, as the bar's button does: "English" is said
+    // as English, not read out with Swahili sounds (UI-9).
+    render(
+      <Choice
+        label="Lugha"
+        options={[
+          { value: "sw", label: "Kiswahili", lang: "sw" },
+          { value: "en", label: "English", lang: "en" },
+        ]}
+        value="sw"
+        onValueChange={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("English").getAttribute("lang")).toBe("en");
+    expect(screen.getByText("Kiswahili").getAttribute("lang")).toBe("sw");
+    // Still the dot's name: the words are inside its row's label.
+    expect(radio("English")).toBeTruthy();
+  });
+
+  it("shows a row in its own font, so a person sees what they pick", () => {
+    // A font's row is written in that font (UI-9). data-font changes the font only where font-sans is on
+    // the same element (globals.css), so both are on the row's words.
+    render(
+      <Choice
+        label="Herufi"
+        options={[
+          { value: "default", label: "Herufi ya kawaida", font: "default" },
+          { value: "second", label: "Herufi ya pili", font: "second" },
+        ]}
+        value="default"
+        onValueChange={() => undefined}
+      />,
+    );
+
+    const second = screen.getByText("Herufi ya pili");
+    expect(second.dataset.font).toBe("second");
+    expect(second.className.split(/\s+/)).toContain("font-sans");
+    expect(screen.getByText("Herufi ya kawaida").dataset.font).toBe("default");
+  });
+
+  it("leaves a row's words alone when it names no language or font", () => {
+    render(<Picker />);
+
+    const words = screen.getByText("Dawa");
+    expect(words.hasAttribute("lang")).toBe(false);
+    expect(words.hasAttribute("data-font")).toBe(false);
+  });
 });

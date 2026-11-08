@@ -5,7 +5,8 @@
 // tap, and the page grows a button as each office screen comes (products, prices, reports…). Today there
 // is one, Vifaa, for whoever holds device.manage on some side, as its Sajili kifaa is theirs (UI-3).
 // A button for a screen someone may not use stays off the page; the server still checks every change
-// itself (PPL-5), so this only keeps a door nobody may use out of sight.
+// itself (PPL-5), so this only keeps a door nobody may use out of sight. Under them, for everyone,
+// Mipangilio yangu: a person's own language and font need no key (UI-9).
 //
 // "use client": it asks use-intl for words, and the server who is here.
 "use client";
@@ -27,6 +28,7 @@ export function OfficeHome() {
   const devices = useTranslations("device.office");
   // The PIN login's book, for its "Subiri kidogo…", which the office says the same way.
   const loginWords = useTranslations("login");
+  const settings = useTranslations("mySettings");
   const me = useWhoIsHere();
   // Focus on the welcome as each person arrives: after a login, or Chagua nenosiri lako's Hifadhi, the
   // button that had it is gone. A screen reader then says where the person is, and Tab goes on to the
@@ -95,6 +97,12 @@ export function OfficeHome() {
         ) : (
           <p>{t("nothingYet")}</p>
         )}
+        {/* Apart from the office's work, and the second kind: it is the person's own, not a job. */}
+        <div>
+          <ButtonLink href="/my-settings/" kind="second" size="normal">
+            {settings("title")}
+          </ButtonLink>
+        </div>
       </>
     );
   }

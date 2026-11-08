@@ -141,6 +141,23 @@
     "welcome": "Karibu, {name}",
     "nothingYet": "Bado hakuna kazi ya ofisi unayoweza kufungua hapa."
   },
+  "mySettings": {
+    "title": "Mipangilio yangu",
+    "intro": "Ni yako peke yako, na inakufuata kwenye kila kifaa unachoingia.",
+    "language": "Lugha",
+    "languages": {
+      "sw": "Kiswahili",
+      "en": "English"
+    },
+    "font": "Herufi",
+    "fonts": {
+      "default": "Herufi ya kawaida",
+      "second": "Herufi ya pili, rahisi kusoma"
+    },
+    "saving": "Inahifadhi…",
+    "saved": "Imehifadhiwa.",
+    "back": "Rudi"
+  },
   "stock": {
     "part": "{unit} {count}"
   },

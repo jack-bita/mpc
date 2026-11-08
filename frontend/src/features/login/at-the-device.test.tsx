@@ -445,3 +445,25 @@ describe("the way in by password", () => {
     ).toBeNull();
   });
 });
+
+describe("Mipangilio yangu", () => {
+  it("is offered to the person at the laptop, under the welcome", async () => {
+    // Neema logs in by PIN here and never sees the office's home page: her own language and font are
+    // one tap from her welcome (UI-9).
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    const link = screen.getByRole("link", { name: "Mipangilio yangu" });
+    // The end slash comes from next.config.ts (trailingSlash), which a test doesn't read.
+    expect(link.getAttribute("href")).toMatch(/^\/my-settings\/?$/);
+  });
+
+  it("isn't there while nobody is logged in: the tiles have no one's settings", async () => {
+    theLaptop(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Wewe ni nani?" });
+
+    expect(screen.queryByRole("link", { name: "Mipangilio yangu" })).toBeNull();
+  });
+});

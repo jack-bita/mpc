@@ -2,15 +2,16 @@
 // and who is, once someone is, under the shop's top bar (UI-4, 03 §5.9).
 //
 // It asks `me` (useWhoIsHere), which answers for the session this browser holds:
-//   someone logged in             "Karibu, Asha", and her name and the side she works on in the bar
+//   someone logged in             "Karibu, Asha", Mipangilio yangu, and her name and the side she works on
+//                                 in the bar
 //   refused, under 500            the PIN login: nobody here, or a session the server ended, with why
 //   no answer, or the server down  the reason, and Inahitaji mtandao: the PIN login needs the network
 // A PIN login, a logout and a quick switch forget the last person, which asks `me` again
 // (forgetTheLastPerson), so this follows each by itself. After `me`'s idle minutes untouched, the laptop
 // logs the person out by itself (idle-lock.ts).
 //
-// Until the counter screens come, someone logged in sees only the welcome (UI-4's plan). It calls the
-// server, so it lives outside the counter lock (rule 5, ADR-0019).
+// Until the counter screens come, someone logged in sees only the welcome and her settings' button (UI-4's
+// plan, UI-9). It calls the server, so it lives outside the counter lock (rule 5, ADR-0019).
 //
 // "use client": it asks the server and reads the device's saved copy, both in the browser only.
 "use client";
@@ -50,6 +51,7 @@ export function AtTheDevice({
   children?: ReactNode;
 }) {
   const t = useTranslations("login");
+  const settings = useTranslations("mySettings");
   const me = useWhoIsHere();
   const store = useQueryClient();
 
@@ -135,6 +137,13 @@ export function AtTheDevice({
           >
             {t("welcome", { name: here.staff.display_name })}
           </h1>
+          {/* The person's own language and font, one tap from the welcome: someone logged in by PIN
+              never sees the office's home page (UI-9). */}
+          <div>
+            <ButtonLink href="/my-settings/" kind="second" size="normal">
+              {settings("title")}
+            </ButtonLink>
+          </div>
         </>
       );
     // Plain "nobody is logged in" is no error to show: only a session that ended for a reason says why,

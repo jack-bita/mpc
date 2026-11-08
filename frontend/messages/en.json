@@ -141,6 +141,23 @@
     "welcome": "Welcome, {name}",
     "nothingYet": "There is nothing in the office you can open here yet."
   },
+  "mySettings": {
+    "title": "My settings",
+    "intro": "They are yours alone, and follow you to every device you log in on.",
+    "language": "Language",
+    "languages": {
+      "sw": "Kiswahili",
+      "en": "English"
+    },
+    "font": "Font",
+    "fonts": {
+      "default": "The default font",
+      "second": "The second font, easy to read"
+    },
+    "saving": "Saving…",
+    "saved": "Saved.",
+    "back": "Back"
+  },
   "stock": {
     "part": "{count} {unit}"
   },
