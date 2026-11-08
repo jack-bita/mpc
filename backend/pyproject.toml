@@ -110,7 +110,7 @@ skip_covered = true
 # and two apps can never import each other in a circle. It reads the import lines without running
 # the code. `make check` (and so CI) runs it as `lint-imports`.
 [tool.importlinter]
-# The package whose imports are checked: the 13 apps. Their tests (apps/*/tests/) and imports under
+# The package whose imports are checked: the 13 domain apps and the demo seed's app. Their tests (apps/*/tests/) and imports under
 # `if TYPE_CHECKING:` count too: import-linter's defaults. So a test that needs a higher layer's rows
 # gets them from a fixture in backend/conftest.py, which is outside `apps`. Type-only imports keep
 # counting (decided in CORE-2, so `exclude_type_checking_imports` stays off): a type that names another
@@ -126,6 +126,7 @@ containers = ["apps"]
 # Top to bottom, one line per layer of the table in 03 §5.1. `|` puts apps on the same layer;
 # they may not import each other either, apart from the exceptions in `ignore_imports`.
 layers = [
+    "demo",                        # 7: the demo shop's seed (DATA-1); builds on every app, and none imports it
     "sync | reports",              # 6
     "sales | services | staffpay", # 5
     "inventory | money",           # 4

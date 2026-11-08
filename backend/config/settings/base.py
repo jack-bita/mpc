@@ -83,6 +83,8 @@ INSTALLED_APPS = [
     "apps.staffpay",
     "apps.sync",
     "apps.reports",
+    # The demo shop's seed (DATA-1): not a domain app, so on a layer of its own above them all (03 §5.1).
+    "apps.demo",
 ]
 
 # The custom User (apps/people/models.py) replaces Django's own. Set before the first migration and
@@ -323,6 +325,12 @@ PASSWORD_RESET_TIMEOUT = 60 * 60
 # Whether the description and the docs page are open (apps/core/api/schema.py). False: closed to everyone,
 # the real server's rule. Off unless an environment turns it on: dev.py does, and the demo does (prod.py).
 API_DOCS_PUBLIC = False
+
+# The demo seed's sign (DATA-1, apps/demo/services.py): `manage.py seed_demo` wipes the database, so it runs only where
+# DEMO_SEED=yes is set, the mark of a place that holds demo data alone. The real server never sets it, so the seed
+# refuses there even before its first shop exists (Jack, 8 Nov 2026). Read here, in base.py, so every environment
+# reads it the same way, and off unless that environment turns it on.
+DEMO_SEED = env("DEMO_SEED", "no") == "yes"
 
 # The version this process runs. A deploy builds the image with its git commit as the version
 # (backend/Dockerfile, `make check-image APP_VERSION=<commit>`); every other build, and a laptop, say "dev".

@@ -1,10 +1,13 @@
-"""apps — the 13 domain apps of the modular monolith (ADR-0035, 03 §5.1).
+"""apps — the 13 domain apps of the modular monolith (ADR-0035, 03 §5.1), and the demo seed's app.
 
 Each app owns its own tables and rules; its `__init__.py` says what in one line.
 The apps sit in layers, and an app imports only from the layers below it:
 
     0 core, control · 1 shops · 2 people · 3 catalog, contacts · 4 inventory, money ·
-    5 sales, services, staffpay · 6 sync, reports
+    5 sales, services, staffpay · 6 sync, reports · 7 demo
+
+`demo` is not a domain app: it holds no tables, only the seed that builds the demo shop through the others' services
+(DATA-1), so it sits above them all, and no app imports it.
 
 Apps on the same layer don't import each other, except control → core, inventory → money and
 services → sales. A model may still point at a higher layer by name ("sales.Sale"): that is not an import.
