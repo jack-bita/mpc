@@ -5,7 +5,8 @@
     the session                                   the answer
     a PIN's badge, or a password                  200: their language and font, as now saved
     an unknown language or font                   400, under the field, nothing saved
-    a suspended person, a temporary password      403, each with its code, nothing saved
+    a suspended person, a temporary password,
+    a blocked laptop, a copied badge              403, each with its code, nothing saved
     nobody, or the superuser (nobody's staff)     403 not_authenticated
     no CSRF token                                 403, nothing saved
 
@@ -25,7 +26,7 @@ from rest_framework.test import APIClient
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
-from apps.people.services import change_own_settings, confirm_pairing, set_pin, start_pairing, suspend
+from apps.people.services import block, change_own_settings, confirm_pairing, set_pin, start_pairing, suspend
 from apps.shops.models import Side
 
 pytestmark = pytest.mark.django_db
@@ -36,7 +37,9 @@ GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 SETTINGS = "/api/auth/me/settings/"
 ME = "/api/auth/me/"
 PIN_LOGIN = "/api/auth/pin-login/"
+SESSION = "/_allauth/browser/v1/auth/session"
 KEY_COOKIE = "device_key"
+SESSION_COOKIE = "sessionid"
 
 PIN = "4829"
 
@@ -164,27 +167,77 @@ def test_settings_need_a_login(superuser_client: Client) -> None:
     assert (answer.status_code, answer.data["code"]) == (403, "not_authenticated")
 
     admin = superuser_client.patch(SETTINGS, {"font": "second"}, content_type="application/json")
-    assert admin.status_code == 403
+    assert (admin.status_code, admin.json()["code"]) == (403, "not_authenticated")
     assert User.objects.get(email="admin@example.com").font == "default"
 
 
 def test_settings_check_csrf(staff_a: StaffMember) -> None:
     # Without the token, another website Asha visits could change her language behind her back.
-    answer = on_a_phone(staff_a, csrf=True).patch(SETTINGS, {"language": "en"}, format="json")
+    phone = on_a_phone(staff_a, csrf=True)
+    answer = phone.patch(SETTINGS, {"language": "en"}, format="json")
 
     assert (answer.status_code, answer.data["code"]) == (403, "permission_denied")
     assert row(staff_a).language == "sw"
 
+    # The same request with the token passes, so the refusal above was the token's and nothing else's. The app gets the
+    # token from the `csrftoken` cookie, which allauth's routes hand out.
+    phone.get(SESSION)
+    answer = phone.patch(SETTINGS, {"language": "en"}, format="json", HTTP_X_CSRFTOKEN=phone.cookies["csrftoken"].value)
+    assert answer.status_code == 200
+    assert row(staff_a).language == "en"
+
 
 @pytest.fixture
-def laptop_key(staff_a2: StaffMember, side_a: Side, give_role: GiveRole) -> str:
+def paired(staff_a2: StaffMember, side_a: Side, give_role: GiveRole) -> tuple[Device, str]:
     # A device paired the way the app pairs one: it asks and keeps its key, and a manager confirms its code.
     give_role(staff_a2, RoleTemplate.MANAGER, None)
     asked = start_pairing()
     with shop_context(staff_a2.shop_id):
-        device: Device = confirm_pairing(asked.request.code, name="Laptop ya Dawa", home_side=side_a, by=staff_a2)
-    assert device.pk
-    return asked.key
+        device = confirm_pairing(asked.request.code, name="Laptop ya Dawa", home_side=side_a, by=staff_a2)
+    return device, asked.key
+
+
+@pytest.fixture
+def laptop_key(paired: tuple[Device, str]) -> str:
+    return paired[1]
+
+
+def at_the_laptop(staff: StaffMember, key: str) -> APIClient:
+    # A browser holding the laptop's key, after this person typed their PIN there.
+    with shop_context(staff.shop_id):
+        set_pin(staff, PIN, by=None)
+    laptop = APIClient()
+    laptop.cookies[KEY_COOKIE] = key
+    assert laptop.post(PIN_LOGIN, {"staff": str(staff.pk), "pin": PIN}, format="json").status_code == 204
+    return laptop
+
+
+def test_settings_refuse_a_blocked_laptop(
+    staff_a: StaffMember, staff_a2: StaffMember, paired: tuple[Device, str]
+) -> None:
+    # A stolen laptop, blocked by the manager: whoever holds it can no longer act through it, here as on every office
+    # route (ADR-0038).
+    device, key = paired
+    laptop = at_the_laptop(staff_a, key)
+    with shop_context(staff_a.shop_id):
+        block(device, by=staff_a2, reason="Imeibiwa")
+
+    answer = laptop.patch(SETTINGS, {"font": "second"}, format="json")
+
+    assert (answer.status_code, answer.data["code"]) == (403, "device.blocked")
+    assert row(staff_a).font == "default"
+
+
+def test_settings_refuse_a_copied_badge(staff_a: StaffMember, laptop_key: str) -> None:
+    # The PIN session's cookie copied off the laptop, used from a browser without the laptop's key: refused before
+    # anything is read of the person it names.
+    thief = APIClient()
+    thief.cookies[SESSION_COOKIE] = at_the_laptop(staff_a, laptop_key).cookies[SESSION_COOKIE].value
+
+    answer = thief.patch(SETTINGS, {"font": "second"}, format="json")
+
+    assert (answer.status_code, answer.data["code"]) == (403, "session.wrong_device")
+    assert row(staff_a).font == "default"
 
 
 def test_a_pin_session_changes_its_own_settings(staff_a: StaffMember, laptop_key: str) -> None:
