@@ -264,10 +264,11 @@ class OwnSettingsView(APIView):
     # else. So the sweep doesn't call it (NOT_SHOP_ROUTES, backend/tests/sweep_lists.py), and
     # test_settings_answer_holds_nothing_of_a_shop proves the answer instead.
     #
-    # The office routes' own login, though, not logout's: it reads the person's job afresh on every visit, so a
-    # suspended person, someone on a temporary password, a copied badge or a blocked laptop is refused here as on every
-    # office route (ADR-0038). That read, of the person's own job at the shop the login door names, is the only shop
-    # row the visit touches. It checks the CSRF token too, so another website can't change someone's language.
+    # The office routes' own login, though, not logout's: it reads the person afresh on every visit, so a suspended
+    # person, someone on a temporary password, a copied badge or a blocked laptop is refused here as on every office
+    # route (ADR-0038). It reads the person's job and its shop, and for a PIN's session the device that holds the key,
+    # each inside the shop its login door names (apps/people/login_doors.py), only to refuse them; the route itself
+    # reads no shop's row. It checks the CSRF token too, so another website can't change someone's language.
     authentication_classes = [StaffSessionAuthentication]
     permission_classes = [AtAShop]
     # No answer to OPTIONS, which would describe the route's form to whoever asks: refused as the office routes refuse

@@ -42,9 +42,10 @@ INFRASTRUCTURE = {
 # Routes under api/ that may be built on something other than ShopViewSet, because none of them reads a
 # shop's table, so there is nothing of a shop's for the sweep to look for in them. A route that does read
 # one, such as sync's pull with a device's key, is never listed here: the sweep is taught to call it instead,
-# as a device of shop B, in a reviewed change. One exception, decided on its card (UI-9): a route whose login, the one
-# every office route shares, reads the caller's own job to refuse a suspended person, and nothing else of any shop's,
-# and whose answer its own test proves holds nothing of a shop's.
+# as a device of shop B, in a reviewed change. One exception, decided on its card (UI-9): a route whose own code reads
+# no shop's table, whose login, the one every office route shares, reads only the caller's own job and its shop, and
+# for a PIN's session the device that holds the key, each inside the shop its login door names, to refuse them if they
+# may not act, and whose answer its own test proves holds nothing of a shop's.
 NOT_SHOP_ROUTES: set[type] = {
     # The uptime check: no login, and no table at all (apps/core/api/views.py).
     HealthView,
@@ -57,8 +58,8 @@ NOT_SHOP_ROUTES: set[type] = {
     LogoutView,
     # A person's own language and font (UI-9): it changes only the logged-in person, who belongs to no shop, and answers
     # with their two choices alone, as test_settings_answer_holds_nothing_of_a_shop proves
-    # (apps/people/tests/test_own_settings.py). Its login reads the person's own job, at the shop the login door names,
-    # only to refuse them if they may not act.
+    # (apps/people/tests/test_own_settings.py). Its login reads the person's job and its shop, and at a laptop the
+    # device, each inside the shop the login door names, only to refuse them if they may not act.
     OwnSettingsView,
 }
 
