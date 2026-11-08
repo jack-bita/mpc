@@ -42,9 +42,18 @@ export function makeQueryClient(): QueryClient {
       // (its id is the client's own, 03 §5.10), but an edit sent twice meets its own new version and
       // gets `version_conflict`, so a person decides.
       queries: { retry: shouldRetry },
+      // Every change in one queue, sent one at a time, in the order it was made: a scope (TanStack runs
+      // the changes of one scope one after another, and holds the next back while one is on its way, offline
+      // too). Asha renames a laptop with no network, then presses Toka: back online, the two would go at once,
+      // and a logout that landed first would leave the rename refused, and lost. In one queue, the rename
+      // goes first, then the logout, which forgets the person once both are done (UI-5's review).
+      mutations: { scope: { id: CHANGES_IN_ORDER } },
     },
   });
 }
+
+/** The one queue every change waits in (makeQueryClient). */
+export const CHANGES_IN_ORDER = "changes-in-order";
 
 /**
  * Forgets the last person at this device: every answer the store holds and every change sent, and asks
@@ -54,10 +63,9 @@ export function makeQueryClient(): QueryClient {
  */
 export async function forgetTheLastPerson(store: QueryClient): Promise<void> {
   // The changes sent, a PIN login among them: each keeps what it was sent with, the PIN too. A change
-  // waiting for the network goes too: TanStack sends again only what this list holds when the network is
-  // back (resumePausedMutations), so its screen would wait for it for ever. None can be waiting at a PIN
-  // login today, as the home page shows only "Unatoka…" while a logout waits (UI-4's review); a screen
-  // that sends changes offline and then logs people in must send them first (UI-5).
+  // still waiting for the network would go too, and TanStack sends again only what this list holds when
+  // the network is back (resumePausedMutations). None waits by the time a logout forgets: every change is
+  // in one queue (CHANGES_IN_ORDER), so the logout is sent only after those made before it (UI-5's review).
   store.getMutationCache().clear();
   // Every answer back to nothing, and the screens showing one told, so those on show ask again, for the
   // new person. Not store.clear(): it drops the answers without telling the screens that show them,
