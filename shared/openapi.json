@@ -87,8 +87,7 @@
                 "security": [
                     {
                         "cookieAuth": []
-                    },
-                    {}
+                    }
                 ],
                 "responses": {
                     "200": {

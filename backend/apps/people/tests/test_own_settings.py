@@ -214,3 +214,9 @@ def test_a_choice_follows_the_person_to_another_device(staff_a: StaffMember, lap
     person = laptop.get(ME).data["user"]
 
     assert (person["language"], person["font"]) == ("en", "second")
+
+
+def test_settings_describe_nothing_to_options(staff_a: StaffMember) -> None:
+    # OPTIONS would describe the route's form to anyone who asks; the office routes refuse it on purpose, as the API's
+    # own description is the schema (apps/core/api/base.py). This route refuses it too.
+    assert on_a_phone(staff_a).options(SETTINGS).status_code == 405

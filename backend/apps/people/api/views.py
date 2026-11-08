@@ -44,7 +44,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import exceptions, mixins
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import BaseThrottle
@@ -245,6 +245,18 @@ class LogoutView(APIView):
         return Response(status=204)
 
 
+class AtAShop(BasePermission):
+    # Someone acting as a staff member at a shop: the job the login put in `request.auth` (StaffSessionAuthentication).
+    # Nobody logged in, and the superuser, who is nobody's staff, are refused as an office route refuses them
+    # (ShopViewSet), with not_authenticated, before anything is read. A permission of its own, not AllowAny with a check
+    # after it: the API's description reads the permission to say who may call the route, and AllowAny would tell it
+    # "no login at all" (UI-9's review).
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if request.auth is None:
+            raise exceptions.NotAuthenticated("This route needs a staff login at a shop.")
+        return True
+
+
 class OwnSettingsView(APIView):
     # A person changes their own language and font (UI-9, ADR-0039). Not an office route: an office route asks every
     # change for a key of its own (PPL-5), and everyone may change their own choices, so no key fits. Beside logout, as
@@ -257,20 +269,16 @@ class OwnSettingsView(APIView):
     # office route (ADR-0038). That read, of the person's own job at the shop the login door names, is the only shop
     # row the visit touches. It checks the CSRF token too, so another website can't change someone's language.
     authentication_classes = [StaffSessionAuthentication]
-    permission_classes = [AllowAny]
-
-    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
-        super().initial(request, *args, **kwargs)  # the login above, which refuses with the reason's code
-        if request.auth is None:
-            # Nobody logged in, or the superuser, who is nobody's staff and has no screens to set: refused as an office
-            # route refuses them, before anything is read.
-            raise exceptions.NotAuthenticated("Your own settings need a staff login at a shop.")
+    permission_classes = [AtAShop]
+    # No answer to OPTIONS, which would describe the route's form to whoever asks: refused as the office routes refuse
+    # it, as the API's own description is the schema (ShopViewSet.initial, apps/core/api/base.py).
+    metadata_class = None
 
     @extend_schema(request=OwnSettingsSerializer, responses=OwnSettingsAnswerSerializer)
     def patch(self, request: Request) -> Response:
         sent = OwnSettingsSerializer(data=request.data, partial=True)
         sent.is_valid(raise_exception=True)
-        # cast: the login has put the person here, as initial() checked; DRF's type stubs can't see that.
+        # cast: the login has put the person here, as AtAShop checked; DRF's type stubs can't see that.
         person = change_own_settings(cast(User, request.user), **sent.validated_data)
         return Response(OwnSettingsAnswerSerializer(person).data)
 

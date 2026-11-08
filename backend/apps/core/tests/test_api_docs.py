@@ -152,3 +152,11 @@ def test_docs_group_routes_by_app(tmp_path: Path) -> None:
     assert schema["paths"]["/api/v1/shops/sides/"]["get"]["tags"] == ["shops"]
     assert schema["paths"]["/api/v1/shops/sides/"]["get"]["operationId"] == "shops_sides_list"
     assert schema["paths"]["/api/health/"]["get"]["tags"] == ["health"]
+
+
+def test_own_settings_route_says_it_needs_a_login(tmp_path: Path) -> None:
+    # A person's own language and font (UI-9) take no key, but they do take a login: the description names only the
+    # session's cookie, as `me` does. An empty entry ({}) would tell a reader of the API that no login is needed.
+    schema = _schema(tmp_path)
+
+    assert schema["paths"]["/api/auth/me/settings/"]["patch"]["security"] == [{"cookieAuth": []}]
