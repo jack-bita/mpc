@@ -1,6 +1,6 @@
 #!/bin/sh
-# start-demo.sh — how the demo starts on Render: the migrations and the cache tables first, then the image's usual
-# server (OPS-2).
+# start-demo.sh — how the demo starts on Render: the migrations, the cache tables and the demo seed first, then the
+# image's usual server (OPS-2, DATA-1).
 #
 # render.yaml runs it as the service's dockerCommand, `sh start-demo.sh`. A script, not a chain written out
 # in render.yaml, because Render may split that command at its spaces without honouring quotes, and a
@@ -19,6 +19,14 @@ python manage.py migrate --noinput
 # The cache tables (CACHES, config/settings/base.py), where the pairing limits count (AUTH-5). Django makes them with
 # this command, not with a migration. It leaves a table that is already there as it is, so every start can run it.
 python manage.py createcachetable
+
+# The demo shop (DATA-1, apps/demo/services.py): made on a new database, made again on the first start of a new day,
+# and kept as visitors left it on a wake-up the same day. Here because the free plan has no shell and no one-off
+# jobs: the start is the only place the demo can run anything. After the migrations, so the seed meets the tables
+# as this version has them. It needs the sign (DEMO_SEED=yes, render.yaml and compose.e2e.yml); without it, or on a
+# database with a shop that isn't a demo, it refuses, `set -e` stops the start, and gunicorn never serves that
+# database. On Render the old version then keeps running, and the deploy's smoke test turns red.
+python manage.py seed_demo
 
 # The same server command as the image's CMD (backend/Dockerfile): change both together.
 # exec: gunicorn takes this shell's place as the container's main process, so Render's stop signal reaches

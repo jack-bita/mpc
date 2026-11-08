@@ -2,9 +2,10 @@
 
 It owns the demo shop as visitors meet it (Jack, 8 Nov 2026): Duka la Mfano, a demo shop with the sides Dawa and
 Vyakula; Meneja, its manager on both sides, who logs in with a password; Asha, a seller on Dawa, and Baraka, a seller
-on Vyakula, who log in with a PIN. `manage.py seed_demo` (management/commands/seed_demo.py) runs it, and so do the
-browser tests, on their own empty database (scripts/run_e2e.sh): they log in as these people, with the logins
-written again in frontend/e2e/pair-and-pin-login.spec.ts. Change both together.
+on Vyakula, who log in with a PIN. `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start
+of the demo (backend/start-demo.sh) and of the browser tests' container, which starts the same way (compose.e2e.yml):
+the tests log in as these people, with the logins written again in frontend/e2e/pair-and-pin-login.spec.ts. Change
+both together.
 
 Why it wipes the whole database instead of taking out the demo shop's rows: the ledgers refuse every DELETE
 (ADR-0021, apps/core/operations.py), and every link PROTECTs what it points at (rule 7), so a shop's rows can't be
