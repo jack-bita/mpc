@@ -2,7 +2,9 @@
 # smoke_demo.sh — proves that the live demo runs a given version and serves the app over HTTPS (OPS-2).
 #
 # It owns the check that ends every demo deploy (.github/workflows/deploy-demo.yml):
-#   1. wait until GET /api/health/ answers "ok" with the expected version, the commit just deployed.
+#   1. wait until GET /api/health/ answers "ok" with the expected version, the run's just deployed: a
+#      merge's commit, or a night's own version (the commit, `-nightly-` and the run's number), which only
+#      the new image has, so the wait ends only once Render has started it, its demo seed included.
 #      Until then the answer is the old version (Render keeps it running until the new one is up), or
 #      nothing at all (the free service is asleep, or waking up);
 #   2. GET / shows "Karibu", over HTTPS;

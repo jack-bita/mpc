@@ -27,7 +27,7 @@ No secret is in the repo. The deploy hook is the only one GitHub holds. Never re
 ## How a deploy happens
 
 1. A pull request is squash-merged into `main`. *Deploy demo* starts in the repo's **Actions** tab.
-2. **`publish`** builds the image and checks it (`make check-image`, the same as CI), with the merge's commit as its version. It pushes the image to GitHub Container Registry as `:main` and `:<commit>`, then reads its digest.
+2. **`publish`** builds the image and checks it (`make check-image`, the same as CI), with the merge's commit as its version. It pushes the image to GitHub Container Registry as `:main` and `:<commit>`, then reads its digest. A nightly run's version is the commit, `-nightly-` and the run's number, and its image is pushed under that name, so the night's check waits for the restarted demo, and a merge's image keeps its own name.
 3. **`deploy`** calls Render's deploy hook with that digest. Render pulls exactly that image and starts it with `backend/start-demo.sh`, which runs `migrate` and `createcachetable` (the pairing limits' cache tables, AUTH-5) first, then the demo seed (`seed_demo`, below), then gunicorn. Render keeps the old version running until the new one is up.
 4. **`deploy`** then runs `scripts/smoke_demo.sh`. It asks `/api/health/` every 10 seconds until the answer carries the merge's commit (up to 15 minutes). Then it checks that `/` shows *Karibu* over HTTPS, and that `http://` is redirected to `https://`.
 5. Green: the demo runs the merge. Red: see *Troubleshooting*.
@@ -53,7 +53,7 @@ None of them can open the admin: nobody the seed makes is `is_staff`.
 
 A deploy during the day keeps the day's shop too, so a merge that changes the seed shows the next morning. Every night at 00:30 in Arusha (21:30 UTC), *Deploy demo* runs by itself (`schedule` in `deploy-demo.yml`), and its start is the one that finds yesterday's shop. There is no button to reset it during the day: the free plan has no shell, and the night does it.
 
-**Check, the morning after DATA-1 merges** (*not yet tried*): Actions → *Deploy demo* shows a green run started by `schedule`, and the demo still logs Meneja in.
+**Check, the morning after DATA-1 merges** (*not yet tried*): the evening before, log in as Meneja and rename the demo's laptop, or register one. The next morning: Actions → *Deploy demo* shows a green run started by `schedule`; `/api/health/` shows a version ending in `-nightly-` and a number; the change is gone; and Meneja still logs in. A night whose new start fails turns that run red, as a merge's does.
 
 **GitHub pauses a public repo's schedules after 60 days with no commit.** It sends an email. Actions → *Deploy demo* → **Enable workflow** starts the nightly runs again.
 
