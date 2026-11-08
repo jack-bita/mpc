@@ -22,6 +22,20 @@ describe("the name a person logs in with", () => {
     expect(loginName(typed)).toEqual({ phone });
   });
 
+  it("drops the invisible marks a number copied from WhatsApp carries", () => {
+    // WhatsApp wraps a number in direction marks (U+202A … U+202C); a left-to-right mark (U+200E) and a
+    // zero-width space come with others. Unseen, they would stop the number being written out in full.
+    expect(loginName("\u202A0712 345 678\u202C")).toEqual({
+      phone: "+255712345678",
+    });
+    expect(loginName("\u200E+255\u200B712345678")).toEqual({
+      phone: "+255712345678",
+    });
+    expect(loginName("\u202Aneema@example.com\u202C")).toEqual({
+      email: "neema@example.com",
+    });
+  });
+
   it("leaves anything else for the server to judge", () => {
     // The server's cleaner knows the numbering plan; the form doesn't guess (apps/core/phones.py).
     expect(loginName("712345678")).toEqual({ phone: "712345678" });

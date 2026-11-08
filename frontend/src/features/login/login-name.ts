@@ -20,10 +20,15 @@ const COUNTRY_CODE = "255";
 // The marks people put between a number's digits: spaces, dashes, dots and brackets.
 const BETWEEN_DIGITS = /[\s\-.()]/g;
 
+// Marks nobody sees, which text copied from another app carries: WhatsApp wraps a number in direction
+// marks (U+202A … U+202C), and others bring a left-to-right mark or a zero-width space. Unicode calls
+// them "format" characters (\p{Cf}); none belongs in an email or a phone.
+const UNSEEN = /\p{Cf}/gu;
+
 /** The email or the phone in what was typed. Anything with an @ is an email, as typed; anything else is
  * a phone, written out in full. */
 export function loginName(typed: string): LoginName {
-  const value = typed.trim();
+  const value = typed.replace(UNSEEN, "").trim();
   // The server finds an email in any case (AUTH-3): the form leaves it as typed.
   if (value.includes("@")) return { email: value };
 
