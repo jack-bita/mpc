@@ -16,7 +16,7 @@ from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError
 
-from apps.people.models import User
+from apps.people.models import Font, User
 
 # Every test in this file may use the database.
 pytestmark = pytest.mark.django_db
@@ -180,3 +180,9 @@ def test_unknown_font_refused() -> None:
     # ...and by the database's own rule, for code that skips those checks.
     with pytest.raises(IntegrityError, match="people_user_font_known"):
         User(full_name="Asha Demo", font="atkinson").save()
+
+
+def test_font_labels_name_roles_not_fonts() -> None:
+    # The labels go into the migration and the API's description: named by role, a font swapped later in the app
+    # (src/fonts/fonts.ts) needs no migration and changes no promise to the app (ADR-0039).
+    assert dict(Font.choices) == {"default": "Default", "second": "Second, easy to read"}

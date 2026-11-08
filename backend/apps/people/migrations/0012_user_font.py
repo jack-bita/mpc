@@ -18,10 +18,7 @@ class Migration(migrations.Migration):
             model_name="user",
             name="font",
             field=models.CharField(
-                choices=[
-                    ("default", "Default (Source Sans 3)"),
-                    ("second", "Second, easy to read (Atkinson Hyperlegible Next)"),
-                ],
+                choices=[("default", "Default"), ("second", "Second, easy to read")],
                 default="default",
                 max_length=10,
             ),

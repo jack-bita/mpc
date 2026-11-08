@@ -301,8 +301,8 @@ export interface components {
          */
         DeviceStatusEnum: "active" | "blocked";
         /**
-         * @description * `default` - Default (Source Sans 3)
-         *     * `second` - Second, easy to read (Atkinson Hyperlegible Next)
+         * @description * `default` - Default
+         *     * `second` - Second, easy to read
          * @enum {string}
          */
         FontEnum: "default" | "second";

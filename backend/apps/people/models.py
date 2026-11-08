@@ -34,9 +34,10 @@ class Font(models.TextChoices):
     # The fonts a person can read the app in, by role, never by name (ADR-0039): the font behind a role can change in
     # the app (src/fonts/fonts.ts) and no row has to. Each model's check constraint copies these values into its
     # migration, as Language's do (apps/core/languages.py). Here, not in core: only a person has a font, and a shop
-    # doesn't, so no lower app needs the list.
-    DEFAULT = "default", "Default (Source Sans 3)"
-    SECOND = "second", "Second, easy to read (Atkinson Hyperlegible Next)"
+    # doesn't, so no lower app needs the list. The labels name the role too: they are copied into the migration and the
+    # API's description, so a font's name there would make a swap a migration and a change to the app's promise.
+    DEFAULT = "default", "Default"
+    SECOND = "second", "Second, easy to read"
 
 
 # The two choices a person makes for their own screens, and the only fields of theirs they change themselves

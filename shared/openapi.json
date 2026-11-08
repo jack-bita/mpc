@@ -1043,7 +1043,7 @@
                     "second"
                 ],
                 "type": "string",
-                "description": "* `default` - Default (Source Sans 3)\n* `second` - Second, easy to read (Atkinson Hyperlegible Next)"
+                "description": "* `default` - Default\n* `second` - Second, easy to read"
             },
             "Health": {
                 "type": "object",
