@@ -9,6 +9,7 @@ import { OfficeFrame } from "@/features/office/office-frame";
 import { WHO_IS_HERE, type WhoIsHere } from "@/features/people/who-is-here";
 import { DAWA, DAWA_LAPTOP_ANSWER, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
+import { swahiliIn } from "@/test/language";
 import { render } from "@/test/render";
 
 import { MySettings } from "./my-settings";
@@ -325,6 +326,32 @@ describe("Mipangilio yangu", () => {
 
     const back = await screen.findByRole("link", { name: "Rudi" });
     expect(back.getAttribute("href")).toBe("/");
+  });
+
+  it("speaks English to someone who reads it, with no Swahili left", async () => {
+    // language.test.tsx opens every page in English, but there `me` never answers, so it sees only this
+    // screen's waiting line: here the whole screen, inside the office's frame, which opens her language.
+    answer("GET", ME, {
+      status: 200,
+      body: { ...NEEMA, user: { ...NEEMA.user, language: "en" } },
+    });
+
+    const { container } = render(
+      <OfficeFrame>
+        <MySettings />
+      </OfficeFrame>,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "My settings" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "Font" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Back" })).toBeTruthy();
+    // One word the checker can't tell apart: "English", the row naming that language. The Swahili book has
+    // the same word, as the bar button's label (language.switch), so the checker counts it. It is the row's,
+    // marked as English on purpose, and the bar has no language button while she is logged in.
+    expect(swahiliIn(container)).toEqual(["English"]);
+    expect(screen.getByText("English").getAttribute("lang")).toBe("en");
   });
 
   it("says to wait while it asks who is here, so the page is never blank", () => {
