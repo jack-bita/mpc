@@ -98,9 +98,10 @@ function openLanguage(): Language {
 }
 
 /**
- * The open language, the person's or the laptop's. useSyncExternalStore is React's way to read something kept outside React. The
- * build has no browser, so the page is built in Swahili (the last argument). In the browser, React
- * first draws that same Swahili, to match the built page, then draws the saved language at once.
+ * The open language, the person's or the laptop's. useSyncExternalStore is React's way to read something
+ * kept outside React. The build has no browser, so the page is built in Swahili (the last argument). In
+ * the browser, React first draws that same Swahili, to match the built page, then draws the open language
+ * at once.
  */
 export function useLanguage(): Language {
   return useSyncExternalStore(subscribe, openLanguage, () => DEFAULT_LANGUAGE);

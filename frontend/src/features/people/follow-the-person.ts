@@ -14,8 +14,10 @@
 //
 // Undone as the frame leaves the page too: a blocked laptop's lock takes the place of every page
 // (DeviceLock), and the last person's choices must go with them. Going from one frame to the other (the
-// PIN welcome to Mipangilio yangu) undoes and sets again in one go, before the page is drawn, so nothing
-// flickers. A reload shows the laptop's own for a moment, until `me` answers: accepted (the UI-9 card).
+// PIN welcome to Mipangilio yangu), nothing flickers: the new page is drawn with the choices still on, and
+// the old frame's undoing and the new one's setting then run together, after that drawing, with nothing
+// drawn between them. A reload shows the laptop's own for a moment, until `me` answers: accepted (the UI-9
+// card).
 import { useEffect } from "react";
 
 import { isLanguage, setPersonsLanguage } from "@/i18n/language";

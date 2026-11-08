@@ -664,7 +664,7 @@ frontend/src/
 
 ### 7.4 Language
 
-- use-intl v4 on the client, next-intl's own core: the language follows the logged-in person (no language in the URL). Swahili by default, English switch, on the top bar. Until UI-9 the browser keeps the choice (ADR-0040) **(v1.30)**.
+- use-intl v4 on the client, next-intl's own core: the language follows the logged-in person (no language in the URL). Swahili by default, English switch, on the top bar. Until UI-9 the browser keeps the choice (ADR-0040) **(v1.30)**; since UI-9, the two layers below **(v1.35)**.
 - The font follows the person too: `default` or `second`, and only the person changes it (UI-9, ADR-0039) **(v1.27)**.
 - **Two layers (v1.35):** while someone is logged in, the app shows their own language and font, saved on them and changed in *Mipangilio yangu*, so they follow the person to every device. While nobody is, it shows the laptop's own: its language from the top bar's switch, kept on this browser, and the default font. The switch shows only while nobody is logged in, for the tiles and the login pages: once someone is in, *Mipangilio yangu* is the one place to change theirs (Jack, UI-9). The person's language is never saved as the laptop's, so the next person at the tiles never meets it.
 - Money with `Intl.NumberFormat('sw-TZ')`, TZS without decimals; stock in selling units, in each language's order: Swahili word first, "mifuko 26 + kilo 35.5", English number first, "26 mifuko + 35.5 kilo". The unit words are the shop's own, from its catalog, so only the order changes **(v1.30)**.
