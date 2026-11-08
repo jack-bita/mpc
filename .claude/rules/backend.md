@@ -7,7 +7,7 @@ paths:
 
 <!-- Source: 03 §5, §9, §11. Loads when Claude reads or edits a file under backend/. -->
 
-## Apps and layers (ADR-0035)
+## Apps and layers (ADR-0041)
 
 An app imports only from lower layers; import-linter checks it in CI.
 
@@ -20,6 +20,7 @@ An app imports only from lower layers; import-linter checks it in CI.
 | 4 | `inventory`, `money` — `inventory` may import `money` |
 | 5 | `sales`, `services`, `staffpay` — `services` may import `sales` |
 | 6 | `sync`, `reports` |
+| 7 | `demo` — the demo seed only (`manage.py seed_demo`, DATA-1): no tables; it may import every app, and no app imports it |
 
 Every app may import `control`; `control` imports only `core`. A model may name a higher-layer model by string (`"sales.Sale"`) — that is not an import.
 

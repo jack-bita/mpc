@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.35 · 8 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.36 · 8 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
-**Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+**Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.36** (8 Nov 2026, DATA-1): the demo seed (§4, §5.1, §12, §13, 04 v1.51). It is `manage.py seed_demo`, in a 14th app, `demo`, on a layer of its own above every other: it builds the demo shop through the other apps' services and will need most of them, and the demo's image holds `backend/apps` only, so it can't be a script in `backend/scripts/` (ADR-0041, which supersedes ADR-0035). It wipes the database and makes the demo shop again, only where `DEMO_SEED=yes` is set and no shop but a demo one exists. The demo's start runs it: on the first start of a new day it makes the shop again, and a wake-up the same day keeps it; the nightly redeploy is the start that finds yesterday's shop.
 
 **Changes in v1.35** (8 Nov 2026, UI-9): a person's language and font follow them (§5.10, §7.2, §7.4, 04 v1.49). A person changes their own, and only their own, through `PATCH /api/auth/me/settings/`, which needs no key; `me` answers both. The app shows whoever is logged in in their own, and the laptop's own once nobody is; the bar's language button sets the laptop's own, and shows only while nobody is logged in (Jack). Marked **(v1.35)**.
 
@@ -81,7 +83,7 @@
 ## 0. How to read this
 
 - **Architecture** = how the system is built: the pieces, where each one runs, how they talk, how data moves, and how we test, ship and run it. Portion 2 said *what* the system knows; this says *how* it works.
-- Every key decision (**AD1**, **AD2**…) is an ADR in `docs/adr/`: AD1 = ADR-0015 … AD18 = ADR-0032 **(v1.1)**; AD1 is now ADR-0035, which supersedes ADR-0015 **(v1.4)**. "Cost" = how hard it is to change later.
+- Every key decision (**AD1**, **AD2**…) is an ADR in `docs/adr/`: AD1 = ADR-0015 … AD18 = ADR-0032 **(v1.1)**; AD1 is now ADR-0035, which supersedes ADR-0015 **(v1.4)**; then ADR-0041, which supersedes ADR-0035 to add the demo seed's app on top **(v1.36)**. "Cost" = how hard it is to change later.
 - Tags: **[R1] [R1b] [R2] [R3] [Later]**, as before. **✚** = added beyond the spec and the domain model; veto freely.
 - Versions mean "the latest patch of this line when the repo is created" (portion 6 checks them).
 - Names follow `02-domain-model.md` §21.
@@ -128,7 +130,7 @@ Three ideas carry the whole design:
 ## 2. Key decisions
 
 **AD1 — A modular monolith.**
-One Django project and one database, split into apps that follow the domain modules. Import rules between apps are checked in CI (§5.1).
+One Django project and one database, split into apps that follow the domain modules, with the demo seed's app above them all **(v1.36)**. Import rules between apps are checked in CI (§5.1).
 *Why:* one developer and one shop; separate services would add network failures, more deploys and harder debugging, for no gain. Clean modules keep the door open to split later. *Cost:* high.
 
 **AD2 — The shop app is a static PWA built with Next.js.**
@@ -249,9 +251,9 @@ MPC/                          ← repo name follows the product name
 │   ├── pyproject.toml, uv.lock, manage.py, Dockerfile
 │   ├── config/               ← settings/{base,dev,test,prod}.py, urls.py, wsgi.py, asgi.py
 │   ├── apps/                 ← core, shops, people, control, catalog, contacts,
-│   │                            inventory, money, sales, services, staffpay, sync, reports
-│   ├── tests/                ← cross-app tests: tenancy sweep, E1–E10, sync
-│   └── scripts/              ← seed the demo shop
+│   │                            inventory, money, sales, services, staffpay, sync, reports;
+│   │                            demo, the demo seed `manage.py seed_demo` (ADR-0041) (v1.36)
+│   └── tests/                ← cross-app tests: tenancy sweep, E1–E10, sync
 ├── frontend/
 │   ├── package.json, next.config.ts
 │   ├── src/                  ← app/, features/, offline/, api/, lib/, components/, i18n/
@@ -292,6 +294,7 @@ An app may import only from layers below it. Same-layer imports are allowed only
 | 5 | `staffpay` [R1b] | AttendanceEvent, AttendanceDay, PayRate, PayRun, Payslip |
 | 6 | `sync` ✚ | Push, pull and bootstrap endpoints, device sequence tracking, the document router |
 | 6 | `reports` ✚ | Daily report, exports; read-only queries across apps |
+| 7 | `demo` | The demo seed, `manage.py seed_demo` (DATA-1): no tables of its own. It builds the demo shop through the other apps' services, so it may import every app, and no app imports it: nothing a shop runs can reach the code that wipes the demo's database (ADR-0041) **(v1.36)** |
 
 Models may point at models in higher layers by name (Django's lazy `"app.Model"` references) — that is not an import. Generic links (a ledger row's `source`, a flag's `subject`) are stored as a short type code plus a UUID ✚: readable, and stable across databases. The codes are one list in `core` (`apps/core/links.py`), as the setting keys are: a code, once stored, never changes or names another table, and each card adds the tables its links point at. Not Django's content types, whose ids differ from one database to the next **(v1.10)**.
 
@@ -738,7 +741,7 @@ Rules: tests run on real PostgreSQL, never SQLite. Every bug fix adds a test. Co
 - **`ci.yml`** on every pull request: backend (ruff, mypy, import-linter, `makemigrations --check`, schema up to date, pytest with PostgreSQL), frontend (lint, types, Vitest, production build with the service worker), types regenerated with no difference (`test_committed_schema_matches_the_code` in the backend job, `pnpm check:api` in the frontend job, UI-2) **(v1.31)**, Playwright end-to-end tests, Docker images build. GitHub Actions is free for public repositories.
 - **`pr-title.yml`** ✚ **(v1.1)**: checks that every PR title is a conventional commit — it becomes the one squash commit on `main` and a changelog line (04 BP11). It is its own small workflow, so editing a title re-runs the check.
 - **Branch protection:** `main` changes only through pull requests with green CI, even working solo.
-- **`deploy-demo.yml`:** every merge to `main` → images to GitHub Container Registry → Render redeploys the demo (deploy hook) → smoke test. A nightly schedule redeploys it again, which resets the fake data.
+- **`deploy-demo.yml`:** every merge to `main` → images to GitHub Container Registry → Render redeploys the demo (deploy hook) → smoke test. A nightly schedule redeploys it again, which resets the fake data: at 00:30 in Arusha, the same run as a merge's, whose start finds the demo shop made on an earlier day and makes it again **(v1.36)**.
 - **`release.yml`** **(v1.1)**: release-please reads the squash-merged PR titles and keeps a release PR open; merging that PR writes `CHANGELOG.md` and tags the version — `v0.x` until the first go-live, `v1.0.0` at it (04 BP11). When a release is created, the same workflow runs the production deploy as one of its jobs, calling `deploy-prod.yml`, so the release and the deploy follow each other in one run, in a fixed order, with no tag trigger to keep in step. release-please runs with a short-lived token from the repo's own GitHub App, not the default `GITHUB_TOKEN`: a pull request opened with the default token starts no workflow, so the release PR would never get its required checks on its own **(v1.5)**.
 - **`deploy-prod.yml`** (a reusable workflow, called by `release.yml`): manual approval (a GitHub environment) → migrations rehearsed on a scratch copy of the production database, **on the production server itself** so real data never leaves it ✚ → deploy → smoke test.
 - Dependabot weekly.
@@ -754,7 +757,7 @@ Rules: tests run on real PostgreSQL, never SQLite. Every bug fix adds a test. Co
 
 **Two images** are built per release: `backend` (Django; also runs the worker and the scheduler) and `web` (Caddy with the built app inside).
 
-**The demo** runs as one free Render web service from the `backend` image, with Django also serving the built app (WhiteNoise), so the app and the API share one address there too *(default)*. Its database is Render's free PostgreSQL.
+**The demo** runs as one free Render web service from the `backend` image, with Django also serving the built app (WhiteNoise), so the app and the API share one address there too *(default)*. Its database is Render's free PostgreSQL. Its start runs the migrations, then the demo seed (`backend/start-demo.sh`, ADR-0041): on a new database, or on the first start of a new day in Arusha, the seed wipes it and makes the demo shop again; a wake-up from the free plan's sleep the same day keeps it, so a visitor back from a break meets the PIN lock with their work still there. The seed runs only where `DEMO_SEED=yes` is set (the demo, the browser tests, `make seed` on a laptop), never on the real server, and refuses any database with a shop that isn't a demo **(v1.36)**.
 
 **Production server** — a Lineserve VPS in Dar es Salaam: **2 GB** (1 vCPU, 40 GB SSD) for R1, resized to **4 GB** (2 vCPU, 80 GB) when the Foods side joins in R2:
 
