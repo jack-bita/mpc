@@ -15,6 +15,10 @@ import { saveDevice } from "@/features/devices/this-device";
 import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { DAWA, DAWA_LAPTOP, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
+import {
+  leaveTheLastPersonsAnswers,
+  stillHoldsTheirs,
+} from "@/test/last-person";
 import { render } from "@/test/render";
 import { router } from "@/test/router";
 
@@ -207,13 +211,23 @@ describe("the office's frame", () => {
 describe("leaving the office", () => {
   it("Toka ends the session on the server, forgets the person, and goes to the way in", async () => {
     neemaLoggedIn();
-    renderTheFrame();
+    const store = makeQueryClient();
+    leaveTheLastPersonsAnswers(store);
+    render(
+      <QueryClientProvider client={store}>
+        <OfficeFrame>
+          <p>screen</p>
+        </OfficeFrame>
+      </QueryClientProvider>,
+    );
 
     fireEvent.click(await bar().findByRole("button", { name: "Toka" }));
 
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login/"));
     expect(logouts()).toHaveLength(1);
-    // The store forgot her: `me` was asked again, and answered nobody.
+    // The store forgot her: her answer and her change are gone, and `me` was asked again, and answered
+    // nobody.
+    expect(stillHoldsTheirs(store)).toBe(false);
     expect(askedWhoIsHere()).toBeGreaterThan(1);
   });
 

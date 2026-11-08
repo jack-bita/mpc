@@ -61,15 +61,19 @@ const resets = (method: string) =>
 describe("the email link's page", () => {
   it("reads the key after the #, clears it from the browser, and checks it", async () => {
     aWorkingKey();
+    const entries = window.history.length;
 
     openTheLink();
 
     expect(await screen.findByLabelText("Nenosiri jipya")).toBeTruthy();
     const [check] = resets("GET");
     expect(check?.headers.get("X-Password-Reset-Key")).toBe(KEY);
-    // Out of the address bar and the history: the next person at this browser can't use it.
+    // Out of the address bar and the tab's entry: the next person at this tab can't use it.
     expect(window.location.hash).toBe("");
     expect(window.location.pathname).toBe("/password-reset/");
+    // In the same entry, not a new one: Back would open the address with its key (pushState would pass
+    // the two lines above).
+    expect(window.history.length).toBe(entries);
   });
 
   it("sets the new password with the link's key, and says to log in with it", async () => {

@@ -15,6 +15,10 @@ import {
   refusal,
   sent,
 } from "@/test/fake-server";
+import {
+  leaveTheLastPersonsAnswers,
+  stillHoldsTheirs,
+} from "@/test/last-person";
 import { render } from "@/test/render";
 import { router } from "@/test/router";
 
@@ -86,7 +90,13 @@ const askedWhoIsHere = () =>
 describe("the password login", () => {
   it("sends the phone written in full, forgets the last person, and opens the office", async () => {
     answer("POST", LOGIN, { status: 200, body: { status: 200 } });
-    render(<PasswordLogin />);
+    const store = makeQueryClient();
+    leaveTheLastPersonsAnswers(store);
+    render(
+      <QueryClientProvider client={store}>
+        <PasswordLogin />
+      </QueryClientProvider>,
+    );
     await waitFor(() => expect(askedWhoIsHere()).toBe(1));
 
     await logIn("0712 345 678", "siri-ya-neema");
@@ -99,7 +109,9 @@ describe("the password login", () => {
       phone: "+255712345678",
       password: "siri-ya-neema",
     });
-    // The store forgot whoever was here before: `me` was asked again, for the new person (UI-4).
+    // The store forgot whoever was here before: their answer and their change are gone, and `me` was
+    // asked again, for the new person (UI-4).
+    expect(stillHoldsTheirs(store)).toBe(false);
     expect(askedWhoIsHere()).toBe(2);
   });
 
