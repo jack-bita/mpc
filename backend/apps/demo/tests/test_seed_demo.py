@@ -5,16 +5,19 @@ The seed wipes the whole database before it makes the demo shop (apps/demo/servi
 tests prove what it refuses, and that a refusal writes nothing:
 
     no DEMO_SEED=yes          → refused (demo.no_sign): the real server never has the sign
-    a shop that isn't a demo  → refused (demo.other_shop): a live shop's data is real
+    a shop that isn't a demo  → refused (demo.other_shop): a live shop's data is real, beside the demo's too
     today's demo shop         → kept: a visitor back from a break finds their work
-    an earlier day's          → made again
+    an earlier day's          → made again, the day being Arusha's, not UTC's
+
+The logins are written here as the visitors read them (README, docs/runbooks/demo.md, 04's notes, the browser test),
+never imported from the seed: a changed PIN must turn a test red, not pass quietly while the README says another.
 
 `fresh_content_types` clears Django's memory of content types after each test: the seed's flush makes them again
 with new ids, and the test's rollback takes those back, so the next test must not find them in memory.
 """
 
 from collections.abc import Iterator
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from io import StringIO
 from typing import Any
 
@@ -29,13 +32,18 @@ from django.utils import timezone
 from pytest_django import Settings
 
 from apps.core.tenancy import shop_context
-from apps.demo.services import MANAGER_EMAIL, MANAGER_PASSWORD, PEOPLE, SHOP_CODE, Seeded, seed_demo
+from apps.demo.services import SHOP_CODE, Seeded, seed_demo
 from apps.people.models import RoleAssignment, StaffMember, User
 from apps.people.pins import pin_matches
 from apps.shops.models import Shop, ShopKind, Side
 from apps.shops.services import NewSide, create_shop
 
 pytestmark = pytest.mark.django_db
+
+# The demo's public logins, as visitors read them. Change them here only together with every place that prints them.
+MANAGER_EMAIL = "meneja@example.com"
+MANAGER_PASSWORD = "jaribu-demo"
+PINS = {"Asha": "2580", "Baraka": "1470"}
 
 
 @pytest.fixture(autouse=True)
@@ -63,7 +71,6 @@ def what_the_shop_holds() -> dict[str, Any]:
         sides = {side.pk: side.code for side in Side.objects.all()}
         staff = list(StaffMember.objects.order_by("display_name"))
         users = {user.pk: user for user in User.objects.filter(pk__in=[member.user_id for member in staff])}
-        pins = {person.display_name: person.pin for person in PEOPLE}
         people = []
         for member in staff:
             user = users[member.user_id]
@@ -71,11 +78,12 @@ def what_the_shop_holds() -> dict[str, Any]:
                 (assignment.role.template, "every side" if assignment.side_id is None else sides[assignment.side_id])
                 for assignment in RoleAssignment.objects.filter(staff=member).select_related("role")
             )
-            pin = pins[member.display_name]
+            pin = PINS.get(member.display_name)
             people.append(
                 {
                     "name": (user.full_name, member.display_name),
                     "email": user.email,
+                    "staff": user.is_staff,
                     "roles": roles,
                     "pin works": pin is not None and pin_matches(pin, member.pin_hash, staff_id=member.pk),
                     "password works": user.check_password(MANAGER_PASSWORD),
@@ -97,15 +105,45 @@ def row_counts() -> dict[str, int]:
 
 def test_seed_demo_refuses_live_shop() -> None:
     # The real server's data, or a laptop's shop made by hand: the seed would wipe it with its flush. Refused before
-    # anything is written: the live shop is still there, and no demo shop or person was made.
+    # anything is written: every table holds what it held, and no demo shop or person was made.
     live = create_shop(name="Duka Halisi", code="HALISI", sides=[NewSide("D", "Dawa")])
+    before = row_counts()
 
     with pytest.raises(ValidationError) as refused:
         seed_demo(fresh=True)
 
     assert refused.value.code == "demo.other_shop"
+    assert row_counts() == before
     assert list(Shop.objects.all()) == [live]
-    assert not User.objects.exists()
+
+
+def test_seed_demo_refuses_a_live_shop_beside_the_demo_shop() -> None:
+    # The likelier accident: the demo's own database, with a live shop beside the demo shop. A demo shop being there
+    # must not let the seed wipe the other one.
+    seed_demo(fresh=True)
+    create_shop(name="Duka Halisi", code="HALISI", sides=[NewSide("D", "Dawa")])
+    before = row_counts()
+
+    with pytest.raises(ValidationError) as refused:
+        seed_demo(fresh=True)
+
+    assert refused.value.code == "demo.other_shop"
+    assert row_counts() == before
+
+
+def test_seed_demo_refuses_a_practice_shop() -> None:
+    # A practice shop copies a live one (ADR-0014): not demo data either. Saved straight to the table, as only Django's
+    # own form check stops it naming the demo shop, so this is the one database where a practice shop sits beside the
+    # demo shop alone: still refused, as the seed asks for demo shops only, not for "no live shop".
+    seed_demo(fresh=True)
+    Shop.objects.create(name="Duka la Zoezi", code="ZOEZI", kind=ShopKind.PRACTICE, practice_of=the_demo_shop())
+    before = row_counts()
+
+    with pytest.raises(ValidationError) as refused:
+        seed_demo(fresh=True)
+
+    assert refused.value.code == "demo.other_shop"
+    assert row_counts() == before
 
 
 def test_seed_demo_refused_without_the_sign(settings: Settings) -> None:
@@ -119,6 +157,18 @@ def test_seed_demo_refused_without_the_sign(settings: Settings) -> None:
     assert refused.value.code == "demo.no_sign"
     assert not Shop.objects.exists()
     assert not User.objects.exists()
+
+
+def test_seed_demo_refused_without_the_sign_writes_nothing(settings: Settings) -> None:
+    # Without the sign, today's demo shop isn't wiped either: every table holds what it held.
+    seed_demo(fresh=True)
+    before = row_counts()
+    settings.DEMO_SEED = False
+
+    with pytest.raises(ValidationError):
+        seed_demo(fresh=True)
+
+    assert row_counts() == before
 
 
 def test_seed_demo_is_repeatable() -> None:
@@ -137,6 +187,7 @@ def test_seed_demo_is_repeatable() -> None:
             {
                 "name": ("Asha Mfano", "Asha"),
                 "email": None,
+                "staff": False,
                 "roles": [("seller", "D")],
                 "pin works": True,
                 "password works": False,
@@ -144,13 +195,15 @@ def test_seed_demo_is_repeatable() -> None:
             {
                 "name": ("Baraka Mfano", "Baraka"),
                 "email": None,
+                "staff": False,
                 "roles": [("seller", "F")],
                 "pin works": True,
                 "password works": False,
             },
             {
                 "name": ("Meneja Mfano", "Meneja"),
-                "email": MANAGER_EMAIL,
+                "email": "meneja@example.com",
+                "staff": False,
                 "roles": [("manager", "every side")],
                 "pin works": False,
                 "password works": True,
@@ -172,6 +225,8 @@ def test_seed_demo_opens_no_admin(client: Client) -> None:
     assert not User.objects.filter(is_superuser=True).exists()
     answer = client.post("/admin/login/", {"username": MANAGER_EMAIL, "password": MANAGER_PASSWORD, "next": "/admin/"})
     assert answer.status_code == 200
+    # And nobody is logged in: a 200 alone could be any page.
+    assert "_auth_user_id" not in client.session
 
 
 def test_seed_demo_keeps_todays_shop() -> None:
@@ -194,6 +249,30 @@ def test_seed_demo_makes_yesterdays_shop_again() -> None:
     assert seed_demo() == Seeded.MADE
     assert not Shop.objects.filter(pk=yesterdays.pk).exists()
     assert Shop.objects.count() == 1
+
+
+def test_seed_demo_makes_the_shop_again_after_midnight_in_arusha(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Made at 20:50 UTC, 23:50 in Arusha; started at 21:10 UTC the same UTC day, 00:10 in Arusha the next. A new day
+    # in the shop's time: made again. Read in UTC, both are 3 March and the shop would wrongly be kept.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    Shop.objects.filter(pk=made.pk).update(created_at=datetime(2026, 3, 3, 20, 50, tzinfo=UTC))
+    monkeypatch.setattr(timezone, "now", lambda: datetime(2026, 3, 3, 21, 10, tzinfo=UTC))
+
+    assert seed_demo() == Seeded.MADE
+    assert not Shop.objects.filter(pk=made.pk).exists()
+
+
+def test_seed_demo_keeps_a_shop_made_after_midnight_in_arusha(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Made at 21:10 UTC, 00:10 on 4 March in Arusha; started at 00:30 UTC on 4 March, 03:30 in Arusha. The same day in
+    # the shop's time: kept. Read in UTC, 3 March and 4 March differ and the shop would wrongly be made again.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    Shop.objects.filter(pk=made.pk).update(created_at=datetime(2026, 3, 3, 21, 10, tzinfo=UTC))
+    monkeypatch.setattr(timezone, "now", lambda: datetime(2026, 3, 4, 0, 30, tzinfo=UTC))
+
+    assert seed_demo() == Seeded.KEPT
+    assert the_demo_shop() == made
 
 
 def test_seed_demo_makes_the_shop_on_an_empty_database() -> None:
