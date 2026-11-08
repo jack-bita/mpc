@@ -25,7 +25,10 @@ python manage.py createcachetable
 # jobs: the start is the only place the demo can run anything. After the migrations, so the seed meets the tables
 # as this version has them. It needs the sign (DEMO_SEED=yes, render.yaml and compose.e2e.yml); without it, or on a
 # database with a shop that isn't a demo, it refuses, `set -e` stops the start, and gunicorn never serves that
-# database. On Render the old version then keeps running, and the deploy's smoke test turns red.
+# database. On a deploy, Render then keeps the old version running, and the deploy's smoke test turns red. On a
+# wake-up from the free plan's sleep there is no old version and no smoke test: the demo stays down, and only
+# Render's Events and Logs say why (docs/runbooks/demo.md, Troubleshooting). The first wake-up of each day wipes and
+# makes the shop again, so a seed that fails shows there first.
 python manage.py seed_demo
 
 # The same server command as the image's CMD (backend/Dockerfile): change both together.

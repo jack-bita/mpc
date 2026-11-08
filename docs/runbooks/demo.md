@@ -44,7 +44,7 @@ The demo seed (`manage.py seed_demo`, DATA-1) makes one made-up shop, *Duka la M
 | Asha, a seller on Dawa | PIN `2580` | a registered laptop's PIN screen |
 | Baraka, a seller on Vyakula | PIN `1470` | a registered laptop's PIN screen |
 
-None of them can open the admin: nobody the seed makes is `is_staff`.
+None of them can open the admin: nobody the seed makes is `is_staff`. And nobody can change a password or a PIN on the demo (`demo.logins_fixed`), as every visitor shares them: a visitor who changed Meneja's password would otherwise lock out everyone after them until the next day.
 
 **When it is made again.** The seed runs on every start of the demo, after the migrations:
 - on a new database (the first setup, or every 30 days) it makes the shop;
@@ -112,6 +112,7 @@ Render's free PostgreSQL expires 30 days after it is created, and Render deletes
   - `DisallowedHost` / `Invalid HTTP_HOST header`: `DJANGO_ALLOWED_HOSTS` doesn't hold the demo's host (step 5). A line about `localhost:10000` is Render's own port check and does no harm.
   - Database connection errors: the free database expired (*Every 30 days*).
 - **The new version stops at start with `The environment variable PIN_PEPPER is not set`** (or another variable `render.yaml` names): the deploy reached Render before the Blueprint sync added it. The old version keeps running. Render → **Blueprints** → the demo's Blueprint → **Manual Sync**; check the service's **Environment** page lists the variable; then re-run the newest *Deploy demo* run.
+- **The demo doesn't wake up** (a visit waits, then fails) and no run is red: a wake-up runs the seed too, with no smoke test after it, and the first wake-up of a day is the one that wipes and makes the shop again. Render → the service → **Events** and **Logs** say why: a seed's `Refused: …` line, or a database error. Fix the cause, then **Manual Deploy** → **Deploy latest reference**.
 - **The new version stops at start with `Refused: DEMO_SEED=yes is not set`:** the deploy reached Render before the Blueprint sync added the seed's sign (the first deploy after DATA-1, or after the sign changed). The old version keeps running. The same fix as for `PIN_PEPPER`, above: **Manual Sync**, check the **Environment** page lists `DEMO_SEED`, then re-run the newest *Deploy demo* run.
 - **The start stops with `Refused: the database holds a shop that isn't a demo`:** the demo's database holds a live or practice shop, which nothing on the demo can make. The seed refuses to wipe it, and the old version keeps running. Don't force anything: find out how it got there first.
 - **The demo shows an older commit than `main`:** an older run was re-run after a newer one. Re-run the newest *Deploy demo* run, or merge again.

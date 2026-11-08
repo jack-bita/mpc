@@ -6,8 +6,8 @@
 // of it fails here, before the merge, instead of at the counter. Stage 1's own goal is this test (04).
 //
 // The shop it logs in to is the demo's, made by the demo seed (`manage.py seed_demo`, backend/apps/demo/services.py)
-// on an empty database, before the tests (scripts/run_e2e.sh): the same shop and people a visitor of the demo
-// meets. The words come from the Swahili book (messages/sw.json), the app's default
+// on an empty database as the test container starts, as the demo does (backend/start-demo.sh, compose.e2e.yml),
+// before the tests run (scripts/run_e2e.sh): the same shop and people a visitor of the demo meets. The words come from the Swahili book (messages/sw.json), the app's default
 // language, never typed here: a reworded button moves the test with it, and a word the screen lost fails
 // the test.
 import {

@@ -57,7 +57,7 @@ check: check-backend check-frontend check-image check-e2e ## run everything CI r
 # - First, `uv sync --locked`: it fails when uv.lock no longer matches pyproject.toml, instead of
 #   quietly writing a new lock that nobody committed (ADR-0025). It also installs the packages,
 #   which is all CI needs before the checks.
-# - lint-imports checks the layer contracts in pyproject.toml (ADR-0035): an import that climbs a
+# - lint-imports checks the layer contracts in pyproject.toml (ADR-0041): an import that climbs a
 #   layer fails here. Like ruff and mypy it needs no database, so it runs with them, before the
 #   slower checks. --no-logo: no banner, so the last lines printed are the result.
 # - makemigrations --check fails when a model changed without a migration. It runs with the test
@@ -158,7 +158,8 @@ migrate: ## apply migrations to the dev database (refused before PPL-1) and make
 	cd backend && $(UV_RUN) python manage.py migrate
 	cd backend && $(UV_RUN) python manage.py createcachetable
 
-# The demo shop on this laptop's database (DATA-1, apps/demo/services.py): wipes every table, then makes Duka la Mfano
+# The demo shop on this laptop's database (DATA-1, apps/demo/services.py): wipes every table of the apps (the cache
+# tables and the list of migrations stay), then makes Duka la Mfano
 # and its people again. DEMO_SEED=yes is the sign the seed asks for: typing `make seed` is how a laptop gives it, as
 # the seed never runs where nobody put the sign. --fresh: made again now, even if today's is there. The seed still
 # refuses a database holding any shop that isn't a demo, such as one made by hand to try something.

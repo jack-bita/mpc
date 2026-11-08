@@ -69,7 +69,7 @@ INSTALLED_APPS = [
     "allauth",
     "allauth.account",
     "allauth.headless",
-    # Our domain apps, in layer order (ADR-0035; see apps/__init__.py).
+    # Our domain apps, in layer order (ADR-0041; see apps/__init__.py).
     "apps.core",
     "apps.control",
     "apps.shops",

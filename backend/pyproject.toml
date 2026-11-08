@@ -105,7 +105,7 @@ omit = ["*/tests/*", "*/migrations/*"]
 show_missing = true
 skip_covered = true
 
-# --- import-linter: turns the layers of 03 §5.1 into a check (ADR-0035). An app may import only
+# --- import-linter: turns the layers of 03 §5.1 into a check (ADR-0041). An app may import only
 # from the apps below it, so every dependency points down: a change in `sales` can't break `core`,
 # and two apps can never import each other in a circle. It reads the import lines without running
 # the code. `make check` (and so CI) runs it as `lint-imports`.

@@ -1,4 +1,4 @@
-"""apps — the 13 domain apps of the modular monolith (ADR-0035, 03 §5.1), and the demo seed's app.
+"""apps — the 13 domain apps of the modular monolith (ADR-0041, 03 §5.1), and the demo seed's app.
 
 Each app owns its own tables and rules; its `__init__.py` says what in one line.
 The apps sit in layers, and an app imports only from the layers below it:

@@ -294,7 +294,7 @@ An app may import only from layers below it. Same-layer imports are allowed only
 | 5 | `staffpay` [R1b] | AttendanceEvent, AttendanceDay, PayRate, PayRun, Payslip |
 | 6 | `sync` ✚ | Push, pull and bootstrap endpoints, device sequence tracking, the document router |
 | 6 | `reports` ✚ | Daily report, exports; read-only queries across apps |
-| 7 | `demo` | The demo seed, `manage.py seed_demo` (DATA-1): no tables of its own. It builds the demo shop through the other apps' services, so it may import every app, and no app imports it: nothing a shop runs can reach the code that wipes the demo's database (ADR-0041) **(v1.36)** |
+| 7 | `demo` | The demo seed, `manage.py seed_demo` (DATA-1): no tables of its own. It builds the demo shop through the other apps' services, so it may import every app, and no app imports it, so no other app's code calls it. Its own refusals keep it shut on the real server: the sign `DEMO_SEED=yes`, which only the demo sets, and no shop but a demo one (ADR-0041) **(v1.36)** |
 
 Models may point at models in higher layers by name (Django's lazy `"app.Model"` references) — that is not an import. Generic links (a ledger row's `source`, a flag's `subject`) are stored as a short type code plus a UUID ✚: readable, and stable across databases. The codes are one list in `core` (`apps/core/links.py`), as the setting keys are: a code, once stored, never changes or names another table, and each card adds the tables its links point at. Not Django's content types, whose ids differ from one database to the next **(v1.10)**.
 
@@ -334,7 +334,7 @@ apps/sales/
 - **Writes check links.** Services check that every record they link to belongs to the same shop (T1).
 - **IDs from devices.** If a document's UUID already exists in *another* shop, the server rejects it and reveals nothing about the other record ✚ (`id.taken`, CORE-6 **(v1.8)**).
 - **Sweep tests:** every model except `User`, `Unit`, the `Shop` itself **(v1.6)**, a `PairingRequest` (a device no shop has said yes to yet, §5.9) **(v1.13)** and the infrastructure tables has `shop`; every list and detail endpoint, called as shop B, never returns shop A's rows.
-- **Later (before shop #2):** RLS policies on every table (the app connects as a database role that can't bypass them) and composite "same shop" foreign keys.
+- **Later (before shop #2):** RLS policies on every table (the app connects as a database role that can't bypass them) and composite "same shop" foreign keys. The demo seed empties every table with TRUNCATE once a day (ADR-0041, DATA-1): on the demo, the role it runs as must keep that right, or every day's first start stops at the seed **(v1.36)**.
 
 ### 5.5 Posting: documents in, ledgers out
 

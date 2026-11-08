@@ -22,7 +22,7 @@ One Django project and one database, split into apps that follow the domain modu
 - `inventory` may import `money`, because deliveries pay suppliers.
 - `services` may import `sales`, because a job's bill is a sale.
 
-`demo` is not a domain module: it holds no tables, only the demo seed. On layer 7, alone, it may import every app, and no app imports it, so nothing a shop runs can reach the code that wipes the demo's database.
+`demo` is not a domain module: it holds no tables, only the demo seed. On layer 7, alone, it may import every app, and no app imports it, so no other app's code calls the seed. What keeps the seed shut on the real server is not the layer but its own two refusals: it runs only where the sign `DEMO_SEED=yes` is set, which the real server never sets, and only on a database with no shop that isn't a demo.
 
 import-linter checks this on every pull request. Business logic lives only in services and calculations.
 

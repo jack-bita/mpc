@@ -9,9 +9,9 @@ both together.
 
 Why it wipes the whole database instead of taking out the demo shop's rows: the ledgers refuse every DELETE
 (ADR-0021, apps/core/operations.py), and every link PROTECTs what it points at (rule 7), so a shop's rows can't be
-taken out one by one. Django's `flush` empties every table at once (TRUNCATE), which the ledgers' triggers don't
-watch. That is safe only on a database that holds nothing but demo data, so the seed refuses, before it writes
-anything, in two cases:
+taken out one by one. Django's `flush` empties every table of the apps' models at once (TRUNCATE), which the ledgers'
+triggers don't watch; the cache tables (the pairing limits' counts) and Django's list of the migrations stay. That is
+safe only on a database that holds nothing but demo data, so the seed refuses, before it writes anything, in two cases:
   1. without the sign: DEMO_SEED=yes in the environment (config/settings/base.py). Only places that hold demo data
      set it, and the real server never does, so even a brand-new real server, with no shop yet, refuses (Jack,
      8 Nov 2026);
@@ -106,6 +106,10 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
     """Make the demo shop again on a database that holds only demo data, or keep today's (see above). `fresh`: make it
     again even if it was made today. Refuses with a ValidationError, before anything is written, without the sign or
     with a shop that isn't a demo."""
+    # The look, then the wipe. A shop someone made in the split second between them would be wiped too. Left open on
+    # purpose (Jack, 8 Nov 2026): nothing on the demo can make a shop (no admin account, no route that makes one), and
+    # the real server never has the sign, so the look already rules it out; closing it would take a table lock written
+    # in SQL by hand, for a case that can't occur.
     _check_may_seed()
     if not fresh and _made_today():
         return Seeded.KEPT
@@ -145,7 +149,7 @@ def _wipe_and_make() -> None:
 
 
 def _check_may_seed() -> None:
-    # The two refusals, both before anything is written. Codes, as every refusal has (ADR-0032): the command prints
+    # The two refusals, both before anything is written. Codes, as every refusal has (ADR-0040): the command prints
     # the sentence, a test reads the code.
     if not settings.DEMO_SEED:
         raise ValidationError(

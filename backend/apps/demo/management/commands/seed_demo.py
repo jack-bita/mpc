@@ -1,6 +1,6 @@
 """apps/demo/management/commands/seed_demo.py — `manage.py seed_demo`: makes the demo shop, or keeps today's (DATA-1).
 
-Thin, like a view (ADR-0015): the seed itself, its refusals and the reason it wipes the database are in
+Thin, like a view (ADR-0041): the seed itself, its refusals and the reason it wipes the database are in
 apps/demo/services.py. This file only reads `--fresh`, turns a refusal into the command's error, and prints one line
 at the start and one at the end (ops rule: a job logs its start and end). Neither line holds a name, an email, a PIN or
 the password (privacy rule): only what was done, and how many people the shop has.
