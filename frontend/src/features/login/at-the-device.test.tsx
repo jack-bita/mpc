@@ -420,3 +420,27 @@ describe("a session the server ends", () => {
     expect(bar().queryByRole("button", { name: "Toka" })).toBeNull();
   });
 });
+
+describe("the way in by password", () => {
+  it("offers it under the tiles, for someone with a password and no PIN", async () => {
+    // Baba, the owner, has a password and no PIN: at the shop laptop he would see only the tiles (Jack,
+    // 8 Nov 2026, at UI-5's review).
+    theLaptop(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Wewe ni nani?" });
+
+    const link = screen.getByRole("link", { name: "Ingia kwa nenosiri" });
+    // The end slash comes from next.config.ts (trailingSlash), which a test doesn't read.
+    expect(link.getAttribute("href")).toMatch(/^\/login\/?$/);
+  });
+
+  it("isn't there while someone is logged in", async () => {
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    expect(
+      screen.queryByRole("link", { name: "Ingia kwa nenosiri" }),
+    ).toBeNull();
+  });
+});

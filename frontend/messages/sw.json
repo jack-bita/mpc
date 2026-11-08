@@ -103,7 +103,8 @@
     "switch": "Badilisha mtu",
     "logout": "Toka",
     "leaving": "Unatoka…",
-    "waiting": "Subiri kidogo…"
+    "waiting": "Subiri kidogo…",
+    "withPassword": "Ingia kwa nenosiri"
   },
   "passwordField": {
     "show": "Onyesha nenosiri"

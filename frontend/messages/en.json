@@ -103,7 +103,8 @@
     "switch": "Switch person",
     "logout": "Log out",
     "leaving": "Logging out…",
-    "waiting": "One moment…"
+    "waiting": "One moment…",
+    "withPassword": "Log in with a password"
   },
   "passwordField": {
     "show": "Show password"
