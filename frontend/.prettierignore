@@ -3,10 +3,12 @@
 # Each one is written by a tool, so the tool decides its layout. Formatting it by hand
 # would only make a diff that the tool undoes on its next run.
 
-# Build output (next build) and test coverage reports.
+# Build output (next build), test coverage reports, and Playwright's output (UI-6).
 .next/
 out/
 coverage/
+test-results/
+playwright-report/
 
 # Written by pnpm: change it with `pnpm add` and `pnpm remove`, never by hand (ADR-0025).
 pnpm-lock.yaml

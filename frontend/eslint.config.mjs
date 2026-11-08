@@ -183,6 +183,8 @@ export default defineConfig([
     ".next/**",
     "out/**",
     "coverage/**",
+    "test-results/**",
+    "playwright-report/**",
     "next-env.d.ts",
     "src/api/schema.d.ts",
   ]),

@@ -14,6 +14,7 @@
     "lint": "eslint . --max-warnings=0 && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
+    "e2e": "playwright test",
     "gen:api": "pnpm gen:api:schema && pnpm gen:api:types",
     "gen:api:schema": "cd ../backend && uv run --locked python manage.py spectacular --skip-checks --validate --fail-on-warn --format openapi-json --file ../shared/openapi.json",
     "gen:api:types": "openapi-typescript ../shared/openapi.json --output src/api/schema.d.ts",
@@ -38,6 +39,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@serwist/cli": "9.5.13",
     "@tailwindcss/postcss": "4.3.3",
     "@testing-library/dom": "10.4.2",
