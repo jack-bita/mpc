@@ -15,8 +15,9 @@ COMPOSE = docker compose -f compose.dev.yml
 # keeps its default, so `make check` runs there too.
 UV_RUN = uv run $(if $(wildcard .env),--env-file ../.env)
 
+# Every target with a `## ` description, in file order. Names may hold digits (check-e2e), so 0-9 is in the class.
 help: ## list the commands
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  make %-15s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  make %-15s %s\n", $$1, $$2}'
 
 # --- Running the app
 
