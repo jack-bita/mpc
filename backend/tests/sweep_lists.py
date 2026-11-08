@@ -11,7 +11,7 @@ the sync routes with a device's key, is a new check instead, added in a reviewed
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.core.api.views import HealthView
-from apps.people.api.views import LogoutView
+from apps.people.api.views import LogoutView, OwnSettingsView
 
 # T1's exceptions (02 §16, 03 §5.4): tables that belong to no one shop, so they have no `shop`.
 NO_SHOP = {
@@ -42,7 +42,10 @@ INFRASTRUCTURE = {
 # Routes under api/ that may be built on something other than ShopViewSet, because none of them reads a
 # shop's table, so there is nothing of a shop's for the sweep to look for in them. A route that does read
 # one, such as sync's pull with a device's key, is never listed here: the sweep is taught to call it instead,
-# as a device of shop B, in a reviewed change.
+# as a device of shop B, in a reviewed change. One exception, decided on its card (UI-9): a route whose own code reads
+# no shop's table, whose login, the one every office route shares, reads only the caller's own job and its shop, and
+# for a PIN's session the device that holds the key, each inside the shop its login door names, to refuse them if they
+# may not act, and whose answer its own test proves holds nothing of a shop's.
 NOT_SHOP_ROUTES: set[type] = {
     # The uptime check: no login, and no table at all (apps/core/api/views.py).
     HealthView,
@@ -53,6 +56,11 @@ NOT_SHOP_ROUTES: set[type] = {
     # shop's table, on purpose: it must work whatever has happened to the person or the device (AUTH-4's plan, approved
     # by Jack).
     LogoutView,
+    # A person's own language and font (UI-9): it changes only the logged-in person, who belongs to no shop, and answers
+    # with their two choices alone, as test_settings_answer_holds_nothing_of_a_shop proves
+    # (apps/people/tests/test_own_settings.py). Its login reads the person's job and its shop, and at a laptop the
+    # device, each inside the shop the login door names, only to refuse them if they may not act.
+    OwnSettingsView,
 }
 
 # Office routes whose answers the sweep can't read, such as a PDF or an Excel download, which squeeze their

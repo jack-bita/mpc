@@ -3,8 +3,9 @@
 //
 // It names the other language, in that language: "English" while Swahili is open, "Kiswahili" while
 // English is. Someone who can't read the open language still finds their own, as bank apps and
-// government sites do. Each book holds that name (language.switch). This browser keeps the choice
-// until UI-9 keeps it on the person.
+// government sites do. Each book holds that name (language.switch). It switches this laptop's own
+// language, which this browser keeps, for the tiles and the login pages: the bar shows it only while
+// nobody is logged in. A person's own language is saved on them, in Mipangilio yangu (Jack, UI-9).
 "use client";
 
 import { useTranslations } from "use-intl";

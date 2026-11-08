@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/me/settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["auth_me_settings_partial_update"];
+        trace?: never;
+    };
     "/api/auth/pin-login/": {
         parameters: {
             query?: never;
@@ -284,6 +300,12 @@ export interface components {
          * @enum {string}
          */
         DeviceStatusEnum: "active" | "blocked";
+        /**
+         * @description * `default` - Default
+         *     * `second` - Second, easy to read
+         * @enum {string}
+         */
+        FontEnum: "default" | "second";
         Health: {
             status: string;
             version: string;
@@ -335,6 +357,15 @@ export interface components {
             readonly id: string;
             readonly full_name: string;
             readonly language: components["schemas"]["LanguageEnum"];
+            readonly font: components["schemas"]["FontEnum"];
+        };
+        OwnSettingsAnswer: {
+            readonly language: components["schemas"]["LanguageEnum"];
+            readonly font: components["schemas"]["FontEnum"];
+        };
+        OwnSettingsRequest: {
+            language?: components["schemas"]["LanguageEnum"];
+            font?: components["schemas"]["FontEnum"];
         };
         PaginatedDeviceList: {
             /**
@@ -472,6 +503,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WhoIsHere"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    auth_me_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OwnSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnSettingsAnswer"];
                 };
             };
             default: {

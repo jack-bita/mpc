@@ -46,6 +46,7 @@ const JUMA: WhoIsHere = {
     id: "019a5e00-0000-7000-8000-0000000000b2",
     full_name: "Juma Mfano",
     language: "sw",
+    font: "default",
   },
   staff: {
     id: "019a5e00-0000-7000-8000-0000000000c3",
@@ -320,9 +321,9 @@ describe("leaving the laptop", () => {
     expect(bar().queryByRole("button", { name: "Badilisha mtu" })).toBeNull();
   });
 
-  it("speaks English after the switch, with no Swahili left", async () => {
-    setLanguage("en");
-    theLaptop(NEEMA);
+  it("speaks English to someone who reads it, with no Swahili left", async () => {
+    // Her own language, saved on her: since UI-9 it decides once she is in, not the laptop's switch.
+    theLaptop({ ...NEEMA, user: { ...NEEMA.user, language: "en" } });
     const { container } = render(<AtTheDevice device={DAWA_LAPTOP} />);
 
     expect(
@@ -442,5 +443,90 @@ describe("the way in by password", () => {
     expect(
       screen.queryByRole("link", { name: "Ingia kwa nenosiri" }),
     ).toBeNull();
+  });
+});
+
+describe("Mipangilio yangu", () => {
+  it("is offered to the person at the laptop, under the welcome", async () => {
+    // Neema logs in by PIN here and never sees the office's home page: her own language and font are
+    // one tap from her welcome (UI-9).
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    const link = screen.getByRole("link", { name: "Mipangilio yangu" });
+    // The end slash comes from next.config.ts (trailingSlash), which a test doesn't read.
+    expect(link.getAttribute("href")).toMatch(/^\/my-settings\/?$/);
+  });
+
+  it("isn't there while nobody is logged in: the tiles have no one's settings", async () => {
+    theLaptop(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Wewe ni nani?" });
+
+    expect(screen.queryByRole("link", { name: "Mipangilio yangu" })).toBeNull();
+  });
+});
+
+describe("each person's own language and font", () => {
+  // Neema saved English and the second font in Mipangilio yangu; Juma keeps Swahili and the default one.
+  const NEEMA_IN_ENGLISH: WhoIsHere = {
+    ...NEEMA,
+    user: { ...NEEMA.user, language: "en", font: "second" },
+  };
+  const page = document.documentElement;
+
+  it("applies her choices as she logs in, wherever she logs in", async () => {
+    // Saved on her, not on this laptop: any device that asks `me` after her login shows them (UI-9).
+    theLaptop(NEEMA_IN_ENGLISH);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Welcome, Neema" }),
+    ).toBeTruthy();
+    expect(page.lang).toBe("en");
+    expect(page.dataset.font).toBe("second");
+  });
+
+  it("juma logs in after her on the same laptop and sees his own choices", async () => {
+    // The card's own case: the quick switch hands the laptop from her to him, and nothing of hers stays.
+    // The laptop's own language is English, switched from the bar, and Juma reads Swahili: so his welcome
+    // in Swahili is his own choice at work, not the laptop's (UI-9's review).
+    setLanguage("en");
+    theLaptop(NEEMA_IN_ENGLISH);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Welcome, Neema" });
+
+    fireEvent.click(bar().getByRole("button", { name: "Switch person" }));
+    // The tiles, in the laptop's own language and font: they are for whoever is next.
+    expect(
+      await screen.findByRole("heading", { name: "Who are you?" }),
+    ).toBeTruthy();
+    expect(page.dataset.font).toBeUndefined();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Juma Mfano Juma" }),
+    );
+    for (const digit of "4829")
+      fireEvent.click(screen.getByRole("button", { name: digit }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Karibu, Juma" }),
+    ).toBeTruthy();
+    expect(page.lang).toBe("sw");
+    expect(page.dataset.font).toBe("default");
+  });
+
+  it("shows the bar's language button only while nobody is logged in", async () => {
+    // Jack's choice (UI-9): the button switches the laptop's own language, for the tiles; once someone
+    // is in, their language is changed in Mipangilio yangu, the one place for it.
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    expect(bar().queryByRole("button", { name: "English" })).toBeNull();
+
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+
+    await screen.findByRole("heading", { name: "Wewe ni nani?" });
+    expect(bar().getByRole("button", { name: "English" })).toBeTruthy();
   });
 });

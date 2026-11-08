@@ -75,7 +75,20 @@ describe("the office's home page", () => {
         "Bado hakuna kazi ya ofisi unayoweza kufungua hapa.",
       ),
     ).toBeTruthy();
-    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Vifaa" })).toBeNull();
+  });
+
+  it("opens Mipangilio yangu for everyone, who needs no key for their own", async () => {
+    // A seller with no office work still has a language and a font of her own (UI-9).
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: ["sale.create"] }]),
+    });
+
+    render(<OfficeHome />);
+
+    const link = await screen.findByRole("link", { name: "Mipangilio yangu" });
+    expect(link.getAttribute("href")).toMatch(/^\/my-settings\/?$/);
   });
 
   it("greets nobody the server refused since, though the store still holds their answer", async () => {

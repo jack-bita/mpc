@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.34 · 8 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.35 · 8 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.35** (8 Nov 2026, UI-9): a person's language and font follow them (§5.10, §7.2, §7.4, 04 v1.49). A person changes their own, and only their own, through `PATCH /api/auth/me/settings/`, which needs no key; `me` answers both. The app shows whoever is logged in in their own, and the laptop's own once nobody is; the bar's language button sets the laptop's own, and shows only while nobody is logged in (Jack). Marked **(v1.35)**.
 
 **Changes in v1.34** (8 Nov 2026, UI-5): the password screens are built (§5.9, §7.2, 04 v1.48). The app reads allauth's own answers into the API's refusal in one place; a login lands on the office's home page, whose frame names the person and their shop, ends a session with Toka, locks the shared laptop and asks a temporary password's owner to choose their own; the email link opens `/password-reset/#<key>`, with the page's slash. From its review: every change waits in one queue, sent in order, so a logout goes after the changes made before it (§7.1); the login offers Toka when another session holds the browser; and a reset link stays in the browser's own history list, an honest limit (§5.9). Marked **(v1.34)**.
 
@@ -432,7 +434,7 @@ Confirming a one-screen sale:
 | `/api/v1/<app>/…` | Office REST: products, prices, deliveries, counts, contacts, cash-up, reports, staff, settings, flags, devices (a manager confirms a pairing there, AUTH-5) **(v1.14)**, and lists, renames, blocks and unblocks them; the list shows a side's devices to whoever works on that side, and every change needs `device.manage` on the device's home side (Jack, AUTH-5) **(v1.15)** | Staff session |
 | `/api/sync/v1/bootstrap`, `/pull`, `/push`, `/attachments/{id}` | Sync (§6) | Device key |
 | `/_allauth/browser/v1/…` | Password login, logout, password reset, session (django-allauth): only these, and they answer in allauth's own shape, not the API's one error shape **(v1.17)** | — |
-| `/api/auth/…` | PIN login, logout, me (our own) | PIN login: device key. Logout and me: the session, so logout works on a blocked device, and me serves a password login too **(v1.20)** |
+| `/api/auth/…` | PIN login, logout, me (our own); and `me/settings/`, where a person changes their own language and font, with no key (UI-9) **(v1.35)** | PIN login: device key. Logout and me: the session, so logout works on a blocked device, and me serves a password login too **(v1.20)**. My settings: the office routes' login, so a suspended person is refused **(v1.35)** |
 | `/api/devices/v1/pairing/`, `/api/devices/v1/me/`, `/api/devices/v1/staff/` | A new device asks to join; a paired device learns its shop. Versioned like sync: devices are the slowest to update **(v1.14)**. A paired device lists its shop's people for the PIN screen, names only, until sync carries them (UI-4) **(v1.33)** | Device key (none yet, to ask) |
 | `/api/health/` | Uptime check | Public |
 | `/api/schema/`, `/api/docs/` | The OpenAPI description, and its docs page | Open on the demo and on a laptop; closed in production, where the page would run a CDN's code beside the superuser's login **(v1.8)** |
@@ -617,12 +619,14 @@ frontend/src/
 │   ├── (office)/products/  prices/  deliveries/  counts/  contacts/  cashup/
 │   │            reports/  staff/  settings/  devices/  flags/   (devices/ is the first, v1.32)
 │   │            office/: the office's home page, a button for each screen (v1.34)
+│   │            my-settings/: Mipangilio yangu, a person's own language and font, for everyone (v1.35)
 │   │            each area's layout.tsx puts its screens in AppFrame; the office one adds the offline banner (v1.30),
 │   │            through features/office/office-frame.tsx: who is here, Toka, the way in, the idle lock (v1.34)
 │   ├── print/slip/  print/receipt/      print-only pages
 │   └── design/               every colour, both fonts and every piece of the look, to check by eye (v1.29)
 ├── features/<module>/        components and hooks per domain module: devices/ (the device's check, its saved copy and
-│                             lock, and the registration screens), people/ (who is logged in) (v1.32), login/ (the PIN
+│                             lock, and the registration screens), people/ (who is logged in (v1.32), Mipangilio
+│                             yangu, and the app following the person (v1.35)), login/ (the PIN
 │                             screen on a registered device's home page: picker, pad, logout, idle lock) (v1.33), and the
 │                             password forms: login, choose your own, forgotten, the email link's (v1.34); office/ (the
 │                             office's frame and home page) (v1.34)
@@ -660,8 +664,9 @@ frontend/src/
 
 ### 7.4 Language
 
-- use-intl v4 on the client, next-intl's own core: the language follows the logged-in person (no language in the URL). Swahili by default, English switch, on the top bar. Until UI-9 the browser keeps the choice (ADR-0040) **(v1.30)**.
+- use-intl v4 on the client, next-intl's own core: the language follows the logged-in person (no language in the URL). Swahili by default, English switch, on the top bar. Until UI-9 the browser keeps the choice (ADR-0040) **(v1.30)**; since UI-9, the two layers below **(v1.35)**.
 - The font follows the person too: `default` or `second`, and only the person changes it (UI-9, ADR-0039) **(v1.27)**.
+- **Two layers (v1.35):** while someone is logged in, the app shows their own language and font, saved on them and changed in *Mipangilio yangu*, so they follow the person to every device. While nobody is, it shows the laptop's own: its language from the top bar's switch, kept on this browser, and the default font. The switch shows only while nobody is logged in, for the tiles and the login pages: once someone is in, *Mipangilio yangu* is the one place to change theirs (Jack, UI-9). The person's language is never saved as the laptop's, so the next person at the tiles never meets it.
 - Money with `Intl.NumberFormat('sw-TZ')`, TZS without decimals; stock in selling units, in each language's order: Swahili word first, "mifuko 26 + kilo 35.5", English number first, "26 mifuko + 35.5 kilo". The unit words are the shop's own, from its catalog, so only the order changes **(v1.30)**.
 - API error codes map to translated messages. Jack reviews the Swahili (02 §21).
 

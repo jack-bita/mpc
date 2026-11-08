@@ -4,7 +4,8 @@
 // Every office screen asks the server for everything, and needs a login. So the frame asks `me`
 // (useWhoIsHere, one answer shared with the screens), and:
 //   someone logged in          their name, their shop and Toka in the bar: a manager's own phone knows no
-//                              device, so only the login says which shop it is at
+//                              device, so only the login says which shop it is at; and the app in their
+//                              own language and font (follow-the-person.ts, UI-9)
 //   nobody (not_authenticated)  away to the way in: the password login on a phone, and the PIN login at
 //                              a registered laptop, whose home page it is (UI-4)
 //   refused for a reason        why, in place of the screen, with Toka (a suspension, a shop switched
@@ -43,6 +44,7 @@ import { OfflineBanner } from "@/components/offline-banner";
 import { useThisDevice } from "@/features/devices/this-device";
 import { ChoosePassword } from "@/features/login/choose-password";
 import { useIdleLock } from "@/features/login/idle-lock";
+import { useFollowThePerson } from "@/features/people/follow-the-person";
 import { sideAt, useWhoIsHere } from "@/features/people/who-is-here";
 
 export function OfficeFrame({ children }: { children: ReactNode }) {
@@ -95,6 +97,9 @@ export function OfficeFrame({ children }: { children: ReactNode }) {
   // Who is logged in, as `me` last said: TanStack keeps the last answer through a dropped network, which
   // leaves the person where they are. Nobody once the server refused them, or from the press of Toka.
   const here = refused || leaving ? undefined : me.data;
+  // Their own language and font, as on the PIN screen (at-the-device.tsx): a password's login lands here
+  // (UI-9).
+  useFollowThePerson(here);
   // At a registered laptop, the side the person works on, as the PIN login names it (UI-4); a phone knows
   // no side, and the bar names only the shop.
   const side = here && device ? sideAt(here, device.homeSide.id) : undefined;

@@ -62,6 +62,7 @@ export function whoIsHere(
       id: "019a5e00-0000-7000-8000-0000000000b1",
       full_name: "Neema Mfano",
       language: "sw",
+      font: "default",
     },
     staff: {
       id: "019a5e00-0000-7000-8000-0000000000c1",

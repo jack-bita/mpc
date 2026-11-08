@@ -9,6 +9,7 @@
 // the shop of whoever is logged in (office-frame.tsx, UI-5). No band yet: no side
 // says which look it gets (04 §20, item 19). Once someone logs in at the device, the bar names them, and
 // the side they work on in place of the device's (UI-4): a screen that knows who is here hands both in.
+// The language button goes then: it is the laptop's own language, and the person reads theirs (UI-9).
 //
 // "use client": it reads the device's saved copy, which only the browser holds (this-device.ts).
 "use client";
@@ -65,7 +66,10 @@ export function AppFrame({
             {/* Who is here, read at a glance from where the next person stands. */}
             {person ? <p className="text-lg font-semibold">{person}</p> : null}
             {actions}
-            <LanguageButton />
+            {/* The laptop's own language, for the tiles and the login pages: only while nobody is logged
+                in. Someone who is reads their own, and changes it in Mipangilio yangu, the one place for
+                it (Jack, UI-9). */}
+            {person ? null : <LanguageButton />}
           </>
         }
       />

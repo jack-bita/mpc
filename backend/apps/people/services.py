@@ -9,7 +9,8 @@ and a person is given a role, or one extra permission, on one side or on all of 
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
 (start_pairing), a manager with device.manage says yes (confirm_pairing), renames it (rename_device, AUTH-5), and
 blocks it, or lets it work again (block, unblock); and each time its key reaches the server, it is noted as seen
-(note_device_seen, AUTH-2).
+(note_device_seen, AUTH-2). And a person's own choices for their screens, their language and font, which only they
+change (change_own_settings, UI-9).
 Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
@@ -17,8 +18,8 @@ who and why, in the same transaction (apps/control/services.py, audit): the chan
 together or not at all (T3).
 
 Callers open shop_context(shop) first: full_clean and the unique checks read through the guarded
-`objects` (CORE-2). The one exception is start_pairing: a device that asks to join belongs to no shop yet,
-so it needs none open, and its request links to nothing (02 v1.11).
+`objects` (CORE-2). Two need none open: start_pairing, as a device that asks to join belongs to no shop yet, and its
+request links to nothing (02 v1.11); and change_own_settings, which writes only the person, who belongs to no shop.
 """
 
 import math
@@ -56,6 +57,7 @@ from apps.people.device_keys import (
 from apps.people.login_counts import lift_wrong_password_count
 from apps.people.login_doors import shop_of_device_key
 from apps.people.models import (
+    OWN_SETTINGS,
     Device,
     DeviceStatus,
     PairingRequest,
@@ -448,6 +450,39 @@ def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, secret
     # one acting holds now.
     if not held_permissions(by).covers(given_permissions(staff)):
         raise ValidationError("This person holds a key the one acting doesn't.", code=f"{secret}.more_keys")
+
+
+def change_own_settings(user: User, *, language: str | None = None, font: str | None = None) -> User:
+    """A person changes their own language or font, or both (UI-9, ADR-0039): the screens then follow them to every
+    device they log in at. Only the person: `user` is whoever is logged in, never a person named in a request, so nobody
+    changes another's. The route has already refused anyone who may not act today (a suspension, a temporary password),
+    through the login every office route shares. A choice left None stays as it is: the screen sends only the one just
+    tapped. Refuses an unknown value under its field, with its code (invalid_choice); the database's rules are the last
+    guard (people_user_language_known, people_user_font_known). Returns the person as saved."""
+    sent = {"language": language, "font": font}
+    changed = [name for name in OWN_SETTINGS if sent[name] is not None]
+    # Each changed field's own checks, its list of choices above all, and nothing else of the row: the rest of the
+    # person isn't this action's to judge. Checked before anything is set, so a refusal leaves the person in hand as
+    # saved, the good half of a change included (UI-9's review).
+    columns = {column.name: column for column in User._meta.concrete_fields}
+    refused: dict[str, list[ValidationError]] = {}
+    for name in changed:
+        try:
+            columns[name].clean(sent[name], user)
+        except ValidationError as error:
+            refused[name] = error.error_list
+    if refused:
+        raise ValidationError(refused)
+    for name in changed:
+        setattr(user, name, sent[name])
+    if changed:
+        # Only the changed columns: a change to her font in one tab never writes back an old language from another. No
+        # lock and no version: each choice is one value, and the last one tapped is the one she meant. No line in the
+        # audit trail either: it keeps who changed what in a shop, and this changes no shop's rows, nobody's rights and
+        # no money, only how one person's own screens look.
+        with transaction.atomic():
+            user.save(update_fields=changed)
+    return user
 
 
 def set_up_shop(*, name: str, code: str, sides: Sequence[NewSide]) -> Shop:

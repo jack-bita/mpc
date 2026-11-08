@@ -385,6 +385,19 @@ def test_admin_shows_the_mark_read_only(superuser_client: Client) -> None:
     assert "must_change_password" not in response.context["adminform"].form.fields
 
 
+def test_admin_shows_the_font_read_only(superuser_client: Client) -> None:
+    # Only the person changes their font (03 §7.4, ADR-0039): the superuser can see which one Asha reads, to help her on
+    # the phone, but has no box to change it for her. Nor is it asked for when a person is added: everyone starts on
+    # the default one.
+    asha = User.objects.create_user(full_name="Asha Demo")
+    response = superuser_client.get(f"{USERS}{asha.pk}/change/")
+    assert "font" in response.context["adminform"].readonly_fields
+    assert "font" not in response.context["adminform"].form.fields
+
+    added = superuser_client.get(f"{USERS}add/")
+    assert "font" not in added.context["adminform"].form.fields
+
+
 def test_admin_shows_id_read_only(superuser_client: Client) -> None:
     juma = User.objects.create_user(full_name="Juma Demo")
 

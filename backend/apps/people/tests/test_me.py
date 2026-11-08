@@ -189,7 +189,13 @@ def test_me_names_who_and_where(asha: StaffMember, laptop: Device, laptop_key: s
         "idle_minutes",
         "permissions",
     }
-    assert data["user"] == {"id": str(asha.user_id), "full_name": asha.user.full_name, "language": asha.user.language}
+    # Her language and font too: the app applies both at every login, so they follow her to any device (UI-9).
+    assert data["user"] == {
+        "id": str(asha.user_id),
+        "full_name": asha.user.full_name,
+        "language": asha.user.language,
+        "font": asha.user.font,
+    }
     assert data["staff"] == {"id": str(asha.pk), "display_name": asha.display_name, "job_title": asha.job_title}
     assert data["shop"] == {"id": str(asha.shop_id), "name": asha.shop.name, "code": asha.shop.code}
     assert data["device"] == {"id": str(laptop.pk), "name": laptop.name, "code": laptop.code, "status": "active"}

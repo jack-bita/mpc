@@ -1,5 +1,5 @@
-// choice.tsx — pick one of a few, with a big row for each: a new device's home side, later a way to pay
-// (UI-3, ADR-0039).
+// choice.tsx — pick one of a few, with a big row for each: a new device's home side, a person's own
+// language and font (UI-9), later a way to pay (UI-3, ADR-0039).
 //
 // shadcn's radio group (components/ui/radio-group.tsx) gives the behaviour, through Base UI: one choice
 // at a time, the arrow keys move between them, and a screen reader says "radio button, 1 of 2,
@@ -12,6 +12,9 @@
 // Each choice is a whole row, as tall as a big button (52 px), wrapped in its <label>: a tap anywhere
 // on the row picks it, where shadcn's dot alone is 16 px, too small for a finger. The row's own words
 // name the dot for a screen reader. The order on screen is Field's: name, hint, error, then the rows.
+//
+// A row may be written in a language or a font of its own (UI-9): "English" among Swahili words is said
+// as English, and a font's row shows that font, so a person sees what they pick before they pick it.
 import { useId } from "react";
 
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -21,6 +24,10 @@ import { cn } from "@/lib/utils";
 export interface ChoiceOption {
   value: string;
   label: string;
+  /** The words' language, when it isn't the page's: "en" for "English" on a Swahili page. */
+  lang?: string;
+  /** The font the words are shown in, by its role (ADR-0039), when it isn't the page's. */
+  font?: "default" | "second";
 }
 
 /** The row around a dot and its words. Its edge is the box's dark edge (--input, 3:1), and green once
@@ -101,7 +108,14 @@ export function Choice({
         {options.map((option) => (
           <label key={option.value} className={ROW_LOOK}>
             <RadioGroupItem value={option.value} className={DOT_LOOK} />
-            {option.label}
+            {/* data-font changes the font only where font-sans is on the same element (globals.css). */}
+            <span
+              lang={option.lang}
+              data-font={option.font}
+              className={option.font ? "font-sans" : undefined}
+            >
+              {option.label}
+            </span>
           </label>
         ))}
       </RadioGroup>

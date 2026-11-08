@@ -26,6 +26,7 @@ And what a session itself may ask, built on neither (AUTH-4):
 
     GET  /api/auth/me/              who is logged in here, where, and what they may do; an office route, in all but name
     POST /api/auth/logout/          this browser's session ends, at once, whatever has happened to them since
+    PATCH /api/auth/me/settings/    the person changes their own language and font, with no key (UI-9)
 
 Thin: each one calls its service (apps/people/services.py), or reads its rows, and answers with its serializer
 (ADR-0015).
@@ -43,7 +44,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import exceptions, mixins
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import BaseThrottle
@@ -60,19 +61,28 @@ from apps.people.api.serializers import (
     DeviceMeSerializer,
     DeviceReasonSerializer,
     DeviceSerializer,
+    OwnSettingsAnswerSerializer,
+    OwnSettingsSerializer,
     PairingStartSerializer,
     PinLoginSerializer,
     PinScreenStaffSerializer,
     TemporaryPasswordSerializer,
     WhoIsHereSerializer,
 )
-from apps.people.api.staff_session import MeSessionAuthentication
+from apps.people.api.staff_session import MeSessionAuthentication, StaffSessionAuthentication
 from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle, PinLoginThrottle
 from apps.people.device_keys import DEVICE_KEY_COOKIE
-from apps.people.models import Device, StaffMember
+from apps.people.models import Device, StaffMember, User
 from apps.people.selectors import LoginRefused, idle_lock_minutes, pin_screen_staff, who_is_here
 from apps.people.services import block as block_device
-from apps.people.services import confirm_pairing, pin_login, rename_device, set_temporary_password, start_pairing
+from apps.people.services import (
+    change_own_settings,
+    confirm_pairing,
+    pin_login,
+    rename_device,
+    set_temporary_password,
+    start_pairing,
+)
 from apps.people.services import unblock as unblock_device
 
 
@@ -233,6 +243,45 @@ class LogoutView(APIView):
     def post(self, request: Request) -> Response:
         logout(request._request)
         return Response(status=204)
+
+
+class AtAShop(BasePermission):
+    # Someone acting as a staff member at a shop: the job the login put in `request.auth` (StaffSessionAuthentication).
+    # Nobody logged in, and the superuser, who is nobody's staff, are refused as an office route refuses them
+    # (ShopViewSet), with not_authenticated, before anything is read. A permission of its own, not AllowAny with a check
+    # after it: the API's description reads the permission to say who may call the route, and AllowAny would tell it
+    # "no login at all" (UI-9's review).
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if request.auth is None:
+            raise exceptions.NotAuthenticated("This route needs a staff login at a shop.")
+        return True
+
+
+class OwnSettingsView(APIView):
+    # A person changes their own language and font (UI-9, ADR-0039). Not an office route: an office route asks every
+    # change for a key of its own (PPL-5), and everyone may change their own choices, so no key fits. Beside logout, as
+    # it acts on the person, who belongs to no shop, not on a shop's rows; its answer holds the two choices and nothing
+    # else. So the sweep doesn't call it (NOT_SHOP_ROUTES, backend/tests/sweep_lists.py), and
+    # test_settings_answer_holds_nothing_of_a_shop proves the answer instead.
+    #
+    # The office routes' own login, though, not logout's: it reads the person afresh on every visit, so a suspended
+    # person, someone on a temporary password, a copied badge or a blocked laptop is refused here as on every office
+    # route (ADR-0038). It reads the person's job and its shop, and for a PIN's session the device that holds the key,
+    # each inside the shop its login door names (apps/people/login_doors.py), only to refuse them; the route itself
+    # reads no shop's row. It checks the CSRF token too, so another website can't change someone's language.
+    authentication_classes = [StaffSessionAuthentication]
+    permission_classes = [AtAShop]
+    # No answer to OPTIONS, which would describe the route's form to whoever asks: refused as the office routes refuse
+    # it, as the API's own description is the schema (ShopViewSet.initial, apps/core/api/base.py).
+    metadata_class = None
+
+    @extend_schema(request=OwnSettingsSerializer, responses=OwnSettingsAnswerSerializer)
+    def patch(self, request: Request) -> Response:
+        sent = OwnSettingsSerializer(data=request.data, partial=True)
+        sent.is_valid(raise_exception=True)
+        # cast: the login has put the person here, as AtAShop checked; DRF's type stubs can't see that.
+        person = change_own_settings(cast(User, request.user), **sent.validated_data)
+        return Response(OwnSettingsAnswerSerializer(person).data)
 
 
 class MeViewSet(ShopViewSet[StaffMember]):
