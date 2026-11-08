@@ -46,6 +46,7 @@ const JUMA: WhoIsHere = {
     id: "019a5e00-0000-7000-8000-0000000000b2",
     full_name: "Juma Mfano",
     language: "sw",
+    font: "default",
   },
   staff: {
     id: "019a5e00-0000-7000-8000-0000000000c3",

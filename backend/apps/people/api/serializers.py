@@ -3,7 +3,8 @@
 Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a
 shop's devices on the office routes (AUTH-5): a device as the device list shows it, and what a manager sends to say
 yes to a waiting one, to rename one, and to block or unblock one; what the owner sends to set a temporary password
-(AUTH-6); what a device sends for a PIN login, and what `me` answers (AUTH-4); and the answers of the routes a device
+(AUTH-6); what a device sends for a PIN login, and what `me` answers (AUTH-4); what a person sends to change their
+own language and font (UI-9); and the answers of the routes a device
 calls with its key (apps/people/api/views.py), the PIN screen's list of people among them (UI-4). A key, a key's hash
 or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
 """
@@ -13,7 +14,7 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
-from apps.people.models import Device, PairingRequest, StaffMember, User
+from apps.people.models import OWN_SETTINGS, Device, PairingRequest, StaffMember, User
 from apps.shops.api.fields import SideField
 from apps.shops.models import Shop, Side
 
@@ -151,11 +152,32 @@ class PinScreenStaffSerializer(serializers.ModelSerializer[StaffMember]):
 
 
 class MeUserSerializer(serializers.ModelSerializer[User]):
-    # The person, as the screens greet them, in their own language (03 §7.4). No phone and no email: a screen on a
-    # shared laptop doesn't need them, and the next person could read them there.
+    # The person, as the screens greet them, in their own language and font (03 §7.4, UI-9): the app applies both at
+    # every login, so they follow the person to any device. No phone and no email: a screen on a shared laptop doesn't
+    # need them, and the next person could read them there.
     class Meta:
         model = User
-        fields = ["id", "full_name", "language"]
+        fields = ["id", "full_name", "language", "font"]
+        read_only_fields = fields
+
+
+class OwnSettingsSerializer(serializers.ModelSerializer[User]):
+    # What a person sends to `PATCH /api/auth/me/settings/` (UI-9): one of their two choices, or both, each refused
+    # under its field if it isn't one the app knows (invalid_choice). Only these two fields: anything else sent, another
+    # person's id included, is not read at all. Both optional, as the screen sends only the one just tapped: written
+    # out, though the model's defaults already make them so, as that is a promise to the screen, not a side effect.
+    class Meta:
+        model = User
+        fields = list(OWN_SETTINGS)
+        extra_kwargs = {name: {"required": False} for name in OWN_SETTINGS}
+
+
+class OwnSettingsAnswerSerializer(serializers.ModelSerializer[User]):
+    # What the route answers: both choices, always, as now saved. Read-only, so the API's description, and the app's
+    # types from it, say both are always there.
+    class Meta:
+        model = User
+        fields = list(OWN_SETTINGS)
         read_only_fields = fields
 
 

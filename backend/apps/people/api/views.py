@@ -26,6 +26,7 @@ And what a session itself may ask, built on neither (AUTH-4):
 
     GET  /api/auth/me/              who is logged in here, where, and what they may do; an office route, in all but name
     POST /api/auth/logout/          this browser's session ends, at once, whatever has happened to them since
+    PATCH /api/auth/me/settings/    the person changes their own language and font, with no key (UI-9)
 
 Thin: each one calls its service (apps/people/services.py), or reads its rows, and answers with its serializer
 (ADR-0015).
@@ -60,19 +61,28 @@ from apps.people.api.serializers import (
     DeviceMeSerializer,
     DeviceReasonSerializer,
     DeviceSerializer,
+    OwnSettingsAnswerSerializer,
+    OwnSettingsSerializer,
     PairingStartSerializer,
     PinLoginSerializer,
     PinScreenStaffSerializer,
     TemporaryPasswordSerializer,
     WhoIsHereSerializer,
 )
-from apps.people.api.staff_session import MeSessionAuthentication
+from apps.people.api.staff_session import MeSessionAuthentication, StaffSessionAuthentication
 from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle, PinLoginThrottle
 from apps.people.device_keys import DEVICE_KEY_COOKIE
-from apps.people.models import Device, StaffMember
+from apps.people.models import Device, StaffMember, User
 from apps.people.selectors import LoginRefused, idle_lock_minutes, pin_screen_staff, who_is_here
 from apps.people.services import block as block_device
-from apps.people.services import confirm_pairing, pin_login, rename_device, set_temporary_password, start_pairing
+from apps.people.services import (
+    change_own_settings,
+    confirm_pairing,
+    pin_login,
+    rename_device,
+    set_temporary_password,
+    start_pairing,
+)
 from apps.people.services import unblock as unblock_device
 
 
@@ -233,6 +243,36 @@ class LogoutView(APIView):
     def post(self, request: Request) -> Response:
         logout(request._request)
         return Response(status=204)
+
+
+class OwnSettingsView(APIView):
+    # A person changes their own language and font (UI-9, ADR-0039). Not an office route: an office route asks every
+    # change for a key of its own (PPL-5), and everyone may change their own choices, so no key fits. Beside logout, as
+    # it acts on the person, who belongs to no shop, not on a shop's rows; its answer holds the two choices and nothing
+    # else. So the sweep doesn't call it (NOT_SHOP_ROUTES, backend/tests/sweep_lists.py), and
+    # test_settings_answer_holds_nothing_of_a_shop proves the answer instead.
+    #
+    # The office routes' own login, though, not logout's: it reads the person's job afresh on every visit, so a
+    # suspended person, someone on a temporary password, a copied badge or a blocked laptop is refused here as on every
+    # office route (ADR-0038). That read, of the person's own job at the shop the login door names, is the only shop
+    # row the visit touches. It checks the CSRF token too, so another website can't change someone's language.
+    authentication_classes = [StaffSessionAuthentication]
+    permission_classes = [AllowAny]
+
+    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
+        super().initial(request, *args, **kwargs)  # the login above, which refuses with the reason's code
+        if request.auth is None:
+            # Nobody logged in, or the superuser, who is nobody's staff and has no screens to set: refused as an office
+            # route refuses them, before anything is read.
+            raise exceptions.NotAuthenticated("Your own settings need a staff login at a shop.")
+
+    @extend_schema(request=OwnSettingsSerializer, responses=OwnSettingsAnswerSerializer)
+    def patch(self, request: Request) -> Response:
+        sent = OwnSettingsSerializer(data=request.data, partial=True)
+        sent.is_valid(raise_exception=True)
+        # cast: the login has put the person here, as initial() checked; DRF's type stubs can't see that.
+        person = change_own_settings(cast(User, request.user), **sent.validated_data)
+        return Response(OwnSettingsAnswerSerializer(person).data)
 
 
 class MeViewSet(ShopViewSet[StaffMember]):

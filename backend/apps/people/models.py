@@ -39,6 +39,12 @@ class Font(models.TextChoices):
     SECOND = "second", "Second, easy to read (Atkinson Hyperlegible Next)"
 
 
+# The two choices a person makes for their own screens, and the only fields of theirs they change themselves
+# (change_own_settings, apps/people/services.py, UI-9). Everything else about a person is set by the shop or the
+# superuser.
+OWN_SETTINGS = ("language", "font")
+
+
 class UserManager(BaseUserManager["User"]):
     # Not written into the migrations (no `use_in_migrations`): inside a migration, User is a bare copy
     # without set_password or full_clean, so this manager couldn't run there, and 0001 would import it forever.

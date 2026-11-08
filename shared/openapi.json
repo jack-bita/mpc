@@ -69,6 +69,51 @@
                 }
             }
         },
+        "/api/auth/me/settings/": {
+            "patch": {
+                "operationId": "auth_me_settings_partial_update",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OwnSettingsRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OwnSettingsAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/auth/pin-login/": {
             "post": {
                 "operationId": "auth_pin_login_create",
@@ -993,6 +1038,14 @@
                 "type": "string",
                 "description": "* `active` - Active\n* `blocked` - Blocked"
             },
+            "FontEnum": {
+                "enum": [
+                    "default",
+                    "second"
+                ],
+                "type": "string",
+                "description": "* `default` - Default (Source Sans 3)\n* `second` - Second, easy to read (Atkinson Hyperlegible Next)"
+            },
             "Health": {
                 "type": "object",
                 "properties": {
@@ -1184,13 +1237,58 @@
                             }
                         ],
                         "readOnly": true
+                    },
+                    "font": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FontEnum"
+                            }
+                        ],
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "font",
                     "full_name",
                     "id",
                     "language"
                 ]
+            },
+            "OwnSettingsAnswer": {
+                "type": "object",
+                "properties": {
+                    "language": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/LanguageEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "font": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FontEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "font",
+                    "language"
+                ]
+            },
+            "OwnSettingsRequest": {
+                "type": "object",
+                "properties": {
+                    "language": {
+                        "$ref": "#/components/schemas/LanguageEnum"
+                    },
+                    "font": {
+                        "$ref": "#/components/schemas/FontEnum"
+                    }
+                }
             },
             "PaginatedDeviceList": {
                 "type": "object",
