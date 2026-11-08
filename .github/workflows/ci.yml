@@ -45,8 +45,8 @@ jobs:
     services:
       postgres:
         # The same tag as compose.dev.yml, so CI tests on the PostgreSQL every laptop runs.
-        # Dependabot updates only compose.dev.yml; scripts/test_same_postgres.py keeps CI red until
-        # this line matches it.
+        # Dependabot updates the compose files (compose.dev.yml, compose.e2e.yml), never this line;
+        # scripts/test_same_postgres.py keeps CI red until this line matches them.
         image: postgres:18.6-alpine
         env:
           POSTGRES_DB: mpc
