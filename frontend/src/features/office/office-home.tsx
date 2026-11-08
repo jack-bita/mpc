@@ -12,6 +12,7 @@
 
 import { useTranslations } from "use-intl";
 
+import { ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { ButtonLink } from "@/components/design/button";
 import {
@@ -35,9 +36,12 @@ export function OfficeHome() {
       },
     ].filter((screen) => screen.open);
 
-  // Refused, or no answer: why. Nobody logged in, the office's frame sends them to the way in
-  // (office-frame.tsx), so "Ingia kwanza" shows only for that moment.
-  if (!me.data) return <ApiErrorAlert error={me.error} />;
+  // Refused, or no answer yet: why. A refusal is read before the answer: TanStack keeps the last answer
+  // beside it, which would greet someone the server has just refused, as a suspended person. A 5xx or a
+  // dropped network leaves the answer as it was. Nobody logged in, the office's frame sends them to the
+  // way in (office-frame.tsx), so "Ingia kwanza" shows only for that moment.
+  const refused = me.error instanceof ApiRefusal && me.error.status < 500;
+  if (refused || !me.data) return <ApiErrorAlert error={me.error} />;
 
   const open = screens(me.data);
   return (

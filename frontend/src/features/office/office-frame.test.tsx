@@ -111,14 +111,63 @@ describe("the office's frame", () => {
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/"));
   });
 
-  it("keeps a person whose session the server refused for a reason, to read why", async () => {
-    // A suspension says so on the screen (ApiErrorAlert); sending them to the login would hide it.
+  it("keeps a person whose session the server refused for a reason, to read why, with Toka", async () => {
+    // A suspension says so in place of the screen; sending them to the login would hide it.
     answer("GET", ME, refusal(403, "staff.suspended"));
+    answer("POST", LOGOUT, { status: 204 });
 
     renderTheFrame();
 
-    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(
+      await screen.findByText("Umesimamishwa. Ongea na meneja au mmiliki."),
+    ).toBeTruthy();
+    expect(screen.queryByText("screen")).toBeNull();
     expect(router.replace).not.toHaveBeenCalled();
+    // The session still stands on the server, and blocks a new login (409): Toka ends it.
+    fireEvent.click(
+      within(screen.getByRole("main")).getByRole("button", { name: "Toka" }),
+    );
+    await waitFor(() => expect(logouts()).toHaveLength(1));
+  });
+
+  it("forgets a person the server refuses for a reason, so a later failure never brings them back", async () => {
+    // Baba suspends Neema while the office shows her. TanStack keeps her last answer beside the
+    // refusal, so a 502 a moment later, as the server restarts, would put her name and Toka back.
+    let answers = "neema";
+    answer("GET", ME, () => {
+      if (answers === "neema") return Response.json(NEEMA);
+      const why =
+        answers === "suspended"
+          ? refusal(403, "staff.suspended")
+          : refusal(502, "server_error");
+      return Response.json(why.body, { status: why.status });
+    });
+    const store = makeQueryClient();
+    render(
+      <QueryClientProvider client={store}>
+        <OfficeFrame>
+          <p>screen</p>
+        </OfficeFrame>
+      </QueryClientProvider>,
+    );
+    await bar().findByText("Neema");
+
+    answers = "suspended";
+    await act(() => store.refetchQueries({ queryKey: WHO_IS_HERE }));
+    expect(
+      await screen.findByText("Umesimamishwa. Ongea na meneja au mmiliki."),
+    ).toBeTruthy();
+    expect(bar().queryByText("Neema")).toBeNull();
+    await waitFor(() =>
+      expect(store.getQueryData(WHO_IS_HERE)).toBeUndefined(),
+    );
+
+    answers = "restarting";
+    await act(() =>
+      store.refetchQueries({ queryKey: WHO_IS_HERE }).catch(() => undefined),
+    );
+    expect(bar().queryByText("Neema")).toBeNull();
+    expect(bar().queryByRole("button", { name: "Toka" })).toBeNull();
   });
 
   it("stays where it is while there is no network", async () => {

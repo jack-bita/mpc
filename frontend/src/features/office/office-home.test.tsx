@@ -1,8 +1,11 @@
 // office-home.test.tsx — the office's home page greets the person, with a big button for each office
 // screen they may open (UI-5).
+import { QueryClientProvider } from "@tanstack/react-query";
 import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { makeQueryClient } from "@/api/query-client";
+import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { DAWA, whoIsHere } from "@/test/devices";
 import { answer, refusal } from "@/test/fake-server";
 import { render } from "@/test/render";
@@ -47,6 +50,28 @@ describe("the office's home page", () => {
       ),
     ).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("greets nobody the server refused since, though the store still holds their answer", async () => {
+    // TanStack keeps the last answer beside a refusal: read first, it would greet a suspended person.
+    const store = makeQueryClient();
+    store.setQueryData(
+      WHO_IS_HERE,
+      whoIsHere([{ side: DAWA, permissions: ["device.manage"] }]),
+    );
+    answer("GET", ME, refusal(403, "staff.suspended"));
+
+    render(
+      <QueryClientProvider client={store}>
+        <OfficeHome />
+      </QueryClientProvider>,
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Umesimamishwa",
+    );
+    expect(screen.queryByRole("heading", { name: "Karibu, Neema" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Vifaa" })).toBeNull();
   });
 
   it("says why when the server refuses the person", async () => {

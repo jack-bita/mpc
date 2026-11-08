@@ -7,7 +7,8 @@
 //                              device, so only the login says which shop it is at
 //   nobody (not_authenticated)  away to the way in: the password login on a phone, and the PIN login at
 //                              a registered laptop, whose home page it is (UI-4)
-//   refused for a reason        stays: each screen shows why (a suspension, a shop switched off)
+//   refused for a reason        why, in place of the screen, with Toka (a suspension, a shop switched
+//                              off): the session still stands on the server, and blocks a new login
 //   no answer, or a 5xx         stays, as it was: the offline banner says Inahitaji mtandao
 //   on a temporary password     Chagua nenosiri lako in place of the screen (choose-password.tsx), as
 //                              every office route refuses them until they choose (password.must_change)
@@ -16,9 +17,13 @@
 // (AUTH-4). A temporary password set later ends the person's sessions (AUTH-6), so every session meets
 // the mark at its login, where `me` is asked: the frame never needs to watch the other routes' refusals.
 //
+// Any refusal under 500 forgets the person at once: TanStack keeps their last answer beside a refusal,
+// and a 5xx or a dropped network a moment later would put their name and Toka back in the bar, as UI-4's
+// review found on the PIN screen (at-the-device.tsx).
+//
 // Toka ends the session on the server first, sent again until the server hears it, with the screen
 // hidden from the press; then the store forgets the person (forgetTheLastPerson), and they go to the way
-// in. The PIN login's Toka works the same way (at-the-device.tsx, UI-4).
+// in, as the PIN screen's Toka does (at-the-device.tsx, UI-4).
 //
 // "use client": it asks use-intl for words, calls the server, and reads the device's saved copy.
 "use client";
@@ -72,18 +77,20 @@ export function OfficeFrame({ children }: { children: ReactNode }) {
   const refused =
     me.error instanceof ApiRefusal && me.error.status < 500 ? me.error : null;
   // Nobody logged in, and the server says only that: no reason to read. Any other refusal is a reason,
-  // which the screen shows, and the person stays to read it.
+  // shown in place of the screen, and the person stays to read it.
   const nobody = refused?.body.code === "not_authenticated";
+  const endedFor = refused && !nobody ? refused : null;
   const hadAnswer = me.data !== undefined;
   useEffect(() => {
-    if (!nobody) return;
-    // A session that ended while the screen showed its person, at its idle time or by a logout in another
-    // tab: TanStack keeps their last answer beside the refusal. Forgotten first, or the login page would
-    // read it, and send them straight back here.
+    if (!refused) return;
+    // A session refused while the screen showed its person: at its idle time, by a logout in another tab,
+    // or for a reason, as a suspension. TanStack keeps their last answer beside the refusal: forgotten at
+    // once, or a 5xx a moment later would bring them back, and the login page would read it and send them
+    // straight back here. Asked again, `me` answers the same refusal, with no answer left to forget.
     if (hadAnswer) void forgetTheLastPerson(store);
     // replace, not push: Back from the login shouldn't open a screen that sends them to it again.
-    router.replace(wayIn);
-  }, [nobody, hadAnswer, store, wayIn, router]);
+    if (nobody) router.replace(wayIn);
+  }, [refused, nobody, hadAnswer, store, wayIn, router]);
 
   // Who is logged in, as `me` last said: TanStack keeps the last answer through a dropped network, which
   // leaves the person where they are. Nobody once the server refused them, or from the press of Toka.
@@ -100,6 +107,24 @@ export function OfficeFrame({ children }: { children: ReactNode }) {
   // PIN's: `me` gives a password the shop's minutes for this (UI-4). A phone that is only the person's own
   // doesn't: nobody else stands at it, and its session ends on the server by itself.
   useIdleLock(device ? here?.idle_minutes : undefined, leave);
+
+  function whatShows() {
+    // While leaving: nothing but the status line above.
+    if (leaving) return null;
+    // Refused for a reason: why, and Toka, which ends the session the server still holds; until then a
+    // login on this browser would be refused (409), and the reason told again at every visit.
+    if (endedFor)
+      return (
+        <div className="grid max-w-md gap-4">
+          <ApiErrorAlert error={endedFor} />
+          <div>
+            <Button onClick={leave}>{t("logout")}</Button>
+          </div>
+        </div>
+      );
+    if (here?.must_change_password) return <ChoosePassword />;
+    return children;
+  }
 
   return (
     <AppFrame
@@ -125,11 +150,7 @@ export function OfficeFrame({ children }: { children: ReactNode }) {
       </p>
       {/* A logout the server refused: why, and the person stays where they are. */}
       <ApiErrorAlert error={logout.error} />
-      {leaving ? null : here?.must_change_password ? (
-        <ChoosePassword />
-      ) : (
-        children
-      )}
+      {whatShows()}
     </AppFrame>
   );
 }
