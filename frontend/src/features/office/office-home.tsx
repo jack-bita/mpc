@@ -10,6 +10,7 @@
 // "use client": it asks use-intl for words, and the server who is here.
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiRefusal } from "@/api/refusal";
@@ -25,6 +26,12 @@ export function OfficeHome() {
   const t = useTranslations("office");
   const devices = useTranslations("device.office");
   const me = useWhoIsHere();
+  // Focus on the welcome as each person arrives: after a login, or Chagua nenosiri lako's Hifadhi, the
+  // button that had it is gone. A screen reader then says where the person is, and Tab goes on to the
+  // screens (UI-4's review moved focus to each step's heading the same way).
+  const welcome = useRef<HTMLHeadingElement>(null);
+  const arrived = me.data?.staff.id;
+  useEffect(() => welcome.current?.focus(), [arrived]);
 
   // The office's screens, each with who may open it. A new office screen adds its line here.
   const screens = (here: WhoIsHere) =>
@@ -46,7 +53,11 @@ export function OfficeHome() {
   const open = screens(me.data);
   return (
     <div className="grid max-w-md gap-6">
-      <h1 className="text-2xl font-semibold">
+      <h1
+        ref={welcome}
+        tabIndex={-1}
+        className="text-2xl font-semibold outline-none"
+      >
         {t("welcome", { name: me.data.staff.display_name })}
       </h1>
       {open.length > 0 ? (

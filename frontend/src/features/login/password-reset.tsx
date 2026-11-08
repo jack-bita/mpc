@@ -200,64 +200,79 @@ function WithTheKey({
     },
   });
 
-  if (aboutTheKey(check.error) || aboutTheKey(reset.error))
-    return (
-      <WayForward
-        text={codeMessage(words, "invalid_password_reset")}
-        href="/forgot-password/"
-        label={t("reset.askAgain")}
-        focus
-      />
-    );
-  // The check on its way: a status line; no answer, or the server's problem: why.
-  if (!check.isSuccess)
-    return check.isPending ? (
-      <p role="status">{t("reset.checking")}</p>
-    ) : (
-      <ApiErrorAlert error={check.error} />
-    );
-
-  // Where each refusal shows: the form's own beside its box, the server's beside the new box, and
-  // anything else in the alert (a key's refusal replaces the form, above).
-  const own = (code: string | undefined) => {
-    if (!code) return undefined;
-    return code === NOT_THE_SAME ? t("notTheSame") : codeMessage(words, code);
-  };
-  const server = fieldMessages(reset.error);
-  const { errors } = form.formState;
+  // The check on its way, said on a status line that is on the page from the start: one that comes with
+  // its words in it often goes unsaid (offline-banner.tsx). Empty, and hidden from the eye, after.
+  const checking = check.isPending;
   return (
-    // noValidate: the browser's own checks would speak its language, not the shop's.
-    <form
-      noValidate
-      onSubmit={(event) =>
-        void form.handleSubmit((values) => reset.mutate(values))(event)
-      }
-      className="grid gap-6"
-    >
-      <PasswordField
-        label={t("new")}
-        hint={t("newHint")}
-        error={own(errors.fresh?.message) ?? server.password}
-        // "new-password": the phone's password manager offers to make one, and saves it.
-        autoComplete="new-password"
-        {...form.register("fresh")}
-        autoFocus
-      />
-      <PasswordField
-        label={t("again")}
-        error={own(errors.again?.message)}
-        autoComplete="new-password"
-        {...form.register("again")}
-      />
-      {/* What no box can show: too many tries, no network. */}
-      <ApiErrorAlert error={server.password ? null : reset.error} />
-      <div>
-        <Button type="submit" disabled={reset.isPending}>
-          {t("save")}
-        </Button>
-      </div>
-    </form>
+    <>
+      <p role="status" className={checking ? undefined : "sr-only"}>
+        {checking ? t("reset.checking") : null}
+      </p>
+      {whatShows()}
+    </>
   );
+
+  function whatShows() {
+    if (aboutTheKey(check.error) || aboutTheKey(reset.error))
+      return (
+        <WayForward
+          text={codeMessage(words, "invalid_password_reset")}
+          href="/forgot-password/"
+          label={t("reset.askAgain")}
+          focus
+        />
+      );
+    // Still checking: only the status line above. No answer, or the server's problem: why.
+    if (checking) return null;
+    if (!check.isSuccess) return <ApiErrorAlert error={check.error} />;
+    return theForm();
+  }
+
+  // The form. Called, not drawn as a component of its own: one made inside this one would be new at every
+  // redraw, and React would empty its boxes as the person types.
+  function theForm() {
+    // Where each refusal shows: the form's own beside its box, the server's beside the new box, and
+    // anything else in the alert (a key's refusal replaces the form, above).
+    const own = (code: string | undefined) => {
+      if (!code) return undefined;
+      return code === NOT_THE_SAME ? t("notTheSame") : codeMessage(words, code);
+    };
+    const server = fieldMessages(reset.error);
+    const { errors } = form.formState;
+    return (
+      // noValidate: the browser's own checks would speak its language, not the shop's.
+      <form
+        noValidate
+        onSubmit={(event) =>
+          void form.handleSubmit((values) => reset.mutate(values))(event)
+        }
+        className="grid gap-6"
+      >
+        <PasswordField
+          label={t("new")}
+          hint={t("newHint")}
+          error={own(errors.fresh?.message) ?? server.password}
+          // "new-password": the phone's password manager offers to make one, and saves it.
+          autoComplete="new-password"
+          {...form.register("fresh")}
+          autoFocus
+        />
+        <PasswordField
+          label={t("again")}
+          error={own(errors.again?.message)}
+          autoComplete="new-password"
+          {...form.register("again")}
+        />
+        {/* What no box can show: too many tries, no network. */}
+        <ApiErrorAlert error={server.password ? null : reset.error} />
+        <div>
+          <Button type="submit" disabled={reset.isPending}>
+            {t("save")}
+          </Button>
+        </div>
+      </form>
+    );
+  }
 }
 
 /** A sentence in place of the form, and the one way forward from it. */

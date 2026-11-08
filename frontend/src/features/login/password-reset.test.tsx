@@ -79,6 +79,33 @@ describe("the email link's page", () => {
     expect(window.history.length).toBe(entries);
   });
 
+  it("says it is checking the link on a status line that stays on the page", async () => {
+    // A status line that comes with its words in it often goes unsaid (offline-banner.tsx): the line is
+    // there from the start, and its words change.
+    let answerTheCheck: (response: Response) => void = () => undefined;
+    answer(
+      "GET",
+      RESET,
+      () =>
+        new Promise<Response>((resolve) => {
+          answerTheCheck = resolve;
+        }),
+    );
+    answer("POST", RESET, { status: 401, body: { status: 401 } });
+    openTheLink();
+
+    const line = await screen.findByText("Tunaangalia kiungo…");
+    expect(line.getAttribute("role")).toBe("status");
+
+    await act(async () =>
+      answerTheCheck(Response.json({ status: 200, data: {} })),
+    );
+
+    await screen.findByLabelText("Nenosiri jipya");
+    expect(screen.getByRole("status")).toBe(line);
+    expect(line.textContent).toBe("");
+  });
+
   it("sets the new password with the link's key, and says to log in with it", async () => {
     aWorkingKey();
     openTheLink();

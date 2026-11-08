@@ -35,6 +35,22 @@ describe("the office's home page", () => {
     expect(link.getAttribute("href")).toMatch(/^\/devices\/?$/);
   });
 
+  it("moves focus to its welcome as it opens, where the form that sent the person here had it", async () => {
+    // After a login, or Chagua nenosiri lako's Hifadhi, the button that had focus is gone: the welcome
+    // takes it, so a screen reader says where the person is, and Tab goes on to the screens.
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: ["device.manage"] }]),
+    });
+
+    render(<OfficeHome />);
+
+    const welcome = await screen.findByRole("heading", {
+      name: "Karibu, Neema",
+    });
+    expect(document.activeElement).toBe(welcome);
+  });
+
   it("offers no screen someone may not open, and says so", async () => {
     // A seller logged in by password sees no Vifaa: registering and blocking devices isn't theirs.
     answer("GET", ME, {
