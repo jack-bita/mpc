@@ -198,3 +198,19 @@ def test_a_pin_session_changes_its_own_settings(staff_a: StaffMember, laptop_key
     answer = laptop.patch(SETTINGS, {"font": "second"}, format="json")
 
     assert (answer.status_code, answer.data) == (200, {"language": "sw", "font": "second"})
+
+
+def test_a_choice_follows_the_person_to_another_device(staff_a: StaffMember, laptop_key: str) -> None:
+    # The card's first case, on the server: Asha picks the second font on her phone, then logs in by PIN at the
+    # counter laptop, another browser with a session of its own. The laptop learns her choice from `me` there, as it is
+    # saved on her, not on the phone (UI-9).
+    on_a_phone(staff_a).patch(SETTINGS, {"language": "en", "font": "second"}, format="json")
+    with shop_context(staff_a.shop_id):
+        set_pin(staff_a, PIN, by=None)
+    laptop = APIClient()
+    laptop.cookies[KEY_COOKIE] = laptop_key
+    assert laptop.post(PIN_LOGIN, {"staff": str(staff_a.pk), "pin": PIN}, format="json").status_code == 204
+
+    person = laptop.get(ME).data["user"]
+
+    assert (person["language"], person["font"]) == ("en", "second")
