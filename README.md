@@ -14,7 +14,10 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 
 **Status:** in development. Working today: CI (automatic checks) on every pull request, a demo that updates itself on every merge, and an app that installs on a laptop or phone and opens with no internet. The [build plan](docs/04-build-plan.md) ticks each task when it merges.
 
-**Demo:** <https://mabatinipumba-demo.onrender.com>, with fake data only. It sleeps when nobody uses it, so the first visit takes about a minute.
+**Demo:** <https://mabatinipumba-demo.onrender.com>, with fake data only. It sleeps when nobody uses it, so the first visit takes about a minute. It holds one made-up shop, *Duka la Mfano*, made fresh every night; the logins are public on purpose:
+
+- **The manager:** on a phone or a second browser, `/login/` with `meneja@example.com` and `jaribu-demo`.
+- **A seller at a laptop:** *Sajili kifaa hiki* on the laptop, the manager confirms its code, then tap Asha (PIN `2580`, Dawa) or Baraka (PIN `1470`, Vyakula). A one-tap way in comes later.
 
 ## Start here
 
