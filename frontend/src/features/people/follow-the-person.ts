@@ -18,7 +18,7 @@
 // flickers. A reload shows the laptop's own for a moment, until `me` answers: accepted (the UI-9 card).
 import { useEffect } from "react";
 
-import { setPersonsLanguage } from "@/i18n/language";
+import { isLanguage, setPersonsLanguage } from "@/i18n/language";
 
 import type { WhoIsHere } from "./who-is-here";
 
@@ -30,7 +30,10 @@ export function useFollowThePerson(here: WhoIsHere | undefined): void {
   useEffect(() => {
     // Nobody here: the laptop's own, which the last person's undoing below has already brought back.
     if (language === undefined || font === undefined) return;
-    setPersonsLanguage(language);
+    // A language this copy of the app has no book for, as a newer server may send before the laptop updates:
+    // the laptop's own, never a screen of bare keys (UI-9's review). The font needs no such check: a role
+    // with no rule in globals.css shows the default font.
+    setPersonsLanguage(isLanguage(language) ? language : null);
     document.documentElement.dataset.font = font;
     return () => {
       setPersonsLanguage(null);

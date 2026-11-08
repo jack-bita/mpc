@@ -89,6 +89,21 @@ describe("following the person", () => {
     expect(page.dataset.font).toBeUndefined();
   });
 
+  it("opens the laptop's own language for one this copy of the app has no words for", () => {
+    // A newer server may learn a third language before this laptop's copy of the app updates. With no book
+    // for it, every screen would show bare keys: the laptop's own book is the honest fallback. The font
+    // needs no such guard: a role with no rule in globals.css shows the default font.
+    const fromANewerServer = {
+      ...NEEMA,
+      user: { ...NEEMA.user, language: "fr" },
+    } as unknown as WhoIsHere;
+
+    render(<Frame here={fromANewerServer} />);
+
+    expect(document.body.textContent).toContain("Toka");
+    expect(page.lang).toBe("sw");
+  });
+
   it("follows the next person at once, on a quick switch", () => {
     const { rerender } = render(<Frame here={NEEMA_IN_ENGLISH} />);
 
