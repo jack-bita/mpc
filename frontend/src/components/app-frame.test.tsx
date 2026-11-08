@@ -109,4 +109,21 @@ describe("the bar once someone logs in", () => {
       "English",
     ]);
   });
+
+  it("has no language button once someone is logged in: theirs is in Mipangilio yangu", () => {
+    // Jack's choice (UI-9): the bar's button is the laptop's own language, for the tiles and the login
+    // pages; a person's own follows them, and only they change it.
+    render(
+      <AppFrame
+        area="login"
+        person="Neema"
+        actions={<button type="button">Toka</button>}
+      >
+        <p>screen</p>
+      </AppFrame>,
+    );
+
+    const buttons = within(screen.getByRole("banner")).getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual(["Toka"]);
+  });
 });

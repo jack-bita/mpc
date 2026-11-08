@@ -299,3 +299,37 @@ describe("leaving the office", () => {
     }
   });
 });
+
+describe("the person's own language and font", () => {
+  const NEEMA_IN_ENGLISH = {
+    ...NEEMA,
+    user: { ...NEEMA.user, language: "en" as const, font: "second" as const },
+  };
+  const page = document.documentElement;
+
+  it("applies them at a password's login too, and Toka brings back the laptop's own", async () => {
+    // A manager on a phone, or at the shop laptop with a password, lands here, not on the PIN screen.
+    let here = true;
+    answer("GET", ME, () => {
+      const nobody = refusal(403, "not_authenticated");
+      return here
+        ? Response.json(NEEMA_IN_ENGLISH)
+        : Response.json(nobody.body, { status: nobody.status });
+    });
+    answer("POST", LOGOUT, () => {
+      here = false;
+      return new Response(null, { status: 204 });
+    });
+    renderTheFrame();
+
+    const logout = await bar().findByRole("button", { name: "Log out" });
+    expect(page.dataset.font).toBe("second");
+    // Her own language is in Mipangilio yangu, so the bar offers no switch while she is in.
+    expect(bar().queryByRole("button", { name: "Kiswahili" })).toBeNull();
+
+    fireEvent.click(logout);
+
+    await waitFor(() => expect(page.lang).toBe("sw"));
+    expect(page.dataset.font).toBeUndefined();
+  });
+});

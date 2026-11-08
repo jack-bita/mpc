@@ -3,6 +3,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { OfficeFrame } from "@/features/office/office-frame";
 import { DAWA, DAWA_LAPTOP_ANSWER, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
@@ -105,6 +106,29 @@ describe("Mipangilio yangu", () => {
       (request) => new URL(request.url).pathname === ME,
     );
     expect(asked).toHaveLength(1);
+  });
+
+  it("changes the whole app at once, inside the office's frame", async () => {
+    // The card's first case, on this side: she picks the second font, it is saved on her, and the page
+    // follows with no reload. Another device shows it at her next login there, from `me`
+    // (follow-the-person.test.tsx, and test_me_answers_the_persons_choices on the server).
+    answer("GET", ME, { status: 200, body: NEEMA });
+    savesAsTheServerDoes();
+    render(
+      <OfficeFrame>
+        <MySettings />
+      </OfficeFrame>,
+    );
+
+    fireEvent.click(await screen.findByText("Herufi ya pili, rahisi kusoma"));
+    await waitFor(() =>
+      expect(document.documentElement.dataset.font).toBe("second"),
+    );
+
+    fireEvent.click(screen.getByText("English"));
+    expect(
+      await screen.findByRole("heading", { name: "My settings" }),
+    ).toBeTruthy();
   });
 
   it("shows the tap at once, while the server hears it", async () => {
