@@ -80,7 +80,7 @@ from apps.people.pins import (
     pin_matches,
 )
 from apps.people.selectors import check_may_act, shop_today
-from apps.shops.models import Shop, Side
+from apps.shops.models import Shop, ShopKind, Side
 from apps.shops.services import NewSide, create_shop
 
 
@@ -485,14 +485,15 @@ def change_own_settings(user: User, *, language: str | None = None, font: str | 
     return user
 
 
-def set_up_shop(*, name: str, code: str, sides: Sequence[NewSide]) -> Shop:
-    """Make a live shop with everything it needs to work, all or nothing: its sides, each with its stock location
-    and cash drawer (create_shop, apps/shops/services.py), and its own copy of the six roles. For the superuser and
+def set_up_shop(*, name: str, code: str, sides: Sequence[NewSide], kind: ShopKind = ShopKind.LIVE) -> Shop:
+    """Make a shop with everything it needs to work, all or nothing: its sides, each with its stock location and
+    cash drawer (create_shop, apps/shops/services.py), and its own copy of the six roles. For the superuser and
     system jobs. `shops` may not import `people` (ADR-0035), so the roles are added here, not by create_shop: a
-    shop made by create_shop alone has no roles, so nobody may act there."""
+    shop made by create_shop alone has no roles, so nobody may act there. `kind`: live unless the caller says
+    otherwise, passed on to create_shop; the demo seed (DATA-1) makes a demo shop."""
     # One transaction around both: if the roles can't be copied, the shop and its sides are taken back too.
     with transaction.atomic():
-        shop = create_shop(name=name, code=code, sides=sides)
+        shop = create_shop(name=name, code=code, sides=sides, kind=kind)
         # create_shop closes the new shop as it returns; the roles' checks read through the guard, so it is opened
         # again for them.
         with shop_context(shop):

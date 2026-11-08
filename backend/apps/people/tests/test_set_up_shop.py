@@ -20,7 +20,7 @@ from apps.core.permissions import ROLE_TEMPLATES, Permission, RoleTemplate
 from apps.core.tenancy import shop_context, system_context
 from apps.people.models import Role
 from apps.people.services import set_up_shop
-from apps.shops.models import Shop, Side
+from apps.shops.models import Shop, ShopKind, Side
 from apps.shops.services import NewSide
 
 pytestmark = pytest.mark.django_db
@@ -61,3 +61,13 @@ def test_shops_roles_are_copies() -> None:
     with shop_context(jingine):
         assert Permission.SALE_BARGAIN in Role.objects.get(template=RoleTemplate.ORDER_WRITER).permissions
     assert Permission.SALE_BARGAIN in ROLE_TEMPLATES[RoleTemplate.ORDER_WRITER]
+
+
+def test_set_up_shop_makes_a_demo_shop_with_its_roles() -> None:
+    # The demo seed (DATA-1) makes its shop through set_up_shop, so the kind reaches create_shop, and the demo shop
+    # gets the same six roles as a real one: a visitor tries the roles a real shop has.
+    shop = set_up_shop(name="Duka la Mfano", code="MFANO", sides=DAWA_NA_VYAKULA, kind=ShopKind.DEMO)
+
+    assert Shop.objects.get(pk=shop.pk).kind == ShopKind.DEMO
+    with shop_context(shop):
+        assert {role.template for role in Role.objects.all()} == set(RoleTemplate)

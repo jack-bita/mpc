@@ -22,6 +22,7 @@ from apps.shops.models import (
     PaymentAccountSide,
     SaleFlow,
     Shop,
+    ShopKind,
     Side,
     StockLocation,
 )
@@ -99,4 +100,31 @@ def test_create_shop_needs_a_side() -> None:
         create_shop(name=NAME, code=CODE, sides=[])
 
     assert refused.value.code == "shop.no_sides"
+    assert not Shop.objects.exists()
+
+
+def test_create_shop_makes_a_live_shop_unless_told() -> None:
+    # Every shop made so far is a real one, and the callers that don't name a kind keep making real ones.
+    shop = create_shop(name=NAME, code=CODE, sides=SIDES)
+
+    assert shop.kind == ShopKind.LIVE
+
+
+def test_create_shop_makes_a_demo_shop() -> None:
+    # The demo seed (DATA-1) makes its shop as a demo one, with the same sides, locations and drawers as any
+    # other: a demo shop works as a real one does, with fake data (ADR-0029).
+    shop = create_shop(name=NAME, code=CODE, sides=SIDES, kind=ShopKind.DEMO)
+
+    assert Shop.objects.get(pk=shop.pk).kind == ShopKind.DEMO
+    with shop_context(shop):
+        assert StockLocation.objects.count() == 2
+
+
+def test_create_shop_refuses_a_practice_shop_with_no_shop_to_copy() -> None:
+    # A practice shop names the live shop it copies (ADR-0014), and create_shop takes no such argument yet. The
+    # model's own rule refuses it, with its code, before anything is written.
+    with pytest.raises(ValidationError) as refused:
+        create_shop(name=NAME, code=CODE, sides=SIDES, kind=ShopKind.PRACTICE)
+
+    assert [error.code for error in refused.value.error_dict["__all__"]] == ["shop.practice_needs_shop"]
     assert not Shop.objects.exists()

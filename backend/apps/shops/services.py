@@ -12,7 +12,8 @@ rule with a ValidationError that carries a code (ADR-0032), which the API's erro
 (apps/core/tenancy.py): anything with a `shop_id` and a `staff_id`, as a staff member has. create_shop needs
 none: a new shop has no staff yet, so every row it makes has `created_by` empty, like any row the system
 makes (02 §1). A new shop's roles live in `people`, so a `people` service, set_up_shop, calls create_shop and
-then copies the role templates in, in one transaction (PPL-3, 03 §5.8).
+then copies the role templates in, in one transaction (PPL-3, 03 §5.8). A shop is live unless it is made as
+something else: the demo seed (DATA-1, apps/demo) makes its shop as a demo one.
 """
 
 import uuid
@@ -30,6 +31,7 @@ from apps.shops.models import (
     PaymentAccountSide,
     SaleFlow,
     Shop,
+    ShopKind,
     Side,
     StockLocation,
 )
@@ -44,11 +46,11 @@ class NewSide:
     sale_flow: SaleFlow = SaleFlow.ONE_SCREEN
 
 
-def create_shop(*, name: str, code: str, sides: Sequence[NewSide]) -> Shop:
-    """Make a live shop with its sides, and for each side a default stock location and a cash drawer, all
-    or nothing. For set_up_shop (apps/people/services.py), which adds the shop's roles: on its own, it makes a
-    shop with no roles, where nobody may act. Always `kind=live` for now: the demo seed (DATA-1) and
-    practice shops (ADR-0014) will need a `kind` argument, which the first of them adds."""
+def create_shop(*, name: str, code: str, sides: Sequence[NewSide], kind: ShopKind = ShopKind.LIVE) -> Shop:
+    """Make a shop with its sides, and for each side a default stock location and a cash drawer, all or
+    nothing. For set_up_shop (apps/people/services.py), which adds the shop's roles: on its own, it makes a
+    shop with no roles, where nobody may act. `kind`: live, unless the caller says otherwise. The demo seed
+    (DATA-1) makes a demo shop, which its own refusal then knows as its own."""
     # A shop does everything on a side (ADR-0001): with none it could neither sell nor count. Refused
     # before anything is written.
     if not sides:
@@ -57,8 +59,10 @@ def create_shop(*, name: str, code: str, sides: Sequence[NewSide]) -> Shop:
     # there is never a shop with half its sides set up.
     with transaction.atomic():
         # Two shops made with the same code at the very same moment can both pass full_clean; the unique
-        # rule on `code` then refuses the second.
-        shop = _saved(Shop(name=name, code=code))
+        # rule on `code` then refuses the second. The kind is set here, once: nothing changes it later
+        # (Shop.kind). A practice shop can't be made here yet: it must name the live shop it copies
+        # (ADR-0014), which this takes no argument for, so full_clean refuses it (shop.practice_needs_shop).
+        shop = _saved(Shop(name=name, code=code, kind=kind))
         # The new shop is opened for the rows below, because their full_clean reads through the guarded
         # `objects` (CORE-2). No caller could have opened it: it didn't exist yet. The block hands back
         # whatever shop was open before.
