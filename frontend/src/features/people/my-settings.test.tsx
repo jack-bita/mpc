@@ -185,6 +185,76 @@ describe("Mipangilio yangu", () => {
     expect(screen.getByRole("status").textContent).toBe("Inahifadhi…");
   });
 
+  it("shows two quick taps at once, while both wait their turn", async () => {
+    // Asha taps the second font, then English, on a slow network. The changes go one at a time, in order
+    // (CHANGES_IN_ORDER): the second waits for the first. Both dots show what she tapped meanwhile, not
+    // only the last one.
+    const waiting: ((answer: Response) => void)[] = [];
+    answer("GET", ME, { status: 200, body: NEEMA });
+    answer(
+      "PATCH",
+      SETTINGS,
+      (request) =>
+        new Promise<Response>((resolve) => {
+          void request
+            .json()
+            .then((change: object) =>
+              waiting.push(() =>
+                resolve(Response.json({ ...NEEMA.user, ...change })),
+              ),
+            );
+        }),
+    );
+    render(<MySettings />);
+
+    fireEvent.click(await screen.findByText("Herufi ya pili, rahisi kusoma"));
+    fireEvent.click(screen.getByText("English"));
+
+    await waitFor(() => expect(picked("English")).toBe("true"));
+    expect(picked("Herufi ya pili, rahisi kusoma")).toBe("true");
+    expect(screen.getByRole("status").textContent).toBe("Inahifadhi…");
+  });
+
+  it("never puts a late answer into the next person's record", async () => {
+    // Neema taps, and before the answer lands the store's `me` is someone else's: the answer is hers, so
+    // it must not change Juma's record (onSuccess checks whose it is).
+    const juma: WhoIsHere = {
+      ...NEEMA,
+      user: { ...NEEMA.user, id: "019a5e00-0000-7000-8000-0000000000b2" },
+    };
+    let land: () => void = () => undefined;
+    answer("GET", ME, { status: 200, body: NEEMA });
+    answer(
+      "PATCH",
+      SETTINGS,
+      () =>
+        new Promise<Response>((resolve) => {
+          land = () =>
+            resolve(Response.json({ ...NEEMA.user, font: "second" }));
+        }),
+    );
+    const store = makeQueryClient();
+    render(
+      <QueryClientProvider client={store}>
+        <MySettings />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByText("Herufi ya pili, rahisi kusoma"));
+    await waitFor(() =>
+      expect(sent.some((r) => r.method === "PATCH")).toBe(true),
+    );
+
+    act(() => {
+      store.setQueryData(WHO_IS_HERE, juma);
+    });
+    await act(async () => {
+      land();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(store.getQueryData<WhoIsHere>(WHO_IS_HERE)?.user).toEqual(juma.user);
+  });
+
   it("says why a change was refused, and shows what is still saved", async () => {
     // Suspended since the screen opened: the server refuses, the dot goes back, and she is told why.
     answer("GET", ME, { status: 200, body: NEEMA });
