@@ -490,6 +490,9 @@ describe("each person's own language and font", () => {
 
   it("juma logs in after her on the same laptop and sees his own choices", async () => {
     // The card's own case: the quick switch hands the laptop from her to him, and nothing of hers stays.
+    // The laptop's own language is English, switched from the bar, and Juma reads Swahili: so his welcome
+    // in Swahili is his own choice at work, not the laptop's (UI-9's review).
+    setLanguage("en");
     theLaptop(NEEMA_IN_ENGLISH);
     render(<AtTheDevice device={DAWA_LAPTOP} />);
     await screen.findByRole("heading", { name: "Welcome, Neema" });
@@ -497,7 +500,7 @@ describe("each person's own language and font", () => {
     fireEvent.click(bar().getByRole("button", { name: "Switch person" }));
     // The tiles, in the laptop's own language and font: they are for whoever is next.
     expect(
-      await screen.findByRole("heading", { name: "Wewe ni nani?" }),
+      await screen.findByRole("heading", { name: "Who are you?" }),
     ).toBeTruthy();
     expect(page.dataset.font).toBeUndefined();
     fireEvent.click(
