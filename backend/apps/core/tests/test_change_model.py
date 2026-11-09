@@ -93,3 +93,15 @@ def test_change_log_has_a_counter_of_its_own(shop_a: Model) -> None:
         for _ in range(3):
             next_number(shop_a, SequenceName.DEVICE)
         assert next_number(shop_a, SequenceName.CHANGE) == 1
+
+
+def test_change_log_has_one_index_on_its_shop() -> None:
+    # Every line is a write on the busiest table there is, and each index costs one more write per line. The rule of
+    # one line per number (shop, seq) is an index that leads with `shop`, and every pull reads by it, so an index on
+    # `shop` alone, which Django adds to a link by itself, would only cost (from the review).
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT indexdef FROM pg_indexes WHERE tablename = %s", [Change._meta.db_table])
+        indexes = sorted(indexdef for (indexdef,) in cursor.fetchall())
+    assert len(indexes) == 2, indexes  # the primary key, and the rule
+    assert any("core_change_one_per_seq" in index and "(shop_id, seq)" in index for index in indexes)
+    assert not any(index.endswith("(shop_id)") for index in indexes)

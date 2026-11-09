@@ -4,7 +4,7 @@
 # (ADR-0021) before it holds a row. Then the shop's counters learn the change log's name, "change": the list of
 # names is a database rule too, so it is dropped and made again with the new name in it (apps/core/models.py).
 # After people's 0012 and shops' 0008, the latest of each, as every shop table links to its shop and to the staff
-# member who made the row.
+# member who made the row. Its shop link has no index of its own: the rule of one line per number leads with `shop`.
 
 import uuid
 
@@ -52,6 +52,7 @@ class Migration(migrations.Migration):
                 (
                     "shop",
                     models.ForeignKey(
+                        db_index=False,
                         on_delete=django.db.models.deletion.PROTECT,
                         related_name="+",
                         to="shops.shop",

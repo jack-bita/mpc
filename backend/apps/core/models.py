@@ -264,6 +264,10 @@ class Change(AppendOnly):
     # refuses a second save() and any delete() in Python, and the trigger in the migration refuses the same in
     # PostgreSQL (ADR-0021): a device that read line 41 must never find it rewritten.
 
+    # The shop, as ShopScoped has it, but with no index of its own: the one-line-per-number rule below is an index that
+    # leads with `shop`, so a second one, on `shop` alone, would cost one more write for every line on the busiest table
+    # there is, and serve no read (from the review). PROTECT never searches it either: no shop is ever deleted.
+    shop = models.ForeignKey("shops.Shop", on_delete=models.PROTECT, related_name="+", db_index=False)
     # The change's number in its shop: 1, 2, 3..., from the shop's "change" counter (apps/core/sequences.py). A big
     # integer: a shop numbers every change it ever makes, every sale included.
     seq = models.PositiveBigIntegerField()
