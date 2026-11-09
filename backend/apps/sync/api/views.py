@@ -4,7 +4,7 @@ For now one: the bootstrap (SYNC-2), which hands a new or reset device a copy of
 the push (SYNC-4) join it. Each builds on DeviceView (apps/people/api/base.py): the device's key logs it in, a blocked
 one is refused (401 device.blocked), and its shop is open for the whole visit, so every read goes through the guard and
 sees that shop alone. The tenancy sweep finds these routes by themselves and calls each as a device of each shop.
-Thin: what is read, and in which order, lives in apps/sync/bootstrap.py (ADR-0015).
+Thin: what is read, and in which order, lives in apps/sync/bootstrap.py (ADR-0041).
 """
 
 from typing import cast
@@ -22,10 +22,11 @@ from apps.sync.api.serializers import BootstrapAnswer
 from apps.sync.bootstrap import snapshot
 
 
-# Compressed for a client that asks (Accept-Encoding: gzip), as every browser does: the copy grows to about 1 MB once
-# products and customers travel (03 §6.4), over a shop's slow line. Here, not on every route: an answer that mixes a
-# secret with words a stranger can choose can leak through its compressed size (BREACH), and this one holds neither a
-# secret nor anything from the request. Django adds random bytes to each compressed answer as a further guard.
+# Compressed for a client that asks (Accept-Encoding: gzip), as every browser does: once products and customers
+# travel, the copy is still about 1 MB compressed (03 §6.4), over a shop's slow line. Here, not on every route: an
+# answer that mixes a secret with words a stranger can choose can leak through its compressed size (BREACH), and this
+# one holds neither a secret nor anything from the request. Django adds random bytes to each compressed answer as a
+# further guard.
 # And never kept by a cache, the browser's or a proxy's on the way (Cache-Control: no-store, private): it holds the
 # shop's whole staff list and everyone's keys, and a reset device must get today's lists, never yesterday's.
 @method_decorator(gzip_page, name="dispatch")

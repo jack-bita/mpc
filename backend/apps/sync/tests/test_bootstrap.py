@@ -151,8 +151,8 @@ def test_bootstrap_cursor_consistent(
 
 
 def test_bootstrap_is_compressed(paired: tuple[Device, str]) -> None:
-    # About 1 MB once products and customers travel (03 §6.4), over a shop's slow line: gzip, for a client that says it
-    # reads it, as every browser does. The same JSON once unpacked.
+    # Still about 1 MB compressed once products and customers travel (03 §6.4), over a shop's slow line: gzip, for a
+    # client that says it reads it, as every browser does. The same JSON once unpacked.
     _device, key = paired
     browser = a_browser(key)
     plain = browser.get(BOOTSTRAP)

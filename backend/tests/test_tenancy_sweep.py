@@ -40,8 +40,8 @@ backend/tests/conftest.py (sweep_device_clients).
 A new table, file or route is checked with no change here. The checks are never loosened, nor edited, to let
 something pass: what grows instead lives beside them, the two shops' data in backend/tests/conftest.py, and the
 tables, routes and files allowed to break a rule, each with its reason, in backend/tests/sweep_lists.py.
-Teaching the sweep something new, such as calling the sync routes with a device's key, is a new check, added
-in a reviewed change (backend rules).
+Teaching the sweep something new, such as sending a device route a method other than GET and POST, is a new
+check, added in a reviewed change (backend rules).
 
 Each check is a function that returns what breaks its rule, as in test_no_floats.py. The tests of the checks
 hand them tables, code and routes built to break the rule (the tables made in a throwaway registry of their

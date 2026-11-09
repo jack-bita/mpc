@@ -64,9 +64,9 @@ def payment_account_rows(shop: Shop) -> QuerySet[PaymentAccount]:
 
 def staff_rows(shop: Shop) -> QuerySet[StaffMember]:
     """The people at work at the shop, A to Z by full name: active and suspended. A suspended person is sent, marked so,
-    so an offline laptop refuses their PIN as the server does (X2, SYNC-10). Someone who left, or whom the superuser
-    switched off (User.is_active), can never log in here again, so isn't sent, as the PIN screen shows neither
-    (pin_screen_staff, apps/people/selectors.py)."""
+    so an offline laptop refuses their PIN as the server does (X2, SYNC-10). Someone who left can never log in here
+    again, and someone the superuser switched off (User.is_active) can't while they stay so; neither is sent, as the
+    PIN screen shows neither (pin_screen_staff, apps/people/selectors.py)."""
     _check_open(shop)
     # The person in the same query, for the full name, language and font each row shows. Nickname next, then id, so
     # two people of one name keep one order, as on the PIN screen.
