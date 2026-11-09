@@ -12,9 +12,10 @@ are abstract: they make no table of their own, they only pass their columns on t
 inherit them. PPL-1's User builds on the first two, every shop's table on ShopScoped, every office record
 people edit on Editable, and every ledger on AppendOnly.
 
-One real table lives here too, because every app needs it and `core` is the layer all may import:
-ShopSequence, a shop's named counters, such as the one that gives each new device its code (AUTH-1). Only
-next_number moves them (apps/core/sequences.py).
+Two real tables live here too, because every app needs them and `core` is the layer all may import:
+ShopSequence, a shop's named counters, such as the one that gives each new device its code (AUTH-1), moved
+only by next_number (apps/core/sequences.py); and Change, a shop's change log, the numbered list of changed
+records that devices pull (SYNC-1, 03 §6.4), written only by recording_changes (apps/core/changes.py).
 """
 
 import uuid
@@ -23,6 +24,7 @@ from typing import Any, NoReturn
 from django.db import models
 
 from apps.core.tenancy import ALL_SHOPS, current_shop
+from apps.core.type_codes import TYPE_CODE_MAX_LENGTH, TYPE_CODE_SHAPE
 
 
 class UUIDModel(models.Model):
@@ -206,9 +208,10 @@ class SequenceName(models.TextChoices):
     # The counters a shop keeps, one row each (03 §5.1). A fixed list, checked by the database too, because a typo
     # must never start a second counter: "devcie" would count again from 1 and hand out device codes already in use,
     # so two devices would print the same receipt numbers (D7). A new counter is a new line here and a migration
-    # that rebuilds the rule below, as a new permission code is (apps/core/permissions.py). The change log's
-    # counter comes with SYNC-1.
+    # that rebuilds the rule below, as a new permission code is (apps/core/permissions.py).
     DEVICE = "device", "Device codes"
+    # The change log's numbers (Change, below; SYNC-1): one per changed record, in the order the changes commit.
+    CHANGE = "change", "Change-log numbers"
 
 
 class ShopSequence(ShopScoped):
@@ -240,3 +243,57 @@ class ShopSequence(ShopScoped):
 
     def __str__(self) -> str:
         return f"{self.name}: {self.value}"
+
+
+class ChangeOp(models.TextChoices):
+    # What a device does with a changed record when it pulls it (03 §6.4). Upsert ("update or insert"): save the
+    # record as it is now, new or changed. Archive: take it off the device's lists. Nothing is ever deleted (rule 7),
+    # so a record that leaves, such as a person who left the shop, is archived, never removed.
+    UPSERT = "upsert", "Added or changed"
+    ARCHIVE = "archive", "Archived"
+
+
+class Change(AppendOnly):
+    # One line of a shop's change log (03 §6.4): "record X of table Y changed, and this is change number N". A device
+    # remembers the last number it read and asks for the lines after it (SYNC-3), then reads each record as it is now
+    # from its own table. A line names the record and holds none of its data, so the log stays small and holds
+    # nothing secret. Written only by recording_changes (apps/core/changes.py), as the last step of the transaction
+    # that changed the record, so the numbers follow the order the transactions commit.
+    # ShopScoped (CORE-2) gives `id`, `shop`, `created_at` and `created_by`, which stays empty: who changed a record is
+    # in its edit history and the audit trail, and a device needs only to know that it changed. AppendOnly (CORE-3)
+    # refuses a second save() and any delete() in Python, and the trigger in the migration refuses the same in
+    # PostgreSQL (ADR-0021): a device that read line 41 must never find it rewritten.
+
+    # The shop, as ShopScoped has it, but with no index of its own: the one-line-per-number rule below is an index that
+    # leads with `shop`, so a second one, on `shop` alone, would cost one more write for every line on the busiest table
+    # there is, and serve no read (from the review). PROTECT never searches it either: no shop is ever deleted.
+    shop = models.ForeignKey("shops.Shop", on_delete=models.PROTECT, related_name="+", db_index=False)
+    # The change's number in its shop: 1, 2, 3..., from the shop's "change" counter (apps/core/sequences.py). A big
+    # integer: a shop numbers every change it ever makes, every sale included.
+    seq = models.PositiveBigIntegerField()
+    # Which table: its link type code (apps/core/links.py), such as "side" or "staff", the code an audit line or a
+    # flag names that table by. SYNC-2's list of what devices may pull goes by these codes.
+    entity = models.CharField(max_length=TYPE_CODE_MAX_LENGTH)
+    # Which record of that table. No foreign key: one column can't point at rows of many tables.
+    record_id = models.UUIDField()
+    op = models.CharField(max_length=10, choices=ChangeOp)
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). No error
+        # codes on these rules: only recording_changes writes this table, never a form or an API, so a broken rule
+        # is a bug in our code, a server error and a log line (ADR-0032).
+        constraints = [
+            # One line per number in a shop: with two lines numbered 42, a device that read up to 42 might have read
+            # only one of them, and could never learn it missed the other. Also the index every pull reads by (shop,
+            # then the numbers after the device's cursor, in order), leading with `shop` as every index does.
+            models.UniqueConstraint(fields=["shop", "seq"], name="core_change_one_per_seq"),
+            # Numbers start at 1. A cursor of 0 means "nothing read yet", so a line numbered 0 would never be pulled.
+            models.CheckConstraint(condition=models.Q(seq__gte=1), name="core_change_seq_from_one"),
+            models.CheckConstraint(condition=models.Q(op__in=ChangeOp.values), name="core_change_op_known"),
+            # The list of type codes lives in code, where the database can't see it, but a code's shape it can check,
+            # as for an audit line's subject (control.AuditEvent).
+            models.CheckConstraint(condition=models.Q(entity__regex=TYPE_CODE_SHAPE), name="core_change_entity_shape"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.seq}: {self.op} {self.entity}"

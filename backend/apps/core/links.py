@@ -20,13 +20,7 @@ from django.apps import apps
 
 from apps.core.models import ShopScoped
 
-# The shape of a code: small letters and underscores, starting with a letter ("drawer_session"), and its
-# longest length, the size of the column that stores it. The tables that store a link use both: the column
-# (control.Flag's subject_type) and a database rule on its shape. A code that broke either would be refused
-# only when the first link to its table is written, perhaps while a device's records are posted, which must
-# never fail; so a test checks every code in the list instead (apps/core/tests/test_links.py).
-TYPE_CODE_SHAPE = r"^[a-z][a-z_]*$"
-TYPE_CODE_MAX_LENGTH = 40
+# A code's shape and longest length live in apps/core/type_codes.py, which models.py imports too.
 
 # Code → the table it names, as "app.Model". Only shop tables (ShopScoped): a link is a shop's, and it loads
 # through the shop guard.

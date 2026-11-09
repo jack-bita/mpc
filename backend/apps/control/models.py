@@ -30,8 +30,9 @@ from typing import Any, NoReturn
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 
-from apps.core.links import TYPE_CODE_MAX_LENGTH, TYPE_CODE_SHAPE, load_link
+from apps.core.links import load_link
 from apps.core.models import AppendOnly, AppendOnlyError, ShopScoped
+from apps.core.type_codes import TYPE_CODE_MAX_LENGTH, TYPE_CODE_SHAPE
 
 
 # Outside Flag so that its Meta can read the values, as StaffStatus is (apps/people/models.py).

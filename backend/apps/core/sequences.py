@@ -1,5 +1,5 @@
-"""apps/core/sequences.py — a shop's counters: next_number(shop, name) gives the next number of one of them
-(ShopSequence, apps/core/models.py; 03 §5.1, §6.4).
+"""apps/core/sequences.py — a shop's counters: next_number(shop, name) gives the next number of one of them, and
+next_numbers(shop, name, how_many) the next few in one go (ShopSequence, apps/core/models.py; 03 §5.1, §6.4).
 
 A counter belongs to one shop and has a name from a fixed list (SequenceName): MPC's "device" counter gives
 each new device its code, 1, 2, 3... (AUTH-1, D7). Each number is given inside the caller's transaction, with
@@ -39,6 +39,18 @@ def next_number(shop: models.Model | uuid.UUID, name: str) -> int:
     """The next number of `shop`'s counter `name`: 1 the first time, then one more each time. Call it inside the
     transaction that saves the number: the counter stays locked until that transaction ends. `shop` is a Shop row,
     typed as any model because `core` may not name `Shop` (ADR-0035), or a shop's id."""
+    return next_numbers(shop, name, 1)[0]
+
+
+def next_numbers(shop: models.Model | uuid.UUID, name: str, how_many: int) -> range:
+    """The next `how_many` numbers of `shop`'s counter `name`, one after another: with 4 given so far, asking for 3
+    gives range(5, 8), so 5, 6 and 7. Same promises as next_number: call it inside the transaction that saves the
+    numbers, and the counter stays locked until that transaction ends."""
+    # A save that changes many records takes all their change numbers here in one go (SYNC-1, apps/core/changes.py):
+    # one lock and one write, however many, so the shop's other saves wait for one write, not one per record.
+    if how_many < 1:
+        # A bug in the calling code: zero numbers would lock the counter for nothing. Refused before it is touched.
+        raise ValueError(f"A counter gives at least one number, not {how_many}.")
     if name not in SequenceName.values:
         raise UnknownSequence(f"{name!r} is not a counter's name (SequenceName, apps/core/models.py).")
     # Outside a transaction (Django's default, autocommit), each query would end its own transaction, so the lock
@@ -66,7 +78,9 @@ def next_number(shop: models.Model | uuid.UUID, name: str) -> int:
         # rule, keeps one row), and the read below finds and locks the row it made.
         ShopSequence.objects.bulk_create([ShopSequence(shop_id=shop_id, name=name)], ignore_conflicts=True)
         counter = counters.get(shop_id=shop_id, name=name)
-    counter.value += 1
+    first = counter.value + 1
+    # Safe to add in Python, not in SQL: the row is locked, so nobody else moves it between the read and this write.
+    counter.value += how_many
     # Only `value` is written: the row's other columns never change.
     counter.save(update_fields=["value"])
-    return counter.value
+    return range(first, counter.value + 1)
