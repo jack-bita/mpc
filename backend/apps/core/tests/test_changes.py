@@ -147,3 +147,38 @@ def test_block_with_no_change_takes_no_number(shop_a: Model) -> None:
             pass
         assert not ShopSequence.objects.filter(name=SequenceName.CHANGE).exists()
         assert _log() == []
+
+
+def test_record_change_refused_inside_a_part_that_can_fail_alone(
+    shop_a: Model, side_a: ShopScoped, staff_a: ShopScoped
+) -> None:
+    # An import of 50 products is one save, and product 7 fails inside a part of its own (an `atomic()`, or an
+    # `editing()` block) and is skipped while the rest carry on. Had its change stayed on the list, the log would name a
+    # product that was never saved, and a line can never be taken back. So a change is named only at its block's own
+    # level, where a rollback takes the name away too: inside such a part it is refused, and named after the part.
+    with shop_context(shop_a):
+        with recording_changes(shop_a):
+            # The part that can fail on its own, with the refusal caught inside it, so the part itself succeeds.
+            with transaction.atomic(), pytest.raises(TransactionManagementError, match="own level"):
+                record_change(staff_a)
+            record_change(side_a)  # named after the part: allowed
+        assert _log() == [(1, "side", side_a.pk, UPSERT)]
+
+
+def test_block_inside_a_part_that_can_fail_alone_numbers_on_its_own(
+    shop_a: Model, side_a: ShopScoped, staff_a: ShopScoped, device_a: ShopScoped
+) -> None:
+    # A service's block inside such a part doesn't join the outer block: its changes would outlive a rollback of the
+    # part around it. It numbers at its own end, inside the part, so a rollback of the part takes its lines and its
+    # numbers with it. (The counter then stays locked from that end to the commit: correct, only longer.)
+    with shop_context(shop_a):
+        with recording_changes(shop_a):  # the import
+            record_change(side_a)
+            with pytest.raises(RuntimeError), transaction.atomic():  # product 7's part
+                with recording_changes(shop_a):
+                    record_change(staff_a)
+                assert [line[1] for line in _log()] == ["staff"]  # numbered at its own end, not yet committed
+                raise RuntimeError("product 7 failed")
+            with transaction.atomic(), recording_changes(shop_a):  # product 8's part, and its service's block
+                record_change(device_a)
+        assert _log() == [(1, "device", device_a.pk, UPSERT), (2, "side", side_a.pk, UPSERT)]

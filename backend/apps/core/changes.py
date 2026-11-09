@@ -18,6 +18,10 @@ So a service saves inside the block, and names each record as it changes it:
         side.save()
         record_change(side)
 
+A change is named at the block's own level, after any part within it that can fail on its own (an `atomic()`, an
+`editing()` block), never inside one: that part could roll back while the block carries on, and a line is never taken
+back. record_change refuses it.
+
 The block collects the names and, as its last step inside the transaction, takes all their numbers at once from the
 shop's "change" counter (next_numbers, apps/core/sequences.py). The counter's row stays locked from then until the
 commit, so the next save of the same shop waits for that last moment, and takes the numbers after (lesson 2: one
@@ -33,7 +37,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
-from django.db import models, transaction
+from django.db import connection, models, transaction
 from django.db.transaction import TransactionManagementError
 
 from apps.core.links import link_type_of
@@ -50,6 +54,18 @@ class _Block:
     # recorded, and the lines are numbered in that order.
     shop_id: uuid.UUID
     changes: dict[tuple[str, uuid.UUID], ChangeOp] = field(default_factory=dict)
+    # Where a change may be named: how many transactions and savepoints are open (_depth) right inside the block's own,
+    # and inside each block that joined it, innermost last. A change named deeper, inside an `atomic()` or `editing()`
+    # within the block, could be rolled back alone while the block carries on, and leave a line for a record never
+    # saved; record_change refuses it (from the review).
+    levels: list[int] = field(default_factory=list)
+
+
+def _depth() -> int:
+    # How many transactions and savepoints are open on this connection, the outermost first: Django's own list of open
+    # `atomic()` blocks. Only compared with itself, so the test's own transaction, open around every test, counts the
+    # same on both sides.
+    return len(connection.atomic_blocks)
 
 
 # The block open in this visit, if any. A context variable, as the open shop is (apps/core/tenancy.py): each request,
@@ -69,27 +85,34 @@ def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[None]:
     if open_shop is not ALL_SHOPS and open_shop != shop_id:
         raise ShopMismatch("The shop recording changes is not the one open.")
     outer = _open_block.get()
-    if outer is not None and outer.shop_id == shop_id:
-        # A service called by another service of the same shop: join the outer block, so all the numbers come once,
-        # at its end, the last moment of the whole transaction. Numbered here instead, the counter would stay locked
-        # from now until the outer commit, making the shop's other saves wait longer.
+    if outer is not None and outer.shop_id == shop_id and _depth() == outer.levels[-1]:
+        # A service called by another service of the same shop, right at its level: join the outer block, so all the
+        # numbers come once, at its end, the last moment of the whole transaction. Numbered here instead, the counter
+        # would stay locked from now until the outer commit, making the shop's other saves wait longer.
         # Its own savepoint, as any nested `atomic()` has: if this part fails and the outer service carries on, its
         # writes roll back, so what it recorded must go too, any outer record it changed included.
         before = dict(outer.changes)
         try:
             with transaction.atomic():
-                yield
+                outer.levels.append(_depth())  # changes may be named here, at this block's own level
+                try:
+                    yield
+                finally:
+                    outer.levels.pop()
         except BaseException:
             outer.changes.clear()
             outer.changes.update(before)
             raise
         return
-    # The outermost block of this shop. (A block of another shop opened inside it starts its own, and numbers at its
-    # own end: correct, as that shop's counter stays locked until the commit, only for a little longer.)
+    # A block of its own, numbered at its own end: the outermost block of this shop; or one inside an `atomic()` within
+    # the shop's block, which must not join it, as that part could roll back alone and leave the outer block naming
+    # changes never saved (from the review); or one inside another shop's block. Inside a transaction already open,
+    # its numbers are taken at its end but kept locked until that transaction commits: correct, only longer.
     block = _Block(shop_id)
     token = _open_block.set(block)
     try:
         with transaction.atomic():
+            block.levels.append(_depth())  # changes may be named here, at the block's own level
             yield
             # The last step inside the transaction. Reached only if the service's work succeeded: an error above skips
             # it, and the whole transaction, its numbers included, rolls back, leaving no line and no gap.
@@ -115,12 +138,21 @@ def _number_and_write(block: _Block) -> None:
 
 def record_change(row: ShopScoped, op: ChangeOp = ChangeOp.UPSERT) -> None:
     """Name `row` as changed by this save: `upsert` when it is new or changed, `archive` when it leaves the lists.
-    Call it inside recording_changes, after the change; its number comes at the block's end."""
+    Call it inside recording_changes, after the change, at the block's own level: after an `atomic()` or `editing()`
+    block within it, never inside one. Its number comes at the block's end."""
     block = _open_block.get()
     if block is None:
         # Outside a block nothing would number this change, and devices would never learn of it: a bug in the calling
         # code, so a server error, as next_number outside a transaction is.
         raise TransactionManagementError("record_change() runs inside recording_changes(shop).")
+    # A part within the block that can roll back on its own, while the block carries on, would leave this name behind
+    # for a change it took away: a line for a record never saved, or an "archive" that makes every device drop a record
+    # still in use, and a line is never taken back. A bug in the calling code, so a server error.
+    if _depth() != block.levels[-1]:
+        raise TransactionManagementError(
+            "record_change() runs at its block's own level, never inside an atomic() or editing() block within it: "
+            "name the change after that part, or give the part a recording_changes block of its own."
+        )
     # T1: another shop's record would land in this shop's log, where this shop's devices would pull it.
     if row.shop_id != block.shop_id:
         raise ShopMismatch("The changed record's shop is not the one recording changes.")
