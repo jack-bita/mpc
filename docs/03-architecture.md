@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.36 · 8 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.37 · 9 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.37** (9 Nov 2026, SYNC-1): how the change log is written (§6.4, 04 v1.52). A service saves inside `recording_changes(shop)` and names each record it changed with `record_change(row)`; the block takes all their numbers at its end, at once, from the shop's `change` counter, and a block inside another of the same shop joins it. A line names its record by its table's link type code and its id. The log is a ledger, so its monthly compaction waits for OPS-7 to square it with the trigger. Marked **(v1.37)**.
 
 **Changes in v1.36** (8 Nov 2026, DATA-1): the demo seed (§4, §5.1, §12, §13, 04 v1.51). It is `manage.py seed_demo`, in a 14th app, `demo`, on a layer of its own above every other: it builds the demo shop through the other apps' services and will need most of them, and the demo's image holds `backend/apps` only, so it can't be a script in `backend/scripts/` (ADR-0041, which supersedes ADR-0035). It wipes the database and makes the demo shop again, only where `DEMO_SEED=yes` is set and no shop but a demo one exists. The demo's start runs it: on the first start of a new day it makes the shop again, and a wake-up the same day keeps it; the nightly redeploy is the start that finds yesterday's shop.
 
@@ -548,8 +550,8 @@ Once that commits, the sale exists, even if the browser closes a moment later. T
 - Each change is `{seq, entity, id, op, data}`, where `op` is `upsert` or `archive`. The device applies a page in one transaction, then moves its cursor.
 - **No double counting** ✚: a document's pending effects are dropped once the device's cursor passes that document's `posted_seq`, because the server's balances now include it.
 - **Bootstrap** (new or reset device): a snapshot of all reference data plus the cursor it is valid at; then normal pulls. About 1 MB compressed for 5,000 products and 2,000 customers.
-- **The change log** (`core.Change`): services record which records changed, in the same transaction. At the end of the transaction the numbers are taken from the shop's counter row, which stays locked until commit — so numbers always appear in commit order, and a device can never skip a change that committed late. The lock is held only for the last moment of each transaction, and only within one shop.
-- Pulls read the current rows from the tables, so the log stays small; it is compacted monthly (latest entry per record).
+- **The change log** (`core.Change`): services record which records changed, in the same transaction. At the end of the transaction the numbers are taken from the shop's counter row, which stays locked until commit — so numbers always appear in commit order, and a device can never skip a change that committed late. The lock is held only for the last moment of each transaction, and only within one shop. How it is built **(v1.37)**: a service saves inside `with recording_changes(shop):` (`apps/core/changes.py`) in place of `transaction.atomic()`, and calls `record_change(row)` after each change (`archive` when the record leaves the lists). The block collects the records and, as its last step, takes all their numbers at once (`next_numbers`, `apps/core/sequences.py`: one lock, one write) and writes one line each: the shop, the number, the table's link type code (`apps/core/links.py`), the record's id and the `op`, never the record's data. One line per record per transaction, with the last `op`. A block inside another of the same shop joins it, so the numbers come once, at the outer end; a block that recorded nothing takes no lock.
+- Pulls read the current rows from the tables, so the log stays small; it is compacted monthly (latest entry per record). The log is a ledger whose trigger refuses every DELETE, so OPS-7 decides how, or whether, it compacts **(v1.37)**.
 
 ### 6.5 When sync runs
 
