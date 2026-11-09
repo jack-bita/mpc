@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import time
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any
+from typing import Any, ClassVar
 
 # The shape of a key: an area and a name in small letters and underscores, joined by a dot
 # ("attendance.late_fine"). The database holds the same rule (shops_setting_key_shape).
@@ -45,6 +45,10 @@ class ValueKind[T](ABC):
     # (parse) and how a value is written back (to_text). parse() refuses bad text with ValueError, which
     # Setting.clean() turns into the code `setting.value_invalid` (ADR-0032). T stands for what parse()
     # returns: a Decimal for money, an int for a count, and so on.
+
+    # The kind's own name, as a device reads it: the bootstrap sends it with each rule's default (SYNC-2), so a
+    # device knows to read "07:35" as a time and "true" as yes. Fixed once sent, as a device's code reads by it.
+    code: ClassVar[str]
 
     @abstractmethod
     def parse(self, text: str) -> T: ...
@@ -81,6 +85,7 @@ def _amount(text: str) -> Decimal:
 class Money(ValueKind[Decimal]):
     # An amount in the shop's currency: exact, never a float (ADR-0024), with at most two places, as every
     # amount is stored (03 §9).
+    code: ClassVar[str] = "money"
     minimum: Decimal = Decimal("0")
 
     def parse(self, text: str) -> Decimal:
@@ -98,6 +103,7 @@ class Money(ValueKind[Decimal]):
 @dataclass(frozen=True)
 class Percent(ValueKind[Decimal]):
     # A share from 0 to 100, exact like money: "2.5" means 2.5 %.
+    code: ClassVar[str] = "percent"
 
     def parse(self, text: str) -> Decimal:
         value = _amount(text)
@@ -116,6 +122,7 @@ class Whole(ValueKind[int]):
     # A count of days or minutes, in plain digits: int() alone would also read "+15", " 15" and "1_000".
     # Every key names its own maximum: a mistyped 999999999999 days would pass today and crash the card
     # that adds it to a date (OverflowError), so it is refused when it is typed.
+    code: ClassVar[str] = "whole"
     maximum: int
     minimum: int = 0
 
@@ -137,6 +144,7 @@ class Whole(ValueKind[int]):
 class TimeOfDay(ValueKind[time]):
     # A time on the shop's clock, such as the on-time cut-off: hours and minutes, two digits each
     # ("07:35"), as a browser's time box sends them. No timezone: it is read against the shop's own day.
+    code: ClassVar[str] = "time"
 
     def parse(self, text: str) -> time:
         match = _HOURS_MINUTES.fullmatch(text)
@@ -151,6 +159,7 @@ class TimeOfDay(ValueKind[time]):
 @dataclass(frozen=True)
 class YesNo(ValueKind[bool]):
     # On or off. Only "true" and "false", the way JSON writes them, so screens and devices read one form.
+    code: ClassVar[str] = "yes_no"
 
     def parse(self, text: str) -> bool:
         if text == "true":
@@ -161,6 +170,11 @@ class YesNo(ValueKind[bool]):
 
     def _write(self, value: bool) -> str:
         return "true" if value else "false"
+
+
+# Every kind, in one place: the names a device may meet (the bootstrap's choices for a rule's kind, SYNC-2).
+# test_each_kind_has_a_name_of_its_own holds that each has a name of its own and that every key's kind is here.
+KINDS: tuple[type[ValueKind[Any]], ...] = (Money, Percent, Whole, TimeOfDay, YesNo)
 
 
 class Scope(StrEnum):

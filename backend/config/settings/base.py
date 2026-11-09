@@ -270,8 +270,18 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_PATCH": False,
     # A field's fixed choices are named after their own type, not after the field: drf-spectacular would call a
     # device's status StatusEnum, and rename it, with a warning, once another table shows a `status` of its own. The
-    # app's generated types keep these names (UI-2).
-    "ENUM_NAME_OVERRIDES": {"DeviceStatusEnum": "apps.people.models.DeviceStatus"},
+    # app's generated types keep these names (UI-2). The bootstrap's own (SYNC-2): a person's status, which an office
+    # staff route will show too (PPL-4), an account's kind, before an attendance event's own `kind` (ATT-1), and a
+    # rule's scope and kind. And a language, which a person and a shop both have, under two field names (`language`,
+    # `default_language`): one list, one name.
+    "ENUM_NAME_OVERRIDES": {
+        "DeviceStatusEnum": "apps.people.models.DeviceStatus",
+        "LanguageEnum": "apps.core.languages.Language",
+        "StaffStatusEnum": "apps.people.models.StaffStatus",
+        "PaymentAccountKindEnum": "apps.shops.models.PaymentAccountKind",
+        "SettingScopeEnum": "apps.sync.api.serializers.SETTING_SCOPES",
+        "SettingKindEnum": "apps.sync.api.serializers.SETTING_KINDS",
+    },
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.
     "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0",

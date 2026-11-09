@@ -120,10 +120,14 @@ class MeSideSerializer(serializers.ModelSerializer[Side]):
 
 
 class MeShopSerializer(serializers.ModelSerializer[Shop]):
-    # Its shop. Shown by name, so a code claimed by the wrong shop's manager is seen at once (03 §5.9).
+    # Its shop. Shown by name, so a code claimed by the wrong shop's manager is seen at once (03 §5.9). And what an
+    # offline device needs to know of it (SYNC-2's review): its time zone, to tell which of its rules is in force today,
+    # as a rule starts on the shop's own day (02 §1); its currency, for amounts on screen; and its language, for screens
+    # nobody has logged in to yet. Here, not in the bootstrap: a shop's own row has no line in the change log, so a copy
+    # sent once would go stale, and a device asks this route again every 5 minutes (03 §5.9).
     class Meta:
         model = Shop
-        fields = ["id", "name", "code"]
+        fields = ["id", "name", "code", "timezone", "currency", "default_language"]
         read_only_fields = fields
 
 

@@ -91,11 +91,18 @@ def test_a_fields_choices_keep_a_name_of_their_own(tmp_path: Path) -> None:
     # drf-spectacular names a field's fixed choices after the field: a device's `status` would be StatusEnum. Once a
     # second table shows a status of its own, such as a staff member's, the two clash, and drf-spectacular renames
     # both, with a warning that fails the build (above), and the app's types change under it (UI-2). So the device's is
-    # named after its own type (ENUM_NAME_OVERRIDES, config/settings/base.py).
+    # named after its own type (ENUM_NAME_OVERRIDES, config/settings/base.py), and so are the bootstrap's (SYNC-2): a
+    # person's status, which an office staff route will show too (PPL-4), an account's kind, before an attendance
+    # event's (ATT-1), and a rule's scope.
     shapes = _schema(tmp_path)["components"]["schemas"]
 
     assert shapes["Device"]["properties"]["status"]["allOf"][0]["$ref"] == "#/components/schemas/DeviceStatusEnum"
-    assert "StatusEnum" not in shapes
+    assert shapes["StaffRecord"]["properties"]["status"]["allOf"][0]["$ref"] == "#/components/schemas/StaffStatusEnum"
+    kind = shapes["PaymentAccountRecord"]["properties"]["kind"]["allOf"][0]["$ref"]
+    assert kind == "#/components/schemas/PaymentAccountKindEnum"
+    assert shapes["SettingKeyRecord"]["properties"]["scope"]["$ref"] == "#/components/schemas/SettingScopeEnum"
+    assert shapes["SettingKeyRecord"]["properties"]["kind"]["$ref"] == "#/components/schemas/SettingKindEnum"
+    assert {"StatusEnum", "KindEnum", "ScopeEnum", "StaffRecordStatusEnum"}.isdisjoint(shapes)
 
 
 def test_every_route_refuses_in_the_error_shape(tmp_path: Path) -> None:

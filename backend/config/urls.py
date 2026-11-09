@@ -25,6 +25,8 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("api/v1/people/", include("apps.people.api.urls")),
     # The routes a device calls with its key: the start of a pairing, and what a paired device learns (AUTH-2).
     path("api/devices/v1/", include("apps.people.api.device_urls")),
+    # Sync, also with a device's key: a new device's copy of its shop (SYNC-2), and later the pull and the push.
+    path("api/sync/v1/", include("apps.sync.api.urls")),
     # Who stands at a shop's device, or is logged in on their own phone: PIN login, "who is here?", logout (AUTH-4).
     path("api/auth/", include("apps.people.api.auth_urls")),
     # Only the superuser can log in here (PPL-1, apps/people/admin.py).
