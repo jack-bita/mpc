@@ -296,6 +296,42 @@
                 }
             }
         },
+        "/api/sync/v1/bootstrap/": {
+            "get": {
+                "operationId": "sync_v1_bootstrap_retrieve",
+                "tags": [
+                    "sync"
+                ],
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BootstrapAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/people/devices/": {
             "get": {
                 "operationId": "people_devices_list",
@@ -888,6 +924,54 @@
                     "params"
                 ]
             },
+            "BootstrapAnswer": {
+                "type": "object",
+                "properties": {
+                    "cursor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "The shop's last change number this copy holds: the first pull asks for what came after."
+                    },
+                    "side": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SideRecord"
+                        }
+                    },
+                    "payment_account": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PaymentAccountRecord"
+                        }
+                    },
+                    "staff": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/StaffRecord"
+                        }
+                    },
+                    "setting": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SettingRecord"
+                        }
+                    },
+                    "setting_keys": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SettingKeyRecord"
+                        }
+                    }
+                },
+                "required": [
+                    "cursor",
+                    "payment_account",
+                    "setting",
+                    "setting_keys",
+                    "side",
+                    "staff"
+                ]
+            },
             "Device": {
                 "type": "object",
                 "properties": {
@@ -1059,6 +1143,15 @@
                     "status",
                     "version"
                 ]
+            },
+            "KindEnum": {
+                "enum": [
+                    "cash_drawer",
+                    "mobile_money",
+                    "bank"
+                ],
+                "type": "string",
+                "description": "* `cash_drawer` - Cash drawer\n* `mobile_money` - Mobile money\n* `bank` - Bank"
             },
             "LanguageEnum": {
                 "enum": [
@@ -1359,6 +1452,52 @@
                     "expires_at"
                 ]
             },
+            "PaymentAccountRecord": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "kind": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/KindEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "provider": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "number": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "sides": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "kind",
+                    "name",
+                    "number",
+                    "provider",
+                    "sides"
+                ]
+            },
             "PinLoginRequest": {
                 "type": "object",
                 "properties": {
@@ -1409,6 +1548,69 @@
                 ],
                 "type": "string",
                 "description": "* `one_screen` - One screen\n* `writer_cashier_loader` - Writer, cashier, loader"
+            },
+            "ScopeEnum": {
+                "enum": [
+                    "shop",
+                    "side"
+                ],
+                "type": "string",
+                "description": "* `shop` - shop\n* `side` - side"
+            },
+            "SettingKeyRecord": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string"
+                    },
+                    "scope": {
+                        "$ref": "#/components/schemas/ScopeEnum"
+                    },
+                    "default": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "default",
+                    "key",
+                    "scope"
+                ]
+            },
+            "SettingRecord": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "key": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "side": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "value": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "effective_from": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "effective_from",
+                    "id",
+                    "key",
+                    "side",
+                    "value"
+                ]
             },
             "Side": {
                 "type": "object",
@@ -1509,6 +1711,158 @@
                     "name",
                     "version"
                 ]
+            },
+            "SideKeysRecord": {
+                "type": "object",
+                "properties": {
+                    "side": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "permissions",
+                    "side"
+                ]
+            },
+            "SideRecord": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "code": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "sale_flow": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SaleFlowEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "is_live": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "code",
+                    "id",
+                    "is_live",
+                    "name",
+                    "sale_flow"
+                ]
+            },
+            "StaffKeysRecord": {
+                "type": "object",
+                "properties": {
+                    "every_side": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "sides": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SideKeysRecord"
+                        }
+                    }
+                },
+                "required": [
+                    "every_side",
+                    "sides"
+                ]
+            },
+            "StaffRecord": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "full_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StaffRecordStatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "pin_changed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "language": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/LanguageEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "font": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FontEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "permissions": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StaffKeysRecord"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "display_name",
+                    "font",
+                    "full_name",
+                    "id",
+                    "language",
+                    "permissions",
+                    "pin_changed_at",
+                    "status"
+                ]
+            },
+            "StaffRecordStatusEnum": {
+                "enum": [
+                    "active",
+                    "suspended",
+                    "left"
+                ],
+                "type": "string",
+                "description": "* `active` - Active\n* `suspended` - Suspended\n* `left` - Left"
             },
             "TemporaryPasswordRequest": {
                 "type": "object",

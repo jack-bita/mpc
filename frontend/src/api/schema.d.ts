@@ -132,6 +132,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sync/v1/bootstrap/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["sync_v1_bootstrap_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/devices/": {
         parameters: {
             query?: never;
@@ -258,6 +274,15 @@ export interface components {
                 [key: string]: (string | number | boolean) | null;
             };
         };
+        BootstrapAnswer: {
+            /** @description The shop's last change number this copy holds: the first pull asks for what came after. */
+            cursor: number;
+            side: components["schemas"]["SideRecord"][];
+            payment_account: components["schemas"]["PaymentAccountRecord"][];
+            staff: components["schemas"]["StaffRecord"][];
+            setting: components["schemas"]["SettingRecord"][];
+            setting_keys: components["schemas"]["SettingKeyRecord"][];
+        };
         Device: {
             /** Format: uuid */
             readonly id: string;
@@ -310,6 +335,13 @@ export interface components {
             status: string;
             version: string;
         };
+        /**
+         * @description * `cash_drawer` - Cash drawer
+         *     * `mobile_money` - Mobile money
+         *     * `bank` - Bank
+         * @enum {string}
+         */
+        KindEnum: "cash_drawer" | "mobile_money" | "bank";
         /**
          * @description * `sw` - Kiswahili
          *     * `en` - English
@@ -398,6 +430,15 @@ export interface components {
             /** Format: date-time */
             readonly expires_at: string;
         };
+        PaymentAccountRecord: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["KindEnum"];
+            readonly name: string;
+            readonly provider: string;
+            readonly number: string;
+            readonly sides: string[];
+        };
         PinLoginRequest: {
             /** Format: uuid */
             staff: string;
@@ -415,6 +456,27 @@ export interface components {
          * @enum {string}
          */
         SaleFlowEnum: "one_screen" | "writer_cashier_loader";
+        /**
+         * @description * `shop` - shop
+         *     * `side` - side
+         * @enum {string}
+         */
+        ScopeEnum: "shop" | "side";
+        SettingKeyRecord: {
+            key: string;
+            scope: components["schemas"]["ScopeEnum"];
+            default: string;
+        };
+        SettingRecord: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly key: string;
+            /** Format: uuid */
+            readonly side: string | null;
+            readonly value: string;
+            /** Format: date */
+            readonly effective_from: string;
+        };
         Side: {
             /** Format: uuid */
             readonly id: string;
@@ -439,6 +501,42 @@ export interface components {
             name: string;
             version: number;
         };
+        SideKeysRecord: {
+            /** Format: uuid */
+            side: string;
+            permissions: string[];
+        };
+        SideRecord: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly code: string;
+            readonly name: string;
+            readonly sale_flow: components["schemas"]["SaleFlowEnum"];
+            readonly is_live: boolean;
+        };
+        StaffKeysRecord: {
+            every_side: string[];
+            sides: components["schemas"]["SideKeysRecord"][];
+        };
+        StaffRecord: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly full_name: string;
+            readonly display_name: string;
+            readonly status: components["schemas"]["StaffRecordStatusEnum"];
+            /** Format: date-time */
+            readonly pin_changed_at: string | null;
+            readonly language: components["schemas"]["LanguageEnum"];
+            readonly font: components["schemas"]["FontEnum"];
+            readonly permissions: components["schemas"]["StaffKeysRecord"];
+        };
+        /**
+         * @description * `active` - Active
+         *     * `suspended` - Suspended
+         *     * `left` - Left
+         * @enum {string}
+         */
+        StaffRecordStatusEnum: "active" | "suspended" | "left";
         TemporaryPasswordRequest: {
             password: string;
             reason: string;
@@ -672,6 +770,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    sync_v1_bootstrap_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapAnswer"];
                 };
             };
             default: {

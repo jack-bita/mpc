@@ -7,7 +7,8 @@ made the way the app makes them, through the services. The checks never change; 
 a card that adds a route over a new table gives both shops a row of it here, and the sweep fails, saying
 so, while shop A has none; and a card that adds a route needing query parameters gives them here too
 (sweep_queries). Each shop has a paired device: a row of the office device list (AUTH-5), and the visitor the sweep
-sends to every device route (sweep_device_clients, AUTH-2). The demo seed (DATA-1) could fill the shops later.
+sends to every device route (sweep_device_clients, AUTH-2); and dated rules, which the bootstrap sends (SYNC-2). The
+demo seed (DATA-1) could fill the shops later.
 
 The sweep knows shop A's rows by their ids, and by the texts and amounts only shop A holds, so that a leak
 with no ids, like a report of names and totals, is found too. So give shop A values of its own: names and
@@ -19,25 +20,30 @@ The shops and their staff come from backend/conftest.py. Fake data only: the rep
 """
 
 from collections.abc import Callable
+from datetime import date
 
 import pytest
 from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
+from apps.core.settings_registry import CASH_TOLERANCE, LATE_FINE
 from apps.core.tenancy import shop_context
 from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import StaffMember
 from apps.people.services import confirm_pairing, start_pairing
-from apps.shops.models import Shop, Side
+from apps.shops.models import Setting, Shop, Side
 from apps.shops.services import add_side
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
 
 @pytest.fixture
-def sweep_shops(sweep_sides: tuple[Shop, Shop], sweep_device_keys: tuple[str, str]) -> tuple[Shop, Shop]:
+def sweep_shops(
+    sweep_sides: tuple[Shop, Shop], sweep_device_keys: tuple[str, str], sweep_settings: tuple[Shop, Shop]
+) -> tuple[Shop, Shop]:
     # Shop A, whose rows must never show, and shop B, the visitor's own, each filled with every table below: their
-    # sides, and a paired device each, which the office device list shows (AUTH-5).
+    # sides, a paired device each, which the office device list shows (AUTH-5), and dated rules, which the bootstrap
+    # sends (SYNC-2).
     return sweep_sides
 
 
@@ -52,6 +58,24 @@ def sweep_sides(shop_a: Shop, shop_b: Shop, staff_a: StaffMember, staff_b: Staff
     with shop_context(shop_b):
         add_side(shop=shop_b, code="P", name="Pembejeo", by=staff_b)
     return shop_a, shop_b
+
+
+@pytest.fixture
+def sweep_settings(sweep_sides: tuple[Shop, Shop]) -> tuple[Shop, Shop]:
+    # Each shop's own late fine, and a tolerance for its own first side: rows the bootstrap sends a device (SYNC-2),
+    # with amounts only that shop holds. From a day long past, so both stay in force whatever day the tests run.
+    # Checked, then saved, as the settings screen will write them (SHOP-3).
+    for shop, side_code, fine, tolerance in (
+        (sweep_sides[0], "D", "1250.00", "350.00"),
+        (sweep_sides[1], "P", "1750.00", "450.00"),
+    ):
+        with shop_context(shop):
+            side = Side.objects.get(code=side_code)
+            for key, value, on_side in ((LATE_FINE, fine, None), (CASH_TOLERANCE, tolerance, side)):
+                row = Setting(shop=shop, side=on_side, key=key.key, value=value, effective_from=date(2026, 1, 1))
+                row.full_clean()
+                row.save()
+    return sweep_sides
 
 
 @pytest.fixture

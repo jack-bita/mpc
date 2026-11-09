@@ -1,9 +1,11 @@
-"""apps/sync/selectors.py — the rows a shop's devices keep a copy of, table by table (SYNC-2; 03 §6.1).
+"""apps/sync/selectors.py — the rows a shop's devices keep a copy of, table by table, and the last change number their
+copy is valid at (SYNC-2; 03 §6.1, §6.4).
 
 One function per table the registry sends (apps/sync/registry.py), each answering "which of this shop's rows does a
 device hold?": every side; the payment accounts in use; the people at work there; each rule's row in force today and
 every later one. The bootstrap sends all of them (SYNC-2); the pull will find a changed record among them, or learn that
-it left the lists (SYNC-3). What each row may show is the registry's fields, not this file's.
+it left the lists (SYNC-3). What each row may show is the registry's fields, not this file's. And
+last_change_number, the cursor a copy is valid at.
 
 Each reads inside the shop it is given, which must be the one open (T1), and names it in its query too: under
 system_context() the guard shows every shop's rows (03 §5.11).
@@ -15,6 +17,7 @@ from datetime import date
 from django.db.models import Prefetch, QuerySet
 
 from apps.core import settings_registry
+from apps.core.models import Change
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.people.models import StaffMember, StaffStatus
 from apps.people.selectors import shop_today
@@ -27,6 +30,16 @@ def _check_open(shop: Shop) -> None:
     opened = current_shop()  # raises NoShopSelected when no shop is open
     if opened is not ALL_SHOPS and opened != shop.pk:
         raise ShopMismatch("A device's rows were asked for a shop that is not the one open.")
+
+
+def last_change_number(shop: Shop) -> int:
+    """The number of the shop's last change, or 0 for a shop with none: a cursor of 0 means nothing read yet, as numbers
+    start at 1 (SYNC-1). A copy of the shop read after this holds every change up to it."""
+    _check_open(shop)
+    # The newest line, found from the end of the log's own index (core_change_one_per_seq: shop, then number), so the
+    # read costs the same on a shop's first day and after years of changes.
+    last = Change.objects.filter(shop=shop).order_by("-seq").values_list("seq", flat=True).first()
+    return last or 0
 
 
 def side_rows(shop: Shop) -> QuerySet[Side]:

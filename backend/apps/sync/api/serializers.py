@@ -1,11 +1,11 @@
-"""apps/sync/api/serializers.py — the fields a shop's devices may see of each record they keep a copy of (SYNC-2;
-03 §6.1).
+"""apps/sync/api/serializers.py — the fields a shop's devices may see of each record they keep a copy of, and the
+bootstrap's answer (SYNC-2; 03 §6.1, §6.4).
 
 One serializer per table the registry sends (apps/sync/registry.py): a side, a payment account, a person at work, a
 dated rule's row. Each names its fields one by one, never `__all__`, so a column a later card adds stays on the server
 until someone decides it travels. What must never travel, buying prices, PIN hashes and passwords above all (03 §6.1,
 the sync rules), is checked against these lists by test_bootstrap_secrets.py. Read-only: devices never write through
-them; what a device makes travels as a document (SYNC-4).
+them; what a device makes travels as a document (SYNC-4). Then the bootstrap's answer, as the API schema describes it.
 """
 
 from typing import Any
@@ -14,6 +14,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.core.languages import Language
+from apps.core.settings_registry import Scope
 from apps.people.models import Font, StaffMember
 from apps.people.permissions import held_permissions
 from apps.shops.models import PaymentAccount, Setting, Side
@@ -93,3 +94,25 @@ class SettingRecord(serializers.ModelSerializer[Setting]):
         model = Setting
         fields = ["id", "key", "side", "value", "effective_from"]
         read_only_fields = fields
+
+
+class SettingKeyRecord(serializers.Serializer[Any]):
+    # One rule in the list in core: its key, whether a side may have a value of its own, and its default as its kind
+    # writes it (setting_keys, apps/sync/bootstrap.py).
+    key = serializers.CharField()
+    scope = serializers.ChoiceField(choices=[scope.value for scope in Scope])
+    default = serializers.CharField()
+
+
+class BootstrapAnswer(serializers.Serializer[Any]):
+    # The bootstrap's answer, as the API schema and the app's types describe it. The answer itself is built by snapshot
+    # (apps/sync/bootstrap.py) from the registry; this names the same tables with the same fields, which
+    # test_answer_shape_names_every_registry_table holds, so a table added to the registry is added here too.
+    cursor = serializers.IntegerField(
+        min_value=0, help_text="The shop's last change number this copy holds: the first pull asks for what came after."
+    )
+    side = SideRecord(many=True)
+    payment_account = PaymentAccountRecord(many=True)
+    staff = StaffRecord(many=True)
+    setting = SettingRecord(many=True)
+    setting_keys = SettingKeyRecord(many=True)
