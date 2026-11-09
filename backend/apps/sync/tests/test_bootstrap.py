@@ -146,7 +146,7 @@ def test_bootstrap_cursor_consistent(
     assert [side["name"] for side in answer["side"]] == ["Dawa Kuu"]
 
 
-def test_bootstrap_is_compressed(paired: tuple[Device, str], give_role: GiveRole, shop_a: Shop) -> None:
+def test_bootstrap_is_compressed(paired: tuple[Device, str]) -> None:
     # About 1 MB once products and customers travel (03 §6.4), over a shop's slow line: gzip, for a client that says it
     # reads it, as every browser does. The same JSON once unpacked.
     _device, key = paired
@@ -168,6 +168,12 @@ def test_bootstrap_needs_a_paired_device(manager: StaffMember, paired: tuple[Dev
     assert APIClient().get(BOOTSTRAP).json()["code"] == "not_authenticated"
     made_up = a_browser("a" * 43).get(BOOTSTRAP)
     assert (made_up.status_code, made_up.json()["code"]) == (401, "not_authenticated")
+    # The manager's own phone, logged in as a person, with every key on every side but no device's key: a seller's phone
+    # logged in the same way would otherwise carry the shop's whole staff list and everyone's keys away.
+    phone = APIClient()
+    phone.force_login(manager.user)
+    from_a_phone = phone.get(BOOTSTRAP)
+    assert (from_a_phone.status_code, from_a_phone.json()["code"]) == (401, "not_authenticated")
     device, key = paired
     with shop_context(shop_a):
         block(device, by=manager, reason="Laptop imeibiwa")
