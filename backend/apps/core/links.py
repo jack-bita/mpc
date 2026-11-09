@@ -15,10 +15,15 @@ not by an import: `core` is layer 0 and may not import any app (ADR-0035), and a
 """
 
 import uuid
+from typing import TYPE_CHECKING
 
 from django.apps import apps
 
-from apps.core.models import ShopScoped
+# models.py imports this file's code shape, for the change log's `entity` (SYNC-1), so this file can't import
+# models.py as it loads: each would wait for the other. ShopScoped is only a type in the signatures below, which
+# Python 3.14 reads only when asked (PEP 649), and mypy reads under TYPE_CHECKING; table_of imports it when it runs.
+if TYPE_CHECKING:
+    from apps.core.models import ShopScoped
 
 # The shape of a code: small letters and underscores, starting with a letter ("drawer_session"), and its
 # longest length, the size of the column that stores it. The tables that store a link use both: the column
@@ -98,6 +103,10 @@ def table_of(type_code: str) -> type[ShopScoped]:
         # Text that isn't "app.Model" at all.
         raise UnknownLinkType(f'{type_code!r} names {label!r}, which is not written as "app.Model".') from None
     # A table with no `shop` (a User, a Unit) has no guard, so loading through it could read any shop's row.
+    # Imported here, not at the top (see the top of this file). By now models.py has long loaded, so this only
+    # reads it.
+    from apps.core.models import ShopScoped
+
     if not issubclass(table, ShopScoped):
         raise UnknownLinkType(f"{type_code!r} names {label}, which is not a shop's table.")
     return table
