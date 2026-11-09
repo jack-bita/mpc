@@ -19,15 +19,17 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 
 from apps.core import settings_registry
 from apps.core.changes import record_change, recording_changes
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import Device, StaffMember
+from apps.people.models import Device, StaffMember, User
 from apps.people.selectors import shop_today
-from apps.people.services import block, confirm_pairing, start_pairing
+from apps.people.services import add_staff, block, confirm_pairing, start_pairing
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.services import add_side, rename_side
 from apps.sync import bootstrap
@@ -179,6 +181,38 @@ def test_bootstrap_needs_a_paired_device(manager: StaffMember, paired: tuple[Dev
         block(device, by=manager, reason="Laptop imeibiwa")
     blocked = a_browser(key).get(BOOTSTRAP)
     assert (blocked.status_code, blocked.json()["code"]) == (401, "device.blocked")
+
+
+def reads_of_a_snapshot(shop: Shop) -> int:
+    # How many queries one bootstrap answer costs the database, inside the device's shop, as its visit opens it.
+    with shop_context(shop), CaptureQueriesContext(connection) as seen:
+        bootstrap.snapshot(shop)
+    return len(seen)
+
+
+def test_bootstrap_reads_each_list_once_and_two_per_person(shop_a: Shop, dawa: Side, manager: StaffMember) -> None:
+    # The copy grows to thousands of rows once products and customers travel (03 §6.4): a list must cost the same few
+    # reads however many rows it holds, or 2,000 customers would cost 2,000 more. The one exception, by choice: each
+    # person's keys, two reads each, by the one function the office routes use (held_permissions), as a shop has a
+    # handful of people.
+    with shop_context(shop_a):
+        Setting.objects.create(
+            shop=shop_a, key="attendance.late_fine", value="1500.00", effective_from=shop_today(shop_a)
+        )
+    before = reads_of_a_snapshot(shop_a)
+    # Two more sides, each with its drawer and the drawer's link, and two more rules: not one more read.
+    with shop_context(shop_a):
+        for code, name in (("F", "Vyakula"), ("M", "Mbegu")):
+            add_side(shop=shop_a, code=code, name=name, by=None)
+        for key, value in (("cash.tolerance", "500.00"), ("session.idle_minutes", "20")):
+            Setting.objects.create(shop=shop_a, key=key, value=value, effective_from=shop_today(shop_a))
+    assert reads_of_a_snapshot(shop_a) == before
+    # Two more people: two reads each, for their keys.
+    for full_name, nickname in (("Asha Mfano", "Asha"), ("Juma Mfano", "Juma")):
+        user = User.objects.create_user(full_name=full_name)
+        with shop_context(shop_a):
+            add_staff(shop=shop_a, user=user, display_name=nickname, by=None)
+    assert reads_of_a_snapshot(shop_a) == before + 2 * 2
 
 
 def test_answer_shape_names_every_registry_table() -> None:
