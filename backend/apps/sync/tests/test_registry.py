@@ -22,10 +22,11 @@ from typing import Any
 import pytest
 from rest_framework.renderers import JSONRenderer
 
+from apps.core.changes import record_change, recording_changes
 from apps.core.links import table_of
 from apps.core.permissions import ROLE_TEMPLATES, Permission, RoleTemplate
 from apps.core.settings_registry import CASH_TOLERANCE, IDLE_MINUTES, LATE_FINE, SettingKey
-from apps.core.tenancy import ShopMismatch, shop_context
+from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import StaffMember, User
 from apps.people.selectors import shop_today
 from apps.people.services import add_staff, change_own_settings, grant_permission, mark_left, set_pin, suspend
@@ -40,6 +41,7 @@ from apps.shops.models import (
 )
 from apps.shops.services import add_side
 from apps.sync.registry import REGISTRY
+from apps.sync.selectors import last_change_number
 
 pytestmark = pytest.mark.django_db
 
@@ -100,6 +102,26 @@ def test_rows_are_read_only_inside_their_own_shop(shop_a: Shop, shop_b: Shop) ->
     for entry in REGISTRY.values():
         with shop_context(shop_b), pytest.raises(ShopMismatch):
             entry.rows(shop_a)
+
+
+def test_each_list_keeps_to_its_own_shop_with_every_shop_open(
+    shop_a: Shop, dawa: Side, staff_a: StaffMember, shop_b: Shop, side_b: Side, staff_b: StaffMember
+) -> None:
+    # A system job has every shop open (system_context, 03 §5.11), and the guard then shows every shop's rows: each
+    # list, and the cursor, must name their shop themselves, or a job that read them for shop A would get shop B's too.
+    # Both shops hold a row of every table, and shop B more changes than shop A. Shown red by dropping one list's shop.
+    for shop, fine in ((shop_a, "1250.00"), (shop_b, "1750.00")):
+        add_row(shop, LATE_FINE, fine, shop_today(shop))
+    with shop_context(shop_a), recording_changes(shop_a):
+        record_change(dawa)
+    for _ in range(3):
+        with shop_context(shop_b), recording_changes(shop_b):
+            record_change(side_b)
+    with system_context():
+        for code, entry in REGISTRY.items():
+            shops = {row.shop_id for row in entry.rows(shop_a)}
+            assert shops == {shop_a.pk}, code  # shop A's rows, and only them
+        assert last_change_number(shop_a) == 1
 
 
 def test_every_side_is_sent(shop_a: Shop, dawa: Side, vyakula: Side) -> None:
