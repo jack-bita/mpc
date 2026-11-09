@@ -6,7 +6,8 @@ The block numbers them only at its end, still inside the transaction, so the num
 commit (03 §6.4). These tests pin what one connection can show: the numbers come at the end, in the order recorded;
 a rollback leaves no line and no gap; a record changed twice is one line; record_change refuses to run outside a
 block or for another shop's record; a block inside another of the same shop waits for the outer end, and drops its
-own changes if it fails; and a block that changed nothing takes no number.
+own changes if it fails; and a block that changed nothing takes no number. What only two connections at once can
+show, that the order holds when two saves meet, is in test_change_order.py.
 
 The rows come from backend/conftest.py: a side, a staff member's job and a paired device, each a table with a link
 type code (apps/core/links.py). They are typed by their base, ShopScoped: `core` may not name a higher app's table,
