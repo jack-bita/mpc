@@ -336,13 +336,6 @@ export interface components {
             version: string;
         };
         /**
-         * @description * `cash_drawer` - Cash drawer
-         *     * `mobile_money` - Mobile money
-         *     * `bank` - Bank
-         * @enum {string}
-         */
-        KindEnum: "cash_drawer" | "mobile_money" | "bank";
-        /**
          * @description * `sw` - Kiswahili
          *     * `en` - English
          * @enum {string}
@@ -430,10 +423,17 @@ export interface components {
             /** Format: date-time */
             readonly expires_at: string;
         };
+        /**
+         * @description * `cash_drawer` - Cash drawer
+         *     * `mobile_money` - Mobile money
+         *     * `bank` - Bank
+         * @enum {string}
+         */
+        PaymentAccountKindEnum: "cash_drawer" | "mobile_money" | "bank";
         PaymentAccountRecord: {
             /** Format: uuid */
             readonly id: string;
-            readonly kind: components["schemas"]["KindEnum"];
+            readonly kind: components["schemas"]["PaymentAccountKindEnum"];
             readonly name: string;
             readonly provider: string;
             readonly number: string;
@@ -456,15 +456,9 @@ export interface components {
          * @enum {string}
          */
         SaleFlowEnum: "one_screen" | "writer_cashier_loader";
-        /**
-         * @description * `shop` - shop
-         *     * `side` - side
-         * @enum {string}
-         */
-        ScopeEnum: "shop" | "side";
         SettingKeyRecord: {
             key: string;
-            scope: components["schemas"]["ScopeEnum"];
+            scope: components["schemas"]["SettingScopeEnum"];
             default: string;
         };
         SettingRecord: {
@@ -477,6 +471,12 @@ export interface components {
             /** Format: date */
             readonly effective_from: string;
         };
+        /**
+         * @description * `shop` - shop
+         *     * `side` - side
+         * @enum {string}
+         */
+        SettingScopeEnum: "shop" | "side";
         Side: {
             /** Format: uuid */
             readonly id: string;
@@ -523,7 +523,7 @@ export interface components {
             readonly id: string;
             readonly full_name: string;
             readonly display_name: string;
-            readonly status: components["schemas"]["StaffRecordStatusEnum"];
+            readonly status: components["schemas"]["StaffStatusEnum"];
             /** Format: date-time */
             readonly pin_changed_at: string | null;
             readonly language: components["schemas"]["LanguageEnum"];
@@ -536,7 +536,7 @@ export interface components {
          *     * `left` - Left
          * @enum {string}
          */
-        StaffRecordStatusEnum: "active" | "suspended" | "left";
+        StaffStatusEnum: "active" | "suspended" | "left";
         TemporaryPasswordRequest: {
             password: string;
             reason: string;

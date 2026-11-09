@@ -1144,15 +1144,6 @@
                     "version"
                 ]
             },
-            "KindEnum": {
-                "enum": [
-                    "cash_drawer",
-                    "mobile_money",
-                    "bank"
-                ],
-                "type": "string",
-                "description": "* `cash_drawer` - Cash drawer\n* `mobile_money` - Mobile money\n* `bank` - Bank"
-            },
             "LanguageEnum": {
                 "enum": [
                     "sw",
@@ -1452,6 +1443,15 @@
                     "expires_at"
                 ]
             },
+            "PaymentAccountKindEnum": {
+                "enum": [
+                    "cash_drawer",
+                    "mobile_money",
+                    "bank"
+                ],
+                "type": "string",
+                "description": "* `cash_drawer` - Cash drawer\n* `mobile_money` - Mobile money\n* `bank` - Bank"
+            },
             "PaymentAccountRecord": {
                 "type": "object",
                 "properties": {
@@ -1463,7 +1463,7 @@
                     "kind": {
                         "allOf": [
                             {
-                                "$ref": "#/components/schemas/KindEnum"
+                                "$ref": "#/components/schemas/PaymentAccountKindEnum"
                             }
                         ],
                         "readOnly": true
@@ -1549,14 +1549,6 @@
                 "type": "string",
                 "description": "* `one_screen` - One screen\n* `writer_cashier_loader` - Writer, cashier, loader"
             },
-            "ScopeEnum": {
-                "enum": [
-                    "shop",
-                    "side"
-                ],
-                "type": "string",
-                "description": "* `shop` - shop\n* `side` - side"
-            },
             "SettingKeyRecord": {
                 "type": "object",
                 "properties": {
@@ -1564,7 +1556,7 @@
                         "type": "string"
                     },
                     "scope": {
-                        "$ref": "#/components/schemas/ScopeEnum"
+                        "$ref": "#/components/schemas/SettingScopeEnum"
                     },
                     "default": {
                         "type": "string"
@@ -1611,6 +1603,14 @@
                     "side",
                     "value"
                 ]
+            },
+            "SettingScopeEnum": {
+                "enum": [
+                    "shop",
+                    "side"
+                ],
+                "type": "string",
+                "description": "* `shop` - shop\n* `side` - side"
             },
             "Side": {
                 "type": "object",
@@ -1808,7 +1808,7 @@
                     "status": {
                         "allOf": [
                             {
-                                "$ref": "#/components/schemas/StaffRecordStatusEnum"
+                                "$ref": "#/components/schemas/StaffStatusEnum"
                             }
                         ],
                         "readOnly": true
@@ -1855,7 +1855,7 @@
                     "status"
                 ]
             },
-            "StaffRecordStatusEnum": {
+            "StaffStatusEnum": {
                 "enum": [
                     "active",
                     "suspended",

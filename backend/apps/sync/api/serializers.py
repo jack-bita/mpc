@@ -96,11 +96,17 @@ class SettingRecord(serializers.ModelSerializer[Setting]):
         read_only_fields = fields
 
 
+# A rule's scopes, as the choices of its `scope` below: by value alone, as Scope is a plain enum, not Django's choices.
+# The schema names this very list (SettingScopeEnum, ENUM_NAME_OVERRIDES in config/settings/base.py), as it matches a
+# name by each choice's value and label: Scope itself would give the labels "SHOP" and "SIDE", and match nothing.
+SETTING_SCOPES = [scope.value for scope in Scope]
+
+
 class SettingKeyRecord(serializers.Serializer[Any]):
     # One rule in the list in core: its key, whether a side may have a value of its own, and its default as its kind
     # writes it (setting_keys, apps/sync/bootstrap.py).
     key = serializers.CharField()
-    scope = serializers.ChoiceField(choices=[scope.value for scope in Scope])
+    scope = serializers.ChoiceField(choices=SETTING_SCOPES)
     default = serializers.CharField()
 
 
