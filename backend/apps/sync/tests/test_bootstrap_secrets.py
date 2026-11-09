@@ -12,9 +12,11 @@ byte of it. So these never travel:
     a buying price                 not every seller may see it (02 §7); no table holds one yet, so the names catch it
 
 Three checks. The bootstrap's answer, as sent, holds none of a real person's secrets, and no name in it looks secret.
-Every field the registry sends is checked by its name and by what it reads, so a field named innocently but reading
-`user.password` is caught too. And the check catches a planted secret, so it can't quietly stop working. Fake data
-only: the repo is public (03 §10).
+Every field the registry sends is checked by its name, by what it reads, and by what it shows of a linked row, in every
+field it holds inside it too (a list's items, a dict's values, a nested record), so a field named innocently but reading
+`user.password`, or a product's batches shown by their `unit_cost`, is caught too. And the check catches a secret
+planted each of those ways, so it can't quietly stop working. A field that looks secret travels only by a decision
+written on its card (TRAVELS_BY_DECISION). Fake data only: the repo is public (03 §10).
 """
 
 import json
@@ -44,46 +46,77 @@ KEY_COOKIE = "device_key"
 
 # A word that marks a secret, as a whole word of a name, plural too: `pin_hash`, `password`, `unit_cost`, `phones`,
 # never `monkey` or `costume`. The same idea as SECRET_COLUMN (backend/tests/test_edit_history.py), with a seller's
-# secrets added (cost, buying, phone, email), and `key` kept apart, below.
-SECRET_WORD = re.compile(r"(^|_)(hash|password|secret|token|pepper|cost|buying|phone|email)(e?s)?(_|$)")
+# secrets added: what a sale cost the shop (cost, buying, profit, margin: `cost.view`'s, 02 §5), a phone and an email;
+# and `key` kept apart, below.
+SECRET_WORD = re.compile(r"(^|_)(hash|password|secret|token|pepper|cost|buying|profit|margin|phone|email)(e?s)?(_|$)")
 # `key` alone is a rule's name in the list in core ("attendance.late_fine"), which a setting's row must carry. Inside a
 # longer name it marks a secret: `key_hash`, `api_key`.
 KEY_WORD = re.compile(r"(^|_)key(_|$)")
 
+# A field that looks secret but travels all the same, by a decision written on its card, as "table.field" → that
+# decision: a customer's phone, say, once the contacts card decides the counter needs it to find someone. Empty today.
+# Grown only by such a decision, never to let a test pass, as the sweep's lists are (backend/tests/sweep_lists.py); each
+# one must still be found, so a name that went stays off the list.
+TRAVELS_BY_DECISION: dict[str, str] = {}
+
 
 def looks_secret(name: str) -> bool:
-    # Whether a field's name, or one part of what it reads, names a secret.
+    # Whether a field's name, one part of what it reads, or what it shows of a linked row, names a secret.
     return bool(SECRET_WORD.search(name)) or (name != "key" and bool(KEY_WORD.search(name)))
 
 
 def secret_fields(serializer: serializers.BaseSerializer[Any], path: str = "") -> list[str]:
-    # Every field of `serializer` that looks secret, by its name or by any part of what it reads (`source`), in nested
-    # serializers too, as "staff.permissions: reads ...". `.fields` binds each field, which sets its source: its own
-    # name unless it names another, such as "user.full_name".
+    # Every field of `serializer` that looks secret, as "staff.pin_hash: its name". `.fields` binds each field, which
+    # sets its source: its own name unless it names another, such as "user.full_name".
     assert isinstance(serializer, serializers.Serializer)
     found = []
     for name, field in serializer.fields.items():
-        where = f"{path}{name}"
-        if looks_secret(name):
-            found.append(f"{where}: its name")
-        assert field.source is not None  # set as `.fields` bound the field; its type stubs allow None before that
-        if any(looks_secret(part) for part in field.source.split(".")):
-            found.append(f"{where}: reads {field.source}")
-        nested = field.child if isinstance(field, serializers.ListSerializer) else field
-        if isinstance(nested, serializers.Serializer):
-            found += secret_fields(nested, f"{where}.")
+        found += _secrets_of(field, f"{path}{name}", name)
     return found
 
 
-def names_in(value: object) -> Iterator[str]:
-    # Every key of every object in a JSON answer, however deep: the names a device would store.
+def _secrets_of(field: serializers.Field[Any, Any, Any, Any], where: str, name: str) -> list[str]:
+    # One field, and every field it holds inside it, all reported under its own path: a device stores them as one.
+    found = []
+    if looks_secret(name):
+        found.append(f"{where}: its name")
+    # What it reads: "user.password" under the innocent name `nickname`. A field held inside another reads nothing of
+    # its own (its source is empty); "*" is the whole row, as a method field reads it.
+    if field.source and any(looks_secret(part) for part in field.source.split(".")):
+        found.append(f"{where}: reads {field.source}")
+    # What it shows of each linked row: a product's batches, shown by their `unit_cost` (a SlugRelatedField).
+    slug_field = getattr(field, "slug_field", None)
+    if slug_field and looks_secret(slug_field):
+        found.append(f"{where}: shows {slug_field}")
+    # A nested record: its own fields, one level down.
+    if isinstance(field, serializers.Serializer):
+        found += secret_fields(field, f"{where}.")
+    # What a field holds inside it, with no name of its own: a list of records' record, a list's or a dict's item, a
+    # many-link's link.
+    if isinstance(field, serializers.ListSerializer | serializers.ListField | serializers.DictField):
+        # Never empty once bound (a ListField with no child of its own gets a plain one); its type stubs allow None.
+        assert field.child is not None
+        found += _secrets_of(field.child, where, "")
+    if isinstance(field, serializers.ManyRelatedField):
+        found += _secrets_of(field.child_relation, where, "")
+    return found
+
+
+def names_in(value: object, path: str = "") -> Iterator[str]:
+    # The path of every key of every object in a JSON answer, however deep, as "staff.permissions.every_side": the
+    # names a device would store. A list adds nothing to the path: its items are rows of the same table.
     if isinstance(value, dict):
         for name, inner in value.items():
-            yield name
-            yield from names_in(inner)
+            yield f"{path}{name}"
+            yield from names_in(inner, f"{path}{name}.")
     elif isinstance(value, list):
         for item in value:
-            yield from names_in(item)
+            yield from names_in(item, path)
+
+
+def not_decided(paths: Iterator[str] | list[str]) -> list[str]:
+    # The findings, or the paths, that no decision lets travel.
+    return [path for path in paths if path.split(":")[0] not in TRAVELS_BY_DECISION]
 
 
 @pytest.fixture
@@ -132,25 +165,38 @@ def test_bootstrap_never_sends_costs_or_pins(shop_a: Shop, paired: tuple[Device,
     }
     assert all(secrets.values())  # each one really set, or the check proves nothing
     assert [what for what, secret in secrets.items() if secret in sent] == []
-    assert [name for name in names_in(json.loads(sent)) if looks_secret(name)] == []
+    names = [path for path in names_in(json.loads(sent)) if looks_secret(path.split(".")[-1])]
+    assert not_decided(names) == []
 
 
 def test_no_registry_field_reads_a_secret() -> None:
-    # Every field each table sends, nested ones too, by its name and by what it reads: a field a later card adds, a
-    # product's `cost_price` above all (CAT-1), turns this red until someone decides it must not travel.
-    found = {code: secret_fields(entry.serializer()) for code, entry in REGISTRY.items()}
-    assert found == {code: [] for code in REGISTRY}
+    # Every field each table sends, and every field it holds inside it, by its name, by what it reads and by what it
+    # shows of a linked row: a field a later card adds, a product's `cost_price` above all (CAT-1), turns this red until
+    # its card decides it travels (TRAVELS_BY_DECISION).
+    found = [finding for code, entry in REGISTRY.items() for finding in secret_fields(entry.serializer(), f"{code}.")]
+    assert not_decided(found) == []
+    # A decision for a field that no longer looks secret, or is no longer sent, is stale: it goes from the list.
+    assert set(TRAVELS_BY_DECISION) <= {finding.split(":")[0] for finding in found}
+
+
+class _Inner(serializers.Serializer[Any]):
+    # A record held inside another, with a secret of its own.
+    api_key = serializers.CharField()
 
 
 class _Planted(serializers.Serializer[Any]):
     # A made-up table's fields, with a secret planted every way the check must find one.
-    class _Inner(serializers.Serializer[Any]):
-        api_key = serializers.CharField()
-
     pin_hash = serializers.CharField()  # by its name
     nickname = serializers.CharField(source="user.password")  # by what it reads, under an innocent name
     unit_costs = serializers.ListField(child=serializers.CharField())  # by a plural
-    extras = _Inner(many=True)  # nested
+    extras = _Inner(many=True)  # in a list of nested records
+    profit_margin = serializers.CharField()  # by the words of what a sale cost the shop
+    # By what a link shows of its row, alone and in a many-link.
+    owner = serializers.SlugRelatedField[Any](source="user", slug_field="password", read_only=True)
+    batches = serializers.SlugRelatedField[Any](many=True, slug_field="unit_cost", read_only=True)
+    wrapped = serializers.ListField(child=_Inner())  # in a list's item
+    # In a dict's value.
+    notes = serializers.DictField(child=serializers.SlugRelatedField[Any](slug_field="pin_hash", read_only=True))
     # Allowed: a rule's name, when the PIN last changed, and words that only hold a secret word's letters.
     key = serializers.CharField()
     pin_changed_at = serializers.DateTimeField()
@@ -167,4 +213,11 @@ def test_secret_check_finds_what_it_must() -> None:
         "unit_costs: reads unit_costs",
         "extras.api_key: its name",
         "extras.api_key: reads api_key",
+        "profit_margin: its name",
+        "profit_margin: reads profit_margin",
+        "owner: shows password",
+        "batches: shows unit_cost",
+        "wrapped.api_key: its name",
+        "wrapped.api_key: reads api_key",
+        "notes: shows pin_hash",
     ]
