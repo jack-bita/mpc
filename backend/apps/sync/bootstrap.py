@@ -41,8 +41,12 @@ def snapshot(shop: Shop) -> dict[str, Any]:
 
 
 def setting_keys() -> list[dict[str, str]]:
-    """Every rule in the list in core (apps/core/settings_registry.py), with where it may be set and its default, as the
-    rule's kind writes it ("1000.00", "07:35"). A device works a rule out as get_setting does (apps/shops/selectors.py):
-    the side's row, else the shop's, else this default; a new shop has no rows at all. Code, not a shop's data, so the
-    same for every shop; a rule a later release adds reaches a device at its next bootstrap (SYNC-13's note)."""
-    return [{"key": key.key, "scope": key.scope.value, "default": key.kind.to_text(key.default)} for key in KEYS]
+    """Every rule in the list in core (apps/core/settings_registry.py), with its kind's name, so a device knows how to
+    read its stored text ("time": "07:35"), where it may be set, and its default, as the rule's kind writes it
+    ("1000.00", "07:35"). A device works a rule out as get_setting does (apps/shops/selectors.py): the side's row, else
+    the shop's, else this default; a new shop has no rows at all. Code, not a shop's data, so the same for every shop;
+    a rule a later release adds reaches a device at its next bootstrap (SYNC-13's note)."""
+    return [
+        {"key": key.key, "kind": key.kind.code, "scope": key.scope.value, "default": key.kind.to_text(key.default)}
+        for key in KEYS
+    ]

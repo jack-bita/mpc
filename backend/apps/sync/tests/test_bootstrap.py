@@ -96,10 +96,12 @@ def test_bootstrap_has_reference_data(
     assert [account["name"] for account in answer["payment_account"]] == ["Dawa"]  # the side's drawer
     assert [person["id"] for person in answer["staff"]] == [str(manager.pk)]
     assert [rule["id"] for rule in answer["setting"]] == [str(fine.pk)]
-    # Every rule in the list in core, with its scope and its default as the rule's kind writes it.
+    # Every rule in the list in core, with its kind, its scope and its default as the kind writes it.
     assert len(answer["setting_keys"]) == len(settings_registry.KEYS)
-    assert {"key": "attendance.late_fine", "scope": "shop", "default": "1000.00"} in answer["setting_keys"]
-    assert {"key": "cash.tolerance", "scope": "side", "default": "0.00"} in answer["setting_keys"]
+    assert {"key": "attendance.late_fine", "kind": "money", "scope": "shop", "default": "1000.00"} in answer[
+        "setting_keys"
+    ]
+    assert {"key": "cash.tolerance", "kind": "money", "scope": "side", "default": "0.00"} in answer["setting_keys"]
 
 
 def test_bootstrap_cursor_is_the_shops_last_change(
@@ -228,4 +230,4 @@ def test_setting_keys_hold_every_rule_in_core() -> None:
     # A rule added to the list in core reaches the bootstrap by itself, with its default as its kind writes it.
     keys = bootstrap.setting_keys()
     assert [key["key"] for key in keys] == [key.key for key in settings_registry.KEYS]
-    assert keys[0] == {"key": "attendance.on_time_until", "scope": "shop", "default": "07:35"}
+    assert keys[0] == {"key": "attendance.on_time_until", "kind": "time", "scope": "shop", "default": "07:35"}

@@ -461,9 +461,19 @@ export interface components {
         SaleFlowEnum: "one_screen" | "writer_cashier_loader";
         SettingKeyRecord: {
             key: string;
+            kind: components["schemas"]["SettingKindEnum"];
             scope: components["schemas"]["SettingScopeEnum"];
             default: string;
         };
+        /**
+         * @description * `money` - money
+         *     * `percent` - percent
+         *     * `whole` - whole
+         *     * `time` - time
+         *     * `yes_no` - yes_no
+         * @enum {string}
+         */
+        SettingKindEnum: "money" | "percent" | "whole" | "time" | "yes_no";
         SettingRecord: {
             /** Format: uuid */
             readonly id: string;

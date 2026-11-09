@@ -23,6 +23,7 @@ import pytest
 from apps.core.settings_registry import (
     KEY_SHAPE,
     KEYS,
+    KINDS,
     REGISTRY,
     Money,
     Percent,
@@ -42,6 +43,13 @@ def test_every_default_is_a_valid_value(key: SettingKey[Any]) -> None:
     # The key's shape is also a rule in the database (shops_setting_key_shape): a key that breaks it
     # could never get a row.
     assert re.fullmatch(KEY_SHAPE, key.key)
+
+
+def test_each_kind_has_a_name_of_its_own() -> None:
+    # A device reads a rule's stored text by its kind's name ("time" → "07:35"), sent with the rule's default
+    # (SYNC-2), so each kind has one name, no two kinds share one, and every key's kind is on the list.
+    assert [kind.code for kind in KINDS] == ["money", "percent", "whole", "time", "yes_no"]
+    assert {type(key.kind) for key in KEYS} <= set(KINDS)
 
 
 def test_each_key_listed_once() -> None:

@@ -1574,6 +1574,9 @@
                     "key": {
                         "type": "string"
                     },
+                    "kind": {
+                        "$ref": "#/components/schemas/SettingKindEnum"
+                    },
                     "scope": {
                         "$ref": "#/components/schemas/SettingScopeEnum"
                     },
@@ -1584,8 +1587,20 @@
                 "required": [
                     "default",
                     "key",
+                    "kind",
                     "scope"
                 ]
+            },
+            "SettingKindEnum": {
+                "enum": [
+                    "money",
+                    "percent",
+                    "whole",
+                    "time",
+                    "yes_no"
+                ],
+                "type": "string",
+                "description": "* `money` - money\n* `percent` - percent\n* `whole` - whole\n* `time` - time\n* `yes_no` - yes_no"
             },
             "SettingRecord": {
                 "type": "object",

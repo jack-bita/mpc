@@ -14,7 +14,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.core.languages import Language
-from apps.core.settings_registry import Scope
+from apps.core.settings_registry import KINDS, Scope
 from apps.people.models import Font, StaffMember
 from apps.people.permissions import held_permissions
 from apps.shops.models import PaymentAccount, Setting, Side
@@ -100,12 +100,15 @@ class SettingRecord(serializers.ModelSerializer[Setting]):
 # The schema names this very list (SettingScopeEnum, ENUM_NAME_OVERRIDES in config/settings/base.py), as it matches a
 # name by each choice's value and label: Scope itself would give the labels "SHOP" and "SIDE", and match nothing.
 SETTING_SCOPES = [scope.value for scope in Scope]
+# A rule's kinds, by name, for the same reason: the schema names this very list (SettingKindEnum).
+SETTING_KINDS = [kind.code for kind in KINDS]
 
 
 class SettingKeyRecord(serializers.Serializer[Any]):
-    # One rule in the list in core: its key, whether a side may have a value of its own, and its default as its kind
-    # writes it (setting_keys, apps/sync/bootstrap.py).
+    # One rule in the list in core: its key, its kind's name, which says how to read its stored text, whether a side may
+    # have a value of its own, and its default as its kind writes it (setting_keys, apps/sync/bootstrap.py).
     key = serializers.CharField()
+    kind = serializers.ChoiceField(choices=SETTING_KINDS)
     scope = serializers.ChoiceField(choices=SETTING_SCOPES)
     default = serializers.CharField()
 

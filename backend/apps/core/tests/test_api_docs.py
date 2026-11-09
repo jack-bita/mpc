@@ -101,6 +101,7 @@ def test_a_fields_choices_keep_a_name_of_their_own(tmp_path: Path) -> None:
     kind = shapes["PaymentAccountRecord"]["properties"]["kind"]["allOf"][0]["$ref"]
     assert kind == "#/components/schemas/PaymentAccountKindEnum"
     assert shapes["SettingKeyRecord"]["properties"]["scope"]["$ref"] == "#/components/schemas/SettingScopeEnum"
+    assert shapes["SettingKeyRecord"]["properties"]["kind"]["$ref"] == "#/components/schemas/SettingKindEnum"
     assert {"StatusEnum", "KindEnum", "ScopeEnum", "StaffRecordStatusEnum"}.isdisjoint(shapes)
 
 
