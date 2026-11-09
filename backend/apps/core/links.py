@@ -45,6 +45,9 @@ LINK_TYPES: dict[str, str] = {
     # A paired device: the history of its edits, such as a new name or a block, and the audit trail's lines about
     # blocking and unblocking it (AUTH-1).
     "device": "people.Device",
+    # A dated rule's row, such as next week's late fine: the change log's lines about it, and the bootstrap's list of
+    # rules, which devices keep a copy of (SYNC-2). A ledger, so it has no edit history to name it.
+    "setting": "shops.Setting",
 }
 
 
