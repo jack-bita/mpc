@@ -21,7 +21,7 @@ from django.db.transaction import TransactionManagementError
 
 from apps.core.changes import record_change, recording_changes
 from apps.core.models import Change, ChangeOp, SequenceName, ShopScoped, ShopSequence
-from apps.core.tenancy import ShopMismatch, shop_context
+from apps.core.tenancy import ShopMismatch, shop_context, system_context
 
 pytestmark = pytest.mark.django_db
 
@@ -182,3 +182,43 @@ def test_block_inside_a_part_that_can_fail_alone_numbers_on_its_own(
             with transaction.atomic(), recording_changes(shop_a):  # product 8's part, and its service's block
                 record_change(device_a)
         assert _log() == [(1, "device", device_a.pk, UPSERT), (2, "side", side_a.pk, UPSERT)]
+
+
+def _log_of(shop: Model) -> list[tuple[int, str]]:
+    # One shop's change log, read while every shop is open (system_context): each line's number and table.
+    return list(Change.objects.filter(shop_id=shop.pk).order_by("seq").values_list("seq", "entity"))
+
+
+def test_blocks_of_two_shops_one_inside_the_other(
+    shop_a: Model, shop_b: Model, side_a: ShopScoped, side_b: ShopScoped, staff_a: ShopScoped
+) -> None:
+    # A system job with every shop open (system_context, 03 §5.4) saves in shop A, and opens shop B's block inside A's.
+    # B's block doesn't join A's: it numbers at its own end, in B's own log, from 1. Once it ends, A's block is the
+    # job's block again, and A's next change lands in A's log.
+    with system_context():
+        with recording_changes(shop_a):
+            record_change(side_a)
+            with recording_changes(shop_b):
+                record_change(side_b)
+            assert _log_of(shop_b) == [(1, "side")]
+            assert _log_of(shop_a) == []
+            record_change(staff_a)
+        assert _log_of(shop_a) == [(1, "side"), (2, "staff")]
+
+
+def test_a_shops_block_inside_another_shops_block_numbers_on_its_own(
+    shop_a: Model, shop_b: Model, side_a: ShopScoped, side_b: ShopScoped, staff_a: ShopScoped
+) -> None:
+    # A, then B inside it, then A again inside B. The innermost A block doesn't join the outer one, as B's block sits
+    # between them and could fail alone: it numbers at its own end, so its line comes first in A's log. Its numbers stay
+    # locked until the commit, as the outer A block's will: two saves that nest the same two shops in opposite orders
+    # could each wait for the other, so a save over several shops takes them in a fixed order (SYNC-2's note).
+    with system_context():
+        with recording_changes(shop_a):
+            record_change(side_a)
+            with recording_changes(shop_b):
+                record_change(side_b)
+                with recording_changes(shop_a):
+                    record_change(staff_a)
+        assert _log_of(shop_a) == [(1, "staff"), (2, "side")]
+        assert _log_of(shop_b) == [(1, "side")]
