@@ -23,8 +23,8 @@ from typing import Any, NoReturn
 
 from django.db import models
 
-from apps.core.links import TYPE_CODE_MAX_LENGTH, TYPE_CODE_SHAPE
 from apps.core.tenancy import ALL_SHOPS, current_shop
+from apps.core.type_codes import TYPE_CODE_MAX_LENGTH, TYPE_CODE_SHAPE
 
 
 class UUIDModel(models.Model):

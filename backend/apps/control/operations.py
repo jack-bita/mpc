@@ -41,8 +41,8 @@ from collections.abc import Sequence
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.migrations.state import ProjectState
 
-from apps.core.links import TYPE_CODE_SHAPE
 from apps.core.operations import AppendOnlyTrigger
+from apps.core.type_codes import TYPE_CODE_SHAPE
 
 # The rule, stored in PostgreSQL as a function, as core's are. A trigger runs it before each UPDATE or
 # DELETE of a flag, and it checks in order:

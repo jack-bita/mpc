@@ -15,23 +15,12 @@ not by an import: `core` is layer 0 and may not import any app (ADR-0035), and a
 """
 
 import uuid
-from typing import TYPE_CHECKING
 
 from django.apps import apps
 
-# models.py imports this file's code shape, for the change log's `entity` (SYNC-1), so this file can't import
-# models.py as it loads: each would wait for the other. ShopScoped is only a type in the signatures below, which
-# Python 3.14 reads only when asked (PEP 649), and mypy reads under TYPE_CHECKING; table_of imports it when it runs.
-if TYPE_CHECKING:
-    from apps.core.models import ShopScoped
+from apps.core.models import ShopScoped
 
-# The shape of a code: small letters and underscores, starting with a letter ("drawer_session"), and its
-# longest length, the size of the column that stores it. The tables that store a link use both: the column
-# (control.Flag's subject_type) and a database rule on its shape. A code that broke either would be refused
-# only when the first link to its table is written, perhaps while a device's records are posted, which must
-# never fail; so a test checks every code in the list instead (apps/core/tests/test_links.py).
-TYPE_CODE_SHAPE = r"^[a-z][a-z_]*$"
-TYPE_CODE_MAX_LENGTH = 40
+# A code's shape and longest length live in apps/core/type_codes.py, which models.py imports too.
 
 # Code → the table it names, as "app.Model". Only shop tables (ShopScoped): a link is a shop's, and it loads
 # through the shop guard.
@@ -103,10 +92,6 @@ def table_of(type_code: str) -> type[ShopScoped]:
         # Text that isn't "app.Model" at all.
         raise UnknownLinkType(f'{type_code!r} names {label!r}, which is not written as "app.Model".') from None
     # A table with no `shop` (a User, a Unit) has no guard, so loading through it could read any shop's row.
-    # Imported here, not at the top (see the top of this file). By now models.py has long loaded, so this only
-    # reads it.
-    from apps.core.models import ShopScoped
-
     if not issubclass(table, ShopScoped):
         raise UnknownLinkType(f"{type_code!r} names {label}, which is not a shop's table.")
     return table
