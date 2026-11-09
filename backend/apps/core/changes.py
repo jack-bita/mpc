@@ -24,8 +24,14 @@ back. record_change refuses it.
 
 The block collects the names and, as its last step inside the transaction, takes all their numbers at once from the
 shop's "change" counter (next_numbers, apps/core/sequences.py). The counter's row stays locked from then until the
-commit, so the next save of the same shop waits for that last moment, and takes the numbers after (lesson 2: one
-numbers book, one writer at a time). Each shop has a counter of its own, so shops never wait for each other.
+commit, so the next save of the same shop waits for that last moment, and takes the numbers after: one numbers book,
+one writer at a time. Each shop has a counter of its own, so shops never wait for each other.
+
+Code that calls more than one saving service opens the block itself, never a plain `atomic()`, so the services join it
+and the numbers come once, at its end. Inside a plain transaction, each service's block would be one of its own: the
+first to end would take the counter's lock there and hold it until that transaction commits, so every save of the shop
+would wait for the whole job, and a save holding a row the job wants next could deadlock with it. A block can't wait
+for a transaction it didn't open: Django has no step just before a commit to hook into (from the review).
 
 This file owns the block and record_change. It names no table of a higher app: a record's table is read from the
 record itself, by its link type code (apps/core/links.py).
@@ -77,7 +83,7 @@ _open_block: ContextVar[_Block | None] = ContextVar("open_change_block", default
 def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[None]:
     """The block a service saves in, in place of `transaction.atomic()`: one transaction, whose changes record_change
     names, numbered as its last step. `shop` is a Shop row, typed as any model because `core` may not name `Shop`
-    (ADR-0035), or a shop's id. The shop must be the one open."""
+    (ADR-0041), or a shop's id. The shop must be the one open."""
     shop_id = shop if isinstance(shop, uuid.UUID) else shop.pk
     # T1: a shop's changes are recorded while that shop is open, as its numbers are given (next_number). Checked here,
     # at the start, so the service fails before it writes anything, not at the end.
@@ -107,7 +113,10 @@ def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[None]:
     # A block of its own, numbered at its own end: the outermost block of this shop; or one inside an `atomic()` within
     # the shop's block, which must not join it, as that part could roll back alone and leave the outer block naming
     # changes never saved (from the review); or one inside another shop's block. Inside a transaction already open,
-    # its numbers are taken at its end but kept locked until that transaction commits: correct, only longer.
+    # its numbers are taken at its end but kept locked until that transaction commits: correct, only longer. So two
+    # saves that nest the same two shops' blocks in opposite orders could each hold one counter and wait for the other's
+    # (PostgreSQL then ends one with a deadlock error): a save over several shops takes them one after another, in a
+    # fixed order (SYNC-2's note).
     block = _Block(shop_id)
     token = _open_block.set(block)
     try:
@@ -115,7 +124,8 @@ def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[None]:
             block.levels.append(_depth())  # changes may be named here, at the block's own level
             yield
             # The last step inside the transaction. Reached only if the service's work succeeded: an error above skips
-            # it, and the whole transaction, its numbers included, rolls back, leaving no line and no gap.
+            # it, so no number is taken, and the block's transaction (its savepoint, inside one already open) rolls
+            # back. Numbers taken here go back too if what is around the block fails later: no line and no gap.
             _number_and_write(block)
     finally:
         _open_block.reset(token)  # the visit's block is the outer one again, or none

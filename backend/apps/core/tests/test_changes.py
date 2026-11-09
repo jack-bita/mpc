@@ -11,7 +11,7 @@ show, that the order holds when two saves meet, is in test_change_order.py.
 
 The rows come from backend/conftest.py: a side, a staff member's job and a paired device, each a table with a link
 type code (apps/core/links.py). They are typed by their base, ShopScoped: `core` may not name a higher app's table,
-not even for types (ADR-0035).
+not even for types (ADR-0041).
 """
 
 import pytest

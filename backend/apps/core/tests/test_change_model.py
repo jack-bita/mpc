@@ -10,7 +10,7 @@ These tests pin what the database itself keeps true, whatever code writes the ro
 deleted (a ledger, ADR-0021); a shop has one line per number, and numbers start at 1; and `op` and `entity` hold only
 what a device can read. The rows are written here with save(), not through recording_changes (apps/core/changes.py),
 as the rules must hold even for code that goes around it. The shops come from backend/conftest.py, typed as plain
-models: `core` may not name `Shop` (ADR-0035).
+models: `core` may not name `Shop` (ADR-0041).
 """
 
 import uuid
