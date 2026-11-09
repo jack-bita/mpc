@@ -20,13 +20,18 @@ from django.db.models import Model
 from django.db.transaction import TransactionManagementError
 
 from apps.core.changes import record_change, recording_changes
+from apps.core.links import UnknownLinkType
 from apps.core.models import Change, ChangeOp, SequenceName, ShopScoped, ShopSequence
-from apps.core.tenancy import ShopMismatch, shop_context, system_context
+from apps.core.tenancy import NoShopSelected, ShopMismatch, shop_context, system_context
+from tests.probe.models import Note
 
 pytestmark = pytest.mark.django_db
 
 UPSERT = ChangeOp.UPSERT
 ARCHIVE = ChangeOp.ARCHIVE
+# The refusal of a change named with no block open, word for word: the refusal of one named too deep inside a block
+# also names recording_changes, so a looser match would take one for the other.
+OUTSIDE_A_BLOCK = r"runs inside recording_changes\(shop\)"
 
 
 def _log() -> list[tuple[int, str, object, str]]:
@@ -68,6 +73,22 @@ def test_rollback_leaves_no_changes(shop_a: Model, side_a: ShopScoped) -> None:
         assert _log() == [(1, "side", side_a.pk, UPSERT)]  # 1 again: no gap
 
 
+def test_rollback_of_a_later_save_gives_its_numbers_back(shop_a: Model, side_a: ShopScoped) -> None:
+    # The same promise on any day but a shop's first: the counter's row already exists, so a failed save's numbers go
+    # back by undoing its UPDATE, not by its row vanishing (from the review). The next save gets 2, not 3.
+    with shop_context(shop_a):
+        with recording_changes(shop_a):
+            record_change(side_a)
+        with pytest.raises(RuntimeError), transaction.atomic():
+            with recording_changes(shop_a):
+                record_change(side_a)
+            assert [line[0] for line in _log()] == [1, 2]  # numbered, but not yet committed
+            raise RuntimeError("the save failed after its numbers were taken")
+        with recording_changes(shop_a):
+            record_change(side_a)
+        assert [line[0] for line in _log()] == [1, 2]  # 2 again: no gap
+
+
 def test_same_record_twice_is_one_change_with_the_last_op(
     shop_a: Model, side_a: ShopScoped, staff_a: ShopScoped
 ) -> None:
@@ -85,11 +106,11 @@ def test_record_change_needs_a_block(shop_a: Model, side_a: ShopScoped) -> None:
     # Outside a block nothing would ever number the change, and devices would never learn of it. A bug in the calling
     # code, so it fails loudly, as next_number does outside a transaction.
     with shop_context(shop_a):
-        with pytest.raises(TransactionManagementError, match="recording_changes"):
+        with pytest.raises(TransactionManagementError, match=OUTSIDE_A_BLOCK):
             record_change(side_a)
         with recording_changes(shop_a):
             pass
-        with pytest.raises(TransactionManagementError, match="recording_changes"):
+        with pytest.raises(TransactionManagementError, match=OUTSIDE_A_BLOCK):
             record_change(side_a)  # the block has ended
         assert _log() == []
 
@@ -222,3 +243,35 @@ def test_a_shops_block_inside_another_shops_block_numbers_on_its_own(
                     record_change(staff_a)
         assert _log_of(shop_a) == [(1, "staff"), (2, "side")]
         assert _log_of(shop_b) == [(1, "side")]
+
+
+def test_block_needs_an_open_shop(shop_a: Model) -> None:
+    # With no shop open, nothing could check that the records belong to the block's shop (T1), nor number them: refused
+    # as the block starts, before the service writes anything, as every read with no shop is (CORE-2).
+    with pytest.raises(NoShopSelected), recording_changes(shop_a):
+        pass
+    with shop_context(shop_a):
+        assert _log() == []
+
+
+def test_record_change_refuses_a_table_with_no_type_code(shop_a: Model) -> None:
+    # A line names its table by its link type code (apps/core/links.py). A table with none can't be named, so its
+    # change is refused, and the whole save with it, rather than written under a made-up name no device could read.
+    # The test-only Note has no code.
+    note = Note(shop_id=shop_a.pk, text="no code")
+    note.save()
+    with shop_context(shop_a):
+        with pytest.raises(UnknownLinkType), recording_changes(shop_a):
+            record_change(note)
+        assert _log() == []
+
+
+def test_record_change_refused_after_a_failed_block(shop_a: Model, side_a: ShopScoped) -> None:
+    # A failed block lets go of its list as surely as a finished one: a change named after it would otherwise land in
+    # a block that no longer exists, and never be numbered (from the review).
+    with shop_context(shop_a):
+        with pytest.raises(RuntimeError), recording_changes(shop_a):
+            raise RuntimeError("the save failed")
+        with pytest.raises(TransactionManagementError, match=OUTSIDE_A_BLOCK):
+            record_change(side_a)
+        assert _log() == []
