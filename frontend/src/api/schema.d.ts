@@ -357,6 +357,9 @@ export interface components {
             readonly id: string;
             readonly name: string;
             readonly code: string;
+            readonly timezone: string;
+            readonly currency: string;
+            readonly default_language: components["schemas"]["LanguageEnum"];
         };
         MeSide: {
             /** Format: uuid */

@@ -1220,12 +1220,31 @@
                     "code": {
                         "type": "string",
                         "readOnly": true
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "currency": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "default_language": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/LanguageEnum"
+                            }
+                        ],
+                        "readOnly": true
                     }
                 },
                 "required": [
                     "code",
+                    "currency",
+                    "default_language",
                     "id",
-                    "name"
+                    "name",
+                    "timezone"
                 ]
             },
             "MeSide": {

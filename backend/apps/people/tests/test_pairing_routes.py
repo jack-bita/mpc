@@ -235,7 +235,15 @@ def test_paired_device_learns_its_shop_and_code(manager_a: StaffMember, side_a: 
     assert answer.json() == {
         "device": {"id": str(device.pk), "name": "Laptop ya Dawa", "code": 1, "status": "active"},
         "home_side": {"id": str(side_a.pk), "code": "D", "name": "Dawa"},
-        "shop": {"id": str(shop_a.pk), "name": "Duka la Mfano", "code": "MFANO"},
+        # And what it needs offline: its shop's day starts in the shop's own time zone, which a rule's day is in.
+        "shop": {
+            "id": str(shop_a.pk),
+            "name": "Duka la Mfano",
+            "code": "MFANO",
+            "timezone": "Africa/Dar_es_Salaam",
+            "currency": "TZS",
+            "default_language": "sw",
+        },
     }
     # Never the key's hash: it stays on the server (03 §5.9).
     assert device.key_hash.encode() not in answer.content

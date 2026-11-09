@@ -197,7 +197,14 @@ def test_me_names_who_and_where(asha: StaffMember, laptop: Device, laptop_key: s
         "font": asha.user.font,
     }
     assert data["staff"] == {"id": str(asha.pk), "display_name": asha.display_name, "job_title": asha.job_title}
-    assert data["shop"] == {"id": str(asha.shop_id), "name": asha.shop.name, "code": asha.shop.code}
+    assert data["shop"] == {
+        "id": str(asha.shop_id),
+        "name": asha.shop.name,
+        "code": asha.shop.code,
+        "timezone": "Africa/Dar_es_Salaam",
+        "currency": "TZS",
+        "default_language": "sw",
+    }
     assert data["device"] == {"id": str(laptop.pk), "name": laptop.name, "code": laptop.code, "status": "active"}
     assert data["home_side"] == {"id": str(side_a.pk), "code": side_a.code, "name": side_a.name}
     assert data["must_change_password"] is False

@@ -272,9 +272,11 @@ SPECTACULAR_SETTINGS = {
     # device's status StatusEnum, and rename it, with a warning, once another table shows a `status` of its own. The
     # app's generated types keep these names (UI-2). The bootstrap's three (SYNC-2): a person's status, which an office
     # staff route will show too (PPL-4), an account's kind, before an attendance event's own `kind` (ATT-1), and a
-    # rule's scope.
+    # rule's scope. And a language, which a person and a shop both have, under two field names (`language`,
+    # `default_language`): one list, one name.
     "ENUM_NAME_OVERRIDES": {
         "DeviceStatusEnum": "apps.people.models.DeviceStatus",
+        "LanguageEnum": "apps.core.languages.Language",
         "StaffStatusEnum": "apps.people.models.StaffStatus",
         "PaymentAccountKindEnum": "apps.shops.models.PaymentAccountKind",
         "SettingScopeEnum": "apps.sync.api.serializers.SETTING_SCOPES",
