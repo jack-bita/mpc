@@ -166,6 +166,14 @@ def test_bootstrap_is_compressed(paired: tuple[Device, str]) -> None:
     assert len(packed.content) < len(plain.content)
 
 
+def test_bootstrap_is_never_cached(paired: tuple[Device, str]) -> None:
+    # The shop's whole staff list and everyone's keys: no browser cache, nor any proxy on the way, may keep a copy for
+    # the next person, and a reset device must get today's lists, never yesterday's from a cache.
+    _device, key = paired
+    cache_control = a_browser(key).get(BOOTSTRAP).headers["Cache-Control"]
+    assert {"no-store", "no-cache", "private"} <= {part.strip() for part in cache_control.split(",")}
+
+
 def test_bootstrap_needs_a_paired_device(manager: StaffMember, paired: tuple[Device, str], shop_a: Shop) -> None:
     # The shop's whole list of people and rules, so a device's key alone opens it: no key, a made-up one, or a person's
     # session gets nothing (DeviceView). A blocked laptop, a stolen one, say, gets nothing either, and learns why.
