@@ -3,8 +3,8 @@
     the cookie holds              GET /api/sync/v1/pull/?cursor=41
     nothing, or a made-up key     401 not_authenticated
     a blocked device's key        401 device.blocked
-    a paired device's key         200: the changes after 41, the cursor to ask from next, the server's time and the
-                                  oldest app that may still sync
+    a paired device's key         200: the changes after 41, the cursor to ask from next, whether more wait, the
+                                  server's time and the oldest app that may still sync
     ... and a cursor that is no   400 invalid, under `cursor`
     change number ("abc", -1)
 
@@ -80,7 +80,7 @@ def test_pull_sends_the_changes_after_the_cursor(shop_a: Shop, dawa: Side, paire
     response = a_browser(key).get(PULL, {"cursor": start})
     assert response.status_code == 200
     page = response.json()
-    assert list(page) == ["changes", "cursor", "server_time", "min_app_version"]
+    assert list(page) == ["changes", "cursor", "has_more", "server_time", "min_app_version"]
     (change,) = page["changes"]
     assert {key: change[key] for key in ("seq", "entity", "id", "op")} == {
         "seq": start + 1,
@@ -89,7 +89,7 @@ def test_pull_sends_the_changes_after_the_cursor(shop_a: Shop, dawa: Side, paire
         "op": "upsert",
     }
     assert change["data"]["name"] == "Dawa Kuu"
-    assert page["cursor"] == start + 1
+    assert (page["cursor"], page["has_more"]) == (start + 1, False)
     assert a_browser(key).get(PULL, {"cursor": page["cursor"]}).json()["changes"] == []
 
 
@@ -171,7 +171,7 @@ def test_answer_shape_names_every_registry_table() -> None:
     # The answer's documented shape (the API schema, and the app's types made from it) names a change of each registry
     # table, by its code, with that table's own record as its data, so a table a later card adds can't reach devices
     # undocumented, or the other way round.
-    assert list(PullAnswer().fields) == ["changes", "cursor", "server_time", "min_app_version"]
+    assert list(PullAnswer().fields) == ["changes", "cursor", "has_more", "server_time", "min_app_version"]
     assert list(CHANGE_RECORDS) == list(REGISTRY)
     for code, entry in REGISTRY.items():
         fields = CHANGE_RECORDS[code]().fields

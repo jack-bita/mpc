@@ -11,7 +11,7 @@ it read, its cursor, and asks for what came after:
 
 A line holds no data, so each change carries its record as it is now, read through the registry (apps/sync/registry.py)
 with the bootstrap's own fields. A record no longer among its table's rows has left the device's lists, so it goes as
-`archive`, whatever its line said. Up to 1,000 lines a page; a device asks again while a page comes full.
+`archive`, whatever its line said. Up to 1,000 lines a page; a device asks again at once while a page says more wait.
 
 These tests read the answer as pull.page builds it; the route that sends it, with the device's key, is
 test_pull_route.py's. The changes come from the services themselves, which write their own lines (SYNC-15). Setting up
@@ -127,8 +127,8 @@ def test_pulling_again_gives_every_change_once_in_order(shop_a: Shop, dawa: Side
 
 def test_pull_pages_of_1000(shop_a: Shop) -> None:
     # A laptop away for a busy week finds thousands of lines waiting: it gets them 1,000 a page, so each answer stays a
-    # size a slow line can carry and the device can save in one go. 1,001 changes: a full page, then the one left, then
-    # nothing. A full page tells the device to ask again at once.
+    # size a slow line can carry and the device can save in one go. 1,001 changes: a full page, which says more wait, so
+    # the device asks again at once; then the one left, which says none do; then nothing.
     start = last_line(shop_a)
     # 1,001 lines in one save, so the test stays quick: a save names each record once, so 1,001 records, sides made up
     # for the test and never saved. No device holds them, so the pages send them as archive; what counts here is how
@@ -138,10 +138,29 @@ def test_pull_pages_of_1000(shop_a: Shop) -> None:
             record_change(Side(shop=shop_a))
     first = pulled(shop_a, start)
     assert [change["seq"] for change in first["changes"]] == list(range(start + 1, start + 1001))
-    assert first["cursor"] == start + 1000
+    assert (first["cursor"], first["has_more"]) == (start + 1000, True)
     second = pulled(shop_a, first["cursor"])
     assert [change["seq"] for change in second["changes"]] == [start + 1001]
+    assert (second["cursor"], second["has_more"]) == (start + 1001, False)
     assert pulled(shop_a, second["cursor"])["changes"] == []
+
+
+def test_a_page_says_more_wait_though_it_passed_lines_over(shop_a: Shop) -> None:
+    # A page leaves out the lines of a table no device keeps (test_a_line_of_a_table_devices_dont_keep_is_passed_over),
+    # so it can hold fewer than 1,000 changes while more wait: a device that asked again only after a page of 1,000
+    # would stop there, and wait for its next sync, 30 seconds on, for the rest. So a page says itself whether more
+    # wait. A stock location's line first, then 1,000 more, in one save, as in test_pull_pages_of_1000.
+    start = last_line(shop_a)
+    with shop_context(shop_a), recording_changes(shop_a):
+        record_change(StockLocation(shop=shop_a))
+        for _ in range(1000):
+            record_change(Side(shop=shop_a))
+    first = pulled(shop_a, start)
+    assert len(first["changes"]) == 999
+    assert (first["cursor"], first["has_more"]) == (start + 1000, True)
+    second = pulled(shop_a, first["cursor"])
+    assert [change["seq"] for change in second["changes"]] == [start + 1001]
+    assert second["has_more"] is False
 
 
 def test_pull_sends_archive_ops(shop_a: Shop, dawa: Side) -> None:
@@ -276,8 +295,8 @@ def test_every_page_carries_the_server_time_and_the_oldest_app_allowed(
     before = timezone.now()
     page = pulled(shop_a, last_line(shop_a))
     after = timezone.now()
-    assert list(page) == ["changes", "cursor", "server_time", "min_app_version"]
-    assert page["changes"] == []
+    assert list(page) == ["changes", "cursor", "has_more", "server_time", "min_app_version"]
+    assert (page["changes"], page["has_more"]) == ([], False)
     assert page["server_time"].endswith("Z")
     assert before <= datetime.fromisoformat(page["server_time"]) <= after
     assert page["min_app_version"] is None

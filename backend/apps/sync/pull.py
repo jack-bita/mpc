@@ -8,6 +8,7 @@ came after, and gets one page:
     42  staff  Juma suspended            {"seq": 42, "entity": "staff", "id": …, "op": "upsert", "data": Juma's row}
     43  staff  Asha left                 {"seq": 43, "entity": "staff", "id": …, "op": "archive", "data": null}
                                          "cursor": 43, the number to ask from next
+                                         "has_more": false, so nothing waits after 43
 
 A line names a record and holds none of its data, so each record is read as it is now, through the registry
 (apps/sync/registry.py): its rows and its fields, the bootstrap's own, so a pull and a bootstrap can't disagree. A
@@ -25,7 +26,9 @@ from the lines, so the records can't be read first.
 
 Every line is sent once, in order, a record changed twice twice, each time as it is now: the laptop applies a page in
 order, so the last one wins. A line of a table no device keeps (one a later card records before it joins the registry)
-is passed over, but counted: the cursor moves past it, so a laptop never stops on it.
+is passed over, but counted: the cursor moves past it, so a laptop never stops on it. So a page may hold fewer than
+1,000 changes while more wait, and says itself whether they do (`has_more`): a laptop that asked again only after a
+page of 1,000 would stop early, and wait for its next sync for the rest.
 """
 
 import uuid
@@ -40,16 +43,19 @@ from apps.sync.registry import REGISTRY
 from apps.sync.selectors import changes_after
 
 # The most lines one page holds (03 §6.4): an answer a slow line can carry, and a device can save in one go. A laptop
-# away for a week asks again while its pages come full, from each page's cursor.
+# away for a week asks again at once while a page says more wait, from each page's cursor.
 PAGE_SIZE = 1000
 
 
 def page(shop: Shop, cursor: int) -> dict[str, Any]:
     """One page of the pull for a device of `shop`, which must be the shop open, at `cursor`: the changes after it, in
-    order; the number to ask from next (`cursor` again when nothing came); the server's time; and the oldest app
-    version that may still sync."""
-    # First, before any record: see the file's header.
-    lines = changes_after(shop, cursor, PAGE_SIZE)
+    order; the number to ask from next (`cursor` again when nothing came); whether more wait after it; the server's
+    time; and the oldest app version that may still sync."""
+    # First, before any record: see the file's header. One line more than a page holds: if it is there, more wait. It
+    # is left for the next page, which reads it again.
+    lines = changes_after(shop, cursor, PAGE_SIZE + 1)
+    has_more = len(lines) > PAGE_SIZE
+    lines = lines[:PAGE_SIZE]
     now = _records_now(shop, lines)
     changes = []
     for seq, entity, record_id in lines:
@@ -62,6 +68,8 @@ def page(shop: Shop, cursor: int) -> dict[str, Any]:
         "changes": changes,
         # The last line read, sent or passed over: the next page starts after it.
         "cursor": lines[-1][0] if lines else cursor,
+        # Ask again at once, from that cursor. The count of changes can't say it: lines passed over aren't sent.
+        "has_more": has_more,
         # For the device's clock: it keeps how far its own is off, and stamps its documents by it (03 §6.6). Every
         # page, an empty one too, so a quiet shop still checks its clock at every sync.
         "server_time": timezone.now(),

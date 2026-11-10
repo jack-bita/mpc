@@ -492,6 +492,8 @@ export interface components {
             changes: components["schemas"]["Change"][];
             /** @description The last change number this page holds: the next pull asks for what came after. */
             cursor: number;
+            /** @description More changes wait after this page: ask again at once, from its cursor. A page can hold fewer than 1,000 changes and still have more after it. */
+            has_more: boolean;
             /** Format: date-time */
             server_time: string;
             min_app_version: string | null;

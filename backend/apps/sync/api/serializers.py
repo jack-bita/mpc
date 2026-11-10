@@ -195,8 +195,8 @@ CHANGE_RECORDS: dict[str, type[ChangeRecord]] = {
 
 class PullAnswer(serializers.Serializer[Any]):
     # One page of the pull: up to 1,000 changes after the cursor, in order, each told apart by its `entity`; the cursor
-    # to ask from next, the cursor asked when nothing came; the server's time, for the device's clock; and the oldest
-    # app version that may still sync, empty while any may.
+    # to ask from next, the cursor asked when nothing came; whether more wait after it; the server's time, for the
+    # device's clock; and the oldest app version that may still sync, empty while any may.
     changes = PolymorphicProxySerializer(
         component_name="Change",
         # A copy, built where mypy reads it as the wider dict the schema's class takes: a dict's values are fixed to
@@ -207,6 +207,10 @@ class PullAnswer(serializers.Serializer[Any]):
     )
     cursor = serializers.IntegerField(
         min_value=0, help_text="The last change number this page holds: the next pull asks for what came after."
+    )
+    has_more = serializers.BooleanField(
+        help_text="More changes wait after this page: ask again at once, from its cursor. A page can hold fewer than"
+        " 1,000 changes and still have more after it."
     )
     server_time = serializers.DateTimeField()
     min_app_version = serializers.CharField(allow_null=True)

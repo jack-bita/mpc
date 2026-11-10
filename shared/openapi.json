@@ -1691,6 +1691,10 @@
                         "minimum": 0,
                         "description": "The last change number this page holds: the next pull asks for what came after."
                     },
+                    "has_more": {
+                        "type": "boolean",
+                        "description": "More changes wait after this page: ask again at once, from its cursor. A page can hold fewer than 1,000 changes and still have more after it."
+                    },
                     "server_time": {
                         "type": "string",
                         "format": "date-time"
@@ -1703,6 +1707,7 @@
                 "required": [
                     "changes",
                     "cursor",
+                    "has_more",
                     "min_app_version",
                     "server_time"
                 ]
