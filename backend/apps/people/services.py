@@ -26,7 +26,8 @@ refused action opens nothing.
 
 Callers open shop_context(shop) first: full_clean and the unique checks read through the guarded
 `objects` (CORE-2). Two need none open: start_pairing, as a device that asks to join belongs to no shop yet, and its
-request links to nothing (02 v1.11); and change_own_settings, which writes only the person, who belongs to no shop.
+request links to nothing (02 v1.11); and change_own_settings, which writes the person, who belongs to no shop, and then
+opens each shop where they work in turn, to write that shop's line (_record_each_job).
 """
 
 import math
@@ -43,6 +44,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q, QuerySet
+from django.db.transaction import TransactionManagementError
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
@@ -64,7 +66,7 @@ from apps.people.device_keys import (
     make_pairing_code,
 )
 from apps.people.login_counts import lift_wrong_password_count
-from apps.people.login_doors import shop_of_device_key
+from apps.people.login_doors import shop_of_device_key, shops_of_person
 from apps.people.models import (
     OWN_SETTINGS,
     Device,
@@ -514,10 +516,29 @@ def change_own_settings(user: User, *, language: str | None = None, font: str | 
         # Only the changed columns: a change to her font in one tab never writes back an old language from another. No
         # lock and no version: each choice is one value, and the last one tapped is the one she meant. No line in the
         # audit trail either: it keeps who changed what in a shop, and this changes no shop's rows, nobody's rights and
-        # no money, only how one person's own screens look.
+        # no money, only how one person's own screens look. One transaction with every shop's line: all, or none.
         with transaction.atomic():
             user.save(update_fields=changed)
+            _record_each_job(user)
     return user
+
+
+def _record_each_job(user: User) -> None:
+    # A person's own row changed, in a way every shop where they work shows on their staff row: their language and font
+    # (UI-9). The person belongs to no shop, so each shop gets a line of its own, naming the person's job there, in the
+    # transaction that saved the person (SYNC-15). The shops come from the person's door, read before any shop is open,
+    # ordered by id (ADR-0042): one block per shop, one after another, never one inside another. Two such saves at once
+    # then take the shops' counters in the same order, so neither can hold one counter while waiting for the other's.
+    # Each block numbers at its own end and keeps its counter until the commit, a moment later.
+    if not transaction.get_connection().in_atomic_block:
+        # Outside a transaction, each shop's line would commit alone, and a failure later would leave the person unsaved
+        # and some shops' laptops told of a change that never happened. A bug in the calling code, so a server error.
+        raise TransactionManagementError("_record_each_job runs inside the transaction that saved the person.")
+    for shop_id in shops_of_person(user.pk):
+        with shop_context(shop_id), recording_changes(shop_id):
+            # Read through the guard, inside this shop: the person's current job here, one at most (the door's rule).
+            for job in StaffMember.objects.filter(user_id=user.pk).exclude(status=StaffStatus.LEFT):
+                record_change(job)
 
 
 def set_up_shop(

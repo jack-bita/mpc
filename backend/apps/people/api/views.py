@@ -267,8 +267,10 @@ class OwnSettingsView(APIView):
     # The office routes' own login, though, not logout's: it reads the person afresh on every visit, so a suspended
     # person, someone on a temporary password, a copied badge or a blocked laptop is refused here as on every office
     # route (ADR-0038). It reads the person's job and its shop, and for a PIN's session the device that holds the key,
-    # each inside the shop its login door names (apps/people/login_doors.py), only to refuse them; the route itself
-    # reads no shop's row. It checks the CSRF token too, so another website can't change someone's language.
+    # each inside the shop its login door names (apps/people/login_doors.py), only to refuse them. Its save writes the
+    # person's staff line in every shop where they work, so their laptops show the new choice (change_own_settings,
+    # SYNC-15); its answer holds none of it. It checks the CSRF token too, so another website can't change someone's
+    # language.
     authentication_classes = [StaffSessionAuthentication]
     permission_classes = [AtAShop]
     # No answer to OPTIONS, which would describe the route's form to whoever asks: refused as the office routes refuse

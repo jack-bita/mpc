@@ -216,17 +216,23 @@ def test_logout_stops_office_routes(owner: StaffMember, phone: APIClient) -> Non
     assert code_of(phone) == (403, "not_authenticated")
 
 
-def test_person_door_reads_only_a_shop_id(owner: StaffMember) -> None:
-    # The door reads past the guard, so it reads as little as a login needs: shops' ids, in one query, by the person,
-    # two at most. Everything else is read through the guard, once that shop is open.
+def test_person_door_reads_only_a_shop_id(owner: StaffMember, shop_b: Shop) -> None:
+    # The door reads past the guard, so it reads as little as its callers need: shops' ids, in one query, by the
+    # person, every shop where they work, by id. The login counts them; a change to the person writes a line in each,
+    # in that order (ADR-0042, SYNC-15). Everything else is read through the guard, once each shop is open.
     with CaptureQueriesContext(connection) as queries:
         found = shops_of_person(owner.user_id)
 
     assert found == [owner.shop_id]
     [query] = queries.captured_queries
-    # The one column, under the name values_list() gives it; then the table, the person, and the limit.
+    # The one column, under the name values_list() gives it; then the table, the person, and the order: by the first
+    # column, the shop's id, which Django writes by its place in the list.
     assert query["sql"].startswith('SELECT "people_staffmember"."shop_id" AS "shop_id" FROM "people_staffmember" WHERE')
     assert '"people_staffmember"."user_id" =' in query["sql"]
-    assert query["sql"].endswith("LIMIT 2")
+    assert query["sql"].endswith("ORDER BY 1 ASC")
+    # A job at a second shop: both shops, by id, whichever job came first.
+    with shop_context(shop_b):
+        add_staff(shop=shop_b, user=User.objects.get(pk=owner.user_id), display_name="Owner", by=None)
+    assert shops_of_person(owner.user_id) == sorted([owner.shop_id, shop_b.pk])
     # Nobody's job leads to no shop.
     assert shops_of_person(uuid.uuid7()) == []
