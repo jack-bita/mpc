@@ -15,7 +15,9 @@ a record no longer among an entry's rows has left the device's lists. A table mi
 field missing from its serializer never leaves the server.
 
 The order is the bootstrap's: sides first, as the other tables name them. A later card that sends a new table adds its
-entry here, with a code in LINK_TYPES, and the services that change it record each change (SYNC-15).
+entry here, with a code in LINK_TYPES, and the services that change it record each change (SYNC-15). Until then the pull
+passes over that table's lines, so a device already past them never pulls them: after the release that adds the entry,
+each device gets the table by a fresh bootstrap (SYNC-13's note).
 """
 
 from collections.abc import Callable
