@@ -175,12 +175,16 @@ def test_push_needs_csrf(shop_a: Shop, laptop: tuple[Device, str], staff_a: Staf
 
 
 def test_push_takes_at_most_100_documents(shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember) -> None:
-    # A laptop sends its outbox 100 at a time (03 §6.3), so one push stays short on a slow line. More is refused
-    # whole, before anything is saved.
+    # A laptop sends its outbox 100 at a time (03 §6.3), so one push stays short on a slow line: exactly 100 are taken,
+    # each answered. More is refused whole, before anything is saved.
     _device, key = laptop
     refused = send(a_browser(key), [envelope(seq, staff_a) for seq in range(1, 102)])
     assert (refused.status_code, refused.json()["fields"]) == (400, {"documents": ["max_length"]})
     assert _tickets(shop_a) == 0
+    taken = send(a_browser(key), [envelope(seq, staff_a) for seq in range(1, 101)])
+    assert taken.status_code == 200
+    assert len(taken.json()["answers"]) == 100
+    assert _tickets(shop_a) == 100
 
 
 @pytest.mark.parametrize(

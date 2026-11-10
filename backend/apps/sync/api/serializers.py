@@ -254,9 +254,10 @@ class PushedEnvelope(serializers.Serializer[Any]):
 class PushBatch(serializers.Serializer[Any]):
     # Up to 100 documents a push (03 §6.3), so one push stays short on a shop's slow line. No device id: the key says
     # which laptop sends (AUTH-2). The laptop's app version and unsent count come with SYNC-5, which records them.
-    # Written out as the list it is: `many=True` would make the same list, but the type checker's notes don't know the
-    # limit on that form.
-    documents: serializers.ListSerializer[Any] = serializers.ListSerializer(child=PushedEnvelope(), max_length=100)
+    # A list field of envelopes, not `many=True`: the same checks, each envelope's under its number
+    # (`documents.0.device_seq`), and its limit reaches the API's description (maxItems), which a list serializer's
+    # doesn't, nor the type checker's notes on the `many=True` form.
+    documents = serializers.ListField(child=PushedEnvelope(), max_length=100)
 
 
 class FlagRaised(serializers.Serializer[Any]):
@@ -264,14 +265,21 @@ class FlagRaised(serializers.Serializer[Any]):
     kind = serializers.ChoiceField(choices=FlagKind.choices)
 
 
+# The four answers, by name, for the schema to name this very list (PushAnswerStatusEnum), as it does the settings'
+# lists above: an automatic name, taken from the field, would change the day another field of that name joins.
+PUSH_ANSWER_STATUSES = [ACCEPTED, DUPLICATE, INVALID, RETRY]
+
+
 class PushedAnswer(serializers.Serializer[Any]):
     # One document's answer (apps/sync/push.py, Answer): accepted, duplicate, invalid or retry.
     id = serializers.UUIDField()
-    status = serializers.ChoiceField(choices=[ACCEPTED, DUPLICATE, INVALID, RETRY])
+    status = serializers.ChoiceField(choices=PUSH_ANSWER_STATUSES)
     first = serializers.ChoiceField(
         choices=PushedStatus.choices, allow_null=True, help_text="A duplicate's first answer."
     )
-    posted_seq = serializers.IntegerField(allow_null=True, help_text="The last change number its save took.")
+    posted_seq = serializers.IntegerField(
+        min_value=1, allow_null=True, help_text="The last change number its save took."
+    )
     flags = FlagRaised(many=True)
     code = serializers.CharField(allow_blank=True, help_text="An invalid one's reason, as the error shape names it.")
 

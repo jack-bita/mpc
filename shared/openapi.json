@@ -1250,31 +1250,7 @@
                 "type": "string",
                 "description": "* `active` - Active\n* `blocked` - Blocked"
             },
-            "FirstEnum": {
-                "enum": [
-                    "accepted",
-                    "invalid"
-                ],
-                "type": "string",
-                "description": "* `accepted` - Accepted\n* `invalid` - Invalid"
-            },
-            "FlagRaised": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "kind": {
-                        "$ref": "#/components/schemas/FlagRaisedKindEnum"
-                    }
-                },
-                "required": [
-                    "id",
-                    "kind"
-                ]
-            },
-            "FlagRaisedKindEnum": {
+            "FlagKindEnum": {
                 "enum": [
                     "cash_difference",
                     "count_difference",
@@ -1297,6 +1273,22 @@
                 ],
                 "type": "string",
                 "description": "* `cash_difference` - Cash difference\n* `count_difference` - Count difference\n* `delivery_difference` - Delivery difference\n* `transfer_difference` - Transfer difference\n* `negative_stock` - Negative stock\n* `duplicate_code` - Duplicate transaction code\n* `late_record` - Late record\n* `unverified_time` - Unverified time\n* `missing_clock_out` - Missing clock-out\n* `suspended_staff_activity` - Suspended staff activity\n* `device_gap` - Device gap\n* `balance_mismatch` - Balance mismatch\n* `open_bag_difference` - Open bag difference\n* `production_loss` - Production loss\n* `total_mismatch` - Total mismatch\n* `permission_break` - Permission break\n* `drawer_conflict` - Drawer conflict\n* `invalid_document` - Invalid document"
+            },
+            "FlagRaised": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/FlagKindEnum"
+                    }
+                },
+                "required": [
+                    "id",
+                    "kind"
+                ]
             },
             "FontEnum": {
                 "enum": [
@@ -1825,6 +1817,16 @@
                     "answers"
                 ]
             },
+            "PushAnswerStatusEnum": {
+                "enum": [
+                    "accepted",
+                    "duplicate",
+                    "invalid",
+                    "retry"
+                ],
+                "type": "string",
+                "description": "* `accepted` - accepted\n* `duplicate` - duplicate\n* `invalid` - invalid\n* `retry` - retry"
+            },
             "PushBatchRequest": {
                 "type": "object",
                 "properties": {
@@ -1832,7 +1834,8 @@
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/PushedEnvelopeRequest"
-                        }
+                        },
+                        "maxItems": 100
                     }
                 },
                 "required": [
@@ -1847,14 +1850,14 @@
                         "format": "uuid"
                     },
                     "status": {
-                        "$ref": "#/components/schemas/PushedAnswerStatusEnum"
+                        "$ref": "#/components/schemas/PushAnswerStatusEnum"
                     },
                     "first": {
                         "nullable": true,
                         "description": "A duplicate's first answer.\n\n* `accepted` - Accepted\n* `invalid` - Invalid",
                         "oneOf": [
                             {
-                                "$ref": "#/components/schemas/FirstEnum"
+                                "$ref": "#/components/schemas/PushedStatusEnum"
                             },
                             {
                                 "$ref": "#/components/schemas/NullEnum"
@@ -1863,6 +1866,7 @@
                     },
                     "posted_seq": {
                         "type": "integer",
+                        "minimum": 1,
                         "nullable": true,
                         "description": "The last change number its save took."
                     },
@@ -1895,16 +1899,6 @@
                     "posted_seq",
                     "status"
                 ]
-            },
-            "PushedAnswerStatusEnum": {
-                "enum": [
-                    "accepted",
-                    "duplicate",
-                    "invalid",
-                    "retry"
-                ],
-                "type": "string",
-                "description": "* `accepted` - accepted\n* `duplicate` - duplicate\n* `invalid` - invalid\n* `retry` - retry"
             },
             "PushedEnvelopeRequest": {
                 "type": "object",
@@ -1956,6 +1950,14 @@
                     "schema_version",
                     "type"
                 ]
+            },
+            "PushedStatusEnum": {
+                "enum": [
+                    "accepted",
+                    "invalid"
+                ],
+                "type": "string",
+                "description": "* `accepted` - Accepted\n* `invalid` - Invalid"
             },
             "SaleFlowEnum": {
                 "enum": [

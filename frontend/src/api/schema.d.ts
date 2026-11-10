@@ -365,17 +365,6 @@ export interface components {
          */
         DeviceStatusEnum: "active" | "blocked";
         /**
-         * @description * `accepted` - Accepted
-         *     * `invalid` - Invalid
-         * @enum {string}
-         */
-        FirstEnum: "accepted" | "invalid";
-        FlagRaised: {
-            /** Format: uuid */
-            id: string;
-            kind: components["schemas"]["FlagRaisedKindEnum"];
-        };
-        /**
          * @description * `cash_difference` - Cash difference
          *     * `count_difference` - Count difference
          *     * `delivery_difference` - Delivery difference
@@ -396,7 +385,12 @@ export interface components {
          *     * `invalid_document` - Invalid document
          * @enum {string}
          */
-        FlagRaisedKindEnum: "cash_difference" | "count_difference" | "delivery_difference" | "transfer_difference" | "negative_stock" | "duplicate_code" | "late_record" | "unverified_time" | "missing_clock_out" | "suspended_staff_activity" | "device_gap" | "balance_mismatch" | "open_bag_difference" | "production_loss" | "total_mismatch" | "permission_break" | "drawer_conflict" | "invalid_document";
+        FlagKindEnum: "cash_difference" | "count_difference" | "delivery_difference" | "transfer_difference" | "negative_stock" | "duplicate_code" | "late_record" | "unverified_time" | "missing_clock_out" | "suspended_staff_activity" | "device_gap" | "balance_mismatch" | "open_bag_difference" | "production_loss" | "total_mismatch" | "permission_break" | "drawer_conflict" | "invalid_document";
+        FlagRaised: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FlagKindEnum"];
+        };
         /**
          * @description * `default` - Default
          *     * `second` - Second, easy to read
@@ -552,20 +546,28 @@ export interface components {
         PushAnswer: {
             answers: components["schemas"]["PushedAnswer"][];
         };
+        /**
+         * @description * `accepted` - accepted
+         *     * `duplicate` - duplicate
+         *     * `invalid` - invalid
+         *     * `retry` - retry
+         * @enum {string}
+         */
+        PushAnswerStatusEnum: "accepted" | "duplicate" | "invalid" | "retry";
         PushBatchRequest: {
             documents: components["schemas"]["PushedEnvelopeRequest"][];
         };
         PushedAnswer: {
             /** Format: uuid */
             id: string;
-            status: components["schemas"]["PushedAnswerStatusEnum"];
+            status: components["schemas"]["PushAnswerStatusEnum"];
             /**
              * @description A duplicate's first answer.
              *
              *     * `accepted` - Accepted
              *     * `invalid` - Invalid
              */
-            first: (components["schemas"]["FirstEnum"] | components["schemas"]["NullEnum"]) | null;
+            first: (components["schemas"]["PushedStatusEnum"] | components["schemas"]["NullEnum"]) | null;
             /** @description The last change number its save took. */
             posted_seq: number | null;
             flags: components["schemas"]["FlagRaised"][];
@@ -575,14 +577,6 @@ export interface components {
                 [key: string]: string[];
             };
         };
-        /**
-         * @description * `accepted` - accepted
-         *     * `duplicate` - duplicate
-         *     * `invalid` - invalid
-         *     * `retry` - retry
-         * @enum {string}
-         */
-        PushedAnswerStatusEnum: "accepted" | "duplicate" | "invalid" | "retry";
         PushedEnvelopeRequest: {
             /**
              * Format: uuid
@@ -611,6 +605,12 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * @description * `accepted` - Accepted
+         *     * `invalid` - Invalid
+         * @enum {string}
+         */
+        PushedStatusEnum: "accepted" | "invalid";
         /**
          * @description * `one_screen` - One screen
          *     * `writer_cashier_loader` - Writer, cashier, loader
