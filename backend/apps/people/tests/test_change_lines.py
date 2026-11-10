@@ -12,6 +12,7 @@ language or switch-off, reach every shop where they work, as the person belongs 
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db.transaction import TransactionManagementError
 
 from apps.core.models import ChangeOp
 from apps.core.permissions import Permission, RoleTemplate
@@ -19,6 +20,7 @@ from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, User
 from apps.people.selectors import shop_today
 from apps.people.services import (
+    _record_each_job,
     add_staff,
     assign_role,
     change_person,
@@ -107,3 +109,16 @@ def test_a_change_no_laptop_shows_writes_no_line(staff_a: StaffMember) -> None:
 
     assert lines == []
     assert User.objects.get(pk=juma.pk).phone == "+255700000001"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_persons_lines_need_the_transaction_that_saved_them(staff_a: StaffMember) -> None:
+    # Outside a transaction, each shop's line would commit on its own, and a failure after it would leave a laptop told
+    # of a change to the person that never happened. So writing them outside one is refused, before any line. A normal
+    # test always runs inside its own transaction, which hides this: `transaction=True` runs it with none open.
+    juma = User.objects.get(pk=staff_a.user_id)
+    refused = pytest.raises(TransactionManagementError, match="inside the transaction that saved the person")
+    with lines_written(staff_a.shop_id) as lines, refused:
+        _record_each_job(juma)
+
+    assert lines == []
