@@ -10,7 +10,8 @@ grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 0
 (start_pairing), a manager with device.manage says yes (confirm_pairing), renames it (rename_device, AUTH-5), and
 blocks it, or lets it work again (block, unblock); and each time its key reaches the server, it is noted as seen
 (note_device_seen, AUTH-2). And a person's own choices for their screens, their language and font, which only they
-change (change_own_settings, UI-9).
+change (change_own_settings, UI-9). And the superuser's edit of a person in the admin, which every shop where they work
+hears of when it touches what its laptops show: their name, language, or switch-off (change_person, SYNC-15).
 Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
@@ -523,22 +524,45 @@ def change_own_settings(user: User, *, language: str | None = None, font: str | 
     return user
 
 
+# What a laptop shows of a person, on their staff row in each shop where they work (StaffRecord, apps/sync/api/
+# serializers.py): their name, language and font; and whether they are sent at all, which `is_active` decides
+# (staff_rows). `people` can't read the sync app (a higher layer), so the list is written here, and a sync test pins it
+# to StaffRecord (test_the_people_app_knows_which_of_a_persons_fields_travel).
+FIELDS_ON_STAFF_ROWS = frozenset({"full_name", *OWN_SETTINGS, "is_active"})
+
+
+def change_person(user: User, *, changed: Collection[str]) -> User:
+    """Save a person as the superuser changed them in the admin (apps/people/admin.py), with every field the form
+    holds, as the admin's own save does. `changed`: the fields the form changed. When one is a field a laptop shows
+    (FIELDS_ON_STAFF_ROWS), each shop where the person works gets a line for their job, in the same transaction:
+    `archive` when they are switched off, as no laptop may then show them, `upsert` otherwise (SYNC-15). Returns the
+    person as saved."""
+    with transaction.atomic():
+        user.save()
+        if FIELDS_ON_STAFF_ROWS & set(changed):
+            _record_each_job(user)
+    return user
+
+
 def _record_each_job(user: User) -> None:
     # A person's own row changed, in a way every shop where they work shows on their staff row: their language and font
-    # (UI-9). The person belongs to no shop, so each shop gets a line of its own, naming the person's job there, in the
-    # transaction that saved the person (SYNC-15). The shops come from the person's door, read before any shop is open,
-    # ordered by id (ADR-0042): one block per shop, one after another, never one inside another. Two such saves at once
-    # then take the shops' counters in the same order, so neither can hold one counter while waiting for the other's.
-    # Each block numbers at its own end and keeps its counter until the commit, a moment later.
+    # (UI-9), or their name or switch-off in the admin. The person belongs to no shop, so each shop gets a line of its
+    # own, naming the person's job there, in the transaction that saved the person (SYNC-15). The shops come from the
+    # person's door, read before any shop is open, ordered by id (ADR-0042): one block per shop, one after another,
+    # never one inside another. Two such saves at once then take the shops' counters in the same order, so neither can
+    # hold one counter while waiting for the other's. Each block numbers at its own end and keeps its counter until the
+    # commit, a moment later.
     if not transaction.get_connection().in_atomic_block:
         # Outside a transaction, each shop's line would commit alone, and a failure later would leave the person unsaved
         # and some shops' laptops told of a change that never happened. A bug in the calling code, so a server error.
         raise TransactionManagementError("_record_each_job runs inside the transaction that saved the person.")
+    # Switched off, they leave every laptop's PIN screen: the bootstrap no longer sends them (staff_rows).
+    op = ChangeOp.UPSERT if user.is_active else ChangeOp.ARCHIVE
     for shop_id in shops_of_person(user.pk):
         with shop_context(shop_id), recording_changes(shop_id):
             # Read through the guard, inside this shop: the person's current job here, one at most (the door's rule).
             for job in StaffMember.objects.filter(user_id=user.pk).exclude(status=StaffStatus.LEFT):
-                record_change(job)
+                record_change(job, op)
 
 
 def set_up_shop(

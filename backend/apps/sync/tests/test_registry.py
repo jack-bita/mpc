@@ -29,7 +29,15 @@ from apps.core.settings_registry import CASH_TOLERANCE, IDLE_MINUTES, LATE_FINE,
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import StaffMember, User
 from apps.people.selectors import shop_today
-from apps.people.services import add_staff, change_own_settings, grant_permission, mark_left, set_pin, suspend
+from apps.people.services import (
+    FIELDS_ON_STAFF_ROWS,
+    add_staff,
+    change_own_settings,
+    grant_permission,
+    mark_left,
+    set_pin,
+    suspend,
+)
 from apps.shops.models import (
     PaymentAccount,
     PaymentAccountKind,
@@ -40,6 +48,7 @@ from apps.shops.models import (
     Side,
 )
 from apps.shops.services import add_side
+from apps.sync.api.serializers import StaffRecord
 from apps.sync.registry import REGISTRY
 from apps.sync.selectors import last_change_number
 from tests.change_log import last_line
@@ -316,3 +325,14 @@ def test_each_rules_row_in_force_and_every_later_one_are_sent(shop_a: Shop, dawa
         "value": "200.00",
         "effective_from": str(today - timedelta(days=100)),
     }
+
+
+def test_the_people_app_knows_which_of_a_persons_fields_travel() -> None:
+    # A change to the person (User), who belongs to no shop, writes a staff line in each of their shops only when it
+    # touches a field the staff row shows, or whether they are sent at all (FIELDS_ON_STAFF_ROWS,
+    # apps/people/services.py). `people` can't read this registry (a lower layer), so the list is written there, and
+    # pinned here: a person's field added to StaffRecord, a photo say, turns this red until the list names it too.
+    sources = [field.source or "" for field in StaffRecord().fields.values()]
+    from_the_person = {source.removeprefix("user.") for source in sources if source.startswith("user.")}
+    # And is_active: staff_rows sends only the people switched on.
+    assert from_the_person | {"is_active"} == FIELDS_ON_STAFF_ROWS
