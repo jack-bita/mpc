@@ -6,9 +6,11 @@ v2 routes beside these until every device has moved over. Plain paths, not a rou
 
 from django.urls import path
 
-from apps.sync.api.views import BootstrapView
+from apps.sync.api.views import BootstrapView, PullView
 
 urlpatterns = [
     # A new or reset device's copy of its whole shop (SYNC-2).
     path("bootstrap/", BootstrapView.as_view(), name="sync-bootstrap"),
+    # What changed after the last change the device read (SYNC-3).
+    path("pull/", PullView.as_view(), name="sync-pull"),
 ]

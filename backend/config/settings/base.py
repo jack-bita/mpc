@@ -281,6 +281,8 @@ SPECTACULAR_SETTINGS = {
         "PaymentAccountKindEnum": "apps.shops.models.PaymentAccountKind",
         "SettingScopeEnum": "apps.sync.api.serializers.SETTING_SCOPES",
         "SettingKindEnum": "apps.sync.api.serializers.SETTING_KINDS",
+        # A pull's change says `upsert` or `archive` (SYNC-3): named after the log's own choices, not after `op`.
+        "ChangeOpEnum": "apps.core.models.ChangeOp",
     },
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.
