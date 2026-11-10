@@ -164,7 +164,7 @@ class CounterRecord(ShopScoped):
     # repayment, a clock-in. ShopScoped plus four facts only the push can give it, and it fills all four (SYNC-4):
     # editable=False keeps them out of every form and every API field, as created_by is.
 
-    # The device that made it, the one whose key sent the push. Named, not imported: `core` is layer 0 (ADR-0035).
+    # The device that made it, the one whose key sent the push. Named, not imported: `core` is layer 0 (ADR-0041).
     # PROTECT: nothing is deleted (rule 7), so every record keeps naming the laptop it came from. No index of its own:
     # indexes lead with `shop`, and nothing is deleted, so PROTECT never has to search this column.
     device = models.ForeignKey(
@@ -180,7 +180,7 @@ class CounterRecord(ShopScoped):
 
     class Meta(ShopScoped.Meta):
         # abstract: a base, not a table. Built on ShopScoped.Meta, so a counter table keeps the shop guard as its
-        # default manager (ADR-0022), as Editable's and AppendOnly's tables do. A counter ledger, such as a clock-in,
+        # default manager (ADR-0042), as Editable's and AppendOnly's tables do. A counter ledger, such as a clock-in,
         # builds on both: `class AttendanceEvent(AppendOnly, CounterRecord)`, its Meta from both.
         abstract = True
 

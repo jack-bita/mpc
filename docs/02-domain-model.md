@@ -685,7 +685,7 @@ One word per idea, the same in code, docs and UI. The Swahili is a draft — Jac
 | PayRun | Mishahara | One month's pay for everyone |
 | Job | Kazi ya mashine | A grinding or mixing order |
 | Flag | Tofauti | A difference someone must explain |
-| Document | Kumbukumbu | A record a device saves at the counter and sends to the server: a sale, a clock-in **(v1.21)** |
+| Document | Kumbukumbu | A record a device saves at the counter and sends to the server: a sale, a clock-in; English screens say *record* **(v1.21)** |
 
 ## Appendix A — Diagram
 

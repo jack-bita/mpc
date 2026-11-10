@@ -21,9 +21,10 @@ class PushedStatus(models.TextChoices):
     INVALID = "invalid", "Invalid"
 
 
-# The type checker's Django plugin writes each base its own get_next_by_created_at(), and then calls the two copies a
-# clash: they are one and the same method, from ShopScoped, as Django builds the table (`created_at` once). The plugin's
-# mistake, not ours, so ignored here, on this line only; every field below keeps its own type.
+# The type checker's Django plugin writes each base its own get_next_by_created_at() and get_previous_by_created_at(),
+# then calls each pair of copies a clash: each is one and the same method, from ShopScoped, as Django builds the table
+# (`created_at` once). The plugin's mistake, not ours, so ignored here, on this line only; every field below keeps its
+# own type.
 class PushedDocument(AppendOnly, CounterRecord):  # type: ignore[misc]
     # One line per document a laptop pushed. AppendOnly first, so its save() and delete() run first and refuse a
     # change; CounterRecord gives the laptop, its number and both clocks. created_by (ShopScoped): who made it at the
@@ -48,7 +49,7 @@ class PushedDocument(AppendOnly, CounterRecord):  # type: ignore[misc]
     reason_fields = models.JSONField(default=dict, blank=True)
 
     class Meta(AppendOnly.Meta, CounterRecord.Meta):
-        # Both bases' Meta, so the guard stays the default manager (CORE-1, ADR-0022). No error codes on these rules:
+        # Both bases' Meta, so the guard stays the default manager (CORE-1, ADR-0042). No error codes on these rules:
         # only the push writes this table, so a broken rule is a bug in our code, a server error and a log line.
         constraints = [
             # One line per document in a shop: two copies of one sale sent at the same moment can't both be written,

@@ -100,7 +100,8 @@ def _answer(device: Device, sent: Sent, received_at: datetime) -> Answer:
     except Exception:
         # A server problem, not the document's: a bug, or a database that went away. Nothing of it was saved (its
         # transaction rolled back), so the laptop keeps it and sends it again, and the batch stops here to keep the
-        # order. Logged with its traceback, its id, type and laptop, never what it holds (03 §5.17).
+        # order. Logged with its id, type and laptop, and its traceback, as Django logs any server error: like any
+        # server error's, the traceback can quote the row the database refused (03 §5.17).
         logger.exception("Push: server error on document %s (%s) from device %s.", sent.id, sent.type, device.pk)
         return Answer(id=sent.id, status=RETRY)
 

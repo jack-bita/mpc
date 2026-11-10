@@ -10,7 +10,7 @@ in a push. It keeps four facts the server can't work out for itself:
 
 These tests pin what the base gives: the four facts kept as saved, none of them left out, a device that made records
 never deleted, and the shop guard every shop's table has. The table is `probe.Ticket`, a test-only table built on
-CounterRecord (backend/tests/probe/), standing for a sale: core may not name a higher app's table (ADR-0035). The
+CounterRecord (backend/tests/probe/), standing for a sale: core may not name a higher app's table (ADR-0041). The
 device comes from backend/conftest.py, typed by its base, as core's tests may not name `people`'s tables either.
 """
 
@@ -78,7 +78,7 @@ def test_a_device_with_counter_records_is_never_deleted(shop_a: Model, device_a:
 
 def test_counter_record_keeps_the_shop_guard(shop_a: Model, shop_b: Model, device_a: ShopScoped) -> None:
     # A base with a Meta of its own can lose the guard if it is written wrong (CORE-1): a read must still name its shop,
-    # and see that shop's rows only (ADR-0022).
+    # and see that shop's rows only (ADR-0042).
     _ticket(shop_a, device_a).save()
     with pytest.raises(NoShopSelected):
         Ticket.objects.count()

@@ -156,7 +156,7 @@ def test_an_invalid_document_raises_its_own_flag(shop_a: Model, device_a: ShopSc
 
 def test_pushed_documents_keep_the_shop_guard(shop_b: Model, shop_a: Model, line: PushedDocument) -> None:
     # Built on two bases, AppendOnly and CounterRecord: the guard stays the default, as on every shop's table
-    # (ADR-0022). A shop's answer log is its own: shop B's push never finds shop A's answers.
+    # (ADR-0042). A shop's answer log is its own: shop B's push never finds shop A's answers.
     with pytest.raises(NoShopSelected):
         PushedDocument.objects.count()
     with shop_context(shop_b):
