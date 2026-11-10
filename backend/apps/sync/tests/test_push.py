@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import Model
 
 from apps.control.models import EditEvent, Flag, FlagKind, FlagPerson
@@ -297,15 +297,22 @@ def test_a_refusal_of_the_saving_code_is_invalid(
     assert _tickets(shop_a) == []
 
 
-def test_another_database_rule_answers_retry(
-    monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
-) -> None:
-    # A database rule other than a taken id, one the saving code should have checked first: a bug on the server, not a
-    # problem of the document, so a retry, and nothing saved.
-    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), _refusing(IntegrityError("some other rule")))
-    sent = _sent(1, staff_a)
+def test_another_database_rule_answers_retry(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # A clash on a rule other than an id the laptop made: here, a ticket this laptop already has under number 5, made
+    # some other way, with no line in the answer log (one ticket per laptop number, tests/probe/models.py). The new
+    # document's id is free, so no id is taken: it is a rule the saving code should have checked first, a bug on the
+    # server, so a retry. `id.taken` would set a good sale aside for good.
+    Ticket(
+        shop_id=shop_a.pk,
+        device=device_a,
+        device_seq=5,
+        client_time=CLIENT_TIME,
+        received_at=RECEIVED_AT,
+        text="made some other way",
+    ).save()
+    sent = _sent(5, staff_a)
     assert _push(device_a, [sent]) == [Answer(id=sent.id, status="retry")]
-    assert _tickets(shop_a) == []
+    assert _tickets(shop_a) == [(5, "made some other way")]
 
 
 def test_a_pushed_documents_edits_name_its_maker_and_its_laptop(
