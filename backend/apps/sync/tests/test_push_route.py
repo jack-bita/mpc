@@ -13,6 +13,7 @@ with no GET (DEVICE_ROUTES_WITHOUT_A_LOOK). Fake data only: the repo is public (
 """
 
 import datetime as dt
+import re
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -44,6 +45,8 @@ DEVICE_ME = "/api/devices/v1/me/"
 KEY_COOKIE = "device_key"
 # 10:42 by the laptop's clock, in UTC, as the laptop sends it (03 §6.6).
 CLIENT_TIME = "2026-11-10T07:42:00Z"
+# Any id, as JSON writes one: for finding every id an answer holds.
+AN_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
 @pytest.fixture(autouse=True)
@@ -266,3 +269,7 @@ def test_push_answers_hold_nothing_of_another_shop(
         str(ticket.device_id),
     ):
         assert of_a not in shown
+    # And every id in the answers is one B's laptop sent itself, a document's or a maker's: none the server made or
+    # found, of either shop.
+    sent_ids = {str(each[part]) for each in (same_id, a_maker) for part in ("id", "created_by")}
+    assert set(AN_ID.findall(shown)) <= sent_ids
