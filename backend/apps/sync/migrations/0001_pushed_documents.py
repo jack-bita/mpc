@@ -80,17 +80,21 @@ class Migration(migrations.Migration):
                     ),
                     models.CheckConstraint(
                         condition=models.Q(
-                            models.Q(("status", "accepted"), _negated=True), ("reason", ""), _connector="OR"
+                            models.Q(("status", "accepted"), _negated=True),
+                            models.Q(("reason", ""), ("reason_fields", {})),
+                            _connector="OR",
                         ),
                         name="sync_pusheddocument_accepted_has_no_reason",
                     ),
                     models.CheckConstraint(
                         condition=models.Q(
                             models.Q(("status", "invalid"), _negated=True),
-                            models.Q(("posted_seq__isnull", True), models.Q(("reason", ""), _negated=True)),
+                            models.Q(
+                                ("flags", []), ("posted_seq__isnull", True), models.Q(("reason", ""), _negated=True)
+                            ),
                             _connector="OR",
                         ),
-                        name="sync_pusheddocument_invalid_has_reason_no_number",
+                        name="sync_pusheddocument_invalid_has_only_a_reason",
                     ),
                     models.CheckConstraint(
                         condition=models.Q(("device_seq__gte", 1)), name="sync_pusheddocument_device_seq_from_one"

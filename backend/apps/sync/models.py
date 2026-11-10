@@ -58,17 +58,18 @@ class PushedDocument(AppendOnly, CounterRecord):  # type: ignore[misc]
             models.CheckConstraint(
                 condition=models.Q(status__in=PushedStatus.values), name="sync_pusheddocument_status_known"
             ),
-            # An accepted document has nothing it was refused for.
+            # An accepted document has nothing it was refused for: no reason, and no wrong fields either.
             models.CheckConstraint(
-                condition=~models.Q(status=PushedStatus.ACCEPTED) | models.Q(reason=""),
+                condition=~models.Q(status=PushedStatus.ACCEPTED) | models.Q(reason="", reason_fields={}),
                 name="sync_pusheddocument_accepted_has_no_reason",
             ),
-            # An invalid one says why, and took no change number, as it saved nothing: a laptop would wait for one
-            # forever.
+            # An invalid one says why, and only that. It took no change number, as it saved nothing: a laptop would
+            # wait for one forever. And it names no flag: none of its rules was checked, and the one flag it raises,
+            # about this line, is found by its subject.
             models.CheckConstraint(
                 condition=~models.Q(status=PushedStatus.INVALID)
-                | (models.Q(posted_seq__isnull=True) & ~models.Q(reason="")),
-                name="sync_pusheddocument_invalid_has_reason_no_number",
+                | (models.Q(posted_seq__isnull=True, flags=[]) & ~models.Q(reason="")),
+                name="sync_pusheddocument_invalid_has_only_a_reason",
             ),
             # A laptop numbers its documents from 1. Not one line per laptop number: a laptop wiped and started again
             # from 1 would have every new sale refused. SYNC-5, which owns the numbers and their gaps, decides that.

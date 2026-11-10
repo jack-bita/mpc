@@ -108,17 +108,36 @@ def test_another_shop_keeps_its_own_answer_for_the_same_id(
     ("changes", "rule"),
     [
         # An invalid document with no reason: whoever reads its flag can't tell what to fix.
-        ({"status": PushedStatus.INVALID, "posted_seq": None}, "invalid_has_reason_no_number"),
+        ({"status": PushedStatus.INVALID, "posted_seq": None}, "invalid_has_only_a_reason"),
         # An invalid document saved nothing, so it took no change number: a laptop would wait for one forever.
-        ({"status": PushedStatus.INVALID, "reason": "document.type_unknown"}, "invalid_has_reason_no_number"),
-        # An accepted document has nothing to be refused for.
+        ({"status": PushedStatus.INVALID, "reason": "document.type_unknown"}, "invalid_has_only_a_reason"),
+        # An accepted document has nothing to be refused for: no reason, and no wrong fields either.
         ({"reason": "document.type_unknown"}, "accepted_has_no_reason"),
+        ({"reason_fields": {"text": ["max_length"]}}, "accepted_has_no_reason"),
+        # An invalid document saved nothing, so it raised no flag of its own rules: its one flag is about its line.
+        (
+            {
+                "status": PushedStatus.INVALID,
+                "posted_seq": None,
+                "reason": "invalid",
+                "flags": [{"id": "0193a000-0000-7000-8000-0000000000f1", "kind": "negative_stock"}],
+            },
+            "invalid_has_only_a_reason",
+        ),
         # "duplicate" is never stored: it is the first answer, given again.
         ({"status": "duplicate"}, "status_known"),
         # A laptop numbers its documents from 1, as the change log does.
         ({"device_seq": 0}, "device_seq_from_one"),
     ],
-    ids=["invalid_with_no_reason", "invalid_with_a_change_number", "accepted_with_a_reason", "duplicate", "seq_0"],
+    ids=[
+        "invalid_with_no_reason",
+        "invalid_with_a_change_number",
+        "accepted_with_a_reason",
+        "accepted_with_wrong_fields",
+        "invalid_with_flags",
+        "duplicate",
+        "seq_0",
+    ],
 )
 def test_an_answer_must_make_sense(shop_a: Model, device_a: ShopScoped, changes: dict[str, object], rule: str) -> None:
     with pytest.raises(IntegrityError, match=f"sync_pusheddocument_{rule}"):
