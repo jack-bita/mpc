@@ -133,15 +133,15 @@ def test_record_change_refuses_another_shops_row(
 ) -> None:
     # T1: shop B's side must never land in shop A's log, where A's devices would pull it. And a block for shop B is
     # refused while A is open, as next_number refuses B's counter there.
-    start = last_line(shop_a)
+    start, start_b = last_line(shop_a), last_line(shop_b)
     with shop_context(shop_a):
         with pytest.raises(ShopMismatch), recording_changes(shop_a):
             record_change(side_b)
         with pytest.raises(ShopMismatch), recording_changes(shop_b):
             pass
-        assert _log(shop_a, start) == []
-    with shop_context(shop_b):
-        assert _log(shop_a, start) == []
+    # Neither shop's log got a line. Each read opens its own shop (lines_after).
+    assert _log(shop_a, start) == []
+    assert _log(shop_b, start_b) == []
 
 
 def test_nested_block_numbers_once_at_the_outer_end(
