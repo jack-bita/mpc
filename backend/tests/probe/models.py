@@ -15,13 +15,17 @@ Card stands for an office record people change, a side or a staff member's job: 
 history on (RecordEdits, ADR-0036), for the history's own tests (apps/control/tests/test_edit_history.py). A table
 of its own, not Note: the history's trigger refuses an edit of another shop's row, and the tenancy sweep's own tests
 need Note's leaky routes to really make one, to prove the sweep finds it.
+
+Ticket stands for a sale, a record made at a shop's counter on a device and pushed later: it builds on CounterRecord,
+which gives it the device, the device's own number for it and both clocks (03 §5.3), for CounterRecord's own tests
+(apps/core/tests/test_counter_record.py) and the push's pretend document (SYNC-4).
 """
 
 from decimal import Decimal
 
 from django.db import models
 
-from apps.core.models import AppendOnly, ShopScoped
+from apps.core.models import AppendOnly, CounterRecord, ShopScoped
 
 
 class Note(ShopScoped):
@@ -74,3 +78,11 @@ class VoidableEntry(AppendOnly):
 
     def __str__(self) -> str:
         return str(self.amount)
+
+
+class Ticket(CounterRecord):
+    # A line of text, as Note has: what a pretend sale sold.
+    text = models.CharField(max_length=100)
+
+    def __str__(self) -> str:
+        return self.text
