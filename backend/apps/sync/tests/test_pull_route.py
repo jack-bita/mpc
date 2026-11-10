@@ -105,7 +105,8 @@ def test_every_page_carries_the_server_time(shop_a: Shop, paired: tuple[Device, 
 
 def test_a_pull_with_no_cursor_starts_from_the_beginning(shop_a: Shop, paired: tuple[Device, str]) -> None:
     # 0 means nothing read yet, as numbers start at 1 (SYNC-1), and a cursor left out means 0: the whole log, from its
-    # first line, as a laptop that never bootstrapped would need it.
+    # first line. Not a bootstrap: a pull from 0 has no rule's defaults, nor any record that never changed since its
+    # line was written, so a new laptop still bootstraps first. The tenancy sweep asks this way, with no cursor.
     _device, key = paired
     browser = a_browser(key)
     from_nothing = browser.get(PULL).json()
@@ -132,7 +133,8 @@ def test_pull_needs_a_paired_device(manager: StaffMember, paired: tuple[Device, 
     # The shop's people and their keys travel on a page, as on the bootstrap, so a device's key alone opens it: no key,
     # a made-up one, or a person's own login gets nothing (DeviceView). A blocked laptop, a stolen one, say, gets
     # nothing either, and learns why.
-    assert APIClient().get(PULL).json()["code"] == "not_authenticated"
+    no_key = APIClient().get(PULL)
+    assert (no_key.status_code, no_key.json()["code"]) == (401, "not_authenticated")
     made_up = a_browser("a" * 43).get(PULL)
     assert (made_up.status_code, made_up.json()["code"]) == (401, "not_authenticated")
     phone = APIClient()

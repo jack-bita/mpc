@@ -20,7 +20,7 @@ only: the repo is public (03 §10).
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -75,6 +75,17 @@ def hire(shop: Shop, full_name: str, nickname: str) -> StaffMember:
     user = User.objects.create_user(full_name=full_name)
     with shop_context(shop):
         return add_staff(shop=shop, user=user, display_name=nickname, by=None)
+
+
+def add_rule_row(shop: Shop, value: str, effective_from: date) -> Setting:
+    # A late fine's row, checked and saved, with its line in the log. No service writes a rule's line yet (SHOP-3 will),
+    # so the save names its row here, as that service will.
+    with shop_context(shop), recording_changes(shop):
+        row = Setting(shop=shop, key=LATE_FINE.key, value=value, effective_from=effective_from)
+        row.full_clean()
+        row.save()
+        record_change(row)
+    return row
 
 
 @pytest.fixture
@@ -165,6 +176,18 @@ def test_pull_pages_of_1000(shop_a: Shop) -> None:
     assert pulled(shop_a, second["cursor"])["changes"] == []
 
 
+def test_a_page_of_exactly_1000_says_none_wait(shop_a: Shop) -> None:
+    # 1,000 lines waiting fill one page and leave nothing after it: the page says so, and the laptop doesn't ask again
+    # for an empty page. Only the one line read past a page can tell this from 1,001 (test_pull_pages_of_1000).
+    start = last_line(shop_a)
+    with shop_context(shop_a), recording_changes(shop_a):
+        for _ in range(1000):
+            record_change(Side(shop=shop_a))
+    page = pulled(shop_a, start)
+    assert len(page["changes"]) == 1000
+    assert (page["cursor"], page["has_more"]) == (start + 1000, False)
+
+
 def test_a_page_says_more_wait_though_it_passed_lines_over(shop_a: Shop) -> None:
     # A page leaves out the lines of a table no device keeps (test_a_line_of_a_table_devices_dont_keep_is_passed_over),
     # so it can hold fewer than 1,000 changes while more wait: a device that asked again only after a page of 1,000
@@ -201,6 +224,18 @@ def test_pull_sends_archive_ops(shop_a: Shop, dawa: Side) -> None:
     assert [change["data"] for change in page["changes"]] == [None, None]
 
 
+def test_a_person_switched_off_goes_as_archive(shop_a: Shop, dawa: Side) -> None:
+    # The second way a person leaves the lists (SYNC-15): the superuser switches Zuhura off in the admin. Every laptop
+    # takes her off its PIN screen, though she still has her job at the shop: she is no longer sent (staff_rows).
+    zuhura = hire(shop_a, "Zuhura Mfano", "Zuhura")
+    start = last_line(shop_a)
+    zuhura.user.is_active = False
+    change_person(zuhura.user, changed=["is_active"])
+    page = pulled(shop_a, start)
+    assert each_change(page) == [(start + 1, "staff", str(zuhura.pk), "archive")]
+    assert page["changes"][0]["data"] is None
+
+
 def test_a_person_switched_on_again_comes_back(shop_a: Shop, dawa: Side) -> None:
     # The superuser switches Neema off in the admin (an archive line), then on again (an upsert). A laptop that asks
     # after both gets her row at each, as she is now, back on the PIN screen: the record decides, not its line's op.
@@ -220,38 +255,37 @@ def test_a_person_switched_on_again_comes_back(shop_a: Shop, dawa: Side) -> None
 
 def test_each_change_carries_its_record_as_the_bootstrap_sends_it(shop_a: Shop, dawa: Side) -> None:
     # A pull and a bootstrap send a record through the same fields (the registry's), so a laptop that bootstrapped and
-    # one that pulled hold the same row. Dawa renamed twice: both lines carry the record as it is now, the last name.
+    # one that pulled hold the same row, in every table the registry sends: a side, a drawer with the sides it serves,
+    # a person with their keys, a rule's row. Dawa renamed twice: both lines carry the record as it is now, the last
+    # name.
     juma = hire(shop_a, "Juma Mfano", "Juma")
     start = last_line(shop_a)
     with shop_context(shop_a):
         dawa = rename_side(dawa, version=dawa.version, name="Dawa Kuu", by=None)
         rename_side(dawa, version=dawa.version, name="Dawa ya Mifugo", by=None)
         suspend(juma, by=None, reason="Likizo ya adhabu")
-    first, second, person = pulled(shop_a, start)["changes"]
-    assert first["data"] == second["data"] == sent_by_the_bootstrap("side", shop_a, str(dawa.pk))
-    assert first["data"]["name"] == "Dawa ya Mifugo"
-    assert person["data"] == sent_by_the_bootstrap("staff", shop_a, str(juma.pk))
+        add_side(shop=shop_a, code="F", name="Vyakula", by=None)
+    add_rule_row(shop_a, "1500.00", shop_today(shop_a))
+    changes = pulled(shop_a, start)["changes"]
+    assert [change["entity"] for change in changes] == ["side", "side", "staff", "side", "payment_account", "setting"]
+    for change in changes:
+        assert change["data"] == sent_by_the_bootstrap(change["entity"], shop_a, change["id"]), change["entity"]
+    assert changes[0]["data"]["name"] == changes[1]["data"]["name"] == "Dawa ya Mifugo"
 
 
 def test_a_rules_rows_come_as_the_device_reads_them(shop_a: Shop) -> None:
     # A dated rule's rows (the late fine) travel as get_setting reads them (setting_rows): the row in force today and
     # every later one, one per day, the one written last. The owner writes, in turn: the fine in force since last week;
     # next week's new fine; a fix for a day three weeks ago, already replaced by last week's; and a fix of next week's
-    # fine, which replaces it. No service writes a rule's line yet (SHOP-3 will), so each save names its row here, as
-    # that service will. A laptop that asks after all four gets the two rows it needs, each as it is, and the other two
-    # as archive: the fix for a past day is no day a device works on, and next week's first fine was replaced, so a
-    # laptop that got it on an earlier pull drops it, and keeps the fix.
+    # fine, which replaces it. A laptop that asks after all four gets the two rows it needs, each as it is, and the
+    # other two as archive: the fix for a past day is no day a device works on, and next week's first fine was
+    # replaced, so a laptop that got it on an earlier pull drops it, and keeps the fix.
     today = shop_today(shop_a)
     start = last_line(shop_a)
-    written = []
-    for value, day in (("1000.00", -7), ("1500.00", 7), ("1200.00", -21), ("1600.00", 7)):
-        with shop_context(shop_a), recording_changes(shop_a):
-            row = Setting(shop=shop_a, key=LATE_FINE.key, value=value, effective_from=today + timedelta(days=day))
-            row.full_clean()
-            row.save()
-            record_change(row)
-        written.append(row)
-    in_force, next_week, past_fix, next_week_fix = written
+    in_force, next_week, past_fix, next_week_fix = (
+        add_rule_row(shop_a, value, today + timedelta(days=day))
+        for value, day in (("1000.00", -7), ("1500.00", 7), ("1200.00", -21), ("1600.00", 7))
+    )
     page = pulled(shop_a, start)
     assert each_change(page) == [
         (start + 1, "setting", str(in_force.pk), "upsert"),
@@ -346,7 +380,7 @@ def test_a_change_between_the_two_reads_comes_again_with_its_own_line(
     assert later["changes"][0]["data"]["name"] == "Dawa ya Mifugo"
 
 
-def test_pull_is_read_only_inside_its_own_shop(shop_a: Shop, shop_b: Shop) -> None:
+def test_pull_refuses_a_shop_that_is_not_the_one_open(shop_a: Shop, shop_b: Shop) -> None:
     # T1: shop B open, shop A asked for. The guard would show B's lines and the shop filter none, so a laptop would be
     # told nothing changed, for good. A bug in the calling code, refused loudly instead.
     with shop_context(shop_b), pytest.raises(ShopMismatch):
@@ -364,13 +398,18 @@ def test_a_page_reads_the_log_once_and_each_table_once(shop_a: Shop, dawa: Side)
     # A page holds up to 1,000 lines: it must cost the same few reads however many it holds, or a laptop back from a
     # busy week would cost the database thousands. One read of the log, then one of each table the page names, for all
     # its records at once. The one exception, as in the bootstrap: each person's keys, two reads each, by the one
-    # function the office routes use (held_permissions).
+    # function the office routes use (held_permissions). Every table the registry sends is on the page, a rule's row
+    # too, whose rows cost the most reads.
     hire(shop_a, "Juma Mfano", "Juma")
+    today = shop_today(shop_a)
+    add_rule_row(shop_a, "1000.00", today)
     before = reads_of_a_page(shop_a, 0)
-    # Two more sides, each with its drawer: four more lines, not one more read.
+    # Two more sides, each with its drawer, and two more rows of the rule: six more lines, not one more read.
     with shop_context(shop_a):
         for code, name in (("F", "Vyakula"), ("M", "Mbegu")):
             add_side(shop=shop_a, code=code, name=name, by=None)
+    for value, day in (("1500.00", 7), ("2000.00", 14)):
+        add_rule_row(shop_a, value, today + timedelta(days=day))
     assert reads_of_a_page(shop_a, 0) == before
     # Two more people: two reads each, for their keys.
     hire(shop_a, "Asha Mfano", "Asha")
