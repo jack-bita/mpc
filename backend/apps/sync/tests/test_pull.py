@@ -40,6 +40,7 @@ from apps.shops.services import add_side, rename_side
 from apps.sync import pull
 from apps.sync.registry import REGISTRY
 from tests.change_log import last_line
+from tests.concurrency import in_another_transaction
 
 pytestmark = pytest.mark.django_db
 
@@ -252,6 +253,44 @@ def _drawer_of(side: Side) -> Any:
     # The id of a side's cash drawer, the second line add_side writes.
     with shop_context(side.shop_id):
         return REGISTRY["payment_account"].rows(side.shop).get(sides=side).pk
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_change_between_the_two_reads_comes_again_with_its_own_line(
+    shop_a: Shop, dawa: Side, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Done when: every change once, in order, even when a save lands while a laptop asks. The owner renames Dawa, and
+    # the laptop asks from the mark; at that very moment the owner renames it again, on the office laptop, and that
+    # rename commits after the page has read its lines but before it reads the records. The page's one line then
+    # carries the second name already, which does no harm; its cursor stops at that line, so the second rename's own
+    # line comes on the next page. Had the cursor been read after the records, as the last number in the log, the page
+    # would pass that line unseen. Two connections, as two laptops are; `transaction=True`, so each save really commits
+    # (backend/tests/concurrency.py). Shown red by working the cursor out from a read after the records.
+    start = last_line(shop_a)
+    with shop_context(shop_a):
+        dawa = rename_side(dawa, version=dawa.version, name="Dawa Kuu", by=None)
+    real_read = pull._records_now
+
+    def owner_renames_then_read(shop: Shop, lines: list[Any]) -> Any:
+        def owner_renames() -> None:
+            # The office's save: the second rename, and its line in the log, which rename_side writes itself.
+            with shop_context(shop_a):
+                rename_side(dawa, version=dawa.version, name="Dawa ya Mifugo", by=None)
+
+        office, ended = in_another_transaction(owner_renames)
+        office.join(timeout=5)
+        assert ended == [None]
+        return real_read(shop, lines)  # the real read, once the second rename has committed
+
+    monkeypatch.setattr(pull, "_records_now", owner_renames_then_read)
+    page = pulled(shop_a, start)
+    monkeypatch.undo()
+    assert each_change(page) == [(start + 1, "side", str(dawa.pk), "upsert")]
+    assert page["changes"][0]["data"]["name"] == "Dawa ya Mifugo"
+    assert (page["cursor"], page["has_more"]) == (start + 1, False)
+    later = pulled(shop_a, page["cursor"])
+    assert each_change(later) == [(start + 2, "side", str(dawa.pk), "upsert")]
+    assert later["changes"][0]["data"]["name"] == "Dawa ya Mifugo"
 
 
 def test_pull_is_read_only_inside_its_own_shop(shop_a: Shop, shop_b: Shop) -> None:
