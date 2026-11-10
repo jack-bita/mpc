@@ -490,7 +490,7 @@ export interface components {
         };
         PullAnswer: {
             changes: components["schemas"]["Change"][];
-            /** @description The last change number this page holds: the next pull asks for what came after. */
+            /** @description The last change number this page read, sent or passed over, or the cursor asked when none came: the next pull asks from it. */
             cursor: number;
             /** @description More changes wait after this page: ask again at once, from its cursor. A page can hold fewer than 1,000 changes and still have more after it. */
             has_more: boolean;

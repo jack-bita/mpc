@@ -165,7 +165,7 @@ class PullQuery(serializers.Serializer[Any]):
 class ChangeRecord(serializers.Serializer[Any]):
     # What every change on a page says, whatever its table: its number, its table's code, its record's id, and what to
     # do: `upsert`, save `data` as the record now is, new or changed; `archive`, take it off the lists. Then `data`
-    # itself: the record, through the fields of the table each change below names, empty for an archive.
+    # itself: the record, through the fields of the table each change below names, null for an archive.
     seq = serializers.IntegerField(min_value=1)
     entity = serializers.CharField()
     id = serializers.UUIDField()
@@ -174,8 +174,9 @@ class ChangeRecord(serializers.Serializer[Any]):
     record: type[serializers.ModelSerializer[Any]]
 
     def get_fields(self) -> dict[str, serializers.Field[Any, Any, Any, Any]]:
-        # `data`, the name 03 §6.4 gives it, is added here, not written as a field above: a class attribute of that
-        # name would stand where DRF keeps every serializer's own `.data`.
+        # `data`, the name 03 §6.4 gives it, is added here, once for all four tables, from each one's `record`. Not
+        # written as a field in each class below: DRF would take it off the class as a field, but mypy reads the class
+        # as written, and finds it standing where every serializer keeps its own `.data`, the answer it renders.
         fields = super().get_fields()
         fields["data"] = self.record(allow_null=True)
         return fields
@@ -210,7 +211,7 @@ CHANGE_RECORDS: dict[str, type[ChangeRecord]] = {
 class PullAnswer(serializers.Serializer[Any]):
     # One page of the pull: up to 1,000 changes after the cursor, in order, each told apart by its `entity`; the cursor
     # to ask from next, the cursor asked when nothing came; whether more wait after it; the server's time, for the
-    # device's clock; and the oldest app version that may still sync, empty while any may.
+    # device's clock; and the oldest app version that may still sync, null while any may.
     changes = PolymorphicProxySerializer(
         component_name="Change",
         # A copy, built where mypy reads it as the wider dict the schema's class takes: a dict's values are fixed to
@@ -220,7 +221,9 @@ class PullAnswer(serializers.Serializer[Any]):
         many=True,
     )
     cursor = serializers.IntegerField(
-        min_value=0, help_text="The last change number this page holds: the next pull asks for what came after."
+        min_value=0,
+        help_text="The last change number this page read, sent or passed over, or the cursor asked when none came:"
+        " the next pull asks from it.",
     )
     has_more = serializers.BooleanField(
         help_text="More changes wait after this page: ask again at once, from its cursor. A page can hold fewer than"

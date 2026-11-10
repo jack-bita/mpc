@@ -20,7 +20,7 @@ The one rule this file keeps is the order of its reads: the lines first, then th
 committed when it started (PostgreSQL's default), and numbers are taken in commit order (SYNC-1), so every change up to
 the page's last line had committed before the records were read: each record is at least as new as its last line here.
 A change that commits between the two reads may show in a record already, under an earlier line, and comes again with
-its own line in the next page, which does no harm. Read the other way round, a page could hold a line whose change its
+its own line on a later page, which does no harm. Read the other way round, a page could hold a line whose change its
 record doesn't show yet, and the laptop, moving its cursor past that line, would keep the old row for good. The ids come
 from the lines, so the records can't be read first.
 
