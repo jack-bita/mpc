@@ -14,6 +14,11 @@ none: a new shop has no staff yet, so every row it makes has `created_by` empty,
 makes (02 §1). A new shop's roles live in `people`, so a `people` service, set_up_shop, calls create_shop and
 then copies the role templates in, in one transaction (PPL-3, 03 §5.8). A shop is live unless it is made as
 something else: the demo seed (DATA-1, apps/demo) makes its shop as a demo one.
+
+A shop's devices keep a copy of its sides and its payment accounts (apps/sync/registry.py), and learn what changed
+from the shop's change log (03 §6.4). So each action saves inside `recording_changes(shop)` (apps/core/changes.py), in
+place of a plain transaction, and names what it changed with record_change: a new side and its cash drawer, a renamed
+side (SYNC-15). The lines are numbered at the block's end, once, however many services joined it.
 """
 
 import uuid
@@ -21,8 +26,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import models
 
+from apps.core.changes import record_change, recording_changes
 from apps.core.editing import editing
 from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop, shop_context
 from apps.shops.models import (
@@ -55,20 +61,21 @@ def create_shop(*, name: str, code: str, sides: Sequence[NewSide], kind: ShopKin
     # before anything is written.
     if not sides:
         raise ValidationError("A shop needs at least one side.", code="shop.no_sides")
-    # One transaction: if any row below is refused, the rows already written are taken back too, so
-    # there is never a shop with half its sides set up.
-    with transaction.atomic():
+    # The kind is set here, once: nothing changes it later (Shop.kind). A practice shop can't be made here
+    # yet: it must name the live shop it copies (ADR-0014), which this takes no argument for, so full_clean
+    # refuses it (shop.practice_needs_shop). The row's id is given as it is made (uuid7), before it is saved.
+    shop = Shop(name=name, code=code, kind=kind)
+    # The new shop is opened first, because the rows' full_clean reads through the guarded `objects`
+    # (CORE-2). No caller could have opened it: it didn't exist yet. shop_context hands back whatever shop
+    # was open before. Then one block, which is the transaction: if any row below is refused, the rows
+    # already written are taken back too, so there is never a shop with half its sides set up. Each
+    # add_side joins it, so every side's lines are numbered once, at the very end (SYNC-15).
+    with shop_context(shop), recording_changes(shop):
         # Two shops made with the same code at the very same moment can both pass full_clean; the unique
-        # rule on `code` then refuses the second. The kind is set here, once: nothing changes it later
-        # (Shop.kind). A practice shop can't be made here yet: it must name the live shop it copies
-        # (ADR-0014), which this takes no argument for, so full_clean refuses it (shop.practice_needs_shop).
-        shop = _saved(Shop(name=name, code=code, kind=kind))
-        # The new shop is opened for the rows below, because their full_clean reads through the guarded
-        # `objects` (CORE-2). No caller could have opened it: it didn't exist yet. The block hands back
-        # whatever shop was open before.
-        with shop_context(shop):
-            for new_side in sides:
-                add_side(shop=shop, code=new_side.code, name=new_side.name, sale_flow=new_side.sale_flow, by=None)
+        # rule on `code` then refuses the second. The shop's own row has no line: no device keeps it.
+        _saved(shop)
+        for new_side in sides:
+            add_side(shop=shop, code=new_side.code, name=new_side.name, sale_flow=new_side.sale_flow, by=None)
     return shop
 
 
@@ -86,9 +93,9 @@ def add_side(
     for the system or the superuser."""
     _check_shop(shop, by)
     created_by_id = None if by is None else by.staff_id
-    # One transaction, so a side never exists without its location and its drawer. Inside create_shop's
-    # own transaction, it is a part that is taken back with the rest.
-    with transaction.atomic():
+    # One block, so a side never exists without its location and its drawer, nor without its lines. Inside
+    # create_shop's block, it joins that one: a part that is taken back with the rest, numbered at its end.
+    with recording_changes(shop):
         side = Side(shop=shop, code=code, name=name, sale_flow=sale_flow, created_by_id=created_by_id)
         if side_id is not None:
             # The client's id, not a new one: a retry of the same request then finds the side it made.
@@ -102,6 +109,10 @@ def add_side(
             PaymentAccount(shop=shop, kind=PaymentAccountKind.CASH_DRAWER, name=side.name, created_by_id=created_by_id)
         )
         _saved(PaymentAccountSide(shop=shop, account=drawer, side=side, created_by_id=created_by_id))
+        # What a device keeps a copy of: the side, and its drawer, which carries the sides it serves, so its
+        # link travels on it. The stock location stays on the server. Named last, after every row is saved.
+        record_change(side)
+        record_change(drawer)
     return side
 
 
@@ -109,10 +120,15 @@ def rename_side(side: Side, *, version: int, name: str, by: Actor | None) -> Sid
     """Give a side a new name, unless someone else changed the side since `version` was read (02 §1).
     `by`: who renames it; None for the system or the superuser. Only the name: the letter starts every
     number printed on the side's receipts (D7), so it never changes."""
-    # editing() checks the shop (T1), locks the side, refuses a stale version, then checks the new name
-    # (full_clean trims it, and refuses a name of only spaces) and saves it with the next version.
-    with editing(side, version=version, by=by) as fresh:
-        fresh.name = name
+    # The block opens the transaction; editing() checks who acts belongs to the shop (T1), locks the side,
+    # refuses a stale version, then checks the new name (full_clean trims it, and refuses a name of only
+    # spaces) and saves it with the next version. The block refuses a shop that isn't the one open (T1).
+    with recording_changes(side.shop_id):
+        with editing(side, version=version, by=by) as fresh:
+            fresh.name = name
+        # After editing() ends, at the block's own level, never inside it: that part could roll back alone,
+        # and leave a line for a name never saved (apps/core/changes.py). A refused edit never gets here.
+        record_change(fresh)
     return fresh
 
 

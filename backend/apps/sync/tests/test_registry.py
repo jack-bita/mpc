@@ -42,6 +42,7 @@ from apps.shops.models import (
 from apps.shops.services import add_side
 from apps.sync.registry import REGISTRY
 from apps.sync.selectors import last_change_number
+from tests.change_log import last_line
 
 pytestmark = pytest.mark.django_db
 
@@ -112,6 +113,8 @@ def test_each_list_keeps_to_its_own_shop_with_every_shop_open(
     # Both shops hold a row of every table, and shop B more changes than shop A. Shown red by dropping one list's shop.
     for shop, fine in ((shop_a, "1250.00"), (shop_b, "1750.00")):
         add_row(shop, LATE_FINE, fine, shop_today(shop))
+    # Setting the shops up wrote lines too (SYNC-15), so shop A's cursor is counted from where this test starts.
+    start_a = last_line(shop_a)
     with shop_context(shop_a), recording_changes(shop_a):
         record_change(dawa)
     for _ in range(3):
@@ -121,7 +124,16 @@ def test_each_list_keeps_to_its_own_shop_with_every_shop_open(
         for code, entry in REGISTRY.items():
             shops = {row.shop_id for row in entry.rows(shop_a)}
             assert shops == {shop_a.pk}, code  # shop A's rows, and only them
-        assert last_change_number(shop_a) == 1
+        # Shop B's last number is the higher, so a cursor read across both shops would answer it, not shop A's.
+        assert last_line(shop_b) > last_line(shop_a)
+        assert last_change_number(shop_a) == start_a + 1
+
+
+def test_a_shop_with_no_change_is_at_zero(shop_a: Shop) -> None:
+    # A shop whose log has no line yet: its cursor is 0, which a pull reads as "from the start", as numbers start at 1
+    # (SYNC-1). Every shop the app sets up has lines from its first moment (SYNC-15), so only a bare shop shows it.
+    with shop_context(shop_a):
+        assert last_change_number(shop_a) == 0
 
 
 def test_every_side_is_sent(shop_a: Shop, dawa: Side, vyakula: Side) -> None:
