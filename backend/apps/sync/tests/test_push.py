@@ -28,6 +28,7 @@ from apps.core.links import LINK_TYPES
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember
 from apps.shops.models import Shop, Side
+from apps.sync import push as push_module
 from apps.sync.document_types import DOCUMENT_TYPES, Document
 from apps.sync.models import PushedDocument, PushedStatus
 from apps.sync.push import Answer, Sent, push
@@ -189,6 +190,44 @@ def test_server_error_answers_retry(
     monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), TICKET)
     assert [answer.status for answer in _push(device_a, batch)] == ["duplicate", "accepted", "accepted"]
     assert [seq for seq, _text in _tickets(shop_a)] == [1, 2, 3]
+
+
+def test_a_document_and_its_answer_line_are_saved_in_one_transaction(
+    monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # The ticket is saved, then its line in the answer log can't be: the server stops between the two. Had the ticket
+    # stayed alone, the laptop's resend would find no line, clash on the ticket's id, and answer `id.taken`: a sale that
+    # really went in, set aside under "needs attention". So the two go together: the ticket and its change lines roll
+    # back, and the answer is `retry`, as for any server problem.
+    real_line = push_module._line
+
+    def a_line_the_database_refuses(*args: Any, **answer: Any) -> PushedDocument:
+        line = real_line(*args, **answer)
+        line.reason = "never.saved"  # an accepted line with a reason: sync_pusheddocument_accepted_has_no_reason
+        return line
+
+    monkeypatch.setattr(push_module, "_line", a_line_the_database_refuses)
+    sent = _sent(1, staff_a)
+    with lines_written(shop_a) as lines:
+        assert _push(device_a, [sent]) == [Answer(id=sent.id, status="retry")]
+    assert _tickets(shop_a) == []
+    assert lines == []
+
+
+def test_an_invalid_line_and_its_flag_are_saved_together(
+    monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # An invalid document's line is written, then its flag can't be. Had the line stayed alone, every resend would get
+    # the stored `invalid` and no manager would ever see a flag for it. So the line goes too, and the answer is `retry`:
+    # sent again, the document gets its line and its flag together.
+    def no_flag(**_: Any) -> Flag:
+        raise RuntimeError("the flag could not be raised")
+
+    monkeypatch.setattr(push_module, "raise_flag", no_flag)
+    sent = _sent(1, staff_a, type="receipt")
+    assert _push(device_a, [sent]) == [Answer(id=sent.id, status="retry")]
+    with shop_context(shop_a):
+        assert not PushedDocument.objects.exists()
 
 
 def test_accepted_answer_carries_its_change_number_and_flags(
