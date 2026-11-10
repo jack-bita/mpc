@@ -84,5 +84,12 @@ class Ticket(CounterRecord):
     # A line of text, as Note has: what a pretend sale sold.
     text = models.CharField(max_length=100)
 
+    class Meta(CounterRecord.Meta):
+        constraints = [
+            # One ticket per laptop number, as a sale will have one receipt number per laptop (D2-0457): a rule other
+            # than the id, which two copies of one document can clash on, for the push's twin test (test_push.py).
+            models.UniqueConstraint(fields=["shop", "device", "device_seq"], name="probe_ticket_one_per_device_seq"),
+        ]
+
     def __str__(self) -> str:
         return self.text

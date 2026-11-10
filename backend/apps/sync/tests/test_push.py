@@ -331,15 +331,28 @@ def test_a_pushed_documents_edits_name_its_maker_and_its_laptop(
     assert edit.after == {"name": "Dawa za Mifugo"}
 
 
+def _with_its_own_id(document: Document, payload: dict[str, Any]) -> list[Flag]:
+    # The pretend ticket saved under an id the server makes, not the document's: a twin's ticket then never clashes on
+    # the id, only on the rule of one ticket per laptop number, as a sale's receipt number will.
+    return post_ticket(dataclasses.replace(document, id=uuid.uuid7()), payload)
+
+
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("text", ["2 bags of pumba", "x" * 101], ids=["accepted", "invalid"])
+@pytest.mark.parametrize(
+    ("text", "clashes_on"),
+    [("2 bags of pumba", "the id"), ("x" * 101, "the line"), ("2 bags of pumba", "another rule")],
+    ids=["accepted", "invalid", "another_rule"],
+)
 def test_twin_sent_at_the_same_moment_answers_duplicate(
-    shop_a: Model, device_a: Device, staff_a: StaffMember, text: str
+    monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember, text: str, clashes_on: str
 ) -> None:
     # Two copies of one batch at the same moment: the laptop sent again while the first was still being saved. The
-    # second copy finds no line yet, so it starts saving too, and waits on the first copy's ticket, or on its line for
-    # an invalid one; once the first commits, its insert clashes. It looks in the receipt book again, finds the first
-    # copy's line, and answers with that: one ticket, one flag at most, and both copies get the first answer (CORE-6).
+    # second copy finds no line yet, so it starts saving too, and waits on the first copy's rows; once the first
+    # commits, its insert clashes: on the ticket's id, on the invalid document's line, or on another rule of the saving
+    # code's tables. Whichever it is, it looks in the answer log again, finds the first copy's line, and answers with
+    # that: one ticket, one flag at most, and both copies get the first answer (CORE-6).
+    if clashes_on == "another rule":
+        monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=_with_its_own_id))
     sent = _sent(1, staff_a, text=text)
     with shop_context(shop_a), transaction.atomic():
         (first,) = push(device_a, [sent], received_at=RECEIVED_AT)
