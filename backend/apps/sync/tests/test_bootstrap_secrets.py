@@ -196,9 +196,18 @@ def test_pull_never_sends_costs_or_pins(shop_a: Shop, paired: tuple[Device, str]
     asha = hire_asha(shop_a, give_role)
     response = a_browser(key).get(PULL, {"cursor": start})
     assert response.status_code == 200
-    rows = [change["data"] for change in response.json()["changes"] if change["id"] == str(asha.pk)]
+    page = response.json()
+    rows = [change["data"] for change in page["changes"] if change["id"] == str(asha.pk)]
     assert rows and all(rows)  # her row, sent, not an archive with none
     assert_holds_no_secret(response.content.decode(), asha, device, key)
+    # The page, and each change on it, holds the fields its schema names, and no other: the page is built by hand
+    # (apps/sync/pull.py), so a field added there alone would pass every check of the schema's fields below
+    # (test_no_pull_field_reads_a_secret). Tied here, a field the page sends is a field that check reads.
+    assert list(page) == list(PullAnswer().fields)
+    for change in page["changes"]:
+        assert list(change) == list(CHANGE_RECORDS[change["entity"]]().fields)
+        if change["data"] is not None:
+            assert list(change["data"]) == list(REGISTRY[change["entity"]].serializer().fields)
 
 
 def test_no_registry_field_reads_a_secret() -> None:
@@ -214,7 +223,9 @@ def test_no_registry_field_reads_a_secret() -> None:
 def test_no_pull_field_reads_a_secret() -> None:
     # What a pull's page adds around the registry's records (SYNC-3): its own fields (the cursor, the server's time),
     # and each table's change (the line's number, table, record and op), whose `data` is the registry's record, checked
-    # again here as the change holds it. A field a later card adds to either, say who made the change, is caught.
+    # again here as the change holds it. A field a later card adds to either, say who made the change, is caught: a
+    # page sends these very fields and no other (test_pull_never_sends_costs_or_pins), so one added to the page alone,
+    # and not here, turns that test red.
     found = secret_fields(PullAnswer(), "pull.")
     for code, change in CHANGE_RECORDS.items():
         found += secret_fields(change(), f"pull.changes.{code}.")
