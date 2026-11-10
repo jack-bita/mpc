@@ -281,6 +281,8 @@ SPECTACULAR_SETTINGS = {
         "PaymentAccountKindEnum": "apps.shops.models.PaymentAccountKind",
         "SettingScopeEnum": "apps.sync.api.serializers.SETTING_SCOPES",
         "SettingKindEnum": "apps.sync.api.serializers.SETTING_KINDS",
+        # A pull's change says `upsert` or `archive` (SYNC-3): named after the log's own choices, not after `op`.
+        "ChangeOpEnum": "apps.core.models.ChangeOp",
     },
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.
@@ -347,3 +349,8 @@ DEMO_SEED = env("DEMO_SEED", "no") == "yes"
 # The health check shows it, so after a deploy the smoke test can tell whether the new version is
 # answering or the old one still is (OPS-2).
 APP_VERSION = env("APP_VERSION", "dev")
+
+# The oldest app a shop device may run and still sync (03 §6.8), sent on every pull (SYNC-3): an older one sends its
+# outbox, then updates. None for now: any app may. SYNC-13 gives it a form a device can compare with its own version, as
+# APP_VERSION is a git commit, and a commit can't say whether it is older or newer than another.
+MIN_APP_VERSION: str | None = None

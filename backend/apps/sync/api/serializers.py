@@ -1,19 +1,23 @@
-"""apps/sync/api/serializers.py — the fields a shop's devices may see of each record they keep a copy of, and the
-bootstrap's answer (SYNC-2; 03 §6.1, §6.4).
+"""apps/sync/api/serializers.py — the fields a shop's devices may see of each record they keep a copy of, the
+bootstrap's answer (SYNC-2; 03 §6.1, §6.4), and the pull's question and answer (SYNC-3).
 
 One serializer per table the registry sends (apps/sync/registry.py): a side, a payment account, a person at work, a
 dated rule's row. Each names its fields one by one, never `__all__`, so a column a later card adds stays on the server
 until someone decides it travels. What must never travel, buying prices, PIN hashes and passwords above all (03 §6.1,
 the sync rules), is checked against these lists by test_bootstrap_secrets.py. Read-only: devices never write through
-them; what a device makes travels as a document (SYNC-4). Then the bootstrap's answer, as the API schema describes it.
+them; what a device makes travels as a document (SYNC-4). Then the bootstrap's answer, and the pull's question and
+answer, as the API schema describes them. A pull's change carries the same records, and test_bootstrap_secrets.py checks
+what it adds around them too, field by field and as sent.
 """
 
+from collections.abc import Mapping
 from typing import Any
 
-from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema_field
 from rest_framework import serializers
 
 from apps.core.languages import Language
+from apps.core.models import ChangeOp
 from apps.core.settings_registry import KINDS, Scope
 from apps.people.models import Font, StaffMember
 from apps.people.permissions import held_permissions
@@ -125,3 +129,105 @@ class BootstrapAnswer(serializers.Serializer[Any]):
     staff = StaffRecord(many=True)
     setting = SettingRecord(many=True)
     setting_keys = SettingKeyRecord(many=True)
+
+
+# The pull's question and answer (SYNC-3), as the API schema describes them. The answer itself is built by page
+# (apps/sync/pull.py) from the registry; these name the same tables with the same records, which
+# test_answer_shape_names_every_registry_table (test_pull_route.py) holds.
+
+# The biggest number the change log can hold (Change.seq, a big integer): a cursor past it names no change.
+BIGGEST_CHANGE_NUMBER = 2**63 - 1
+
+
+class ChangeNumber(serializers.IntegerField):
+    # A change number sent in the address. DRF reads a blank value there (`?cursor=`) as a field left out, and so as its
+    # default: a device that lost its cursor and sent it blank would read the whole log again at every sync, and nobody
+    # would notice. Here a blank value is a value, checked as one, and refused as no whole number (invalid).
+
+    def get_value(self, dictionary: Mapping[str, Any]) -> Any:
+        # The field's name is set once it is bound to PullQuery, before any value is read; the types allow None.
+        if self.field_name is not None and dictionary.get(self.field_name) == "":
+            return ""
+        return super().get_value(dictionary)
+
+
+class PullQuery(serializers.Serializer[Any]):
+    # What a device asks: the last change number it read. Left out, 0: nothing read yet, as numbers start at 1. One
+    # that is no change number ("abc", -1, a blank) is refused under `cursor` (400 invalid), never read as another.
+    cursor = ChangeNumber(
+        min_value=0,
+        max_value=BIGGEST_CHANGE_NUMBER,
+        default=0,
+        help_text="The last change number this device read: the bootstrap's cursor, then each page's. 0 for none.",
+    )
+
+
+class ChangeRecord(serializers.Serializer[Any]):
+    # What every change on a page says, whatever its table: its number, its table's code, its record's id, and what to
+    # do: `upsert`, save `data` as the record now is, new or changed; `archive`, take it off the lists. Then `data`
+    # itself: the record, through the fields of the table each change below names, null for an archive.
+    seq = serializers.IntegerField(min_value=1)
+    entity = serializers.CharField()
+    id = serializers.UUIDField()
+    op = serializers.ChoiceField(choices=ChangeOp.choices)
+    # The table's record, the registry's own (apps/sync/registry.py), named by each table's change below.
+    record: type[serializers.ModelSerializer[Any]]
+
+    def get_fields(self) -> dict[str, serializers.Field[Any, Any, Any, Any]]:
+        # `data`, the name 03 §6.4 gives it, is added here, once for all four tables, from each one's `record`. Not
+        # written as a field in each class below: DRF would take it off the class as a field, but mypy reads the class
+        # as written, and finds it standing where every serializer keeps its own `.data`, the answer it renders.
+        fields = super().get_fields()
+        fields["data"] = self.record(allow_null=True)
+        return fields
+
+
+class SideChange(ChangeRecord):
+    record = SideRecord
+
+
+class PaymentAccountChange(ChangeRecord):
+    record = PaymentAccountRecord
+
+
+class StaffChange(ChangeRecord):
+    record = StaffRecord
+
+
+class SettingChange(ChangeRecord):
+    record = SettingRecord
+
+
+# Each table's change, by its code, in the registry's order: the schema then says which record a change of each table
+# carries, so the app's types know a "staff" change holds a person.
+CHANGE_RECORDS: dict[str, type[ChangeRecord]] = {
+    "side": SideChange,
+    "payment_account": PaymentAccountChange,
+    "staff": StaffChange,
+    "setting": SettingChange,
+}
+
+
+class PullAnswer(serializers.Serializer[Any]):
+    # One page of the pull: up to 1,000 changes after the cursor, in order, each told apart by its `entity`; the cursor
+    # to ask from next, the cursor asked when nothing came; whether more wait after it; the server's time, for the
+    # device's clock; and the oldest app version that may still sync, null while any may.
+    changes = PolymorphicProxySerializer(
+        component_name="Change",
+        # A copy, built where mypy reads it as the wider dict the schema's class takes: a dict's values are fixed to
+        # their type, so CHANGE_RECORDS itself, of ChangeRecord classes alone, doesn't pass as one.
+        serializers={code: change for code, change in CHANGE_RECORDS.items()},
+        resource_type_field_name="entity",
+        many=True,
+    )
+    cursor = serializers.IntegerField(
+        min_value=0,
+        help_text="The last change number this page read, sent or passed over, or the cursor asked when none came:"
+        " the next pull asks from it.",
+    )
+    has_more = serializers.BooleanField(
+        help_text="More changes wait after this page: ask again at once, from its cursor. A page can hold fewer than"
+        " 1,000 changes and still have more after it."
+    )
+    server_time = serializers.DateTimeField()
+    min_app_version = serializers.CharField(allow_null=True)

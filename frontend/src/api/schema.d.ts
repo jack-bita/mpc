@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sync/v1/pull/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["sync_v1_pull_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/devices/": {
         parameters: {
             query?: never;
@@ -283,6 +299,13 @@ export interface components {
             setting: components["schemas"]["SettingRecord"][];
             setting_keys: components["schemas"]["SettingKeyRecord"][];
         };
+        Change: components["schemas"]["SideChange"] | components["schemas"]["PaymentAccountChange"] | components["schemas"]["StaffChange"] | components["schemas"]["SettingChange"];
+        /**
+         * @description * `upsert` - Added or changed
+         *     * `archive` - Archived
+         * @enum {string}
+         */
+        ChangeOpEnum: "upsert" | "archive";
         Device: {
             /** Format: uuid */
             readonly id: string;
@@ -426,6 +449,18 @@ export interface components {
             /** Format: date-time */
             readonly expires_at: string;
         };
+        PaymentAccountChange: {
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            entity: "payment_account";
+            /** Format: uuid */
+            id: string;
+            op: components["schemas"]["ChangeOpEnum"];
+            data: components["schemas"]["PaymentAccountRecord"] | null;
+        };
         /**
          * @description * `cash_drawer` - Cash drawer
          *     * `mobile_money` - Mobile money
@@ -453,12 +488,34 @@ export interface components {
             readonly full_name: string;
             readonly display_name: string;
         };
+        PullAnswer: {
+            changes: components["schemas"]["Change"][];
+            /** @description The last change number this page read, sent or passed over, or the cursor asked when none came: the next pull asks from it. */
+            cursor: number;
+            /** @description More changes wait after this page: ask again at once, from its cursor. A page can hold fewer than 1,000 changes and still have more after it. */
+            has_more: boolean;
+            /** Format: date-time */
+            server_time: string;
+            min_app_version: string | null;
+        };
         /**
          * @description * `one_screen` - One screen
          *     * `writer_cashier_loader` - Writer, cashier, loader
          * @enum {string}
          */
         SaleFlowEnum: "one_screen" | "writer_cashier_loader";
+        SettingChange: {
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            entity: "setting";
+            /** Format: uuid */
+            id: string;
+            op: components["schemas"]["ChangeOpEnum"];
+            data: components["schemas"]["SettingRecord"] | null;
+        };
         SettingKeyRecord: {
             key: string;
             kind: components["schemas"]["SettingKindEnum"];
@@ -503,6 +560,18 @@ export interface components {
             readonly updated_at: string | null;
             readonly version: number;
         };
+        SideChange: {
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            entity: "side";
+            /** Format: uuid */
+            id: string;
+            op: components["schemas"]["ChangeOpEnum"];
+            data: components["schemas"]["SideRecord"] | null;
+        };
         SideCreateRequest: {
             /** Format: uuid */
             id: string;
@@ -526,6 +595,18 @@ export interface components {
             readonly name: string;
             readonly sale_flow: components["schemas"]["SaleFlowEnum"];
             readonly is_live: boolean;
+        };
+        StaffChange: {
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            entity: "staff";
+            /** Format: uuid */
+            id: string;
+            op: components["schemas"]["ChangeOpEnum"];
+            data: components["schemas"]["StaffRecord"] | null;
         };
         StaffKeysRecord: {
             every_side: string[];
@@ -810,6 +891,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BootstrapAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    sync_v1_pull_retrieve: {
+        parameters: {
+            query?: {
+                /** @description The last change number this device read: the bootstrap's cursor, then each page's. 0 for none. */
+                cursor?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullAnswer"];
                 };
             };
             default: {
