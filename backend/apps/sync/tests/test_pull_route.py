@@ -114,11 +114,13 @@ def test_a_pull_with_no_cursor_starts_from_the_beginning(shop_a: Shop, paired: t
     assert from_nothing["cursor"] == last_line(shop_a)
 
 
-@pytest.mark.parametrize("cursor", ["abc", "-1", "1.5", "9223372036854775808"])
+@pytest.mark.parametrize("cursor", ["abc", "-1", "1.5", "9223372036854775808", ""])
 def test_a_cursor_that_is_no_change_number_is_refused(paired: tuple[Device, str], cursor: str) -> None:
     # A cursor is a change number the device was given, or 0: whole, from 0, and no bigger than the log's numbers can
     # be (a big integer). Anything else is a bug in the device, refused under its field, never read as some number,
-    # which would send the device lines it has, or skip lines it hasn't, and hide the bug.
+    # which would send the device lines it has, or skip lines it hasn't, and hide the bug. A blank one too (`?cursor=`):
+    # a device that lost its cursor and sent it anyway would otherwise read the whole log again at every sync, page
+    # after page, and nobody would notice the cost. Left out altogether, it is 0 (the test above).
     _device, key = paired
     response = a_browser(key).get(PULL, {"cursor": cursor})
     assert response.status_code == 400

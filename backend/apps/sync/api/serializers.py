@@ -10,6 +10,7 @@ answer, as the API schema describes them. A pull's change carries the same recor
 what it adds around them too, field by field and as sent.
 """
 
+from collections.abc import Mapping
 from typing import Any
 
 from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema_field
@@ -138,10 +139,22 @@ class BootstrapAnswer(serializers.Serializer[Any]):
 BIGGEST_CHANGE_NUMBER = 2**63 - 1
 
 
+class ChangeNumber(serializers.IntegerField):
+    # A change number sent in the address. DRF reads a blank value there (`?cursor=`) as a field left out, and so as its
+    # default: a device that lost its cursor and sent it blank would read the whole log again at every sync, and nobody
+    # would notice. Here a blank value is a value, checked as one, and refused as no whole number (invalid).
+
+    def get_value(self, dictionary: Mapping[str, Any]) -> Any:
+        # The field's name is set once it is bound to PullQuery, before any value is read; the types allow None.
+        if self.field_name is not None and dictionary.get(self.field_name) == "":
+            return ""
+        return super().get_value(dictionary)
+
+
 class PullQuery(serializers.Serializer[Any]):
-    # What a device asks: the last change number it read. Left out, 0: nothing read yet, as numbers start at 1. A
-    # number that is no change number ("abc", -1) is refused under `cursor` (400 invalid), never read as another.
-    cursor = serializers.IntegerField(
+    # What a device asks: the last change number it read. Left out, 0: nothing read yet, as numbers start at 1. One
+    # that is no change number ("abc", -1, a blank) is refused under `cursor` (400 invalid), never read as another.
+    cursor = ChangeNumber(
         min_value=0,
         max_value=BIGGEST_CHANGE_NUMBER,
         default=0,
