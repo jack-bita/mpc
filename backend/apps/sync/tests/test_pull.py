@@ -20,7 +20,7 @@ only: the repo is public (03 §10).
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -31,11 +31,12 @@ from pytest_django import Settings
 from rest_framework.renderers import JSONRenderer
 
 from apps.core.changes import record_change, recording_changes
+from apps.core.settings_registry import LATE_FINE
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import StaffMember, User
 from apps.people.selectors import shop_today
 from apps.people.services import add_staff, change_person, mark_left, suspend
-from apps.shops.models import Shop, Side, StockLocation
+from apps.shops.models import Setting, Shop, Side, StockLocation
 from apps.shops.services import add_side, rename_side
 from apps.sync import pull
 from apps.sync.registry import REGISTRY
@@ -230,6 +231,40 @@ def test_each_change_carries_its_record_as_the_bootstrap_sends_it(shop_a: Shop, 
     assert first["data"] == second["data"] == sent_by_the_bootstrap("side", shop_a, str(dawa.pk))
     assert first["data"]["name"] == "Dawa ya Mifugo"
     assert person["data"] == sent_by_the_bootstrap("staff", shop_a, str(juma.pk))
+
+
+def test_a_rules_rows_come_as_the_device_reads_them(shop_a: Shop) -> None:
+    # A dated rule's rows (the late fine) travel as get_setting reads them (setting_rows): the row in force today and
+    # every later one, one per day, the one written last. The owner writes, in turn: the fine in force since last week;
+    # next week's new fine; a fix for a day three weeks ago, already replaced by last week's; and a fix of next week's
+    # fine, which replaces it. No service writes a rule's line yet (SHOP-3 will), so each save names its row here, as
+    # that service will. A laptop that asks after all four gets the two rows it needs, each as it is, and the other two
+    # as archive: the fix for a past day is no day a device works on, and next week's first fine was replaced, so a
+    # laptop that got it on an earlier pull drops it, and keeps the fix.
+    today = shop_today(shop_a)
+    start = last_line(shop_a)
+    written = []
+    for value, day in (("1000.00", -7), ("1500.00", 7), ("1200.00", -21), ("1600.00", 7)):
+        with shop_context(shop_a), recording_changes(shop_a):
+            row = Setting(shop=shop_a, key=LATE_FINE.key, value=value, effective_from=today + timedelta(days=day))
+            row.full_clean()
+            row.save()
+            record_change(row)
+        written.append(row)
+    in_force, next_week, past_fix, next_week_fix = written
+    page = pulled(shop_a, start)
+    assert each_change(page) == [
+        (start + 1, "setting", str(in_force.pk), "upsert"),
+        (start + 2, "setting", str(next_week.pk), "archive"),
+        (start + 3, "setting", str(past_fix.pk), "archive"),
+        (start + 4, "setting", str(next_week_fix.pk), "upsert"),
+    ]
+    assert [change["data"] and change["data"]["value"] for change in page["changes"]] == [
+        "1000.00",
+        None,
+        None,
+        "1600.00",
+    ]
 
 
 def test_a_line_of_a_table_devices_dont_keep_is_passed_over(shop_a: Shop, dawa: Side) -> None:
