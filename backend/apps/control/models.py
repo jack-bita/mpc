@@ -57,7 +57,7 @@ class FlagKind(models.TextChoices):
     PERMISSION_BREAK = "permission_break", "Permission break"
     DRAWER_CONFLICT = "drawer_conflict", "Drawer conflict"
     # A document a laptop pushed that the server can't save: a type or version it doesn't take, a wrong shape, a maker
-    # not of this shop, an id already taken (SYNC-4). Its subject is the document's line in the receipt book.
+    # not of this shop, an id already taken (SYNC-4). Its subject is the document's line in the answer log.
     INVALID_DOCUMENT = "invalid_document", "Invalid document"
 
 

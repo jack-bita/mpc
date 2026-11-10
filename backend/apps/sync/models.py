@@ -1,4 +1,4 @@
-"""apps/sync/models.py — the receipt book: the answer the push gave each document a laptop sent, kept so that the
+"""apps/sync/models.py — the answer log: the answer the push gave each document a laptop sent, kept so that the
 same document sent again gets the same answer (SYNC-4; 03 §5.5, §6.3).
 
     shop  document  laptop          #   answer    change no.  flags   reason

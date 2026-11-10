@@ -2,7 +2,7 @@
 transaction of its own, each answered once, and the same way every time it comes again (SYNC-4; 03 §5.5, §6.3).
 
     for each document, by its laptop number (device_seq):
-      in the receipt book already?       → duplicate, with the first answer
+      in the answer log already?       → duplicate, with the first answer
       type, maker and shape all right?   no → invalid: its line and a flag, and the batch goes on
       save it, in one transaction        → accepted: the document, its change lines, its line, its change number
       a server problem?                  → retry, and the batch stops here
@@ -10,7 +10,7 @@ transaction of its own, each answered once, and the same way every time it comes
 The route (apps/sync/api/views.py) checks each document's envelope and hands the batch here, with the laptop its key
 opened, and that laptop's shop open. Each document's saving code comes from the list of document types
 (apps/sync/document_types.py). A broken business rule is never a refusal here: the saving code accepts and flags it.
-This file owns the order, the transactions and the answers; the receipt book's own rules are in apps/sync/models.py.
+This file owns the order, the transactions and the answers; the answer log's own rules are in apps/sync/models.py.
 """
 
 import logging
@@ -37,7 +37,7 @@ from apps.sync.models import PushedDocument, PushedStatus
 
 logger = logging.getLogger(__name__)
 
-# The four answers (03 §6.3). Two are kept in the receipt book (PushedStatus); a duplicate is one of them given again,
+# The four answers (03 §6.3). Two are kept in the answer log (PushedStatus); a duplicate is one of them given again,
 # and a retry is never kept, as nothing of it was saved.
 ACCEPTED = PushedStatus.ACCEPTED.value
 INVALID = PushedStatus.INVALID.value
@@ -137,7 +137,7 @@ def _save(
         created_by=maker,
     )
     try:
-        # One document, one transaction (03 §5.5): its rows, its change lines and its line in the receipt book are
+        # One document, one transaction (03 §5.5): its rows, its change lines and its line in the answer log are
         # saved together, or not at all. X3: both books name its maker and the laptop, for every row its saving code
         # writes or edits. The block opens first, so the services the saving code calls join it, and the change
         # numbers come once, at its end (SYNC-1).
@@ -151,7 +151,7 @@ def _save(
     except (ValidationError, IntegrityError) as refusal:
         # Refused, and all of it rolled back. Perhaps by a twin: another copy of this document, sent at the same
         # moment, that finished while this one was saving, so its rows or its line clash with this copy's. Its
-        # answer is the answer (CORE-6), so the receipt book is read again after every refusal, not only a clash.
+        # answer is the answer (CORE-6), so the answer log is read again after every refusal, not only a clash.
         twin = _stored(sent.id)
         if twin is not None:
             return _replay(twin)
@@ -203,7 +203,7 @@ def _invalid(
 def _line(
     device: Device, sent: Sent, received_at: datetime, maker: StaffMember | None, **answer: Any
 ) -> PushedDocument:
-    # The document's line in the receipt book: what the laptop sent, as it sent it, and the answer it got.
+    # The document's line in the answer log: what the laptop sent, as it sent it, and the answer it got.
     return PushedDocument(
         shop_id=device.shop_id,
         device=device,
@@ -219,7 +219,7 @@ def _line(
 
 
 def _stored(document_id: uuid.UUID) -> PushedDocument | None:
-    # The document's line in the open shop's receipt book, if it has one: the guard hides every other shop's.
+    # The document's line in the open shop's answer log, if it has one: the guard hides every other shop's.
     return PushedDocument.objects.filter(document_id=document_id).first()
 
 
@@ -254,6 +254,6 @@ def _without_ids_taken(fields: dict[str, list[str]]) -> tuple[dict[str, list[str
 def _id_taken(error: IntegrityError) -> bool:
     # True when the refused insert broke a table's primary key: an id the laptop made, a document's or one of its
     # rows', is already taken. PostgreSQL names the broken rule, and names a table's primary key "<table>_pkey". The
-    # receipt book's own ids are the server's, so they never clash.
+    # answer log's own ids are the server's, so they never clash.
     cause = error.__cause__
     return isinstance(cause, psycopg.errors.UniqueViolation) and (cause.diag.constraint_name or "").endswith("_pkey")

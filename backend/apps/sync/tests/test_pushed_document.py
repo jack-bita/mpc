@@ -1,4 +1,4 @@
-"""apps/sync/tests/test_pushed_document.py — the receipt book: the answer the push gave each document, kept so that the
+"""apps/sync/tests/test_pushed_document.py — the answer log: the answer the push gave each document, kept so that the
 same document sent again gets the same answer (SYNC-4; 03 §5.5, §6.3).
 
     shop  document  laptop          #   answer    change no.  flags   reason
@@ -35,7 +35,7 @@ RECEIVED_AT = dt.datetime(2026, 11, 10, 11, 5, tzinfo=dt.UTC)
 
 
 def _line(shop: Model, device: ShopScoped, **changes: object) -> PushedDocument:
-    # The receipt book's line for Asha's sale, accepted at change 43; `changes` overrides a fact.
+    # The answer log's line for Asha's sale, accepted at change 43; `changes` overrides a fact.
     facts: dict[str, object] = {
         "shop_id": shop.pk,
         "device_id": device.pk,
@@ -156,7 +156,7 @@ def test_an_invalid_document_raises_its_own_flag(shop_a: Model, device_a: ShopSc
 
 def test_pushed_documents_keep_the_shop_guard(shop_b: Model, shop_a: Model, line: PushedDocument) -> None:
     # Built on two bases, AppendOnly and CounterRecord: the guard stays the default, as on every shop's table
-    # (ADR-0022). A shop's receipt book is its own: shop B's push never finds shop A's answers.
+    # (ADR-0022). A shop's answer log is its own: shop B's push never finds shop A's answers.
     with pytest.raises(NoShopSelected):
         PushedDocument.objects.count()
     with shop_context(shop_b):

@@ -195,7 +195,7 @@ class AppendOnlyError(Exception):
 class AppendOnly(ShopScoped):
     # The base of every ledger table (03 §5.3; the list is 03 §5.6): stock movements, balance entries,
     # allocations, payments, money movements, attendance events, audit events, a flag's notes and the
-    # people it names, the change log, the push's receipt book (sync.PushedDocument), and the dated rules:
+    # people it names, the change log, the push's answer log (sync.PushedDocument), and the dated rules:
     # prices, product costs, settings and pay rates. A ledger is ShopScoped plus this: its rows are written
     # once, and never changed or deleted (T2). Its migration adds the trigger that refuses the same in
     # PostgreSQL (apps/core/operations.py), whatever sends the change; this class only stops the commonest

@@ -46,7 +46,7 @@
 
 **Changes in v1.20** (5 Nov 2026, the design-system cards): a choice by Jack. A person's font is on `User`, beside their language, so it follows them to every device (§5, ADR-0039, 04 v1.40). Marked **(v1.20)**.
 
-**Changes in v1.21** (10 Nov 2026, SYNC-4): a new Flag kind, `invalid_document`: a document a device pushed that the server can't save, raised about its line in the push's receipt book, a new append-only record (§13, T2; 03 v1.41). A word for a document a device sends: *kumbukumbu* (Jack, §21). Marked **(v1.21)**.
+**Changes in v1.21** (10 Nov 2026, SYNC-4): a new Flag kind, `invalid_document`: a document a device pushed that the server can't save, raised about its line in the push's answer log, a new append-only record (§13, T2; 03 v1.41). A word for a document a device sends: *kumbukumbu* (Jack, §21). Marked **(v1.21)**.
 
 ---
 

@@ -3,7 +3,7 @@
 The Dawa laptop worked offline all morning and sends what it saved, #1, #2, #3. For each one, in its number's order,
 the push answers:
 
-    accepted    saved: its document, its change lines and its line in the receipt book, in one transaction
+    accepted    saved: its document, its change lines and its line in the answer log, in one transaction
     duplicate   saved before: the first answer again, and nothing saved twice
     invalid     can't be saved: set aside, with its reason and a flag, and the others go on
     retry       a server problem: nothing of it saved, and the batch stops there, to keep the order
@@ -282,7 +282,7 @@ def test_maker_of_another_shop_is_invalid(shop_a: Model, device_a: Device, staff
 def test_document_records_who_made_it_its_laptop_and_both_clocks(
     shop_a: Model, device_a: Device, staff_a: StaffMember
 ) -> None:
-    # X3: the saved ticket, and its line in the receipt book, name who made it at the counter and the laptop it came
+    # X3: the saved ticket, and its line in the answer log, name who made it at the counter and the laptop it came
     # from, with the laptop's number for it and both clocks: the laptop's, kept but not trusted, and the server's.
     _push(device_a, [_sent(12, staff_a)])
     facts = ("created_by_id", "device_id", "device_seq", "client_time", "received_at")
