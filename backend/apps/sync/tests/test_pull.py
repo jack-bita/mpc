@@ -279,7 +279,9 @@ def test_a_rules_rows_come_as_the_device_reads_them(shop_a: Shop) -> None:
     # next week's new fine; a fix for a day three weeks ago, already replaced by last week's; and a fix of next week's
     # fine, which replaces it. A laptop that asks after all four gets the two rows it needs, each as it is, and the
     # other two as archive: the fix for a past day is no day a device works on, and next week's first fine was
-    # replaced, so a laptop that got it on an earlier pull drops it, and keeps the fix.
+    # replaced. That archive reaches only a laptop that hadn't got the first fine yet, as this one hadn't: one that got
+    # it on an earlier pull is past its line, gets no archive, and holds both rows for that day, so it reads the last
+    # one it was given, the fix (SYNC-7's note).
     today = shop_today(shop_a)
     start = last_line(shop_a)
     in_force, next_week, past_fix, next_week_fix = (

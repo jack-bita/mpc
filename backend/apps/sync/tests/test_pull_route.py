@@ -105,8 +105,9 @@ def test_every_page_carries_the_server_time(shop_a: Shop, paired: tuple[Device, 
 
 def test_a_pull_with_no_cursor_starts_from_the_beginning(shop_a: Shop, paired: tuple[Device, str]) -> None:
     # 0 means nothing read yet, as numbers start at 1 (SYNC-1), and a cursor left out means 0: the whole log, from its
-    # first line. Not a bootstrap: a pull from 0 has no rule's defaults, nor any record that never changed since its
-    # line was written, so a new laptop still bootstraps first. The tenancy sweep asks this way, with no cursor.
+    # first line. Not a bootstrap: a pull from 0 has no rule's defaults (setting_keys), nor any record saved without a
+    # line, such as a rule's row until SHOP-3's service writes one, or a row saved before SYNC-15's services wrote
+    # lines, so a new laptop still bootstraps first. The tenancy sweep asks this way, with no cursor.
     _device, key = paired
     browser = a_browser(key)
     from_nothing = browser.get(PULL).json()
