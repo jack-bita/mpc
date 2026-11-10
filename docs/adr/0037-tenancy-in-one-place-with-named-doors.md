@@ -1,10 +1,11 @@
 ---
-status: accepted
+status: superseded
 date: 2026-11-02
 source: "AUTH-2, confirmed with Jack in chat at AUTH-2's review; supersedes ADR-0022 (03 §2 — AD8, §5.4)"
 standing: confirmed
 cost-to-change: medium
 revisit: "before a second real shop goes live (R3): switch on row-level security"
+superseded-by: ADR-0042
 ---
 
 # ADR-0037 · Tenancy is enforced in one place, with named doors; row-level security comes later

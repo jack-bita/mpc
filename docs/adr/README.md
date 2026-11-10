@@ -47,8 +47,9 @@ An ADR is a short record of one big decision: the context, what we chose, what i
 | [0034](0034-no-open-source-licence-yet.md) | No open-source licence yet | BP16 | default | low |
 | [0035](0035-a-modular-monolith-with-control-beside-core.md) | A modular monolith, with control beside core · *superseded by [0041](0041-a-modular-monolith-with-the-demo-seed-on-top.md)* | AD1 (REPO-6) | confirmed | high |
 | [0036](0036-office-edits-are-recorded-by-our-own-trigger.md) | Office edits are recorded by our own trigger, into one table | CTRL-2 | confirmed | medium |
-| [0037](0037-tenancy-in-one-place-with-named-doors.md) | Tenancy is enforced in one place, with named doors; row-level security comes later | AUTH-2 | confirmed | medium |
+| [0037](0037-tenancy-in-one-place-with-named-doors.md) | Tenancy is enforced in one place, with named doors; row-level security comes later · *superseded by [0042](0042-tenancy-in-one-place-with-doors-for-a-login-and-a-persons-change.md)* | AUTH-2 | confirmed | medium |
 | [0038](0038-passwords-without-email-reset-face-to-face.md) | One web address, session cookies, and django-allauth for passwords; a lost password is reset face to face | AD3 (AUTH-3) | confirmed | medium |
 | [0039](0039-the-apps-look-is-one-layer-over-shadcn.md) | The app's look is one layer over shadcn, with its fonts inside the app | UI-7 | confirmed | low |
 | [0040](0040-ui-text-lives-in-the-app-through-use-intl.md) | UI text lives in the app, through use-intl; the API sends codes | AD18 (UI-1) | confirmed | low |
 | [0041](0041-a-modular-monolith-with-the-demo-seed-on-top.md) | A modular monolith, with control beside core and the demo seed on top | AD1 (DATA-1) | confirmed | high |
+| [0042](0042-tenancy-in-one-place-with-doors-for-a-login-and-a-persons-change.md) | Tenancy is enforced in one place, with named doors for a login and a person's change; row-level security comes later | AD8 (SYNC-15) | decided | medium |
