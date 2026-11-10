@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import OperationalError, transaction
 from django.db.models import Model
 
 from apps.control.models import EditEvent, Flag, FlagKind, FlagPerson
@@ -190,6 +190,25 @@ def test_server_error_answers_retry(
     monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), TICKET)
     assert [answer.status for answer in _push(device_a, batch)] == ["duplicate", "accepted", "accepted"]
     assert [seq for seq, _text in _tickets(shop_a)] == [1, 2, 3]
+
+
+def test_a_database_error_looking_up_a_document_answers_retry(
+    monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # The database goes away just as the push looks #2 up in the answer log: a server problem like any other, so #2
+    # gets `retry` and the batch stops there, keeping #1's answer, not one refusal of the whole push that would hide
+    # that #1 went in.
+    batch = [_sent(1, staff_a), _sent(2, staff_a), _sent(3, staff_a)]
+    real_stored = push_module._stored
+
+    def lost_on_two(document_id: uuid.UUID) -> PushedDocument | None:
+        if document_id == batch[1].id:
+            raise OperationalError("the database went away")
+        return real_stored(document_id)
+
+    monkeypatch.setattr(push_module, "_stored", lost_on_two)
+    assert [answer.status for answer in _push(device_a, batch)] == ["accepted", "retry"]
+    assert [seq for seq, _text in _tickets(shop_a)] == [1]
 
 
 def test_a_document_and_its_answer_line_are_saved_in_one_transaction(

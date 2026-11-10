@@ -89,11 +89,13 @@ def push(device: Device, documents: Sequence[Sent], *, received_at: datetime) ->
 
 
 def _answer(device: Device, sent: Sent, received_at: datetime) -> Answer:
-    # Sent before? Look first, before any check: the first copy's own rows would make this one's checks fail.
-    stored = _stored(sent.id)
-    if stored is not None:
-        return _replay(stored)
     try:
+        # Sent before? Look first, before any check: the first copy's own rows would make this one's checks fail.
+        # Inside the `try`, as a lost database here is a server problem like any other: this document's `retry`, with
+        # the answers before it kept, not a refusal of the whole push.
+        stored = _stored(sent.id)
+        if stored is not None:
+            return _replay(stored)
         return _post(device, sent, received_at)
     except Exception:
         # A server problem, not the document's: a bug, or a database that went away. Nothing of it was saved (its
