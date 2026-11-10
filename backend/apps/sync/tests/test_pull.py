@@ -103,24 +103,42 @@ def test_pull_returns_changes_after_cursor(shop_a: Shop, dawa: Side) -> None:
     assert page["cursor"] == start + 2
 
 
-def test_pulling_again_gives_every_change_once_in_order(shop_a: Shop, dawa: Side) -> None:
+def test_pulling_again_gives_every_change_once_in_order(
+    shop_a: Shop, dawa: Side, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Done when: pulling repeatedly gives every change once, in order. A new laptop starts at 0, as a shop's first
-    # bootstrap could, and asks from the cursor each page hands it: it reads every number the log holds, once each, in
-    # order. Asked again with nothing new, it gets nothing, and stays where it is; a new change comes alone.
+    # bootstrap could, and asks as a device must: from the cursor each page hands it, again at once while a page says
+    # more wait (never by counting a page's changes). It reads every number the log holds, once each, in order, but for
+    # the lines of a table no device keeps. Pages of two lines here, so a short log spans several, and two of those
+    # lines fill one page between the others: a page with no change at all that still says more wait. A device that
+    # stopped at a page with fewer changes than it holds, or none, would stop there. Asked again with nothing new, it
+    # gets nothing, and stays where it is; a new change comes alone.
+    monkeypatch.setattr(pull, "PAGE_SIZE", 2)
     hire(shop_a, "Juma Mfano", "Juma")
     with shop_context(shop_a):
-        rename_side(dawa, version=dawa.version, name="Dawa Kuu", by=None)
+        dawa = rename_side(dawa, version=dawa.version, name="Dawa Kuu", by=None)
+        location = StockLocation.objects.get(side=dawa)
+        for _ in range(2):
+            with recording_changes(shop_a):
+                record_change(location)
+        passed_over = [last_line(shop_a) - 1, last_line(shop_a)]
+        rename_side(dawa, version=dawa.version, name="Dawa ya Mifugo", by=None)
     read: list[int] = []
+    pages = 0
     cursor = 0
     while True:
         page = pulled(shop_a, cursor)
+        pages += 1
         read += [change["seq"] for change in page["changes"]]
-        if not page["changes"]:
-            break
         cursor = page["cursor"]
-    assert read == list(range(1, last_line(shop_a) + 1))
-    # The page that ended the loop came empty, and handed back the cursor it was asked from.
-    assert page["cursor"] == cursor
+        if not page["has_more"]:
+            break
+    assert read == [seq for seq in range(1, last_line(shop_a) + 1) if seq not in passed_over]
+    assert pages == 4  # seven lines, two a page: the empty third page didn't stop the laptop
+    assert cursor == last_line(shop_a)
+    # Nothing new: an empty page, which hands back the cursor it was asked from.
+    page = pulled(shop_a, cursor)
+    assert (page["changes"], page["cursor"], page["has_more"]) == ([], cursor, False)
     with shop_context(shop_a):
         add_side(shop=shop_a, code="F", name="Vyakula", by=None)
     assert [change["entity"] for change in pulled(shop_a, cursor)["changes"]] == ["side", "payment_account"]
