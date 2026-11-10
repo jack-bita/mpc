@@ -75,12 +75,12 @@ def create_shop(
     shop = Shop(name=name, code=code, kind=kind)
     if shop_id is not None:
         shop.id = shop_id
-    # The new shop is opened first, because the rows' full_clean reads through the guarded `objects`
-    # (CORE-2). No caller could have opened it: it didn't exist yet. shop_context hands back whatever shop
-    # was open before. Then one block, which is the transaction: if any row below is refused, the rows
-    # already written are taken back too, so there is never a shop with half its sides set up. Each
-    # add_side joins it, so every side's lines are numbered once, at the very end (SYNC-15). Inside a caller's
-    # block for this same shop (set_up_shop), this one joins that one in turn.
+    # The new shop is opened first, because the rows' full_clean reads through the guarded `objects` (CORE-2). A caller
+    # can't have opened it, unless by the id it chose for it (set_up_shop): it didn't exist yet. shop_context hands back
+    # whatever shop was open before. Then one block, which is the transaction: if any row below is refused, the rows
+    # already written are taken back too, so there is never a shop with half its sides set up. Each add_side joins it,
+    # so every side's lines are numbered once, at the very end (SYNC-15). Inside a caller's block for this same shop
+    # (set_up_shop), this one joins that one in turn.
     with shop_context(shop), recording_changes(shop):
         # Two shops made with the same code at the very same moment can both pass full_clean; the unique
         # rule on `code` then refuses the second. The shop's own row has no line: no device keeps it.

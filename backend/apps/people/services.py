@@ -26,9 +26,10 @@ travels on the person's row, so giving one names the person. The refusals that n
 refused action opens nothing.
 
 Callers open shop_context(shop) first: full_clean and the unique checks read through the guarded
-`objects` (CORE-2). Two need none open: start_pairing, as a device that asks to join belongs to no shop yet, and its
-request links to nothing (02 v1.11); and change_own_settings, which writes the person, who belongs to no shop, and then
-opens each shop where they work in turn, to write that shop's line (_record_each_job).
+`objects` (CORE-2). Four need none open: start_pairing, as a device that asks to join belongs to no shop yet, and its
+request links to nothing (02 v1.11); set_up_shop, which opens the shop it makes itself; and change_own_settings and
+change_person, which write the person, who belongs to no shop, and then open each shop where they work in turn, to
+write that shop's line (_record_each_job).
 """
 
 import math
@@ -479,8 +480,9 @@ def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, secret
     is_owner = RoleAssignment.objects.filter(staff=staff, role__template=RoleTemplate.OWNER).exists()
     # Someone who can open the admin reads every shop's rows, so they stand above any shop's people: no shop's owner may
     # act as them, whether by their password, which opens the admin, or by their PIN, which opens their job. A job at
-    # another shop isn't looked at: reading that shop's rows during this shop's visit would pass the guard, which is
-    # only for a login, before any shop is open (ADR-0037, Jack, 4 Nov 2026). Nothing is lost yet, as a person at two
+    # another shop isn't looked at: reading that shop's rows during this shop's visit, to decide who may, would pass the
+    # guard, which no door is for: a door finds a login's shop, or the shops a change to a person must reach, and reads
+    # their ids alone (ADR-0042, which supersedes ADR-0037; Jack, 4 Nov 2026). Nothing is lost yet, as a person at two
     # shops is refused at every office route until AUTH-7, whose card adds this rule.
     if is_owner or user.is_superuser or user.is_staff:
         raise ValidationError(f"Only the superuser may reset this person's {secret}.", code=f"{secret}.superuser_only")

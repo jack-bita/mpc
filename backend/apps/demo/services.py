@@ -179,7 +179,7 @@ def _made_today() -> bool:
 
 def _make_the_shop() -> Shop:
     # The new shop's id first, so the shop can be opened before it exists: the services' checks read through the
-    # tenancy guard (ADR-0037). One block for the whole shop, which every service below joins, so all its lines (the
+    # tenancy guard (ADR-0042). One block for the whole shop, which every service below joins, so all its lines (the
     # sides, their drawers, the people) are numbered once, at the very end (SYNC-15): a visitor's new laptop starts
     # from them. The block ends just before _wipe_and_make's transaction commits.
     shop_id = uuid.uuid7()

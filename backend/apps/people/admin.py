@@ -4,9 +4,9 @@ Only the superuser opens it, to see and fix people before any office screen exis
 from the app's own staff screen (PPL-4), not here. It owns the add and edit forms for a User and the
 page's three rules: the id is shown but never typed in, nobody is deleted, and a password typed here is temporary
 (ADR-0038). A reset here is kept in Django's own admin log, with who and when, and not in the shop's audit trail: a
-person belongs to no one shop, and this page reads none. And a PIN's badge never opens the site (AUTH-4). An edit of
-a person saves through change_person, so each shop where they work hears of a new name, language or switch-off
-(SYNC-15).
+person belongs to no one shop, and this page reads no shop's rows. And a PIN's badge never opens the site (AUTH-4). An
+edit of a person saves through change_person, which opens each shop where they work in turn, only to write their staff
+line there, so each shop's laptops hear of a new name, language or switch-off (SYNC-15).
 """
 
 from typing import Any, cast
@@ -38,7 +38,7 @@ _admin_login = admin.site.login
 
 
 def _not_by_pin(request: HttpRequest) -> bool:
-    # A PIN's badge never opens this site, whoever's it is. The site reads every shop's rows (ADR-0037), and a badge is
+    # A PIN's badge never opens this site, whoever's it is. The site reads every shop's rows (ADR-0042), and a badge is
     # 4 digits typed at a shared counter; and what each visit asks of a badge (job_of_pin_session,
     # apps/people/selectors.py) is asked by the office routes' login, never here, so a copied badge, a suspended person
     # or a blocked device would still get in. Someone who may open the site logs in here with their password.
