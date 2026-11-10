@@ -10,16 +10,26 @@ grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 0
 (start_pairing), a manager with device.manage says yes (confirm_pairing), renames it (rename_device, AUTH-5), and
 blocks it, or lets it work again (block, unblock); and each time its key reaches the server, it is noted as seen
 (note_device_seen, AUTH-2). And a person's own choices for their screens, their language and font, which only they
-change (change_own_settings, UI-9).
+change (change_own_settings, UI-9). And the superuser's edit of a person in the admin, which every shop where they work
+hears of when it touches what its laptops show: their name, language, or switch-off (change_person, SYNC-15).
 Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
 who and why, in the same transaction (apps/control/services.py, audit): the change and its line are kept
 together or not at all (T3).
 
+A shared laptop keeps a copy of the shop's people at work (apps/sync/registry.py): names, status, PIN time and keys,
+all on their staff row. So each action that changes one of those saves inside `recording_changes(shop)`
+(apps/core/changes.py), in place of a plain transaction, and names the person's job with record_change, last, after
+every other write of the save: `archive` when they leave, as a laptop then drops them (SYNC-15). A role or an extra key
+travels on the person's row, so giving one names the person. The refusals that need no transaction come first, so a
+refused action opens nothing.
+
 Callers open shop_context(shop) first: full_clean and the unique checks read through the guarded
-`objects` (CORE-2). Two need none open: start_pairing, as a device that asks to join belongs to no shop yet, and its
-request links to nothing (02 v1.11); and change_own_settings, which writes only the person, who belongs to no shop.
+`objects` (CORE-2). Four need none open: start_pairing, as a device that asks to join belongs to no shop yet, and its
+request links to nothing (02 v1.11); set_up_shop, which opens the shop it makes itself; and change_own_settings and
+change_person, which write the person, who belongs to no shop, and then open each shop where they work in turn, to
+write that shop's line (_record_each_job).
 """
 
 import math
@@ -36,15 +46,17 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q, QuerySet
+from django.db.transaction import TransactionManagementError
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
 from apps.control.models import AuditAction, AuditEvent
 from apps.control.services import audit
 from apps.core.acting import acting_as
+from apps.core.changes import record_change, recording_changes
 from apps.core.editing import editing
 from apps.core.links import link_type_of
-from apps.core.models import SequenceName, ShopScoped
+from apps.core.models import ChangeOp, SequenceName, ShopScoped
 from apps.core.permissions import ROLE_TEMPLATES, HeldPermissions, Permission, RoleTemplate
 from apps.core.sequences import next_number
 from apps.core.tenancy import ALL_SHOPS, current_shop, shop_context
@@ -56,7 +68,7 @@ from apps.people.device_keys import (
     make_pairing_code,
 )
 from apps.people.login_counts import lift_wrong_password_count
-from apps.people.login_doors import shop_of_device_key
+from apps.people.login_doors import shop_of_device_key, shops_of_person
 from apps.people.models import (
     OWN_SETTINGS,
     Device,
@@ -121,12 +133,13 @@ def add_staff(
         started_on=started_on,
         created_by=by,
     )
-    with transaction.atomic():
+    with recording_changes(shop):
         # Every field, clean() and the rules in Meta, before anything is written: a clash comes back
         # as a code. Two adds at the very same moment can both pass this; the database's unique
         # index then refuses the second.
         staff.full_clean()
         staff.save()
+        record_change(staff)
     return staff
 
 
@@ -159,7 +172,7 @@ def suspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Staff
     """Stop an active person working for a while. Their PIN stops working (AUTH-4)."""
     _check_shop(staff.shop_id, by)
     _check_reason(reason)
-    with transaction.atomic():
+    with recording_changes(staff.shop_id):
         staff = _locked(staff)
         if staff.status != StaffStatus.ACTIVE:
             raise ValidationError("Only an active staff member can be suspended.", code="staff.not_active")
@@ -175,6 +188,8 @@ def suspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Staff
             before={"status": StaffStatus.ACTIVE},
             after={"status": StaffStatus.SUSPENDED},
         )
+        # Laptops must hear of it: offline, a suspended person's PIN is refused there too (X2).
+        record_change(staff)
     return staff
 
 
@@ -182,7 +197,7 @@ def unsuspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Sta
     """Let a suspended person work again."""
     _check_shop(staff.shop_id, by)
     _check_reason(reason)
-    with transaction.atomic():
+    with recording_changes(staff.shop_id):
         staff = _locked(staff)
         if staff.status != StaffStatus.SUSPENDED:
             raise ValidationError("Only a suspended staff member can come back.", code="staff.not_suspended")
@@ -197,6 +212,7 @@ def unsuspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Sta
             before={"status": StaffStatus.SUSPENDED},
             after={"status": StaffStatus.ACTIVE},
         )
+        record_change(staff)
     return staff
 
 
@@ -208,7 +224,7 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
     # Friday" typed on Monday would stop their PIN four days early.
     if left_on > shop_today(staff.shop):
         raise ValidationError("A leaving date can't be in the future.", code="staff.left_in_future")
-    with transaction.atomic():
+    with recording_changes(staff.shop_id):
         staff = _locked(staff)
         if staff.status == StaffStatus.LEFT:
             raise ValidationError("This person has already left.", code="staff.left")
@@ -227,6 +243,8 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
             before=before,
             after={"status": StaffStatus.LEFT, "left_on": left_on},
         )
+        # Archive: a person who left is no longer sent, and every laptop drops them from its PIN screen.
+        record_change(staff, ChangeOp.ARCHIVE)
     return staff
 
 
@@ -262,7 +280,7 @@ def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMem
     # Hashed before the lock: Argon2 is slow on purpose, and the row stays locked only for the short
     # write below.
     pin_hash = hash_pin(pin)
-    with transaction.atomic():
+    with recording_changes(staff.shop_id):
         if by is None:
             staff = _locked(staff)
         else:
@@ -277,6 +295,8 @@ def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMem
         # A new PIN ends any lock at once, on every device: a worker locked out by a coworker's wrong tries asks a
         # manager, and needs no waiting (Jack, 4 Nov 2026).
         _lift_pin_locks(PinLock.objects.filter(staff=staff))
+        # The new `pin_changed_at` travels, never the hash: each laptop drops its offline check of the old PIN.
+        record_change(staff)
     return staff
 
 
@@ -460,8 +480,9 @@ def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, secret
     is_owner = RoleAssignment.objects.filter(staff=staff, role__template=RoleTemplate.OWNER).exists()
     # Someone who can open the admin reads every shop's rows, so they stand above any shop's people: no shop's owner may
     # act as them, whether by their password, which opens the admin, or by their PIN, which opens their job. A job at
-    # another shop isn't looked at: reading that shop's rows during this shop's visit would pass the guard, which is
-    # only for a login, before any shop is open (ADR-0037, Jack, 4 Nov 2026). Nothing is lost yet, as a person at two
+    # another shop isn't looked at: reading that shop's rows during this shop's visit, to decide who may, would pass the
+    # guard, which no door is for: a door finds a login's shop, or the shops a change to a person must reach, and reads
+    # their ids alone (ADR-0042, which supersedes ADR-0037; Jack, 4 Nov 2026). Nothing is lost yet, as a person at two
     # shops is refused at every office route until AUTH-7, whose card adds this rule.
     if is_owner or user.is_superuser or user.is_staff:
         raise ValidationError(f"Only the superuser may reset this person's {secret}.", code=f"{secret}.superuser_only")
@@ -498,25 +519,76 @@ def change_own_settings(user: User, *, language: str | None = None, font: str | 
         # Only the changed columns: a change to her font in one tab never writes back an old language from another. No
         # lock and no version: each choice is one value, and the last one tapped is the one she meant. No line in the
         # audit trail either: it keeps who changed what in a shop, and this changes no shop's rows, nobody's rights and
-        # no money, only how one person's own screens look.
+        # no money, only how one person's own screens look. One transaction with every shop's line: all, or none.
         with transaction.atomic():
             user.save(update_fields=changed)
+            _record_each_job(user)
     return user
 
 
-def set_up_shop(*, name: str, code: str, sides: Sequence[NewSide], kind: ShopKind = ShopKind.LIVE) -> Shop:
+# What a laptop shows of a person, on their staff row in each shop where they work (StaffRecord, apps/sync/api/
+# serializers.py): their name, language and font; and whether they are sent at all, which `is_active` decides
+# (staff_rows). `people` can't read the sync app (a higher layer), so the list is written here, and a sync test pins it
+# to StaffRecord (test_the_people_app_knows_which_of_a_persons_fields_travel).
+FIELDS_ON_STAFF_ROWS = frozenset({"full_name", *OWN_SETTINGS, "is_active"})
+
+
+def change_person(user: User, *, changed: Collection[str]) -> User:
+    """Save a person as the superuser changed them in the admin (apps/people/admin.py), with every field the form
+    holds, as the admin's own save does. `changed`: the fields the form changed. When one is a field a laptop shows
+    (FIELDS_ON_STAFF_ROWS), each shop where the person works gets a line for their job, in the same transaction:
+    `archive` when they are switched off, as no laptop may then show them, `upsert` otherwise (SYNC-15). Returns the
+    person as saved."""
+    with transaction.atomic():
+        user.save()
+        if FIELDS_ON_STAFF_ROWS & set(changed):
+            _record_each_job(user)
+    return user
+
+
+def _record_each_job(user: User) -> None:
+    # A person's own row changed, in a way every shop where they work shows on their staff row: their language and font
+    # (UI-9), or their name or switch-off in the admin. The person belongs to no shop, so each shop gets a line of its
+    # own, naming the person's job there, in the transaction that saved the person (SYNC-15). The shops come from the
+    # person's door, read before any shop is open, ordered by id (ADR-0042): one block per shop, one after another,
+    # never one inside another. Two such saves at once then take the shops' counters in the same order, so neither can
+    # hold one counter while waiting for the other's. Each block numbers at its own end and keeps its counter until the
+    # commit, a moment later.
+    if not transaction.get_connection().in_atomic_block:
+        # Outside a transaction, each shop's line would commit alone, and a failure later would leave the person unsaved
+        # and some shops' laptops told of a change that never happened. A bug in the calling code, so a server error.
+        raise TransactionManagementError("_record_each_job runs inside the transaction that saved the person.")
+    # Switched off, they leave every laptop's PIN screen: the bootstrap no longer sends them (staff_rows).
+    op = ChangeOp.UPSERT if user.is_active else ChangeOp.ARCHIVE
+    for shop_id in shops_of_person(user.pk):
+        with shop_context(shop_id), recording_changes(shop_id):
+            # Read through the guard, inside this shop: the person's current job here, one at most (the door's rule).
+            for job in StaffMember.objects.filter(user_id=user.pk).exclude(status=StaffStatus.LEFT):
+                record_change(job, op)
+
+
+def set_up_shop(
+    *,
+    name: str,
+    code: str,
+    sides: Sequence[NewSide],
+    kind: ShopKind = ShopKind.LIVE,
+    shop_id: uuid.UUID | None = None,
+) -> Shop:
     """Make a shop with everything it needs to work, all or nothing: its sides, each with its stock location and
     cash drawer (create_shop, apps/shops/services.py), and its own copy of the six roles. For the superuser and
     system jobs. `shops` may not import `people` (ADR-0035), so the roles are added here, not by create_shop: a
     shop made by create_shop alone has no roles, so nobody may act there. `kind`: live unless the caller says
-    otherwise, passed on to create_shop; the demo seed (DATA-1) makes a demo shop."""
-    # One transaction around both: if the roles can't be copied, the shop and its sides are taken back too.
-    with transaction.atomic():
-        shop = create_shop(name=name, code=code, sides=sides, kind=kind)
-        # create_shop closes the new shop as it returns; the roles' checks read through the guard, so it is opened
-        # again for them.
-        with shop_context(shop):
-            copy_role_templates(shop)
+    otherwise, passed on to create_shop; the demo seed (DATA-1) makes a demo shop. `shop_id`: the new shop's id, for a
+    caller that opens the shop's block before the shop exists, as the demo seed does; a new one otherwise."""
+    # The id first, so the new shop can be opened, and its block started, before its row exists: the roles' checks read
+    # through the guard, and every line of the setup (the sides and their drawers) is numbered once, at the very end,
+    # after the roles (SYNC-15). One block around both: if the roles can't be copied, the shop and its sides are taken
+    # back too. create_shop's own block joins this one.
+    shop_id = uuid.uuid7() if shop_id is None else shop_id
+    with shop_context(shop_id), recording_changes(shop_id):
+        shop = create_shop(name=name, code=code, sides=sides, kind=kind, shop_id=shop_id)
+        copy_role_templates(shop)
     return shop
 
 
@@ -613,7 +685,7 @@ def assign_role(staff: StaffMember, role: Role, *, side: Side | None, by: StaffM
     someone without those keys set is still open."""
     _check_shop(staff.shop_id, by)
     _check_same_shop(staff, role, side)
-    with transaction.atomic():
+    with recording_changes(staff.shop_id):
         staff = _locked_receiver(staff)
         # The role as stored, read again and locked: the giver's check compares its saved codes, never those of the
         # copy handed in, which may have been changed in memory and never saved (the Owner role made to say
@@ -627,6 +699,8 @@ def assign_role(staff: StaffMember, role: Role, *, side: Side | None, by: StaffM
         # Every rule in Meta first: the same role twice on one side comes back as a code (role.already_given).
         given.full_clean()
         given.save()
+        # The role stays on the server; the keys it gives travel on the person's staff row, so the person is named.
+        record_change(staff)
     return given
 
 
@@ -638,13 +712,15 @@ def grant_permission(
     _check_shop(staff.shop_id, by)
     _check_same_shop(staff, side)
     _check_giver(by, [permission], side)
-    with transaction.atomic():
+    with recording_changes(staff.shop_id):
         staff = _locked_receiver(staff)
         _check_no_open_temporary_password(staff, [permission], side)
         granted = PermissionGrant(shop_id=staff.shop_id, staff=staff, permission=permission, side=side, created_by=by)
         # A code from the list only (permission.unknown), and once per side (permission.already_given).
         granted.full_clean()
         granted.save()
+        # As for a role: the key travels on the person's staff row.
+        record_change(staff)
     return granted
 
 

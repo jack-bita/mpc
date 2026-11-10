@@ -28,7 +28,7 @@ from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, StaffStatus, User
 from apps.people.services import add_staff, mark_left, set_pin, suspend, unsuspend
 from apps.shops.models import Shop
-from tests.concurrency import in_another_transaction
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -151,7 +151,10 @@ def test_two_managers_suspending_each_other_both_go_through(staff_a: StaffMember
     # Each action locks the person it changes, and its audit line links to the manager who did it. PostgreSQL checks
     # that link at the commit, with a light lock on the manager's row. If each action held its person with a full lock,
     # each would wait for the other: PostgreSQL would cancel one after a second, and that manager would get a server
-    # error. So the second must finish while the first is still open.
+    # error. Each action also takes the shop's next change number as its last step (SYNC-15), and holds it until its
+    # commit, so the second waits for the first to commit: correct, as the numbers follow the commits. So the second
+    # must reach that wait, and then finish once the first commits. With full locks, the first's commit would wait for
+    # the second's lock on the manager, while the second waits for the first's number: a deadlock, and a red test.
     # Both end up suspended only because `suspend` has no check of who may yet. That is not the rule: Jack chose that
     # the first wins, and the second is refused, as a suspended person can't act (AUTH-8's second review). PPL-4 adds
     # that check, with `_locked_pair` as set_temporary_password does, and this test changes with it.
@@ -162,9 +165,11 @@ def test_two_managers_suspending_each_other_both_go_through(staff_a: StaffMember
     with shop_context(staff_a.shop_id), transaction.atomic():
         suspend(staff_a, by=staff_a2, reason="Hakuja kazini")
         second, ended = in_another_transaction(second_manager_suspends_the_first)
-        second.join(timeout=5)
-        assert not second.is_alive(), "The second action is waiting for the first: at its commit, they would deadlock."
-
+        # The second has done its work and waits for the shop's change number, which the first holds until it commits.
+        wait_until_someone_waits_for_me()
+    # The first commits here, and lets go of the number.
+    second.join(timeout=5)
+    assert not second.is_alive(), "The second action still waits after the first committed."
     assert isinstance(ended[0], StaffMember)
     with shop_context(staff_a.shop_id):
         assert set(StaffMember.objects.filter(pk__in=[staff_a.pk, staff_a2.pk]).values_list("status", flat=True)) == {

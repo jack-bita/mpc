@@ -31,6 +31,7 @@ visitors need them. Nobody here is staff in Django's sense (`is_staff`), so no s
 login page has no rate limit yet (04 DATA-1, v1.8).
 """
 
+import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 from zoneinfo import ZoneInfo
@@ -42,6 +43,7 @@ from django.core.management import call_command
 from django.db import OperationalError, connection, transaction
 from django.utils import timezone
 
+from apps.core.changes import recording_changes
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Role, User
@@ -176,11 +178,15 @@ def _made_today() -> bool:
 
 
 def _make_the_shop() -> Shop:
-    # The shop, its sides with their stock places and cash drawers, and its own copy of the six roles (set_up_shop),
-    # as a demo shop: the refusal above knows it as the seed's own at the next run.
-    shop = set_up_shop(name=SHOP_NAME, code=SHOP_CODE, sides=SIDES, kind=ShopKind.DEMO)
-    # The services' checks read through the tenancy guard (ADR-0037), so the shop is opened for the people's jobs.
-    with shop_context(shop):
+    # The new shop's id first, so the shop can be opened before it exists: the services' checks read through the
+    # tenancy guard (ADR-0042). One block for the whole shop, which every service below joins, so all its lines (the
+    # sides, their drawers, the people) are numbered once, at the very end (SYNC-15): a visitor's new laptop starts
+    # from them. The block ends just before _wipe_and_make's transaction commits.
+    shop_id = uuid.uuid7()
+    with shop_context(shop_id), recording_changes(shop_id):
+        # The shop, its sides with their stock places and cash drawers, and its own copy of the six roles
+        # (set_up_shop), as a demo shop: the refusal above knows it as the seed's own at the next run.
+        shop = set_up_shop(name=SHOP_NAME, code=SHOP_CODE, sides=SIDES, kind=ShopKind.DEMO, shop_id=shop_id)
         sides = {side.code: side for side in Side.objects.all()}
         for person in PEOPLE:
             # A person's account has no shop (rule 1); their job at the shop does. create_user with no password

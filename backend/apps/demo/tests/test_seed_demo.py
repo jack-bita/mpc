@@ -20,6 +20,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from io import StringIO
 from typing import Any
+from unittest import mock
 
 import pytest
 from django.contrib.contenttypes.models import ContentType
@@ -31,6 +32,8 @@ from django.test import Client
 from django.utils import timezone
 from pytest_django import Settings
 
+from apps.core.models import ChangeOp, SequenceName
+from apps.core.sequences import next_numbers
 from apps.core.tenancy import shop_context
 from apps.demo import services
 from apps.demo.services import SHOP_CODE, Seeded, seed_demo
@@ -38,6 +41,8 @@ from apps.people.models import RoleAssignment, StaffMember, User
 from apps.people.pins import pin_matches
 from apps.shops.models import Shop, ShopKind, Side
 from apps.shops.services import NewSide, create_shop
+from apps.sync.registry import REGISTRY
+from tests.change_log import lines_after
 
 pytestmark = pytest.mark.django_db
 
@@ -370,3 +375,22 @@ def test_seed_demo_stops_at_once_on_another_database_error(monkeypatch: pytest.M
     with pytest.raises(OperationalError):
         seed_demo(fresh=True)
     assert calls == ["flush"]
+
+
+def test_seed_demo_numbers_every_record_once() -> None:
+    # A visitor's new laptop starts from the demo shop's change log (SYNC-3): every record it gets names a line, made
+    # through the services, and the seed numbers them all once, at the end of its one block (SYNC-15). The demo shop's
+    # two sides, their two drawers and its three people: seven lines, from 1.
+    with mock.patch("apps.core.changes.next_numbers", wraps=next_numbers) as numbering:
+        seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    numbering.assert_called_once_with(shop.pk, SequenceName.CHANGE, 7)
+    lines = lines_after(shop, 0)
+    assert [number for number, *_ in lines] == list(range(1, 8))
+    assert all(op == ChangeOp.UPSERT for *_, op in lines)
+    # One line for each record a laptop is sent, and none for anything else: the registry's rows
+    # (apps/sync/registry.py).
+    with shop_context(shop):
+        sent = {(code, row.pk) for code, entry in REGISTRY.items() for row in entry.rows(shop)}
+    assert {(entity, record_id) for _number, entity, record_id, _op in lines} == sent

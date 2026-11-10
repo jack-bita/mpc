@@ -29,7 +29,15 @@ from apps.core.settings_registry import CASH_TOLERANCE, IDLE_MINUTES, LATE_FINE,
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import StaffMember, User
 from apps.people.selectors import shop_today
-from apps.people.services import add_staff, change_own_settings, grant_permission, mark_left, set_pin, suspend
+from apps.people.services import (
+    FIELDS_ON_STAFF_ROWS,
+    add_staff,
+    change_own_settings,
+    grant_permission,
+    mark_left,
+    set_pin,
+    suspend,
+)
 from apps.shops.models import (
     PaymentAccount,
     PaymentAccountKind,
@@ -40,8 +48,10 @@ from apps.shops.models import (
     Side,
 )
 from apps.shops.services import add_side
+from apps.sync.api.serializers import StaffRecord
 from apps.sync.registry import REGISTRY
 from apps.sync.selectors import last_change_number
+from tests.change_log import last_line
 
 pytestmark = pytest.mark.django_db
 
@@ -112,6 +122,8 @@ def test_each_list_keeps_to_its_own_shop_with_every_shop_open(
     # Both shops hold a row of every table, and shop B more changes than shop A. Shown red by dropping one list's shop.
     for shop, fine in ((shop_a, "1250.00"), (shop_b, "1750.00")):
         add_row(shop, LATE_FINE, fine, shop_today(shop))
+    # Setting the shops up wrote lines too (SYNC-15), so shop A's cursor is counted from where this test starts.
+    start_a = last_line(shop_a)
     with shop_context(shop_a), recording_changes(shop_a):
         record_change(dawa)
     for _ in range(3):
@@ -121,7 +133,16 @@ def test_each_list_keeps_to_its_own_shop_with_every_shop_open(
         for code, entry in REGISTRY.items():
             shops = {row.shop_id for row in entry.rows(shop_a)}
             assert shops == {shop_a.pk}, code  # shop A's rows, and only them
-        assert last_change_number(shop_a) == 1
+        # Shop B's last number is the higher, so a cursor read across both shops would answer it, not shop A's.
+        assert last_line(shop_b) > last_line(shop_a)
+        assert last_change_number(shop_a) == start_a + 1
+
+
+def test_a_shop_with_no_change_is_at_zero(shop_a: Shop) -> None:
+    # A shop whose log has no line yet: its cursor is 0, which a pull reads as "from the start", as numbers start at 1
+    # (SYNC-1). Every shop the app sets up has lines from its first moment (SYNC-15), so only a bare shop shows it.
+    with shop_context(shop_a):
+        assert last_change_number(shop_a) == 0
 
 
 def test_every_side_is_sent(shop_a: Shop, dawa: Side, vyakula: Side) -> None:
@@ -304,3 +325,14 @@ def test_each_rules_row_in_force_and_every_later_one_are_sent(shop_a: Shop, dawa
         "value": "200.00",
         "effective_from": str(today - timedelta(days=100)),
     }
+
+
+def test_the_people_app_knows_which_of_a_persons_fields_travel() -> None:
+    # A change to the person (User), who belongs to no shop, writes a staff line in each of their shops only when it
+    # touches a field the staff row shows, or whether they are sent at all (FIELDS_ON_STAFF_ROWS,
+    # apps/people/services.py). `people` can't read this registry (a lower layer), so the list is written there, and
+    # pinned here: a person's field added to StaffRecord, a photo say, turns this red until the list names it too.
+    sources = [field.source or "" for field in StaffRecord().fields.values()]
+    from_the_person = {source.removeprefix("user.") for source in sources if source.startswith("user.")}
+    # And is_active: staff_rows sends only the people switched on.
+    assert from_the_person | {"is_active"} == FIELDS_ON_STAFF_ROWS

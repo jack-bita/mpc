@@ -42,10 +42,11 @@ INFRASTRUCTURE = {
 # Routes under api/ that may be built on something other than ShopViewSet, because none of them reads a
 # shop's table, so there is nothing of a shop's for the sweep to look for in them. A route that does read
 # one, such as sync's pull with a device's key, is never listed here: the sweep is taught to call it instead,
-# as a device of shop B, in a reviewed change. One exception, decided on its card (UI-9): a route whose own code reads
-# no shop's table, whose login, the one every office route shares, reads only the caller's own job and its shop, and
-# for a PIN's session the device that holds the key, each inside the shop its login door names, to refuse them if they
-# may not act, and whose answer its own test proves holds nothing of a shop's.
+# as a device of shop B, in a reviewed change. One exception, decided on its card (UI-9): a route whose login, the one
+# every office route shares, reads only the caller's own job and its shop, and for a PIN's session the device that
+# holds the key, each inside the shop its login door names, to refuse them if they may not act; whose save reads only
+# the caller's own jobs and writes their staff line in each of their shops' change logs, each inside the shop the
+# person's door names (SYNC-15, ADR-0042); and whose answer its own test proves holds nothing of a shop's.
 NOT_SHOP_ROUTES: set[type] = {
     # The uptime check: no login, and no table at all (apps/core/api/views.py).
     HealthView,
@@ -59,7 +60,9 @@ NOT_SHOP_ROUTES: set[type] = {
     # A person's own language and font (UI-9): it changes only the logged-in person, who belongs to no shop, and answers
     # with their two choices alone, as test_settings_answer_holds_nothing_of_a_shop proves
     # (apps/people/tests/test_own_settings.py). Its login reads the person's job and its shop, and at a laptop the
-    # device, each inside the shop the login door names, only to refuse them if they may not act.
+    # device, each inside the shop the login door names, only to refuse them if they may not act. Its save writes the
+    # person's staff line in every shop where they work, so their laptops show the new choice (SYNC-15): it reads only
+    # the person's own job in each, inside the shop the person's door names, and answers nothing of it.
     OwnSettingsView,
 }
 
@@ -87,10 +90,11 @@ HAND_BUILT_QUERIES = {
     # A route's description for the API's schema is made with no visit, so with no shop open: the route's rows
     # come from an empty query (.none()), which reads no row at all (CORE-6).
     "apps/core/api/base.py": "an empty query, .none(), for the API's description",
-    # A login must find the visit's shop before any is open: each door there reads only the shop's id, by what the
-    # request brings (a device's key's hash, a logged-in person's id), and the device or the job is then read through
-    # the guard, inside that shop. A test pins that each door reads a shop's id alone (Jack, AUTH-2, AUTH-3; 03 §5.4).
-    "apps/people/login_doors.py": "a login's door: the shop's id of a key's device or a person's job, and nothing more",
+    # A login must find the visit's shop before any is open, and a change to a person every shop where they work
+    # (SYNC-15): each door there reads only shops' ids, by what the request brings (a device's key's hash, a person's
+    # id), and the device or the job is then read through the guard, inside each shop. A test pins that each door reads
+    # shops' ids alone (Jack, AUTH-2, AUTH-3; ADR-0042; 03 §5.4).
+    "apps/people/login_doors.py": "the doors (ADR-0042): shops' ids of a key's device or a person's jobs, no more",
 }
 
 # App files that may run SQL by hand, `connection.cursor()` or `.raw()`, besides migrations, system jobs and tests,

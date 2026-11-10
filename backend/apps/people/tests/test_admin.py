@@ -15,12 +15,14 @@ from django.contrib.auth.hashers import MD5PasswordHasher
 from django.test import Client, RequestFactory
 from django.views.debug import ExceptionReporter
 
+from apps.core.models import ChangeOp
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.admin import ChooseOwnPasswordForm
 from apps.people.models import StaffMember, User
 from apps.people.services import add_staff
 from apps.shops.models import Shop, Side
+from tests.change_log import lines_written
 
 pytestmark = pytest.mark.django_db
 
@@ -427,3 +429,18 @@ def test_admin_cannot_delete_a_user(superuser_client: Client, superuser: User) -
     request = RequestFactory().get(USERS)
     request.user = superuser
     assert "delete_selected" not in admin.site.get_model_admin(User).get_actions(request)
+
+
+def test_switching_a_person_off_in_the_admin_reaches_their_shops(
+    superuser_client: Client, staff_a: StaffMember
+) -> None:
+    # The superuser opens Juma's page and clears "Active": the admin's own save goes through change_person, so each
+    # shop's laptops drop him (SYNC-15). The form sends every field it shows; a box left clear is not sent at all.
+    juma = User.objects.get(pk=staff_a.user_id)
+    edited = {"full_name": juma.full_name, "phone": "", "email": "", "language": juma.language}
+    with lines_written(staff_a.shop_id) as lines:
+        response = superuser_client.post(f"{USERS}{juma.pk}/change/", edited)
+
+    assert response.status_code == 302, response.content
+    assert User.objects.get(pk=juma.pk).is_active is False
+    assert lines == [("staff", staff_a.pk, ChangeOp.ARCHIVE)]

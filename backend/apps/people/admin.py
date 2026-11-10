@@ -4,7 +4,9 @@ Only the superuser opens it, to see and fix people before any office screen exis
 from the app's own staff screen (PPL-4), not here. It owns the add and edit forms for a User and the
 page's three rules: the id is shown but never typed in, nobody is deleted, and a password typed here is temporary
 (ADR-0038). A reset here is kept in Django's own admin log, with who and when, and not in the shop's audit trail: a
-person belongs to no one shop, and this page reads none. And a PIN's badge never opens the site (AUTH-4).
+person belongs to no one shop, and this page reads no shop's rows. And a PIN's badge never opens the site (AUTH-4). An
+edit of a person saves through change_person, which opens each shop where they work in turn, only to write their staff
+line there, so each shop's laptops hear of a new name, language or switch-off (SYNC-15).
 """
 
 from typing import Any, cast
@@ -23,6 +25,7 @@ from django.views.decorators.debug import sensitive_variables
 from apps.people.api.pin_session import PIN_SESSION
 from apps.people.login_counts import lift_wrong_password_count
 from apps.people.models import User
+from apps.people.services import change_person
 
 # allauth puts its own table of addresses on this site, and its login and reset trust that table. A row typed there
 # would be a login name for a person, set past the phone cleaner and the audit trail (PPL-2). Our User holds the email,
@@ -35,7 +38,7 @@ _admin_login = admin.site.login
 
 
 def _not_by_pin(request: HttpRequest) -> bool:
-    # A PIN's badge never opens this site, whoever's it is. The site reads every shop's rows (ADR-0037), and a badge is
+    # A PIN's badge never opens this site, whoever's it is. The site reads every shop's rows (ADR-0042), and a badge is
     # 4 digits typed at a shared counter; and what each visit asks of a badge (job_of_pin_session,
     # apps/people/selectors.py) is asked by the office routes' login, never here, so a copied badge, a suspended person
     # or a blocked device would still get in. Someone who may open the site logs in here with their password.
@@ -203,6 +206,15 @@ class UserAdmin(DjangoUserAdmin[User]):
             },
         ),
     )
+
+    def save_model(self, request: HttpRequest, obj: User, form: Any, change: bool) -> None:
+        # An edit saves through change_person, so a change every shop's laptops show (a name, a language, a switch-off)
+        # writes the person's line in each shop where they work (SYNC-15). A new person has no job yet, so nothing to
+        # tell: Django's own save.
+        if change:
+            change_person(obj, changed=form.changed_data)
+        else:
+            super().save_model(request, obj, form, change)
 
     def has_delete_permission(self, request: HttpRequest, obj: User | None = None) -> bool:
         # Nothing is deleted: a person who must not log in is switched off (`is_active`), and their name

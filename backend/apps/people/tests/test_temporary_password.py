@@ -248,9 +248,10 @@ def test_keys_on_another_side_count_as_more(shop_a: Shop, side_a: Side, give_rol
 def test_a_job_at_another_shop_is_not_looked_at_until_auth_7(
     shop_b: Shop, baba: StaffMember, asha: StaffMember
 ) -> None:
-    # Reading shop B's rows during shop A's visit would pass the guard, which is only for a login, before any shop is
-    # open (ADR-0037). Nothing is lost yet: with jobs at two shops she is refused at every office route, whatever her
-    # password. AUTH-7, which lets such a person work, must change this test: then, one password opens her job at both.
+    # Reading shop B's rows during shop A's visit, to decide who may, would pass the guard, which no door is for: a door
+    # finds a login's shop, or the shops a change to a person must reach, and reads their ids alone (ADR-0042). Nothing
+    # is lost yet: with jobs at two shops she is refused at every office route, whatever her password. AUTH-7, which
+    # lets such a person work, must change this test: then, one password opens her job at both.
     with shop_context(shop_b):
         add_staff(shop=shop_b, user=asha.user, display_name="Asha", by=None)
     set_for(asha, by=baba)

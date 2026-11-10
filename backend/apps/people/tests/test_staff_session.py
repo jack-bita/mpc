@@ -216,17 +216,27 @@ def test_logout_stops_office_routes(owner: StaffMember, phone: APIClient) -> Non
     assert code_of(phone) == (403, "not_authenticated")
 
 
-def test_person_door_reads_only_a_shop_id(owner: StaffMember) -> None:
-    # The door reads past the guard, so it reads as little as a login needs: shops' ids, in one query, by the person,
-    # two at most. Everything else is read through the guard, once that shop is open.
+def test_person_door_reads_only_a_shop_id(owner: StaffMember, shop_b: Shop) -> None:
+    # The door reads past the guard, so it reads as little as its callers need: shops' ids, in one query, by the
+    # person, every shop where they work, by id. The login counts them; a change to the person writes a line in each,
+    # in that order (ADR-0042, SYNC-15). Everything else is read through the guard, once each shop is open.
     with CaptureQueriesContext(connection) as queries:
         found = shops_of_person(owner.user_id)
 
     assert found == [owner.shop_id]
     [query] = queries.captured_queries
-    # The one column, under the name values_list() gives it; then the table, the person, and the limit.
+    # The one column, under the name values_list() gives it; then the table, the person, and the order: by the first
+    # column, the shop's id, which Django writes by its place in the list.
     assert query["sql"].startswith('SELECT "people_staffmember"."shop_id" AS "shop_id" FROM "people_staffmember" WHERE')
     assert '"people_staffmember"."user_id" =' in query["sql"]
-    assert query["sql"].endswith("LIMIT 2")
+    assert query["sql"].endswith("ORDER BY 1 ASC")
+    # Jobs at two more shops: every shop, by id, whichever job came first. The last job is at a shop whose id is lower
+    # than all the others, so only the door's own order can put it first: the rows' order on disk would put it last.
+    person = User.objects.get(pk=owner.user_id)
+    first = Shop.objects.create(id=uuid.UUID(int=1), name="Duka la Kwanza", code="KWANZA")
+    for shop in (shop_b, first):
+        with shop_context(shop):
+            add_staff(shop=shop, user=person, display_name="Baba", by=None)
+    assert shops_of_person(owner.user_id) == [first.pk, *sorted([owner.shop_id, shop_b.pk])]
     # Nobody's job leads to no shop.
     assert shops_of_person(uuid.uuid7()) == []

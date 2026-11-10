@@ -36,6 +36,7 @@ from apps.sync import bootstrap
 from apps.sync.api.serializers import BootstrapAnswer
 from apps.sync.registry import REGISTRY
 from apps.sync.selectors import last_change_number
+from tests.change_log import last_line
 from tests.concurrency import in_another_transaction
 
 pytestmark = pytest.mark.django_db
@@ -109,8 +110,10 @@ def test_bootstrap_cursor_is_the_shops_last_change(
 ) -> None:
     # The copy is the shop as of its last change: the device's first pull asks for what came after it (SYNC-3).
     _device, key = paired
-    # Nothing recorded yet: 0, which a pull reads as "from the start" (numbers start at 1, SYNC-1).
-    assert a_browser(key).get(BOOTSTRAP).json()["cursor"] == 0
+    # The shop's last line so far: setting it up wrote lines too, its side and drawer and its people (SYNC-15). A shop
+    # with none answers 0, which a pull reads as "from the start" (test_a_shop_with_no_change_is_at_zero).
+    start = a_browser(key).get(BOOTSTRAP).json()["cursor"]
+    assert start == last_line(shop_a)
     with shop_context(shop_a), recording_changes(shop_a):
         record_change(dawa)
         record_change(manager)
@@ -118,7 +121,7 @@ def test_bootstrap_cursor_is_the_shops_last_change(
     for _ in range(3):
         with shop_context(shop_b), recording_changes(shop_b):
             record_change(side_b)
-    assert a_browser(key).get(BOOTSTRAP).json()["cursor"] == 2
+    assert a_browser(key).get(BOOTSTRAP).json()["cursor"] == start + 2
 
 
 @pytest.mark.django_db(transaction=True)
@@ -132,11 +135,13 @@ def test_bootstrap_cursor_consistent(
     # Two connections, as two laptops are; `transaction=True`, so the rename really commits
     # (backend/tests/concurrency.py). Shown red by reading the cursor after the rows.
 
+    start = last_line(shop_a)
+
     def rename_then_read(shop: Shop) -> int:
         def owner_renames() -> None:
-            # The office's save, as SYNC-15's services will make it: the rename, and its line in the log.
-            with shop_context(shop_a), recording_changes(shop_a):
-                record_change(rename_side(dawa, version=dawa.version, name="Dawa Kuu", by=None))
+            # The office's save: the rename, and its line in the log, which rename_side writes itself (SYNC-15).
+            with shop_context(shop_a):
+                rename_side(dawa, version=dawa.version, name="Dawa Kuu", by=None)
 
         office, ended = in_another_transaction(owner_renames)
         office.join(timeout=5)
@@ -146,7 +151,7 @@ def test_bootstrap_cursor_consistent(
     monkeypatch.setattr(bootstrap, "last_change_number", rename_then_read)
     _device, key = paired
     answer = a_browser(key).get(BOOTSTRAP).json()
-    assert answer["cursor"] == 1
+    assert answer["cursor"] == start + 1
     assert [side["name"] for side in answer["side"]] == ["Dawa Kuu"]
 
 

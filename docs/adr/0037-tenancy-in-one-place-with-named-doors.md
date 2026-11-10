@@ -1,13 +1,18 @@
 ---
-status: accepted
+status: superseded
 date: 2026-11-02
 source: "AUTH-2, confirmed with Jack in chat at AUTH-2's review; supersedes ADR-0022 (03 §2 — AD8, §5.4)"
 standing: confirmed
 cost-to-change: medium
 revisit: "before a second real shop goes live (R3): switch on row-level security"
+superseded-by: ADR-0042
 ---
 
 # ADR-0037 · Tenancy is enforced in one place, with named doors; row-level security comes later
+
+> Superseded by [ADR-0042](0042-tenancy-in-one-place-with-doors-for-a-login-and-a-persons-change.md) on 2026-11-10
+> (SYNC-15): a door may serve a change to a person as well as a login, and the person's door reads every shop where
+> they work, in id order.
 
 > Supersedes [ADR-0022](0022-tenancy-in-one-place-rls-later.md). What changed: besides `system_context()`, two other
 > reads may pass the shop guard, each named and listed: the admin's `all_shops`, and the login doors.

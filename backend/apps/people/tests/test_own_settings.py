@@ -12,22 +12,38 @@
 
 It takes no key: everyone may change their own choices. It isn't an office route for that reason, as an office route
 asks every change for a key of its own (PPL-5), so the tenancy sweep doesn't call it (NOT_SHOP_ROUTES,
-backend/tests/sweep_lists.py). Its answer holds only the person's two choices, which this file proves instead. Fake
-data only: the repo is public (03 §10).
+backend/tests/sweep_lists.py). Its answer holds only the person's two choices, which this file proves instead. A
+choice reaches every shop where the person works: each shop's laptops show it on the person's staff row, so each shop's
+change log gets a line, in one transaction (SYNC-15). Fake data only: the repo is public (03 §10).
 """
 
 from collections.abc import Callable
+from contextlib import ExitStack
+from typing import Any
+from unittest import mock
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.test import Client
 from rest_framework.test import APIClient
 
+from apps.core.models import ChangeOp
 from apps.core.permissions import RoleTemplate
+from apps.core.sequences import next_numbers
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
-from apps.people.services import block, change_own_settings, confirm_pairing, set_pin, start_pairing, suspend
-from apps.shops.models import Side
+from apps.people.services import (
+    add_staff,
+    block,
+    change_own_settings,
+    confirm_pairing,
+    set_pin,
+    start_pairing,
+    suspend,
+)
+from apps.shops.models import Shop, Side
+from tests.change_log import lines_written
 
 pytestmark = pytest.mark.django_db
 
@@ -277,3 +293,67 @@ def test_settings_describe_nothing_to_options(staff_a: StaffMember) -> None:
     # OPTIONS would describe the route's form to anyone who asks; the office routes refuse it on purpose, as the API's
     # own description is the schema (apps/core/api/base.py). This route refuses it too.
     assert on_a_phone(staff_a).options(SETTINGS).status_code == 405
+
+
+def _two_shop_person(shop_a: Shop, shop_b: Shop) -> tuple[User, list[Shop]]:
+    # A person with a job at both shops, as AUTH-7 will allow: the jobs made in the order opposite to the shops' ids,
+    # so only the door's own order can put the shops in id order.
+    shops = sorted([shop_a, shop_b], key=lambda shop: shop.pk)
+    asha = User.objects.create_user(full_name="Asha Mfano")
+    for shop in reversed(shops):
+        with shop_context(shop):
+            add_staff(shop=shop, user=asha, display_name="Asha", by=None)
+    return asha, shops
+
+
+def test_own_settings_recorded_in_every_shop(shop_a: Shop, shop_b: Shop) -> None:
+    # Done when: a person's own language or font lands a staff line in every shop where they work, in one transaction.
+    # Asha picks the big font on her phone: each shop's laptops show her staff row, so each shop's log gets a line. One
+    # block per shop, by the shops' ids, one after another, never one inside another (the spy notes how deep each
+    # numbering runs): two such saves at once then take the shops' numbers in the same order, and never deadlock.
+    asha, shops = _two_shop_person(shop_a, shop_b)
+    numbered: list[tuple[object, int]] = []
+
+    def numbering(shop_id: Any, *args: Any) -> range:
+        numbered.append((shop_id, len(connection.atomic_blocks)))
+        return next_numbers(shop_id, *args)
+
+    with ExitStack() as reading:
+        lines = [reading.enter_context(lines_written(shop)) for shop in shops]
+        with mock.patch("apps.core.changes.next_numbers", side_effect=numbering):
+            change_own_settings(asha, font="second")
+
+    for shop, written in zip(shops, lines, strict=True):
+        with shop_context(shop):
+            job = StaffMember.objects.get(user=asha)
+        assert written == [("staff", job.pk, ChangeOp.UPSERT)]
+    assert [shop_id for shop_id, _depth in numbered] == [shop.pk for shop in shops]
+    assert numbered[0][1] == numbered[1][1]  # side by side, at the same depth
+
+
+def test_own_settings_all_or_nothing_across_shops(shop_a: Shop, shop_b: Shop) -> None:
+    # The second shop's numbering fails: the first shop's line, already numbered, goes back with the font itself, so no
+    # laptop is told of a change that never happened, and none misses one that did.
+    asha, shops = _two_shop_person(shop_a, shop_b)
+
+    def numbering(shop_id: Any, *args: Any) -> range:
+        if shop_id == shops[1].pk:
+            raise RuntimeError("the second shop's numbering failed")
+        return next_numbers(shop_id, *args)
+
+    with ExitStack() as reading:
+        lines = [reading.enter_context(lines_written(shop)) for shop in shops]
+        with mock.patch("apps.core.changes.next_numbers", side_effect=numbering), pytest.raises(RuntimeError):
+            change_own_settings(asha, font="second")
+
+    assert lines == [[], []]
+    assert User.objects.get(pk=asha.pk).font == "default"
+
+
+def test_the_route_records_the_change(staff_a: StaffMember) -> None:
+    # Through the route, which opens no shop: the save finds Asha's shop by itself, and its laptops hear of it.
+    with lines_written(staff_a.shop_id) as lines:
+        answer = on_a_phone(staff_a).patch(SETTINGS, {"language": "en"}, format="json")
+
+    assert answer.status_code == 200
+    assert lines == [("staff", staff_a.pk, ChangeOp.UPSERT)]
