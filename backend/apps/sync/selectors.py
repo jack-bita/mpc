@@ -3,9 +3,9 @@ copy is valid at (SYNC-2; 03 §6.1, §6.4).
 
 One function per table the registry sends (apps/sync/registry.py), each answering "which of this shop's rows does a
 device hold?": every side; the payment accounts in use; the people at work there; each rule's row in force today and
-every later one. The bootstrap sends all of them (SYNC-2); the pull will find a changed record among them, or learn that
-it left the lists (SYNC-3). What each row may show is the registry's fields, not this file's. And
-last_change_number, the cursor a copy is valid at.
+every later one. The bootstrap sends all of them (SYNC-2); the pull finds a changed record among them, or learns that
+it left the lists (SYNC-3). What each row may show is the registry's fields, not this file's. And the change log's two
+reads: last_change_number, the cursor a copy is valid at, and changes_after, the lines a pull sends.
 
 Each reads inside the shop it is given, which must be the one open (T1), and names it in its query too: under
 system_context() the guard shows every shop's rows (03 §5.11).
@@ -40,6 +40,20 @@ def last_change_number(shop: Shop) -> int:
     # read costs the same on a shop's first day and after years of changes.
     last = Change.objects.filter(shop=shop).order_by("-seq").values_list("seq", flat=True).first()
     return last or 0
+
+
+def changes_after(shop: Shop, cursor: int, limit: int) -> list[tuple[int, str, uuid.UUID]]:
+    """The shop's change log after `cursor`, oldest first, `limit` lines at most: each line's number, its table's code
+    and its record's id (SYNC-3). Not its `op`: the pull sends each record as it is now, which says that by itself."""
+    _check_open(shop)
+    # The log's own index (core_change_one_per_seq: shop, then number) holds the lines in this very order, so the read
+    # starts at the cursor and stops after `limit` lines: the same cost on a shop's first day and after years of sales.
+    lines = (
+        Change.objects.filter(shop=shop, seq__gt=cursor)
+        .order_by("seq")
+        .values_list("seq", "entity", "record_id")[:limit]
+    )
+    return list(lines)
 
 
 def side_rows(shop: Shop) -> QuerySet[Side]:
