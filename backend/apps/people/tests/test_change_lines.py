@@ -89,14 +89,16 @@ def test_a_person_switched_off_leaves_every_shops_laptops(staff_a: StaffMember, 
     assert (on_a, on_b) == ([("staff", staff_a.pk, UPSERT)], [("staff", at_b.pk, UPSERT)])
 
 
-def test_a_persons_name_or_language_reaches_every_shop(staff_a: StaffMember) -> None:
-    # The name on Juma's tile, and the language his screens speak, travel on his staff row too.
+def test_a_persons_name_or_language_reaches_every_shop(staff_a: StaffMember, shop_b: Shop) -> None:
+    # The name on Juma's tile, and the language his screens speak, travel on his staff row too, in both his shops.
     juma = User.objects.get(pk=staff_a.user_id)
+    with shop_context(shop_b):
+        at_b = add_staff(shop=shop_b, user=juma, display_name="Juma", by=None)
     for field, value in (("full_name", "Juma Mfano Mpya"), ("language", "en")):
-        with lines_written(staff_a.shop_id) as lines:
+        with lines_written(staff_a.shop_id) as at_a_lines, lines_written(shop_b) as at_b_lines:
             setattr(juma, field, value)
             change_person(juma, changed=[field])
-        assert lines == [("staff", staff_a.pk, UPSERT)], field
+        assert (at_a_lines, at_b_lines) == ([("staff", staff_a.pk, UPSERT)], [("staff", at_b.pk, UPSERT)]), field
     assert User.objects.get(pk=juma.pk).full_name == "Juma Mfano Mpya"
 
 
