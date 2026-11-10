@@ -1,5 +1,5 @@
-"""apps/sync/tests/test_bootstrap_secrets.py — nothing secret leaves the server for a shop's devices (SYNC-2; 03 §6.1,
-the sync rules).
+"""apps/sync/tests/test_bootstrap_secrets.py — nothing secret leaves the server for a shop's devices, by the bootstrap
+or by the pull (SYNC-2, SYNC-3; 03 §6.1, the sync rules).
 
 A shared laptop's copy of the shop is open to whoever uses the laptop next: Juma, at the Dawa counter, could read every
 byte of it. So these never travel:
@@ -11,10 +11,11 @@ byte of it. So these never travel:
     a phone, an email              a person's own, not the next person's at the laptop (UI-4)
     a buying price                 not every seller may see it (02 §7); no table holds one yet, so the names catch it
 
-Three checks. The bootstrap's answer, as sent, holds none of a real person's secrets, and no name in it looks secret.
-Every field the registry sends is checked by its name, by what it reads, and by what it shows of a linked row, in every
-field it holds inside it too (a list's items, a dict's values, a nested record), so a field named innocently but reading
-`user.password`, or a product's batches shown by their `unit_cost`, is caught too. And the check catches a secret
+Three checks. The bootstrap's answer and a pull's page, as sent, hold none of a real person's secrets, and no name in
+them looks secret. Every field the registry sends, and every field a pull's page adds around a record, is checked by its
+name, by what it reads, and by what it shows of a linked row, in every field it holds inside it too (a list's items, a
+dict's values, a nested record), so a field named innocently but reading `user.password`, or a product's batches shown
+by their `unit_cost`, is caught too. And the check catches a secret
 planted each of those ways, so it can't quietly stop working. A field that looks secret travels only by a decision
 written on its card (TRAVELS_BY_DECISION). Fake data only: the repo is public (03 §10).
 """
@@ -34,7 +35,9 @@ from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, confirm_pairing, set_pin, start_pairing
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
+from apps.sync.api.serializers import CHANGE_RECORDS, PullAnswer
 from apps.sync.registry import REGISTRY
+from tests.change_log import last_line
 
 pytestmark = pytest.mark.django_db
 
@@ -42,6 +45,7 @@ GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
 # The route and the cookie's name, written out: a promise to the app and to the browser (test_bootstrap.py says why).
 BOOTSTRAP = "/api/sync/v1/bootstrap/"
+PULL = "/api/sync/v1/pull/"
 KEY_COOKIE = "device_key"
 
 # A word that marks a secret, as a whole word of a name, plural too: `pin_hash`, `password`, `unit_cost`, `phones`,
@@ -135,29 +139,25 @@ def paired(staff_a2: StaffMember, dawa: Side, give_role: GiveRole) -> tuple[Devi
     return device, asked.key
 
 
-def test_bootstrap_never_sends_costs_or_pins(shop_a: Shop, paired: tuple[Device, str], give_role: GiveRole) -> None:
-    # Done when: a test proves that no buying price, PIN hash or password ever leaves the server. Asha has every secret
-    # a person can have here, and sells on every side, so her row is sent whole, keys and all.
+def hire_asha(shop: Shop, give_role: GiveRole) -> StaffMember:
+    # Asha has every secret a person can have here, and sells on every side, so her row is sent whole, keys and all.
     user = User.objects.create_user(
         full_name="Asha Mfano", phone="+255712345678", email="asha@example.com", password="siri-ya-mfano-2026"
     )
-    with shop_context(shop_a):
-        asha = add_staff(shop=shop_a, user=user, display_name="Asha", by=None)
+    with shop_context(shop):
+        asha = add_staff(shop=shop, user=user, display_name="Asha", by=None)
         set_pin(asha, "2580", by=None)
     give_role(asha, RoleTemplate.SELLER, None)
     asha.refresh_from_db()
-    user.refresh_from_db()
-    device, key = paired
-    browser = APIClient()
-    browser.cookies[KEY_COOKIE] = key
-    response = browser.get(BOOTSTRAP)
-    assert response.status_code == 200
-    # Her row is there: the check below looks at a copy that holds her, not an empty one.
-    assert str(asha.pk) in [person["id"] for person in response.json()["staff"]]
-    sent = response.content.decode()
+    asha.user.refresh_from_db()
+    return asha
+
+
+def assert_holds_no_secret(sent: str, asha: StaffMember, device: Device, key: str) -> None:
+    # An answer, as sent, holds none of Asha's secrets, nor the laptop's, and no name in it looks secret.
     secrets = {
         "the PIN's hash": asha.pin_hash,
-        "the password's hash": user.password,
+        "the password's hash": asha.user.password,
         "the phone": "+255712345678",
         "the email": "asha@example.com",
         "the device's key": key,
@@ -169,6 +169,38 @@ def test_bootstrap_never_sends_costs_or_pins(shop_a: Shop, paired: tuple[Device,
     assert not_decided(names) == []
 
 
+def a_browser(key: str) -> APIClient:
+    # A browser that holds this device's key in its cookie, as the device's does.
+    browser = APIClient()
+    browser.cookies[KEY_COOKIE] = key
+    return browser
+
+
+def test_bootstrap_never_sends_costs_or_pins(shop_a: Shop, paired: tuple[Device, str], give_role: GiveRole) -> None:
+    # Done when: a test proves that no buying price, PIN hash or password ever leaves the server.
+    asha = hire_asha(shop_a, give_role)
+    device, key = paired
+    response = a_browser(key).get(BOOTSTRAP)
+    assert response.status_code == 200
+    # Her row is there: the check looks at a copy that holds her, not an empty one.
+    assert str(asha.pk) in [person["id"] for person in response.json()["staff"]]
+    assert_holds_no_secret(response.content.decode(), asha, device, key)
+
+
+def test_pull_never_sends_costs_or_pins(shop_a: Shop, paired: tuple[Device, str], give_role: GiveRole) -> None:
+    # The same for a pull (SYNC-3): a page wraps each record in a change of its own, so what it adds around the record
+    # must hold no secret either. Asha joins after the laptop's mark, so her joining, her PIN and her keys are all on
+    # the page, each with her whole row.
+    device, key = paired
+    start = last_line(shop_a)
+    asha = hire_asha(shop_a, give_role)
+    response = a_browser(key).get(PULL, {"cursor": start})
+    assert response.status_code == 200
+    rows = [change["data"] for change in response.json()["changes"] if change["id"] == str(asha.pk)]
+    assert rows and all(rows)  # her row, sent, not an archive with none
+    assert_holds_no_secret(response.content.decode(), asha, device, key)
+
+
 def test_no_registry_field_reads_a_secret() -> None:
     # Every field each table sends, and every field it holds inside it, by its name, by what it reads and by what it
     # shows of a linked row: a field a later card adds, a product's `cost_price` above all (CAT-1), turns this red until
@@ -177,6 +209,16 @@ def test_no_registry_field_reads_a_secret() -> None:
     assert not_decided(found) == []
     # A decision for a field that no longer looks secret, or is no longer sent, is stale: it goes from the list.
     assert set(TRAVELS_BY_DECISION) <= {finding.split(":")[0] for finding in found}
+
+
+def test_no_pull_field_reads_a_secret() -> None:
+    # What a pull's page adds around the registry's records (SYNC-3): its own fields (the cursor, the server's time),
+    # and each table's change (the line's number, table, record and op), whose `data` is the registry's record, checked
+    # again here as the change holds it. A field a later card adds to either, say who made the change, is caught.
+    found = secret_fields(PullAnswer(), "pull.")
+    for code, change in CHANGE_RECORDS.items():
+        found += secret_fields(change(), f"pull.changes.{code}.")
+    assert not_decided(found) == []
 
 
 class _Inner(serializers.Serializer[Any]):

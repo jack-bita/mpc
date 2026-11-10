@@ -6,7 +6,8 @@ dated rule's row. Each names its fields one by one, never `__all__`, so a column
 until someone decides it travels. What must never travel, buying prices, PIN hashes and passwords above all (03 §6.1,
 the sync rules), is checked against these lists by test_bootstrap_secrets.py. Read-only: devices never write through
 them; what a device makes travels as a document (SYNC-4). Then the bootstrap's answer, and the pull's question and
-answer, as the API schema describes them: a pull's change carries the same records, so the same check covers it.
+answer, as the API schema describes them. A pull's change carries the same records, and test_bootstrap_secrets.py checks
+what it adds around them too, field by field and as sent.
 """
 
 from typing import Any
