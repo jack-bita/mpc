@@ -48,6 +48,9 @@ LINK_TYPES: dict[str, str] = {
     # A dated rule's row, such as next week's late fine: the change log's lines about it, and the bootstrap's list of
     # rules, which devices keep a copy of (SYNC-2). A ledger, so it has no edit history to name it.
     "setting": "shops.Setting",
+    # A pushed document's line in the receipt book: the flag an invalid document raises names it (SYNC-4). A ledger,
+    # so it has no edit history to name it.
+    "pushed_document": "sync.PushedDocument",
 }
 
 
