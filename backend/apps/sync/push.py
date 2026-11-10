@@ -28,6 +28,7 @@ from rest_framework import exceptions
 from apps.control.models import FlagKind
 from apps.control.services import raise_flag
 from apps.core.acting import acting_as
+from apps.core.api.errors import INVALID as ONLY_FIELDS_WRONG
 from apps.core.api.errors import refusal_parts
 from apps.core.changes import recording_changes
 from apps.people.models import Device, StaffMember
@@ -153,8 +154,15 @@ def _save(
         if twin is not None:
             return _replay(twin)
         if isinstance(refusal, ValidationError):
-            # A refusal of the saving code's own, for what can't be saved even with a flag.
+            # A refusal of the saving code's own, for what can't be saved even with a flag. Its check before the insert
+            # (full_clean) reads through the shop's guard: it calls an id of a row of this shop "unique", while another
+            # shop's only the insert finds. So that "unique" is left out, as CORE-6's create does
+            # (_without_the_ids_clash, apps/core/api/base.py): the rest of what is wrong is the answer, else the id is
+            # taken, the same two answers as for another shop's row (03 §5.4).
             code, fields = refusal_parts(refusal)
+            fields, an_id_was_taken = _without_ids_taken(fields)
+            if an_id_was_taken and not fields and code == ONLY_FIELDS_WRONG:
+                return _invalid(device, sent, received_at, maker, "id.taken", {})
             return _invalid(device, sent, received_at, maker, code, fields)
         if _id_taken(refusal):
             # No twin, yet an id clashes: a row this shop can't see has it, another shop's (03 §5.4). Answered without
@@ -224,6 +232,21 @@ def _replay(line: PushedDocument) -> Answer:
         code=line.reason,
         fields=line.reason_fields,
     )
+
+
+def _without_ids_taken(fields: dict[str, list[str]]) -> tuple[dict[str, list[str]], bool]:
+    # The refusal's fields less "unique" on an id, the document's (`id`) or one of its rows' (`lines.0.id`): every such
+    # id is the laptop's own. And whether one was there.
+    kept: dict[str, list[str]] = {}
+    taken = False
+    for name, codes in fields.items():
+        if name == "id" or name.endswith(".id"):
+            rest = [code for code in codes if code != "unique"]
+            taken = taken or len(rest) < len(codes)
+            codes = rest
+        if codes:
+            kept[name] = codes
+    return kept, taken
 
 
 def _id_taken(error: IntegrityError) -> bool:

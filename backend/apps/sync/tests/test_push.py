@@ -297,6 +297,49 @@ def test_a_refusal_of_the_saving_code_is_invalid(
     assert _tickets(shop_a) == []
 
 
+def _checked_first(document: Document, payload: dict[str, Any]) -> list[Flag]:
+    # A saving code that checks its row before saving it (full_clean), as a service may: twice the pretend sale's text,
+    # so a long one also breaks the text's own rule.
+    shop_id = document.device.shop_id
+    Ticket(
+        id=document.id,
+        shop_id=shop_id,
+        device=document.device,
+        device_seq=document.device_seq,
+        client_time=document.client_time,
+        received_at=document.received_at,
+        text=payload["text"] * 2,
+    ).full_clean()
+    return post_ticket(document, payload)
+
+
+@pytest.mark.parametrize(
+    ("text", "answer"),
+    [("2 bags", ("id.taken", {})), ("x" * 60, ("invalid", {"text": ["max_length"]}))],
+    ids=["only_the_id", "and_the_text"],
+)
+def test_an_id_taken_in_this_shop_gets_the_same_answer_as_in_another(
+    monkeypatch: pytest.MonkeyPatch,
+    shop_a: Model,
+    device_a: Device,
+    staff_a: StaffMember,
+    text: str,
+    answer: tuple[str, dict[str, list[str]]],
+) -> None:
+    # A saving code's own check reads through the shop's guard (CORE-2): it finds an id taken by a row of this shop, a
+    # row on a side the laptop's people can't see included, and calls it "unique", while another shop's row only the
+    # insert finds, as `id.taken`. Two answers would tell a laptop which; so that "unique" is left out, as CORE-6's
+    # create does: the rest is the answer, else the id is taken (03 §5.4).
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=_checked_first))
+    taken = uuid.uuid7()
+    Ticket(
+        id=taken, shop_id=shop_a.pk, device=device_a, device_seq=9, client_time=CLIENT_TIME, received_at=RECEIVED_AT
+    ).save()
+    sent = _sent(1, staff_a, text=text, id=taken)
+    code, fields = answer
+    assert _push(device_a, [sent]) == [Answer(id=taken, status="invalid", code=code, fields=fields)]
+
+
 def test_another_database_rule_answers_retry(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
     # A clash on a rule other than an id the laptop made: here, a ticket this laptop already has under number 5, made
     # some other way, with no line in the answer log (one ticket per laptop number, tests/probe/models.py). The new
