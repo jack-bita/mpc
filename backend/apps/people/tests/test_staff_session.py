@@ -230,9 +230,13 @@ def test_person_door_reads_only_a_shop_id(owner: StaffMember, shop_b: Shop) -> N
     assert query["sql"].startswith('SELECT "people_staffmember"."shop_id" AS "shop_id" FROM "people_staffmember" WHERE')
     assert '"people_staffmember"."user_id" =' in query["sql"]
     assert query["sql"].endswith("ORDER BY 1 ASC")
-    # A job at a second shop: both shops, by id, whichever job came first.
-    with shop_context(shop_b):
-        add_staff(shop=shop_b, user=User.objects.get(pk=owner.user_id), display_name="Owner", by=None)
-    assert shops_of_person(owner.user_id) == sorted([owner.shop_id, shop_b.pk])
+    # Jobs at two more shops: every shop, by id, whichever job came first. The last job is at a shop whose id is lower
+    # than all the others, so only the door's own order can put it first: the rows' order on disk would put it last.
+    person = User.objects.get(pk=owner.user_id)
+    first = Shop.objects.create(id=uuid.UUID(int=1), name="Duka la Kwanza", code="KWANZA")
+    for shop in (shop_b, first):
+        with shop_context(shop):
+            add_staff(shop=shop, user=person, display_name="Baba", by=None)
+    assert shops_of_person(owner.user_id) == [first.pk, *sorted([owner.shop_id, shop_b.pk])]
     # Nobody's job leads to no shop.
     assert shops_of_person(uuid.uuid7()) == []
