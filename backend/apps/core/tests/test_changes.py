@@ -6,8 +6,9 @@ The block numbers them only at its end, still inside the transaction, so the num
 commit (03 §6.4). These tests pin what one connection can show: the numbers come at the end, in the order recorded;
 a rollback leaves no line and no gap; a record changed twice is one line; record_change refuses to run outside a
 block or for another shop's record; a block inside another of the same shop waits for the outer end, and drops its
-own changes if it fails; and a block that changed nothing takes no number. What only two connections at once can
-show, that the order holds when two saves meet, is in test_change_order.py.
+own changes if it fails; a block that changed nothing takes no number; and a block hands back the last number it took,
+once it has ended, the posted_seq of a pushed document (SYNC-4). What only two connections at once can show, that the
+order holds when two saves meet, is in test_change_order.py.
 
 The rows come from backend/conftest.py: a side, a staff member's job and a paired device, each a table with a link
 type code (apps/core/links.py). They are typed by their base, ShopScoped: `core` may not name a higher app's table,
@@ -302,3 +303,75 @@ def test_record_change_refused_after_a_failed_block(shop_a: Model, side_a: ShopS
         with pytest.raises(TransactionManagementError, match=OUTSIDE_A_BLOCK):
             record_change(side_a)
         assert _log(shop_a, start) == []
+
+
+# The block's last number (SYNC-4). A pushed document's answer says the last change number its save took, its
+# `posted_seq`: the laptop keeps the document's stock and debt changes on its screens until its pull passes that number,
+# and then drops them, as the server's own lists now hold them (03 §6.4). The block hands it back, once it has ended:
+#
+#     with recording_changes(shop) as numbers:
+#         ...save the sale...
+#     numbers.last   # 43, or None for a save that changed nothing a laptop keeps
+#
+# Unknown until then, so asking any sooner is refused, never answered with a guess.
+NOT_ENDED = r"once its block has ended"
+
+
+def test_block_hands_back_its_last_number(shop_a: Model, side_a: ShopScoped, staff_a: ShopScoped) -> None:
+    # Asha's sale writes two lines, 42 and 43 on a real day: its answer says 43, the last. The shop's next save goes on
+    # from there, and hands back its own last number.
+    start = last_line(shop_a)
+    with shop_context(shop_a):
+        with recording_changes(shop_a) as numbers:
+            record_change(side_a)
+            record_change(staff_a)
+        assert numbers.last == start + 2
+        with recording_changes(shop_a) as second:
+            record_change(staff_a, ARCHIVE)
+        assert second.last == start + 3
+
+
+def test_block_with_no_change_hands_back_no_number(shop_a: Model) -> None:
+    # A save that changed nothing a laptop keeps took no number: None, so its laptop has nothing to wait for.
+    with shop_context(shop_a):
+        with recording_changes(shop_a) as numbers:
+            pass
+        assert numbers.last is None
+
+
+def test_last_number_refused_inside_the_block(shop_a: Model, side_a: ShopScoped) -> None:
+    # Inside the block the numbers are not taken yet: they come at its very end (lesson 1). An answer now could only be
+    # a guess, and a wrong posted_seq makes a laptop drop a sale's stock change too soon, or never.
+    with shop_context(shop_a), recording_changes(shop_a) as numbers:
+        record_change(side_a)
+        with pytest.raises(TransactionManagementError, match=NOT_ENDED):
+            _ = numbers.last
+
+
+def test_joined_block_hands_back_the_outer_blocks_last_number(
+    shop_a: Model, side_a: ShopScoped, staff_a: ShopScoped, device_a: ShopScoped
+) -> None:
+    # A service called by another joins its block, so its numbers come at the outer end (lesson 2). It hands back what
+    # the outer block hands back: unknown when the inner part ends, then the whole save's last number, which is the
+    # document's posted_seq whichever service took it.
+    start = last_line(shop_a)
+    with shop_context(shop_a):
+        with recording_changes(shop_a) as outer:
+            record_change(side_a)
+            with recording_changes(shop_a) as inner:
+                record_change(staff_a)
+            with pytest.raises(TransactionManagementError, match=NOT_ENDED):
+                _ = inner.last
+            record_change(device_a)
+        assert inner.last == outer.last == start + 3
+
+
+def test_failed_block_hands_back_no_number(shop_a: Model, side_a: ShopScoped) -> None:
+    # A save that failed took no number, or gave it back with its rollback: there is no number to hand back, and asking
+    # is refused, as inside the block, so the failure can't pass for a save that changed nothing (None).
+    with shop_context(shop_a):
+        with pytest.raises(RuntimeError), recording_changes(shop_a) as numbers:
+            record_change(side_a)
+            raise RuntimeError("the save failed")
+        with pytest.raises(TransactionManagementError, match=NOT_ENDED):
+            _ = numbers.last
