@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.40 · 10 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.41 · 10 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.41** (10 Nov 2026, SYNC-4): how the push is built (§6.3, 04 v1.56): each document in the device's order, in a transaction of its own, its answer kept in the receipt book (`sync.PushedDocument`, a new ledger, §5.6), so a repeat gets the first answer; a broken envelope refuses the whole push; the body names no device, and the device's app version and unsent count come with SYNC-5. How `CounterRecord` is built (§5.3). Marked **(v1.41)**.
 
 **Changes in v1.40** (10 Nov 2026, SYNC-3): how the pull is built (§6.4, 04 v1.55). It reads the shop's lines after the device's cursor, then each record they name as it is now, through the registry; a record no longer among its table's rows goes as `archive`. Each page says the next cursor, whether more changes wait, the server time and `min_app_version`, empty until SYNC-13. Marked **(v1.40)**.
 
@@ -330,7 +332,7 @@ apps/sales/
 
 - **`ShopScoped`** (abstract): `id` (UUIDv7 primary key), `shop`, `created_at`, `created_by`, and the scoped manager (§5.4).
 - **`Editable`** adds `updated_at`, `updated_by`, `version`. An edit sends the version it read; a stale one gets `409 version_conflict`.
-- **`CounterRecord`** adds `device`, `device_seq`, `client_time`, `received_at`.
+- **`CounterRecord`** adds `device`, `device_seq`, `client_time`, `received_at`. An abstract base on `ShopScoped`, none of the four left empty, the device `PROTECT`ed; a counter ledger, such as a clock-in, builds on both `AppendOnly` and `CounterRecord` (SYNC-4) **(v1.41)**.
 - **`AppendOnly`**: the ORM refuses to update or delete; the database trigger (§5.6) backs it up.
 - Every foreign key uses `on_delete=PROTECT`: nothing is deleted (T3).
 
@@ -377,7 +379,7 @@ Confirming a one-screen sale:
 
 - A migration helper adds a trigger to each ledger table that raises an error on UPDATE or DELETE.
 - **Payments, money movements and attendance events** allow exactly one change: filling the void stamp (`voided_at`, `voided_by`, `void_reason`, `void_approval`) once. Every other column must stay equal (the trigger compares the old and new rows as JSON, without those columns). For attendance events this is 02 §12's `void` (by, reason) **(v1.1)**.
-- Covered tables: stock movements, balance entries, allocations, attendance events (void only), audit events, the edit history **(v1.11)**, flag notes and the people a flag names **(v1.10)**, the change log, payments and money movements (void only), and the dated-rule tables — prices, product costs, settings, pay rates ✚.
+- Covered tables: stock movements, balance entries, allocations, attendance events (void only), audit events, the edit history **(v1.11)**, flag notes and the people a flag names **(v1.10)**, the change log, the push's receipt book **(v1.41)**, payments and money movements (void only), and the dated-rule tables — prices, product costs, settings, pay rates ✚.
 - A flag is not a ledger, but it keeps its facts the same way: a trigger of its own (`control_flag_forward_only`) lets only its status change, and only forward, and refuses a DELETE (02 §13) **(v1.10)**.
 - Tests prove that an UPDATE fails.
 
@@ -549,6 +551,7 @@ Once that commits, the sale exists, even if the browser closes a moment later. T
 - Broken business rules never stop a batch (accept, then flag).
 - The server keeps each device's last `device_seq`; a jump raises a `device_gap` Flag (the missing record may still arrive).
 - Repayments: the device suggests allocations from its last-known balances; the server allocates again, oldest first, at posting, unless staff picked specific debts ✚.
+- How it is built **(v1.41)**: `POST /api/sync/v1/push/`, with the device's key and its CSRF token, takes `{documents: [...]}`, up to 100; the device is the key's, so the body names none, and `app_version` and `unsent_count` come with SYNC-5. Each envelope is checked first (a UUIDv7 id, a type, a shape version and a number from 1, the device's time, the maker's id, a payload that is an object): a broken one refuses the whole push (400 `invalid`, under `documents.N.<field>`), as the device's sync code writes it, not a person. Then `push()` (`apps/sync/push.py`) takes the documents in `device_seq` order. A document with a line in the receipt book (`sync.PushedDocument`) gets `duplicate`, with `first` saying what its first answer was, and that answer. Otherwise its type and version must be on the list (`DOCUMENT_TYPES`, `apps/sync/document_types.py`: shape, saving code, permission), its maker a staff member of this shop, and its payload in its type's shape, or it is `invalid`, with the error shape's `code` and `fields`. It is saved in one transaction, as its maker on this device (X3), inside a `recording_changes` block the saving code's services join; its line is written after the block, in the same transaction, with the block's last number as its `posted_seq`. After any refusal the receipt book is read again: a twin's line is the answer; otherwise a primary-key clash is `id.taken`, revealing nothing of the row, and any other error is `retry`: the batch stops there, with no answer for the documents after it. An invalid document's line and its `invalid_document` flag are written together, so a repeat raises no second flag. The receipt book keeps one line per document in a shop, never a `duplicate` or a `retry`. A device's number is not unique in it, as a device wiped and started again from 1 would have every new document refused (SYNC-5). The permission a type names is checked by SYNC-5.
 
 ### 6.4 Pull and the change log
 
