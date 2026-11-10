@@ -375,3 +375,34 @@ def test_failed_block_hands_back_no_number(shop_a: Model, side_a: ShopScoped) ->
             raise RuntimeError("the save failed")
         with pytest.raises(TransactionManagementError, match=NOT_ENDED):
             _ = numbers.last
+
+
+def test_a_block_inside_a_part_passes_its_last_number_to_the_block_around_it(
+    shop_a: Model, side_a: ShopScoped, staff_a: ShopScoped
+) -> None:
+    # A push's block names nothing itself: the saving code saves inside a part of its own (an `atomic()`), where a
+    # service's block numbers on its own (test_block_inside_a_part_that_can_fail_alone_numbers_on_its_own). The save
+    # still took a number, so the push's block hands it back, not None: with None, the laptop would drop the document's
+    # "still waiting" stock at once, before its pull brings the change (03 §6.4). When the outer block names a change
+    # too, its own number, taken after, is the save's last.
+    start = last_line(shop_a)
+    with shop_context(shop_a):
+        with recording_changes(shop_a) as outer, transaction.atomic(), recording_changes(shop_a):
+            record_change(side_a)
+        assert outer.last == start + 1
+        with recording_changes(shop_a) as outer:
+            with transaction.atomic(), recording_changes(shop_a):
+                record_change(side_a)
+            record_change(staff_a)
+        assert outer.last == start + 3
+
+
+def test_numbers_of_a_part_that_failed_are_not_handed_back(shop_a: Model, side_a: ShopScoped) -> None:
+    # The inner part numbered, then the service around it failed and the outer block carried on without it: those
+    # numbers rolled back with it, so the outer block, which named nothing else, hands back none.
+    with shop_context(shop_a):
+        with recording_changes(shop_a) as outer, pytest.raises(RuntimeError), recording_changes(shop_a):
+            with transaction.atomic(), recording_changes(shop_a):
+                record_change(side_a)
+            raise RuntimeError("the service failed after its part numbered")
+        assert outer.last is None

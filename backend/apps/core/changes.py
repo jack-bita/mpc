@@ -65,7 +65,9 @@ class ChangeNumbers:
     def last(self) -> int | None:
         # Unknown until the numbers are taken, at the block's very end: inside it, inside a joined block before the
         # outer one ends, and after a failure, which took none. Refused then, never a guess: a wrong posted_seq makes a
-        # laptop drop a sale's pending stock change too soon, or never (03 §6.4).
+        # laptop drop a sale's pending stock change too soon, or never (03 §6.4). Once known, it stays: if what is
+        # around the block fails later, the number rolled back with it, and whoever reads it then must not use it, as
+        # the push never does (its line rolls back in the same transaction).
         if not self._ended:
             raise TransactionManagementError("A block's last change number is known once its block has ended.")
         return self._last
@@ -92,6 +94,11 @@ class _Block:
     # What the block hands back: its last number, filled in at its end. A block that joins this one hands back this
     # same object, as its numbers come at this block's end (SYNC-4).
     numbers: ChangeNumbers = field(default_factory=ChangeNumbers)
+    # The last number taken by a block of its own of the same shop, opened inside one of this block's parts (an
+    # `atomic()` or `editing()` within it), which numbers at its own end. They are the same save's numbers, so this
+    # block hands back the later of its own and these: a push's posted_seq is never None when its save took a number
+    # (SYNC-4's review).
+    inner_last: int | None = None
 
 
 def _depth() -> int:
@@ -125,7 +132,7 @@ def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[ChangeNumbers]
         # would stay locked from now until the outer commit, making the shop's other saves wait longer.
         # Its own savepoint, as any nested `atomic()` has: if this part fails and the outer service carries on, its
         # writes roll back, so what it recorded must go too, any outer record it changed included.
-        before = dict(outer.changes)
+        before, inner_before = dict(outer.changes), outer.inner_last
         try:
             with transaction.atomic():
                 outer.levels.append(_depth())  # changes may be named here, at this block's own level
@@ -135,8 +142,10 @@ def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[ChangeNumbers]
                 finally:
                     outer.levels.pop()
         except BaseException:
+            # Numbers a block inside this part took went back with it too.
             outer.changes.clear()
             outer.changes.update(before)
+            outer.inner_last = inner_before
             raise
         return
     # A block of its own, numbered at its own end: the outermost block of this shop; or one inside an `atomic()` within
@@ -156,6 +165,12 @@ def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[ChangeNumbers]
             # it, so no number is taken, and the block's transaction (its savepoint, inside one already open) rolls
             # back. Numbers taken here go back too if what is around the block fails later: no line and no gap.
             _number_and_write(block)
+            if outer is not None and outer.shop_id == shop_id:
+                # Inside a part of this shop's block: the same save, numbered here, before the outer block's own. Passed
+                # up, so the outer block hands back the save's last number. Should the part around this block roll
+                # back later, the number stays passed up: a posted_seq a little too late, so a laptop waits for one more
+                # change before dropping its pending effects, which does no harm; too early would.
+                outer.inner_last = max(outer.inner_last or 0, block.numbers.last or 0) or None
     finally:
         _open_block.reset(token)  # the visit's block is the outer one again, or none
 
@@ -164,7 +179,9 @@ def _number_and_write(block: _Block) -> None:
     # A save that changed nothing devices see takes no number, so it never locks the counter, and never makes the
     # shop's other saves wait.
     if not block.changes:
-        block.numbers.ended(None)  # no number taken: a laptop has nothing to wait for
+        # No number taken here: a laptop has nothing to wait for, unless a block inside one of this block's parts took
+        # some for the same save.
+        block.numbers.ended(block.inner_last)
         return
     # All the numbers in one go: one lock, one write, however many records changed. From here until the commit the
     # counter's row stays locked, so no later save of this shop can number before this one commits.
@@ -174,7 +191,8 @@ def _number_and_write(block: _Block) -> None:
         Change(shop_id=block.shop_id, seq=seq, entity=entity, record_id=record_id, op=op)
         for seq, ((entity, record_id), op) in zip(numbers, block.changes.items(), strict=True)
     )
-    # The last of them, handed back once the block ends: the save's posted_seq (SYNC-4).
+    # The last of them, handed back once the block ends: the save's posted_seq (SYNC-4). Later than any a block inside
+    # one of its parts took, as those were taken before this, from the same counter.
     block.numbers.ended(numbers[-1])
 
 
