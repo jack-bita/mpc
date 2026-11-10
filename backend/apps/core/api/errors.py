@@ -98,6 +98,15 @@ def handle_error(exc: Exception, context: dict[str, Any]) -> Response | None:
     return response
 
 
+def refusal_parts(exc: DjangoValidationError | exceptions.ValidationError) -> tuple[str, dict[str, list[str]]]:
+    """A refusal's code and each wrong field's codes, as the one error shape names them, for an answer that carries a
+    refusal without being one: a pushed document's `invalid` (SYNC-4). Django's refusal, from a service, or DRF's,
+    from a serializer's checks."""
+    problems = _problems_from_django(exc) if isinstance(exc, DjangoValidationError) else _problems_from_drf(exc.detail)
+    shape = _shape(problems)
+    return shape["code"], shape["fields"]
+
+
 def _problems_from_django(exc: DjangoValidationError) -> list[_Problem]:
     # full_clean files each problem under a field's name, or under "__all__" for the whole record. A
     # service's refusal names no field at all: it has only a list of messages.

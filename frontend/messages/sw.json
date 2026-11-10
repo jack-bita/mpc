@@ -296,6 +296,7 @@
     "incorrect_type": "Thamani hii si ya aina sahihi.",
     "unique": "Hiki tayari kipo.",
     "not_a_list": "Orodha inahitajika hapa.",
+    "not_a_dict": "Kundi la sehemu linahitajika hapa.",
     "empty": "Orodha hii haiwezi kuwa tupu.",
     "max_string_length": "Namba ni ndefu mno.",
     "null_characters_not_allowed": "Maandishi yana herufi isiyoruhusiwa.",
@@ -311,6 +312,11 @@
       "reason_required": "Andika sababu.",
       "not_active": "Kifaa hiki hakitumiki sasa, kwa hiyo hakiwezi kuzuiwa.",
       "not_blocked": "Kifaa hiki hakijazuiwa."
+    },
+    "document": {
+      "type_unknown": "Seva haipokei aina hii ya kumbukumbu. Sasisha programu.",
+      "version_unknown": "Kumbukumbu hii ni ya toleo jingine la programu. Sasisha programu.",
+      "maker_unknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili."
     },
     "session": {
       "wrong_device": "Kuingia huku ni kwa kifaa kingine. Ingia tena hapa."

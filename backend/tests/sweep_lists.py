@@ -82,6 +82,9 @@ DEVICE_ROUTES_WITHOUT_A_LOOK: dict[str, str] = {
     # PIN login: its answer is empty, or a refusal's code and nothing more, never a name or a shop, on its own device or
     # on another shop's (AUTH-4).
     "auth-pin-login": "test_pin_login_answers_hold_nothing_of_any_shop",
+    # The push (SYNC-4): its answers name only the documents sent, by the ids the laptop sent, with codes; shop B's
+    # laptop sending shop A's ids is refused without a word of A.
+    "sync-push": "test_push_answers_hold_nothing_of_another_shop",
 }
 
 # App files that may build a query by hand, `models.QuerySet(Table)`, which starts from no manager and so from

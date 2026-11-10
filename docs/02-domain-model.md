@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.20 · 5 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.21 · 10 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -45,6 +45,8 @@
 **Changes in v1.19** (5 Nov 2026, AUTH-8's review): X3 now says what §13 already allowed: a visit with no device names none (§16). Marked **(v1.19)**.
 
 **Changes in v1.20** (5 Nov 2026, the design-system cards): a choice by Jack. A person's font is on `User`, beside their language, so it follows them to every device (§5, ADR-0039, 04 v1.40). Marked **(v1.20)**.
+
+**Changes in v1.21** (10 Nov 2026, SYNC-4): a new Flag kind, `invalid_document`: a document a device pushed that the server can't save, raised about its line in the push's answer log, a new append-only record (§13, T2; 03 v1.41). A word for a document a device sends: *kumbukumbu* (Jack, §21). Marked **(v1.21)**.
 
 ---
 
@@ -473,7 +475,7 @@ Advances come from `MoneyMovement` `staff_advance` and are deducted in the next 
 ## 13. Control — module `control`
 
 **Flag** [R1] ✚ — one review queue for every difference and every offline rule break.
-- `kind`: `cash_difference` · `count_difference` · `delivery_difference` · `transfer_difference` · `negative_stock` · `duplicate_code` · `late_record` · `unverified_time` · `missing_clock_out` · `suspended_staff_activity` · `device_gap` · `balance_mismatch` · `open_bag_difference` · `production_loss` · `total_mismatch` · `permission_break` · `drawer_conflict` **(v1.1)** · …
+- `kind`: `cash_difference` · `count_difference` · `delivery_difference` · `transfer_difference` · `negative_stock` · `duplicate_code` · `late_record` · `unverified_time` · `missing_clock_out` · `suspended_staff_activity` · `device_gap` · `balance_mismatch` · `open_bag_difference` · `production_loss` · `total_mismatch` · `permission_break` · `drawer_conflict` **(v1.1)** · `invalid_document` **(v1.21)** · …
 - `subject`, `expected`, `actual`, `difference`, `people`, `side`
 - `status`: `open` → `explained` → `resolved` | `dismissed` (by, note)
 - A manager who finds the reason may resolve or dismiss a flag straight from `open`, with their own note. `resolved` and `dismissed` are final **(v1.8)**.
@@ -549,7 +551,7 @@ These become database constraints and automated tests.
 
 **Tenancy and history**
 - **T1** Every record (except `User`, `Unit`, the `Shop` itself **(v1.3)** and a `PairingRequest` **(v1.11)**) has a shop, and only points at records of the same shop.
-- **T2** Stock movements, balance entries, allocations, attendance events, audit events and edit events **(v1.9)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
+- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** and the answers the push keeps **(v1.21)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
 - **T3** Nothing is deleted: cancel, void, suspend, archive — always with who, when and why.
 - **T4** Copied values (price, floor, factor, cost, rate, rules, formula version) never change once the record is confirmed.
 
@@ -683,6 +685,7 @@ One word per idea, the same in code, docs and UI. The Swahili is a draft — Jac
 | PayRun | Mishahara | One month's pay for everyone |
 | Job | Kazi ya mashine | A grinding or mixing order |
 | Flag | Tofauti | A difference someone must explain |
+| Document | Kumbukumbu | A record a device saves at the counter and sends to the server: a sale, a clock-in; English screens say *record* **(v1.21)** |
 
 ## Appendix A — Diagram
 

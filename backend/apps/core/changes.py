@@ -33,8 +33,9 @@ first to end would take the counter's lock there and hold it until that transact
 would wait for the whole job, and a save holding a row the job wants next could deadlock with it. A block can't wait
 for a transaction it didn't open: Django has no step just before a commit to hook into (from the review).
 
-This file owns the block and record_change. It names no table of a higher app: a record's table is read from the
-record itself, by its link type code (apps/core/links.py).
+This file owns the block, record_change, and what the block hands back once it has ended: its last number
+(ChangeNumbers), a pushed document's posted_seq (SYNC-4). It names no table of a higher app: a record's table is read
+from the record itself, by its link type code (apps/core/links.py).
 """
 
 import uuid
@@ -52,6 +53,31 @@ from apps.core.sequences import next_numbers
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 
 
+class ChangeNumbers:
+    """What a block hands back (`with recording_changes(shop) as numbers:`): the last change number its save took,
+    known once the block that numbers it has ended (SYNC-4)."""
+
+    def __init__(self) -> None:
+        self._ended = False
+        self._last: int | None = None
+
+    @property
+    def last(self) -> int | None:
+        # Unknown until the numbers are taken, at the block's very end: inside it, inside a joined block before the
+        # outer one ends, and after a failure, which took none. Refused then, never a guess: a wrong posted_seq makes a
+        # laptop drop a sale's pending stock change too soon, or never (03 §6.4). Once known, it stays: if what is
+        # around the block fails later, the number rolled back with it, and whoever reads it then must not use it, as
+        # the push never does (its line rolls back in the same transaction).
+        if not self._ended:
+            raise TransactionManagementError("A block's last change number is known once its block has ended.")
+        return self._last
+
+    def ended(self, last: int | None) -> None:
+        # Called once, by the block that numbers, as its last step: its last number, or None when it took none.
+        self._last = last
+        self._ended = True
+
+
 @dataclass
 class _Block:
     # One open block: the shop it records for, and what was recorded so far. One entry per record, keyed by its table's
@@ -65,6 +91,14 @@ class _Block:
     # within the block, could be rolled back alone while the block carries on, and leave a line for a record never
     # saved; record_change refuses it (from the review).
     levels: list[int] = field(default_factory=list)
+    # What the block hands back: its last number, filled in at its end. A block that joins this one hands back this
+    # same object, as its numbers come at this block's end (SYNC-4).
+    numbers: ChangeNumbers = field(default_factory=ChangeNumbers)
+    # The last number taken by a block of its own of the same shop, opened inside one of this block's parts (an
+    # `atomic()` or `editing()` within it), which numbers at its own end. They are the same save's numbers, so this
+    # block hands back the later of its own and these: a push's posted_seq is never None when its save took a number
+    # (SYNC-4's review).
+    inner_last: int | None = None
 
 
 def _depth() -> int:
@@ -80,10 +114,11 @@ _open_block: ContextVar[_Block | None] = ContextVar("open_change_block", default
 
 
 @contextmanager
-def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[None]:
+def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[ChangeNumbers]:
     """The block a service saves in, in place of `transaction.atomic()`: one transaction, whose changes record_change
     names, numbered as its last step. `shop` is a Shop row, typed as any model because `core` may not name `Shop`
-    (ADR-0041), or a shop's id. The shop must be the one open."""
+    (ADR-0041), or a shop's id. The shop must be the one open. It hands back its last number once it has ended
+    (`as numbers`, then `numbers.last`): a pushed document's posted_seq (SYNC-4)."""
     shop_id = shop if isinstance(shop, uuid.UUID) else shop.pk
     # T1: a shop's changes are recorded while that shop is open, as its numbers are given (next_number). Checked here,
     # at the start, so the service fails before it writes anything, not at the end.
@@ -97,17 +132,20 @@ def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[None]:
         # would stay locked from now until the outer commit, making the shop's other saves wait longer.
         # Its own savepoint, as any nested `atomic()` has: if this part fails and the outer service carries on, its
         # writes roll back, so what it recorded must go too, any outer record it changed included.
-        before = dict(outer.changes)
+        before, inner_before = dict(outer.changes), outer.inner_last
         try:
             with transaction.atomic():
                 outer.levels.append(_depth())  # changes may be named here, at this block's own level
                 try:
-                    yield
+                    # The outer block's numbers, as they come at its end: unknown until then.
+                    yield outer.numbers
                 finally:
                     outer.levels.pop()
         except BaseException:
+            # Numbers a block inside this part took went back with it too.
             outer.changes.clear()
             outer.changes.update(before)
+            outer.inner_last = inner_before
             raise
         return
     # A block of its own, numbered at its own end: the outermost block of this shop; or one inside an `atomic()` within
@@ -122,11 +160,17 @@ def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[None]:
     try:
         with transaction.atomic():
             block.levels.append(_depth())  # changes may be named here, at the block's own level
-            yield
+            yield block.numbers
             # The last step inside the transaction. Reached only if the service's work succeeded: an error above skips
             # it, so no number is taken, and the block's transaction (its savepoint, inside one already open) rolls
             # back. Numbers taken here go back too if what is around the block fails later: no line and no gap.
             _number_and_write(block)
+            if outer is not None and outer.shop_id == shop_id:
+                # Inside a part of this shop's block: the same save, numbered here, before the outer block's own. Passed
+                # up, so the outer block hands back the save's last number. Should the part around this block roll
+                # back later, the number stays passed up: a posted_seq a little too late, so a laptop waits for one more
+                # change before dropping its pending effects, which does no harm; too early would.
+                outer.inner_last = max(outer.inner_last or 0, block.numbers.last or 0) or None
     finally:
         _open_block.reset(token)  # the visit's block is the outer one again, or none
 
@@ -135,6 +179,9 @@ def _number_and_write(block: _Block) -> None:
     # A save that changed nothing devices see takes no number, so it never locks the counter, and never makes the
     # shop's other saves wait.
     if not block.changes:
+        # No number taken here: a laptop has nothing to wait for, unless a block inside one of this block's parts took
+        # some for the same save.
+        block.numbers.ended(block.inner_last)
         return
     # All the numbers in one go: one lock, one write, however many records changed. From here until the commit the
     # counter's row stays locked, so no later save of this shop can number before this one commits.
@@ -144,6 +191,9 @@ def _number_and_write(block: _Block) -> None:
         Change(shop_id=block.shop_id, seq=seq, entity=entity, record_id=record_id, op=op)
         for seq, ((entity, record_id), op) in zip(numbers, block.changes.items(), strict=True)
     )
+    # The last of them, handed back once the block ends: the save's posted_seq (SYNC-4). Later than any a block inside
+    # one of its parts took, as those were taken before this, from the same counter.
+    block.numbers.ended(numbers[-1])
 
 
 def record_change(row: ShopScoped, op: ChangeOp = ChangeOp.UPSERT) -> None:

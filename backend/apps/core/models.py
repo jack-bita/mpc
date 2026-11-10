@@ -6,11 +6,13 @@ on both and adds the shop a row belongs to and the staff member who made it, wit
 shows only the current shop's rows (ADR-0022; the current shop lives in apps/core/tenancy.py). Editable
 builds on ShopScoped for the office records people change: it adds when and by whom a row was last
 edited, and its version, so that two people editing at once can't overwrite each other
-(apps/core/editing.py). AppendOnly builds on ShopScoped for ledgers: it refuses, in Python, to save a row
-again or to delete one, and PostgreSQL's trigger backs it up (apps/core/operations.py, ADR-0021). All five
+(apps/core/editing.py). CounterRecord builds on ShopScoped for the records made at a shop's counter, on a
+device, and pushed later: it adds the device, the device's own number for the record, and both clocks
+(SYNC-4). AppendOnly builds on ShopScoped for ledgers: it refuses, in Python, to save a row
+again or to delete one, and PostgreSQL's trigger backs it up (apps/core/operations.py, ADR-0021). All six
 are abstract: they make no table of their own, they only pass their columns on to the models that
 inherit them. PPL-1's User builds on the first two, every shop's table on ShopScoped, every office record
-people edit on Editable, and every ledger on AppendOnly.
+people edit on Editable, every counter record on CounterRecord, and every ledger on AppendOnly.
 
 Two real tables live here too, because every app needs them and `core` is the layer all may import:
 ShopSequence, a shop's named counters, such as the one that gives each new device its code (AUTH-1), moved
@@ -157,6 +159,32 @@ class Editable(ShopScoped):
         abstract = True
 
 
+class CounterRecord(ShopScoped):
+    # The base of every record made at a shop's counter, on a device, and pushed later (02 §1, 03 §5.3): a sale, a
+    # repayment, a clock-in. ShopScoped plus four facts only the push can give it, and it fills all four (SYNC-4):
+    # editable=False keeps them out of every form and every API field, as created_by is.
+
+    # The device that made it, the one whose key sent the push. Named, not imported: `core` is layer 0 (ADR-0041).
+    # PROTECT: nothing is deleted (rule 7), so every record keeps naming the laptop it came from. No index of its own:
+    # indexes lead with `shop`, and nothing is deleted, so PROTECT never has to search this column.
+    device = models.ForeignKey(
+        "people.Device", on_delete=models.PROTECT, related_name="+", editable=False, db_index=False
+    )
+    # Its number on that device: 1, 2, 3... in the order the device made its records, whatever their type. The push
+    # posts a batch in this order (SYNC-4), and a jump means a record still missing (device_gap, SYNC-5).
+    device_seq = models.PositiveBigIntegerField(editable=False)
+    # The time the device's clock showed when it was made: kept, never trusted, as a device's clock can be wrong
+    # (02 §12). And the server's own clock when the push arrived: the time that can be trusted.
+    client_time = models.DateTimeField(editable=False)
+    received_at = models.DateTimeField(editable=False)
+
+    class Meta(ShopScoped.Meta):
+        # abstract: a base, not a table. Built on ShopScoped.Meta, so a counter table keeps the shop guard as its
+        # default manager (ADR-0042), as Editable's and AppendOnly's tables do. A counter ledger, such as a clock-in,
+        # builds on both: `class AttendanceEvent(AppendOnly, CounterRecord)`, its Meta from both.
+        abstract = True
+
+
 class AppendOnlyError(Exception):
     # A bug, not a user's mistake: the code tried to change or delete a ledger row. Like NoShopSelected,
     # it becomes a server error and a log line, never a message on a screen, so it carries no error code
@@ -167,11 +195,11 @@ class AppendOnlyError(Exception):
 class AppendOnly(ShopScoped):
     # The base of every ledger table (03 §5.3; the list is 03 §5.6): stock movements, balance entries,
     # allocations, payments, money movements, attendance events, audit events, a flag's notes and the
-    # people it names, the change log, and the dated rules: prices, product costs, settings and pay rates.
-    # A ledger is ShopScoped plus this: its rows are written once, and never changed or deleted (T2). Its
-    # migration adds the trigger that refuses the same in PostgreSQL (apps/core/operations.py), whatever
-    # sends the change; this class only stops the commonest mistake earlier, with a clear message, before
-    # the database is asked.
+    # people it names, the change log, the push's answer log (sync.PushedDocument), and the dated rules:
+    # prices, product costs, settings and pay rates. A ledger is ShopScoped plus this: its rows are written
+    # once, and never changed or deleted (T2). Its migration adds the trigger that refuses the same in
+    # PostgreSQL (apps/core/operations.py), whatever sends the change; this class only stops the commonest
+    # mistake earlier, with a clear message, before the database is asked.
     # A base built on ShopScoped, not a mixin listed beside it, because a mixin can be listed wrong: a
     # plain Python mixin listed after ShopScoped never runs (Django's own save() comes first), and a
     # model mixin listed before it, with a Meta of its own, drops the shop guard (CORE-1). A base can't

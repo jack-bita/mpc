@@ -296,6 +296,7 @@
     "incorrect_type": "This value is the wrong kind.",
     "unique": "This is already taken.",
     "not_a_list": "A list is needed here.",
+    "not_a_dict": "A group of fields is needed here.",
     "empty": "This list can't be empty.",
     "max_string_length": "This number is too long.",
     "null_characters_not_allowed": "This text has a character that isn't allowed.",
@@ -311,6 +312,11 @@
       "reason_required": "Write a reason.",
       "not_active": "This device isn't active, so it can't be blocked.",
       "not_blocked": "This device isn't blocked."
+    },
+    "document": {
+      "type_unknown": "The server doesn't take this kind of record. Update the app.",
+      "version_unknown": "This record comes from another version of the app. Update the app.",
+      "maker_unknown": "The person who made this record doesn't work at this shop."
     },
     "session": {
       "wrong_device": "This login belongs to another device. Log in again here."

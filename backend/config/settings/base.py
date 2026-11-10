@@ -283,6 +283,12 @@ SPECTACULAR_SETTINGS = {
         "SettingKindEnum": "apps.sync.api.serializers.SETTING_KINDS",
         # A pull's change says `upsert` or `archive` (SYNC-3): named after the log's own choices, not after `op`.
         "ChangeOpEnum": "apps.core.models.ChangeOp",
+        # The push's answers (SYNC-4): a flag's kind, the four answers, and a duplicate's first answer, each named after
+        # its own list, not after the field that holds it (`first`, `kind`, `status`), as another field of that name
+        # would rename them both, and the app's types with them.
+        "FlagKindEnum": "apps.control.models.FlagKind",
+        "PushAnswerStatusEnum": "apps.sync.api.serializers.PUSH_ANSWER_STATUSES",
+        "PushedStatusEnum": "apps.sync.models.PushedStatus",
     },
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.

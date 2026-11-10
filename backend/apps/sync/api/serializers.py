@@ -7,7 +7,8 @@ until someone decides it travels. What must never travel, buying prices, PIN has
 the sync rules), is checked against these lists by test_bootstrap_secrets.py. Read-only: devices never write through
 them; what a device makes travels as a document (SYNC-4). Then the bootstrap's answer, and the pull's question and
 answer, as the API schema describes them. A pull's change carries the same records, and test_bootstrap_secrets.py checks
-what it adds around them too, field by field and as sent.
+what it adds around them too, field by field and as sent. Last, the push's question and answer (SYNC-4): each document's
+envelope, checked here, and each document's answer.
 """
 
 from collections.abc import Mapping
@@ -16,12 +17,16 @@ from typing import Any
 from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema_field
 from rest_framework import serializers
 
+from apps.control.models import FlagKind
+from apps.core.api.ids import uuid7_only
 from apps.core.languages import Language
 from apps.core.models import ChangeOp
 from apps.core.settings_registry import KINDS, Scope
 from apps.people.models import Font, StaffMember
 from apps.people.permissions import held_permissions
 from apps.shops.models import PaymentAccount, Setting, Side
+from apps.sync.models import PushedStatus
+from apps.sync.push import ACCEPTED, DUPLICATE, INVALID, RETRY
 
 
 class SideRecord(serializers.ModelSerializer[Side]):
@@ -231,3 +236,61 @@ class PullAnswer(serializers.Serializer[Any]):
     )
     server_time = serializers.DateTimeField()
     min_app_version = serializers.CharField(allow_null=True)
+
+
+class PushedEnvelope(serializers.Serializer[Any]):
+    # One document as a laptop sends it (03 §6.3): the parts every type has, checked here, around its payload, which
+    # its own type's shape checks (apps/sync/push.py). A broken envelope is a bug in the laptop's sync code, not a
+    # document to set aside: the whole push is refused, under the field (`documents.0.device_seq`).
+    id = serializers.UUIDField(validators=[uuid7_only], help_text="The document's id, made on the laptop (UUIDv7).")
+    type = serializers.CharField(max_length=40)
+    schema_version = serializers.IntegerField(min_value=1, max_value=2**31 - 1)
+    device_seq = serializers.IntegerField(min_value=1, max_value=2**63 - 1, help_text="The laptop's number for it.")
+    client_time = serializers.DateTimeField(help_text="The laptop's clock when it was made: kept, never trusted.")
+    created_by = serializers.UUIDField(help_text="The staff member who made it at the counter.")
+    payload = serializers.DictField(help_text="The document itself, in its type's shape.")
+
+
+class PushBatch(serializers.Serializer[Any]):
+    # Up to 100 documents a push (03 §6.3), so one push stays short on a shop's slow line. No device id: the key says
+    # which laptop sends (AUTH-2). The laptop's app version and unsent count come with SYNC-5, which records them.
+    # A list field of envelopes, not `many=True`: the same checks, each envelope's under its number
+    # (`documents.0.device_seq`), and its limit reaches the API's description (maxItems), which a list serializer's
+    # doesn't, nor the type checker's notes on the `many=True` form.
+    documents = serializers.ListField(child=PushedEnvelope(), max_length=100)
+
+
+class FlagRaised(serializers.Serializer[Any]):
+    id = serializers.UUIDField()
+    kind = serializers.ChoiceField(choices=FlagKind.choices)
+
+
+# The four answers, by name, for the schema to name this very list (PushAnswerStatusEnum), as it does the settings'
+# lists above: an automatic name, taken from the field, would change the day another field of that name joins.
+PUSH_ANSWER_STATUSES = [ACCEPTED, DUPLICATE, INVALID, RETRY]
+
+
+class PushedAnswer(serializers.Serializer[Any]):
+    # One document's answer (apps/sync/push.py, Answer): accepted, duplicate, invalid or retry.
+    id = serializers.UUIDField()
+    status = serializers.ChoiceField(choices=PUSH_ANSWER_STATUSES)
+    first = serializers.ChoiceField(
+        choices=PushedStatus.choices, allow_null=True, help_text="A duplicate's first answer."
+    )
+    posted_seq = serializers.IntegerField(
+        min_value=1, allow_null=True, help_text="The last change number its save took."
+    )
+    flags = FlagRaised(many=True)
+    code = serializers.CharField(allow_blank=True, help_text="An invalid one's reason, as the error shape names it.")
+
+    def get_fields(self) -> dict[str, serializers.Field[Any, Any, Any, Any]]:
+        # `fields`, as the error shape names it, added here: written in the class, it would stand where every
+        # serializer keeps its own `.fields` (the same reason as ChangeRecord's `data`).
+        fields = super().get_fields()
+        fields["fields"] = serializers.DictField(child=serializers.ListField(child=serializers.CharField()))
+        return fields
+
+
+class PushAnswer(serializers.Serializer[Any]):
+    # One answer per document, in the laptop's order, up to the first retry.
+    answers = PushedAnswer(many=True)
