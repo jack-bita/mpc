@@ -23,7 +23,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Model
 
-from apps.control.models import Flag, FlagKind, FlagPerson
+from apps.control.models import EditEvent, Flag, FlagKind, FlagPerson
 from apps.core.links import LINK_TYPES
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember
@@ -35,7 +35,7 @@ from apps.sync.push import Answer, Sent, push
 from tests.change_log import last_line, lines_written
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 from tests.probe.documents import TICKET, TICKET_CODE, post_ticket
-from tests.probe.models import Ticket
+from tests.probe.models import Card, Ticket
 
 pytestmark = pytest.mark.django_db
 
@@ -306,6 +306,29 @@ def test_another_database_rule_answers_retry(
     sent = _sent(1, staff_a)
     assert _push(device_a, [sent]) == [Answer(id=sent.id, status="retry")]
     assert _tickets(shop_a) == []
+
+
+def test_a_pushed_documents_edits_name_its_maker_and_its_laptop(
+    monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # X3: every write records the person and the device. A sale Asha made on the Dawa laptop, saved hours later by the
+    # push, changes an office record, as a sale will change a customer's balance: its edit history names Asha and the
+    # laptop, not nobody, nor only the laptop the visit came from. The test-only Card keeps an edit history (its
+    # migration's RecordEditsV2), and both books read the same note (apps/core/acting.py).
+    card = Card(shop_id=shop_a.pk, name="Dawa")
+    card.save()
+
+    def rename_the_card(document: Document, payload: dict[str, Any]) -> list[Flag]:
+        flags = post_ticket(document, payload)
+        Card.objects.filter(pk=card.pk).update(name=payload["text"])
+        return flags
+
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=rename_the_card))
+    _push(device_a, [_sent(1, staff_a, text="Dawa za Mifugo")])
+    with shop_context(shop_a):
+        (edit,) = EditEvent.objects.filter(subject_type="probe_card", subject_id=card.pk)
+    assert (edit.created_by_id, edit.device_id) == (staff_a.pk, device_a.pk)
+    assert edit.after == {"name": "Dawa za Mifugo"}
 
 
 @pytest.mark.django_db(transaction=True)
