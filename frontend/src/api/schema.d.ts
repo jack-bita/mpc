@@ -164,6 +164,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sync/v1/push/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["sync_v1_push_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/devices/": {
         parameters: {
             query?: never;
@@ -349,6 +365,39 @@ export interface components {
          */
         DeviceStatusEnum: "active" | "blocked";
         /**
+         * @description * `accepted` - Accepted
+         *     * `invalid` - Invalid
+         * @enum {string}
+         */
+        FirstEnum: "accepted" | "invalid";
+        FlagRaised: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FlagRaisedKindEnum"];
+        };
+        /**
+         * @description * `cash_difference` - Cash difference
+         *     * `count_difference` - Count difference
+         *     * `delivery_difference` - Delivery difference
+         *     * `transfer_difference` - Transfer difference
+         *     * `negative_stock` - Negative stock
+         *     * `duplicate_code` - Duplicate transaction code
+         *     * `late_record` - Late record
+         *     * `unverified_time` - Unverified time
+         *     * `missing_clock_out` - Missing clock-out
+         *     * `suspended_staff_activity` - Suspended staff activity
+         *     * `device_gap` - Device gap
+         *     * `balance_mismatch` - Balance mismatch
+         *     * `open_bag_difference` - Open bag difference
+         *     * `production_loss` - Production loss
+         *     * `total_mismatch` - Total mismatch
+         *     * `permission_break` - Permission break
+         *     * `drawer_conflict` - Drawer conflict
+         *     * `invalid_document` - Invalid document
+         * @enum {string}
+         */
+        FlagRaisedKindEnum: "cash_difference" | "count_difference" | "delivery_difference" | "transfer_difference" | "negative_stock" | "duplicate_code" | "late_record" | "unverified_time" | "missing_clock_out" | "suspended_staff_activity" | "device_gap" | "balance_mismatch" | "open_bag_difference" | "production_loss" | "total_mismatch" | "permission_break" | "drawer_conflict" | "invalid_document";
+        /**
          * @description * `default` - Default
          *     * `second` - Second, easy to read
          * @enum {string}
@@ -410,6 +459,8 @@ export interface components {
             readonly language: components["schemas"]["LanguageEnum"];
             readonly font: components["schemas"]["FontEnum"];
         };
+        /** @enum {unknown} */
+        NullEnum: null;
         OwnSettingsAnswer: {
             readonly language: components["schemas"]["LanguageEnum"];
             readonly font: components["schemas"]["FontEnum"];
@@ -497,6 +548,68 @@ export interface components {
             /** Format: date-time */
             server_time: string;
             min_app_version: string | null;
+        };
+        PushAnswer: {
+            answers: components["schemas"]["PushedAnswer"][];
+        };
+        PushBatchRequest: {
+            documents: components["schemas"]["PushedEnvelopeRequest"][];
+        };
+        PushedAnswer: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["PushedAnswerStatusEnum"];
+            /**
+             * @description A duplicate's first answer.
+             *
+             *     * `accepted` - Accepted
+             *     * `invalid` - Invalid
+             */
+            first: (components["schemas"]["FirstEnum"] | components["schemas"]["NullEnum"]) | null;
+            /** @description The last change number its save took. */
+            posted_seq: number | null;
+            flags: components["schemas"]["FlagRaised"][];
+            /** @description An invalid one's reason, as the error shape names it. */
+            code: string;
+            fields: {
+                [key: string]: string[];
+            };
+        };
+        /**
+         * @description * `accepted` - accepted
+         *     * `duplicate` - duplicate
+         *     * `invalid` - invalid
+         *     * `retry` - retry
+         * @enum {string}
+         */
+        PushedAnswerStatusEnum: "accepted" | "duplicate" | "invalid" | "retry";
+        PushedEnvelopeRequest: {
+            /**
+             * Format: uuid
+             * @description The document's id, made on the laptop (UUIDv7).
+             */
+            id: string;
+            type: string;
+            schema_version: number;
+            /**
+             * Format: int64
+             * @description The laptop's number for it.
+             */
+            device_seq: number;
+            /**
+             * Format: date-time
+             * @description The laptop's clock when it was made: kept, never trusted.
+             */
+            client_time: string;
+            /**
+             * Format: uuid
+             * @description The staff member who made it at the counter.
+             */
+            created_by: string;
+            /** @description The document itself, in its type's shape. */
+            payload: {
+                [key: string]: unknown;
+            };
         };
         /**
          * @description * `one_screen` - One screen
@@ -921,6 +1034,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PullAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    sync_v1_push_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushBatchRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushAnswer"];
                 };
             };
             default: {

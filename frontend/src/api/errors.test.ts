@@ -47,6 +47,7 @@ const CODES_THE_API_SENDS = [
   "incorrect_type",
   "unique",
   "not_a_list",
+  "not_a_dict",
   "empty",
   "max_string_length",
   "null_characters_not_allowed",
@@ -95,6 +96,11 @@ const CODES_THE_API_SENDS = [
   "pairing.code_used",
   "pairing.code_expired",
   "pairing.already_paired",
+  // A pushed document set aside (SYNC-4): its type or version the server doesn't take, or a maker not of this
+  // shop. The laptop shows these beside the document under "needs attention".
+  "document.type_unknown",
+  "document.version_unknown",
+  "document.maker_unknown",
   // Sides (CORE-6).
   "side.code_invalid",
   "side.code_taken",

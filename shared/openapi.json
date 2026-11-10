@@ -382,6 +382,52 @@
                 }
             }
         },
+        "/api/sync/v1/push/": {
+            "post": {
+                "operationId": "sync_v1_push_create",
+                "tags": [
+                    "sync"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PushBatchRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PushAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/people/devices/": {
             "get": {
                 "operationId": "people_devices_list",
@@ -1204,6 +1250,54 @@
                 "type": "string",
                 "description": "* `active` - Active\n* `blocked` - Blocked"
             },
+            "FirstEnum": {
+                "enum": [
+                    "accepted",
+                    "invalid"
+                ],
+                "type": "string",
+                "description": "* `accepted` - Accepted\n* `invalid` - Invalid"
+            },
+            "FlagRaised": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/FlagRaisedKindEnum"
+                    }
+                },
+                "required": [
+                    "id",
+                    "kind"
+                ]
+            },
+            "FlagRaisedKindEnum": {
+                "enum": [
+                    "cash_difference",
+                    "count_difference",
+                    "delivery_difference",
+                    "transfer_difference",
+                    "negative_stock",
+                    "duplicate_code",
+                    "late_record",
+                    "unverified_time",
+                    "missing_clock_out",
+                    "suspended_staff_activity",
+                    "device_gap",
+                    "balance_mismatch",
+                    "open_bag_difference",
+                    "production_loss",
+                    "total_mismatch",
+                    "permission_break",
+                    "drawer_conflict",
+                    "invalid_document"
+                ],
+                "type": "string",
+                "description": "* `cash_difference` - Cash difference\n* `count_difference` - Count difference\n* `delivery_difference` - Delivery difference\n* `transfer_difference` - Transfer difference\n* `negative_stock` - Negative stock\n* `duplicate_code` - Duplicate transaction code\n* `late_record` - Late record\n* `unverified_time` - Unverified time\n* `missing_clock_out` - Missing clock-out\n* `suspended_staff_activity` - Suspended staff activity\n* `device_gap` - Device gap\n* `balance_mismatch` - Balance mismatch\n* `open_bag_difference` - Open bag difference\n* `production_loss` - Production loss\n* `total_mismatch` - Total mismatch\n* `permission_break` - Permission break\n* `drawer_conflict` - Drawer conflict\n* `invalid_document` - Invalid document"
+            },
             "FontEnum": {
                 "enum": [
                     "default",
@@ -1437,6 +1531,11 @@
                     "full_name",
                     "id",
                     "language"
+                ]
+            },
+            "NullEnum": {
+                "enum": [
+                    null
                 ]
             },
             "OwnSettingsAnswer": {
@@ -1710,6 +1809,152 @@
                     "has_more",
                     "min_app_version",
                     "server_time"
+                ]
+            },
+            "PushAnswer": {
+                "type": "object",
+                "properties": {
+                    "answers": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PushedAnswer"
+                        }
+                    }
+                },
+                "required": [
+                    "answers"
+                ]
+            },
+            "PushBatchRequest": {
+                "type": "object",
+                "properties": {
+                    "documents": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PushedEnvelopeRequest"
+                        }
+                    }
+                },
+                "required": [
+                    "documents"
+                ]
+            },
+            "PushedAnswer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/PushedAnswerStatusEnum"
+                    },
+                    "first": {
+                        "nullable": true,
+                        "description": "A duplicate's first answer.\n\n* `accepted` - Accepted\n* `invalid` - Invalid",
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/FirstEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "posted_seq": {
+                        "type": "integer",
+                        "nullable": true,
+                        "description": "The last change number its save took."
+                    },
+                    "flags": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FlagRaised"
+                        }
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": "An invalid one's reason, as the error shape names it."
+                    },
+                    "fields": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "required": [
+                    "code",
+                    "fields",
+                    "first",
+                    "flags",
+                    "id",
+                    "posted_seq",
+                    "status"
+                ]
+            },
+            "PushedAnswerStatusEnum": {
+                "enum": [
+                    "accepted",
+                    "duplicate",
+                    "invalid",
+                    "retry"
+                ],
+                "type": "string",
+                "description": "* `accepted` - accepted\n* `duplicate` - duplicate\n* `invalid` - invalid\n* `retry` - retry"
+            },
+            "PushedEnvelopeRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The document's id, made on the laptop (UUIDv7)."
+                    },
+                    "type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                    },
+                    "schema_version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 1
+                    },
+                    "device_seq": {
+                        "type": "integer",
+                        "maximum": 9223372036854775807,
+                        "minimum": 1,
+                        "format": "int64",
+                        "description": "The laptop's number for it."
+                    },
+                    "client_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "The laptop's clock when it was made: kept, never trusted."
+                    },
+                    "created_by": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The staff member who made it at the counter."
+                    },
+                    "payload": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "description": "The document itself, in its type's shape."
+                    }
+                },
+                "required": [
+                    "client_time",
+                    "created_by",
+                    "device_seq",
+                    "id",
+                    "payload",
+                    "schema_version",
+                    "type"
                 ]
             },
             "SaleFlowEnum": {
