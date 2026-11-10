@@ -52,11 +52,19 @@ class NewSide:
     sale_flow: SaleFlow = SaleFlow.ONE_SCREEN
 
 
-def create_shop(*, name: str, code: str, sides: Sequence[NewSide], kind: ShopKind = ShopKind.LIVE) -> Shop:
+def create_shop(
+    *,
+    name: str,
+    code: str,
+    sides: Sequence[NewSide],
+    kind: ShopKind = ShopKind.LIVE,
+    shop_id: uuid.UUID | None = None,
+) -> Shop:
     """Make a shop with its sides, and for each side a default stock location and a cash drawer, all or
     nothing. For set_up_shop (apps/people/services.py), which adds the shop's roles: on its own, it makes a
     shop with no roles, where nobody may act. `kind`: live, unless the caller says otherwise. The demo seed
-    (DATA-1) makes a demo shop, which its own refusal then knows as its own."""
+    (DATA-1) makes a demo shop, which its own refusal then knows as its own. `shop_id`: the new shop's id, for a
+    caller that has opened the shop's block already (set_up_shop), as add_side takes `side_id`; a new one otherwise."""
     # A shop does everything on a side (ADR-0001): with none it could neither sell nor count. Refused
     # before anything is written.
     if not sides:
@@ -65,11 +73,14 @@ def create_shop(*, name: str, code: str, sides: Sequence[NewSide], kind: ShopKin
     # yet: it must name the live shop it copies (ADR-0014), which this takes no argument for, so full_clean
     # refuses it (shop.practice_needs_shop). The row's id is given as it is made (uuid7), before it is saved.
     shop = Shop(name=name, code=code, kind=kind)
+    if shop_id is not None:
+        shop.id = shop_id
     # The new shop is opened first, because the rows' full_clean reads through the guarded `objects`
     # (CORE-2). No caller could have opened it: it didn't exist yet. shop_context hands back whatever shop
     # was open before. Then one block, which is the transaction: if any row below is refused, the rows
     # already written are taken back too, so there is never a shop with half its sides set up. Each
-    # add_side joins it, so every side's lines are numbered once, at the very end (SYNC-15).
+    # add_side joins it, so every side's lines are numbered once, at the very end (SYNC-15). Inside a caller's
+    # block for this same shop (set_up_shop), this one joins that one in turn.
     with shop_context(shop), recording_changes(shop):
         # Two shops made with the same code at the very same moment can both pass full_clean; the unique
         # rule on `code` then refuses the second. The shop's own row has no line: no device keeps it.

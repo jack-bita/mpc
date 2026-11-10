@@ -10,18 +10,25 @@ create_shop (apps/shops/services.py) makes the shop, its sides and what each sid
     ├── Dawa (D), Vyakula (F)    → each with its stock location and cash drawer (create_shop)
     └── Owner, Manager, Seller, Order writer, Cashier, Worker    → the shop's own roles
 
-If any step fails, nothing is saved: never a shop where nobody may act.
+If any step fails, nothing is saved: never a shop where nobody may act. What its devices will keep a copy of is named
+in the shop's change log, numbered once, at the very end (SYNC-15).
 """
+
+from typing import Any
+from unittest import mock
 
 import pytest
 from django.core.exceptions import ValidationError
 
+from apps.core.models import ChangeOp, SequenceName
 from apps.core.permissions import ROLE_TEMPLATES, Permission, RoleTemplate
+from apps.core.sequences import next_numbers
 from apps.core.tenancy import shop_context, system_context
 from apps.people.models import Role
 from apps.people.services import set_up_shop
-from apps.shops.models import Shop, ShopKind, Side
+from apps.shops.models import PaymentAccountSide, Shop, ShopKind, Side
 from apps.shops.services import NewSide
+from tests.change_log import lines_after
 
 pytestmark = pytest.mark.django_db
 
@@ -71,3 +78,30 @@ def test_set_up_shop_makes_a_demo_shop_with_its_roles() -> None:
     assert Shop.objects.get(pk=shop.pk).kind == ShopKind.DEMO
     with shop_context(shop):
         assert {role.template for role in Role.objects.all()} == set(RoleTemplate)
+
+
+def test_setting_up_a_shop_numbers_once() -> None:
+    # Done when: setting up a shop numbers its lines once, at the end. Its sides and their drawers are named as they
+    # are made, and the six roles, which stay on the server, come after them; the numbers wait until all of it is
+    # written, in one call for the shop's numbers (SYNC-15). The spy notes how many roles exist at that moment: six,
+    # so the numbering came after the roles, at the very end.
+    roles_when_numbered: list[int] = []
+
+    def numbered(*args: Any) -> range:
+        roles_when_numbered.append(Role.objects.count())  # the new shop is open while it numbers
+        return next_numbers(*args)
+
+    with mock.patch("apps.core.changes.next_numbers", side_effect=numbered) as numbering:
+        shop = set_up_shop(name="Duka la Mfano", code="MFANO", sides=DAWA_NA_VYAKULA)
+
+    numbering.assert_called_once_with(shop.pk, SequenceName.CHANGE, 4)
+    assert roles_when_numbered == [len(RoleTemplate)]
+    with shop_context(shop):
+        side = {side.code: side.pk for side in Side.objects.all()}
+        drawer = {link.side_id: link.account_id for link in PaymentAccountSide.objects.all()}
+    assert lines_after(shop, 0) == [
+        (1, "side", side["D"], ChangeOp.UPSERT),
+        (2, "payment_account", drawer[side["D"]], ChangeOp.UPSERT),
+        (3, "side", side["F"], ChangeOp.UPSERT),
+        (4, "payment_account", drawer[side["F"]], ChangeOp.UPSERT),
+    ]
