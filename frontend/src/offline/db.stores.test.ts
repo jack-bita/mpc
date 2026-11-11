@@ -87,7 +87,7 @@ describe("the device database", () => {
     );
   });
 
-  it("has every drawer of 03 §6.1, and nothing else", async () => {
+  it("has the drawers of version 1: the server's five lists and the laptop's own", async () => {
     const db = open(MPC);
     await db.open();
     expect(db.tables.map((table) => table.name).sort()).toEqual(

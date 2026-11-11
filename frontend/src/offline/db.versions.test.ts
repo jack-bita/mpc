@@ -4,6 +4,7 @@ import Dexie, { type Transaction } from "dexie";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  databaseName,
   openShopDatabase,
   VERSIONS,
   type ShopDatabase,
@@ -27,10 +28,13 @@ const ASHA: components["schemas"]["StaffRecord"] = {
 
 // A pretend later card: version 2 adds a `debts` drawer, and its upgrade gives every staff member a line
 // owing nothing. Real later versions are added to VERSIONS in db.ts; this one lives only in the test.
+// It counts its runs, so a test can see it ran once, or not at all.
+let upgradesRun = 0;
 const LATER: Version = {
   version: 2,
   stores: { debts: "id" },
   upgrade: async (tx: Transaction) => {
+    upgradesRun += 1;
     const staff = await tx.table("staff").toArray();
     await tx
       .table("debts")
@@ -46,7 +50,8 @@ function open(versions: readonly Version[]): ShopDatabase {
 }
 afterEach(async () => {
   for (const db of opened.splice(0)) db.close();
-  await Dexie.delete(`mpc-shop-${MPC}`);
+  await Dexie.delete(databaseName(MPC));
+  upgradesRun = 0;
 });
 
 describe("the device database's versions", () => {
@@ -54,6 +59,28 @@ describe("the device database's versions", () => {
     expect(VERSIONS.map((step) => step.version)).toEqual(
       VERSIONS.map((_, index) => index + 1),
     );
+  });
+
+  it("keeps version 1 exactly as it is", () => {
+    // A laptop already on version 1 never reads it again: a drawer or search key added here would
+    // reach only new laptops, and the old ones would fail at the first read of it. Never change this
+    // test to make it pass; add a new version to VERSIONS instead (sync rules).
+    expect(VERSIONS[0]).toEqual({
+      version: 1,
+      stores: {
+        meta: "key",
+        side: "id",
+        payment_account: "id",
+        staff: "id",
+        setting: "id, key",
+        setting_keys: "key",
+        pin_checks: "staff_id",
+        documents: "id, type, [type+client_time]",
+        outbox: "id, &device_seq, [status+device_seq]",
+        pending_effects: "id, document_id, posted_seq",
+        sent_archive: "id, sent_at, device_seq",
+      },
+    });
   });
 
   it("runs version 2's upgrade on a laptop at version 1, and keeps its rows", async () => {
@@ -65,6 +92,7 @@ describe("the device database's versions", () => {
     await after.open();
 
     expect(after.verno).toBe(2);
+    expect(upgradesRun).toBe(1);
     expect(await after.table("debts").toArray()).toEqual([
       { id: ASHA.id, owes: "0" },
     ]);
@@ -76,7 +104,7 @@ describe("the device database's versions", () => {
     await db.open();
 
     expect(db.verno).toBe(2);
+    expect(upgradesRun).toBe(0);
     expect(await db.table("debts").count()).toBe(0);
-    expect(await db.staff.count()).toBe(0);
   });
 });
