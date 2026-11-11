@@ -93,7 +93,8 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
             models.CheckConstraint(
                 condition=(
                     models.Q(voided_at__isnull=True, voided_by__isnull=True, void_reason="")
-                    | (models.Q(voided_at__isnull=False, voided_by__isnull=False) & ~models.Q(void_reason=""))
+                    # A reason holds at least one letter, figure or sign: spaces alone are no reason (ATT-1's review).
+                    | models.Q(voided_at__isnull=False, voided_by__isnull=False, void_reason__regex=r"\S")
                 ),
                 name="staffpay_attendanceevent_void_complete",
             ),

@@ -90,8 +90,9 @@ def test_a_clock_in_is_voided_once(shop_a: Model, staff_a: StaffMember, event: A
 
 @pytest.mark.parametrize(
     ("who", "why"),
-    [(False, ""), (True, ""), (False, "Clocked in twice")],
-    ids=["neither_who_nor_why", "no_why", "no_who"],
+    # A reason of spaces alone is no reason (ATT-1's review): the first void table, so it sets the pattern.
+    [(False, ""), (True, ""), (False, "Clocked in twice"), (True, "   "), (True, "\t\n")],
+    ids=["neither_who_nor_why", "no_why", "no_who", "why_only_spaces", "why_only_tabs_and_lines"],
 )
 def test_a_void_says_who_and_why(
     shop_a: Model, staff_a: StaffMember, event: AttendanceEvent, who: bool, why: str

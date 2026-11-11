@@ -124,9 +124,9 @@ class Migration(migrations.Migration):
                         condition=models.Q(
                             models.Q(("void_reason", ""), ("voided_at__isnull", True), ("voided_by__isnull", True)),
                             models.Q(
+                                ("void_reason__regex", "\\S"),
                                 ("voided_at__isnull", False),
                                 ("voided_by__isnull", False),
-                                models.Q(("void_reason", ""), _negated=True),
                             ),
                             _connector="OR",
                         ),
