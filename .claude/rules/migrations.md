@@ -12,6 +12,7 @@ paths:
 - No `migrate` on any database before PPL-1 — the custom `User` — is merged (ADR-0012). (The guard hook refuses it.)
 - Ledger and dated-rule tables get the append-only trigger operation from `core`; payments, money movements and attendance events get the void-stamp variant (ADR-0021).
 - Every other shop table people change gets `RecordEditsV2` from `control` in its migration (never the old `RecordEdits`, which names no device), with its type code, and `skip=[...]` for any column that must never be copied, such as a hash or a key (ADR-0036).
+- To change a table's skip list later, a new migration lists `ChangeRecordEditsV2` from `control`, with the new list in `skip` and the old one in `was` (never the old `ChangeRecordEdits`, which puts the table back on the rule that names no device): as people's 0013 does for a device's sync columns (SYNC-5).
 - Rules the database can enforce go into the migration: check constraints, partial unique indexes, `PROTECT` foreign keys.
 - A change old devices may still rely on goes "add the new → move over → remove the old", across releases.
 - Global seed data (units) is a data migration. Role templates are not: they live in code (`apps/core/permissions.py`) and `set_up_shop` (`apps/people/services.py`) copies them into each new shop. A new permission code is added to the shops that already have their roles in a data migration: their Owner, and their Manager unless it is one of the owner's four (03 §5.8).
