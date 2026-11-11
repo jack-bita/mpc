@@ -27,12 +27,15 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Model
+from django.db.transaction import TransactionManagementError
 
 from apps.control.models import Flag, FlagKind, FlagNote, FlagStatus, FlagStep
 from apps.control.services import dismiss_flag, explain_flag
 from apps.core.links import LINK_TYPES
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember
+from apps.people.services import lock_device_numbers
+from apps.shops.models import Shop, Side
 from apps.sync import push as push_module
 from apps.sync.document_types import DOCUMENT_TYPES, Document
 from apps.sync.models import PushedDocument
@@ -247,6 +250,55 @@ def test_a_record_from_before_a_reset_fills_no_new_gap(
     # Once the new #4 comes too, the gap is whole.
     _push_numbers(device_a, staff_a, 4)
     assert _status(gap) == FlagStatus.RESOLVED
+
+
+def test_another_shops_gap_is_never_filled_or_closed(
+    shop_a: Model,
+    shop_b: Shop,
+    side_b: Side,
+    device_a: Device,
+    staff_a: StaffMember,
+    staff_b: StaffMember,
+) -> None:
+    # Shop B's laptop misses #2 and #3, as shop A's does. A's late #2 and #3 close A's gap alone: a laptop's numbers
+    # are its own, and a gap of another shop is never seen, let alone closed (03 §5.4; SYNC-5's review).
+    with shop_context(shop_b):
+        device_b = Device.objects.create(shop=shop_b, home_side=side_b, name="Laptop B", code=1, key_hash="b" * 64)
+    _push_numbers(device_b, staff_b, 1, 4)
+    _push_numbers(device_a, staff_a, 1, 4)
+    _push_numbers(device_a, staff_a, 2, 3)
+    [gap_a] = _gaps(shop_a)
+    [gap_b] = _gaps(shop_b)
+    assert (_status(gap_a), _status(gap_b)) == (FlagStatus.RESOLVED, FlagStatus.OPEN)
+    assert _notes(gap_b) == []
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_late_record_and_a_managers_close_take_turns(
+    shop_a: Model, device_a: Device, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # The manager dismisses the gap's flag at the very moment the late #2 arrives. The system's close waits for the
+    # manager's, then finds the flag closed, and leaves it as the manager left it: one note, never a second on a
+    # closed flag (SYNC-5's review).
+    _push_numbers(device_a, staff_a, 1, 3)
+    [gap] = _gaps(shop_a)
+    with shop_context(shop_a), transaction.atomic():
+        dismiss_flag(gap, text="Laptop ilizimwa", by=staff_a2)
+        late, ended = in_another_transaction(lambda: _push_numbers(device_a, staff_a, 2))
+        wait_until_someone_waits_for_me()
+    late.join()
+    [answers] = ended
+    assert [answer.status for answer in cast(list[Answer], answers)] == ["accepted"]
+    assert _status(gap) == FlagStatus.DISMISSED
+    assert [step for step, _text, _by in _notes(gap)] == [FlagStep.DISMISSED]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_numbers_lock_needs_a_transaction(shop_a: Model, device_a: Device) -> None:
+    # Outside a transaction the lock would end with its own query, and two pushes of one laptop could read the same
+    # number: refused loudly, as a bug in the calling code.
+    with shop_context(shop_a), pytest.raises(TransactionManagementError, match="transaction"):
+        lock_device_numbers(device_a)
 
 
 def test_numbers_gone_back_never_close_by_themselves(

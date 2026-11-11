@@ -18,7 +18,7 @@ from apps.control.models import AuditEvent
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember
 from apps.people.selectors import shop_today, was_working_at
-from apps.people.services import mark_left
+from apps.people.services import mark_left, suspend
 from apps.shops.models import Shop
 
 pytestmark = pytest.mark.django_db
@@ -42,3 +42,24 @@ def test_a_leaving_recorded_after_the_person_was_read_still_counts(shop_a: Shop,
         mark_left(staff_a, left_on=shop_today(shop_a), by=None, reason="Amehamia Moshi")
         [left_at] = _moves(staff_a)
         assert not was_working_at(copy_read_before, left_at + dt.timedelta(minutes=1))
+
+
+def test_a_record_made_at_the_moment_of_a_suspension_counts_as_suspended(shop_a: Shop, staff_a: StaffMember) -> None:
+    # The same instant as the suspension, by the laptop's clock: the suspension has begun, so the record is flagged.
+    with shop_context(shop_a):
+        suspend(staff_a, by=None, reason="Uchunguzi wa droo")
+        [suspended_at] = _moves(staff_a)
+        assert not was_working_at(staff_a, suspended_at)
+        assert was_working_at(staff_a, suspended_at - dt.timedelta(microseconds=1))
+
+
+def test_suspended_then_left(shop_a: Shop, staff_a: StaffMember) -> None:
+    # Suspended, then marked as left while still suspended: not working from the suspension on, and never again, though
+    # leaving is no "return" in the suspension's history. Working before it.
+    with shop_context(shop_a):
+        suspend(staff_a, by=None, reason="Uchunguzi wa droo")
+        mark_left(staff_a, left_on=shop_today(shop_a), by=None, reason="Ameondoka")
+        suspended_at, left_at = _moves(staff_a)
+        assert was_working_at(staff_a, suspended_at - dt.timedelta(minutes=1))
+        assert not was_working_at(staff_a, suspended_at + (left_at - suspended_at) / 2)
+        assert not was_working_at(staff_a, left_at + dt.timedelta(days=3))
