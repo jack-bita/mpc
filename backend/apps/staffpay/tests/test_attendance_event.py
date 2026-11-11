@@ -15,7 +15,7 @@ the repo is public.
 import datetime as dt
 
 import pytest
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.db.models import Model
 from django.utils import timezone
 
@@ -157,6 +157,32 @@ def test_the_three_checks_each_fit_their_trusted_time(
     _event(shop_a, device_a, staff_a, device_seq=3, time_check=TimeCheck.UNVERIFIED, trusted_time=None).save()
     with shop_context(shop_a):
         assert AttendanceEvent.objects.count() == 3
+
+
+def test_the_trusted_time_rule_holds_in_any_sessions_time_zone(
+    shop_a: Model, device_a: ShopScoped, staff_a: StaffMember
+) -> None:
+    # A laptop whose clock reset itself 200 days back taps at once: its line keeps a clock error of minus 200 days. The
+    # rule must hold however the database session's zone is set, as a restore of a backup may run in any: "a time less
+    # a length of time" steps whole days in the session's zone, and in New York 200 days cross summer time, an hour
+    # off. So the rule compares two times instead, which no zone moves (ATT-1's second review).
+    error = dt.timedelta(days=-200)
+    line = _event(
+        shop_a,
+        device_a,
+        staff_a,
+        time_check=TimeCheck.SERVER,
+        clock_error=error,
+        trusted_time=CLIENT_TIME - error,
+    )
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("SET LOCAL TIME ZONE 'America/New_York'")
+        line.save()
+        # Back to the zone Django reads in, UTC, before the line is read back: a test runs in one transaction, so the
+        # zone would otherwise stay New York's until its end.
+        cursor.execute("SET LOCAL TIME ZONE 'UTC'")
+    with shop_context(shop_a):
+        assert AttendanceEvent.objects.get().trusted_time == CLIENT_TIME + dt.timedelta(days=200)
 
 
 def test_clock_ins_keep_the_shop_guard(shop_a: Model, shop_b: Model, event: AttendanceEvent) -> None:

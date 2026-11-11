@@ -73,13 +73,16 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
             ),
             # The trusted time fits its check, and only the three checks there are: the server's time of the tap for a
             # line sent at once, the laptop's for one kept, none for one not verified. Each kept time is said to be
-            # there too: in a database rule, a comparison with an empty value is "unknown", and "unknown" passes.
+            # there too: in a database rule, a comparison with an empty value is "unknown", and "unknown" passes. The
+            # server's is written as two times compared, `client_time - trusted_time = clock_error`: "a time less a
+            # length of time" steps whole days in the session's time zone, so a restore run in a zone with summer time
+            # would find a laptop's year-long clock error an hour off and refuse the line (ATT-1's second review).
             models.CheckConstraint(
                 condition=(
                     models.Q(
                         time_check=TimeCheck.SERVER,
                         trusted_time__isnull=False,
-                        trusted_time=models.F("client_time") - models.F("clock_error"),
+                        clock_error=models.F("client_time") - models.F("trusted_time"),
                     )
                     | models.Q(
                         time_check=TimeCheck.DEVICE_OK, trusted_time__isnull=False, trusted_time=models.F("client_time")

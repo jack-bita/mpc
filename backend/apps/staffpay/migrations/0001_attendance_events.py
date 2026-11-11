@@ -106,8 +106,8 @@ class Migration(migrations.Migration):
                     models.CheckConstraint(
                         condition=models.Q(
                             models.Q(
+                                ("clock_error", models.F("client_time") - models.F("trusted_time")),
                                 ("time_check", "server"),
-                                ("trusted_time", models.F("client_time") - models.F("clock_error")),
                                 ("trusted_time__isnull", False),
                             ),
                             models.Q(
