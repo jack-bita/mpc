@@ -42,6 +42,10 @@ class Document:
     # or answer; None when it holds none (ATT-1). A later record with an earlier time means the laptop's clock went
     # back between the two (02 §12).
     time_before: datetime | None
+    # Who made that record, as its line in the answer log names them; None when it names nobody of this shop, or
+    # there is none. A later record with an earlier time says a clock moved between the two, not at which, so a
+    # clock-in's flag names them too (Jack, ATT-1's review).
+    made_before_by: uuid.UUID | None
     created_by: StaffMember
 
 

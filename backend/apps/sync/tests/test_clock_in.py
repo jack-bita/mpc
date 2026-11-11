@@ -146,7 +146,8 @@ def test_clock_moved_back_is_unverified(
 ) -> None:
     # Done when #3: offline, Neema taps Ingia at 08:05. Juma comes at 08:10, sets the laptop back to 07:30, taps, and
     # sets it right again. At 12:00 the laptop sends both: Juma's says 07:30, yet it came after Neema's 08:05. His line
-    # is kept, with no time trusted, and a flag about it, naming him, for a manager to decide (02 §12).
+    # is kept, with no time trusted, and a flag about it for a manager to decide (02 §12). It names both of them: the
+    # server sees that a clock moved between the two taps, not whether it went back for his or forward for hers.
     taps = [_clock(1, staff_a2, arusha(8, 5)), _clock(2, staff_a, arusha(7, 30))]
     neemas, juma = _push(device_a, taps, sent_at=arusha(12, 0), received_at=arusha(12, 0, 1))
     first, second = _events(shop_a)
@@ -162,7 +163,7 @@ def test_clock_moved_back_is_unverified(
         None,
         None,
     )
-    assert _named(flag) == [staff_a.pk]
+    assert _named(flag) == [staff_a.pk, staff_a2.pk]
     # The flag is the saving code's own, so it reaches the laptop's answer; Neema's has none.
     assert (neemas.status, neemas.flags) == ("accepted", [])
     assert (juma.status, juma.flags) == ("accepted", [{"id": str(flag.pk), "kind": "unverified_time"}])
@@ -179,6 +180,31 @@ def test_a_toka_timed_after_sending_is_unverified(shop_a: Model, device_a: Devic
     assert (event.kind, event.time_check, event.trusted_time) == ("out", TimeCheck.UNVERIFIED, None)
     [flag] = _flags(shop_a, FlagKind.UNVERIFIED_TIME)
     assert (flag.subject_id, _named(flag)) == (event.pk, [staff_a.pk])
+
+
+def test_a_clock_moved_forward_names_both_workers(
+    shop_a: Model, device_a: Device, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # Offline afternoon. Juma sets the laptop forward to 17:00, taps Toka, and sets it back to 16:00; then Asha taps
+    # Toka, honestly, at 16:00. Her tap is the one that looks wrong, after his "17:00", but the server can't tell
+    # which moved: the flag about her line names them both, so a manager checks his too (Jack, ATT-1's review).
+    taps = [_clock(1, staff_a2, arusha(17, 0), kind="out"), _clock(2, staff_a, arusha(16, 0), kind="out")]
+    _push(device_a, taps, sent_at=arusha(18, 0), received_at=arusha(18, 0))
+    jumas, ashas = _events(shop_a)
+    assert (jumas.time_check, ashas.time_check) == (TimeCheck.DEVICE_OK, TimeCheck.UNVERIFIED)
+    [flag] = _flags(shop_a, FlagKind.UNVERIFIED_TIME)
+    assert (flag.subject_id, _named(flag)) == (ashas.pk, [staff_a.pk, staff_a2.pk])
+
+
+def test_a_record_before_by_nobody_known_names_only_the_worker(
+    shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # The record before was set aside, its maker no one of this shop, so its line names nobody: the flag names the
+    # worker alone, as there is no one else to ask.
+    stranger = dataclasses.replace(_clock(1, staff_a, arusha(8, 5)), created_by=uuid.uuid7())
+    _push(device_a, [stranger, _clock(2, staff_a, arusha(7, 30))], sent_at=arusha(12, 0), received_at=arusha(12, 0))
+    [flag] = _flags(shop_a, FlagKind.UNVERIFIED_TIME)
+    assert _named(flag) == [staff_a.pk]
 
 
 def test_suspended_worker_clock_in_flagged(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:

@@ -22,7 +22,7 @@ from apps.control.services import raise_flag
 from apps.core.api.times import ZonedDateTimeField
 from apps.core.changes import record_change, recording_changes
 from apps.people.models import Device, StaffMember
-from apps.staffpay.calculations import Evidence, check_time
+from apps.staffpay.calculations import Evidence, Sign, check_time
 from apps.staffpay.models import AttendanceEvent, ClockKind, TimeCheck
 
 
@@ -44,6 +44,8 @@ class Pushed(Protocol):
     def sent_at(self) -> dt.datetime: ...
     @property
     def time_before(self) -> dt.datetime | None: ...
+    @property
+    def made_before_by(self) -> uuid.UUID | None: ...
     @property
     def created_by(self) -> StaffMember: ...
 
@@ -96,4 +98,10 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
         return []
     # A sign the laptop's clock moved: the line is kept, and flagged for a manager, naming the worker (02 §12). On no
     # side: attendance belongs to the whole shop, as its rules do, so the flag is the shop's.
-    return [raise_flag(kind=FlagKind.UNVERIFIED_TIME, subject=event, people=[document.created_by], by=None)]
+    people = [document.created_by]
+    # Sign 1 says two records disagree, not whose clock moved: back for this tap, or forward for the one before. So the
+    # flag names that record's maker too, for a manager to check both (Jack, ATT-1's review). Read only now, through
+    # the shop's guard, as a flag is rare; someone the guard can't find is left out.
+    if Sign.RECORD_BEFORE_IS_LATER in checked.signs and document.made_before_by is not None:
+        people.extend(StaffMember.objects.filter(pk=document.made_before_by))
+    return [raise_flag(kind=FlagKind.UNVERIFIED_TIME, subject=event, people=people, by=None)]

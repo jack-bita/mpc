@@ -17,7 +17,7 @@ only: the repo is public.
 import datetime as dt
 from zoneinfo import ZoneInfo
 
-from apps.staffpay.calculations import Evidence, check_time
+from apps.staffpay.calculations import Evidence, Sign, check_time
 from apps.staffpay.models import TimeCheck
 
 ARUSHA = ZoneInfo("Africa/Dar_es_Salaam")
@@ -110,6 +110,25 @@ def test_a_time_after_the_laptops_clock_at_sending_is_a_sign() -> None:
         TimeCheck.DEVICE_OK,
         TimeCheck.UNVERIFIED,
     )
+
+
+def test_the_check_names_each_sign_it_found() -> None:
+    # Which signs, not only that there was one: sign 1 says two records disagree, so its flag names the maker of the
+    # record before too (Jack, ATT-1's review). None, for a time kept or sent at once.
+    assert check_time(morning()).signs == frozenset()
+    assert check_time(morning(sent_at=arusha(7, 20, 2), received_at=arusha(7, 20, 2))).signs == frozenset()
+    assert check_time(morning(client_time=arusha(7, 30), time_before=arusha(8, 5))).signs == {
+        Sign.RECORD_BEFORE_IS_LATER
+    }
+    everything_wrong = morning(
+        client_time=arusha(7, 30), time_before=arusha(8, 5), last_server_time=arusha(7, 50), sent_at=arusha(6, 0)
+    )
+    assert check_time(everything_wrong).signs == {
+        Sign.RECORD_BEFORE_IS_LATER,
+        Sign.BEFORE_THE_LAST_SERVER_TIME,
+        Sign.CLOCK_OFF_AT_SENDING,
+        Sign.AFTER_SENDING,
+    }
 
 
 def test_two_minutes_off_is_not_yet_a_sign() -> None:

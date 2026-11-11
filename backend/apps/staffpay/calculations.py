@@ -7,6 +7,7 @@ TypeScript twin and no shared test vectors (03 §8).
 """
 
 import datetime as dt
+import enum
 from dataclasses import dataclass
 
 from apps.staffpay.models import TimeCheck
@@ -17,6 +18,15 @@ ONLINE_WITHIN = dt.timedelta(minutes=2)
 # How far two clocks may disagree before it is a sign the laptop's moved: a laptop's clock drifts a little while it
 # is offline, and a push takes a moment to arrive. Past it, a worker could win a late fine's worth, so it stays small.
 CLOCK_SLACK = dt.timedelta(minutes=2)
+
+
+class Sign(enum.Enum):
+    # The four signs that a laptop's clock moved (02 §12), by name, so the saving code knows which it found: sign 1
+    # says two records disagree, and its flag names the maker of the record before too (Jack, ATT-1's review).
+    RECORD_BEFORE_IS_LATER = "record_before_is_later"  # 1. its record before has a later time
+    BEFORE_THE_LAST_SERVER_TIME = "before_the_last_server_time"  # 2. it is before a time the server had told it
+    CLOCK_OFF_AT_SENDING = "clock_off_at_sending"  # 3. the laptop's clock was off as it sent
+    AFTER_SENDING = "after_sending"  # 4. it is after the laptop's own clock as it sent
 
 
 @dataclass(frozen=True)
@@ -33,10 +43,12 @@ class Evidence:
 @dataclass(frozen=True)
 class CheckedTime:
     # The answer, copied onto the line (T4): how far its time can be trusted, the time trusted (None when it can't be),
-    # and how far off the laptop's clock was as it sent (its clock minus the server's).
+    # and how far off the laptop's clock was as it sent (its clock minus the server's). And the signs found, for the
+    # saving code: empty for a time kept or sent at once.
     time_check: TimeCheck
     trusted_time: dt.datetime | None
     clock_error: dt.timedelta
+    signs: frozenset[Sign]
 
 
 def check_time(evidence: Evidence) -> CheckedTime:
@@ -49,20 +61,24 @@ def check_time(evidence: Evidence) -> CheckedTime:
     # 4 below looks at it.
     waited = evidence.sent_at - evidence.client_time
     if dt.timedelta(0) <= waited <= ONLINE_WITHIN:
-        return CheckedTime(TimeCheck.SERVER, evidence.received_at, clock_error)
+        return CheckedTime(TimeCheck.SERVER, evidence.received_at, clock_error, frozenset())
     # Each sign compares the gap between two times with the slack, never a time moved by it: a time from year 1, which
     # a laptop's code can send, can't be moved 2 minutes earlier, and the crash would answer retry at every push.
-    signs = (
-        # 1. Its record before it has a later time: the clock went back between the two.
-        evidence.time_before is not None and evidence.time_before - evidence.client_time > CLOCK_SLACK,
+    seen = {
+        # 1. Its record before it has a later time: the clock moved between the two, back for this one or forward for
+        # that one.
+        Sign.RECORD_BEFORE_IS_LATER: (
+            evidence.time_before is not None and evidence.time_before - evidence.client_time > CLOCK_SLACK
+        ),
         # 2. Its time is before a time the server had already told the laptop.
-        evidence.last_server_time - evidence.client_time > CLOCK_SLACK,
+        Sign.BEFORE_THE_LAST_SERVER_TIME: evidence.last_server_time - evidence.client_time > CLOCK_SLACK,
         # 3. The laptop's clock was off as it sent, slow or fast, so what it wrote that morning can't be believed.
-        abs(clock_error) > CLOCK_SLACK,
+        Sign.CLOCK_OFF_AT_SENDING: abs(clock_error) > CLOCK_SLACK,
         # 4. Its time is after the laptop's own clock as it sent: made "in the future", so the clock was moved forward
         # for the tap and set right again before the push, which no other sign sees (ATT-1's review).
-        evidence.client_time - evidence.sent_at > CLOCK_SLACK,
-    )
-    if any(signs):
-        return CheckedTime(TimeCheck.UNVERIFIED, None, clock_error)
-    return CheckedTime(TimeCheck.DEVICE_OK, evidence.client_time, clock_error)
+        Sign.AFTER_SENDING: evidence.client_time - evidence.sent_at > CLOCK_SLACK,
+    }
+    signs = frozenset(sign for sign, found in seen.items() if found)
+    if signs:
+        return CheckedTime(TimeCheck.UNVERIFIED, None, clock_error, signs)
+    return CheckedTime(TimeCheck.DEVICE_OK, evidence.client_time, clock_error, signs)
