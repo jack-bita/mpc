@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   databaseName,
+  type DocumentRow,
   openShopDatabase,
   type OutboxRow,
   type ShopDatabase,
@@ -36,6 +37,17 @@ function waiting(id: string, deviceSeq: number): OutboxRow {
     attempts: 0,
     last_error: null,
     posted_seq: null,
+  };
+}
+
+function made(id: string, type: string, clientTime: string): DocumentRow {
+  return {
+    id,
+    type,
+    schema_version: 1,
+    client_time: clientTime,
+    created_by: ASHA.id,
+    payload: {},
   };
 }
 
@@ -106,5 +118,39 @@ describe("the device database", () => {
     await expect(
       db.outbox.add(waiting("0192f000-0000-7000-8000-0000000000d2", 1)),
     ).rejects.toMatchObject({ name: "ConstraintError" });
+  });
+
+  it("finds one kind of document for one day", async () => {
+    // Today's clock-ins (SYNC-11): yesterday's clock-in and today's sale are left out.
+    const db = open(MPC);
+    await db.documents.bulkAdd([
+      made(
+        "0192f000-0000-7000-8000-0000000000c1",
+        "clock",
+        "2026-11-10T05:58:00.000Z",
+      ),
+      made(
+        "0192f000-0000-7000-8000-0000000000c2",
+        "clock",
+        "2026-11-11T06:02:00.000Z",
+      ),
+      made(
+        "0192f000-0000-7000-8000-0000000000c3",
+        "sale",
+        "2026-11-11T07:15:00.000Z",
+      ),
+    ]);
+
+    const today = await db.documents
+      .where("[type+client_time]")
+      .between(
+        ["clock", "2026-11-11T00:00:00.000Z"],
+        ["clock", "2026-11-12T00:00:00.000Z"],
+      )
+      .toArray();
+
+    expect(today.map((document) => document.id)).toEqual([
+      "0192f000-0000-7000-8000-0000000000c2",
+    ]);
   });
 });

@@ -37,16 +37,19 @@ export interface PinCheckRow {
   pin_changed_at: string;
 }
 
-/** A document made on this device: a clock-in now, a sale or a repayment later (03 §6.1). */
+/** A document made on this device: a clock-in now, a sale or a repayment later (03 §6.1). It holds
+ * the push's envelope (03 §6.3) but its place in the line, device_seq, which its outbox row keeps. */
 export interface DocumentRow {
   /** A UUIDv7 made here, so the server knows a resend as the same document (SYNC-4). */
   id: string;
   type: string;
   schema_version: number;
-  /** The document as the push sends it. */
-  body: unknown;
-  /** This laptop's clock when it was saved. */
-  saved_at: string;
+  /** This laptop's clock when it was made, with its zone (`Z`), as the push sends it (ATT-1). */
+  client_time: string;
+  /** The staff member who made it: the server checks they were working then (SYNC-5). */
+  created_by: string;
+  /** What the document says, in its type's shape. */
+  payload: unknown;
 }
 
 /** One document waiting to be sent (SYNC-8, 03 §6.2). */
@@ -102,8 +105,9 @@ export const VERSIONS: readonly Version[] = [
       setting_keys: "key",
       // One check value per person (SYNC-10).
       pin_checks: "staff_id",
-      // Everything made here, of every type, so a screen can list one kind: today's clock-ins.
-      documents: "id, type",
+      // Everything made here, of every type. By type, and by type and time together, so a screen
+      // reads one kind for one day (today's clock-ins, SYNC-11) without reading every day before it.
+      documents: "id, type, [type+client_time]",
       // One row per unsent document. Unique device_seq: one number, one document (SYNC-4).
       // By status, so the push finds what is waiting and the needs-attention list what was set aside.
       outbox: "id, &device_seq, status",
