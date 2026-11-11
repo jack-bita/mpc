@@ -196,13 +196,15 @@ def test_push_takes_at_most_100_documents(shop_a: Shop, laptop: tuple[Device, st
     ("changes", "field", "code"),
     [
         ({"device_seq": 0}, "documents.0.device_seq", "min_value"),
+        # A number too long for a missing number's flag to hold (HIGHEST_DEVICE_SEQ).
+        ({"device_seq": 10**12}, "documents.0.device_seq", "max_value"),
         # A random UUID (version 4), not one made with the time, as every id a device makes is (ADR-0007).
         ({"id": "6f1c2e8a-3b4d-4c5e-9f6a-7b8c9d0e1f2a"}, "documents.0.id", "id.not_uuid7"),
         ({"created_by": "not-an-id"}, "documents.0.created_by", "invalid"),
         ({"payload": ["2 bags of pumba"]}, "documents.0.payload", "not_a_dict"),
         ({"type": "t" * 41}, "documents.0.type", "max_length"),
     ],
-    ids=["seq_0", "not_uuid7", "maker_not_an_id", "payload_not_an_object", "type_too_long"],
+    ids=["seq_0", "seq_too_long", "not_uuid7", "maker_not_an_id", "payload_not_an_object", "type_too_long"],
 )
 def test_a_broken_envelope_refuses_the_whole_push(
     shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember, changes: dict[str, Any], field: str, code: str

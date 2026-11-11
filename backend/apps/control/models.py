@@ -95,7 +95,8 @@ class Flag(ShopScoped):
     subject_type = models.CharField(max_length=TYPE_CODE_MAX_LENGTH)
     subject_id = models.UUIDField()
     # What the system worked out, and what a person recorded. Empty, both, for kinds that are facts, not
-    # amounts: a transaction code used twice, a device's missing records.
+    # amounts: a transaction code used twice. A device's missing records keep the number the server waited
+    # for and the one that came (SYNC-5), so the difference is how many are missing.
     expected = models.DecimalField(max_digits=_NUMBER_DIGITS, decimal_places=_NUMBER_PLACES, null=True, blank=True)
     actual = models.DecimalField(max_digits=_NUMBER_DIGITS, decimal_places=_NUMBER_PLACES, null=True, blank=True)
     # actual − expected, worked out by PostgreSQL as the row is written and stored with it (db_persist). One

@@ -170,14 +170,21 @@ def test_the_move_to_v2_kept_each_skip_list() -> None:
     # AUTH-8's migrations wrote each table's list out again as they moved it. A word lost on the way would be silent:
     # `last_seen_at` is no secret, so history_problems wouldn't object, and each device would write a history row every
     # few minutes, burying the owner's trail. A fixed list of the tables that moved: a new table needs no change here.
-    # A list a later migration changes changes here too: the device's, which skips its push report since SYNC-5
-    # (people's 0013), each column of it moved by every push.
+    # A list a later migration changes changes here too: the device's, which skips its push report and its last number
+    # since SYNC-5 (people's 0013 and 0014), each column moved by every push.
     moved = {
         "people_staffmember": {"pin_hash"},
         "people_role": set(),
         "people_roleassignment": set(),
         "people_permissiongrant": set(),
-        "people_device": {"key_hash", "last_seen_at", "last_synced_at", "unsent_count", "app_version"},
+        "people_device": {
+            "key_hash",
+            "last_seen_at",
+            "last_synced_at",
+            "unsent_count",
+            "app_version",
+            "last_device_seq",
+        },
         "shops_side": set(),
         "shops_paymentaccount": set(),
         "shops_stocklocation": set(),

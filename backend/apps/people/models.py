@@ -456,6 +456,13 @@ class Device(Editable):
     last_synced_at = models.DateTimeField(null=True, blank=True, editable=False)
     unsent_count = models.PositiveIntegerField(null=True, blank=True, editable=False)
     app_version = models.CharField(max_length=APP_VERSION_LENGTH, blank=True, editable=False)
+    # The number the laptop's next record should follow (SYNC-5, 02 §17): it numbers its records 1, 2, 3 and never
+    # skips one, so the next is this + 1, and a jump raises a device_gap flag. Mostly the highest it sent; after a
+    # reset that numbers again from 1, the new count's. Empty before its first record. Moved only by the push, record by
+    # record, in each record's own transaction (move_device_number, apps/people/services.py), so a record rolled back
+    # takes its number with it. Moved by every push, as the report above: its version never moves for it, and its
+    # edit history skips it (migration 0014).
+    last_device_seq = models.PositiveBigIntegerField(null=True, blank=True, editable=False)
 
     class Meta(Editable.Meta):
         # Builds on Editable.Meta, so `objects`, with the guard, stays the default manager (CORE-2). The database is

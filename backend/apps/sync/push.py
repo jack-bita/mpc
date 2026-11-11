@@ -5,6 +5,7 @@ transaction of its own, each answered once, and the same way every time it comes
       in the answer log already?       → duplicate, with the first answer
       type, maker and shape all right?   no → invalid: its line and a flag, and the batch goes on
       save it, in one transaction        → accepted: the document, its change lines, its line, its change number
+      its laptop number skips some?      → a device_gap flag about its line, in the same transaction (SYNC-5)
       a server problem?                  → retry, and the batch stops here
     then the laptop's report on itself  → its row: last synced, records still unsent, app version (SYNC-5)
 
@@ -19,6 +20,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 import psycopg
@@ -26,14 +28,15 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from rest_framework import exceptions
 
-from apps.control.models import FlagKind
+from apps.control.models import Flag, FlagKind
 from apps.control.services import raise_flag
 from apps.core.acting import acting_as
 from apps.core.api.errors import INVALID as ONLY_FIELDS_WRONG
 from apps.core.api.errors import refusal_parts
 from apps.core.changes import recording_changes
+from apps.core.links import link_type_of
 from apps.people.models import Device, StaffMember
-from apps.people.services import record_sync
+from apps.people.services import lock_device_numbers, move_device_number, record_sync
 from apps.sync.document_types import Document, DocumentType, document_type
 from apps.sync.models import PushedDocument, PushedStatus
 
@@ -45,6 +48,11 @@ ACCEPTED = PushedStatus.ACCEPTED.value
 INVALID = PushedStatus.INVALID.value
 DUPLICATE = "duplicate"
 RETRY = "retry"
+
+# The highest number a laptop may give a record (SYNC-5). A missing number's flag keeps the numbers in the flag's own
+# columns (Flag.expected and .actual, numeric(15,3): 12 digits before the point), so no number may be longer, or its
+# flag couldn't be written. At 1,000 records a day, a laptop would reach it in about 2.7 billion years.
+HIGHEST_DEVICE_SEQ = 10**12 - 1
 
 
 @dataclass(frozen=True)
@@ -149,17 +157,22 @@ def _save(
         created_by=maker,
     )
     try:
-        # One document, one transaction (03 §5.5): its rows, its change lines and its line in the answer log are
-        # saved together, or not at all. X3: both books name its maker and the laptop, for every row its saving code
-        # writes or edits. The block opens first, so the services the saving code calls join it, and the change
-        # numbers come once, at its end (SYNC-1).
+        # One document, one transaction (03 §5.5): its rows, its change lines, its line in the answer log and its
+        # laptop's number are saved together, or not at all. X3: both books name its maker and the laptop, for every
+        # row its saving code writes or edits. The block opens first, so the services the saving code calls join it,
+        # and the change numbers come once, at its end (SYNC-1).
         with acting_as(maker, device=device), transaction.atomic():
+            # The laptop's last number, its row locked first of all: every record takes this lock before any other,
+            # so two pushes of one laptop take turns in the same order, and can't each wait for the other.
+            last = lock_device_numbers(device)
             with recording_changes(device.shop_id) as numbers:
                 flags = kind.post(document, payload)
             flagged = [{"id": str(flag.pk), "kind": flag.kind} for flag in flags]
             # After the block, still in the transaction: the line keeps the block's last number, known only once the
             # block has ended. The shop's change counter stays locked for this one more INSERT, until the commit.
-            _line(device, sent, received_at, maker, status=ACCEPTED, posted_seq=numbers.last, flags=flagged).save()
+            line = _line(device, sent, received_at, maker, status=ACCEPTED, posted_seq=numbers.last, flags=flagged)
+            line.save()
+            _check_number(device, line, last)
     except (ValidationError, IntegrityError) as refusal:
         # Refused, and all of it rolled back. Perhaps by a twin: another copy of this document, sent at the same
         # moment, that finished while this one was saving, so its rows or its line clash with this copy's. Its
@@ -197,12 +210,15 @@ def _invalid(
 ) -> Answer:
     # Set aside: its line, with the reason, and a flag about the line, naming its maker if known, in one transaction
     # of their own, so a repeat gets the same answer and raises no second flag (03 §6.3). The laptop keeps the
-    # document under "needs attention".
+    # document under "needs attention". It came, so its number is not missing: it moves the laptop's number as a
+    # saved one does, in the same transaction.
     try:
         with transaction.atomic():
+            last = lock_device_numbers(device)
             line = _line(device, sent, received_at, maker, status=INVALID, reason=code, reason_fields=fields)
             line.save()
             raise_flag(kind=FlagKind.INVALID_DOCUMENT, subject=line, people=[] if maker is None else [maker], by=None)
+            _check_number(device, line, last)
     except IntegrityError:
         # A twin wrote its line first: its answer is the answer, as in _save.
         twin = _stored(sent.id)
@@ -210,6 +226,58 @@ def _invalid(
             raise
         return _replay(twin)
     return Answer(id=sent.id, status=INVALID, code=code, fields=fields)
+
+
+def _check_number(device: Device, line: PushedDocument, last: int) -> None:
+    # The laptop numbers its records 1, 2, 3 and never skips one (03 §6.3), so after `last` comes `last + 1` (SYNC-5).
+    # Run after the record's line, in its transaction: the flag is about the line, and a record rolled back takes its
+    # number and its flag with it. Never a refusal: the record is kept whatever its number (accept, then flag).
+    number = line.device_seq
+    awaited = last + 1
+    if number == awaited:
+        move_device_number(device, number)
+    elif number > awaited:
+        # A jump: the numbers from `awaited` to `number - 1` never came, deleted on the laptop or lost.
+        _flag_numbers(device, line, awaited)
+        move_device_number(device, number)
+    elif _fills_a_gap(device, line):
+        # Late, not lost: one of the numbers a gap's flag waits for. The laptop's count stays where it was.
+        pass
+    else:
+        # The numbers went back: a laptop reset that numbers again from 1, or a bug on it. Kept and flagged once, then
+        # counted on from here, or every record after a reset would raise a flag of its own.
+        _flag_numbers(device, line, awaited)
+        move_device_number(device, number)
+
+
+def _flag_numbers(device: Device, line: PushedDocument, awaited: int) -> None:
+    # One device_gap flag about the record that came: the number the server waited for, and the one that came. Their
+    # difference is how many are missing, or below zero when the numbers went back. On the laptop's own side, so its
+    # people see it (X1); naming nobody, as the server can't know who made a record it never got.
+    raise_flag(
+        kind=FlagKind.DEVICE_GAP,
+        subject=line,
+        expected=Decimal(awaited),
+        actual=Decimal(line.device_seq),
+        side=device.home_side,
+        by=None,
+    )
+
+
+def _fills_a_gap(device: Device, line: PushedDocument) -> bool:
+    # Whether the line's number is one a gap of this laptop is missing: between the number a device_gap flag waited
+    # for and the one that came after the gap, that one left out. Its flag's status doesn't matter: a record that
+    # comes late is late, even after a manager closed the flag. A flag of numbers gone back waits for none (its
+    # `expected` is above its `actual`), so it never matches. Asked only of a number below the laptop's count, which
+    # is rare.
+    lines = PushedDocument.objects.filter(device=device).values("pk")
+    return Flag.objects.filter(
+        kind=FlagKind.DEVICE_GAP,
+        subject_type=link_type_of(line),
+        subject_id__in=lines,
+        expected__lte=line.device_seq,
+        actual__gt=line.device_seq,
+    ).exists()
 
 
 def _line(

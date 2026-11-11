@@ -26,7 +26,7 @@ from apps.people.models import APP_VERSION_LENGTH, Font, StaffMember
 from apps.people.permissions import held_permissions
 from apps.shops.models import PaymentAccount, Setting, Side
 from apps.sync.models import PushedStatus
-from apps.sync.push import ACCEPTED, DUPLICATE, INVALID, RETRY
+from apps.sync.push import ACCEPTED, DUPLICATE, HIGHEST_DEVICE_SEQ, INVALID, RETRY
 
 
 class SideRecord(serializers.ModelSerializer[Side]):
@@ -245,7 +245,10 @@ class PushedEnvelope(serializers.Serializer[Any]):
     id = serializers.UUIDField(validators=[uuid7_only], help_text="The document's id, made on the laptop (UUIDv7).")
     type = serializers.CharField(max_length=40)
     schema_version = serializers.IntegerField(min_value=1, max_value=2**31 - 1)
-    device_seq = serializers.IntegerField(min_value=1, max_value=2**63 - 1, help_text="The laptop's number for it.")
+    # Up to HIGHEST_DEVICE_SEQ, so a missing number's flag can always hold it (apps/sync/push.py).
+    device_seq = serializers.IntegerField(
+        min_value=1, max_value=HIGHEST_DEVICE_SEQ, help_text="The laptop's number for it."
+    )
     client_time = serializers.DateTimeField(help_text="The laptop's clock when it was made: kept, never trusted.")
     created_by = serializers.UUIDField(help_text="The staff member who made it at the counter.")
     payload = serializers.DictField(help_text="The document itself, in its type's shape.")

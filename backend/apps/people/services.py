@@ -942,6 +942,31 @@ def record_sync(device: Device, *, at: datetime, unsent_count: int, app_version:
     return bool(written)
 
 
+def lock_device_numbers(device: Device) -> int:
+    """The number the device's next record should follow (0 before its first), with the device's row locked until
+    the caller's transaction ends (SYNC-5). Two pushes of one laptop at the same moment take turns: the second reads
+    the number the first left, not one from before it. Called by the push at the start of each record's transaction
+    (apps/sync/push.py)."""
+    _check_shop(device.shop_id, None)
+    if not transaction.get_connection().in_atomic_block:
+        # Outside a transaction the lock would end with this one query, and two pushes could read the same number.
+        raise TransactionManagementError("lock_device_numbers locks until the transaction ends: open one first.")
+    # no_key, as block's: the rows that link to the device as a record is saved (its line in the answer log, its
+    # ticket or sale) take a light lock on it, which this one lets through. A full lock would make each such insert,
+    # by another push of this laptop, wait for this whole transaction.
+    last = Device.objects.select_for_update(no_key=True).values_list("last_device_seq", flat=True).get(pk=device.pk)
+    return last or 0
+
+
+def move_device_number(device: Device, number: int) -> None:
+    """Make `number` the one the device's next record should follow. Inside the transaction lock_device_numbers
+    locked the row in, so a record rolled back takes its number with it. One UPDATE of this one column, as
+    record_sync's: the row's version stays, and the edit history skips it (migration 0014)."""
+    _check_shop(device.shop_id, None)
+    Device.objects.filter(pk=device.pk).update(last_device_seq=number)
+    device.last_device_seq = number
+
+
 def _set_device_status(
     device: Device, was: DeviceStatus, becomes: DeviceStatus, action: AuditAction, *, by: StaffMember, reason: str
 ) -> Device:
