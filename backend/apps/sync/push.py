@@ -30,6 +30,7 @@ from typing import Any, cast
 import psycopg
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Max
 from rest_framework import exceptions
 
 from apps.control.models import Flag, FlagKind, FlagStatus
@@ -180,7 +181,7 @@ def _save(
         with acting_as(maker, device=device), transaction.atomic():
             # The laptop's last number, its row locked first of all: every record takes this lock before any other,
             # so two pushes of one laptop take turns in the same order, and can't each wait for the other.
-            last = lock_device_numbers(device)
+            last = _last_number(device)
             # What is wrong with its maker, read now, before the block: once the block has taken the shop's change
             # numbers, the shop's counter stays locked until the commit, and every save of the shop waits (SYNC-1).
             with _checks_of_our_own():
@@ -239,7 +240,7 @@ def _invalid(
     # saved one does, in the same transaction.
     try:
         with transaction.atomic():
-            last = lock_device_numbers(device)
+            last = _last_number(device)
             line = _line(device, sent, received_at, maker, status=INVALID, reason=code, reason_fields=fields)
             line.save()
             raise_flag(kind=FlagKind.INVALID_DOCUMENT, subject=line, people=[] if maker is None else [maker], by=None)
@@ -270,6 +271,18 @@ def _checks_of_our_own() -> Iterator[None]:
         yield
     except (ValidationError, IntegrityError) as error:
         raise CheckFailed("A check of the push's own failed after the record's line.") from error
+
+
+def _last_number(device: Device) -> int:
+    # The number the laptop's next record should follow, its row locked until the record's transaction ends
+    # (lock_device_numbers). When the server never kept one, the laptop's highest line in the answer log says it: a
+    # laptop that pushed before SYNC-5 counts on from its last record, not from 0, which would flag every number it
+    # ever sent as missing (SYNC-5's review). A new laptop has no line, so it starts at 1.
+    last = lock_device_numbers(device)
+    if last is not None:
+        return last
+    highest = PushedDocument.objects.filter(device=device).aggregate(highest=Max("device_seq"))["highest"]
+    return highest or 0
 
 
 def _check_number(device: Device, line: PushedDocument, last: int) -> None:

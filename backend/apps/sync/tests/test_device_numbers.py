@@ -134,6 +134,20 @@ def test_a_new_laptop_starts_at_one(shop_a: Model, device_a: Device, staff_a: St
     assert _numbers(gap) == (Decimal(1), Decimal(3))
 
 
+def test_a_laptop_that_pushed_before_its_numbers_were_kept_counts_on_from_its_last_record(
+    shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # A laptop sent #1 to #3 before the server kept its last number (SYNC-4): its row says nothing, but its answer log
+    # holds them. Its next record, #4, follows its last one, and is no gap from 1 to 3 that would never close
+    # (SYNC-5's review).
+    _push_numbers(device_a, staff_a, 1, 2, 3)
+    with shop_context(shop_a):
+        Device.objects.filter(pk=device_a.pk).update(last_device_seq=None)
+    _push_numbers(device_a, staff_a, 4)
+    assert _gaps(shop_a) == []
+    assert _last(device_a) == 4
+
+
 def test_a_late_record_raises_no_new_flag(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
     # #3 came before #2, which was only late: #2 fills the gap #3 opened, and is no "number gone back". The laptop's
     # last number stays 3: #4 comes next.

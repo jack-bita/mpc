@@ -974,11 +974,11 @@ def record_outages(device: Device, outages: Sequence[Outage]) -> None:
     DeviceOutage.objects.bulk_create(rows.values(), ignore_conflicts=True)
 
 
-def lock_device_numbers(device: Device) -> int:
-    """The number the device's next record should follow (0 before its first), with the device's row locked until
-    the caller's transaction ends (SYNC-5). Two pushes of one laptop at the same moment take turns: the second reads
-    the number the first left, not one from before it. Called by the push at the start of each record's transaction
-    (apps/sync/push.py)."""
+def lock_device_numbers(device: Device) -> int | None:
+    """The number the device's next record should follow, None if the server never kept one (a new device, or one that
+    pushed before SYNC-5), with the device's row locked until the caller's transaction ends (SYNC-5). Two pushes of
+    one laptop at the same moment take turns: the second reads the number the first left, not one from before it.
+    Called by the push at the start of each record's transaction (apps/sync/push.py)."""
     _check_shop(device.shop_id, None)
     if not transaction.get_connection().in_atomic_block:
         # Outside a transaction the lock would end with this one query, and two pushes could read the same number.
@@ -986,8 +986,7 @@ def lock_device_numbers(device: Device) -> int:
     # no_key, as block's: the rows that link to the device as a record is saved (its line in the answer log, its
     # ticket or sale) take a light lock on it, which this one lets through. A full lock would make each such insert,
     # by another push of this laptop, wait for this whole transaction.
-    last = Device.objects.select_for_update(no_key=True).values_list("last_device_seq", flat=True).get(pk=device.pk)
-    return last or 0
+    return Device.objects.select_for_update(no_key=True).values_list("last_device_seq", flat=True).get(pk=device.pk)
 
 
 def move_device_number(device: Device, number: int) -> None:
