@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
 import { ApiRefusal } from "@/api/refusal";
-import { saveDevice, savedBlocked } from "@/features/devices/this-device";
+import {
+  saveDevice,
+  savedBlocked,
+  savedDevice,
+} from "@/features/devices/this-device";
 import { DAWA_LAPTOP } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { ASHA, DAWA_SIDE, IDLE_15, IDLE_RULE } from "@/test/shop-lists";
@@ -390,6 +394,17 @@ describe("a pull", () => {
     await expect(pull(db)).rejects.toBeInstanceOf(ApiRefusal);
 
     expect(savedBlocked()).toBe(true);
+    expect(await readCursor(db)).toBe(120);
+  });
+
+  it("forgets the device when its key opens none, and changes nothing", async () => {
+    saveDevice(DAWA_LAPTOP);
+    answer("GET", PULL, refusal(401, "not_authenticated"));
+
+    await expect(pull(db)).rejects.toBeInstanceOf(ApiRefusal);
+
+    expect(savedDevice()).toBeNull();
+    expect(savedBlocked()).toBe(false);
     expect(await readCursor(db)).toBe(120);
   });
 
