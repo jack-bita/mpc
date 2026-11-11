@@ -24,7 +24,8 @@ from decimal import Decimal
 from typing import Any, cast
 
 import pytest
-from django.db import transaction
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.db.models import Model
 
 from apps.control.models import Flag, FlagKind, FlagNote, FlagStatus, FlagStep
@@ -38,6 +39,7 @@ from apps.sync.models import PushedDocument
 from apps.sync.push import HIGHEST_DEVICE_SEQ, Answer, Sent, push
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 from tests.probe.documents import TICKET, TICKET_CODE, post_ticket
+from tests.probe.models import Ticket
 
 pytestmark = pytest.mark.django_db
 
@@ -327,6 +329,33 @@ def test_two_pushes_of_one_laptop_take_turns_on_its_numbers(
     assert [answer.status for answer in cast(list[Answer], answers)] == ["accepted"]
     assert _gaps(shop_a) == []
     assert _last(device_a) == 2
+
+
+@pytest.mark.parametrize("error", [ValidationError("refused", code="flag.numbers_unpaired"), IntegrityError("refused")])
+@pytest.mark.parametrize("kind", [FlagKind.DEVICE_GAP, FlagKind.PERMISSION_BREAK])
+def test_a_checks_own_error_is_a_retry_never_an_invalid_record(
+    monkeypatch: pytest.MonkeyPatch,
+    shop_a: Model,
+    device_a: Device,
+    staff_a: StaffMember,
+    kind: FlagKind,
+    error: Exception,
+) -> None:
+    # Writing a flag after the record's line fails: a bug in our code, not in the record. The record isn't set aside
+    # as invalid, with a reason about the flag's own columns: it is a server problem, so retry, nothing of it saved,
+    # and the laptop sends it again once the bug is fixed (SYNC-5's review). #3 opens a gap, and its maker holds no
+    # key, so each flag's write is broken in turn.
+    def broken(**kwargs: object) -> None:
+        if kwargs["kind"] == kind:
+            raise error
+
+    _push_numbers(device_a, staff_a, 1)
+    monkeypatch.setattr(push_module, "raise_flag", broken)
+    assert [answer.status for answer in _push_numbers(device_a, staff_a, 3)] == ["retry"]
+    with shop_context(shop_a):
+        assert list(PushedDocument.objects.values_list("device_seq", flat=True)) == [1]
+        assert not Ticket.objects.filter(device_seq=3).exists()
+    assert _last(device_a) == 1
 
 
 def test_the_number_check_runs_after_the_line(

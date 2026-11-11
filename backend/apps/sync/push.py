@@ -20,7 +20,8 @@ This file owns the order, the transactions and the answers; the answer log's own
 
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -187,9 +188,10 @@ def _save(
             # block has ended. The shop's change counter stays locked for this one more INSERT, until the commit.
             line = _line(device, sent, received_at, maker, status=ACCEPTED, posted_seq=numbers.last, flags=flagged)
             line.save()
-            _check_number(device, line, last)
-            _check_maker(device, line, kind, maker)
-            _check_working(device, line, maker)
+            with _checks_of_our_own():
+                _check_number(device, line, last)
+                _check_maker(device, line, kind, maker)
+                _check_working(device, line, maker)
     except (ValidationError, IntegrityError) as refusal:
         # Refused, and all of it rolled back. Perhaps by a twin: another copy of this document, sent at the same
         # moment, that finished while this one was saving, so its rows or its line clash with this copy's. Its
@@ -235,7 +237,8 @@ def _invalid(
             line = _line(device, sent, received_at, maker, status=INVALID, reason=code, reason_fields=fields)
             line.save()
             raise_flag(kind=FlagKind.INVALID_DOCUMENT, subject=line, people=[] if maker is None else [maker], by=None)
-            _check_number(device, line, last)
+            with _checks_of_our_own():
+                _check_number(device, line, last)
     except IntegrityError:
         # A twin wrote its line first: its answer is the answer, as in _save.
         twin = _stored(sent.id)
@@ -243,6 +246,24 @@ def _invalid(
             raise
         return _replay(twin)
     return Answer(id=sent.id, status=INVALID, code=code, fields=fields)
+
+
+class CheckFailed(Exception):
+    # A check of the push's own, after the record's line, refused: a flag that couldn't be written, a device row that
+    # couldn't be moved. A bug in our code, never a fault of the record.
+    pass
+
+
+@contextmanager
+def _checks_of_our_own() -> Iterator[None]:
+    # The push's own checks run after the record's line, inside the record's transaction, inside the `try` that reads
+    # the saving code's refusals. A ValidationError or IntegrityError of theirs would read as the record's own: set
+    # aside as invalid, its rows rolled back, the laptop told a reason about a flag's columns. So each becomes a plain
+    # server error, which rolls the whole record back and answers retry (_answer), as any bug does (SYNC-5's review).
+    try:
+        yield
+    except (ValidationError, IntegrityError) as error:
+        raise CheckFailed("A check of the push's own failed after the record's line.") from error
 
 
 def _check_number(device: Device, line: PushedDocument, last: int) -> None:
