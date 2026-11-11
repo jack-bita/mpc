@@ -315,6 +315,24 @@ describe("a pull", () => {
     expect(await readCursor(db)).toBe(121);
   });
 
+  it("stops when a page says more wait but its cursor doesn't move", async () => {
+    // Not a working server's page: asking again from the same cursor would never end.
+    serverGives(page([], 120, true), page([], 120, true));
+
+    await expect(pull(db)).rejects.toThrow("doesn't move on");
+
+    expect(askedFrom).toEqual(["120"]);
+  });
+
+  it("refuses a page whose cursor goes back, and changes nothing", async () => {
+    serverGives(page([renamed(119)], 119));
+
+    await expect(pull(db)).rejects.toThrow("doesn't move on");
+
+    expect(await db.staff.get(ASHA.id)).toEqual(ASHA);
+    expect(await readCursor(db)).toBe(120);
+  });
+
   it("keeps how far the server's clock is ahead, and its last time", async () => {
     // The laptop's clock says 08:58 while the server says 09:00: two minutes behind. An empty page
     // carries the server's time too.

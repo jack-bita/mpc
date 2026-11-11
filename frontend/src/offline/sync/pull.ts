@@ -59,7 +59,7 @@ export async function pull(db: ShopDatabase): Promise<void> {
     );
     const answeredAt = Date.now();
 
-    checkPage(page);
+    checkPage(page, cursor);
     await applyPage(db, page, (askedAt + answeredAt) / 2);
     cursor = page.cursor;
 
@@ -71,7 +71,14 @@ export async function pull(db: ShopDatabase): Promise<void> {
 
 // Every change on the page is one the app can apply, or nothing is: checked before the transaction, so
 // a page the app can't read changes nothing at all.
-function checkPage(page: Page): void {
+function checkPage(page: Page, askedFrom: number): void {
+  // The cursor only ever moves on: a page that took it back would read old changes as new. And a page
+  // that says more wait must have moved it, or the next ask is the same ask, and the pull would never end.
+  // Neither comes from a working server; better to stop and try again at the next sync.
+  if (page.cursor < askedFrom || (page.has_more && page.cursor === askedFrom))
+    throw new Error(
+      `Page cursor ${page.cursor} after ${askedFrom} doesn't move on.`,
+    );
   for (const change of page.changes) {
     if (!(LISTS as readonly string[]).includes(change.entity))
       throw new AppTooOld(change.entity);
