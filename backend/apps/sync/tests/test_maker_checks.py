@@ -26,7 +26,9 @@ from collections.abc import Callable, Sequence
 from zoneinfo import ZoneInfo
 
 import pytest
+from django.db import connection
 from django.db.models import Model
+from django.test.utils import CaptureQueriesContext
 
 from apps.control.models import AuditEvent, Flag, FlagKind, FlagPerson
 from apps.core.links import LINK_TYPES
@@ -274,3 +276,22 @@ def test_a_leaving_date_recorded_late_counts_from_the_day_after(
 def test_a_working_maker_raises_no_suspension_flag(shop_a: Model, device_a: Device, asha: StaffMember) -> None:
     _push(device_a, [_sent(1, asha)])
     assert _flags(shop_a, FlagKind.SUSPENDED_STAFF_ACTIVITY) == []
+
+
+def test_the_maker_is_read_before_the_shops_change_counter_is_taken(
+    shop_a: Model, device_a: Device, asha: StaffMember
+) -> None:
+    # The shop's change counter, once a record's block has taken its numbers, stays locked until the record commits,
+    # and every save of the shop waits for it (SYNC-1). So the maker's keys and status are read before it, and only
+    # writes come after: the line, the laptop's number, the flags (SYNC-5's review). Each read is named by its table.
+    with CaptureQueriesContext(connection) as queries:
+        _push(device_a, [_sent(1, asha)])
+    sql = [query["sql"] for query in queries.captured_queries]
+    counter = next(i for i, text in enumerate(sql) if "core_shopsequence" in text)
+    reads_after = [
+        text
+        for text in sql[counter:]
+        if text.startswith("SELECT")
+        and any(table in text for table in ("people_roleassignment", "people_permissiongrant", "control_auditevent"))
+    ]
+    assert reads_after == []

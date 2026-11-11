@@ -181,17 +181,23 @@ def _save(
             # The laptop's last number, its row locked first of all: every record takes this lock before any other,
             # so two pushes of one laptop take turns in the same order, and can't each wait for the other.
             last = lock_device_numbers(device)
+            # What is wrong with its maker, read now, before the block: once the block has taken the shop's change
+            # numbers, the shop's counter stays locked until the commit, and every save of the shop waits (SYNC-1).
+            with _checks_of_our_own():
+                broken = _maker_breaks(device, kind, maker, made_at=sent.client_time)
             with recording_changes(device.shop_id) as numbers:
                 flags = kind.post(document, payload)
             flagged = [{"id": str(flag.pk), "kind": flag.kind} for flag in flags]
             # After the block, still in the transaction: the line keeps the block's last number, known only once the
-            # block has ended. The shop's change counter stays locked for this one more INSERT, until the commit.
+            # block has ended. The shop's counter stays locked from here to the commit, so only writes come after it:
+            # the line, the laptop's number and the flags, and, for a late record alone, the two reads that say
+            # whether its gap is whole, as they count the line just saved.
             line = _line(device, sent, received_at, maker, status=ACCEPTED, posted_seq=numbers.last, flags=flagged)
             line.save()
             with _checks_of_our_own():
                 _check_number(device, line, last)
-                _check_maker(device, line, kind, maker)
-                _check_working(device, line, maker)
+                for broken_rule in broken:
+                    raise_flag(kind=broken_rule, subject=line, side=device.home_side, people=[maker], by=None)
     except (ValidationError, IntegrityError) as refusal:
         # Refused, and all of it rolled back. Perhaps by a twin: another copy of this document, sent at the same
         # moment, that finished while this one was saving, so its rows or its line clash with this copy's. Its
@@ -292,26 +298,25 @@ def _check_number(device: Device, line: PushedDocument, last: int) -> None:
         move_device_number(device, number)
 
 
-def _check_maker(device: Device, line: PushedDocument, kind: DocumentType, maker: StaffMember) -> None:
-    # The maker's key for this type, checked again on the server (SYNC-5): the laptop checked it at the counter, but
-    # against its own copy of the shop's keys, which can be old, on a laptop that can be tampered with. On the
-    # laptop's own side, as its counter asks (X1): a seller of Vyakula holds no key on the Dawa laptop. Among the keys
-    # the person was given, whatever their status: a suspended maker's sale is the suspension's flag, not a second
-    # one saying they hold no key. A missing key never refuses the record (accept, then flag): one flag about its
-    # line, naming the maker, for the side's managers to see. A note for SALE-2: a sale that names its own side is
+def _maker_breaks(device: Device, kind: DocumentType, maker: StaffMember, *, made_at: datetime) -> list[FlagKind]:
+    # The rules the maker broke by making this record, checked again on the server (SYNC-5): the laptop checked them at
+    # the counter, but against its own copy of the shop, which can be old, on a laptop that can be tampered with. Each
+    # becomes one flag about the record's line, naming the maker, on the laptop's side, for its managers to see; none
+    # refuses the record (accept, then flag).
+    broken = []
+    # The key for this type, on the laptop's own side, as its counter asks (X1): a seller of Vyakula holds no key on
+    # the Dawa laptop. Among the keys the person was given, whatever their status: a suspended maker's sale is the
+    # suspension's flag, not a second one saying they hold no key. A note for SALE-2: a sale that names its own side is
     # checked on the laptop's side all the same, until that card says otherwise.
     if kind.permission not in given_permissions(maker).on(device.home_side_id):
-        raise_flag(kind=FlagKind.PERMISSION_BREAK, subject=line, side=device.home_side, people=[maker], by=None)
-
-
-def _check_working(device: Device, line: PushedDocument, maker: StaffMember) -> None:
-    # Was the maker working here when they made it (SYNC-5, X2)? A laptop offline when Baba suspended Juma doesn't
-    # know, so its PIN check still lets him in. By the laptop's clock, the one time the record carries: Juma's sale
-    # made at 09:00 is his, though Baba suspended him at 11:00, before the laptop synced. Leaving counts too (Jack,
-    # SYNC-5): a person's keys stay given when they go, so the key check alone would let their sale pass. One flag
-    # about the record's line, naming them, on the laptop's side; the record is kept (accept, then flag).
-    if not was_working_at(maker, line.client_time):
-        raise_flag(kind=FlagKind.SUSPENDED_STAFF_ACTIVITY, subject=line, side=device.home_side, people=[maker], by=None)
+        broken.append(FlagKind.PERMISSION_BREAK)
+    # Working here when they made it (X2)? A laptop offline when Baba suspended Juma doesn't know, so its PIN check
+    # still lets him in. By the laptop's clock, the one time the record carries: Juma's sale made at 09:00 is his,
+    # though Baba suspended him at 11:00, before the laptop synced. Leaving counts too (Jack, SYNC-5): a person's keys
+    # stay given when they go, so the key check alone would let their sale pass.
+    if not was_working_at(maker, made_at):
+        broken.append(FlagKind.SUSPENDED_STAFF_ACTIVITY)
+    return broken
 
 
 def _flag_numbers(device: Device, line: PushedDocument, awaited: int) -> None:
