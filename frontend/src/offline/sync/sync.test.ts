@@ -64,6 +64,20 @@ describe("a sync", () => {
     expect(paths()).toEqual([BOOTSTRAP_ROUTE, PULL]);
   });
 
+  it("never joins another shop's sync", async () => {
+    // The laptop was moved to another shop while its old shop's sync still ran.
+    const other = "019a5e00-0000-7000-8000-0000000000a2";
+    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+    answer("GET", PULL, emptyPage(120));
+
+    const first = syncShop(SHOP);
+    const second = syncShop(other);
+    await Promise.all([first, second]);
+
+    expect(second).not.toBe(first);
+    expect(await readCursor(shopDatabase(other))).toBe(120);
+  });
+
   it("leaves the next sync free to run after one fails", async () => {
     answer("GET", BOOTSTRAP_ROUTE, refusal(500, "server_error"));
     await expect(syncShop(SHOP)).rejects.toThrow();

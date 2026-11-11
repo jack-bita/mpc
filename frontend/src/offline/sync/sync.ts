@@ -9,9 +9,11 @@ import { shopDatabase } from "../this-shop";
 import { bootstrap, needsBootstrap } from "./bootstrap";
 import { pull } from "./pull";
 
-// The sync running now in this tab, if one is. A check that lands while one still runs joins it instead
-// of starting a second, which would ask for the same pages and write them twice. Other tabs are SYNC-9's.
-let running: Promise<void> | null = null;
+// The sync running now in this tab, for each shop. A check that lands while one still runs joins it
+// instead of starting a second, which would ask for the same pages and write them twice. Kept by shop: a
+// laptop moved to another shop mid-sync starts that shop's own, never joining the old shop's. Other tabs
+// are SYNC-9's.
+const running = new Map<string, Promise<void>>();
 
 /**
  * Syncs the shop's database: fills it once, then pulls. A failure is thrown, after a block or a "not
@@ -19,13 +21,16 @@ let running: Promise<void> | null = null;
  * there.
  */
 export function syncShop(shopId: string): Promise<void> {
-  running ??= (async () => {
+  const already = running.get(shopId);
+  if (already !== undefined) return already;
+  const sync = (async () => {
     const db = shopDatabase(shopId);
     // The first pull asks from the bootstrap's cursor, so the copy and the changes after it meet.
     if (await needsBootstrap(db)) await bootstrap(db);
     await pull(db);
   })().finally(() => {
-    running = null;
+    running.delete(shopId);
   });
-  return running;
+  running.set(shopId, sync);
+  return sync;
 }
