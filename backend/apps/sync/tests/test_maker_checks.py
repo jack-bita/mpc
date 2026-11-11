@@ -15,8 +15,8 @@ suspended or gone, is flagged too:
     Baba suspends Juma at 11:00; Juma sells at 12:00 on a laptop still offline   saved + suspended_staff_activity
     Juma sold at 09:00, offline; Baba suspends him at 11:00                      saved, nothing more: he was working
 
-These tests send pretend "ticket" documents
-(tests/probe/documents.py), which need sale.write, through the push service. Fake data only: the repo is public.
+These tests send pretend "ticket" documents (tests/probe/documents.py), which need sale.write, through the push
+service. Fake data only: the repo is public.
 """
 
 import dataclasses
@@ -237,8 +237,8 @@ def test_document_made_while_suspended_is_flagged_after_her_return(
 
 
 def test_document_after_leaving_is_flagged(shop_a: Model, device_a: Device, asha: StaffMember) -> None:
-    # Jack, SYNC-5: Asha left; a sale in her name made after that is flagged too. Her keys stay given, so step 6's
-    # check alone would let it pass.
+    # Jack, SYNC-5: Asha left; a sale in her name made after that is flagged too. Her keys stay given, so the key
+    # check alone (_maker_breaks' first question) would let it pass.
     with shop_context(shop_a):
         mark_left(asha, left_on=shop_today(asha.shop), by=None, reason="Amehamia Moshi")
     [left_at] = _status_moves(asha)

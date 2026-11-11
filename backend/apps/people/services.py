@@ -9,10 +9,15 @@ and a person is given a role, or one extra permission, on one side or on all of 
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
 (start_pairing), a manager with device.manage says yes (confirm_pairing), renames it (rename_device, AUTH-5), and
 blocks it, or lets it work again (block, unblock); and each time its key reaches the server, it is noted as seen
-(note_device_seen, AUTH-2). And a person's own choices for their screens, their language and font, which only they
+(note_device_seen, AUTH-2). What a laptop says about itself at each push is kept on its row and beside it: its unsent
+count, app version and last sync (record_sync), and the offline periods it reports (record_outages); and its last
+number, read and locked, then moved on, inside each pushed record's own transaction (lock_device_numbers,
+move_device_number) (SYNC-5). And a person's own choices for their screens, their language and font, which only they
 change (change_own_settings, UI-9). And the superuser's edit of a person in the admin, which every shop where they work
 hears of when it touches what its laptops show: their name, language, or switch-off (change_person, SYNC-15).
-Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
+Each action runs in one transaction, except five: note_device_seen, record_sync and move_device_number are one UPDATE
+each, atomic on its own; record_outages is one INSERT; and lock_device_numbers locks inside its caller's transaction,
+which it refuses to run without. Each checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
 who and why, in the same transaction (apps/control/services.py, audit): the change and its line are kept
@@ -983,9 +988,10 @@ def lock_device_numbers(device: Device) -> int | None:
     if not transaction.get_connection().in_atomic_block:
         # Outside a transaction the lock would end with this one query, and two pushes could read the same number.
         raise TransactionManagementError("lock_device_numbers locks until the transaction ends: open one first.")
-    # no_key, as block's: the rows that link to the device as a record is saved (its line in the answer log, its
-    # ticket or sale) take a light lock on it, which this one lets through. A full lock would make each such insert,
-    # by another push of this laptop, wait for this whole transaction.
+    # no_key, as block's: other visits insert rows that link to the device as this push runs, and each such insert
+    # takes a light lock on it (FOR KEY SHARE), which this one lets through: a PIN try on this laptop (PinLock), the
+    # audit and edit lines that name it (X3). A full lock would make each of them wait for this whole record's
+    # transaction. Another push of this same laptop waits here all the same, as it must (SYNC-5's review).
     return Device.objects.select_for_update(no_key=True).values_list("last_device_seq", flat=True).get(pk=device.pk)
 
 

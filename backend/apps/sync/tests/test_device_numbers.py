@@ -448,11 +448,11 @@ def test_a_checks_own_error_is_a_retry_never_an_invalid_record(
     assert _last(device_a) == 1
 
 
-def test_the_number_check_runs_after_the_line(
+def test_the_number_check_is_all_or_nothing_with_its_record(
     monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
 ) -> None:
-    # The flag is about the record's line, so the line must be saved first; and if the check fails, the record is not
-    # saved without it: one transaction, all or nothing (03 §5.5).
+    # The number's check runs in the record's own transaction: if it fails, nothing of the record is saved, its line
+    # neither, and the laptop sends it again (03 §5.5).
     def broken(*args: object, **kwargs: object) -> None:
         raise RuntimeError("the check broke")
 

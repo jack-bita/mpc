@@ -3,7 +3,7 @@ shop; and what each job may do there: the shop's own roles (Role), the roles a p
 (RoleAssignment), and the extra permissions one person holds (PermissionGrant) (02 §5). And the shop's devices:
 Device, a laptop or phone a manager has paired with the shop, and PairingRequest, a device still waiting for a
 manager's yes, which belongs to no shop yet (AUTH-1). And PinLock, how one person's PIN tries stand on one device
-(AUTH-4).
+(AUTH-4). And DeviceOutage, the offline periods a device reports at its next push, kept as reported (SYNC-5).
 
 A User is the person, not the job: the same person can work at MPC and in its practice shop, and their
 job at each shop (StaffMember) holds the nickname, the status and the PIN, and its roles hang from it.
