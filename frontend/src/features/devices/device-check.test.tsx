@@ -11,6 +11,7 @@ import { answer, refusal, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
 import { databaseName } from "@/offline/db";
 import { readCursor } from "@/offline/sync/meta";
+import { AppTooOld } from "@/offline/sync/pull";
 import { shopDatabase } from "@/offline/this-shop";
 import { BOOTSTRAP, DAWA_SIDE } from "@/test/shop-lists";
 
@@ -18,6 +19,7 @@ import {
   checkThisDevice,
   DEVICE_CHECK_EVERY,
   DeviceCheck,
+  reportSyncFailure,
 } from "./device-check";
 import {
   saveBlocked,
@@ -34,6 +36,8 @@ const ME = "/api/devices/v1/me/";
 
 afterEach(() => {
   vi.useRealTimers();
+  // The console the failure tests silenced, back as it was.
+  vi.restoreAllMocks();
 });
 
 describe("checkThisDevice", () => {
@@ -182,5 +186,34 @@ describe("DeviceCheck", () => {
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(sent.map((request) => new URL(request.url).pathname)).toEqual([ME]);
+  });
+});
+
+describe("a failed sync", () => {
+  it("says nothing for the server's answers and a dropped network", () => {
+    // Part of a shop's day: the next check tries again.
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    reportSyncFailure(
+      new ApiRefusal(500, {
+        code: "server_error",
+        message: "",
+        fields: {},
+        params: {},
+      }),
+    );
+    reportSyncFailure(new NoConnection(new TypeError("Failed to fetch")));
+
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("goes to the console when it is no answer of the server's", () => {
+    // An app older than the server, or a bug: it would fail at every check, unseen.
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const tooOld = new AppTooOld("product");
+
+    reportSyncFailure(tooOld);
+
+    expect(log).toHaveBeenCalledWith("sync failed", tooOld);
   });
 });

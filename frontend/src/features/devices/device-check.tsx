@@ -32,7 +32,7 @@ import { useEffect } from "react";
 
 import { api } from "@/api/client";
 import { syncShop } from "@/offline/sync/sync";
-import { answerOf, ApiRefusal } from "@/api/refusal";
+import { answerOf, ApiRefusal, NoConnection } from "@/api/refusal";
 import type { components } from "@/api/schema";
 
 import { saveBlocked, saveDevice, type ThisDevice } from "./this-device";
@@ -110,6 +110,19 @@ export async function checkThisDevice(): Promise<ThisDevice | null> {
   }
 }
 
+/**
+ * What a failed sync leaves. Every failure waits for the next check, which tries again from where the
+ * last one stopped. The server's answers and a dropped network are part of a shop's day: a block or a
+ * "not registered" is kept already (answer.ts), and the rest pass. Anything else is no answer of the
+ * server's: an app older than the server (AppTooOld, which SYNC-13 turns into an update), or a bug. It
+ * would fail again at every check with no one the wiser, so it goes to the console, where a developer
+ * looking at a laptop that stopped syncing finds it.
+ */
+export function reportSyncFailure(error: unknown): void {
+  if (error instanceof ApiRefusal || error instanceof NoConnection) return;
+  console.error("sync failed", error);
+}
+
 /** Keeps the device's saved copy up to date. Shows nothing; the root layout puts it on every page. */
 export function DeviceCheck() {
   const client = useQueryClient();
@@ -125,13 +138,11 @@ export function DeviceCheck() {
   });
 
   // After every answer naming a working device, a sync. dataUpdatedAt moves at each answer, even one the
-  // same as the last, so a laptop that shows no change in itself still pulls the shop's. A failed sync
-  // waits for the next check: a block or a "not registered" it met is kept already (answer.ts), and
-  // anything else, a dropped network or a server down, is tried again then.
+  // same as the last, so a laptop that shows no change in itself still pulls the shop's.
   const shopId = device?.shop.id;
   useEffect(() => {
     if (shopId === undefined) return;
-    syncShop(shopId).catch(() => undefined);
+    syncShop(shopId).catch(reportSyncFailure);
   }, [shopId, dataUpdatedAt]);
 
   // Every read and every change through the store, any screen's, is watched for a block, so the lock
