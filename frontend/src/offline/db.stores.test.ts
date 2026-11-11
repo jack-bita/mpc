@@ -28,15 +28,18 @@ const ASHA: components["schemas"]["StaffRecord"] = {
   permissions: { every_side: [], sides: [] },
 };
 
-function waiting(id: string, deviceSeq: number): OutboxRow {
+function waiting(
+  id: string,
+  deviceSeq: number,
+  status: OutboxRow["status"] = "waiting",
+): OutboxRow {
   return {
     id,
     type: "clock",
     device_seq: deviceSeq,
-    status: "waiting",
+    status,
     attempts: 0,
     last_error: null,
-    posted_seq: null,
   };
 }
 
@@ -118,6 +121,23 @@ describe("the device database", () => {
     await expect(
       db.outbox.add(waiting("0192f000-0000-7000-8000-0000000000d2", 1)),
     ).rejects.toMatchObject({ name: "ConstraintError" });
+  });
+
+  it("hands the push what is waiting, in device_seq order", async () => {
+    // Saved out of order on purpose; number 2 was set aside after an `invalid` answer (SYNC-8).
+    const db = open(MPC);
+    await db.outbox.bulkAdd([
+      waiting("0192f000-0000-7000-8000-0000000000d3", 3),
+      waiting("0192f000-0000-7000-8000-0000000000d2", 2, "needs_attention"),
+      waiting("0192f000-0000-7000-8000-0000000000d1", 1),
+    ]);
+
+    const next = await db.outbox
+      .where("[status+device_seq]")
+      .between(["waiting", Dexie.minKey], ["waiting", Dexie.maxKey])
+      .toArray();
+
+    expect(next.map((row) => row.device_seq)).toEqual([1, 3]);
   });
 
   it("finds one kind of document for one day", async () => {

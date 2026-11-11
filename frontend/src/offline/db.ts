@@ -52,7 +52,9 @@ export interface DocumentRow {
   payload: unknown;
 }
 
-/** One document waiting to be sent (SYNC-8, 03 §6.2). */
+/** One document not yet accepted (SYNC-8, 03 §6.2). Only unsent ones: an accepted document leaves
+ * the outbox, with its posted_seq, for sent_archive, in one transaction, so a push can never send an
+ * accepted one again as if it were waiting. The document itself stays in documents, for the screens. */
 export interface OutboxRow {
   /** The document's own id: one outbox row per document. */
   id: string;
@@ -63,8 +65,6 @@ export interface OutboxRow {
   status: "waiting" | "needs_attention";
   attempts: number;
   last_error: string | null;
-  /** The shop's change number the server gave it, once accepted. */
-  posted_seq: number | null;
 }
 
 /** A stock or balance change of a document the server hasn't confirmed yet, so screens count it
@@ -109,8 +109,9 @@ export const VERSIONS: readonly Version[] = [
       // reads one kind for one day (today's clock-ins, SYNC-11) without reading every day before it.
       documents: "id, type, [type+client_time]",
       // One row per unsent document. Unique device_seq: one number, one document (SYNC-4).
-      // By status, so the push finds what is waiting and the needs-attention list what was set aside.
-      outbox: "id, &device_seq, status",
+      // By status and number together, so the push reads what is waiting already in its order, and
+      // the needs-attention list what was set aside.
+      outbox: "id, &device_seq, [status+device_seq]",
       // Found by their document, to drop them once it is confirmed (sync rules).
       pending_effects: "id, document_id",
       // By when it was sent, so rows past 30 days can be cleared.
