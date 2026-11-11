@@ -64,7 +64,10 @@ export function useRule(key: string, side: string | null): string | undefined {
         if (rule === undefined) return undefined;
         const rows = await db.setting.where("key").equals(key).toArray();
         const offset = (await db.meta.get(CLOCK_OFFSET))?.value;
-        const now = Date.now() + (typeof offset === "number" ? offset : 0);
+        // A note that isn't a real number counts as no offset: the laptop's own clock, the best left.
+        const now =
+          Date.now() +
+          (typeof offset === "number" && Number.isFinite(offset) ? offset : 0);
         return ruleInForce(rows, rule, side, shopToday(timezone, now));
       },
     );

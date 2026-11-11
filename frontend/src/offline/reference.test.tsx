@@ -133,6 +133,21 @@ describe("the live rule", () => {
     await waitFor(() => expect(result.current).toBe("30"));
   });
 
+  it("reads the laptop's own clock when the offset kept isn't a number", async () => {
+    vi.useFakeTimers({
+      toFake: ["Date"],
+      now: Date.parse("2026-11-11T09:00:00Z"),
+    });
+    await shopDatabase(DAWA_LAPTOP.shop.id).meta.put({
+      key: CLOCK_OFFSET,
+      value: Number.NaN,
+    });
+
+    const { result } = renderHook(() => useRule(IDLE_RULE.key, null));
+
+    await waitFor(() => expect(result.current).toBe("15"));
+  });
+
   it("gives nothing for a rule the laptop doesn't know", async () => {
     const { result } = renderHook(() => useRule("no.such_rule", null));
 

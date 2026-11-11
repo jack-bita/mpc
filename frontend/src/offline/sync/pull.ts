@@ -109,15 +109,17 @@ async function applyPage(
       // line is how it is now.
       for (const change of page.changes) await applyChange(db, change);
 
-      await db.meta.bulkPut([
-        { key: CURSOR, value: page.cursor },
-        // How far the server's clock is ahead of this laptop's, kept from every page, an empty one too.
-        {
-          key: CLOCK_OFFSET,
-          value: Date.parse(page.server_time) - laptopTime,
-        },
-        { key: LAST_SERVER_TIME, value: page.server_time },
-      ]);
+      await db.meta.put({ key: CURSOR, value: page.cursor });
+
+      // How far the server's clock is ahead of this laptop's, kept from every page, an empty one too.
+      // Only from a time that reads as one: a broken one would store NaN, "not a number", and every rule
+      // worked out from it would fail. The last good offset is kept then, and the page's changes still land.
+      const serverTime = Date.parse(page.server_time);
+      if (Number.isFinite(serverTime))
+        await db.meta.bulkPut([
+          { key: CLOCK_OFFSET, value: serverTime - laptopTime },
+          { key: LAST_SERVER_TIME, value: page.server_time },
+        ]);
 
       // No double counting (03 §6.4): the server's numbers now include every document posted up to the
       // cursor, so that document's pending effects would count it a second time. A row whose document

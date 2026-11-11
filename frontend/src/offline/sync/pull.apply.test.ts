@@ -345,6 +345,19 @@ describe("a pull", () => {
     expect((await db.meta.get(LAST_SERVER_TIME))?.value).toBe(SERVER_TIME);
   });
 
+  it("keeps the last good clock offset when a page's time doesn't read", async () => {
+    await db.meta.put({ key: CLOCK_OFFSET, value: 5000 });
+    serverGives({ ...page([renamed(121)], 121), server_time: "not a time" });
+
+    await pull(db);
+
+    expect((await db.meta.get(CLOCK_OFFSET))?.value).toBe(5000);
+    expect(await db.meta.get(LAST_SERVER_TIME)).toBeUndefined();
+    // The changes still land.
+    expect(await db.staff.get(ASHA.id)).toEqual(RENAMED);
+    expect(await readCursor(db)).toBe(121);
+  });
+
   it("drops the pending effects the cursor has passed, and keeps the rest", async () => {
     // Counted by the server now (posted at 121, and at 125, the page's cursor itself: the server's
     // numbers include the change the cursor names), not yet (posted at 130), and not yet accepted (null).
