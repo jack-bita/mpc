@@ -87,6 +87,7 @@ def _push(
             device,
             documents,
             received_at=RECEIVED_AT,
+            sent_at=RECEIVED_AT,
             unsent_count=unsent_count,
             app_version=APP_VERSION,
             outages=outages,
@@ -513,7 +514,15 @@ def test_twin_sent_at_the_same_moment_answers_duplicate(
         monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=_with_its_own_id))
     sent = _sent(1, staff_a, text=text)
     with shop_context(shop_a), transaction.atomic():
-        (first,) = push(device_a, [sent], received_at=RECEIVED_AT, unsent_count=0, app_version=APP_VERSION, outages=[])
+        (first,) = push(
+            device_a,
+            [sent],
+            received_at=RECEIVED_AT,
+            sent_at=RECEIVED_AT,
+            unsent_count=0,
+            app_version=APP_VERSION,
+            outages=[],
+        )
         twin, ended = in_another_transaction(lambda: _push(device_a, [sent]))
         wait_until_someone_waits_for_me()
     twin.join()

@@ -82,7 +82,15 @@ def _sent(device_seq: int, maker: StaffMember, **envelope: object) -> Sent:
 def _push(device: Device, documents: Sequence[Sent]) -> list[Answer]:
     # The push as the route runs it: inside the laptop's shop, which its key opened.
     with shop_context(device.shop_id):
-        return push(device, documents, received_at=RECEIVED_AT, unsent_count=0, app_version="2026.11.1", outages=[])
+        return push(
+            device,
+            documents,
+            received_at=RECEIVED_AT,
+            sent_at=RECEIVED_AT,
+            unsent_count=0,
+            app_version="2026.11.1",
+            outages=[],
+        )
 
 
 def _flags(shop: Model, kind: FlagKind) -> list[Flag]:

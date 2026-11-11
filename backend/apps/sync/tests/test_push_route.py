@@ -12,6 +12,7 @@ the envelope's checks, and that an answer holds nothing of another shop, which t
 with no GET (DEVICE_ROUTES_WITHOUT_A_LOOK). Fake data only: the repo is public (03 §10).
 """
 
+import dataclasses
 import datetime as dt
 import re
 import uuid
@@ -22,16 +23,17 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.control.models import Flag
 from apps.core.links import LINK_TYPES
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, DeviceOutage, StaffMember
 from apps.people.services import block, confirm_pairing, start_pairing
 from apps.shops.models import Shop, Side
-from apps.sync.document_types import DOCUMENT_TYPES
+from apps.sync.document_types import DOCUMENT_TYPES, Document
 from apps.sync.models import PushedDocument
 from tests.change_log import last_line
-from tests.probe.documents import TICKET, TICKET_CODE
+from tests.probe.documents import TICKET, TICKET_CODE, post_ticket
 from tests.probe.models import Ticket
 
 pytestmark = pytest.mark.django_db
@@ -45,6 +47,8 @@ DEVICE_ME = "/api/devices/v1/me/"
 KEY_COOKIE = "device_key"
 # 10:42 by the laptop's clock, in UTC, as the laptop sends it (03 §6.6).
 CLIENT_TIME = "2026-11-10T07:42:00Z"
+# The laptop's clock as it sends the push, 14:05, in UTC (ATT-1).
+SENT_AT = "2026-11-10T11:05:00Z"
 # Any id, as JSON writes one: for finding every id an answer holds.
 AN_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
@@ -99,7 +103,14 @@ def envelope(device_seq: int, maker: StaffMember, *, text: str = "2 bags of pumb
 def send(client: APIClient, documents: list[dict[str, Any]], *, csrf_token: str | None = None, **report: Any) -> Any:
     # One push, with the laptop's report on itself (`report` overrides a part), and the CSRF token as the app sends
     # it, when given.
-    body = {"documents": documents, "app_version": "2026.11.1", "unsent_count": 0, "outages": [], **report}
+    body = {
+        "documents": documents,
+        "sent_at": SENT_AT,
+        "app_version": "2026.11.1",
+        "unsent_count": 0,
+        "outages": [],
+        **report,
+    }
     if csrf_token is None:
         return client.post(PUSH, body, format="json")
     return client.post(PUSH, body, format="json", HTTP_X_CSRFTOKEN=csrf_token)
@@ -260,6 +271,8 @@ def test_push_takes_the_laptops_offline_periods(shop_a: Shop, laptop: tuple[Devi
         ({"unsent_count": 2**31 - 100}, "unsent_count", "max_value"),
         ({"unsent_count": None}, "unsent_count", "null"),
         ({"outages": None}, "outages", "null"),
+        ({"sent_at": None}, "sent_at", "null"),
+        ({"sent_at": "now"}, "sent_at", "invalid"),
         # A random UUID (version 4), not one made with the time, as every id a device makes is (ADR-0007).
         (
             {
@@ -290,6 +303,8 @@ def test_push_takes_the_laptops_offline_periods(shop_a: Shop, laptop: tuple[Devi
         "unsent_too_many",
         "no_unsent_count",
         "no_outages",
+        "no_laptop_time",
+        "laptop_time_not_a_time",
         "outage_not_uuid7",
         "outage_with_no_end",
         "outage_time_not_a_time",
@@ -307,6 +322,37 @@ def test_push_needs_the_laptops_report(
     assert _tickets(shop_a) == 0
     with shop_context(shop_a):
         assert Device.objects.get(pk=device.pk).last_synced_at is None
+
+
+def test_push_needs_the_laptops_time(shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember) -> None:
+    # The laptop's clock as it sends is part of its report, needed as the rest is: without it the server can't tell a
+    # clock-in sent at once from one kept offline, nor find a laptop clock that is wrong (ATT-1, 02 §12). One left
+    # out is a bug in the laptop's sync code, so the whole push is refused, under the field, and nothing is saved.
+    _device, key = laptop
+    body = {"documents": [envelope(1, staff_a)], "app_version": "2026.11.1", "unsent_count": 0, "outages": []}
+    refused = a_browser(key).post(PUSH, body, format="json")
+    assert (refused.status_code, refused.json()["fields"]) == (400, {"sent_at": ["required"]})
+    assert _tickets(shop_a) == 0
+
+
+def test_saving_code_gets_the_laptops_time_at_sending(
+    monkeypatch: pytest.MonkeyPatch, laptop: tuple[Device, str], staff_a: StaffMember
+) -> None:
+    # The time the laptop sent reaches each document's saving code as it was sent, beside the server's own clock
+    # as the push arrived: a clock-in compares the two (ATT-1).
+    handed: list[Document] = []
+
+    def post(document: Document, payload: dict[str, Any]) -> list[Flag]:
+        handed.append(document)
+        return post_ticket(document, payload)
+
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=post))
+    _device, key = laptop
+    before = timezone.now()
+    send(a_browser(key), [envelope(1, staff_a), envelope(2, staff_a)])
+    after = timezone.now()
+    assert [document.sent_at for document in handed] == [dt.datetime(2026, 11, 10, 11, 5, tzinfo=dt.UTC)] * 2
+    assert all(before <= document.received_at <= after for document in handed)
 
 
 def test_push_saves_the_keys_laptop_and_the_servers_clock(

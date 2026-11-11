@@ -33,6 +33,10 @@ class Document:
     device_seq: int
     client_time: datetime
     received_at: datetime
+    # The laptop's clock as it sent the push that brought this document, the same for the whole batch (ATT-1). Not a
+    # fact of the document, so it is not kept on it: a resend carries another. A clock-in reads it beside received_at
+    # and client_time, as the evidence of 02 §12.
+    sent_at: datetime
     created_by: StaffMember
 
 

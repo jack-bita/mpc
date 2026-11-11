@@ -1862,6 +1862,11 @@
                         },
                         "maxItems": 100
                     },
+                    "sent_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "The laptop's clock as it sends this push."
+                    },
                     "app_version": {
                         "type": "string",
                         "minLength": 1,
@@ -1886,6 +1891,7 @@
                     "app_version",
                     "documents",
                     "outages",
+                    "sent_at",
                     "unsent_count"
                 ]
             },

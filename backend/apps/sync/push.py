@@ -97,12 +97,14 @@ def push(
     documents: Sequence[Sent],
     *,
     received_at: datetime,
+    sent_at: datetime,
     unsent_count: int,
     app_version: str,
     outages: Sequence[Outage],
 ) -> list[Answer]:
     """Save a laptop's batch, in its own order, and answer each document. `received_at`: the server's clock when the
-    push arrived, the same for the whole batch. Stops at the first `retry`: the documents after it get no answer, and
+    push arrived, the same for the whole batch; `sent_at`: the laptop's clock as it sent it, handed to each document's
+    saving code beside it (ATT-1). Stops at the first `retry`: the documents after it get no answer, and
     the laptop sends them again later, in the same order. Then keeps the laptop's report on itself (SYNC-5):
     `unsent_count`, the records it holds besides this batch; `app_version`, the app it runs; and `outages`, the
     offline periods it recorded since it last reported."""
@@ -110,7 +112,7 @@ def push(
     # The laptop's order, not the order they arrived in: #3 may be a repayment of the debt #2 made. sorted() keeps two
     # documents with the same number in the order they were sent.
     for sent in sorted(documents, key=lambda document: document.device_seq):
-        answer = _answer(device, sent, received_at)
+        answer = _answer(device, sent, received_at, sent_at)
         answers.append(answer)
         if answer.status == RETRY:
             break
@@ -124,7 +126,7 @@ def push(
     return answers
 
 
-def _answer(device: Device, sent: Sent, received_at: datetime) -> Answer:
+def _answer(device: Device, sent: Sent, received_at: datetime, sent_at: datetime) -> Answer:
     try:
         # Sent before? Look first, before any check: the first copy's own rows would make this one's checks fail.
         # Inside the `try`, as a lost database here is a server problem like any other: this document's `retry`, with
@@ -132,7 +134,7 @@ def _answer(device: Device, sent: Sent, received_at: datetime) -> Answer:
         stored = _stored(sent.id)
         if stored is not None:
             return _replay(stored)
-        return _post(device, sent, received_at)
+        return _post(device, sent, received_at, sent_at)
     except Exception:
         # A server problem, not the document's: a bug, or a database that went away. Nothing of it was saved (its
         # transaction rolled back), so the laptop keeps it and sends it again, and the batch stops here to keep the
@@ -142,7 +144,7 @@ def _answer(device: Device, sent: Sent, received_at: datetime) -> Answer:
         return Answer(id=sent.id, status=RETRY)
 
 
-def _post(device: Device, sent: Sent, received_at: datetime) -> Answer:
+def _post(device: Device, sent: Sent, received_at: datetime, sent_at: datetime) -> Answer:
     # The maker, read through the guard: a staff member of this shop, or nobody. Someone of another shop is "unknown"
     # here, the same answer as an id no shop has, so the answer tells nothing of other shops (03 §5.4). A maker who
     # was suspended is still found: their document is kept, and SYNC-5 flags it (X2).
@@ -159,11 +161,17 @@ def _post(device: Device, sent: Sent, received_at: datetime) -> Answer:
     except (ValidationError, exceptions.ValidationError) as refusal:
         code, fields = refusal_parts(refusal)
         return _invalid(device, sent, received_at, maker, code, fields)
-    return _save(device, sent, received_at, kind, maker, shape.validated_data)
+    return _save(device, sent, received_at, sent_at, kind, maker, shape.validated_data)
 
 
 def _save(
-    device: Device, sent: Sent, received_at: datetime, kind: DocumentType, maker: StaffMember, payload: dict[str, Any]
+    device: Device,
+    sent: Sent,
+    received_at: datetime,
+    sent_at: datetime,
+    kind: DocumentType,
+    maker: StaffMember,
+    payload: dict[str, Any],
 ) -> Answer:
     document = Document(
         id=sent.id,
@@ -171,6 +179,7 @@ def _save(
         device_seq=sent.device_seq,
         client_time=sent.client_time,
         received_at=received_at,
+        sent_at=sent_at,
         created_by=maker,
     )
     try:

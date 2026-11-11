@@ -279,6 +279,11 @@ class PushBatch(serializers.Serializer[Any]):
     # (`documents.0.device_seq`), and its limit reaches the API's description (maxItems), which a list serializer's
     # doesn't, nor the type checker's notes on the `many=True` form.
     documents = serializers.ListField(child=PushedEnvelope(), max_length=MOST_DOCUMENTS)
+    # The laptop's clock as it sends this push, read afresh at each try (ATT-1, 02 §12). Beside the server's own clock
+    # as the push arrives, it shows how wrong the laptop's clock is now, and, beside a record's own time by the same
+    # clock, how long the record waited on the laptop: a clock-in that waited a moment was made online. Needed, as the
+    # report's parts are: a push without it is a bug in the laptop's sync code.
+    sent_at = serializers.DateTimeField(help_text="The laptop's clock as it sends this push.")
     # The laptop's report on itself, sent at every sync (03 §6.6; SYNC-5), kept on its row (apps/people/services.py,
     # record_sync). Both needed, as the envelope's parts are: the laptop's sync code writes them, so one left out is a
     # bug in the app, refused loudly. The version is kept as the app names itself, only its length checked: the
