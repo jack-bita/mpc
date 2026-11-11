@@ -239,12 +239,18 @@ def test_numbers_gone_back_never_close_by_themselves(
     monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
 ) -> None:
     # A flag of numbers gone back waits for no record: nothing can arrive that makes the reset not have happened, so
-    # it stays open for a person.
+    # it stays open for a person. #1 to #3, then a reset: #1 to #4 again. Then a #2 below the laptop's count, the one
+    # kind of number the server asks the gaps about: the reset's flag is not one it fills, so it stays open, and the
+    # stray #2 raises a flag of its own (SYNC-5's review: before, no number here reached that question).
     monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=_keeps_no_row))
     _push_numbers(device_a, staff_a, 1, 2, 3)
     _push_numbers(device_a, staff_a, 1, 2, 3, 4)
     [back] = _gaps(shop_a)
+    _push_numbers(device_a, staff_a, 2)
+    first, stray = _gaps(shop_a)
+    assert first == back
     assert _status(back) == FlagStatus.OPEN
+    assert _numbers(stray) == (Decimal(5), Decimal(2))
 
 
 def _keeps_no_row(document: Document, payload: dict[str, Any]) -> list[Flag]:
