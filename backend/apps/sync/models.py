@@ -51,6 +51,11 @@ class PushedDocument(AppendOnly, CounterRecord):  # type: ignore[misc]
     class Meta(AppendOnly.Meta, CounterRecord.Meta):
         # Both bases' Meta, so the guard stays the default manager (CORE-1, ADR-0042). No error codes on these rules:
         # only the push writes this table, so a broken rule is a bug in our code, a server error and a log line.
+        indexes = [
+            # A laptop's lines by its number, leading with `shop`: the record before a clock-in, the laptop's highest
+            # number, a gap's lines (apps/sync/push.py) each read a few rows of one laptop, not the whole log (ATT-1).
+            models.Index(fields=["shop", "device", "device_seq"], name="sync_pusheddocument_device_seq"),
+        ]
         constraints = [
             # One line per document in a shop: two copies of one sale sent at the same moment can't both be written,
             # so the second is refused here and finds the first one's answer. Also the index the push looks a document

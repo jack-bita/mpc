@@ -173,15 +173,6 @@ def _save(
     maker: StaffMember,
     payload: dict[str, Any],
 ) -> Answer:
-    document = Document(
-        id=sent.id,
-        device=device,
-        device_seq=sent.device_seq,
-        client_time=sent.client_time,
-        received_at=received_at,
-        sent_at=sent_at,
-        created_by=maker,
-    )
     try:
         # One document, one transaction (03 §5.5): its rows, its change lines, its line in the answer log and its
         # laptop's number are saved together, or not at all. X3: both books name its maker and the laptop, for every
@@ -191,6 +182,18 @@ def _save(
             # The laptop's last number, its row locked first of all: every record takes this lock before any other,
             # so two pushes of one laptop take turns in the same order, and can't each wait for the other.
             last = _last_number(device)
+            # The document as its saving code gets it. Built under the laptop's lock, so the time of its record before
+            # it is read once every record of this laptop that came before it has finished saving (ATT-1).
+            document = Document(
+                id=sent.id,
+                device=device,
+                device_seq=sent.device_seq,
+                client_time=sent.client_time,
+                received_at=received_at,
+                sent_at=sent_at,
+                time_before=_time_before(device, sent.device_seq),
+                created_by=maker,
+            )
             # What is wrong with its maker, read now, before the block: once the block has taken the shop's change
             # numbers, the shop's counter stays locked until the commit, and every save of the shop waits (SYNC-1).
             with _checks_of_our_own():
@@ -292,6 +295,20 @@ def _last_number(device: Device) -> int:
         return last
     highest = PushedDocument.objects.filter(device=device).aggregate(highest=Max("device_seq"))["highest"]
     return highest or 0
+
+
+def _time_before(device: Device, device_seq: int) -> datetime | None:
+    # The laptop's own time on the record it numbered last before this one, of those the server holds (ATT-1): the
+    # evidence a clock-in's time check reads, as only this log holds every record of the laptop, whatever its type. A
+    # set-aside one counts too: it was made at the counter all the same. After a laptop reset, which numbers again
+    # from 1 (SYNC-5), two lines can share a number: the newer is the new count's, so it is the one before. Read
+    # through the index on (shop, device, device_seq): one row, however many records the laptop has sent.
+    return (
+        PushedDocument.objects.filter(device=device, device_seq__lt=device_seq)
+        .order_by("-device_seq", "-created_at", "-id")
+        .values_list("client_time", flat=True)
+        .first()
+    )
 
 
 def _check_number(device: Device, line: PushedDocument, last: int) -> None:

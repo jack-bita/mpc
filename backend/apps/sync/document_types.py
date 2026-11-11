@@ -37,6 +37,10 @@ class Document:
     # fact of the document, so it is not kept on it: a resend carries another. A clock-in reads it beside received_at
     # and client_time, as the evidence of 02 §12.
     sent_at: datetime
+    # The laptop's own time on its record numbered last before this one, of those the server holds, whatever their type
+    # or answer; None when it holds none (ATT-1). A later record with an earlier time means the laptop's clock went
+    # back between the two (02 §12).
+    time_before: datetime | None
     created_by: StaffMember
 
 
