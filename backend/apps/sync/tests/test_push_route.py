@@ -96,11 +96,13 @@ def envelope(device_seq: int, maker: StaffMember, *, text: str = "2 bags of pumb
     }
 
 
-def send(client: APIClient, documents: list[dict[str, Any]], *, csrf_token: str | None = None) -> Any:
-    # One push, with the CSRF token as the app sends it, when given.
+def send(client: APIClient, documents: list[dict[str, Any]], *, csrf_token: str | None = None, **report: Any) -> Any:
+    # One push, with the laptop's report on itself (`report` overrides a part), and the CSRF token as the app sends
+    # it, when given.
+    body = {"documents": documents, "app_version": "2026.11.1", "unsent_count": 0, **report}
     if csrf_token is None:
-        return client.post(PUSH, {"documents": documents}, format="json")
-    return client.post(PUSH, {"documents": documents}, format="json", HTTP_X_CSRFTOKEN=csrf_token)
+        return client.post(PUSH, body, format="json")
+    return client.post(PUSH, body, format="json", HTTP_X_CSRFTOKEN=csrf_token)
 
 
 def _tickets(shop: Shop) -> int:
@@ -213,6 +215,45 @@ def test_a_broken_envelope_refuses_the_whole_push(
     assert refused.status_code == 400
     assert refused.json()["fields"] == {field: [code]}
     assert _tickets(shop_a) == 0
+
+
+def test_push_keeps_the_laptops_report(shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember) -> None:
+    # Every sync pushes, an empty one too (03 §6.6): the laptop says how many records it holds besides these, and which
+    # app it runs, and the server's clock says when. An empty push is how a laptop with nothing to send still reports.
+    device, key = laptop
+    before = timezone.now()
+    answer = send(a_browser(key), [], app_version="2026.11.2", unsent_count=4)
+    after = timezone.now()
+    assert (answer.status_code, answer.json()) == (200, {"answers": []})
+    with shop_context(shop_a):
+        held = Device.objects.get(pk=device.pk)
+    assert (held.unsent_count, held.app_version) == (4, "2026.11.2")
+    assert held.last_synced_at is not None
+    assert before <= held.last_synced_at <= after
+
+
+@pytest.mark.parametrize(
+    ("report", "field", "code"),
+    [
+        ({"app_version": None}, "app_version", "null"),
+        ({"app_version": ""}, "app_version", "blank"),
+        ({"app_version": "v" * 65}, "app_version", "max_length"),
+        ({"unsent_count": -1}, "unsent_count", "min_value"),
+        ({"unsent_count": None}, "unsent_count", "null"),
+    ],
+    ids=["no_app_version", "blank_app_version", "app_version_too_long", "unsent_below_0", "no_unsent_count"],
+)
+def test_push_needs_the_laptops_report(
+    shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember, report: dict[str, Any], field: str, code: str
+) -> None:
+    # The report is the laptop's sync code's work, as the envelope is: one missing or broken is a bug in the app,
+    # refused whole and loudly before anything is saved.
+    device, key = laptop
+    refused = send(a_browser(key), [envelope(1, staff_a)], **report)
+    assert (refused.status_code, refused.json()["fields"]) == (400, {field: [code]})
+    assert _tickets(shop_a) == 0
+    with shop_context(shop_a):
+        assert Device.objects.get(pk=device.pk).last_synced_at is None
 
 
 def test_push_saves_the_keys_laptop_and_the_servers_clock(

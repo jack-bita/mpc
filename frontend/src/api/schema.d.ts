@@ -556,6 +556,10 @@ export interface components {
         PushAnswerStatusEnum: "accepted" | "duplicate" | "invalid" | "retry";
         PushBatchRequest: {
             documents: components["schemas"]["PushedEnvelopeRequest"][];
+            /** @description The app's version on the laptop. */
+            app_version: string;
+            /** @description How many records the laptop holds unsent, besides these. */
+            unsent_count: number;
         };
         PushedAnswer: {
             /** Format: uuid */

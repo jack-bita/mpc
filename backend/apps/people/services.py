@@ -923,6 +923,25 @@ def note_device_seen(device: Device, *, at: datetime) -> bool:
     return bool(written)
 
 
+def record_sync(device: Device, *, at: datetime, unsent_count: int, app_version: str) -> bool:
+    """Keep what a laptop said about itself as it pushed at `at` (SYNC-5): how many records it still holds unsent,
+    and the app version it runs. Called by the push at its end, an empty push too (apps/sync/push.py). True when it
+    was written; False when a newer push's report is already there."""
+    _check_shop(device.shop_id, None)
+    # One UPDATE of these three columns, as note_device_seen's: the row's version and `updated_at` stay as they were,
+    # so a rename screen opened a minute ago is never refused (409) because the laptop synced, and the edit history
+    # skips them (migration 0013). The time is in the UPDATE too: two pushes of one laptop at the same moment, the
+    # older one slower, and its older report would say "3 unsent" of a laptop that has sent them all. A single UPDATE
+    # is atomic on its own, so it needs no transaction of ours.
+    older = Q(last_synced_at__isnull=True) | Q(last_synced_at__lte=at)
+    written = Device.objects.filter(older, pk=device.pk).update(
+        last_synced_at=at, unsent_count=unsent_count, app_version=app_version
+    )
+    if written:
+        device.last_synced_at, device.unsent_count, device.app_version = at, unsent_count, app_version
+    return bool(written)
+
+
 def _set_device_status(
     device: Device, was: DeviceStatus, becomes: DeviceStatus, action: AuditAction, *, by: StaffMember, reason: str
 ) -> Device:

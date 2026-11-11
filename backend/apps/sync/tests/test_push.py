@@ -42,6 +42,8 @@ pytestmark = pytest.mark.django_db
 # Asha served the customer at 10:42 by the laptop's clock; the push reached the server at 14:05. Both in UTC (03 §6.6).
 CLIENT_TIME = dt.datetime(2026, 11, 10, 7, 42, tzinfo=dt.UTC)
 RECEIVED_AT = dt.datetime(2026, 11, 10, 11, 5, tzinfo=dt.UTC)
+# The app's version on the laptop, as it names itself.
+APP_VERSION = "2026.11.1"
 
 
 @pytest.fixture(autouse=True)
@@ -73,10 +75,18 @@ def _sent(device_seq: int, maker: StaffMember, *, text: str = "2 bags of pumba",
     )
 
 
-def _push(device: Device, documents: Sequence[Sent]) -> list[Answer]:
-    # The push as the route runs it: inside the laptop's shop, which its key opened.
+def _push(device: Device, documents: Sequence[Sent], *, unsent_count: int = 0) -> list[Answer]:
+    # The push as the route runs it: inside the laptop's shop, which its key opened. `unsent_count`: what the laptop
+    # says it holds besides this batch.
     with shop_context(device.shop_id):
-        return push(device, documents, received_at=RECEIVED_AT)
+        return push(device, documents, received_at=RECEIVED_AT, unsent_count=unsent_count, app_version=APP_VERSION)
+
+
+def _report(device: Device) -> tuple[object, object, object]:
+    # What the laptop's row says of its last push: when, how many records still unsent, which app.
+    with shop_context(device.shop_id):
+        held = Device.objects.get(pk=device.pk)
+    return held.last_synced_at, held.unsent_count, held.app_version
 
 
 def _again(answer: Answer) -> Answer:
@@ -190,6 +200,45 @@ def test_server_error_answers_retry(
     monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), TICKET)
     assert [answer.status for answer in _push(device_a, batch)] == ["duplicate", "accepted", "accepted"]
     assert [seq for seq, _text in _tickets(shop_a)] == [1, 2, 3]
+
+
+def test_push_records_device_health(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # The Dawa laptop holds 5 records: it sends 2 and says 3 more wait. Its row keeps when it synced, its app, and the
+    # 3 it still holds once these 2 are in.
+    assert _report(device_a) == (None, None, "")
+    _push(device_a, [_sent(1, staff_a), _sent(2, staff_a)], unsent_count=3)
+    assert _report(device_a) == (RECEIVED_AT, 3, APP_VERSION)
+
+
+def test_unsent_count_keeps_what_the_push_did_not_save(
+    monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # The laptop sends #1, #2 and #3 and says nothing else waits. #2 hits a server problem, so #2 and #3 stay on the
+    # laptop, to be sent again: it still holds 2, not 0, and the office must see 2 (a drawer's day can't be approved
+    # while a device holds records, M8). An invalid document counts as sent: it was answered, and set aside.
+    def crash_on_two(document: Document, payload: dict[str, Any]) -> list[Flag]:
+        if document.device_seq == 2:
+            raise RuntimeError("the server broke")
+        return post_ticket(document, payload)
+
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=crash_on_two))
+    _push(device_a, [_sent(1, staff_a), _sent(2, staff_a), _sent(3, staff_a)])
+    assert _report(device_a)[1] == 2
+    _push(device_a, [_sent(4, staff_a, type="no_such_type")], unsent_count=1)
+    assert _report(device_a)[1] == 1
+
+
+def test_push_writes_no_edit_history(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # Each push moves the laptop's row, every 30 seconds or so (03 §6.6), and never adds a line to its edit history,
+    # which would bury the owner's real changes. Nor does its version move: a rename screen opened a minute ago still
+    # works (CORE-6).
+    with shop_context(shop_a):
+        version = Device.objects.get(pk=device_a.pk).version
+    _push(device_a, [_sent(1, staff_a)], unsent_count=3)
+    _push(device_a, [], unsent_count=0)
+    with shop_context(shop_a):
+        assert not EditEvent.objects.filter(subject_type="device", subject_id=device_a.pk).exists()
+        assert Device.objects.get(pk=device_a.pk).version == version
 
 
 def test_a_database_error_looking_up_a_document_answers_retry(
@@ -424,7 +473,7 @@ def test_twin_sent_at_the_same_moment_answers_duplicate(
         monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=_with_its_own_id))
     sent = _sent(1, staff_a, text=text)
     with shop_context(shop_a), transaction.atomic():
-        (first,) = push(device_a, [sent], received_at=RECEIVED_AT)
+        (first,) = push(device_a, [sent], received_at=RECEIVED_AT, unsent_count=0, app_version=APP_VERSION)
         twin, ended = in_another_transaction(lambda: _push(device_a, [sent]))
         wait_until_someone_waits_for_me()
     twin.join()

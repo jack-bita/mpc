@@ -73,6 +73,12 @@ class PushView(DeviceView):
         # A broken envelope, or more than 100: 400 invalid, under the field, through the one error handler.
         sent.is_valid(raise_exception=True)
         documents = [Sent(**document) for document in sent.validated_data["documents"]]
-        # The server's clock as the push arrived, one time for the whole batch.
-        answers = push(device, documents, received_at=timezone.now())
+        # The server's clock as the push arrived, one time for the whole batch and the laptop's report.
+        answers = push(
+            device,
+            documents,
+            received_at=timezone.now(),
+            unsent_count=sent.validated_data["unsent_count"],
+            app_version=sent.validated_data["app_version"],
+        )
         return Response(PushAnswer({"answers": answers}).data)

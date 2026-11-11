@@ -45,6 +45,10 @@ class Font(models.TextChoices):
 # superuser.
 OWN_SETTINGS = ("language", "font")
 
+# The longest app version a laptop may report at a push (SYNC-5): room for a release number and a git commit's 40
+# letters. Here, so the push's check (apps/sync/api/serializers.py) and the column can't disagree.
+APP_VERSION_LENGTH = 64
+
 
 class UserManager(BaseUserManager["User"]):
     # Not written into the migrations (no `use_in_migrations`): inside a migration, User is a bare copy
@@ -425,7 +429,7 @@ class Device(Editable):
     # `updated_at`, `updated_by` and the `version` that keeps two people's edits apart, for the day a manager renames
     # it (UI-3); the trigger in this table's migration records each change, before and after, but never the key's
     # hash (ADR-0036). Who confirmed it, and when, are the row's `created_by` and `created_at` (02 v1.11). The columns
-    # each sync reports (`last_synced_at`, `unsent_count`...) come with SYNC-5.
+    # each push reports (`last_synced_at`, `unsent_count`, `app_version`) come with SYNC-5.
 
     # What the manager called it, on the device list: "Laptop ya Dawa".
     name = models.CharField(max_length=40)
@@ -444,6 +448,14 @@ class Device(Editable):
     # (apps/people/services.py), at most every few minutes, by itself: its version never moves for it, and its edit
     # history skips it (migration 0008). editable=False: no form or API changes it.
     last_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
+    # What the laptop said about itself at its last push (SYNC-5, 02 §5): when the push arrived, by the server's clock;
+    # how many records it still held unsent, which a drawer's day waits for (M8); and the app's version it runs, as it
+    # names itself. For the device health page (SYNC-14). Empty, all three, until its first push: a made-up 0 would
+    # say "nothing unsent". Moved only by record_sync (apps/people/services.py), at every push, so like last_seen_at:
+    # its version never moves for them, and its edit history skips them (migration 0013).
+    last_synced_at = models.DateTimeField(null=True, blank=True, editable=False)
+    unsent_count = models.PositiveIntegerField(null=True, blank=True, editable=False)
+    app_version = models.CharField(max_length=APP_VERSION_LENGTH, blank=True, editable=False)
 
     class Meta(Editable.Meta):
         # Builds on Editable.Meta, so `objects`, with the guard, stays the default manager (CORE-2). The database is

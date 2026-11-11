@@ -1836,10 +1836,24 @@
                             "$ref": "#/components/schemas/PushedEnvelopeRequest"
                         },
                         "maxItems": 100
+                    },
+                    "app_version": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The app's version on the laptop.",
+                        "maxLength": 64
+                    },
+                    "unsent_count": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "How many records the laptop holds unsent, besides these."
                     }
                 },
                 "required": [
-                    "documents"
+                    "app_version",
+                    "documents",
+                    "unsent_count"
                 ]
             },
             "PushedAnswer": {
