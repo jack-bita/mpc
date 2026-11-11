@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.21 · 10 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.22 · 11 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -47,6 +47,8 @@
 **Changes in v1.20** (5 Nov 2026, the design-system cards): a choice by Jack. A person's font is on `User`, beside their language, so it follows them to every device (§5, ADR-0039, 04 v1.40). Marked **(v1.20)**.
 
 **Changes in v1.21** (10 Nov 2026, SYNC-4): a new Flag kind, `invalid_document`: a document a device pushed that the server can't save, raised about its line in the push's answer log, a new append-only record (§13, T2; 03 v1.41). A word for a document a device sends: *kumbukumbu* (Jack, §21). Marked **(v1.21)**.
+
+**Changes in v1.22** (11 Nov 2026, SYNC-5): a choice by Jack, made while planning SYNC-5. A `device_gap` flag closes itself once every number it was missing has arrived: the system resolves it, with a note of its own that says so. It is the one kind the system may close; every other flag is closed by a person, as v1.8 says (§13, §17; 04 v1.57). Marked **(v1.22)**.
 
 ---
 
@@ -481,6 +483,7 @@ Advances come from `MoneyMovement` `staff_advance` and are deducted in the next 
 - A manager who finds the reason may resolve or dismiss a flag straight from `open`, with their own note. `resolved` and `dismissed` are final **(v1.8)**.
 - Each step is a note, with who and when. Every explanation is kept: each person a flag names may write their own, and none replaces another. Closing a flag needs a note too. Notes are never edited **(v1.8)**.
 - A person a flag names may explain it, but never resolve or dismiss it: Asha can't write "no problem" on her own drawer's shortage. Someone else decides, with `flag.review` on the flag's side (X1) **(v1.8)**.
+- One flag closes itself: a `device_gap`, once every number it was missing has arrived (the record was only late). The system resolves it, with a note of its own saying so, and names no person; the note stays in its history like any other. Every other kind waits for a person (Jack, SYNC-5) **(v1.22)**.
 - Low stock and expiring batches are **alerts** (lists), not flags: nobody has to explain them.
 
 **AuditEvent** [R1] — who did what: `actor`, `device`, `action`, `subject`, `before`, `after`, `reason`, `approval`, `at`. Append-only.
@@ -526,7 +529,7 @@ stateDiagram-v2
 - **Transfer** [R2]: `sent` → `received` | `cancelled` (before received).
 - **Job** [R2]: `waiting` → `in_progress` → `ready` → `collected`; `cancelled` before ready (the customer's goods go back).
 - **PayRun** [R1b]: `draft` → `approved` → `paid`.
-- **Flag:** `open` → `explained` → `resolved` | `dismissed`; it may also close straight from `open` **(v1.8)**.
+- **Flag:** `open` → `explained` → `resolved` | `dismissed`; it may also close straight from `open` **(v1.8)**. A `device_gap` resolves itself when its missing records arrive (§13) **(v1.22)**.
 - **StaffMember:** `active` ⇄ `suspended` → `left`. **Product, Contact:** `active` ⇄ `archived`. **PaymentAccount:** `active` ⇄ `archived` **(v1.5)**. **Device:** `active` ⇄ `blocked` **(v1.11)**. **PairingRequest:** `waiting` → `confirmed` | `expired` **(v1.11)**.
 
 ## 15. Calculations
@@ -598,7 +601,7 @@ These become database constraints and automated tests.
 - **Kept on the device:** products, selling units, current and future-dated prices, batches and stock, contacts with balances (as of the last sync), staff names and status, permissions, and the settings in force plus future-dated ones **(v1.1)**. No PIN hashes: each device makes its own offline PIN check the first time a person logs in online on it **(v1.1)**. Buying prices never go to devices.
 - **Safe to resend:** each document travels with its UUID; sending it twice changes nothing.
 - **Accept, then flag:** the server accepts offline documents and flags what it could only check online — negative stock, a duplicate code, over the credit limit, a suspended worker, an archived product. A price changed meanwhile doesn't matter: the sale keeps the device's price.
-- **Missing records:** a gap in a device's `device_seq` → a `device_gap` flag.
+- **Missing records:** a gap in a device's `device_seq` → a `device_gap` flag, which closes itself if the missing records arrive later (§13) **(v1.22)**.
 - **Foods hand-off** ✚: decided in 03 (AD16) — through the server when there is a network; cashier-only on one screen when there isn't; a local hub only if R1's outage numbers justify it **(v1.1)**.
 - **Long power cuts:** when every device is dead, sales go in a numbered paper receipt book and are entered later as late sales, with a manager's approval (03 §6.11) **(v1.1)**.
 
