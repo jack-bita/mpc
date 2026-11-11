@@ -114,6 +114,9 @@ def test_a_void_says_who_and_why(
         # clock's error, which is the push's arrival less the wait. Neither the laptop's own time, nor the arrival.
         ({"time_check": TimeCheck.SERVER}, "trusted_time_fits_its_check"),
         ({"time_check": TimeCheck.SERVER, "trusted_time": RECEIVED_AT}, "trusted_time_fits_its_check"),
+        # With no time at all: a comparison with an empty value is "unknown", which a rule lets pass, so the rule says
+        # the time is there (ATT-1's review).
+        ({"time_check": TimeCheck.SERVER, "trusted_time": None}, "trusted_time_fits_its_check"),
         # Kept from the laptop: its own time, as nothing said it was wrong.
         ({"trusted_time": RECEIVED_AT}, "trusted_time_fits_its_check"),
         ({"trusted_time": None}, "trusted_time_fits_its_check"),
@@ -128,6 +131,7 @@ def test_a_void_says_who_and_why(
     ids=[
         "server_with_the_laptops_time",
         "server_with_the_arrival_time",
+        "server_with_no_time",
         "device_ok_with_the_servers_time",
         "device_ok_with_no_time",
         "unverified_with_a_time",

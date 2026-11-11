@@ -73,6 +73,15 @@ def test_two_minutes_is_still_online_and_a_second_more_is_not() -> None:
     assert (at_two.time_check, after_two.time_check) == (TimeCheck.SERVER, TimeCheck.DEVICE_OK)
 
 
+def test_the_waits_lower_edge() -> None:
+    # Sent in the very second of the tap is "at once". A wait below zero means the clock went back between the tap and
+    # the push: not "at once", so the signs decide, and a second below zero is still within the slack (ATT-1's review).
+    same_second = check_time(morning(sent_at=arusha(7, 20), received_at=arusha(7, 20)))
+    just_below = check_time(morning(sent_at=arusha(7, 19, 59), received_at=arusha(7, 19, 59)))
+    assert (same_second.time_check, same_second.trusted_time) == (TimeCheck.SERVER, arusha(7, 20))
+    assert (just_below.time_check, just_below.trusted_time) == (TimeCheck.DEVICE_OK, arusha(7, 20))
+
+
 def test_sent_later_keeps_the_laptops_time_when_nothing_disagrees() -> None:
     # The morning as it was: sent at 12:00, its record before at 07:05, the server last seen at 06:50, the clock right.
     checked = check_time(morning())
