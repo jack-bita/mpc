@@ -347,12 +347,17 @@ def _gaps_waiting_for(device: Device, line: PushedDocument) -> list[Flag]:
 
 def _every_number_came(device: Device, gap: Flag) -> bool:
     # Whether every number the gap waited for, from `expected` to `actual - 1`, now has a line from this laptop, the
-    # record just saved included (its line is in this transaction). Counted once each: a number that came twice, as two
-    # documents, fills one place. After a reset, a number of the new count fills an old gap's place too: the server
-    # can't tell the two counts apart, and the reset's own flag stays open for a person.
+    # record just saved included (its line is in this transaction). Only lines saved after the flag count: a late
+    # record always comes after the gap was flagged, and a line from before it is an older count's, before a reset,
+    # which must not fill the new count's place and hide a record deleted since (SYNC-5's review). Counted once each:
+    # a number that came twice, as two documents, fills one place. A number of the new count can still fill an old
+    # gap's place after a reset: the server can't tell the two counts apart, and the reset's own flag stays open for a
+    # person.
     first, after = int(cast(Decimal, gap.expected)), int(cast(Decimal, gap.actual))
     came = (
-        PushedDocument.objects.filter(device=device, device_seq__gte=first, device_seq__lt=after)
+        PushedDocument.objects.filter(
+            device=device, device_seq__gte=first, device_seq__lt=after, created_at__gt=gap.created_at
+        )
         .values("device_seq")
         .distinct()
         .count()

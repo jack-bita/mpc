@@ -217,6 +217,24 @@ def test_late_record_leaves_a_closed_gap_flag_as_it_is(
     assert len(_gaps(shop_a)) == 1
 
 
+def test_a_record_from_before_a_reset_fills_no_new_gap(
+    monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # The laptop sent #1 to #10, then was reset: new #1 (its numbers went back), #2, then #5, so the new #3 and #4 are
+    # missing. The new #4 was deleted on the laptop; the new #3 comes late. The old #4, from before the reset, is not
+    # the new one: the gap stays open, or the deletion would hide behind a record of last week (SYNC-5's review).
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=_keeps_no_row))
+    _push_numbers(device_a, staff_a, *range(1, 11))
+    _push_numbers(device_a, staff_a, 1, 2, 5)
+    back, gap = _gaps(shop_a)
+    assert _numbers(gap) == (Decimal(3), Decimal(5))
+    _push_numbers(device_a, staff_a, 3)
+    assert _status(gap) == FlagStatus.OPEN
+    # Once the new #4 comes too, the gap is whole.
+    _push_numbers(device_a, staff_a, 4)
+    assert _status(gap) == FlagStatus.RESOLVED
+
+
 def test_numbers_gone_back_never_close_by_themselves(
     monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
 ) -> None:
