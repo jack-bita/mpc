@@ -320,8 +320,9 @@ def _maker_breaks(device: Device, kind: DocumentType, maker: StaffMember, *, mad
     # The key for this type, on the laptop's own side, as its counter asks (X1): a seller of Vyakula holds no key on
     # the Dawa laptop. Among the keys the person was given, whatever their status: a suspended maker's sale is the
     # suspension's flag, not a second one saying they hold no key. A note for SALE-2: a sale that names its own side is
-    # checked on the laptop's side all the same, until that card says otherwise.
-    if kind.permission not in given_permissions(maker).on(device.home_side_id):
+    # checked on the laptop's side all the same, until that card says otherwise. A type that names no key, a clock-in,
+    # has nothing to check here (Jack, ATT-1).
+    if kind.permission is not None and kind.permission not in given_permissions(maker).on(device.home_side_id):
         broken.append(FlagKind.PERMISSION_BREAK)
     # Working here when they made it (X2)? A laptop offline when Baba suspended Juma doesn't know, so its PIN check
     # still lets him in. By the laptop's clock, the one time the record carries: Juma's sale made at 09:00 is his,

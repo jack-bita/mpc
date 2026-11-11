@@ -45,8 +45,11 @@ class DocumentType:
     # Saves it, inside the push's own transaction for this one document, and hands back the flags it raised.
     post: Callable[[Document, dict[str, Any]], list[Flag]]
     # What its maker needs, on the laptop's side; checked again as it arrives (apps/sync/push.py): a maker without it
-    # gets a permission_break flag, never a refusal.
-    permission: Permission
+    # gets a permission_break flag, never a refusal. None for a type everyone working at the shop may make, on any of
+    # its laptops: a clock-in (Jack, ATT-1). Baraka works on Vyakula, and clocks in on the Dawa laptop when Vyakula's
+    # is off; a key checked on the laptop's side would flag him each time. A maker who wasn't working when they made
+    # it is still flagged, whatever the type (X2).
+    permission: Permission | None
 
 
 # Empty until the first types join: the sale (SALE-2) and the clock-in (ATT-1).
