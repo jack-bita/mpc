@@ -1,0 +1,22 @@
+// meta.ts — the sync's own notes in a shop's database: their names in the meta drawer, and how each is
+// read (SYNC-7, 03 §6.1). Kept in one file so the bootstrap, the pull and the screens that read the
+// clock (SYNC-11) agree on every name.
+import type { ShopDatabase } from "../db";
+
+/** The shop's last change number this database holds: the next pull asks for what came after it.
+ * Missing until the first bootstrap, which is how the app knows a laptop still needs one. */
+export const CURSOR = "pull_cursor";
+
+/** How far the server's clock is ahead of this laptop's, in milliseconds (03 §6.6): a shop laptop's
+ * clock is often wrong, and a time worked out on it must be put right by this much. */
+export const CLOCK_OFFSET = "clock_offset_ms";
+
+/** The server's own time at the last pull, as it sent it (UTC). A clock-in writes it into its document
+ * when the tap is saved, so the server can tell how long ago the laptop last heard from it (ATT-1). */
+export const LAST_SERVER_TIME = "last_server_time";
+
+/** The cursor, or null when this database was never filled. */
+export async function readCursor(db: ShopDatabase): Promise<number | null> {
+  const row = await db.meta.get(CURSOR);
+  return typeof row?.value === "number" ? row.value : null;
+}
