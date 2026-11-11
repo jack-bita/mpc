@@ -72,6 +72,9 @@ export interface OutboxRow {
 export interface PendingEffectRow {
   id: string;
   document_id: string;
+  /** Its document's posted_seq, copied here when the document is accepted; null until then. Once the
+   * pull's cursor reaches it, the server's own numbers include the change, so the row goes (sync rules). */
+  posted_seq: number | null;
 }
 
 /** A document already sent, kept 30 days so it can be sent again after a server restore (03 §6.1). */
@@ -116,8 +119,11 @@ export const VERSIONS: readonly Version[] = [
       // By status and number together, so the push reads what is waiting already in its order, and
       // the needs-attention list what was set aside.
       outbox: "id, &device_seq, [status+device_seq]",
-      // Found by their document, to drop them once it is confirmed (sync rules).
-      pending_effects: "id, document_id",
+      // By their document, to stamp its posted_seq on them when it is accepted; by that number, so
+      // each pull drops the ones its cursor has passed in one step. A row whose number is still null
+      // is left out of that search key, as IndexedDB leaves out what it can't sort, so a document
+      // the server hasn't accepted keeps its effects.
+      pending_effects: "id, document_id, posted_seq",
       // By when it was sent, so rows past 30 days can be cleared; by number, so a replay after a
       // server restore resends them in their order (03 §6.7).
       sent_archive: "id, sent_at, device_seq",

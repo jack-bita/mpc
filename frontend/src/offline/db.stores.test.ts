@@ -171,6 +171,35 @@ describe("the device database", () => {
     expect(replay.map((row) => row.device_seq)).toEqual([7, 8]);
   });
 
+  it("drops the pending effects the pull's cursor has passed, and keeps the rest", async () => {
+    // The cursor is at 42: change 40 is in the server's numbers now, 45 not yet, and the last
+    // document isn't accepted at all.
+    const db = open(MPC);
+    await db.pending_effects.bulkAdd([
+      {
+        id: "0192f000-0000-7000-8000-0000000000f1",
+        document_id: "0192f000-0000-7000-8000-0000000000c1",
+        posted_seq: 40,
+      },
+      {
+        id: "0192f000-0000-7000-8000-0000000000f2",
+        document_id: "0192f000-0000-7000-8000-0000000000c2",
+        posted_seq: 45,
+      },
+      {
+        id: "0192f000-0000-7000-8000-0000000000f3",
+        document_id: "0192f000-0000-7000-8000-0000000000c3",
+        posted_seq: null,
+      },
+    ]);
+
+    await db.pending_effects.where("posted_seq").belowOrEqual(42).delete();
+
+    expect(
+      (await db.pending_effects.toArray()).map((row) => row.posted_seq).sort(),
+    ).toEqual([45, null]);
+  });
+
   it("finds one kind of document for one day", async () => {
     // Today's clock-ins (SYNC-11): yesterday's clock-in and today's sale are left out.
     const db = open(MPC);
