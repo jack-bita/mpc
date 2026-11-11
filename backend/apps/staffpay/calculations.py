@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from apps.staffpay.models import TimeCheck
 
 # A clock-in the laptop sent within 2 minutes of the tap, both by its own clock, was made online: the push runs 2
-# seconds after a new record (03 §6.5), and a retry or two still fits. Its time is the server's own.
+# seconds after a new record (03 §6.5), and a retry or two still fits. Its time is the server's time of the tap: the
+# push's arrival less the wait.
 ONLINE_WITHIN = dt.timedelta(minutes=2)
 # How far two clocks may disagree before it is a sign the laptop's moved: a laptop's clock drifts a little while it
 # is offline, and a push takes a moment to arrive. Past it, a worker could win a late fine's worth, so it stays small.

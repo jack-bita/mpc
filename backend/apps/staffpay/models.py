@@ -23,7 +23,7 @@ class ClockKind(models.TextChoices):
 
 class TimeCheck(models.TextChoices):
     # How far the line's time can be trusted (02 §12).
-    SERVER = "server", "The server's time"  # sent at once: the server's own clock
+    SERVER = "server", "The server's time"  # sent at once: the server's time of the tap, its arrival less the wait
     DEVICE_OK = "device_ok", "The laptop's time, checked"  # sent later, and no sign its clock moved
     UNVERIFIED = "unverified", "Not verified"  # a sign its clock moved: a manager decides
 
