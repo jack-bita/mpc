@@ -9,9 +9,10 @@ import { ApiRefusal } from "@/api/refusal";
 import { saveDevice, savedBlocked } from "@/features/devices/this-device";
 import { DAWA_LAPTOP } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
-import { ASHA, DAWA_SIDE, IDLE_15 } from "@/test/shop-lists";
+import { ASHA, DAWA_SIDE, IDLE_15, IDLE_RULE } from "@/test/shop-lists";
 
 import { openShopDatabase, type ShopDatabase } from "../db";
+import { ruleInForce } from "../rules";
 import { CLOCK_OFFSET, CURSOR, LAST_SERVER_TIME, readCursor } from "./meta";
 import { AppTooOld, pull } from "./pull";
 
@@ -173,6 +174,84 @@ describe("a pull", () => {
     expect(await db.side.get(DAWA_SIDE.id)).toEqual(closed);
     expect(await db.payment_account.get(drawer.id)).toEqual(drawer);
     expect(await db.setting.get(IDLE_15.id)).toEqual(IDLE_15);
+  });
+
+  it("keeps a rule's same-day fix, given last, even when its id is the smaller", async () => {
+    // The manager saved 50, then fixed it to 15 the same day, on a phone whose clock is behind: the fix's
+    // id, made on that phone, sorts before the typo's. The server read the fix as the one saved last, and
+    // the laptop holds the row it was given last.
+    const typo = {
+      ...IDLE_15,
+      id: "019a5e00-0000-7000-8000-000000000105",
+      effective_from: "2026-11-11",
+      value: "50",
+    };
+    const fix = {
+      ...typo,
+      id: "019a5e00-0000-7000-8000-000000000102",
+      value: "15",
+    };
+    serverGives(
+      page(
+        [
+          {
+            seq: 121,
+            entity: "setting",
+            id: typo.id,
+            op: "upsert",
+            data: typo,
+          },
+        ],
+        121,
+        true,
+      ),
+      page(
+        [{ seq: 122, entity: "setting", id: fix.id, op: "upsert", data: fix }],
+        122,
+      ),
+    );
+
+    await pull(db);
+
+    expect(await db.setting.toArray()).toEqual([fix]);
+    expect(
+      ruleInForce(await db.setting.toArray(), IDLE_RULE, null, "2026-11-11"),
+    ).toBe("15");
+  });
+
+  it("keeps a rule's rows of other days and sides beside a fix", async () => {
+    const dawaRow = {
+      ...IDLE_15,
+      id: "019a5e00-0000-7000-8000-000000000103",
+      side: DAWA_SIDE.id,
+    };
+    await db.setting.bulkPut([IDLE_15, dawaRow]);
+    const later = {
+      ...IDLE_15,
+      id: "019a5e00-0000-7000-8000-000000000104",
+      effective_from: "2026-11-20",
+      value: "30",
+    };
+    serverGives(
+      page(
+        [
+          {
+            seq: 121,
+            entity: "setting",
+            id: later.id,
+            op: "upsert",
+            data: later,
+          },
+        ],
+        121,
+      ),
+    );
+
+    await pull(db);
+
+    expect((await db.setting.toArray()).map((row) => row.id).sort()).toEqual(
+      [IDLE_15.id, dawaRow.id, later.id].sort(),
+    );
   });
 
   it("asks again at once while more wait, from each page's cursor", async () => {

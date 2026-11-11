@@ -134,8 +134,43 @@ function applyChange(db: ShopDatabase, change: Change): Promise<unknown> {
     case "staff":
       return applyTo(db.staff, change);
     case "setting":
-      return applyTo(db.setting, change);
+      return applySetting(db, change);
   }
+}
+
+/**
+ * A rule's row, kept as the last one the laptop was given for its rule, side and day (SYNC-3's note).
+ *
+ * Two rows of one rule, side and start day mean a same-day fix: the manager saved 50, then 15. The
+ * server's fix is the row it saved last (get_setting orders by created_at, apps/shops/selectors.py), and
+ * it hands rows over in that order. Nothing on the row says so to the laptop: its id is made in the
+ * manager's browser, so a phone whose clock is behind gives the fix the smaller id. So the row given
+ * last replaces the others of its day here, in the page's transaction, and the laptop holds one row per
+ * rule, side and day, the one the server reads.
+ *
+ * Safe on a page sent again: a replaced row is no longer one the server reads, so it never comes back as
+ * an upsert, only as an archive (setting_rows, apps/sync/selectors.py). The bootstrap sends one row per
+ * day already.
+ */
+async function applySetting(
+  db: ShopDatabase,
+  change: Extract<Change, { entity: "setting" }>,
+): Promise<unknown> {
+  const row = change.data;
+  if (change.op === "upsert" && row !== null) {
+    const replaced = await db.setting
+      .where("key")
+      .equals(row.key)
+      .filter(
+        (held) =>
+          held.side === row.side &&
+          held.effective_from === row.effective_from &&
+          held.id !== row.id,
+      )
+      .primaryKeys();
+    await db.setting.bulkDelete(replaced);
+  }
+  return applyTo(db.setting, change);
 }
 
 /** An upsert saves the record as it is now, new or changed. An archive takes it off the laptop's list:

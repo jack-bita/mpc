@@ -67,15 +67,6 @@ describe("the rule in force", () => {
     expect(ruleInForce(rows, IDLE_RULE, DAWA.id, TODAY)).toBe("15");
   });
 
-  it("is the fix when two rows start the same day, whatever order the laptop holds them in", () => {
-    // A manager typed 50, then fixed it to 15 the same day: the fix was written last.
-    const typo = row("102", null, "2026-11-11", "50");
-    const fix = row("103", null, "2026-11-11", "15");
-
-    expect(ruleInForce([typo, fix], IDLE_RULE, null, TODAY)).toBe("15");
-    expect(ruleInForce([fix, typo], IDLE_RULE, null, TODAY)).toBe("15");
-  });
-
   it("reads only its own rule's rows", () => {
     const other = { ...IDLE_15, key: "drawer.float", value: "50000" };
 

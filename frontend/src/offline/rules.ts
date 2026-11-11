@@ -33,9 +33,9 @@ export function shopToday(timezone: string, at: number): string {
  * 3. else the rule's default.
  * A side's row beats even a newer shop row (CORE-4): the side chose its own value on purpose.
  *
- * Two rows of one rule, side and start day: a same-day fix. The fix is the one written last, and the
- * last one the laptop was given (SYNC-3's note). Row ids are UUIDv7, which sort in the order the server
- * made them, so the greatest id is the fix: the order the laptop got them in isn't kept by IndexedDB.
+ * A same-day fix is settled before this runs: the laptop holds one row per rule, side and day, the last
+ * one it was given (pull.ts, applySetting). Never by the row's id, which the manager's browser made, so its
+ * order follows that browser's clock, not the order the server saved the rows in.
  *
  * Days compare as text: "2026-11-01" < "2026-11-11", as ISO dates sort as they read.
  */
@@ -60,11 +60,8 @@ function latest(
   for (const row of rows) {
     if (row.key !== key || row.side !== side || row.effective_from > day)
       continue;
-    if (
-      best === undefined ||
-      row.effective_from > best.effective_from ||
-      (row.effective_from === best.effective_from && row.id > best.id)
-    )
+    // One row per day (see above), so a later start day is all that decides.
+    if (best === undefined || row.effective_from > best.effective_from)
       best = row;
   }
   return best;
