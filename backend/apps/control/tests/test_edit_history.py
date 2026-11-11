@@ -26,6 +26,7 @@ from apps.control import operations
 from apps.control.models import EditEvent
 from apps.control.operations import (
     ChangeRecordEdits,
+    ChangeRecordEditsV2,
     EditsByTriggerOnly,
     MoveRecordEditsToV2,
     RecordEdits,
@@ -425,6 +426,77 @@ def test_move_to_v2_checks_its_names() -> None:
     state = ProjectState.from_apps(apps)
     with pytest.raises(ValueError, match="nmae"), connection.schema_editor() as editor:
         MoveRecordEditsToV2("card", type_code="probe_card", skip=["nmae"]).database_forwards(
+            "probe", editor, state, state
+        )
+    assert card_runs() == "control_record_edit_v2"
+
+
+def test_change_record_edits_v2_skips_the_new_column_on_the_new_rule(
+    shop_a: Model, card: Card, staff_a: Actor, device_a: ShopScoped
+) -> None:
+    # What a migration lists since SYNC-5 to change a table's list, as the device's sync columns join it: an edit of
+    # only the new column writes nothing, and every other edit is still recorded, naming the device. The old step
+    # would have put the table back on the rule that names none. Inside the test's transaction, which the rollback
+    # at the end undoes.
+    state = ProjectState.from_apps(apps)
+    with connection.schema_editor() as editor:
+        ChangeRecordEditsV2("card", type_code="probe_card", skip=["name"], was=[]).database_forwards(
+            "probe", editor, state, state
+        )
+    assert card_runs() == "control_record_edit_v2"
+
+    with shop_context(shop_a), acting_as(staff_a, device=device_a):
+        Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
+        assert history_of(card) == []
+        Card.objects.filter(pk=card.pk).update(name="Dawa ya Kuku", created_by_id=staff_a.staff_id)
+        [edit] = history_of(card)
+        assert (edit.before, edit.after) == ({"created_by_id": None}, {"created_by_id": str(staff_a.staff_id)})
+        assert edit.device_id == device_a.pk
+
+
+def test_change_record_edits_v2_undone_keeps_the_new_rule(
+    shop_a: Model, card: Card, staff_a: Actor, device_a: ShopScoped
+) -> None:
+    # Undone, it puts the old list back, and keeps the rule that names the device: the table was on it before this
+    # step (AUTH-8), so stepping back must not move it to the old rule, as ChangeRecordEdits's undo would.
+    state = ProjectState.from_apps(apps)
+    change = ChangeRecordEditsV2("card", type_code="probe_card", skip=["name"], was=[])
+    with connection.schema_editor() as editor:
+        change.database_forwards("probe", editor, state, state)
+        change.database_backwards("probe", editor, state, state)
+    assert card_runs() == "control_record_edit_v2"
+
+    with shop_context(shop_a), acting_as(staff_a, device=device_a):
+        Card.objects.filter(pk=card.pk).update(name="Dawa za Mifugo")
+        [edit] = history_of(card)
+        assert (edit.before, edit.after, edit.device_id) == ({"name": "Dawa"}, {"name": "Dawa za Mifugo"}, device_a.pk)
+
+
+def test_change_record_edits_v2_needs_an_atomic_migration(card: Card) -> None:
+    # The same two moves as ChangeRecordEdits, so the same refusal outside one transaction, before any SQL is sent.
+    state = ProjectState.from_apps(apps)
+    change = ChangeRecordEditsV2("card", type_code="probe_card", skip=["name"], was=[])
+    with connection.schema_editor(atomic=False) as editor:
+        with pytest.raises(ValueError, match="atomic"):
+            change.database_forwards("probe", editor, state, state)
+        with pytest.raises(ValueError, match="atomic"):
+            change.database_backwards("probe", editor, state, state)
+    assert card_runs() == "control_record_edit_v2"
+
+
+def test_change_record_edits_v2_checks_its_names() -> None:
+    # The same checks as ChangeRecordEdits, on both lists, and a step that changes nothing is refused.
+    with pytest.raises(ValueError, match="column"):
+        ChangeRecordEditsV2("card", type_code="probe_card", skip=["name'; --"], was=[])
+    with pytest.raises(ValueError, match="column"):
+        ChangeRecordEditsV2("card", type_code="probe_card", skip=["name"], was=["name'; --"])
+    with pytest.raises(TypeError, match="list"):
+        ChangeRecordEditsV2("card", type_code="probe_card", skip=["name"], was="name")
+    with pytest.raises(ValueError, match="change nothing"):
+        ChangeRecordEditsV2("card", type_code="probe_card", skip=["name"], was=["name"])
+    state = ProjectState.from_apps(apps)
+    with pytest.raises(ValueError, match="nmae"), connection.schema_editor() as editor:
+        ChangeRecordEditsV2("card", type_code="probe_card", skip=["nmae"], was=[]).database_forwards(
             "probe", editor, state, state
         )
     assert card_runs() == "control_record_edit_v2"
