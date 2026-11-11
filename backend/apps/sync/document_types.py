@@ -21,6 +21,7 @@ from rest_framework import serializers
 from apps.control.models import Flag
 from apps.core.permissions import Permission
 from apps.people.models import Device, StaffMember
+from apps.staffpay.documents import ClockShape, post_clock
 
 
 @dataclass(frozen=True)
@@ -60,8 +61,12 @@ class DocumentType:
     permission: Permission | None
 
 
-# Empty until the first types join: the sale (SALE-2) and the clock-in (ATT-1).
-DOCUMENT_TYPES: dict[tuple[str, int], DocumentType] = {}
+# The types a push takes, by name and version. The clock-in first (ATT-1); the sale joins with SALE-2.
+DOCUMENT_TYPES: dict[tuple[str, int], DocumentType] = {
+    # A tap of Ingia or Toka (apps/staffpay/documents.py). No key: anyone working at the shop may clock in on any of its
+    # laptops (Jack, ATT-1).
+    ("clock", 1): DocumentType("clock", 1, ClockShape, post_clock, None),
+}
 
 
 def document_type(name: str, schema_version: int) -> DocumentType:
