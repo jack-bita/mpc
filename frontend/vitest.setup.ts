@@ -4,6 +4,10 @@
 // the fake server. Testing Library only empties the page by itself when test functions are global,
 // and ours are imported from "vitest". Without it, what one test rendered stays on the page and can
 // make the next test pass or fail for the wrong reason.
+// The tests run in Node, which has no IndexedDB: fake-indexeddb puts a pretend one, in memory, where
+// the browser's would be, so the device database (src/offline/db.ts) opens in any test (SYNC-6).
+import "fake-indexeddb/auto";
+
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
