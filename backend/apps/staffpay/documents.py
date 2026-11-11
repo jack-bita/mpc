@@ -19,6 +19,7 @@ from rest_framework import serializers
 
 from apps.control.models import Flag, FlagKind
 from apps.control.services import raise_flag
+from apps.core.api.times import ZonedDateTimeField
 from apps.core.changes import record_change, recording_changes
 from apps.people.models import Device, StaffMember
 from apps.staffpay.calculations import Evidence, check_time
@@ -53,8 +54,8 @@ class ClockShape(serializers.Serializer[Any]):
     kind = serializers.ChoiceField(choices=ClockKind.choices)
     # The last time the server had told the laptop, at a pull before the tap: clue 2 of the time check. The laptop
     # keeps it in its `meta` store (03 §6.1) and writes it on the clock-in as it saves it, so it is the one the
-    # laptop knew at the tap, not at the push.
-    last_server_time = serializers.DateTimeField()
+    # laptop knew at the tap, not at the push. With its zone, as every time a laptop sends (ATT-1's review).
+    last_server_time = ZonedDateTimeField()
 
 
 def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:

@@ -239,8 +239,10 @@ def test_clock_in_sent_twice_is_saved_once(shop_a: Model, device_a: Device, staf
         ({"kind": "nap"}, "kind", "invalid_choice"),
         ({"last_server_time": "early"}, "last_server_time", "invalid"),
         ({"last_server_time": None}, "last_server_time", "null"),
+        # 06:50 in Arusha with no zone: read as UTC, it would be 09:50 there, and the clock-in flagged for it.
+        ({"last_server_time": "2026-11-10T06:50:00"}, "last_server_time", "invalid"),
     ],
-    ids=["unknown_kind", "server_time_not_a_time", "no_server_time"],
+    ids=["unknown_kind", "server_time_not_a_time", "no_server_time", "server_time_with_no_zone"],
 )
 def test_clock_in_of_a_wrong_shape_is_invalid(
     shop_a: Model, device_a: Device, staff_a: StaffMember, payload: dict[str, Any], field: str, code: str

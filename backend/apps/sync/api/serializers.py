@@ -19,6 +19,7 @@ from rest_framework import serializers
 
 from apps.control.models import FlagKind
 from apps.core.api.ids import uuid7_only
+from apps.core.api.times import ZonedDateTimeField
 from apps.core.languages import Language
 from apps.core.models import ChangeOp
 from apps.core.settings_registry import KINDS, Scope
@@ -249,7 +250,8 @@ class PushedEnvelope(serializers.Serializer[Any]):
     device_seq = serializers.IntegerField(
         min_value=1, max_value=HIGHEST_DEVICE_SEQ, help_text="The laptop's number for it."
     )
-    client_time = serializers.DateTimeField(help_text="The laptop's clock when it was made: kept, never trusted.")
+    # Every time a laptop sends names its zone, or the whole push is refused (ZonedDateTimeField, ATT-1's review).
+    client_time = ZonedDateTimeField(help_text="The laptop's clock when it was made: kept, never trusted.")
     created_by = serializers.UUIDField(help_text="The staff member who made it at the counter.")
     payload = serializers.DictField(help_text="The document itself, in its type's shape.")
 
@@ -268,8 +270,8 @@ class OutageEnvelope(serializers.Serializer[Any]):
     # document's envelope, so a broken one refuses the whole push. Its two times only as times: kept as the laptop's
     # clock said, even one that ends before it starts (DeviceOutage, apps/people/models.py).
     id = serializers.UUIDField(validators=[uuid7_only], help_text="The period's id, made on the laptop (UUIDv7).")
-    started_at = serializers.DateTimeField(help_text="When the laptop's line went, by its clock.")
-    ended_at = serializers.DateTimeField(help_text="When it came back, by its clock.")
+    started_at = ZonedDateTimeField(help_text="When the laptop's line went, by its clock.")
+    ended_at = ZonedDateTimeField(help_text="When it came back, by its clock.")
 
 
 class PushBatch(serializers.Serializer[Any]):
@@ -283,7 +285,7 @@ class PushBatch(serializers.Serializer[Any]):
     # as the push arrives, it shows how wrong the laptop's clock is now, and, beside a record's own time by the same
     # clock, how long the record waited on the laptop: a clock-in that waited a moment was made online. Needed, as the
     # report's parts are: a push without it is a bug in the laptop's sync code.
-    sent_at = serializers.DateTimeField(help_text="The laptop's clock as it sends this push.")
+    sent_at = ZonedDateTimeField(help_text="The laptop's clock as it sends this push.")
     # The laptop's report on itself, sent at every sync (03 §6.6; SYNC-5), kept on its row (apps/people/services.py,
     # record_sync). Both needed, as the envelope's parts are: the laptop's sync code writes them, so one left out is a
     # bug in the app, refused loudly. The version is kept as the app names itself, only its length checked: the

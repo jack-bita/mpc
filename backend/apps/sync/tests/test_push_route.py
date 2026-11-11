@@ -214,8 +214,18 @@ def test_push_takes_at_most_100_documents(shop_a: Shop, laptop: tuple[Device, st
         ({"created_by": "not-an-id"}, "documents.0.created_by", "invalid"),
         ({"payload": ["2 bags of pumba"]}, "documents.0.payload", "not_a_dict"),
         ({"type": "t" * 41}, "documents.0.type", "max_length"),
+        # A time must name its zone: read as UTC, Arusha's 10:42 would be 3 hours late (ATT-1's review).
+        ({"client_time": "2026-11-10T10:42:00"}, "documents.0.client_time", "invalid"),
     ],
-    ids=["seq_0", "seq_too_long", "not_uuid7", "maker_not_an_id", "payload_not_an_object", "type_too_long"],
+    ids=[
+        "seq_0",
+        "seq_too_long",
+        "not_uuid7",
+        "maker_not_an_id",
+        "payload_not_an_object",
+        "type_too_long",
+        "time_with_no_zone",
+    ],
 )
 def test_a_broken_envelope_refuses_the_whole_push(
     shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember, changes: dict[str, Any], field: str, code: str
@@ -273,6 +283,13 @@ def test_push_takes_the_laptops_offline_periods(shop_a: Shop, laptop: tuple[Devi
         ({"outages": None}, "outages", "null"),
         ({"sent_at": None}, "sent_at", "null"),
         ({"sent_at": "now"}, "sent_at", "invalid"),
+        # Arusha's 14:05 with no zone: read as UTC, every offline clock-in of the push would look 3 hours off.
+        ({"sent_at": "2026-11-10T14:05:00"}, "sent_at", "invalid"),
+        (
+            {"outages": [{"id": str(uuid.uuid7()), "started_at": "2026-11-10T09:10:00", "ended_at": CLIENT_TIME}]},
+            "outages.0.started_at",
+            "invalid",
+        ),
         # A random UUID (version 4), not one made with the time, as every id a device makes is (ADR-0007).
         (
             {
@@ -305,6 +322,8 @@ def test_push_takes_the_laptops_offline_periods(shop_a: Shop, laptop: tuple[Devi
         "no_outages",
         "no_laptop_time",
         "laptop_time_not_a_time",
+        "laptop_time_with_no_zone",
+        "outage_time_with_no_zone",
         "outage_not_uuid7",
         "outage_with_no_end",
         "outage_time_not_a_time",
