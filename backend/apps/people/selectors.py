@@ -76,7 +76,10 @@ def was_working_at(staff: StaffMember, moment: datetime) -> bool:
     as suspension does). For a record made offline, by the laptop's clock: the person's status now says nothing of when
     the record was made. Read from the audit trail, which keeps every suspension and return with the server's time (T3),
     and from the person's last day."""
-    if staff.status == StaffStatus.LEFT and moment >= _gone_from(staff):
+    # Read as stored now, not from the copy handed in: the push reads a record's maker before the record's own
+    # transaction, and a leaving recorded in between would be missed (SYNC-5's review).
+    status, left_on = StaffMember.objects.filter(pk=staff.pk).values_list("status", "left_on").get()
+    if status == StaffStatus.LEFT and moment >= _gone_from(staff, cast(date, left_on)):
         return False
     # The last suspension or return at or before `moment`, if any: a person is born active (02 §5), so none means
     # they were working.
@@ -91,12 +94,12 @@ def was_working_at(staff: StaffMember, moment: datetime) -> bool:
     return last != AuditAction.STAFF_SUSPEND
 
 
-def _gone_from(staff: StaffMember) -> datetime:
+def _gone_from(staff: StaffMember, last_day: date) -> datetime:
     # When a person who left stopped working: the earlier of two times. When their leaving was recorded, as it takes
     # effect at once (their PIN stops); or the start of the day after their last day, in the shop's own time zone, as
     # the owner may record on Monday that Friday was the last day, and a Saturday sale is not theirs to make.
     zone = ZoneInfo(staff.shop.timezone)
-    after_last_day = datetime.combine(cast(date, staff.left_on) + timedelta(days=1), time.min, tzinfo=zone)
+    after_last_day = datetime.combine(last_day + timedelta(days=1), time.min, tzinfo=zone)
     recorded = (
         AuditEvent.objects.filter(subject_type=link_type_of(staff), subject_id=staff.pk, action=AuditAction.STAFF_LEAVE)
         .values_list("created_at", flat=True)
