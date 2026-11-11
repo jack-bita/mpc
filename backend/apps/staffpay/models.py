@@ -41,9 +41,10 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
     # ATT-4 adds the one it reads a month by.
     staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
     kind = models.CharField(max_length=3, choices=ClockKind)
-    # The time the server trusts, and how far (TimeCheck): the server's own clock as the push arrived (`received_at`)
-    # for a clock-in sent at once; the laptop's (`client_time`) for one sent later with no sign its clock moved; none
-    # when a sign says it did, so a manager decides (ATT-6). A rule below holds the three together.
+    # The time the server trusts, and how far (TimeCheck): for a clock-in sent at once, the server's time of the tap,
+    # the push's arrival less the wait on the laptop, which is the laptop's time less its clock's error
+    # (`client_time - clock_error`); the laptop's own (`client_time`) for one sent later with no sign its clock moved;
+    # none when a sign says it did, so a manager decides (ATT-6). A rule below holds the three together.
     trusted_time = models.DateTimeField(null=True, blank=True)
     time_check = models.CharField(max_length=10, choices=TimeCheck)
     # The evidence about the laptop's clock, kept as it was read (02 §12), so a manager can see why a line wasn't
@@ -70,13 +71,15 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
             models.CheckConstraint(
                 condition=models.Q(kind__in=ClockKind.values), name="staffpay_attendanceevent_kind_known"
             ),
-            # The trusted time fits its check, and only the three checks there are: the server's clock for a line sent
-            # at once, the laptop's for one kept, none for one not verified. Each kept time is said to be there too:
-            # in a database rule, a comparison with an empty value is "unknown", and "unknown" passes.
+            # The trusted time fits its check, and only the three checks there are: the server's time of the tap for a
+            # line sent at once, the laptop's for one kept, none for one not verified. Each kept time is said to be
+            # there too: in a database rule, a comparison with an empty value is "unknown", and "unknown" passes.
             models.CheckConstraint(
                 condition=(
                     models.Q(
-                        time_check=TimeCheck.SERVER, trusted_time__isnull=False, trusted_time=models.F("received_at")
+                        time_check=TimeCheck.SERVER,
+                        trusted_time__isnull=False,
+                        trusted_time=models.F("client_time") - models.F("clock_error"),
                     )
                     | models.Q(
                         time_check=TimeCheck.DEVICE_OK, trusted_time__isnull=False, trusted_time=models.F("client_time")

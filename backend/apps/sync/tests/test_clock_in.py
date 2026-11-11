@@ -102,7 +102,8 @@ def _named(flag: Flag) -> list[uuid.UUID]:
 def test_online_clock_in_uses_server_time(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
     # Done when #1: the Dawa laptop's clock is 20 minutes slow. Asha taps Ingia at 07:20 by the server's clock, which
     # the laptop shows as 07:00, and it sends two seconds later, so she was online. Her line keeps the laptop's 07:00,
-    # but its trusted time is the server's, as the push arrived: the clock's mistake costs her nothing.
+    # but its trusted time is the server's: the push arrived at 07:20:03, less the 2 seconds it waited on the laptop.
+    # The clock's mistake costs her nothing.
     [answer] = _push(
         device_a, [_clock(1, staff_a, arusha(7, 0))], sent_at=arusha(7, 0, 2), received_at=arusha(7, 20, 3)
     )
@@ -111,7 +112,7 @@ def test_online_clock_in_uses_server_time(shop_a: Model, device_a: Device, staff
     [event] = _events(shop_a)
     assert (event.time_check, event.trusted_time, event.client_time) == (
         TimeCheck.SERVER,
-        arusha(7, 20, 3),
+        arusha(7, 20, 1),
         arusha(7, 0),
     )
     # Whose line it is, what she tapped, from which laptop, and the evidence, as the laptop sent it.

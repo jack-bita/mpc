@@ -3,7 +3,7 @@
 
     who    in/out  laptop          laptop's time  trusted time  check
     Asha   in      Laptop ya Dawa  07:20          07:20         device_ok    sent later; nothing says the clock moved
-    Asha   out     Laptop ya Dawa  17:01          17:01:02      server       sent at once: the server's own time
+    Asha   out     Laptop ya Dawa  17:01          17:01:00      server       sent at once: the server's time of the tap
     Juma   in      Laptop ya Dawa  07:30          —             unverified   a sign the clock moved: a manager decides
 
 These tests pin the rules the database keeps on it (AttendanceEvent, apps/staffpay/models.py): a line is never changed
@@ -110,8 +110,10 @@ def test_a_void_says_who_and_why(
 @pytest.mark.parametrize(
     ("changes", "rule"),
     [
-        # Sent at once: the server's own time, the moment the push arrived, whatever the laptop's clock said.
+        # Sent at once: the server's time of the tap, whatever the laptop's clock said: the laptop's time less its
+        # clock's error, which is the push's arrival less the wait. Neither the laptop's own time, nor the arrival.
         ({"time_check": TimeCheck.SERVER}, "trusted_time_fits_its_check"),
+        ({"time_check": TimeCheck.SERVER, "trusted_time": RECEIVED_AT}, "trusted_time_fits_its_check"),
         # Kept from the laptop: its own time, as nothing said it was wrong.
         ({"trusted_time": RECEIVED_AT}, "trusted_time_fits_its_check"),
         ({"trusted_time": None}, "trusted_time_fits_its_check"),
@@ -125,6 +127,7 @@ def test_a_void_says_who_and_why(
     ],
     ids=[
         "server_with_the_laptops_time",
+        "server_with_the_arrival_time",
         "device_ok_with_the_servers_time",
         "device_ok_with_no_time",
         "unverified_with_a_time",
@@ -144,7 +147,8 @@ def test_the_three_checks_each_fit_their_trusted_time(
 ) -> None:
     # The table above, each line as its check says: saved, every one.
     _event(shop_a, device_a, staff_a, device_seq=1).save()
-    _event(shop_a, device_a, staff_a, device_seq=2, time_check=TimeCheck.SERVER, trusted_time=RECEIVED_AT).save()
+    tap_by_the_server = CLIENT_TIME - dt.timedelta(seconds=4)
+    _event(shop_a, device_a, staff_a, device_seq=2, time_check=TimeCheck.SERVER, trusted_time=tap_by_the_server).save()
     _event(shop_a, device_a, staff_a, device_seq=3, time_check=TimeCheck.UNVERIFIED, trusted_time=None).save()
     with shop_context(shop_a):
         assert AttendanceEvent.objects.count() == 3

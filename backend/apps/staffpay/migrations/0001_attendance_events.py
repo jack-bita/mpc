@@ -107,7 +107,7 @@ class Migration(migrations.Migration):
                         condition=models.Q(
                             models.Q(
                                 ("time_check", "server"),
-                                ("trusted_time", models.F("received_at")),
+                                ("trusted_time", models.F("client_time") - models.F("clock_error")),
                                 ("trusted_time__isnull", False),
                             ),
                             models.Q(

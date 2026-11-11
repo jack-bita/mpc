@@ -1,7 +1,8 @@
 """apps/staffpay/tests/test_time_check.py — the time check: how far a clock-in's time can be trusted, from the evidence
 about the laptop's clock (check_time, apps/staffpay/calculations.py; ATT-1, 02 §12).
 
-    sent within 2 minutes of the tap, by the laptop's own clock     → server: the server's time, whatever the clock said
+    sent within 2 minutes of the tap, by the laptop's own clock     → server: the server's time of the tap, the push's
+                                                                       arrival less the wait the laptop reports
     sent later, and no sign the clock moved                          → device_ok: the laptop's time
     sent later, and any one sign:                                    → unverified: no time trusted; a manager decides
       1. the laptop's record before it has a later time
@@ -41,11 +42,19 @@ def morning(**changes: object) -> Evidence:
     return Evidence(**clues)  # type: ignore[arg-type]
 
 
-def test_sent_at_once_takes_the_servers_time() -> None:
+def test_sent_at_once_takes_the_servers_time_of_the_tap() -> None:
     # Asha taps at 07:20:00 and the laptop sends at 07:20:02, both by its clock: it was online, so the time is the
-    # server's own, as the push arrived.
+    # server's own: the push arrived at 07:20:03, less the 2 seconds it waited on the laptop.
     checked = check_time(morning(sent_at=arusha(7, 20, 2), received_at=arusha(7, 20, 3)))
-    assert (checked.time_check, checked.trusted_time) == (TimeCheck.SERVER, arusha(7, 20, 3))
+    assert (checked.time_check, checked.trusted_time) == (TimeCheck.SERVER, arusha(7, 20, 1))
+
+
+def test_the_wait_on_the_laptop_is_not_charged_to_the_worker() -> None:
+    # Asha taps at 07:35:00, on time. The first push fails on a bad line, and the second goes 40 seconds later: she is
+    # still on time, as the 40 seconds she waited for the line are taken off (ATT-1's review). Without it, a slow
+    # line would cost her the late fine.
+    checked = check_time(morning(client_time=arusha(7, 35), sent_at=arusha(7, 35, 40), received_at=arusha(7, 35, 40)))
+    assert (checked.time_check, checked.trusted_time) == (TimeCheck.SERVER, arusha(7, 35))
 
 
 def test_a_clock_moved_back_gains_nothing_online() -> None:
@@ -54,7 +63,7 @@ def test_a_clock_moved_back_gains_nothing_online() -> None:
     checked = check_time(
         morning(client_time=arusha(7, 30), sent_at=arusha(7, 30, 2), received_at=arusha(8, 10, 2), time_before=None)
     )
-    assert (checked.time_check, checked.trusted_time) == (TimeCheck.SERVER, arusha(8, 10, 2))
+    assert (checked.time_check, checked.trusted_time) == (TimeCheck.SERVER, arusha(8, 10))
 
 
 def test_two_minutes_is_still_online_and_a_second_more_is_not() -> None:

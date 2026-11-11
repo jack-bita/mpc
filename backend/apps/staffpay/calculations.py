@@ -61,7 +61,10 @@ def check_time(evidence: Evidence) -> CheckedTime:
     # 4 below looks at it.
     waited = evidence.sent_at - evidence.client_time
     if dt.timedelta(0) <= waited <= ONLINE_WITHIN:
-        return CheckedTime(TimeCheck.SERVER, evidence.received_at, clock_error, frozenset())
+        # The server's time of the tap: the push's arrival less the wait, so a worker who taps at 07:35:00 on a line
+        # that takes 40 seconds to send stays on time (ATT-1's review). The same as the laptop's time less its clock's
+        # error, which is how the book's rule checks it, from what the line keeps.
+        return CheckedTime(TimeCheck.SERVER, evidence.received_at - waited, clock_error, frozenset())
     # Each sign compares the gap between two times with the slack, never a time moved by it: a time from year 1, which
     # a laptop's code can send, can't be moved 2 minutes earlier, and the crash would answer retry at every push.
     seen = {
