@@ -36,6 +36,9 @@ export const DAWA_LAPTOP: ThisDevice = {
     id: "019a5e00-0000-7000-8000-0000000000a1",
     name: "MPC",
     code: "MPC",
+    timezone: "Africa/Dar_es_Salaam",
+    currency: "TZS",
+    language: "sw",
   },
   homeSide: {
     id: "019a5e00-0000-7000-8000-0000000000d1",

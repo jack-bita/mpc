@@ -49,7 +49,14 @@ function fromAnswer(me: DeviceMe): ThisDevice {
     id: me.device.id,
     name: me.device.name,
     code: me.device.code,
-    shop: { id: me.shop.id, name: me.shop.name, code: me.shop.code },
+    shop: {
+      id: me.shop.id,
+      name: me.shop.name,
+      code: me.shop.code,
+      timezone: me.shop.timezone,
+      currency: me.shop.currency,
+      language: me.shop.default_language,
+    },
     homeSide: {
       id: me.home_side.id,
       code: me.home_side.code,
