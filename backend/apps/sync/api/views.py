@@ -79,6 +79,7 @@ class PushView(DeviceView):
             device,
             documents,
             received_at=timezone.now(),
+            sent_at=sent.validated_data["sent_at"],
             unsent_count=sent.validated_data["unsent_count"],
             app_version=sent.validated_data["app_version"],
             outages=[Outage(**outage) for outage in sent.validated_data["outages"]],

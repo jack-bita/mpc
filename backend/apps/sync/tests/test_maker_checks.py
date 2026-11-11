@@ -82,7 +82,15 @@ def _sent(device_seq: int, maker: StaffMember, **envelope: object) -> Sent:
 def _push(device: Device, documents: Sequence[Sent]) -> list[Answer]:
     # The push as the route runs it: inside the laptop's shop, which its key opened.
     with shop_context(device.shop_id):
-        return push(device, documents, received_at=RECEIVED_AT, unsent_count=0, app_version="2026.11.1", outages=[])
+        return push(
+            device,
+            documents,
+            received_at=RECEIVED_AT,
+            sent_at=RECEIVED_AT,
+            unsent_count=0,
+            app_version="2026.11.1",
+            outages=[],
+        )
 
 
 def _flags(shop: Model, kind: FlagKind) -> list[Flag]:
@@ -140,6 +148,24 @@ def test_a_key_for_another_side_opens_nothing_here(
     give_role(staff_a, RoleTemplate.SELLER, foods)
     _push(device_a, [_sent(1, staff_a)])
     assert len(_flags(shop_a, FlagKind.PERMISSION_BREAK)) == 1
+
+
+def test_a_type_that_needs_no_key_raises_no_key_flag(
+    shop_a: Model,
+    device_a: Device,
+    staff_a: StaffMember,
+    foods: Side,
+    give_role: GiveRole,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Clocking in needs no key: anyone working at the shop may clock in on any of its laptops (Jack, ATT-1). Baraka
+    # works on Vyakula; one morning its laptop is off, so he clocks in on the Dawa laptop, where he holds no key. A
+    # type that names no key (permission None) is saved with no permission_break flag, whatever the maker holds.
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, permission=None))
+    give_role(staff_a, RoleTemplate.SELLER, foods)
+    [answer] = _push(device_a, [_sent(1, staff_a)])
+    assert answer.status == "accepted"
+    assert _flags(shop_a, FlagKind.PERMISSION_BREAK) == []
 
 
 def test_permission_break_raised_once(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:

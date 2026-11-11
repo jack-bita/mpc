@@ -573,6 +573,11 @@ export interface components {
         PushAnswerStatusEnum: "accepted" | "duplicate" | "invalid" | "retry";
         PushBatchRequest: {
             documents: components["schemas"]["PushedEnvelopeRequest"][];
+            /**
+             * Format: date-time
+             * @description The laptop's clock as it sends this push.
+             */
+            sent_at: string;
             /** @description The app's version on the laptop. */
             app_version: string;
             /** @description How many records the laptop holds unsent, besides these. */

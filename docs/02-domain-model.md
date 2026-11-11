@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.22 · 11 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.23 · 11 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -49,6 +49,8 @@
 **Changes in v1.21** (10 Nov 2026, SYNC-4): a new Flag kind, `invalid_document`: a document a device pushed that the server can't save, raised about its line in the push's answer log, a new append-only record (§13, T2; 03 v1.41). A word for a document a device sends: *kumbukumbu* (Jack, §21). Marked **(v1.21)**.
 
 **Changes in v1.22** (11 Nov 2026, SYNC-5): two choices by Jack. A `device_gap` flag closes itself once every number it was missing has arrived: the system resolves it, with a note of its own that says so. It is the one kind the system may close; every other flag is closed by a person, as v1.8 says (§13, §17; 04 v1.57). And X2 covers a person who has left, as it covers one suspended: what they did offline after they left is flagged (§16). Also what SYNC-5 built: a device's last number and its report on itself (§5), and the offline periods it reports, kept as reported and never changed (§5, T2). Marked **(v1.22)**.
+
+**Changes in v1.23** (11 Nov 2026, ATT-1): how an attendance event's time is trusted (§12): sent at once, the server's; sent later, the laptop's, unless a sign says its clock moved, and then none, with a flag. Each event names whose it is and keeps its evidence. One choice by Jack: clocking in needs no key, on any of the shop's laptops (§12; 04 v1.58). Marked **(v1.23)**.
 
 ---
 
@@ -459,6 +461,9 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - `kind`: `in` | `out`; `device`, `photo`, `client_time`, `trusted_time`, `time_check`: `server` | `device_ok` | `unverified`
 - `entered_by` + `reason` when a manager enters it for someone; `void` (by, reason) — a one-time void stamp; nothing else on the event ever changes (T2) **(v1.2)**
 - **Offline time** ✚: an offline event keeps its device time plus evidence — its `device_seq`, the last server time the device saw, and the device's clock error found at the next sync. If time and sequence disagree (a later record with an earlier time), or the clock was wrong at sync, the event is `unverified` and flagged for a manager.
+- `staff`: whose attendance it is, the worker who tapped, by their PIN (a manager entering one for someone comes with ATT-6) **(v1.23)**
+- **The time trusted** **(v1.23)**: sent within 2 minutes of the tap, both by the laptop's clock, it was made online, and takes the server's time of the tap: when the push arrived, less the wait the laptop reports, however wrong the laptop's clock. Sent later, it keeps the laptop's time, unless one sign says the clock moved: its record before has a later time; its time is before the last server time the laptop had seen; as it sent, the laptop's clock was more than 2 minutes off the server's; or its time is more than 2 minutes after the laptop's own clock as it sent. Then no time is trusted: the event is `unverified`, with an `unverified_time` flag naming the worker, and a manager decides. When the sign is a record before with a later time, the flag names that record's maker too: the server sees that a clock moved between the two, not for whose tap (Jack, ATT-1's review). Each event keeps its evidence: the last server time seen and the clock error.
+- Clocking in needs no key: anyone working at the shop may clock in on any of its laptops, so a Vyakula worker can on the Dawa laptop when Vyakula's is off (Jack, ATT-1). One suspended, or gone, is still flagged (X2) **(v1.23)**.
 
 **AttendanceDay** → StaffMember, date — worked out from the events and the rules in force that day.
 - `first_in`, `last_out`, `status`: `on_time` | `late` | `half` | `absent` | `off` (Sunday, holiday) | `needs_review`

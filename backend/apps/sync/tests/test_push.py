@@ -87,6 +87,7 @@ def _push(
             device,
             documents,
             received_at=RECEIVED_AT,
+            sent_at=RECEIVED_AT,
             unsent_count=unsent_count,
             app_version=APP_VERSION,
             outages=outages,
@@ -383,6 +384,57 @@ def test_document_records_who_made_it_its_laptop_and_both_clocks(
         assert (line.type, line.schema_version, line.status) == ("ticket", 1, PushedStatus.ACCEPTED)
 
 
+def _made_at(device_seq: int, maker: StaffMember, client_time: dt.datetime) -> Sent:
+    # One ticket, made at `client_time` by the laptop's clock.
+    return dataclasses.replace(_sent(device_seq, maker), client_time=client_time)
+
+
+def _times_handed(monkeypatch: pytest.MonkeyPatch) -> list[tuple[int, dt.datetime | None]]:
+    # The pretend ticket's saving code, made to note each document's number and the time it was handed of the laptop's
+    # record before it, in the order it was handed them.
+    handed: list[tuple[int, dt.datetime | None]] = []
+
+    def post(document: Document, payload: dict[str, Any]) -> list[Flag]:
+        handed.append((document.device_seq, document.time_before))
+        return post_ticket(document, payload)
+
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=post))
+    return handed
+
+
+def test_saving_code_gets_the_time_of_the_record_before_it(
+    monkeypatch: pytest.MonkeyPatch, device_a: Device, staff_a: StaffMember
+) -> None:
+    # A clock moved back shows as a later record with an earlier time (02 §12), so each document's saving code is
+    # handed the laptop's own time on its record numbered last before it, of those the server holds: none for its
+    # first; and for #3, sent late after #4, the time of #2, the one before it that came.
+    handed = _times_handed(monkeypatch)
+    at = [dt.datetime(2026, 11, 10, 5, minute, tzinfo=dt.UTC) for minute in (0, 5, 10, 20)]
+    _push(device_a, [_made_at(1, staff_a, at[0]), _made_at(2, staff_a, at[1])])
+    _push(device_a, [_made_at(4, staff_a, at[3])])
+    _push(device_a, [_made_at(3, staff_a, at[2])])
+    assert handed == [(1, None), (2, at[0]), (4, at[1]), (3, at[1])]
+
+
+def test_after_a_reset_the_record_before_is_the_new_counts(
+    monkeypatch: pytest.MonkeyPatch, device_a: Device, staff_a: StaffMember
+) -> None:
+    # A laptop reset numbers its records again from 1 (SYNC-5), so two records can share a number. The one before the
+    # new count's #3 is the new count's #2, made this morning, not the old count's #2 of last month. Last month's are
+    # set aside, of a type the server doesn't take: a ticket keeps one row per laptop number, and their lines count
+    # all the same.
+    handed = _times_handed(monkeypatch)
+    last_month = dt.datetime(2026, 10, 10, 5, 0, tzinfo=dt.UTC)
+    this_morning = dt.datetime(2026, 11, 10, 5, 0, tzinfo=dt.UTC)
+    old_count = [
+        dataclasses.replace(_sent(seq, staff_a, type="no_such_type"), client_time=last_month) for seq in (1, 2)
+    ]
+    assert [answer.status for answer in _push(device_a, old_count)] == ["invalid", "invalid"]
+    _push(device_a, [_made_at(1, staff_a, this_morning), _made_at(2, staff_a, this_morning)])
+    _push(device_a, [_made_at(3, staff_a, this_morning)])
+    assert handed[-1] == (3, this_morning)
+
+
 def _refusing(error: Exception) -> Any:
     # The pretend ticket's saving code, made to fail with `error` after it has saved its ticket, so the test also
     # proves that what it saved rolls back.
@@ -513,7 +565,15 @@ def test_twin_sent_at_the_same_moment_answers_duplicate(
         monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=_with_its_own_id))
     sent = _sent(1, staff_a, text=text)
     with shop_context(shop_a), transaction.atomic():
-        (first,) = push(device_a, [sent], received_at=RECEIVED_AT, unsent_count=0, app_version=APP_VERSION, outages=[])
+        (first,) = push(
+            device_a,
+            [sent],
+            received_at=RECEIVED_AT,
+            sent_at=RECEIVED_AT,
+            unsent_count=0,
+            app_version=APP_VERSION,
+            outages=[],
+        )
         twin, ended = in_another_transaction(lambda: _push(device_a, [sent]))
         wait_until_someone_waits_for_me()
     twin.join()

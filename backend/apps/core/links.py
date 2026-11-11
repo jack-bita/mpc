@@ -51,6 +51,9 @@ LINK_TYPES: dict[str, str] = {
     # A pushed document's line in the answer log: the flag an invalid document raises names it (SYNC-4). A ledger,
     # so it has no edit history to name it.
     "pushed_document": "sync.PushedDocument",
+    # A tap of Ingia or Toka: the unverified_time flag about it, and the change log's line about it (ATT-1). A
+    # ledger, so it has no edit history to name it.
+    "attendance_event": "staffpay.AttendanceEvent",
 }
 
 

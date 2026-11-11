@@ -73,7 +73,15 @@ def _sent(device_seq: int, maker: StaffMember, **envelope: Any) -> Sent:
 def _push(device: Device, documents: Sequence[Sent]) -> list[Answer]:
     # The push as the route runs it: inside the laptop's shop, which its key opened.
     with shop_context(device.shop_id):
-        return push(device, documents, received_at=RECEIVED_AT, unsent_count=0, app_version="2026.11.1", outages=[])
+        return push(
+            device,
+            documents,
+            received_at=RECEIVED_AT,
+            sent_at=RECEIVED_AT,
+            unsent_count=0,
+            app_version="2026.11.1",
+            outages=[],
+        )
 
 
 def _push_numbers(device: Device, maker: StaffMember, *numbers: int) -> list[Answer]:
@@ -408,6 +416,7 @@ def test_two_pushes_of_one_laptop_take_turns_on_its_numbers(
             device_a,
             [_sent(1, staff_a)],
             received_at=RECEIVED_AT,
+            sent_at=RECEIVED_AT,
             unsent_count=0,
             app_version="2026.11.1",
             outages=[],
