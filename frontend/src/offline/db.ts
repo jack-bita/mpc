@@ -20,8 +20,10 @@ import type { components } from "@/api/schema";
 // The shapes the server sends (SYNC-2): its drawers keep each record exactly as it came.
 type Schemas = components["schemas"];
 
-/** One of the laptop's own notes, by name: the pull cursor, the server-time offset, the next
- * device_seq, a receipt counter (03 §6.1). Each card that keeps a note names its key. */
+/** One of the laptop's own notes, by name: the pull cursor, the server-time offset, the last server
+ * time seen, a receipt counter (03 §6.1). Each card that keeps a note names its key. The next
+ * device_seq may not live here: a reset of this database must never start the count again from 1,
+ * so where it is kept is SYNC-8's choice (its note, v1.57). */
 export interface MetaRow {
   key: string;
   value: string | number;
@@ -107,7 +109,9 @@ export const VERSIONS: readonly Version[] = [
       side: "id",
       payment_account: "id",
       staff: "id",
-      // A rule's rows are looked up by the rule's name (get_setting's order, SYNC-7).
+      // A rule's rows are looked up by the rule's name (get_setting's order, SYNC-7). Not by name and
+      // side together: a shop-wide row's side is null, and IndexedDB leaves a row out of a search key
+      // it can't sort, so every shop-wide rule would vanish from that search and its default win.
       setting: "id, key",
       setting_keys: "key",
       // One check value per person (SYNC-10).
