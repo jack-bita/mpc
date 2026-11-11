@@ -48,7 +48,7 @@
 
 **Changes in v1.21** (10 Nov 2026, SYNC-4): a new Flag kind, `invalid_document`: a document a device pushed that the server can't save, raised about its line in the push's answer log, a new append-only record (§13, T2; 03 v1.41). A word for a document a device sends: *kumbukumbu* (Jack, §21). Marked **(v1.21)**.
 
-**Changes in v1.22** (11 Nov 2026, SYNC-5): a choice by Jack, made while planning SYNC-5. A `device_gap` flag closes itself once every number it was missing has arrived: the system resolves it, with a note of its own that says so. It is the one kind the system may close; every other flag is closed by a person, as v1.8 says (§13, §17; 04 v1.57). Marked **(v1.22)**.
+**Changes in v1.22** (11 Nov 2026, SYNC-5): two choices by Jack. A `device_gap` flag closes itself once every number it was missing has arrived: the system resolves it, with a note of its own that says so. It is the one kind the system may close; every other flag is closed by a person, as v1.8 says (§13, §17; 04 v1.57). And X2 covers a person who has left, as it covers one suspended: what they did offline after they left is flagged (§16). Also what SYNC-5 built: a device's last number and its report on itself (§5), and the offline periods it reports, kept as reported and never changed (§5, T2). Marked **(v1.22)**.
 
 ---
 
@@ -244,7 +244,7 @@ A full diagram for GitHub is in Appendix A.
 
 **Device** [R1] ✚ → Shop — a registered shop laptop or phone. (Moved here from `shops` in v1.1.)
 - `name` ("Laptop ya Dawa"), unique in the shop whatever the letter case **(v1.11)**; `code` (used in numbers; never reused: the shop's own counter gives it **(v1.11)**); `home_side`
-- `status`: `active` ⇄ `blocked` **(v1.11)**; `last_seen_at` (the last time its key reached the server, blocked or not, kept to the nearest 5 minutes and outside the edit history **(v1.12)**), `last_synced_at`, `last_device_seq`; `unsent_count` and `app_version`, reported at each sync **(v1.1)**
+- `status`: `active` ⇄ `blocked` **(v1.11)**; `last_seen_at` (the last time its key reached the server, blocked or not, kept to the nearest 5 minutes and outside the edit history **(v1.12)**), `last_synced_at`, `last_device_seq`; `unsent_count` and `app_version`, reported at each sync **(v1.1)**; `last_device_seq` is the number its next record should follow, and `unsent_count` the records it holds besides the push that reported it; all four outside the edit history, as they move at every push **(v1.22)**
 - The hash of its device key, never the key (03 §5.9). Who confirmed it is the row's `created_by` (§1) **(v1.11)**.
 - Only active devices allow PIN login and offline work.
 - Blocking and unblocking need someone with `device.manage` on the device's home side, and a reason, written in the audit trail (T3). Unblocking keeps the device's key, so the records it holds can still arrive (Jack, AUTH-1) **(v1.11)**.
@@ -255,7 +255,7 @@ A full diagram for GitHub is in Appendix A.
 - `code` (8 characters with no look-alikes such as 0/O or 1/I, valid 10 minutes, works once), `expires_at`, the hash of the device's key while it waits, and, once confirmed, the `Device` it became. Confirming moves the hash to the `Device`: from then on the request holds none (Jack, AUTH-2) **(v1.12)**.
 - No shop: until a manager confirms it, the device belongs to no shop, and anyone may ask. Confirming needs `device.manage` on the home side chosen, and makes the `Device` in the manager's own shop (T1).
 
-**DeviceOutage** [R1] ✚ → Device — one offline period the device recorded: `started_at`, `ended_at`, reported at the next sync **(v1.1)**. Feeds the sync health page and the R2 decision on a local hub (03 AD16).
+**DeviceOutage** [R1] ✚ → Device — one offline period the device recorded: `started_at`, `ended_at`, reported at the next sync **(v1.1)**. Feeds the sync health page and the R2 decision on a local hub (03 AD16). Its id is made on the device, so a resent report keeps it once; its times are the device's clock, kept as reported, and the row is never changed (T2) **(v1.22)**.
 
 ## 6. Products & prices — module `catalog`
 
@@ -554,7 +554,7 @@ These become database constraints and automated tests.
 
 **Tenancy and history**
 - **T1** Every record (except `User`, `Unit`, the `Shop` itself **(v1.3)** and a `PairingRequest` **(v1.11)**) has a shop, and only points at records of the same shop.
-- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** and the answers the push keeps **(v1.21)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
+- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** the answers the push keeps **(v1.21)** and the offline periods devices report **(v1.22)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
 - **T3** Nothing is deleted: cancel, void, suspend, archive — always with who, when and why.
 - **T4** Copied values (price, floor, factor, cost, rate, rules, formula version) never change once the record is confirmed.
 
@@ -592,7 +592,7 @@ These become database constraints and automated tests.
 
 **Access and devices**
 - **X1** Permissions are checked per side.
-- **X2** PIN login works only on active registered devices. A suspended person can't log in once the device has synced; anything they did offline after suspension is flagged.
+- **X2** PIN login works only on active registered devices. A suspended person can't log in once the device has synced; anything they did offline after suspension is flagged. The same for a person who has left: from when it was recorded, or from the day after their last day if that is earlier. "After" is by the record's own time on the device (Jack, SYNC-5) **(v1.22)**.
 - **X3** Every write records the person and the device, when the visit has one: a password or a nightly job has none (§13) **(v1.19)**.
 
 ## 17. Offline and sync
