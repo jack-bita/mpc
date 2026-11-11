@@ -7,6 +7,7 @@ transaction of its own, each answered once, and the same way every time it comes
       save it, in one transaction        → accepted: the document, its change lines, its line, its change number
       its laptop number skips some?      → a device_gap flag about its line, in the same transaction (SYNC-5)
       ... or fills a gap's last place?   → that gap's flag closes itself, with the system's note (SYNC-5)
+      its maker holds no key for it?     → a permission_break flag about its line, naming them (SYNC-5)
       a server problem?                  → retry, and the batch stops here
     then the laptop's report on itself  → its row: last synced, records still unsent, app version; its outages (SYNC-5)
 
@@ -37,6 +38,7 @@ from apps.core.api.errors import refusal_parts
 from apps.core.changes import recording_changes
 from apps.core.links import link_type_of
 from apps.people.models import Device, StaffMember
+from apps.people.permissions import given_permissions
 from apps.people.services import Outage, lock_device_numbers, move_device_number, record_outages, record_sync
 from apps.sync.document_types import Document, DocumentType, document_type
 from apps.sync.models import PushedDocument, PushedStatus
@@ -182,6 +184,7 @@ def _save(
             line = _line(device, sent, received_at, maker, status=ACCEPTED, posted_seq=numbers.last, flags=flagged)
             line.save()
             _check_number(device, line, last)
+            _check_maker(device, line, kind, maker)
     except (ValidationError, IntegrityError) as refusal:
         # Refused, and all of it rolled back. Perhaps by a twin: another copy of this document, sent at the same
         # moment, that finished while this one was saving, so its rows or its line clash with this copy's. Its
@@ -261,6 +264,18 @@ def _check_number(device: Device, line: PushedDocument, last: int) -> None:
         # counted on from here, or every record after a reset would raise a flag of its own.
         _flag_numbers(device, line, awaited)
         move_device_number(device, number)
+
+
+def _check_maker(device: Device, line: PushedDocument, kind: DocumentType, maker: StaffMember) -> None:
+    # The maker's key for this type, checked again on the server (SYNC-5): the laptop checked it at the counter, but
+    # against its own copy of the shop's keys, which can be old, on a laptop that can be tampered with. On the
+    # laptop's own side, as its counter asks (X1): a seller of Vyakula holds no key on the Dawa laptop. Among the keys
+    # the person was given, whatever their status: a suspended maker's sale is the suspension's flag, not a second
+    # one saying they hold no key. A missing key never refuses the record (accept, then flag): one flag about its
+    # line, naming the maker, for the side's managers to see. A note for SALE-2: a sale that names its own side is
+    # checked on the laptop's side all the same, until that card says otherwise.
+    if kind.permission not in given_permissions(maker).on(device.home_side_id):
+        raise_flag(kind=FlagKind.PERMISSION_BREAK, subject=line, side=device.home_side, people=[maker], by=None)
 
 
 def _flag_numbers(device: Device, line: PushedDocument, awaited: int) -> None:

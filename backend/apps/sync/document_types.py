@@ -44,7 +44,9 @@ class DocumentType:
     payload: type[serializers.Serializer[Any]]  # what a correct payload looks like; a wrong one is invalid
     # Saves it, inside the push's own transaction for this one document, and hands back the flags it raised.
     post: Callable[[Document, dict[str, Any]], list[Flag]]
-    permission: Permission  # what its maker needs; checked on arrival by SYNC-5 (permission_break)
+    # What its maker needs, on the laptop's side; checked again as it arrives (apps/sync/push.py): a maker without it
+    # gets a permission_break flag, never a refusal.
+    permission: Permission
 
 
 # Empty until the first types join: the sale (SALE-2) and the clock-in (ATT-1).
