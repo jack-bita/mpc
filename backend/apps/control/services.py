@@ -185,6 +185,10 @@ def resolve_flag_by_system(flag: Flag) -> Flag:
     if code is None:
         # A bug in the calling code: every other flag is closed by a person (02 §13, v1.8).
         raise ValueError(f"A {flag.kind} flag is closed by a person, never by the system.")
+    if flag.kind == FlagKind.DEVICE_GAP and not _waits_for_records(flag):
+        # A device's numbers that went back (a reset: `expected` above `actual`) wait for no record, so none can close
+        # the flag: a person looks at what happened. Refused here too, not only by the push, which never asks.
+        raise ValueError("A device_gap of numbers gone back is closed by a person, never by the system.")
     _check_shop(flag.shop_id, None)
     with transaction.atomic():
         # Read again and locked, as a person's step is (_step): a manager closing it at this moment takes turns with
@@ -200,6 +204,12 @@ def resolve_flag_by_system(flag: Flag) -> Flag:
         fresh.full_clean(exclude=[field.name for field in Flag._meta.fields if field.name != "status"])
         fresh.save(update_fields=["status"])
     return fresh
+
+
+def _waits_for_records(gap: Flag) -> bool:
+    # A device_gap waits for records when the number the server awaited is below the one that came: the numbers between
+    # are the missing ones. Above it, the device's count went back, and nothing is missing.
+    return gap.expected is not None and gap.actual is not None and gap.expected < gap.actual
 
 
 def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUID | None) -> Flag:

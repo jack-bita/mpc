@@ -444,6 +444,20 @@ def test_system_leaves_a_closed_flag_as_it_is(shop_a: Model, gap: Flag, staff_a2
         assert [step for step, _text, _by in notes_of(gap)] == [FlagStep.DISMISSED]
 
 
+def test_system_never_closes_numbers_gone_back(shop_a: Model, drawer_day: Note, side_a: ShopScoped) -> None:
+    # A device_gap whose numbers went back (expected 6, came 1: a laptop reset) waits for no record, so no record can
+    # close it: a person looks at what happened. Refused here too, not only by the push that calls this (SYNC-5's
+    # review), as a call that broke the rule would hide a reset for good.
+    with shop_context(shop_a):
+        back = raise_flag(
+            kind=FlagKind.DEVICE_GAP, subject=drawer_day, expected=Decimal(6), actual=Decimal(1), side=side_a, by=None
+        )
+        with pytest.raises(ValueError, match="person"):
+            resolve_flag_by_system(back)
+        assert Flag.objects.get(pk=back.pk).status == FlagStatus.OPEN
+        assert notes_of(back) == []
+
+
 def test_system_closes_no_other_kind(shop_a: Model, flag: Flag) -> None:
     # Every other flag waits for a person (02 §13, v1.8): Asha's drawer short by 3,000 is never closed by the system.
     # Refused loudly: a call like this is a bug in our code.
