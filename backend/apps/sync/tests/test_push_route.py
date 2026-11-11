@@ -196,8 +196,8 @@ def test_push_takes_at_most_100_documents(shop_a: Shop, laptop: tuple[Device, st
     ("changes", "field", "code"),
     [
         ({"device_seq": 0}, "documents.0.device_seq", "min_value"),
-        # A number too long for a missing number's flag to hold (HIGHEST_DEVICE_SEQ).
-        ({"device_seq": 10**12}, "documents.0.device_seq", "max_value"),
+        # Past the highest a missing number's flag can hold with the one awaited after it (HIGHEST_DEVICE_SEQ).
+        ({"device_seq": 10**12 - 1}, "documents.0.device_seq", "max_value"),
         # A random UUID (version 4), not one made with the time, as every id a device makes is (ADR-0007).
         ({"id": "6f1c2e8a-3b4d-4c5e-9f6a-7b8c9d0e1f2a"}, "documents.0.id", "id.not_uuid7"),
         ({"created_by": "not-an-id"}, "documents.0.created_by", "invalid"),

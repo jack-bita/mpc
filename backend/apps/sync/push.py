@@ -54,10 +54,12 @@ INVALID = PushedStatus.INVALID.value
 DUPLICATE = "duplicate"
 RETRY = "retry"
 
-# The highest number a laptop may give a record (SYNC-5). A missing number's flag keeps the numbers in the flag's own
-# columns (Flag.expected and .actual, numeric(15,3): 12 digits before the point), so no number may be longer, or its
-# flag couldn't be written. At 1,000 records a day, a laptop would reach it in about 2.7 billion years.
-HIGHEST_DEVICE_SEQ = 10**12 - 1
+# The highest number a laptop may give a record (SYNC-5). A missing number's flag keeps two numbers in its own columns
+# (Flag.expected and .actual, numeric(15,3): 12 digits before the point): the one that came, and the one awaited, which
+# is the laptop's last + 1. So the last may be at most 999,999,999,998, one short of the largest 12-digit number, or
+# the next flag couldn't be written and every push after it would answer retry (SYNC-5's review). At 1,000 records
+# a day, a laptop would reach it in about 2.7 billion years.
+HIGHEST_DEVICE_SEQ = 10**12 - 2
 
 
 @dataclass(frozen=True)

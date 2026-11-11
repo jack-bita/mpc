@@ -1967,7 +1967,7 @@
                     },
                     "device_seq": {
                         "type": "integer",
-                        "maximum": 999999999999,
+                        "maximum": 999999999998,
                         "minimum": 1,
                         "format": "int64",
                         "description": "The laptop's number for it."

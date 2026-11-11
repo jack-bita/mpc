@@ -35,7 +35,7 @@ from apps.people.models import Device, StaffMember
 from apps.sync import push as push_module
 from apps.sync.document_types import DOCUMENT_TYPES, Document
 from apps.sync.models import PushedDocument
-from apps.sync.push import Answer, Sent, push
+from apps.sync.push import HIGHEST_DEVICE_SEQ, Answer, Sent, push
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 from tests.probe.documents import TICKET, TICKET_CODE, post_ticket
 
@@ -247,6 +247,21 @@ def test_numbers_that_go_back_raise_one_flag_and_counting_follows(
     [back] = _gaps(shop_a)
     assert _numbers(back) == (Decimal(6), Decimal(1))
     assert _last(device_a) == 3
+
+
+def test_the_highest_number_and_a_lower_one_after_it_are_both_kept(
+    monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # A broken or tampered laptop jumps to the highest number a record may have, then numbers again from 1. Both are
+    # kept, each with its flag: the number awaited after the highest one must fit a flag's columns too, or the second
+    # flag couldn't be written, and every push after it would answer retry, for good (SYNC-5's review).
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=_keeps_no_row))
+    answers = _push_numbers(device_a, staff_a, 1, HIGHEST_DEVICE_SEQ)
+    answers += _push_numbers(device_a, staff_a, 1)
+    assert [answer.status for answer in answers] == ["accepted"] * 3
+    jump, back = _gaps(shop_a)
+    assert _numbers(jump) == (Decimal(2), Decimal(HIGHEST_DEVICE_SEQ))
+    assert _numbers(back) == (Decimal(HIGHEST_DEVICE_SEQ + 1), Decimal(1))
 
 
 def test_an_invalid_document_keeps_its_number(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
