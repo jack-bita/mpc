@@ -324,9 +324,11 @@ describe("a pull", () => {
   });
 
   it("drops the pending effects the cursor has passed, and keeps the rest", async () => {
-    // Counted by the server now (posted at 121), not yet (posted at 130), and not yet accepted (null).
+    // Counted by the server now (posted at 121, and at 125, the page's cursor itself: the server's
+    // numbers include the change the cursor names), not yet (posted at 130), and not yet accepted (null).
     await db.pending_effects.bulkPut([
       { id: "counted", document_id: "d1", posted_seq: 121 },
+      { id: "at-cursor", document_id: "d4", posted_seq: 125 },
       { id: "later", document_id: "d2", posted_seq: 130 },
       { id: "unsent", document_id: "d3", posted_seq: null },
     ]);
