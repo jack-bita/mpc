@@ -1,12 +1,15 @@
 """apps/sync/document_types.py — the list of document types a push takes, each in the versions of its shape the
-server still reads, with its saving code and the permission its maker needs (SYNC-4; 03 §6.3, §6.8).
+server still reads, with its saving code and the permission its maker needs, if any (SYNC-4; 03 §6.3, §6.8).
 
+    ("clock", 1)  its shape, its saving code, no key        (ATT-1; the laptop's side is SYNC-11's)
     ("sale", 2)   its shape, its saving code, sale.write   (SALE-2)
     ("sale", 1)   kept until every laptop sends version 2
 
 A card that adds an offline document type lists it here, from its app's documents.py, with the other three parts
-rule 6 asks for: its schema version, the device side, and tests on both sides. A shape that changes gets a new
-version, and the old one stays until every laptop has updated: the server takes the current and the previous one.
+rule 6 asks for: its schema version, the device side, and tests on both sides. The four may come in two cards, the
+server's first, as the clock-in's did (ATT-1, then SYNC-11; Jack): no laptop sends a type before its side is built.
+A shape that changes gets a new version, and the old one stays until every laptop has updated: the server takes the
+current and the previous one.
 """
 
 import uuid

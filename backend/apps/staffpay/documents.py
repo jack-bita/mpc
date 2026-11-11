@@ -54,9 +54,9 @@ class ClockShape(serializers.Serializer[Any]):
     # A clock document's payload, its shape's version 1: a wrong one is set aside as invalid, with the field that is
     # wrong, and nothing goes in the book. What the worker tapped: in or out.
     kind = serializers.ChoiceField(choices=ClockKind.choices)
-    # The last time the server had told the laptop, at a pull before the tap: clue 2 of the time check. The laptop
-    # keeps it in its `meta` store (03 §6.1) and writes it on the clock-in as it saves it, so it is the one the
-    # laptop knew at the tap, not at the push. With its zone, as every time a laptop sends (ATT-1's review).
+    # The last time the server had told the laptop, at a pull before the tap: the evidence for sign 2 of the time
+    # check. The laptop keeps it in its `meta` store (03 §6.1) and writes it on the clock-in as it saves it, so it is
+    # the one the laptop knew at the tap, not at the push. With its zone, as every time a laptop sends (ATT-1's review).
     last_server_time = ZonedDateTimeField()
 
 
@@ -64,7 +64,7 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
     """Save one tap of Ingia or Toka in the attendance book, its time checked, and flag it when the time can't be
     trusted. The line is its maker's: a worker clocks in for themselves, by their PIN (X3)."""
     shop_id = document.device.shop_id
-    # The time check, from the evidence the push handed over and the payload's one clue (apps/staffpay/calculations.py).
+    # The time check, from the evidence the push handed over and the payload's own (apps/staffpay/calculations.py).
     checked = check_time(
         Evidence(
             client_time=document.client_time,

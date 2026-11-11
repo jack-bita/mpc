@@ -16,6 +16,6 @@ paths:
 - On the device, `saveDocument()` writes the document, the next `device_seq`, the outbox row and the pending effects in **one** Dexie transaction. Pending effects drop when the cursor passes the document's `posted_seq`.
 - One sync at a time across tabs (Web Locks). An update never interrupts a busy counter screen, and the outbox is sent before an update.
 - Documents carry `schema_version`; the server accepts the current and the previous one.
-- A new document type needs all four: a server handler with its permission, a schema version, the device side, and tests on both sides.
+- A new document type needs all four: a server handler with its permission (or none, as a clock-in needs no key), a schema version, the device side, and tests on both sides. The server's half may come a card before the device's (ATT-1, then SYNC-11).
 - Nothing secret syncs: no buying prices, PIN hashes or passwords — tests prove it.
 - A Dexie schema change is a new database version with an upgrade; never edit an old version.

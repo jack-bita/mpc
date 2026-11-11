@@ -30,16 +30,17 @@ def arusha(hour: int, minute: int, second: int = 0) -> dt.datetime:
 
 
 def morning(**changes: object) -> Evidence:
-    # The morning above, with nothing wrong: the laptop's clock right to the second. `changes` overrides a clue.
-    clues: dict[str, object] = {
+    # The morning above, with nothing wrong: the laptop's clock right to the second. `changes` overrides one piece of
+    # the evidence.
+    evidence: dict[str, object] = {
         "client_time": arusha(7, 20),
         "sent_at": arusha(12, 0),
         "received_at": arusha(12, 0),
         "last_server_time": arusha(6, 50),
         "time_before": arusha(7, 5),
     }
-    clues.update(changes)
-    return Evidence(**clues)  # type: ignore[arg-type]
+    evidence.update(changes)
+    return Evidence(**evidence)  # type: ignore[arg-type]
 
 
 def test_sent_at_once_takes_the_servers_time_of_the_tap() -> None:
