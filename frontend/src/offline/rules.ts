@@ -31,7 +31,10 @@ export function shopToday(timezone: string, at: number): string {
  * 1. the side's own row that started last, on or before the day;
  * 2. else the shop's row that started last, on or before the day;
  * 3. else the rule's default.
- * A side's row beats even a newer shop row (CORE-4): the side chose its own value on purpose.
+ * A side's row beats even a newer shop row (CORE-4): the side chose its own value on purpose. Only
+ * for a rule a side may set (scope "side"): a shop-wide rule goes straight to the shop's row, as
+ * get_setting does. The server sends no side row of a shop-wide rule; this keeps the two agreeing even
+ * if one slipped through.
  *
  * A same-day fix is settled before this runs: the laptop holds one row per rule, side and day, the last
  * one it was given (pull.ts, applySetting). Never by the row's id, which the manager's browser made, so its
@@ -45,7 +48,10 @@ export function ruleInForce(
   side: string | null,
   day: string,
 ): string {
-  const ofSide = side === null ? undefined : latest(rows, rule.key, side, day);
+  const ofSide =
+    side !== null && rule.scope === "side"
+      ? latest(rows, rule.key, side, day)
+      : undefined;
   const ofShop = latest(rows, rule.key, null, day);
   return (ofSide ?? ofShop)?.value ?? rule.default;
 }

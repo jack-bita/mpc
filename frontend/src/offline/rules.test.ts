@@ -28,6 +28,9 @@ function row(
 
 const TODAY = "2026-11-11";
 
+// The same rule, as if a side could set its own: the side's rows count only for such a rule.
+const PER_SIDE = { ...IDLE_RULE, scope: "side" as const };
+
 describe("the rule in force", () => {
   it("is the default when the shop has no row", () => {
     expect(ruleInForce([], IDLE_RULE, null, TODAY)).toBe("10");
@@ -54,17 +57,25 @@ describe("the rule in force", () => {
       row("103", null, "2026-11-09", "30"),
     ];
 
-    expect(ruleInForce(rows, IDLE_RULE, DAWA.id, TODAY)).toBe("5");
+    expect(ruleInForce(rows, PER_SIDE, DAWA.id, TODAY)).toBe("5");
     // Another side has no row of its own: the shop's.
-    expect(ruleInForce(rows, IDLE_RULE, VYAKULA.id, TODAY)).toBe("30");
+    expect(ruleInForce(rows, PER_SIDE, VYAKULA.id, TODAY)).toBe("30");
     // The whole shop never reads a side's row.
-    expect(ruleInForce(rows, IDLE_RULE, null, TODAY)).toBe("30");
+    expect(ruleInForce(rows, PER_SIDE, null, TODAY)).toBe("30");
+  });
+
+  it("never reads a side's row for a rule kept for the whole shop", () => {
+    // As get_setting: a side's row of a shop-wide rule is never in force, even if one reached the laptop.
+    const rows = [IDLE_15, row("102", DAWA.id, "2026-11-02", "5")];
+
+    expect(IDLE_RULE.scope).toBe("shop");
+    expect(ruleInForce(rows, IDLE_RULE, DAWA.id, TODAY)).toBe("15");
   });
 
   it("falls back to the shop's row while the side's starts later", () => {
     const rows = [IDLE_15, row("102", DAWA.id, "2026-11-20", "5")];
 
-    expect(ruleInForce(rows, IDLE_RULE, DAWA.id, TODAY)).toBe("15");
+    expect(ruleInForce(rows, PER_SIDE, DAWA.id, TODAY)).toBe("15");
   });
 
   it("reads only its own rule's rows", () => {
