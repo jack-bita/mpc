@@ -76,7 +76,11 @@ export interface PendingEffectRow {
 
 /** A document already sent, kept 30 days so it can be sent again after a server restore (03 §6.1). */
 export interface SentDocumentRow extends DocumentRow {
+  /** Its place in the line, from its outbox row, which is gone by now: a replay resends in this
+   * order, as every push must (03 §6.3). */
+  device_seq: number;
   sent_at: string;
+  /** The shop's change number the server gave it when it was accepted. */
   posted_seq: number;
 }
 
@@ -114,8 +118,9 @@ export const VERSIONS: readonly Version[] = [
       outbox: "id, &device_seq, [status+device_seq]",
       // Found by their document, to drop them once it is confirmed (sync rules).
       pending_effects: "id, document_id",
-      // By when it was sent, so rows past 30 days can be cleared.
-      sent_archive: "id, sent_at",
+      // By when it was sent, so rows past 30 days can be cleared; by number, so a replay after a
+      // server restore resends them in their order (03 §6.7).
+      sent_archive: "id, sent_at, device_seq",
     },
   },
 ];

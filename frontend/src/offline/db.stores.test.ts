@@ -140,6 +140,37 @@ describe("the device database", () => {
     expect(next.map((row) => row.device_seq)).toEqual([1, 3]);
   });
 
+  it("replays the sent archive in device_seq order", async () => {
+    // After a server restore, the laptop resends what it had sent (03 §6.7), in its first order.
+    const db = open(MPC);
+    await db.sent_archive.bulkAdd([
+      {
+        ...made(
+          "0192f000-0000-7000-8000-0000000000e2",
+          "clock",
+          "2026-11-11T06:02:00.000Z",
+        ),
+        device_seq: 8,
+        sent_at: "2026-11-11T06:03:00.000Z",
+        posted_seq: 41,
+      },
+      {
+        ...made(
+          "0192f000-0000-7000-8000-0000000000e1",
+          "clock",
+          "2026-11-11T05:58:00.000Z",
+        ),
+        device_seq: 7,
+        sent_at: "2026-11-11T06:03:00.000Z",
+        posted_seq: 40,
+      },
+    ]);
+
+    const replay = await db.sent_archive.orderBy("device_seq").toArray();
+
+    expect(replay.map((row) => row.device_seq)).toEqual([7, 8]);
+  });
+
   it("finds one kind of document for one day", async () => {
     // Today's clock-ins (SYNC-11): yesterday's clock-in and today's sale are left out.
     const db = open(MPC);
