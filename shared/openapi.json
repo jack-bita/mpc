@@ -1530,6 +1530,31 @@
                     null
                 ]
             },
+            "OutageEnvelopeRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The period's id, made on the laptop (UUIDv7)."
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the laptop's line went, by its clock."
+                    },
+                    "ended_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When it came back, by its clock."
+                    }
+                },
+                "required": [
+                    "ended_at",
+                    "id",
+                    "started_at"
+                ]
+            },
             "OwnSettingsAnswer": {
                 "type": "object",
                 "properties": {
@@ -1848,11 +1873,19 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "How many records the laptop holds unsent, besides these."
+                    },
+                    "outages": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OutageEnvelopeRequest"
+                        },
+                        "maxItems": 100
                     }
                 },
                 "required": [
                     "app_version",
                     "documents",
+                    "outages",
                     "unsent_count"
                 ]
             },

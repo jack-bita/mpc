@@ -8,7 +8,7 @@ transaction of its own, each answered once, and the same way every time it comes
       its laptop number skips some?      → a device_gap flag about its line, in the same transaction (SYNC-5)
       ... or fills a gap's last place?   → that gap's flag closes itself, with the system's note (SYNC-5)
       a server problem?                  → retry, and the batch stops here
-    then the laptop's report on itself  → its row: last synced, records still unsent, app version (SYNC-5)
+    then the laptop's report on itself  → its row: last synced, records still unsent, app version; its outages (SYNC-5)
 
 The route (apps/sync/api/views.py) checks each document's envelope and hands the batch here, with the laptop its key
 opened, and that laptop's shop open. Each document's saving code comes from the list of document types
@@ -37,7 +37,7 @@ from apps.core.api.errors import refusal_parts
 from apps.core.changes import recording_changes
 from apps.core.links import link_type_of
 from apps.people.models import Device, StaffMember
-from apps.people.services import lock_device_numbers, move_device_number, record_sync
+from apps.people.services import Outage, lock_device_numbers, move_device_number, record_outages, record_sync
 from apps.sync.document_types import Document, DocumentType, document_type
 from apps.sync.models import PushedDocument, PushedStatus
 
@@ -85,12 +85,19 @@ class Answer:
 
 
 def push(
-    device: Device, documents: Sequence[Sent], *, received_at: datetime, unsent_count: int, app_version: str
+    device: Device,
+    documents: Sequence[Sent],
+    *,
+    received_at: datetime,
+    unsent_count: int,
+    app_version: str,
+    outages: Sequence[Outage],
 ) -> list[Answer]:
     """Save a laptop's batch, in its own order, and answer each document. `received_at`: the server's clock when the
     push arrived, the same for the whole batch. Stops at the first `retry`: the documents after it get no answer, and
     the laptop sends them again later, in the same order. Then keeps the laptop's report on itself (SYNC-5):
-    `unsent_count`, the records it holds besides this batch, and `app_version`, the app it runs."""
+    `unsent_count`, the records it holds besides this batch; `app_version`, the app it runs; and `outages`, the
+    offline periods it recorded since it last reported."""
     answers: list[Answer] = []
     # The laptop's order, not the order they arrived in: #3 may be a repayment of the debt #2 made. sorted() keeps two
     # documents with the same number in the order they were sent.
@@ -104,6 +111,7 @@ def push(
     # answered, and the laptop sets it aside. The office reads it before approving a drawer's day (M8), so it must not
     # say 0 while a sale waits on the laptop.
     answered = sum(1 for answer in answers if answer.status != RETRY)
+    record_outages(device, outages)
     record_sync(device, at=received_at, unsent_count=unsent_count + len(documents) - answered, app_version=app_version)
     return answers
 

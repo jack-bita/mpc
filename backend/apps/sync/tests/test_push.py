@@ -26,7 +26,8 @@ from django.db.models import Model
 from apps.control.models import EditEvent, Flag, FlagKind, FlagPerson
 from apps.core.links import LINK_TYPES
 from apps.core.tenancy import shop_context
-from apps.people.models import Device, StaffMember
+from apps.people.models import Device, DeviceOutage, StaffMember
+from apps.people.services import Outage
 from apps.shops.models import Shop, Side
 from apps.sync import push as push_module
 from apps.sync.document_types import DOCUMENT_TYPES, Document
@@ -75,11 +76,20 @@ def _sent(device_seq: int, maker: StaffMember, *, text: str = "2 bags of pumba",
     )
 
 
-def _push(device: Device, documents: Sequence[Sent], *, unsent_count: int = 0) -> list[Answer]:
+def _push(
+    device: Device, documents: Sequence[Sent], *, unsent_count: int = 0, outages: Sequence[Outage] = ()
+) -> list[Answer]:
     # The push as the route runs it: inside the laptop's shop, which its key opened. `unsent_count`: what the laptop
-    # says it holds besides this batch.
+    # says it holds besides this batch; `outages`: the offline periods it reports.
     with shop_context(device.shop_id):
-        return push(device, documents, received_at=RECEIVED_AT, unsent_count=unsent_count, app_version=APP_VERSION)
+        return push(
+            device,
+            documents,
+            received_at=RECEIVED_AT,
+            unsent_count=unsent_count,
+            app_version=APP_VERSION,
+            outages=outages,
+        )
 
 
 def _report(device: Device) -> tuple[object, object, object]:
@@ -208,6 +218,20 @@ def test_push_records_device_health(shop_a: Model, device_a: Device, staff_a: St
     assert _report(device_a) == (None, None, "")
     _push(device_a, [_sent(1, staff_a), _sent(2, staff_a)], unsent_count=3)
     assert _report(device_a) == (RECEIVED_AT, 3, APP_VERSION)
+
+
+def test_outages_recorded(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # Done when #2: the Dawa laptop lost its line from 09:10 to 09:40, by its own clock, and saved #1 meanwhile. Its
+    # next push brings #1 and that period, which is kept on the laptop for the health page (SYNC-14). Sent again, as
+    # after a lost answer, it is kept once.
+    went = dt.datetime(2026, 11, 10, 6, 10, tzinfo=dt.UTC)
+    came_back = dt.datetime(2026, 11, 10, 6, 40, tzinfo=dt.UTC)
+    offline = Outage(id=uuid.uuid7(), started_at=went, ended_at=came_back)
+    _push(device_a, [_sent(1, staff_a)], outages=[offline])
+    _push(device_a, [_sent(1, staff_a)], outages=[offline])
+    with shop_context(shop_a):
+        kept = list(DeviceOutage.objects.filter(device=device_a).values_list("id", "started_at", "ended_at"))
+    assert kept == [(offline.id, went, came_back)]
 
 
 def test_unsent_count_keeps_what_the_push_did_not_save(
@@ -473,7 +497,7 @@ def test_twin_sent_at_the_same_moment_answers_duplicate(
         monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=_with_its_own_id))
     sent = _sent(1, staff_a, text=text)
     with shop_context(shop_a), transaction.atomic():
-        (first,) = push(device_a, [sent], received_at=RECEIVED_AT, unsent_count=0, app_version=APP_VERSION)
+        (first,) = push(device_a, [sent], received_at=RECEIVED_AT, unsent_count=0, app_version=APP_VERSION, outages=[])
         twin, ended = in_another_transaction(lambda: _push(device_a, [sent]))
         wait_until_someone_waits_for_me()
     twin.join()

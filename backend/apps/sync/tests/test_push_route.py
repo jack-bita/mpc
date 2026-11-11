@@ -25,7 +25,7 @@ from rest_framework.test import APIClient
 from apps.core.links import LINK_TYPES
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import Device, StaffMember
+from apps.people.models import Device, DeviceOutage, StaffMember
 from apps.people.services import block, confirm_pairing, start_pairing
 from apps.shops.models import Shop, Side
 from apps.sync.document_types import DOCUMENT_TYPES
@@ -99,7 +99,7 @@ def envelope(device_seq: int, maker: StaffMember, *, text: str = "2 bags of pumb
 def send(client: APIClient, documents: list[dict[str, Any]], *, csrf_token: str | None = None, **report: Any) -> Any:
     # One push, with the laptop's report on itself (`report` overrides a part), and the CSRF token as the app sends
     # it, when given.
-    body = {"documents": documents, "app_version": "2026.11.1", "unsent_count": 0, **report}
+    body = {"documents": documents, "app_version": "2026.11.1", "unsent_count": 0, "outages": [], **report}
     if csrf_token is None:
         return client.post(PUSH, body, format="json")
     return client.post(PUSH, body, format="json", HTTP_X_CSRFTOKEN=csrf_token)
@@ -234,6 +234,21 @@ def test_push_keeps_the_laptops_report(shop_a: Shop, laptop: tuple[Device, str],
     assert before <= held.last_synced_at <= after
 
 
+def test_push_takes_the_laptops_offline_periods(shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember) -> None:
+    # The laptop's offline periods ride on its next push, each with an id it made (ADR-0007), in UTC (03 §6.6).
+    device, key = laptop
+    offline = {"id": str(uuid.uuid7()), "started_at": "2026-11-10T06:10:00Z", "ended_at": "2026-11-10T06:40:00Z"}
+    answer = send(a_browser(key), [], outages=[offline])
+    assert answer.status_code == 200
+    with shop_context(shop_a):
+        [kept] = DeviceOutage.objects.filter(device=device)
+    assert (str(kept.pk), kept.started_at, kept.ended_at) == (
+        offline["id"],
+        dt.datetime(2026, 11, 10, 6, 10, tzinfo=dt.UTC),
+        dt.datetime(2026, 11, 10, 6, 40, tzinfo=dt.UTC),
+    )
+
+
 @pytest.mark.parametrize(
     ("report", "field", "code"),
     [
@@ -242,8 +257,41 @@ def test_push_keeps_the_laptops_report(shop_a: Shop, laptop: tuple[Device, str],
         ({"app_version": "v" * 65}, "app_version", "max_length"),
         ({"unsent_count": -1}, "unsent_count", "min_value"),
         ({"unsent_count": None}, "unsent_count", "null"),
+        ({"outages": None}, "outages", "null"),
+        # A random UUID (version 4), not one made with the time, as every id a device makes is (ADR-0007).
+        (
+            {
+                "outages": [
+                    {"id": "6f1c2e8a-3b4d-4c5e-9f6a-7b8c9d0e1f2a", "started_at": CLIENT_TIME, "ended_at": CLIENT_TIME}
+                ]
+            },
+            "outages.0.id",
+            "id.not_uuid7",
+        ),
+        ({"outages": [{"id": str(uuid.uuid7()), "started_at": CLIENT_TIME}]}, "outages.0.ended_at", "required"),
+        (
+            {"outages": [{"id": str(uuid.uuid7()), "started_at": "today", "ended_at": CLIENT_TIME}]},
+            "outages.0.started_at",
+            "invalid",
+        ),
+        (
+            {"outages": [{"id": str(uuid.uuid7()), "started_at": CLIENT_TIME, "ended_at": CLIENT_TIME}] * 101},
+            "outages",
+            "max_length",
+        ),
     ],
-    ids=["no_app_version", "blank_app_version", "app_version_too_long", "unsent_below_0", "no_unsent_count"],
+    ids=[
+        "no_app_version",
+        "blank_app_version",
+        "app_version_too_long",
+        "unsent_below_0",
+        "no_unsent_count",
+        "no_outages",
+        "outage_not_uuid7",
+        "outage_with_no_end",
+        "outage_time_not_a_time",
+        "too_many_outages",
+    ],
 )
 def test_push_needs_the_laptops_report(
     shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember, report: dict[str, Any], field: str, code: str

@@ -254,6 +254,15 @@ class PushedEnvelope(serializers.Serializer[Any]):
     payload = serializers.DictField(help_text="The document itself, in its type's shape.")
 
 
+class OutageEnvelope(serializers.Serializer[Any]):
+    # One offline period as a laptop reports it (SYNC-5; 03 §6.11): the laptop's sync code writes it, as it writes a
+    # document's envelope, so a broken one refuses the whole push. Its two times only as times: kept as the laptop's
+    # clock said, even one that ends before it starts (DeviceOutage, apps/people/models.py).
+    id = serializers.UUIDField(validators=[uuid7_only], help_text="The period's id, made on the laptop (UUIDv7).")
+    started_at = serializers.DateTimeField(help_text="When the laptop's line went, by its clock.")
+    ended_at = serializers.DateTimeField(help_text="When it came back, by its clock.")
+
+
 class PushBatch(serializers.Serializer[Any]):
     # Up to 100 documents a push (03 §6.3), so one push stays short on a shop's slow line, none at all when a sync has
     # nothing to send but its report. No device id: the key says which laptop sends (AUTH-2).
@@ -269,6 +278,9 @@ class PushBatch(serializers.Serializer[Any]):
     unsent_count = serializers.IntegerField(
         min_value=0, max_value=2**31 - 1, help_text="How many records the laptop holds unsent, besides these."
     )
+    # Its offline periods since it last reported them, up to 100 a push, as documents are: a laptop that lost its line
+    # many times sends the rest at its next push.
+    outages = serializers.ListField(child=OutageEnvelope(), max_length=100)
 
 
 class FlagRaised(serializers.Serializer[Any]):

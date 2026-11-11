@@ -72,6 +72,7 @@ from apps.people.login_doors import shop_of_device_key, shops_of_person
 from apps.people.models import (
     OWN_SETTINGS,
     Device,
+    DeviceOutage,
     DeviceStatus,
     PairingRequest,
     PermissionGrant,
@@ -940,6 +941,37 @@ def record_sync(device: Device, *, at: datetime, unsent_count: int, app_version:
     if written:
         device.last_synced_at, device.unsent_count, device.app_version = at, unsent_count, app_version
     return bool(written)
+
+
+@dataclass(frozen=True)
+class Outage:
+    # One offline period as a laptop reported it at a push (SYNC-5): its id, made on the laptop (ADR-0007), and when
+    # its line went and came back, by its clock, in UTC.
+    id: uuid.UUID
+    started_at: datetime
+    ended_at: datetime
+
+
+def record_outages(device: Device, outages: Sequence[Outage]) -> None:
+    """Keep each offline period a laptop reported at a push, once each (SYNC-5): a push sent again, or a period listed
+    twice, keeps one row per id. Called by the push at its end (apps/sync/push.py)."""
+    _check_shop(device.shop_id, None)
+    # By id, so a period listed twice in one push is one row.
+    rows = {
+        outage.id: DeviceOutage(
+            id=outage.id,
+            shop_id=device.shop_id,
+            device=device,
+            started_at=outage.started_at,
+            ended_at=outage.ended_at,
+        )
+        for outage in outages
+    }
+    # One INSERT ... ON CONFLICT DO NOTHING: an id already kept is left as it is, whichever shop holds it. This shop's
+    # is the same period sent again, or a twin push at the same moment; another shop's is left out, with no error and
+    # no word of that shop's row, as a report on a laptop's health must never stop its push (03 §5.4). No full_clean:
+    # every field is a time or the laptop's own id, checked by the push's route.
+    DeviceOutage.objects.bulk_create(rows.values(), ignore_conflicts=True)
 
 
 def lock_device_numbers(device: Device) -> int:

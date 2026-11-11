@@ -20,6 +20,7 @@ from rest_framework.response import Response
 
 from apps.people.api.base import DeviceView
 from apps.people.models import Device
+from apps.people.services import Outage
 from apps.sync import pull
 from apps.sync.api.serializers import BootstrapAnswer, PullAnswer, PullQuery, PushAnswer, PushBatch
 from apps.sync.bootstrap import snapshot
@@ -80,5 +81,6 @@ class PushView(DeviceView):
             received_at=timezone.now(),
             unsent_count=sent.validated_data["unsent_count"],
             app_version=sent.validated_data["app_version"],
+            outages=[Outage(**outage) for outage in sent.validated_data["outages"]],
         )
         return Response(PushAnswer({"answers": answers}).data)

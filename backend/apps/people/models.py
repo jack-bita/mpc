@@ -23,7 +23,7 @@ from django.db.models.functions import Lower
 
 from apps.core.fields import PhoneField
 from apps.core.languages import Language
-from apps.core.models import Editable, ShopScoped, TimeStamped, UUIDModel
+from apps.core.models import AppendOnly, Editable, ShopScoped, TimeStamped, UUIDModel
 from apps.core.permissions import PERMISSION_CODE_MAX_LENGTH, HeldPermissions, Permission, RoleTemplate
 from apps.people.device_keys import KEY_HASH_LENGTH, KEY_HASH_SHAPE, PAIRING_CODE_ALPHABET, PAIRING_CODE_LENGTH
 from apps.people.pins import FIRST_LOCK_MINUTES, LONGEST_LOCK_MINUTES, PIN_TRIES
@@ -531,6 +531,31 @@ class Device(Editable):
         # full_clean runs this before the rules above: " Laptop ya Dawa " and "Laptop ya Dawa" are one name on screen.
         super().clean()
         self.name = (self.name or "").strip()
+
+
+class DeviceOutage(AppendOnly):
+    # One offline period a laptop recorded by its own clock, and reported at its next push (SYNC-5; 02 §5): when its
+    # line went, and when it came back. For the device health page (SYNC-14) and the owner's choice on a local hub
+    # (03 AD16). Its id is the laptop's own (ADR-0007), so a push sent again saves each period once. A ledger: written
+    # once, by record_outages (apps/people/services.py), and never changed (ADR-0021); `created_at` is when the server
+    # heard of it. The times are kept as reported, even a period that "ends" before it starts (a clock moved back):
+    # refusing it would refuse the laptop's whole push, records and all, again at every sync.
+
+    # No index of their own, either link: the index below leads with `shop` and then `device` (03 §9), as the answer
+    # log's shop link has none (apps/sync/models.py). PROTECT: nothing is deleted (rule 7), so PROTECT never searches
+    # them. related_name="+": a device's outages are read through the guard.
+    shop = models.ForeignKey("shops.Shop", on_delete=models.PROTECT, related_name="+", db_index=False)
+    device = models.ForeignKey(Device, on_delete=models.PROTECT, related_name="+", db_index=False)
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField()
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so the guard stays the default manager (CORE-2). The health page's question: this
+        # laptop's periods, this week, oldest first.
+        indexes = [models.Index(fields=["shop", "device", "started_at"], name="people_deviceoutage_by_device")]
+
+    def __str__(self) -> str:
+        return f"{self.device_id}: {self.started_at:%Y-%m-%d %H:%M} to {self.ended_at:%H:%M}"
 
 
 class PairingRequest(UUIDModel, TimeStamped):
