@@ -7,6 +7,10 @@
 // minutes while the app is open, so a rename, a block or an unblock shows soon. The answer is saved in
 // this-device.ts, which the top bar and the lock read.
 //
+// Each answer that names a working device also starts a sync of its shop's database (SYNC-7, sync.ts),
+// so an office change reaches the counter at the next check. The check and its moments are the trigger
+// until SYNC-9 brings sync's own (03 §6.5).
+//
 // A block also shows at the device's next request of any kind: every answer in the store of server
 // answers is watched for device.blocked. A PIN session's office routes send it as a 403 (AUTH-4). Sync's
 // pull and push (SYNC-7, SYNC-8) won't go through the store, so nothing here sees their answers: each
@@ -27,6 +31,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 import { api } from "@/api/client";
+import { syncShop } from "@/offline/sync/sync";
 import { answerOf, ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
 
@@ -109,7 +114,7 @@ export async function checkThisDevice(): Promise<ThisDevice | null> {
 export function DeviceCheck() {
   const client = useQueryClient();
 
-  useQuery({
+  const { data: device, dataUpdatedAt } = useQuery({
     queryKey: DEVICE_CHECK,
     queryFn: checkThisDevice,
     refetchInterval: DEVICE_CHECK_EVERY,
@@ -118,6 +123,16 @@ export function DeviceCheck() {
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
+
+  // After every answer naming a working device, a sync. dataUpdatedAt moves at each answer, even one the
+  // same as the last, so a laptop that shows no change in itself still pulls the shop's. A failed sync
+  // waits for the next check: a block or a "not registered" it met is kept already (answer.ts), and
+  // anything else, a dropped network or a server down, is tried again then.
+  const shopId = device?.shop.id;
+  useEffect(() => {
+    if (shopId === undefined) return;
+    syncShop(shopId).catch(() => undefined);
+  }, [shopId, dataUpdatedAt]);
 
   // Every read and every change through the store, any screen's, is watched for a block, so the lock
   // comes at the device's very next request, not at the next check. Each store tells its watchers of

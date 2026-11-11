@@ -9,6 +9,10 @@ import OfficeLayout from "@/app/(office)/layout";
 import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
+import { databaseName } from "@/offline/db";
+import { readCursor } from "@/offline/sync/meta";
+import { shopDatabase } from "@/offline/this-shop";
+import { BOOTSTRAP, DAWA_SIDE } from "@/test/shop-lists";
 
 import {
   checkThisDevice,
@@ -125,6 +129,58 @@ describe("DeviceCheck", () => {
     await act(() => vi.advanceTimersByTimeAsync(DEVICE_CHECK_EVERY));
 
     await vi.waitFor(() => expect(savedDevice()?.name).toBe("Laptop ya Dawa"));
-    expect(sent.length).toBe(2);
+    // Two checks; each also started a sync, whose requests are its own (sync.test.ts).
+    expect(sent.filter((request) => request.url.endsWith(ME))).toHaveLength(2);
+  });
+
+  it("fills a fresh laptop's database once the check names it, then pulls", async () => {
+    // A change made in the office after the copy: the first pull brings it.
+    const renamed = { ...DAWA_SIDE, name: "Duka la Dawa" };
+    answer("GET", ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
+    answer("GET", "/api/sync/v1/bootstrap/", { status: 200, body: BOOTSTRAP });
+    answer("GET", "/api/sync/v1/pull/", {
+      status: 200,
+      body: {
+        changes: [
+          {
+            seq: 121,
+            entity: "side",
+            id: DAWA_SIDE.id,
+            op: "upsert",
+            data: renamed,
+          },
+        ],
+        cursor: 121,
+        has_more: false,
+        server_time: "2026-11-11T09:00:00Z",
+        min_app_version: null,
+      },
+    });
+
+    render(
+      <QueryProvider>
+        <DeviceCheck />
+      </QueryProvider>,
+    );
+
+    const db = shopDatabase(DAWA_LAPTOP.shop.id);
+    await vi.waitFor(async () => expect(await readCursor(db)).toBe(121));
+    expect(db.name).toBe(databaseName(DAWA_LAPTOP.shop.id));
+    expect(await db.side.get(DAWA_SIDE.id)).toEqual(renamed);
+    expect(await db.staff.toArray()).toEqual(BOOTSTRAP.staff);
+  });
+
+  it("starts no sync while the device isn't registered", async () => {
+    answer("GET", ME, refusal(401, "not_authenticated"));
+
+    render(
+      <QueryProvider>
+        <DeviceCheck />
+      </QueryProvider>,
+    );
+
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(sent.map((request) => new URL(request.url).pathname)).toEqual([ME]);
   });
 });
