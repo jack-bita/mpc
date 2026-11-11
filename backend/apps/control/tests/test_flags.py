@@ -30,7 +30,7 @@ from django.db.models import Model
 from pytest_django import DjangoAssertNumQueries
 
 from apps.control.models import Flag, FlagKind, FlagNote, FlagPerson, FlagStatus, FlagStep
-from apps.control.services import dismiss_flag, explain_flag, raise_flag, resolve_flag
+from apps.control.services import dismiss_flag, explain_flag, raise_flag, resolve_flag, resolve_flag_by_system
 from apps.core.links import LINK_TYPES
 from apps.core.models import AppendOnlyError, ShopScoped
 from apps.core.tenancy import Actor, ShopMismatch, shop_context, system_context
@@ -400,6 +400,56 @@ def test_every_step_names_its_person(shop_a: Model, flag: Flag) -> None:
             with pytest.raises(ValueError, match="person"):
                 move(flag, text="Imekaguliwa", by=device)
 
+        assert Flag.objects.get(pk=flag.pk).status == FlagStatus.OPEN
+        assert notes_of(flag) == []
+
+
+@pytest.fixture
+def gap(shop_a: Model, drawer_day: Note, side_a: ShopScoped) -> Flag:
+    # A missing-number flag, as the push raises one (SYNC-5): the laptop's #3 and #4 never came, #5 did.
+    with shop_context(shop_a):
+        return raise_flag(
+            kind=FlagKind.DEVICE_GAP, subject=drawer_day, expected=Decimal(3), actual=Decimal(5), side=side_a, by=None
+        )
+
+
+def test_system_closes_a_gap_flag_with_its_own_note(shop_a: Model, gap: Flag) -> None:
+    # Jack's choice (SYNC-5; 02 v1.22): once the missing records come, the system closes the flag itself. Its note is
+    # a code, which the review screen shows in the reader's language (ADR-0040), and names nobody: the system acted.
+    with shop_context(shop_a):
+        closed = resolve_flag_by_system(gap)
+        assert closed.status == FlagStatus.RESOLVED
+        assert Flag.objects.get(pk=gap.pk).status == FlagStatus.RESOLVED
+        assert notes_of(gap) == [(FlagStep.RESOLVED, "flag.device_gap_filled", None)]
+
+
+def test_system_closes_an_explained_gap_flag(shop_a: Model, gap: Flag, staff_a2: Actor) -> None:
+    # The manager explained it first ("Juma deleted it?"): the record came after all, so the system closes it, and the
+    # manager's words stay beside its note.
+    with shop_context(shop_a):
+        explain_flag(gap, text="Juma ameifuta?", by=staff_a2)
+        resolve_flag_by_system(gap)
+        assert notes_of(gap) == [
+            (FlagStep.EXPLAINED, "Juma ameifuta?", staff_a2.staff_id),
+            (FlagStep.RESOLVED, "flag.device_gap_filled", None),
+        ]
+
+
+def test_system_leaves_a_closed_flag_as_it_is(shop_a: Model, gap: Flag, staff_a2: Actor) -> None:
+    # A manager closed it already, or another push of the laptop did: the flag is handed back as it is, with no
+    # second note, which could never be deleted.
+    with shop_context(shop_a):
+        dismiss_flag(gap, text="Laptop ilizimwa", by=staff_a2)
+        assert resolve_flag_by_system(gap).status == FlagStatus.DISMISSED
+        assert [step for step, _text, _by in notes_of(gap)] == [FlagStep.DISMISSED]
+
+
+def test_system_closes_no_other_kind(shop_a: Model, flag: Flag) -> None:
+    # Every other flag waits for a person (02 §13, v1.8): Asha's drawer short by 3,000 is never closed by the system.
+    # Refused loudly: a call like this is a bug in our code.
+    with shop_context(shop_a):
+        with pytest.raises(ValueError, match="person"):
+            resolve_flag_by_system(flag)
         assert Flag.objects.get(pk=flag.pk).status == FlagStatus.OPEN
         assert notes_of(flag) == []
 

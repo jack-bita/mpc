@@ -6,6 +6,7 @@ transaction of its own, each answered once, and the same way every time it comes
       type, maker and shape all right?   no → invalid: its line and a flag, and the batch goes on
       save it, in one transaction        → accepted: the document, its change lines, its line, its change number
       its laptop number skips some?      → a device_gap flag about its line, in the same transaction (SYNC-5)
+      ... or fills a gap's last place?   → that gap's flag closes itself, with the system's note (SYNC-5)
       a server problem?                  → retry, and the batch stops here
     then the laptop's report on itself  → its row: last synced, records still unsent, app version (SYNC-5)
 
@@ -21,15 +22,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 import psycopg
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from rest_framework import exceptions
 
-from apps.control.models import Flag, FlagKind
-from apps.control.services import raise_flag
+from apps.control.models import Flag, FlagKind, FlagStatus
+from apps.control.services import raise_flag, resolve_flag_by_system
 from apps.core.acting import acting_as
 from apps.core.api.errors import INVALID as ONLY_FIELDS_WRONG
 from apps.core.api.errors import refusal_parts
@@ -240,9 +241,13 @@ def _check_number(device: Device, line: PushedDocument, last: int) -> None:
         # A jump: the numbers from `awaited` to `number - 1` never came, deleted on the laptop or lost.
         _flag_numbers(device, line, awaited)
         move_device_number(device, number)
-    elif _fills_a_gap(device, line):
-        # Late, not lost: one of the numbers a gap's flag waits for. The laptop's count stays where it was.
-        pass
+    elif gaps := _gaps_waiting_for(device, line):
+        # Late, not lost: one of the numbers a gap's flag waits for. The laptop's count stays where it was, and a gap
+        # whose every number has now come closes by itself (Jack, SYNC-5; 02 v1.22).
+        for gap in gaps:
+            # Still open: one a manager closed stays as they left it, and its numbers aren't counted again.
+            if gap.status in (FlagStatus.OPEN, FlagStatus.EXPLAINED) and _every_number_came(device, gap):
+                resolve_flag_by_system(gap)
     else:
         # The numbers went back: a laptop reset that numbers again from 1, or a bug on it. Kept and flagged once, then
         # counted on from here, or every record after a reset would raise a flag of its own.
@@ -264,20 +269,36 @@ def _flag_numbers(device: Device, line: PushedDocument, awaited: int) -> None:
     )
 
 
-def _fills_a_gap(device: Device, line: PushedDocument) -> bool:
-    # Whether the line's number is one a gap of this laptop is missing: between the number a device_gap flag waited
-    # for and the one that came after the gap, that one left out. Its flag's status doesn't matter: a record that
-    # comes late is late, even after a manager closed the flag. A flag of numbers gone back waits for none (its
-    # `expected` is above its `actual`), so it never matches. Asked only of a number below the laptop's count, which
-    # is rare.
+def _gaps_waiting_for(device: Device, line: PushedDocument) -> list[Flag]:
+    # The device_gap flags of this laptop that wait for the line's number: between the number a flag waited for and
+    # the one that came after the gap, that one left out. Whatever their status: a record that comes late is late,
+    # even after a manager closed its flag. A flag of numbers gone back waits for none (its `expected` is above its
+    # `actual`), so it never matches. Asked only of a number below the laptop's count, which is rare.
     lines = PushedDocument.objects.filter(device=device).values("pk")
-    return Flag.objects.filter(
-        kind=FlagKind.DEVICE_GAP,
-        subject_type=link_type_of(line),
-        subject_id__in=lines,
-        expected__lte=line.device_seq,
-        actual__gt=line.device_seq,
-    ).exists()
+    return list(
+        Flag.objects.filter(
+            kind=FlagKind.DEVICE_GAP,
+            subject_type=link_type_of(line),
+            subject_id__in=lines,
+            expected__lte=line.device_seq,
+            actual__gt=line.device_seq,
+        )
+    )
+
+
+def _every_number_came(device: Device, gap: Flag) -> bool:
+    # Whether every number the gap waited for, from `expected` to `actual - 1`, now has a line from this laptop, the
+    # record just saved included (its line is in this transaction). Counted once each: a number that came twice, as two
+    # documents, fills one place. After a reset, a number of the new count fills an old gap's place too: the server
+    # can't tell the two counts apart, and the reset's own flag stays open for a person.
+    first, after = int(cast(Decimal, gap.expected)), int(cast(Decimal, gap.actual))
+    came = (
+        PushedDocument.objects.filter(device=device, device_seq__gte=first, device_seq__lt=after)
+        .values("device_seq")
+        .distinct()
+        .count()
+    )
+    return came == after - first
 
 
 def _line(

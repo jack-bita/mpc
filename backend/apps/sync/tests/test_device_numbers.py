@@ -27,7 +27,8 @@ import pytest
 from django.db import transaction
 from django.db.models import Model
 
-from apps.control.models import Flag, FlagKind, FlagStatus
+from apps.control.models import Flag, FlagKind, FlagNote, FlagStatus, FlagStep
+from apps.control.services import dismiss_flag, explain_flag
 from apps.core.links import LINK_TYPES
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember
@@ -141,6 +142,89 @@ def test_a_late_record_raises_no_new_flag(shop_a: Model, device_a: Device, staff
     assert _last(device_a) == 3
     _push_numbers(device_a, staff_a, 4)
     assert len(_gaps(shop_a)) == 1
+
+
+def _notes(flag: Flag) -> list[tuple[str, str, uuid.UUID | None]]:
+    # A flag's notes, oldest first: the step, the words, and who wrote them (None: the system).
+    with shop_context(flag.shop_id):
+        rows = FlagNote.objects.filter(flag=flag).order_by("created_at", "id")
+        return [(note.step, note.text, note.created_by_id) for note in rows]
+
+
+def _status(flag: Flag) -> str:
+    with shop_context(flag.shop_id):
+        return Flag.objects.get(pk=flag.pk).status
+
+
+def test_late_record_resolves_gap_flag(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # Done when #1: #1, then #4, so #2 and #3 are missing. #3 comes late: #2 is still missing, so the flag stays open.
+    # Then #2 comes: every number the flag waited for is here, so the system closes it with its own note, naming
+    # nobody (Jack, SYNC-5; 02 v1.22). The records were only late; nothing was lost.
+    _push_numbers(device_a, staff_a, 1, 4)
+    [gap] = _gaps(shop_a)
+    _push_numbers(device_a, staff_a, 3)
+    assert (_status(gap), _notes(gap)) == (FlagStatus.OPEN, [])
+    _push_numbers(device_a, staff_a, 2)
+    assert _status(gap) == FlagStatus.RESOLVED
+    assert _notes(gap) == [(FlagStep.RESOLVED, "flag.device_gap_filled", None)]
+    assert len(_gaps(shop_a)) == 1
+
+
+def test_late_record_beside_new_ones_resolves_its_gap(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # #2 comes late in the same push as the new #4: #2 closes the gap #3 opened, and #4 follows #3 as usual.
+    _push(device_a, [_sent(1, staff_a), _sent(3, staff_a)])
+    _push(device_a, [_sent(2, staff_a), _sent(4, staff_a)])
+    [gap] = _gaps(shop_a)
+    assert _status(gap) == FlagStatus.RESOLVED
+
+
+def test_a_late_invalid_record_resolves_its_gap_too(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # #2 comes late and is set aside as invalid: it came all the same, so nothing is missing any more. Its own flag
+    # (invalid_document) says what is wrong with it.
+    _push_numbers(device_a, staff_a, 1, 3)
+    [gap] = _gaps(shop_a)
+    _push(device_a, [_sent(2, staff_a, type="no_such_type")])
+    assert _status(gap) == FlagStatus.RESOLVED
+
+
+def test_late_record_closes_an_explained_gap_flag(
+    shop_a: Model, device_a: Device, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # The manager explained the flag before #2 came: their words stay, and the system's note closes it.
+    _push_numbers(device_a, staff_a, 1, 3)
+    [gap] = _gaps(shop_a)
+    with shop_context(shop_a):
+        explain_flag(gap, text="Juma ameifuta?", by=staff_a2)
+    _push_numbers(device_a, staff_a, 2)
+    assert _status(gap) == FlagStatus.RESOLVED
+    assert [step for step, _text, _by in _notes(gap)] == [FlagStep.EXPLAINED, FlagStep.RESOLVED]
+
+
+def test_late_record_leaves_a_closed_gap_flag_as_it_is(
+    shop_a: Model, device_a: Device, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # A manager dismissed the flag ("the laptop was switched off"); #2 comes later. The flag stays as the manager left
+    # it, with no second note, and #2 is no "number gone back": it is still late, not lost.
+    _push_numbers(device_a, staff_a, 1, 3)
+    [gap] = _gaps(shop_a)
+    with shop_context(shop_a):
+        dismiss_flag(gap, text="Laptop ilizimwa", by=staff_a2)
+    _push_numbers(device_a, staff_a, 2)
+    assert _status(gap) == FlagStatus.DISMISSED
+    assert [step for step, _text, _by in _notes(gap)] == [FlagStep.DISMISSED]
+    assert len(_gaps(shop_a)) == 1
+
+
+def test_numbers_gone_back_never_close_by_themselves(
+    monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # A flag of numbers gone back waits for no record: nothing can arrive that makes the reset not have happened, so
+    # it stays open for a person.
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=_keeps_no_row))
+    _push_numbers(device_a, staff_a, 1, 2, 3)
+    _push_numbers(device_a, staff_a, 1, 2, 3, 4)
+    [back] = _gaps(shop_a)
+    assert _status(back) == FlagStatus.OPEN
 
 
 def _keeps_no_row(document: Document, payload: dict[str, Any]) -> list[Flag]:
