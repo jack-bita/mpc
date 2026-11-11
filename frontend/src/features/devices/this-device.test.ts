@@ -55,6 +55,10 @@ describe("the device's saved copy", () => {
       stored({ ...DAWA_LAPTOP, homeSide: undefined }),
       stored({ ...DAWA_LAPTOP, code: "1" }),
       stored({ ...DAWA_LAPTOP, shop: { ...DAWA_LAPTOP.shop, language: "fr" } }),
+      stored({
+        ...DAWA_LAPTOP,
+        shop: { ...DAWA_LAPTOP.shop, timezone: "Africa/Mabatini" },
+      }),
       stored([DAWA_LAPTOP]),
       JSON.stringify({ device: DAWA_LAPTOP, blocked: "yes" }),
     ]) {

@@ -123,6 +123,7 @@ function isThisDevice(value: unknown): value is ThisDevice {
     typeof shop.name === "string" &&
     typeof shop.code === "string" &&
     typeof shop.timezone === "string" &&
+    isTimeZone(shop.timezone) &&
     typeof shop.currency === "string" &&
     typeof shop.language === "string" &&
     LANGUAGES.includes(shop.language) &&
@@ -131,6 +132,18 @@ function isThisDevice(value: unknown): value is ThisDevice {
     typeof homeSide.code === "string" &&
     typeof homeSide.name === "string"
   );
+}
+
+// A zone the browser knows: a name it doesn't would make every rule's day fail to work out (rules.ts), on
+// every screen that reads one. Asked once, as the copy is read, so a bad name reads as no device, and the
+// next check puts it right.
+function isTimeZone(name: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // A plain JSON object: not nothing, and not a list, which typeof also calls "object".
