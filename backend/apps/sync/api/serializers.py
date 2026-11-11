@@ -254,6 +254,15 @@ class PushedEnvelope(serializers.Serializer[Any]):
     payload = serializers.DictField(help_text="The document itself, in its type's shape.")
 
 
+# The most documents one push takes (03 §6.3), so one push stays short on a shop's slow line.
+MOST_DOCUMENTS = 100
+
+# The most records a laptop may say it holds besides a push's batch. Its column holds 2**31 - 1, and the push adds back
+# each document of the batch it couldn't save, up to MOST_DOCUMENTS, so the count it keeps must still fit, or the push
+# would fail after saving the documents (SYNC-5's review). Two billion is far past any laptop's outbox.
+HIGHEST_UNSENT_COUNT = 2**31 - 1 - MOST_DOCUMENTS
+
+
 class OutageEnvelope(serializers.Serializer[Any]):
     # One offline period as a laptop reports it (SYNC-5; 03 §6.11): the laptop's sync code writes it, as it writes a
     # document's envelope, so a broken one refuses the whole push. Its two times only as times: kept as the laptop's
@@ -269,14 +278,16 @@ class PushBatch(serializers.Serializer[Any]):
     # A list field of envelopes, not `many=True`: the same checks, each envelope's under its number
     # (`documents.0.device_seq`), and its limit reaches the API's description (maxItems), which a list serializer's
     # doesn't, nor the type checker's notes on the `many=True` form.
-    documents = serializers.ListField(child=PushedEnvelope(), max_length=100)
+    documents = serializers.ListField(child=PushedEnvelope(), max_length=MOST_DOCUMENTS)
     # The laptop's report on itself, sent at every sync (03 §6.6; SYNC-5), kept on its row (apps/people/services.py,
     # record_sync). Both needed, as the envelope's parts are: the laptop's sync code writes them, so one left out is a
     # bug in the app, refused loudly. The version is kept as the app names itself, only its length checked: the
     # office reads it, nothing compares it yet (SYNC-13).
     app_version = serializers.CharField(max_length=APP_VERSION_LENGTH, help_text="The app's version on the laptop.")
     unsent_count = serializers.IntegerField(
-        min_value=0, max_value=2**31 - 1, help_text="How many records the laptop holds unsent, besides these."
+        min_value=0,
+        max_value=HIGHEST_UNSENT_COUNT,
+        help_text="How many records the laptop holds unsent, besides these.",
     )
     # Its offline periods since it last reported them, up to 100 a push, as documents are: a laptop that lost its line
     # many times sends the rest at its next push.

@@ -1870,7 +1870,7 @@
                     },
                     "unsent_count": {
                         "type": "integer",
-                        "maximum": 2147483647,
+                        "maximum": 2147483547,
                         "minimum": 0,
                         "description": "How many records the laptop holds unsent, besides these."
                     },

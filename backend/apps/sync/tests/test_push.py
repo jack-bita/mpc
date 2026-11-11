@@ -30,6 +30,7 @@ from apps.people.models import Device, DeviceOutage, StaffMember
 from apps.people.services import Outage
 from apps.shops.models import Shop, Side
 from apps.sync import push as push_module
+from apps.sync.api.serializers import HIGHEST_UNSENT_COUNT
 from apps.sync.document_types import DOCUMENT_TYPES, Document
 from apps.sync.models import PushedDocument, PushedStatus
 from apps.sync.push import Answer, Sent, push
@@ -250,6 +251,21 @@ def test_unsent_count_keeps_what_the_push_did_not_save(
     assert _report(device_a)[1] == 2
     _push(device_a, [_sent(4, staff_a, type="no_such_type")], unsent_count=1)
     assert _report(device_a)[1] == 1
+
+
+def test_the_highest_unsent_count_fits_its_column(
+    monkeypatch: pytest.MonkeyPatch, shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # The laptop says the most it may, and its 100 documents all hit a server problem, so all 100 are added back: the
+    # count still fits its column (2**31 - 1), and the push answers instead of failing after its documents (SYNC-5's
+    # review).
+    def crash(document: Document, payload: dict[str, Any]) -> list[Flag]:
+        raise RuntimeError("the server broke")
+
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, post=crash))
+    batch = [_sent(seq, staff_a) for seq in range(1, 101)]
+    _push(device_a, batch, unsent_count=HIGHEST_UNSENT_COUNT)
+    assert _report(device_a)[1] == 2**31 - 1
 
 
 def test_push_writes_no_edit_history(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:

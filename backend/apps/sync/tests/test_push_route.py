@@ -256,6 +256,8 @@ def test_push_takes_the_laptops_offline_periods(shop_a: Shop, laptop: tuple[Devi
         ({"app_version": ""}, "app_version", "blank"),
         ({"app_version": "v" * 65}, "app_version", "max_length"),
         ({"unsent_count": -1}, "unsent_count", "min_value"),
+        # The column holds 2**31 - 1, and the push adds back up to 100 documents it couldn't save (SYNC-5's review).
+        ({"unsent_count": 2**31 - 100}, "unsent_count", "max_value"),
         ({"unsent_count": None}, "unsent_count", "null"),
         ({"outages": None}, "outages", "null"),
         # A random UUID (version 4), not one made with the time, as every id a device makes is (ADR-0007).
@@ -285,6 +287,7 @@ def test_push_takes_the_laptops_offline_periods(shop_a: Shop, laptop: tuple[Devi
         "blank_app_version",
         "app_version_too_long",
         "unsent_below_0",
+        "unsent_too_many",
         "no_unsent_count",
         "no_outages",
         "outage_not_uuid7",
