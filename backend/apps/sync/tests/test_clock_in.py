@@ -168,6 +168,19 @@ def test_clock_moved_back_is_unverified(
     assert (juma.status, juma.flags) == ("accepted", [{"id": str(flag.pk), "kind": "unverified_time"}])
 
 
+def test_a_toka_timed_after_sending_is_unverified(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # Juma leaves at 15:00. He takes the laptop off the network, sets it to 17:00, taps Toka, sets it right again and
+    # plugs it back in; it sends at 15:01. His Toka says 17:00, after the laptop's own clock as it sent: no time is
+    # trusted, and a flag names him, so his early leave can't pass as a full day (ATT-1's review).
+    tap = _clock(1, staff_a, arusha(17, 0), kind="out", last_server_time=arusha(14, 0))
+    [answer] = _push(device_a, [tap], sent_at=arusha(15, 1), received_at=arusha(15, 1))
+    assert answer.status == "accepted"
+    [event] = _events(shop_a)
+    assert (event.kind, event.time_check, event.trusted_time) == ("out", TimeCheck.UNVERIFIED, None)
+    [flag] = _flags(shop_a, FlagKind.UNVERIFIED_TIME)
+    assert (flag.subject_id, _named(flag)) == (event.pk, [staff_a.pk])
+
+
 def test_suspended_worker_clock_in_flagged(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
     # Done when #4: Baba suspends Juma. The laptop was offline and didn't know, so its PIN check let him in, and he
     # clocked in an hour later. The line is kept, as every record is, and the push flags who made it (SYNC-5, X2):

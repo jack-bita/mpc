@@ -45,7 +45,8 @@ def check_time(evidence: Evidence) -> CheckedTime:
     # How far off the laptop's clock was as it sent: kept whatever the answer, so a manager can see it.
     clock_error = evidence.sent_at - evidence.received_at
     # How long it waited on the laptop, both ends by the laptop's own clock: a wrong clock is wrong at both ends, so
-    # the wait is right. Below zero, the clock went back after the tap, which is not "at once".
+    # the wait is right. Below zero, the clock went back between the tap and the push, which is not "at once": sign
+    # 4 below looks at it.
     waited = evidence.sent_at - evidence.client_time
     if dt.timedelta(0) <= waited <= ONLINE_WITHIN:
         return CheckedTime(TimeCheck.SERVER, evidence.received_at, clock_error)
@@ -56,6 +57,9 @@ def check_time(evidence: Evidence) -> CheckedTime:
         evidence.client_time < evidence.last_server_time - CLOCK_SLACK,
         # 3. The laptop's clock was off as it sent, slow or fast, so what it wrote that morning can't be believed.
         abs(clock_error) > CLOCK_SLACK,
+        # 4. Its time is after the laptop's own clock as it sent: made "in the future", so the clock was moved forward
+        # for the tap and set right again before the push, which no other sign sees (ATT-1's review).
+        evidence.client_time - evidence.sent_at > CLOCK_SLACK,
     )
     if any(signs):
         return CheckedTime(TimeCheck.UNVERIFIED, None, clock_error)

@@ -7,6 +7,7 @@ about the laptop's clock (check_time, apps/staffpay/calculations.py; ATT-1, 02 Â
       1. the laptop's record before it has a later time
       2. its time is before the last server time the laptop had seen
       3. as it sent the push, the laptop's clock was more than 2 minutes off the server's
+      4. its time is after the laptop's own clock as it sent the push: the clock was moved forward for the tap
 
 One morning at MPC, in Arusha's time: the Dawa laptop last heard from the server at 06:50; Asha taps Ingia at 07:20;
 the power goes, and the laptop sends at 12:00, when it comes back. Pure: no database, no clock of its own. Fake data
@@ -93,6 +94,22 @@ def test_a_clock_off_at_sync_is_a_sign() -> None:
     fast = check_time(morning(sent_at=arusha(12, 40)))
     assert (slow.time_check, slow.trusted_time) == (TimeCheck.UNVERIFIED, None)
     assert fast.time_check == TimeCheck.UNVERIFIED
+
+
+def test_a_time_after_the_laptops_clock_at_sending_is_a_sign() -> None:
+    # Sign 4: at 15:00 Juma takes the laptop off the network, sets it to 17:00, taps Toka, sets it right again and
+    # plugs it back in; it sends at 15:01. A tap timed two hours after the laptop's own clock as it sent was made "in
+    # the future": the clock was moved forward for it. Up to 2 minutes is no sign; a second past that is.
+    juma = morning(
+        client_time=arusha(17, 0), sent_at=arusha(15, 1), received_at=arusha(15, 1), last_server_time=arusha(14, 0)
+    )
+    assert (check_time(juma).time_check, check_time(juma).trusted_time) == (TimeCheck.UNVERIFIED, None)
+    at_the_edge = morning(client_time=arusha(15, 3), sent_at=arusha(15, 1), received_at=arusha(15, 1))
+    past_it = morning(client_time=arusha(15, 3, 1), sent_at=arusha(15, 1), received_at=arusha(15, 1))
+    assert (check_time(at_the_edge).time_check, check_time(past_it).time_check) == (
+        TimeCheck.DEVICE_OK,
+        TimeCheck.UNVERIFIED,
+    )
 
 
 def test_two_minutes_off_is_not_yet_a_sign() -> None:
