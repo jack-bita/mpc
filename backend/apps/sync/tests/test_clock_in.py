@@ -215,16 +215,17 @@ def test_suspended_worker_clock_in_flagged(shop_a: Model, device_a: Device, staf
     # server's clock.
     with shop_context(shop_a):
         suspend(staff_a, by=None, reason="Uchunguzi wa droo")
-        line_count_before = PushedDocument.objects.count()
     tapped = dt.datetime.now(dt.UTC) + dt.timedelta(hours=1)
     later = tapped + dt.timedelta(hours=3)
-    [answer] = _push(device_a, [_clock(1, staff_a, tapped, last_server_time=tapped)], sent_at=later, received_at=later)
+    tap = _clock(1, staff_a, tapped, last_server_time=tapped)
+    [answer] = _push(device_a, [tap], sent_at=later, received_at=later)
     assert answer.status == "accepted"
     [event] = _events(shop_a)
     assert event.staff_id == staff_a.pk
     [flag] = _flags(shop_a, FlagKind.SUSPENDED_STAFF_ACTIVITY)
     with shop_context(shop_a):
-        [line] = PushedDocument.objects.all()[line_count_before:]
+        # The clock-in's own line in the answer log, found by the document's id: the flag is about it.
+        line = PushedDocument.objects.get(document_id=tap.id)
     assert (flag.subject_type, flag.subject_id) == ("pushed_document", line.pk)
     assert _named(flag) == [staff_a.pk]
 
@@ -309,7 +310,7 @@ def test_a_clock_in_id_another_shop_holds_is_refused(
     # so it clashes and is set aside as `id.taken`, telling nothing of B's line, which stays as it was (03 §5.4).
     theirs = _clock(1, staff_b, arusha(7, 20))
     _push(device_b, [theirs], sent_at=arusha(7, 20, 2), received_at=arusha(7, 20, 2))
-    ours = Sent(**{**theirs.__dict__, "created_by": staff_a.pk, "client_time": arusha(9, 0)})
+    ours = dataclasses.replace(theirs, created_by=staff_a.pk, client_time=arusha(9, 0))
     [answer] = _push(device_a, [ours], sent_at=arusha(9, 0, 2), received_at=arusha(9, 0, 2))
     assert (answer.status, answer.code, answer.fields) == ("invalid", "id.taken", {})
     assert _events(shop_a) == []
