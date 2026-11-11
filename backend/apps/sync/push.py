@@ -8,6 +8,7 @@ transaction of its own, each answered once, and the same way every time it comes
       its laptop number skips some?      → a device_gap flag about its line, in the same transaction (SYNC-5)
       ... or fills a gap's last place?   → that gap's flag closes itself, with the system's note (SYNC-5)
       its maker holds no key for it?     → a permission_break flag about its line, naming them (SYNC-5)
+      made while its maker wasn't working? → a suspended_staff_activity flag, naming them (SYNC-5, X2)
       a server problem?                  → retry, and the batch stops here
     then the laptop's report on itself  → its row: last synced, records still unsent, app version; its outages (SYNC-5)
 
@@ -39,6 +40,7 @@ from apps.core.changes import recording_changes
 from apps.core.links import link_type_of
 from apps.people.models import Device, StaffMember
 from apps.people.permissions import given_permissions
+from apps.people.selectors import was_working_at
 from apps.people.services import Outage, lock_device_numbers, move_device_number, record_outages, record_sync
 from apps.sync.document_types import Document, DocumentType, document_type
 from apps.sync.models import PushedDocument, PushedStatus
@@ -185,6 +187,7 @@ def _save(
             line.save()
             _check_number(device, line, last)
             _check_maker(device, line, kind, maker)
+            _check_working(device, line, maker)
     except (ValidationError, IntegrityError) as refusal:
         # Refused, and all of it rolled back. Perhaps by a twin: another copy of this document, sent at the same
         # moment, that finished while this one was saving, so its rows or its line clash with this copy's. Its
@@ -276,6 +279,16 @@ def _check_maker(device: Device, line: PushedDocument, kind: DocumentType, maker
     # checked on the laptop's side all the same, until that card says otherwise.
     if kind.permission not in given_permissions(maker).on(device.home_side_id):
         raise_flag(kind=FlagKind.PERMISSION_BREAK, subject=line, side=device.home_side, people=[maker], by=None)
+
+
+def _check_working(device: Device, line: PushedDocument, maker: StaffMember) -> None:
+    # Was the maker working here when they made it (SYNC-5, X2)? A laptop offline when Baba suspended Juma doesn't
+    # know, so its PIN check still lets him in. By the laptop's clock, the one time the record carries: Juma's sale
+    # made at 09:00 is his, though Baba suspended him at 11:00, before the laptop synced. Leaving counts too (Jack,
+    # SYNC-5): a person's keys stay given when they go, so the key check alone would let their sale pass. One flag
+    # about the record's line, naming them, on the laptop's side; the record is kept (accept, then flag).
+    if not was_working_at(maker, line.client_time):
+        raise_flag(kind=FlagKind.SUSPENDED_STAFF_ACTIVITY, subject=line, side=device.home_side, people=[maker], by=None)
 
 
 def _flag_numbers(device: Device, line: PushedDocument, awaited: int) -> None:
