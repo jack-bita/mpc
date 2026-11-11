@@ -30,6 +30,13 @@ export async function needsBootstrap(db: ShopDatabase): Promise<boolean> {
  * keeps no record the server no longer sends.
  *
  * A refusal is thrown, after keeping a block or a "not registered" (answer.ts), and changes nothing.
+ *
+ * Honest limit: the answer is the shop of the device key the browser sends now, and it names no shop, so
+ * nothing here can check it is the shop this database is named for (the device check's last answer). A
+ * laptop paired to another shop in the moment between that check and this call would write the new
+ * shop's lists into the old shop's database. Pairing a working laptop again is refused
+ * (pairing.already_paired, 03 §5.9), which makes that moment rare; the fix is the shop's id in the answer,
+ * checked here, a server change for a later card.
  */
 export async function bootstrap(db: ShopDatabase): Promise<void> {
   const copy = await syncAnswer(api.GET("/api/sync/v1/bootstrap/"));
