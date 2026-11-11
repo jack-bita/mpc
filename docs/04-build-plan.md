@@ -984,8 +984,8 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 **Watch out:** `dexie` and `dexie-react-hooks` (03 §3) are new dependencies again. SPIKE-1 added Dexie for its test page and removed it with the page, so both need Jack's yes before `pnpm add` **(v1.10)**. From UI-3 **(v1.45)**: which device this is (its id, name, code, shop, home side, and a block) already lives in `mpc.device` (`src/features/devices/this-device.ts`), outside every shop's database, as the shop must be known before its database opens (03 §6.1). `meta` keeps no copy of it, so receipt numbers read the device's code from one place.
 **Watch out** **(v1.59)**: built (11 Nov 2026). `src/offline/db.ts`: `openShopDatabase(shopId)` opens the shop's database, `mpc-shop-<shop id>` (`databaseName`), typed (`ShopDatabase`); Dexie opens it at its first read or write. `VERSIONS` lists every version in order, version 1 locked by a test (`db.versions.test.ts`): a change is a new version at the end, with an upgrade if old rows must change. Version 1's drawers: `meta`; the bootstrap's five lists by their codes, `side`, `payment_account`, `staff`, `setting` (by `key` too) and `setting_keys`, so a pull's `entity` names its drawer, each later list coming with its card as a new version; `pin_checks` (by `staff_id`); `documents`, every type in one drawer, each row the push's envelope but its `device_seq` (by `type`, and `[type+client_time]` for one kind on one day); `outbox`, unsent documents only (`&device_seq`, unique, and `[status+device_seq]`); `pending_effects` (by `document_id` and `posted_seq`); `sent_archive` (by `sent_at` and `device_seq`). `dexie` 4.4.7, and `fake-indexeddb` 6.2.6 for tests, turned on for every test in `vitest.setup.ts`; `dexie-react-hooks` moves to SYNC-7.
 **Done when:**
-- [ ] Two shops in one browser get two separate databases.
-- [ ] A version bump runs its upgrade.
+- [x] Two shops in one browser get two separate databases.
+- [x] A version bump runs its upgrade.
 **Tests:** `db.stores.test.ts` · `db.versions.test.ts`
 **Commits:** `test(frontend): device database` → `feat(frontend): dexie schema`
 
