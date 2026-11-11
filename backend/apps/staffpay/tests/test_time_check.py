@@ -127,6 +127,17 @@ def test_two_minutes_off_is_not_yet_a_sign() -> None:
         assert check_time(beyond).time_check == TimeCheck.UNVERIFIED
 
 
+def test_times_at_the_ends_of_the_calendar_still_get_an_answer() -> None:
+    # A laptop's code can send a time from year 1, and the answer log can hold one. The check compares gaps between
+    # two times, never a time moved by 2 minutes, which year 1 can't be: a crash here would answer retry at every
+    # push, and that laptop's whole outbox would wait behind this clock-in forever (ATT-1's review).
+    year_one = dt.datetime(1, 1, 1, tzinfo=dt.UTC)
+    last_day = dt.datetime(9999, 12, 31, 23, 59, tzinfo=dt.UTC)
+    assert check_time(morning(last_server_time=year_one, time_before=year_one)).time_check == TimeCheck.DEVICE_OK
+    assert check_time(morning(last_server_time=last_day)).time_check == TimeCheck.UNVERIFIED
+    assert check_time(morning(time_before=last_day)).time_check == TimeCheck.UNVERIFIED
+
+
 def test_the_clock_error_is_the_laptops_clock_minus_the_servers() -> None:
     # Kept on the line as evidence, whatever the answer: 40 minutes slow is minus 40 minutes; right is zero.
     assert check_time(morning(sent_at=arusha(11, 20))).clock_error == dt.timedelta(minutes=-40)

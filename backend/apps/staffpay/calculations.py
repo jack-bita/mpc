@@ -50,11 +50,13 @@ def check_time(evidence: Evidence) -> CheckedTime:
     waited = evidence.sent_at - evidence.client_time
     if dt.timedelta(0) <= waited <= ONLINE_WITHIN:
         return CheckedTime(TimeCheck.SERVER, evidence.received_at, clock_error)
+    # Each sign compares the gap between two times with the slack, never a time moved by it: a time from year 1, which
+    # a laptop's code can send, can't be moved 2 minutes earlier, and the crash would answer retry at every push.
     signs = (
         # 1. Its record before it has a later time: the clock went back between the two.
-        evidence.time_before is not None and evidence.client_time < evidence.time_before - CLOCK_SLACK,
+        evidence.time_before is not None and evidence.time_before - evidence.client_time > CLOCK_SLACK,
         # 2. Its time is before a time the server had already told the laptop.
-        evidence.client_time < evidence.last_server_time - CLOCK_SLACK,
+        evidence.last_server_time - evidence.client_time > CLOCK_SLACK,
         # 3. The laptop's clock was off as it sent, slow or fast, so what it wrote that morning can't be believed.
         abs(clock_error) > CLOCK_SLACK,
         # 4. Its time is after the laptop's own clock as it sent: made "in the future", so the clock was moved forward

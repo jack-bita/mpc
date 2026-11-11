@@ -254,6 +254,18 @@ def test_clock_in_of_a_wrong_shape_is_invalid(
     assert _events(shop_a) == []
 
 
+def test_a_clock_in_from_year_one_never_stops_the_push(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # A laptop's code wrote year 1 as the last server time it had seen. The clock-in is answered like any other, and
+    # the record after it is saved too: a crash would answer retry, and every later push of that laptop would stop at
+    # this one (ATT-1's review).
+    tap = _clock(1, staff_a, arusha(7, 20), last_server_time=dt.datetime(1, 1, 1, tzinfo=dt.UTC))
+    answers = _push(
+        device_a, [tap, _clock(2, staff_a, arusha(17, 0), kind="out")], sent_at=arusha(18, 0), received_at=arusha(18, 0)
+    )
+    assert [answer.status for answer in answers] == ["accepted", "accepted"]
+    assert len(_events(shop_a)) == 2
+
+
 @pytest.fixture
 def device_b(shop_b: Shop, side_b: Side) -> Device:
     # A laptop of the second shop. Only the row, as device_a is (backend/conftest.py).
