@@ -25,7 +25,7 @@ from rest_framework.test import APIClient
 from apps.core.links import LINK_TYPES
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import Device, StaffMember
+from apps.people.models import Device, DeviceOutage, StaffMember
 from apps.people.services import block, confirm_pairing, start_pairing
 from apps.shops.models import Shop, Side
 from apps.sync.document_types import DOCUMENT_TYPES
@@ -96,11 +96,13 @@ def envelope(device_seq: int, maker: StaffMember, *, text: str = "2 bags of pumb
     }
 
 
-def send(client: APIClient, documents: list[dict[str, Any]], *, csrf_token: str | None = None) -> Any:
-    # One push, with the CSRF token as the app sends it, when given.
+def send(client: APIClient, documents: list[dict[str, Any]], *, csrf_token: str | None = None, **report: Any) -> Any:
+    # One push, with the laptop's report on itself (`report` overrides a part), and the CSRF token as the app sends
+    # it, when given.
+    body = {"documents": documents, "app_version": "2026.11.1", "unsent_count": 0, "outages": [], **report}
     if csrf_token is None:
-        return client.post(PUSH, {"documents": documents}, format="json")
-    return client.post(PUSH, {"documents": documents}, format="json", HTTP_X_CSRFTOKEN=csrf_token)
+        return client.post(PUSH, body, format="json")
+    return client.post(PUSH, body, format="json", HTTP_X_CSRFTOKEN=csrf_token)
 
 
 def _tickets(shop: Shop) -> int:
@@ -194,13 +196,15 @@ def test_push_takes_at_most_100_documents(shop_a: Shop, laptop: tuple[Device, st
     ("changes", "field", "code"),
     [
         ({"device_seq": 0}, "documents.0.device_seq", "min_value"),
+        # Past the highest a missing number's flag can hold with the one awaited after it (HIGHEST_DEVICE_SEQ).
+        ({"device_seq": 10**12 - 1}, "documents.0.device_seq", "max_value"),
         # A random UUID (version 4), not one made with the time, as every id a device makes is (ADR-0007).
         ({"id": "6f1c2e8a-3b4d-4c5e-9f6a-7b8c9d0e1f2a"}, "documents.0.id", "id.not_uuid7"),
         ({"created_by": "not-an-id"}, "documents.0.created_by", "invalid"),
         ({"payload": ["2 bags of pumba"]}, "documents.0.payload", "not_a_dict"),
         ({"type": "t" * 41}, "documents.0.type", "max_length"),
     ],
-    ids=["seq_0", "not_uuid7", "maker_not_an_id", "payload_not_an_object", "type_too_long"],
+    ids=["seq_0", "seq_too_long", "not_uuid7", "maker_not_an_id", "payload_not_an_object", "type_too_long"],
 )
 def test_a_broken_envelope_refuses_the_whole_push(
     shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember, changes: dict[str, Any], field: str, code: str
@@ -213,6 +217,96 @@ def test_a_broken_envelope_refuses_the_whole_push(
     assert refused.status_code == 400
     assert refused.json()["fields"] == {field: [code]}
     assert _tickets(shop_a) == 0
+
+
+def test_push_keeps_the_laptops_report(shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember) -> None:
+    # Every sync pushes, an empty one too (03 §6.6): the laptop says how many records it holds besides these, and which
+    # app it runs, and the server's clock says when. An empty push is how a laptop with nothing to send still reports.
+    device, key = laptop
+    before = timezone.now()
+    answer = send(a_browser(key), [], app_version="2026.11.2", unsent_count=4)
+    after = timezone.now()
+    assert (answer.status_code, answer.json()) == (200, {"answers": []})
+    with shop_context(shop_a):
+        held = Device.objects.get(pk=device.pk)
+    assert (held.unsent_count, held.app_version) == (4, "2026.11.2")
+    assert held.last_synced_at is not None
+    assert before <= held.last_synced_at <= after
+
+
+def test_push_takes_the_laptops_offline_periods(shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember) -> None:
+    # The laptop's offline periods ride on its next push, each with an id it made (ADR-0007), in UTC (03 §6.6).
+    device, key = laptop
+    offline = {"id": str(uuid.uuid7()), "started_at": "2026-11-10T06:10:00Z", "ended_at": "2026-11-10T06:40:00Z"}
+    answer = send(a_browser(key), [], outages=[offline])
+    assert answer.status_code == 200
+    with shop_context(shop_a):
+        [kept] = DeviceOutage.objects.filter(device=device)
+    assert (str(kept.pk), kept.started_at, kept.ended_at) == (
+        offline["id"],
+        dt.datetime(2026, 11, 10, 6, 10, tzinfo=dt.UTC),
+        dt.datetime(2026, 11, 10, 6, 40, tzinfo=dt.UTC),
+    )
+
+
+@pytest.mark.parametrize(
+    ("report", "field", "code"),
+    [
+        ({"app_version": None}, "app_version", "null"),
+        ({"app_version": ""}, "app_version", "blank"),
+        ({"app_version": "v" * 65}, "app_version", "max_length"),
+        ({"unsent_count": -1}, "unsent_count", "min_value"),
+        # The column holds 2**31 - 1, and the push adds back up to 100 documents it couldn't save (SYNC-5's review).
+        ({"unsent_count": 2**31 - 100}, "unsent_count", "max_value"),
+        ({"unsent_count": None}, "unsent_count", "null"),
+        ({"outages": None}, "outages", "null"),
+        # A random UUID (version 4), not one made with the time, as every id a device makes is (ADR-0007).
+        (
+            {
+                "outages": [
+                    {"id": "6f1c2e8a-3b4d-4c5e-9f6a-7b8c9d0e1f2a", "started_at": CLIENT_TIME, "ended_at": CLIENT_TIME}
+                ]
+            },
+            "outages.0.id",
+            "id.not_uuid7",
+        ),
+        ({"outages": [{"id": str(uuid.uuid7()), "started_at": CLIENT_TIME}]}, "outages.0.ended_at", "required"),
+        (
+            {"outages": [{"id": str(uuid.uuid7()), "started_at": "today", "ended_at": CLIENT_TIME}]},
+            "outages.0.started_at",
+            "invalid",
+        ),
+        (
+            {"outages": [{"id": str(uuid.uuid7()), "started_at": CLIENT_TIME, "ended_at": CLIENT_TIME}] * 101},
+            "outages",
+            "max_length",
+        ),
+    ],
+    ids=[
+        "no_app_version",
+        "blank_app_version",
+        "app_version_too_long",
+        "unsent_below_0",
+        "unsent_too_many",
+        "no_unsent_count",
+        "no_outages",
+        "outage_not_uuid7",
+        "outage_with_no_end",
+        "outage_time_not_a_time",
+        "too_many_outages",
+    ],
+)
+def test_push_needs_the_laptops_report(
+    shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember, report: dict[str, Any], field: str, code: str
+) -> None:
+    # The report is the laptop's sync code's work, as the envelope is: one missing or broken is a bug in the app,
+    # refused whole and loudly before anything is saved.
+    device, key = laptop
+    refused = send(a_browser(key), [envelope(1, staff_a)], **report)
+    assert (refused.status_code, refused.json()["fields"]) == (400, {field: [code]})
+    assert _tickets(shop_a) == 0
+    with shop_context(shop_a):
+        assert Device.objects.get(pk=device.pk).last_synced_at is None
 
 
 def test_push_saves_the_keys_laptop_and_the_servers_clock(

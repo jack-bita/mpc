@@ -338,8 +338,8 @@ class RecordEdits(AppendOnlyTrigger):
 class ChangeRecordEdits(RecordEdits):
     # The step a later migration listed to change which columns an office table's history skips, until AUTH-8. It writes
     # the old rule, which names no device, and keeps it on purpose, as migrations on main list it. So listed today, it
-    # would put a table back on the old rule, and backend/tests/test_edit_history.py turns red: SYNC-5, the next card to
-    # need one, adds a form of it that writes the new rule, as RecordEditsV2 does for RecordEdits.
+    # would put a table back on the old rule, and backend/tests/test_edit_history.py turns red: a migration lists
+    # ChangeRecordEditsV2 below instead (SYNC-5), which writes the new rule, as RecordEditsV2 does for RecordEdits.
     # ChangeRecordEdits("device", type_code="device", skip=["key_hash", "last_seen_at"], was=["key_hash"]), after the
     # step that adds `last_seen_at` (AUTH-2). A trigger's words are fixed when it is made, and the SQL that makes it is
     # frozen once on main (rule 9), so this takes the table's trigger off and puts it back with the new list, from the
@@ -420,6 +420,24 @@ class MoveRecordEditsToV2(RecordEditsV2, ChangeRecordEdits):
 
     def describe(self) -> str:
         return f"Edit history of {self.model_name} moves to the rule that names the device"
+
+
+class ChangeRecordEditsV2(RecordEditsV2, ChangeRecordEdits):
+    # The step a later migration lists to change which columns an office table's history skips, since SYNC-5, for a
+    # table already on the rule that names the device (AUTH-8): ChangeRecordEditsV2("device", type_code="device",
+    # skip=["key_hash", "last_seen_at", "last_synced_at"], was=["key_hash", "last_seen_at"]). Two parents, as
+    # MoveRecordEditsToV2 has: the SQL it writes from RecordEditsV2, the moves and their checks from ChangeRecordEdits
+    # (the trigger off and back on, in one transaction, so no edit is ever unrecorded). Undone, `was` puts the old list
+    # back on the same new rule: the table was on it before this step, so going back never moves it to the old one.
+
+    def __init__(self, model_name: str, type_code: str, skip: Sequence[str], was: Sequence[str]) -> None:
+        # ChangeRecordEdits's own checks, both lists and "this step changes nothing" among them; then `was` as a step
+        # of the new rule, in place of the old-rule step that __init__ builds.
+        ChangeRecordEdits.__init__(self, model_name, type_code, skip, was)
+        self.was = RecordEditsV2(model_name, type_code, was)
+
+    def describe(self) -> str:
+        return f"Edit history (v2) of {self.model_name} skips {', '.join(self.skip) or 'nothing'}"
 
 
 # The history's own guard (ADR-0036): every row of control_editevent comes from control_record_edit_v2() above, and

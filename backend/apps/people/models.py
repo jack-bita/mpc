@@ -3,7 +3,7 @@ shop; and what each job may do there: the shop's own roles (Role), the roles a p
 (RoleAssignment), and the extra permissions one person holds (PermissionGrant) (02 §5). And the shop's devices:
 Device, a laptop or phone a manager has paired with the shop, and PairingRequest, a device still waiting for a
 manager's yes, which belongs to no shop yet (AUTH-1). And PinLock, how one person's PIN tries stand on one device
-(AUTH-4).
+(AUTH-4). And DeviceOutage, the offline periods a device reports at its next push, kept as reported (SYNC-5).
 
 A User is the person, not the job: the same person can work at MPC and in its practice shop, and their
 job at each shop (StaffMember) holds the nickname, the status and the PIN, and its roles hang from it.
@@ -23,7 +23,7 @@ from django.db.models.functions import Lower
 
 from apps.core.fields import PhoneField
 from apps.core.languages import Language
-from apps.core.models import Editable, ShopScoped, TimeStamped, UUIDModel
+from apps.core.models import AppendOnly, Editable, ShopScoped, TimeStamped, UUIDModel
 from apps.core.permissions import PERMISSION_CODE_MAX_LENGTH, HeldPermissions, Permission, RoleTemplate
 from apps.people.device_keys import KEY_HASH_LENGTH, KEY_HASH_SHAPE, PAIRING_CODE_ALPHABET, PAIRING_CODE_LENGTH
 from apps.people.pins import FIRST_LOCK_MINUTES, LONGEST_LOCK_MINUTES, PIN_TRIES
@@ -44,6 +44,10 @@ class Font(models.TextChoices):
 # (change_own_settings, apps/people/services.py, UI-9). Everything else about a person is set by the shop or the
 # superuser.
 OWN_SETTINGS = ("language", "font")
+
+# The longest app version a laptop may report at a push (SYNC-5): room for a release number and a git commit's 40
+# letters. Here, so the push's check (apps/sync/api/serializers.py) and the column can't disagree.
+APP_VERSION_LENGTH = 64
 
 
 class UserManager(BaseUserManager["User"]):
@@ -425,7 +429,7 @@ class Device(Editable):
     # `updated_at`, `updated_by` and the `version` that keeps two people's edits apart, for the day a manager renames
     # it (UI-3); the trigger in this table's migration records each change, before and after, but never the key's
     # hash (ADR-0036). Who confirmed it, and when, are the row's `created_by` and `created_at` (02 v1.11). The columns
-    # each sync reports (`last_synced_at`, `unsent_count`...) come with SYNC-5.
+    # each push reports (`last_synced_at`, `unsent_count`, `app_version`) come with SYNC-5.
 
     # What the manager called it, on the device list: "Laptop ya Dawa".
     name = models.CharField(max_length=40)
@@ -444,6 +448,21 @@ class Device(Editable):
     # (apps/people/services.py), at most every few minutes, by itself: its version never moves for it, and its edit
     # history skips it (migration 0008). editable=False: no form or API changes it.
     last_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
+    # What the laptop said about itself at its last push (SYNC-5, 02 §5): when the push arrived, by the server's clock;
+    # how many records it still held unsent, which a drawer's day waits for (M8); and the app's version it runs, as it
+    # names itself. For the device health page (SYNC-14). Empty, all three, until its first push: a made-up 0 would
+    # say "nothing unsent". Moved only by record_sync (apps/people/services.py), at every push, so like last_seen_at:
+    # its version never moves for them, and its edit history skips them (migration 0013).
+    last_synced_at = models.DateTimeField(null=True, blank=True, editable=False)
+    unsent_count = models.PositiveIntegerField(null=True, blank=True, editable=False)
+    app_version = models.CharField(max_length=APP_VERSION_LENGTH, blank=True, editable=False)
+    # The number the laptop's next record should follow (SYNC-5, 02 §17): it numbers its records 1, 2, 3 and never
+    # skips one, so the next is this + 1, and a jump raises a device_gap flag. Mostly the highest it sent; after a
+    # reset that numbers again from 1, the new count's. Empty before its first record. Moved only by the push, record by
+    # record, in each record's own transaction (move_device_number, apps/people/services.py), so a record rolled back
+    # takes its number with it. Moved by every push, as the report above: its version never moves for it, and its
+    # edit history skips it (migration 0014).
+    last_device_seq = models.PositiveBigIntegerField(null=True, blank=True, editable=False)
 
     class Meta(Editable.Meta):
         # Builds on Editable.Meta, so `objects`, with the guard, stays the default manager (CORE-2). The database is
@@ -512,6 +531,31 @@ class Device(Editable):
         # full_clean runs this before the rules above: " Laptop ya Dawa " and "Laptop ya Dawa" are one name on screen.
         super().clean()
         self.name = (self.name or "").strip()
+
+
+class DeviceOutage(AppendOnly):
+    # One offline period a laptop recorded by its own clock, and reported at its next push (SYNC-5; 02 §5): when its
+    # line went, and when it came back. For the device health page (SYNC-14) and the owner's choice on a local hub
+    # (03 AD16). Its id is the laptop's own (ADR-0007), so a push sent again saves each period once. A ledger: written
+    # once, by record_outages (apps/people/services.py), and never changed (ADR-0021); `created_at` is when the server
+    # heard of it. The times are kept as reported, even a period that "ends" before it starts (a clock moved back):
+    # refusing it would refuse the laptop's whole push, records and all, again at every sync.
+
+    # No index of their own, either link: the index below leads with `shop` and then `device` (03 §9), as the answer
+    # log's shop link has none (apps/sync/models.py). PROTECT: nothing is deleted (rule 7), so PROTECT never searches
+    # them. related_name="+": a device's outages are read through the guard.
+    shop = models.ForeignKey("shops.Shop", on_delete=models.PROTECT, related_name="+", db_index=False)
+    device = models.ForeignKey(Device, on_delete=models.PROTECT, related_name="+", db_index=False)
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField()
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so the guard stays the default manager (CORE-2). The health page's question: this
+        # laptop's periods, this week, oldest first.
+        indexes = [models.Index(fields=["shop", "device", "started_at"], name="people_deviceoutage_by_device")]
+
+    def __str__(self) -> str:
+        return f"{self.device_id}: {self.started_at:%Y-%m-%d %H:%M} to {self.ended_at:%H:%M}"
 
 
 class PairingRequest(UUIDModel, TimeStamped):

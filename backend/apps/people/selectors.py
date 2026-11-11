@@ -17,6 +17,9 @@ the same ones: the password's and the PIN's (apps/people/api/staff_session.py), 
 A person who has left counts as no job, not as refused: they aren't anyone at that shop now. A suspended person's job
 still counts, so they can be told why they are stopped.
 
+And one read about the past (SYNC-5): whether a person was working at a given moment, for a record a laptop made
+offline, by its own clock (was_working_at): not suspended then, and not yet gone.
+
 A PIN's badge names its job, so it needs no choice of shop. Its shop still comes through a door, the device key's, on
 every visit (AUTH-4):
 
@@ -32,12 +35,15 @@ every visit (AUTH-4):
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, time, timedelta
+from typing import cast
 from zoneinfo import ZoneInfo
 
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
+from apps.control.models import AuditAction, AuditEvent
+from apps.core.links import link_type_of
 from apps.core.settings_registry import IDLE_MINUTES
 from apps.core.tenancy import shop_context
 from apps.people.device_keys import hash_device_key
@@ -59,6 +65,47 @@ class LoginRefused(Exception):
 def shop_today(shop: Shop) -> date:
     # Today in the shop's own time zone (02 §1), not the server's UTC: at 01:00 in Arusha, UTC is still on yesterday.
     return timezone.localdate(timezone=ZoneInfo(shop.timezone))
+
+
+# The audit trail's lines that move a person between active and suspended (02 §5). Leaving, final, is read apart.
+_SUSPENSION_MOVES = (AuditAction.STAFF_SUSPEND, AuditAction.STAFF_UNSUSPEND)
+
+
+def was_working_at(staff: StaffMember, moment: datetime) -> bool:
+    """Whether `staff` could work at `moment`: not suspended then, and not yet gone (SYNC-5, X2; Jack: leaving counts
+    as suspension does). For a record made offline, by the laptop's clock: the person's status now says nothing of when
+    the record was made. Read from the audit trail, which keeps every suspension and return with the server's time (T3),
+    and from the person's last day."""
+    # Read as stored now, not from the copy handed in: the push reads a record's maker before the record's own
+    # transaction, and a leaving recorded in between would be missed (SYNC-5's review).
+    status, left_on = StaffMember.objects.filter(pk=staff.pk).values_list("status", "left_on").get()
+    if status == StaffStatus.LEFT and moment >= _gone_from(staff, cast(date, left_on)):
+        return False
+    # The last suspension or return at or before `moment`, if any: a person is born active (02 §5), so none means
+    # they were working.
+    last = (
+        AuditEvent.objects.filter(
+            subject_type=link_type_of(staff), subject_id=staff.pk, action__in=_SUSPENSION_MOVES, created_at__lte=moment
+        )
+        .order_by("-created_at", "-id")
+        .values_list("action", flat=True)
+        .first()
+    )
+    return last != AuditAction.STAFF_SUSPEND
+
+
+def _gone_from(staff: StaffMember, last_day: date) -> datetime:
+    # When a person who left stopped working: the earlier of two times. When their leaving was recorded, as it takes
+    # effect at once (their PIN stops); or the start of the day after their last day, in the shop's own time zone, as
+    # the owner may record on Monday that Friday was the last day, and a Saturday sale is not theirs to make.
+    zone = ZoneInfo(staff.shop.timezone)
+    after_last_day = datetime.combine(last_day + timedelta(days=1), time.min, tzinfo=zone)
+    recorded = (
+        AuditEvent.objects.filter(subject_type=link_type_of(staff), subject_id=staff.pk, action=AuditAction.STAFF_LEAVE)
+        .values_list("created_at", flat=True)
+        .first()
+    )
+    return after_last_day if recorded is None else min(recorded, after_last_day)
 
 
 def idle_lock_minutes(shop: Shop) -> int:

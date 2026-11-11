@@ -455,6 +455,23 @@ export interface components {
         };
         /** @enum {unknown} */
         NullEnum: null;
+        OutageEnvelopeRequest: {
+            /**
+             * Format: uuid
+             * @description The period's id, made on the laptop (UUIDv7).
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When the laptop's line went, by its clock.
+             */
+            started_at: string;
+            /**
+             * Format: date-time
+             * @description When it came back, by its clock.
+             */
+            ended_at: string;
+        };
         OwnSettingsAnswer: {
             readonly language: components["schemas"]["LanguageEnum"];
             readonly font: components["schemas"]["FontEnum"];
@@ -556,6 +573,11 @@ export interface components {
         PushAnswerStatusEnum: "accepted" | "duplicate" | "invalid" | "retry";
         PushBatchRequest: {
             documents: components["schemas"]["PushedEnvelopeRequest"][];
+            /** @description The app's version on the laptop. */
+            app_version: string;
+            /** @description How many records the laptop holds unsent, besides these. */
+            unsent_count: number;
+            outages: components["schemas"]["OutageEnvelopeRequest"][];
         };
         PushedAnswer: {
             /** Format: uuid */

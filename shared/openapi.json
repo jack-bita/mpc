@@ -1530,6 +1530,31 @@
                     null
                 ]
             },
+            "OutageEnvelopeRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The period's id, made on the laptop (UUIDv7)."
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the laptop's line went, by its clock."
+                    },
+                    "ended_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When it came back, by its clock."
+                    }
+                },
+                "required": [
+                    "ended_at",
+                    "id",
+                    "started_at"
+                ]
+            },
             "OwnSettingsAnswer": {
                 "type": "object",
                 "properties": {
@@ -1836,10 +1861,32 @@
                             "$ref": "#/components/schemas/PushedEnvelopeRequest"
                         },
                         "maxItems": 100
+                    },
+                    "app_version": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The app's version on the laptop.",
+                        "maxLength": 64
+                    },
+                    "unsent_count": {
+                        "type": "integer",
+                        "maximum": 2147483547,
+                        "minimum": 0,
+                        "description": "How many records the laptop holds unsent, besides these."
+                    },
+                    "outages": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OutageEnvelopeRequest"
+                        },
+                        "maxItems": 100
                     }
                 },
                 "required": [
-                    "documents"
+                    "app_version",
+                    "documents",
+                    "outages",
+                    "unsent_count"
                 ]
             },
             "PushedAnswer": {
@@ -1920,7 +1967,7 @@
                     },
                     "device_seq": {
                         "type": "integer",
-                        "maximum": 9223372036854775807,
+                        "maximum": 999999999998,
                         "minimum": 1,
                         "format": "int64",
                         "description": "The laptop's number for it."

@@ -10,7 +10,8 @@ with a note in a person's own words, who and when kept with it (Jack, 29 Oct 202
 explain_flag may be called again and again: each person a flag names may explain it, and every explanation
 is kept. Each step names the person who took it: a flag is raised by the system as often as not, but only a
 person explains or closes one, and never one who is named on it. Nothing moves a flag back, and nothing
-touches a closed one.
+touches a closed one. One exception, Jack's (SYNC-5; 02 v1.22): resolve_flag_by_system closes a missing-number
+flag once its records arrive, with a note of the system's own, naming no person.
 
 audit() writes one line of the audit trail (03 §5.16): who did what to which row, what it changed, and why. The
 service that does the action calls it inside its own transaction, so the action and its line are kept together
@@ -48,6 +49,12 @@ from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop
 
 # A flag in one of these takes no more notes: it is closed for good.
 _CLOSED = {FlagStatus.RESOLVED, FlagStatus.DISMISSED}
+
+# The kinds the system closes by itself, each with the code of the note it writes (Jack, SYNC-5; 02 v1.22): a
+# missing-number flag, once every record it waited for has come. A code, not words: a person's note is kept as they
+# wrote it, in their language, but the system has no language of its own, so the review screen shows the code's
+# sentence in the reader's (ADR-0040; the sentences come with that screen, CTRL-4). Every other kind waits for a person.
+SYSTEM_NOTES = {FlagKind.DEVICE_GAP: "flag.device_gap_filled"}
 
 
 def raise_flag(
@@ -168,6 +175,41 @@ def audit(
             device_id=current_device_id(shop_id),
         )
     )
+
+
+def resolve_flag_by_system(flag: Flag) -> Flag:
+    """Close `flag` as the system, with the note its kind names in SYSTEM_NOTES and no person: for a flag whose
+    problem went away by itself, as a missing number that arrives late (02 v1.22). Refused for any other kind. A
+    flag already closed, by a manager or by another push, is handed back as it is, with no second note."""
+    code = SYSTEM_NOTES.get(FlagKind(flag.kind))
+    if code is None:
+        # A bug in the calling code: every other flag is closed by a person (02 §13, v1.8).
+        raise ValueError(f"A {flag.kind} flag is closed by a person, never by the system.")
+    if flag.kind == FlagKind.DEVICE_GAP and not _waits_for_records(flag):
+        # A device's numbers that went back (a reset: `expected` above `actual`) wait for no record, so none can close
+        # the flag: a person looks at what happened. Refused here too, not only by the push, which never asks.
+        raise ValueError("A device_gap of numbers gone back is closed by a person, never by the system.")
+    _check_shop(flag.shop_id, None)
+    with transaction.atomic():
+        # Read again and locked, as a person's step is (_step): a manager closing it at this moment takes turns with
+        # the system, and the second finds it closed.
+        fresh = Flag.objects.select_for_update().get(pk=flag.pk)
+        if fresh.status in _CLOSED:
+            return fresh
+        # No `created_by`: the system acted. The note is kept for good, like every note (ADR-0021), so the owner sees
+        # why the flag closed, and when.
+        _saved(FlagNote(shop_id=fresh.shop_id, flag=fresh, step=FlagStep.RESOLVED, text=code))
+        fresh.status = FlagStatus.RESOLVED
+        # Only the status changed, as in _step: only its rule is checked again.
+        fresh.full_clean(exclude=[field.name for field in Flag._meta.fields if field.name != "status"])
+        fresh.save(update_fields=["status"])
+    return fresh
+
+
+def _waits_for_records(gap: Flag) -> bool:
+    # A device_gap waits for records when the number the server awaited is below the one that came: the numbers between
+    # are the missing ones. Above it, the device's count went back, and nothing is missing.
+    return gap.expected is not None and gap.actual is not None and gap.expected < gap.actual
 
 
 def _step(flag: Flag, step: FlagStep, *, text: str, by: Actor, note_id: uuid.UUID | None) -> Flag:

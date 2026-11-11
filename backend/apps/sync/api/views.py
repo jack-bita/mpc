@@ -20,6 +20,7 @@ from rest_framework.response import Response
 
 from apps.people.api.base import DeviceView
 from apps.people.models import Device
+from apps.people.services import Outage
 from apps.sync import pull
 from apps.sync.api.serializers import BootstrapAnswer, PullAnswer, PullQuery, PushAnswer, PushBatch
 from apps.sync.bootstrap import snapshot
@@ -73,6 +74,13 @@ class PushView(DeviceView):
         # A broken envelope, or more than 100: 400 invalid, under the field, through the one error handler.
         sent.is_valid(raise_exception=True)
         documents = [Sent(**document) for document in sent.validated_data["documents"]]
-        # The server's clock as the push arrived, one time for the whole batch.
-        answers = push(device, documents, received_at=timezone.now())
+        # The server's clock as the push arrived, one time for the whole batch and the laptop's report.
+        answers = push(
+            device,
+            documents,
+            received_at=timezone.now(),
+            unsent_count=sent.validated_data["unsent_count"],
+            app_version=sent.validated_data["app_version"],
+            outages=[Outage(**outage) for outage in sent.validated_data["outages"]],
+        )
         return Response(PushAnswer({"answers": answers}).data)

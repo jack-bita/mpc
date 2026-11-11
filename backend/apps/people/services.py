@@ -9,10 +9,15 @@ and a person is given a role, or one extra permission, on one side or on all of 
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
 (start_pairing), a manager with device.manage says yes (confirm_pairing), renames it (rename_device, AUTH-5), and
 blocks it, or lets it work again (block, unblock); and each time its key reaches the server, it is noted as seen
-(note_device_seen, AUTH-2). And a person's own choices for their screens, their language and font, which only they
+(note_device_seen, AUTH-2). What a laptop says about itself at each push is kept on its row and beside it: its unsent
+count, app version and last sync (record_sync), and the offline periods it reports (record_outages); and its last
+number, read and locked, then moved on, inside each pushed record's own transaction (lock_device_numbers,
+move_device_number) (SYNC-5). And a person's own choices for their screens, their language and font, which only they
 change (change_own_settings, UI-9). And the superuser's edit of a person in the admin, which every shop where they work
 hears of when it touches what its laptops show: their name, language, or switch-off (change_person, SYNC-15).
-Each action runs in one transaction, checks that every row it links to belongs to the same shop (T1),
+Each action runs in one transaction, except five: note_device_seen, record_sync and move_device_number are one UPDATE
+each, atomic on its own; record_outages is one INSERT; and lock_device_numbers locks inside its caller's transaction,
+which it refuses to run without. Each checks that every row it links to belongs to the same shop (T1),
 and refuses a broken rule with a ValidationError that carries a code (ADR-0032); CORE-6's error handler
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
 who and why, in the same transaction (apps/control/services.py, audit): the change and its line are kept
@@ -72,6 +77,7 @@ from apps.people.login_doors import shop_of_device_key, shops_of_person
 from apps.people.models import (
     OWN_SETTINGS,
     Device,
+    DeviceOutage,
     DeviceStatus,
     PairingRequest,
     PermissionGrant,
@@ -921,6 +927,81 @@ def note_device_seen(device: Device, *, at: datetime) -> bool:
     if written:
         device.last_seen_at = at
     return bool(written)
+
+
+def record_sync(device: Device, *, at: datetime, unsent_count: int, app_version: str) -> bool:
+    """Keep what a laptop said about itself as it pushed at `at` (SYNC-5): how many records it still holds unsent,
+    and the app version it runs. Called by the push at its end, an empty push too (apps/sync/push.py). True when it
+    was written; False when a newer push's report is already there."""
+    _check_shop(device.shop_id, None)
+    # One UPDATE of these three columns, as note_device_seen's: the row's version and `updated_at` stay as they were,
+    # so a rename screen opened a minute ago is never refused (409) because the laptop synced, and the edit history
+    # skips them (migration 0013). The time is in the UPDATE too: two pushes of one laptop at the same moment, the
+    # older one slower, and its older report would say "3 unsent" of a laptop that has sent them all. A single UPDATE
+    # is atomic on its own, so it needs no transaction of ours.
+    older = Q(last_synced_at__isnull=True) | Q(last_synced_at__lte=at)
+    written = Device.objects.filter(older, pk=device.pk).update(
+        last_synced_at=at, unsent_count=unsent_count, app_version=app_version
+    )
+    if written:
+        device.last_synced_at, device.unsent_count, device.app_version = at, unsent_count, app_version
+    return bool(written)
+
+
+@dataclass(frozen=True)
+class Outage:
+    # One offline period as a laptop reported it at a push (SYNC-5): its id, made on the laptop (ADR-0007), and when
+    # its line went and came back, by its clock, in UTC.
+    id: uuid.UUID
+    started_at: datetime
+    ended_at: datetime
+
+
+def record_outages(device: Device, outages: Sequence[Outage]) -> None:
+    """Keep each offline period a laptop reported at a push, once each (SYNC-5): a push sent again, or a period listed
+    twice, keeps one row per id. Called by the push at its end (apps/sync/push.py)."""
+    _check_shop(device.shop_id, None)
+    # By id, so a period listed twice in one push is one row.
+    rows = {
+        outage.id: DeviceOutage(
+            id=outage.id,
+            shop_id=device.shop_id,
+            device=device,
+            started_at=outage.started_at,
+            ended_at=outage.ended_at,
+        )
+        for outage in outages
+    }
+    # One INSERT ... ON CONFLICT DO NOTHING: an id already kept is left as it is, whichever shop holds it. This shop's
+    # is the same period sent again, or a twin push at the same moment; another shop's is left out, with no error and
+    # no word of that shop's row, as a report on a laptop's health must never stop its push (03 §5.4). No full_clean:
+    # every field is a time or the laptop's own id, checked by the push's route.
+    DeviceOutage.objects.bulk_create(rows.values(), ignore_conflicts=True)
+
+
+def lock_device_numbers(device: Device) -> int | None:
+    """The number the device's next record should follow, None if the server never kept one (a new device, or one that
+    pushed before SYNC-5), with the device's row locked until the caller's transaction ends (SYNC-5). Two pushes of
+    one laptop at the same moment take turns: the second reads the number the first left, not one from before it.
+    Called by the push at the start of each record's transaction (apps/sync/push.py)."""
+    _check_shop(device.shop_id, None)
+    if not transaction.get_connection().in_atomic_block:
+        # Outside a transaction the lock would end with this one query, and two pushes could read the same number.
+        raise TransactionManagementError("lock_device_numbers locks until the transaction ends: open one first.")
+    # no_key, as block's: other visits insert rows that link to the device as this push runs, and each such insert
+    # takes a light lock on it (FOR KEY SHARE), which this one lets through: a PIN try on this laptop (PinLock), the
+    # audit and edit lines that name it (X3). A full lock would make each of them wait for this whole record's
+    # transaction. Another push of this same laptop waits here all the same, as it must (SYNC-5's review).
+    return Device.objects.select_for_update(no_key=True).values_list("last_device_seq", flat=True).get(pk=device.pk)
+
+
+def move_device_number(device: Device, number: int) -> None:
+    """Make `number` the one the device's next record should follow. Inside the transaction lock_device_numbers
+    locked the row in, so a record rolled back takes its number with it. One UPDATE of this one column, as
+    record_sync's: the row's version stays, and the edit history skips it (migration 0014)."""
+    _check_shop(device.shop_id, None)
+    Device.objects.filter(pk=device.pk).update(last_device_seq=number)
+    device.last_device_seq = number
 
 
 def _set_device_status(

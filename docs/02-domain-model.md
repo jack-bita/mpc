@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.21 · 10 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.22 · 11 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -47,6 +47,8 @@
 **Changes in v1.20** (5 Nov 2026, the design-system cards): a choice by Jack. A person's font is on `User`, beside their language, so it follows them to every device (§5, ADR-0039, 04 v1.40). Marked **(v1.20)**.
 
 **Changes in v1.21** (10 Nov 2026, SYNC-4): a new Flag kind, `invalid_document`: a document a device pushed that the server can't save, raised about its line in the push's answer log, a new append-only record (§13, T2; 03 v1.41). A word for a document a device sends: *kumbukumbu* (Jack, §21). Marked **(v1.21)**.
+
+**Changes in v1.22** (11 Nov 2026, SYNC-5): two choices by Jack. A `device_gap` flag closes itself once every number it was missing has arrived: the system resolves it, with a note of its own that says so. It is the one kind the system may close; every other flag is closed by a person, as v1.8 says (§13, §17; 04 v1.57). And X2 covers a person who has left, as it covers one suspended: what they did offline after they left is flagged (§16). Also what SYNC-5 built: a device's last number and its report on itself (§5), and the offline periods it reports, kept as reported and never changed (§5, T2). Marked **(v1.22)**.
 
 ---
 
@@ -242,7 +244,7 @@ A full diagram for GitHub is in Appendix A.
 
 **Device** [R1] ✚ → Shop — a registered shop laptop or phone. (Moved here from `shops` in v1.1.)
 - `name` ("Laptop ya Dawa"), unique in the shop whatever the letter case **(v1.11)**; `code` (used in numbers; never reused: the shop's own counter gives it **(v1.11)**); `home_side`
-- `status`: `active` ⇄ `blocked` **(v1.11)**; `last_seen_at` (the last time its key reached the server, blocked or not, kept to the nearest 5 minutes and outside the edit history **(v1.12)**), `last_synced_at`, `last_device_seq`; `unsent_count` and `app_version`, reported at each sync **(v1.1)**
+- `status`: `active` ⇄ `blocked` **(v1.11)**; `last_seen_at` (the last time its key reached the server, blocked or not, kept to the nearest 5 minutes and outside the edit history **(v1.12)**), `last_synced_at`, `last_device_seq`; `unsent_count` and `app_version`, reported at each sync **(v1.1)**; `last_device_seq` is the number its next record should follow, and `unsent_count` the records it holds besides the push that reported it; all four outside the edit history, as they move at every push **(v1.22)**
 - The hash of its device key, never the key (03 §5.9). Who confirmed it is the row's `created_by` (§1) **(v1.11)**.
 - Only active devices allow PIN login and offline work.
 - Blocking and unblocking need someone with `device.manage` on the device's home side, and a reason, written in the audit trail (T3). Unblocking keeps the device's key, so the records it holds can still arrive (Jack, AUTH-1) **(v1.11)**.
@@ -253,7 +255,7 @@ A full diagram for GitHub is in Appendix A.
 - `code` (8 characters with no look-alikes such as 0/O or 1/I, valid 10 minutes, works once), `expires_at`, the hash of the device's key while it waits, and, once confirmed, the `Device` it became. Confirming moves the hash to the `Device`: from then on the request holds none (Jack, AUTH-2) **(v1.12)**.
 - No shop: until a manager confirms it, the device belongs to no shop, and anyone may ask. Confirming needs `device.manage` on the home side chosen, and makes the `Device` in the manager's own shop (T1).
 
-**DeviceOutage** [R1] ✚ → Device — one offline period the device recorded: `started_at`, `ended_at`, reported at the next sync **(v1.1)**. Feeds the sync health page and the R2 decision on a local hub (03 AD16).
+**DeviceOutage** [R1] ✚ → Device — one offline period the device recorded: `started_at`, `ended_at`, reported at the next sync **(v1.1)**. Feeds the sync health page and the R2 decision on a local hub (03 AD16). Its id is made on the device, so a resent report keeps it once; its times are the device's clock, kept as reported, and the row is never changed (T2) **(v1.22)**.
 
 ## 6. Products & prices — module `catalog`
 
@@ -481,6 +483,7 @@ Advances come from `MoneyMovement` `staff_advance` and are deducted in the next 
 - A manager who finds the reason may resolve or dismiss a flag straight from `open`, with their own note. `resolved` and `dismissed` are final **(v1.8)**.
 - Each step is a note, with who and when. Every explanation is kept: each person a flag names may write their own, and none replaces another. Closing a flag needs a note too. Notes are never edited **(v1.8)**.
 - A person a flag names may explain it, but never resolve or dismiss it: Asha can't write "no problem" on her own drawer's shortage. Someone else decides, with `flag.review` on the flag's side (X1) **(v1.8)**.
+- One flag closes itself: a `device_gap`, once every number it was missing has arrived (the record was only late). The system resolves it, with a note of its own saying so, and names no person; the note stays in its history like any other. Every other kind waits for a person (Jack, SYNC-5) **(v1.22)**.
 - Low stock and expiring batches are **alerts** (lists), not flags: nobody has to explain them.
 
 **AuditEvent** [R1] — who did what: `actor`, `device`, `action`, `subject`, `before`, `after`, `reason`, `approval`, `at`. Append-only.
@@ -526,7 +529,7 @@ stateDiagram-v2
 - **Transfer** [R2]: `sent` → `received` | `cancelled` (before received).
 - **Job** [R2]: `waiting` → `in_progress` → `ready` → `collected`; `cancelled` before ready (the customer's goods go back).
 - **PayRun** [R1b]: `draft` → `approved` → `paid`.
-- **Flag:** `open` → `explained` → `resolved` | `dismissed`; it may also close straight from `open` **(v1.8)**.
+- **Flag:** `open` → `explained` → `resolved` | `dismissed`; it may also close straight from `open` **(v1.8)**. A `device_gap` resolves itself when its missing records arrive (§13) **(v1.22)**.
 - **StaffMember:** `active` ⇄ `suspended` → `left`. **Product, Contact:** `active` ⇄ `archived`. **PaymentAccount:** `active` ⇄ `archived` **(v1.5)**. **Device:** `active` ⇄ `blocked` **(v1.11)**. **PairingRequest:** `waiting` → `confirmed` | `expired` **(v1.11)**.
 
 ## 15. Calculations
@@ -551,7 +554,7 @@ These become database constraints and automated tests.
 
 **Tenancy and history**
 - **T1** Every record (except `User`, `Unit`, the `Shop` itself **(v1.3)** and a `PairingRequest` **(v1.11)**) has a shop, and only points at records of the same shop.
-- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** and the answers the push keeps **(v1.21)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
+- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** the answers the push keeps **(v1.21)** and the offline periods devices report **(v1.22)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
 - **T3** Nothing is deleted: cancel, void, suspend, archive — always with who, when and why.
 - **T4** Copied values (price, floor, factor, cost, rate, rules, formula version) never change once the record is confirmed.
 
@@ -589,7 +592,7 @@ These become database constraints and automated tests.
 
 **Access and devices**
 - **X1** Permissions are checked per side.
-- **X2** PIN login works only on active registered devices. A suspended person can't log in once the device has synced; anything they did offline after suspension is flagged.
+- **X2** PIN login works only on active registered devices. A suspended person can't log in once the device has synced; anything they did offline after suspension is flagged. The same for a person who has left: from when it was recorded, or from the day after their last day if that is earlier. "After" is by the record's own time on the device (Jack, SYNC-5) **(v1.22)**.
 - **X3** Every write records the person and the device, when the visit has one: a password or a nightly job has none (§13) **(v1.19)**.
 
 ## 17. Offline and sync
@@ -598,7 +601,7 @@ These become database constraints and automated tests.
 - **Kept on the device:** products, selling units, current and future-dated prices, batches and stock, contacts with balances (as of the last sync), staff names and status, permissions, and the settings in force plus future-dated ones **(v1.1)**. No PIN hashes: each device makes its own offline PIN check the first time a person logs in online on it **(v1.1)**. Buying prices never go to devices.
 - **Safe to resend:** each document travels with its UUID; sending it twice changes nothing.
 - **Accept, then flag:** the server accepts offline documents and flags what it could only check online — negative stock, a duplicate code, over the credit limit, a suspended worker, an archived product. A price changed meanwhile doesn't matter: the sale keeps the device's price.
-- **Missing records:** a gap in a device's `device_seq` → a `device_gap` flag.
+- **Missing records:** a gap in a device's `device_seq` → a `device_gap` flag, which closes itself if the missing records arrive later (§13) **(v1.22)**.
 - **Foods hand-off** ✚: decided in 03 (AD16) — through the server when there is a network; cashier-only on one screen when there isn't; a local hub only if R1's outage numbers justify it **(v1.1)**.
 - **Long power cuts:** when every device is dead, sales go in a numbered paper receipt book and are entered later as late sales, with a manager's approval (03 §6.11) **(v1.1)**.
 
