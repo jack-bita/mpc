@@ -26,10 +26,25 @@ export interface ThisDevice {
   name: string;
   /** Its number in the shop, for receipt numbers (D7): never reused, never changed. */
   code: number;
-  shop: { id: string; name: string; code: string };
+  /** Its shop, with the three things an offline device needs to work out the shop's rules and money:
+   * the time zone that says which day it is there (a rule is in force from a day, SYNC-7), the
+   * currency, and the language the shop speaks. */
+  shop: {
+    id: string;
+    name: string;
+    code: string;
+    /** Like "Africa/Dar_es_Salaam": a laptop's own clock may be set to any zone. */
+    timezone: string;
+    currency: string;
+    language: Language;
+  };
   /** The side it mostly serves, which the counter screens open on. */
   homeSide: { id: string; code: string; name: string };
 }
+
+/** The languages the app speaks (02 §21). */
+type Language = "sw" | "en";
+const LANGUAGES: readonly string[] = ["sw", "en"] satisfies Language[];
 
 /** What the server last said: the device, if it ever said who it is, and whether it is blocked. A block
  * keeps the device, so the lock can say which device the manager must unblock. A device the app never
@@ -79,22 +94,21 @@ export function savedBlocked(): boolean {
 
 // A copy we can't read, written by another version of the app or by hand, reads as nothing saved: the
 // next check asks the server, which knows. Better that than a top bar naming a shop wrongly.
+//
+// But a block is kept even when the device beside it can't be read: a copy saved by an older app, with
+// no time zone yet (SYNC-7), must never unlock a blocked laptop the day the new app arrives. Its device
+// reads as unknown until the next check, as on a device whose copy was wiped.
 function parsed(text: string | null): Standing {
   if (text === null) return NOT_REGISTERED;
   try {
     const value: unknown = JSON.parse(text);
-    return isStanding(value) ? value : NOT_REGISTERED;
+    if (!isMap(value) || typeof value.blocked !== "boolean")
+      return NOT_REGISTERED;
+    const device = isThisDevice(value.device) ? value.device : null;
+    return { device, blocked: value.blocked };
   } catch {
     return NOT_REGISTERED;
   }
-}
-
-function isStanding(value: unknown): value is Standing {
-  return (
-    isMap(value) &&
-    typeof value.blocked === "boolean" &&
-    (value.device === null || isThisDevice(value.device))
-  );
 }
 
 function isThisDevice(value: unknown): value is ThisDevice {
@@ -108,11 +122,28 @@ function isThisDevice(value: unknown): value is ThisDevice {
     typeof shop.id === "string" &&
     typeof shop.name === "string" &&
     typeof shop.code === "string" &&
+    typeof shop.timezone === "string" &&
+    isTimeZone(shop.timezone) &&
+    typeof shop.currency === "string" &&
+    typeof shop.language === "string" &&
+    LANGUAGES.includes(shop.language) &&
     isMap(homeSide) &&
     typeof homeSide.id === "string" &&
     typeof homeSide.code === "string" &&
     typeof homeSide.name === "string"
   );
+}
+
+// A zone the browser knows: a name it doesn't would make every rule's day fail to work out (rules.ts), on
+// every screen that reads one. Asked once, as the copy is read, so a bad name reads as no device, and the
+// next check puts it right.
+function isTimeZone(name: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // A plain JSON object: not nothing, and not a list, which typeof also calls "object".

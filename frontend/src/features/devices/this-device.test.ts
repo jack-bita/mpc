@@ -54,6 +54,11 @@ describe("the device's saved copy", () => {
       JSON.stringify(DAWA_LAPTOP),
       stored({ ...DAWA_LAPTOP, homeSide: undefined }),
       stored({ ...DAWA_LAPTOP, code: "1" }),
+      stored({ ...DAWA_LAPTOP, shop: { ...DAWA_LAPTOP.shop, language: "fr" } }),
+      stored({
+        ...DAWA_LAPTOP,
+        shop: { ...DAWA_LAPTOP.shop, timezone: "Africa/Mabatini" },
+      }),
       stored([DAWA_LAPTOP]),
       JSON.stringify({ device: DAWA_LAPTOP, blocked: "yes" }),
     ]) {
@@ -61,6 +66,31 @@ describe("the device's saved copy", () => {
       expect(savedDevice()).toBeNull();
       expect(savedBlocked()).toBe(false);
     }
+  });
+
+  it("reads a copy saved before the shop's time zone was kept as no device", () => {
+    // An older app saved the shop with its id, name and code only (UI-3): its rules can't be worked
+    // out without the shop's day, so the next check fills the copy again.
+    const { id, name, code } = DAWA_LAPTOP.shop;
+    const oldShop = { id, name, code };
+    window.localStorage.setItem(
+      DEVICE_STORAGE_KEY,
+      stored({ ...DAWA_LAPTOP, shop: oldShop }),
+    );
+
+    expect(savedDevice()).toBeNull();
+  });
+
+  it("keeps the block of a copy whose device it can't read", () => {
+    // A blocked laptop must stay locked the day a new app arrives, even if the old app's copy of the
+    // device no longer reads.
+    window.localStorage.setItem(
+      DEVICE_STORAGE_KEY,
+      stored({ ...DAWA_LAPTOP, homeSide: undefined }, true),
+    );
+
+    expect(savedBlocked()).toBe(true);
+    expect(savedDevice()).toBeNull();
   });
 
   it("keeps a block, with the device it was known as", () => {

@@ -7,6 +7,10 @@
 // minutes while the app is open, so a rename, a block or an unblock shows soon. The answer is saved in
 // this-device.ts, which the top bar and the lock read.
 //
+// Each answer that names a working device also starts a sync of its shop's database (SYNC-7, sync.ts),
+// so an office change reaches the counter at the next check. The check and its moments are the trigger
+// until SYNC-9 brings sync's own (03 §6.5).
+//
 // A block also shows at the device's next request of any kind: every answer in the store of server
 // answers is watched for device.blocked. A PIN session's office routes send it as a 403 (AUTH-4). Sync's
 // pull and push (SYNC-7, SYNC-8) won't go through the store, so nothing here sees their answers: each
@@ -27,7 +31,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 import { api } from "@/api/client";
-import { answerOf, ApiRefusal } from "@/api/refusal";
+import { syncShop } from "@/offline/sync/sync";
+import { answerOf, ApiRefusal, NoConnection } from "@/api/refusal";
 import type { components } from "@/api/schema";
 
 import { saveBlocked, saveDevice, type ThisDevice } from "./this-device";
@@ -49,7 +54,14 @@ function fromAnswer(me: DeviceMe): ThisDevice {
     id: me.device.id,
     name: me.device.name,
     code: me.device.code,
-    shop: { id: me.shop.id, name: me.shop.name, code: me.shop.code },
+    shop: {
+      id: me.shop.id,
+      name: me.shop.name,
+      code: me.shop.code,
+      timezone: me.shop.timezone,
+      currency: me.shop.currency,
+      language: me.shop.default_language,
+    },
     homeSide: {
       id: me.home_side.id,
       code: me.home_side.code,
@@ -98,11 +110,24 @@ export async function checkThisDevice(): Promise<ThisDevice | null> {
   }
 }
 
+/**
+ * What a failed sync leaves. Every failure waits for the next check, which tries again from where the
+ * last one stopped. The server's answers and a dropped network are part of a shop's day: a block or a
+ * "not registered" is kept already (answer.ts), and the rest pass. Anything else is no answer of the
+ * server's: an app older than the server (AppTooOld, which SYNC-13 turns into an update), or a bug. It
+ * would fail again at every check with no one the wiser, so it goes to the console, where a developer
+ * looking at a laptop that stopped syncing finds it.
+ */
+export function reportSyncFailure(error: unknown): void {
+  if (error instanceof ApiRefusal || error instanceof NoConnection) return;
+  console.error("sync failed", error);
+}
+
 /** Keeps the device's saved copy up to date. Shows nothing; the root layout puts it on every page. */
 export function DeviceCheck() {
   const client = useQueryClient();
 
-  useQuery({
+  const { data: device, dataUpdatedAt } = useQuery({
     queryKey: DEVICE_CHECK,
     queryFn: checkThisDevice,
     refetchInterval: DEVICE_CHECK_EVERY,
@@ -111,6 +136,14 @@ export function DeviceCheck() {
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
+
+  // After every answer naming a working device, a sync. dataUpdatedAt moves at each answer, even one the
+  // same as the last, so a laptop that shows no change in itself still pulls the shop's.
+  const shopId = device?.shop.id;
+  useEffect(() => {
+    if (shopId === undefined) return;
+    syncShop(shopId).catch(reportSyncFailure);
+  }, [shopId, dataUpdatedAt]);
 
   // Every read and every change through the store, any screen's, is watched for a block, so the lock
   // comes at the device's very next request, not at the next check. Each store tells its watchers of

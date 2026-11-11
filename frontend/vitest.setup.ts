@@ -9,8 +9,10 @@
 import "fake-indexeddb/auto";
 
 import { cleanup } from "@testing-library/react";
+import Dexie from "dexie";
 import { afterEach, vi } from "vitest";
 
+import { closeShopDatabases } from "@/offline/this-shop";
 import { resetFakeServer } from "@/test/fake-server";
 import { resetRouter } from "@/test/router";
 
@@ -25,8 +27,14 @@ vi.mock("next/navigation", async (importOriginal) => {
   };
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // The shop databases a test filled, through the app's own shared copies (src/offline/this-shop.ts),
+  // or as the device check's sync filled them (SYNC-7): closed, then deleted, so the next test opens on
+  // a laptop that never synced. An open database would block its own delete.
+  closeShopDatabases();
+  for (const { name } of await indexedDB.databases())
+    if (name !== undefined) await Dexie.delete(name);
   // The language a test chose is kept in the browser's storage (src/i18n/language.ts): forget it, so
   // the next test opens in Swahili, as a new device does. Tests that run in plain Node have no storage.
   // The same for the device's saved copy (src/features/devices/this-device.ts), so each test starts as
