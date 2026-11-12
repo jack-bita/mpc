@@ -76,12 +76,17 @@ describe("saving a document", () => {
   it("gives two saves at the same moment two numbers", async () => {
     // Asha and Baraka tap at once, in two tabs: each save reads the number inside its own transaction,
     // so the second waits for the first, and never reads the same #57.
+    // Each tab opens the database itself, so each save comes through a connection of its own. Opened
+    // before the taps, as a tab's is: opened at the tap, its save would only start once the first ended.
     await filledLaptop();
+    const otherTab = openShopDatabase(DAWA_LAPTOP.shop.id);
+    await otherTab.open();
 
     const both = await Promise.all([
       saveDocument(db, CLOCK_IN),
-      saveDocument(db, CLOCK_IN),
+      saveDocument(otherTab, CLOCK_IN),
     ]);
+    otherTab.close();
 
     expect(both.map((saved) => saved.device_seq).sort()).toEqual([58, 59]);
     expect(await readLastDeviceSeq(db)).toBe(59);
