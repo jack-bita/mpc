@@ -1,9 +1,9 @@
 // sync.test.ts — one sync of the laptop's shop (SYNC-7): the bootstrap once, then the push (SYNC-8), then
 // pulls; one asked for while another runs runs once more after it, and asks beyond that join it (SYNC-9);
 // a failed one leaves the next free to run.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiRefusal } from "@/api/refusal";
+import { ApiRefusal, NoConnection } from "@/api/refusal";
 import {
   saveBlocked,
   saveDevice,
@@ -16,6 +16,7 @@ import { ASHA, BOOTSTRAP } from "@/test/shop-lists";
 
 import { saveDocument } from "../outbox";
 import { shopDatabase } from "../this-shop";
+import { SYNC_CALL_LIMIT_MS } from "./answer";
 import { readCursor } from "./meta";
 import { syncShop } from "./sync";
 
@@ -31,6 +32,11 @@ const PUSH = "/api/sync/v1/push/";
 // Every sync pushes first: with nothing waiting, the push is the laptop's report alone (push.loop.test.ts).
 beforeEach(() => {
   answer("POST", PUSH, { status: 200, body: { answers: [] } });
+});
+
+afterEach(() => {
+  // The time limit a test stood in for (AbortSignal.timeout), back as the browser has it.
+  vi.restoreAllMocks();
 });
 
 const emptyPage = (cursor: number) => ({
@@ -252,6 +258,34 @@ describe("a sync", () => {
     await Promise.all([first, second]);
 
     expect(paths()).toEqual([PUSH, PULL]);
+  });
+
+  it("gives up on a call left with no answer, as no connection", async () => {
+    // The Wi-Fi is up and its internet gone: the push hangs. Its time limit (2 minutes, stood in for
+    // here) ends it as a lost connection, so the sync ends and the lock goes on to the other tabs.
+    await filledLaptop();
+    const limit = new AbortController();
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(limit.signal);
+    answer(
+      "POST",
+      PUSH,
+      (request) =>
+        new Promise<Response>((_, reject) => {
+          request.signal.addEventListener("abort", () =>
+            reject(request.signal.reason),
+          );
+        }),
+    );
+    answer("GET", PULL, emptyPage(130));
+
+    const sync = syncShop(SHOP);
+    await vi.waitFor(() => expect(paths()).toEqual([PUSH]));
+    limit.abort(new DOMException("No answer in time.", "TimeoutError"));
+
+    await expect(sync).rejects.toBeInstanceOf(NoConnection);
+    expect(timeout).toHaveBeenCalledWith(SYNC_CALL_LIMIT_MS);
   });
 
   it("never joins another shop's sync", async () => {

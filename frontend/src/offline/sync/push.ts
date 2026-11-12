@@ -23,7 +23,7 @@ import type { components } from "@/api/schema";
 import { APP_VERSION } from "@/lib/version";
 
 import type { DocumentRow, OutboxRow, ShopDatabase } from "../db";
-import { syncAnswer } from "./answer";
+import { syncAnswer, syncCallLimit } from "./answer";
 
 type Envelope = components["schemas"]["PushedEnvelopeRequest"];
 type PushedAnswer = components["schemas"]["PushedAnswer"];
@@ -74,6 +74,7 @@ export async function push(db: ShopDatabase): Promise<PushResult> {
     const sentAt = new Date().toISOString();
     const { answers } = await syncAnswer(
       api.POST("/api/sync/v1/push/", {
+        signal: syncCallLimit(),
         body: {
           documents: batch.map(envelope),
           sent_at: sentAt,

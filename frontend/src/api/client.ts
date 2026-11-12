@@ -90,9 +90,10 @@ export function createApiClient(options: ClientOptions = {}) {
 // copy (clone()), so openapi-fetch still reads it as usual; our answers are small JSON, kept whole anyway.
 //
 // A read the store cancelled, as its screen closed, throws too: that stays a cancel, as TanStack Query
-// expects. Any aborted signal counts as a cancel, so a time limit added later (AbortSignal.timeout())
-// would read as a bug: map it to NoConnection then. And a single call given its own fetch
-// (api.GET(path, { fetch })) skips this check, as openapi-fetch takes that one over the client's.
+// expects. A call that ran out of time (AbortSignal.timeout(), as the sync's calls have, SYNC-9) is no
+// cancel: nobody stopped it, no answer came in time, so it is NoConnection, as a dropped network is. And
+// a single call given its own fetch (api.GET(path, { fetch })) skips this check, as openapi-fetch takes
+// that one over the client's.
 function noConnectionWhenNoAnswer(
   given: ClientOptions["fetch"],
 ): (request: Request) => Promise<Response> {
@@ -103,10 +104,21 @@ function noConnectionWhenNoAnswer(
       await response.clone().arrayBuffer();
       return response;
     } catch (cause) {
-      if (request.signal.aborted) throw cause;
+      if (request.signal.aborted && !ranOutOfTime(request.signal)) throw cause;
       throw new NoConnection(cause);
     }
   };
+}
+
+// AbortSignal.timeout() stops a call with a "TimeoutError"; a cancel stops it with an "AbortError". Read
+// by name, as the error may come from another part of the browser than this page's DOMException.
+function ranOutOfTime(signal: AbortSignal): boolean {
+  const reason: unknown = signal.reason;
+  return (
+    typeof reason === "object" &&
+    reason !== null &&
+    (reason as { name?: unknown }).name === "TimeoutError"
+  );
 }
 
 /** fetch for a route the typed client can't call, like allauth's password routes (UI-5): it throws

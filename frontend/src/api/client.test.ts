@@ -206,6 +206,26 @@ describe("the answers", () => {
     expect(error).not.toBeInstanceOf(NoConnection);
     expect((error as Error).name).toBe("AbortError");
   });
+
+  it("throw NoConnection when a call runs out of time", async () => {
+    // A sync call on a Wi-Fi whose internet is gone: no answer comes, and its time limit stops it
+    // (SYNC-9). Nobody cancelled it, so it is a lost connection, not a cancel.
+    const client = createApiClient({
+      baseUrl: "http://shop.test",
+      fetch: (request: Request) =>
+        new Promise<Response>((_, reject) => {
+          request.signal.addEventListener("abort", () =>
+            reject(request.signal.reason),
+          );
+        }),
+    });
+
+    const error: unknown = await client
+      .GET("/api/v1/shops/sides/", { signal: AbortSignal.timeout(10) })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NoConnection);
+  });
 });
 
 // For routes outside the API's description, like allauth's password routes (UI-5), which the typed

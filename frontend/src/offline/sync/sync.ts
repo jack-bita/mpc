@@ -112,8 +112,8 @@ export function syncLockName(shopId: string): string {
  * Chrome and Edge, the shop's browsers (03 §7.3), have had it for years. A browser without it, and the
  * tests' jsdom, sync as before: one at a time in each tab.
  *
- * Honest limit: a call that never ends holds the lock, and every other tab waits behind it. The server
- * ends any call after 30 seconds (gunicorn's own limit), and the browser ends one whose network drops.
+ * A call left hanging would hold the lock, and every other tab would wait behind it: each sync call gives
+ * up after 2 minutes (syncCallLimit, answer.ts), as if the network had dropped, and the lock goes on.
  */
 async function inTurn(
   shopId: string,

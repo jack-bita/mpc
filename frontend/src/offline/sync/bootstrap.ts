@@ -12,7 +12,7 @@
 import { api } from "@/api/client";
 
 import type { ShopDatabase } from "../db";
-import { syncAnswer } from "./answer";
+import { syncAnswer, syncCallLimit } from "./answer";
 import { CURSOR, LAST_DEVICE_SEQ, readCursor, readLastDeviceSeq } from "./meta";
 
 /** Whether this database still needs a copy: it has no cursor yet, or no number of its own. A laptop
@@ -46,7 +46,9 @@ export async function needsBootstrap(db: ShopDatabase): Promise<boolean> {
  * checked here, a server change for a later card.
  */
 export async function bootstrap(db: ShopDatabase): Promise<void> {
-  const copy = await syncAnswer(api.GET("/api/sync/v1/bootstrap/"));
+  const copy = await syncAnswer(
+    api.GET("/api/sync/v1/bootstrap/", { signal: syncCallLimit() }),
+  );
 
   await db.transaction(
     "rw",
