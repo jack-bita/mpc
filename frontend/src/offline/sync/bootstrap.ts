@@ -3,6 +3,8 @@
 // A laptop just registered holds nothing: no sides, no staff, no rules, so no counter screen can work.
 // The bootstrap asks for everything at once, `GET /api/sync/v1/bootstrap/`, with the cursor that copy is
 // valid at, and saves it all. From then on, pulls bring only what changed after that cursor (pull.ts).
+// The answer also says where the laptop's own count stands, so its next record carries on from there,
+// never from 1 again (SYNC-8).
 //
 // The server reads its cursor first and then the lists, so the lists may already hold a change numbered
 // after it. That change comes again in the first pull, which saves the record as it is then: nothing is
@@ -11,11 +13,16 @@ import { api } from "@/api/client";
 
 import type { ShopDatabase } from "../db";
 import { syncAnswer } from "./answer";
-import { CURSOR, readCursor } from "./meta";
+import { CURSOR, LAST_DEVICE_SEQ, readCursor, readLastDeviceSeq } from "./meta";
 
-/** Whether this database still needs its first copy: it has no cursor yet. */
+/** Whether this database still needs a copy: it has no cursor yet, or no number of its own. A laptop
+ * filled before the bootstrap named its last number (SYNC-7's) has a cursor but no number, and could
+ * never save a document (outbox.ts): it is filled again, once, which is safe, as a bootstrap empties
+ * each list before it fills it and keeps the larger number. */
 export async function needsBootstrap(db: ShopDatabase): Promise<boolean> {
-  return (await readCursor(db)) === null;
+  return (
+    (await readCursor(db)) === null || (await readLastDeviceSeq(db)) === null
+  );
 }
 
 /**
@@ -63,6 +70,14 @@ export async function bootstrap(db: ShopDatabase): Promise<void> {
       await db.setting.bulkPut(copy.setting);
       await db.setting_keys.clear();
       await db.setting_keys.bulkPut(copy.setting_keys);
+      // The laptop's own count: the server's, unless this laptop is ahead of it. Filled again (SYNC-13)
+      // with records still waiting in its outbox, it has numbered past what the server has seen, and the
+      // server's number would hand one of them out a second time.
+      const mine = (await readLastDeviceSeq(db)) ?? 0;
+      await db.meta.put({
+        key: LAST_DEVICE_SEQ,
+        value: Math.max(mine, copy.last_device_seq),
+      });
       // Last, inside the same transaction: the cursor says the copy is whole.
       await db.meta.put({ key: CURSOR, value: copy.cursor });
     },

@@ -130,6 +130,9 @@ class BootstrapAnswer(serializers.Serializer[Any]):
     cursor = serializers.IntegerField(
         min_value=0, help_text="The shop's last change number this copy holds: the first pull asks for what came after."
     )
+    last_device_seq = serializers.IntegerField(
+        min_value=0, help_text="The laptop's own last number: its next record is this plus one, never 1 again."
+    )
     side = SideRecord(many=True)
     payment_account = PaymentAccountRecord(many=True)
     staff = StaffRecord(many=True)

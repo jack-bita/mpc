@@ -12,6 +12,7 @@ import { render } from "@/test/render";
 import { databaseName } from "@/offline/db";
 import { readCursor } from "@/offline/sync/meta";
 import { AppTooOld } from "@/offline/sync/pull";
+import { BrokenPush } from "@/offline/sync/push";
 import { shopDatabase } from "@/offline/this-shop";
 import { BOOTSTRAP, DAWA_SIDE } from "@/test/shop-lists";
 
@@ -142,6 +143,11 @@ describe("DeviceCheck", () => {
     const renamed = { ...DAWA_SIDE, name: "Duka la Dawa" };
     answer("GET", ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
     answer("GET", "/api/sync/v1/bootstrap/", { status: 200, body: BOOTSTRAP });
+    // Nothing waits to go: the push before the pull is the laptop's report alone (SYNC-8).
+    answer("POST", "/api/sync/v1/push/", {
+      status: 200,
+      body: { answers: [] },
+    });
     answer("GET", "/api/sync/v1/pull/", {
       status: 200,
       body: {
@@ -215,5 +221,22 @@ describe("a failed sync", () => {
     reportSyncFailure(tooOld);
 
     expect(log).toHaveBeenCalledWith("sync failed", tooOld);
+  });
+
+  it("goes to the console when the server refuses a push as broken", () => {
+    // A bug in the sync code (SYNC-8): every later push would be refused the same way.
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const broken = new BrokenPush(
+      new ApiRefusal(400, {
+        code: "invalid",
+        message: "",
+        fields: { "documents.0.device_seq": ["invalid"] },
+        params: {},
+      }),
+    );
+
+    reportSyncFailure(broken);
+
+    expect(log).toHaveBeenCalledWith("sync failed", broken);
   });
 });

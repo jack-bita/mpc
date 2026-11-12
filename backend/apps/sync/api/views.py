@@ -43,7 +43,7 @@ class BootstrapView(DeviceView):
     def get(self, request: Request) -> Response:
         # cast: DeviceView has refused any visit with no device; mypy can't see that.
         device = cast(Device, request.auth)
-        return Response(snapshot(device.shop))
+        return Response(snapshot(device))
 
 
 # Compressed and never cached, as the bootstrap is, for the same reasons: a page of 1,000 changes over a slow line, and

@@ -32,7 +32,7 @@ from django.db.transaction import TransactionManagementError
 from apps.control.models import Flag, FlagKind, FlagNote, FlagStatus, FlagStep
 from apps.control.services import dismiss_flag, explain_flag
 from apps.core.links import LINK_TYPES
-from apps.core.tenancy import shop_context
+from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
 from apps.people.services import lock_device_numbers
 from apps.shops.models import Shop, Side
@@ -40,6 +40,7 @@ from apps.sync import push as push_module
 from apps.sync.document_types import DOCUMENT_TYPES, Document
 from apps.sync.models import PushedDocument
 from apps.sync.push import HIGHEST_DEVICE_SEQ, Answer, Sent, push
+from apps.sync.selectors import highest_pushed_number, last_device_number
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 from tests.probe.documents import TICKET, TICKET_CODE, post_ticket
 from tests.probe.models import Ticket
@@ -104,6 +105,12 @@ def _last(device: Device) -> int | None:
         return Device.objects.get(pk=device.pk).last_device_seq
 
 
+def _counted(device: Device) -> int:
+    # The number the bootstrap tells the laptop its count stands at (SYNC-8), read as the bootstrap reads it.
+    with shop_context(device.shop_id):
+        return last_device_number(device)
+
+
 def test_numbers_in_order_raise_no_flag(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
     # The usual morning: 1, 2, 3, over two pushes. Nothing is missing, so nothing is flagged.
     _push_numbers(device_a, staff_a, 1, 2)
@@ -157,6 +164,52 @@ def test_a_laptop_that_pushed_before_its_numbers_were_kept_counts_on_from_its_la
     _push_numbers(device_a, staff_a, 4)
     assert _gaps(shop_a) == []
     assert _last(device_a) == 4
+
+
+def test_a_new_laptop_has_counted_nothing(device_a: Device) -> None:
+    # A laptop just paired has sent nothing: its bootstrap says 0, so its first record is #1.
+    assert _counted(device_a) == 0
+
+
+def test_a_laptop_counts_on_from_the_number_the_server_keeps(device_a: Device, staff_a: StaffMember) -> None:
+    # The Dawa laptop's database is wiped, and the bootstrap fills it again (SYNC-8): it carries on from the server's
+    # last number, so its next record is #4, never #1 again. #2 came late, after #3: it doesn't pull the count back.
+    _push_numbers(device_a, staff_a, 1, 3)
+    _push_numbers(device_a, staff_a, 2)
+    assert _counted(device_a) == 3
+
+
+def test_a_laptop_that_pushed_before_its_numbers_were_kept_counts_from_its_highest_line(
+    shop_a: Model, device_a: Device, staff_a: StaffMember
+) -> None:
+    # Its row says nothing, as the push's own count reads it (the test above this pair): its answer log says #3.
+    _push_numbers(device_a, staff_a, 1, 2, 3)
+    with shop_context(shop_a):
+        Device.objects.filter(pk=device_a.pk).update(last_device_seq=None)
+    assert _counted(device_a) == 3
+
+
+def test_another_laptops_numbers_are_not_this_ones(
+    shop_a: Shop, side_a: Side, device_a: Device, staff_a: StaffMember
+) -> None:
+    # The office laptop has sent #1 to #5; the Dawa laptop nothing. Each laptop counts on its own (03 §6.3): the Dawa
+    # laptop still starts at #1, or the server would flag its #1 as five records gone.
+    with shop_context(shop_a):
+        office = Device.objects.create(shop=shop_a, home_side=side_a, name="Laptop ya ofisi", code=2, key_hash="b" * 64)
+    _push_numbers(office, staff_a, 1, 2, 3, 4, 5)
+    assert _counted(office) == 5
+    assert _counted(device_a) == 0
+
+
+def test_a_laptops_number_is_read_only_inside_its_shop(device_a: Device, staff_a: StaffMember, shop_b: Shop) -> None:
+    # T1, as every read in apps/sync/selectors.py: asked with another shop open, it fails loudly, never answering
+    # a number of another shop's laptop, nor a quiet 0 that would start its count again from #1.
+    _push_numbers(device_a, staff_a, 1, 2)
+    with shop_context(shop_b):
+        with pytest.raises(ShopMismatch):
+            last_device_number(device_a)
+        with pytest.raises(ShopMismatch):
+            highest_pushed_number(device_a)
 
 
 def test_a_late_record_raises_no_new_flag(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:

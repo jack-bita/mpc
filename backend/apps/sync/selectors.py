@@ -5,7 +5,8 @@ One function per table the registry sends (apps/sync/registry.py), each answerin
 device hold?": every side; the payment accounts in use; the people at work there; each rule's row in force today and
 every later one. The bootstrap sends all of them (SYNC-2); the pull finds a changed record among them, or learns that
 it left the lists (SYNC-3). What each row may show is the registry's fields, not this file's. And the change log's two
-reads: last_change_number, the cursor a copy is valid at, and changes_after, the lines a pull sends.
+reads: last_change_number, the cursor a copy is valid at, and changes_after, the lines a pull sends. And where a
+laptop's own count stands, last_device_number, which the bootstrap sends so a laptop filled again counts on (SYNC-8).
 
 Each reads inside the shop it is given, which must be the one open (T1), and names it in its query too: under
 system_context() the guard shows every shop's rows (03 §5.11).
@@ -14,14 +15,15 @@ system_context() the guard shows every shop's rows (03 §5.11).
 import uuid
 from datetime import date
 
-from django.db.models import Prefetch, QuerySet
+from django.db.models import Max, Prefetch, QuerySet
 
 from apps.core import settings_registry
 from apps.core.models import Change
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
-from apps.people.models import StaffMember, StaffStatus
+from apps.people.models import Device, StaffMember, StaffStatus
 from apps.people.selectors import shop_today
 from apps.shops.models import PaymentAccount, PaymentAccountStatus, Setting, Shop, Side
+from apps.sync.models import PushedDocument
 
 
 def _check_open(shop: Shop) -> None:
@@ -128,3 +130,33 @@ def _rows_in_force_or_later(shop: Shop, today: date) -> list[uuid.UUID]:
         else:
             later.append(row_id)
     return [*in_force.values(), *later]
+
+
+def highest_pushed_number(device: Device) -> int:
+    """The highest number among this laptop's records in the answer log, 0 for a laptop that sent none."""
+    # T1: with another shop open, the guard would hide the laptop's lines and answer a quiet 0, and the laptop would
+    # count again from #1. Refused loudly instead, as every read here.
+    _check_open(device.shop)
+    highest = PushedDocument.objects.filter(shop=device.shop_id, device=device).aggregate(highest=Max("device_seq"))[
+        "highest"
+    ]
+    return highest or 0
+
+
+def last_device_number(device: Device) -> int:
+    """Where the laptop's count stands, the number its next record follows (SYNC-8): the one the server kept (SYNC-5),
+    else the highest in the answer log, for a laptop that pushed before the server kept one, else 0.
+
+    The bootstrap sends it. A browser that frees its storage wipes the laptop's database, its count with it, but keeps
+    the key's cookie: the server's number is the one that survives, so a laptop filled again carries on from it and
+    never numbers from 1 again, which would flag its records and take a sale's number twice (SYNC-5's note).
+
+    Read without the lock the push takes (lock_device_numbers). A laptop filled for the first time saves nothing before
+    its bootstrap, so it sends nothing meanwhile. One filled again may have another tab pushing as it asks, and get a
+    number already behind its own: harmless, as the laptop keeps the larger of the two (bootstrap.ts).
+
+    The row is read afresh rather than from `device`, which its caller may have loaded before a push moved the number.
+    """
+    _check_open(device.shop)
+    kept = Device.objects.filter(shop=device.shop_id, pk=device.pk).values_list("last_device_seq", flat=True).get()
+    return kept if kept is not None else highest_pushed_number(device)

@@ -4,7 +4,8 @@
     nothing, or a made-up key     401 not_authenticated
     a blocked device's key        401 device.blocked
     a paired device's key         200: its shop's sides, accounts, people and rules (the registry's tables), each
-                                  rule's default, and the cursor: the last change number the copy holds
+                                  rule's default, the cursor: the last change number the copy holds, and the
+                                  laptop's own last number, which its count carries on from
 
 The cursor is read before the rows. A change that commits between the two reads is then in the rows, and the device
 pulls it again later, which does no harm. Read after them, it could be counted in the cursor yet missing from the rows,
@@ -92,7 +93,7 @@ def test_bootstrap_has_reference_data(
     response = a_browser(key).get(BOOTSTRAP)
     assert response.status_code == 200
     answer = response.json()
-    assert list(answer) == ["cursor", "side", "payment_account", "staff", "setting", "setting_keys"]
+    assert list(answer) == ["cursor", "last_device_seq", "side", "payment_account", "staff", "setting", "setting_keys"]
     assert [side["id"] for side in answer["side"]] == [str(dawa.pk)]
     assert [account["name"] for account in answer["payment_account"]] == ["Dawa"]  # the side's drawer
     assert [person["id"] for person in answer["staff"]] == [str(manager.pk)]
@@ -122,6 +123,18 @@ def test_bootstrap_cursor_is_the_shops_last_change(
         with shop_context(shop_b), recording_changes(shop_b):
             record_change(side_b)
     assert a_browser(key).get(BOOTSTRAP).json()["cursor"] == start + 2
+
+
+def test_bootstrap_names_the_laptops_last_number(shop_a: Shop, paired: tuple[Device, str]) -> None:
+    # A laptop numbers its records 1, 2, 3 and must never start again from 1 (SYNC-5): a sale's number taken twice would
+    # be refused at every retry. A browser that frees its storage wipes the laptop's database, and its count with it,
+    # but keeps the key's cookie, so the server's number is the one that survives: the bootstrap that fills the laptop
+    # again says where its count stood (SYNC-8). A laptop just paired has counted nothing, so its first record is #1.
+    device, key = paired
+    assert a_browser(key).get(BOOTSTRAP).json()["last_device_seq"] == 0
+    with shop_context(shop_a):
+        Device.objects.filter(pk=device.pk).update(last_device_seq=57)
+    assert a_browser(key).get(BOOTSTRAP).json()["last_device_seq"] == 57
 
 
 @pytest.mark.django_db(transaction=True)
@@ -198,14 +211,20 @@ def test_bootstrap_needs_a_paired_device(manager: StaffMember, paired: tuple[Dev
     assert (blocked.status_code, blocked.json()["code"]) == (401, "device.blocked")
 
 
-def reads_of_a_snapshot(shop: Shop) -> int:
-    # How many queries one bootstrap answer costs the database, inside the device's shop, as its visit opens it.
-    with shop_context(shop), CaptureQueriesContext(connection) as seen:
-        bootstrap.snapshot(shop)
+def reads_of_a_snapshot(device: Device) -> int:
+    # How many queries one bootstrap answer costs the database, inside the device's shop, as its visit opens it. The
+    # device is read as its key's login reads it, with its shop (apps/people/api/authentication.py), so the shop's own
+    # read isn't counted on the first answer alone.
+    with shop_context(device.shop_id):
+        visiting = Device.objects.select_related("shop").get(pk=device.pk)
+        with CaptureQueriesContext(connection) as seen:
+            bootstrap.snapshot(visiting)
     return len(seen)
 
 
-def test_bootstrap_reads_each_list_once_and_two_per_person(shop_a: Shop, dawa: Side, manager: StaffMember) -> None:
+def test_bootstrap_reads_each_list_once_and_two_per_person(
+    shop_a: Shop, dawa: Side, manager: StaffMember, paired: tuple[Device, str]
+) -> None:
     # The copy grows to thousands of rows once products and customers travel (03 §6.4): a list must cost the same few
     # reads however many rows it holds, or 2,000 customers would cost 2,000 more. The one exception, by choice: each
     # person's keys, two reads each, by the one function the office routes use (held_permissions), as a shop has a
@@ -214,27 +233,28 @@ def test_bootstrap_reads_each_list_once_and_two_per_person(shop_a: Shop, dawa: S
         Setting.objects.create(
             shop=shop_a, key="attendance.late_fine", value="1500.00", effective_from=shop_today(shop_a)
         )
-    before = reads_of_a_snapshot(shop_a)
+    device, _key = paired
+    before = reads_of_a_snapshot(device)
     # Two more sides, each with its drawer and the drawer's link, and two more rules: not one more read.
     with shop_context(shop_a):
         for code, name in (("F", "Vyakula"), ("M", "Mbegu")):
             add_side(shop=shop_a, code=code, name=name, by=None)
         for key, value in (("cash.tolerance", "500.00"), ("session.idle_minutes", "20")):
             Setting.objects.create(shop=shop_a, key=key, value=value, effective_from=shop_today(shop_a))
-    assert reads_of_a_snapshot(shop_a) == before
+    assert reads_of_a_snapshot(device) == before
     # Two more people: two reads each, for their keys.
     for full_name, nickname in (("Asha Mfano", "Asha"), ("Juma Mfano", "Juma")):
         user = User.objects.create_user(full_name=full_name)
         with shop_context(shop_a):
             add_staff(shop=shop_a, user=user, display_name=nickname, by=None)
-    assert reads_of_a_snapshot(shop_a) == before + 2 * 2
+    assert reads_of_a_snapshot(device) == before + 2 * 2
 
 
 def test_answer_shape_names_every_registry_table() -> None:
     # The answer's documented shape (the API schema, and the app's types made from it) names each registry table with
     # the registry's own fields, so a table a later card adds can't reach devices undocumented, or the other way round.
     fields = BootstrapAnswer().fields
-    assert list(fields) == ["cursor", *REGISTRY, "setting_keys"]
+    assert list(fields) == ["cursor", "last_device_seq", *REGISTRY, "setting_keys"]
     for code, entry in REGISTRY.items():
         assert type(fields[code].child) is entry.serializer  # type: ignore[attr-defined]
 

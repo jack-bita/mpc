@@ -30,7 +30,6 @@ from typing import Any, cast
 import psycopg
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Max
 from rest_framework import exceptions
 
 from apps.control.models import Flag, FlagKind, FlagStatus
@@ -46,6 +45,7 @@ from apps.people.selectors import was_working_at
 from apps.people.services import Outage, lock_device_numbers, move_device_number, record_outages, record_sync
 from apps.sync.document_types import Document, DocumentType, document_type
 from apps.sync.models import PushedDocument, PushedStatus
+from apps.sync.selectors import highest_pushed_number
 
 logger = logging.getLogger(__name__)
 
@@ -295,8 +295,8 @@ def _last_number(device: Device) -> int:
     last = lock_device_numbers(device)
     if last is not None:
         return last
-    highest = PushedDocument.objects.filter(device=device).aggregate(highest=Max("device_seq"))["highest"]
-    return highest or 0
+    # The same fallback the bootstrap sends a laptop (last_device_number), from one function, so the two never differ.
+    return highest_pushed_number(device)
 
 
 def _record_before(device: Device, device_seq: int) -> tuple[datetime | None, uuid.UUID | None]:

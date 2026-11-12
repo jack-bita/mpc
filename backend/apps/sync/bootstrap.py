@@ -2,7 +2,8 @@
 it is valid at (SYNC-2; 03 §6.4).
 
 A new Dawa laptop asks once and gets every table in the registry (apps/sync/registry.py), each rule's default, and the
-cursor: the shop's last change number. Its pulls then ask for what came after that number (SYNC-3).
+cursor: the shop's last change number. Its pulls then ask for what came after that number (SYNC-3). It also gets its
+own last number (last_device_seq), so a laptop filled again after a wipe counts its records on from there (SYNC-8).
 
 The one rule this file keeps is the order of its reads: the cursor first, then the rows.
 
@@ -22,16 +23,20 @@ transaction's first statement, which no test transaction allows, and a hand-writ
 from typing import Any
 
 from apps.core.settings_registry import KEYS
-from apps.shops.models import Shop
+from apps.people.models import Device
 from apps.sync.registry import REGISTRY
-from apps.sync.selectors import last_change_number
+from apps.sync.selectors import last_change_number, last_device_number
 
 
-def snapshot(shop: Shop) -> dict[str, Any]:
-    """The bootstrap's answer for a device of `shop`, which must be the shop open: the cursor, then each registry
-    table's rows by its code, in the registry's order, then each rule's default (setting_keys)."""
+def snapshot(device: Device) -> dict[str, Any]:
+    """The bootstrap's answer for `device`, whose shop must be the one open: the cursor, the laptop's own last number,
+    then each registry table's rows by its code, in the registry's order, then each rule's default (setting_keys)."""
+    shop = device.shop
     # First, before any row: see the file's header.
     answer: dict[str, Any] = {"cursor": last_change_number(shop)}
+    # The laptop's own count, beside the shop's. Its place among the reads doesn't matter: a laptop filled for the first
+    # time saves nothing before its bootstrap, and one filled again keeps the larger of this and its own (bootstrap.ts).
+    answer["last_device_seq"] = last_device_number(device)
     for code, entry in REGISTRY.items():
         # `.data` reads the rows now, in this order, each table after the cursor: a lazy read left for later would
         # still come after it, but here the order is plain to see.

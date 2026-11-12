@@ -25,3 +25,14 @@ export async function syncAnswer<D>(call: Promise<Answer<D>>): Promise<D> {
     throw error;
   }
 }
+
+/** Whether a sync's failure is about the device itself, a block or a "not registered": the sync must
+ * then ask nothing more, as the device check would. Any other failure of the push still lets the pull
+ * run (sync.ts). */
+export function isAboutTheDevice(error: unknown): boolean {
+  return (
+    error instanceof ApiRefusal &&
+    (error.body.code === "device.blocked" ||
+      error.body.code === "not_authenticated")
+  );
+}

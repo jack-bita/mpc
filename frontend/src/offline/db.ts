@@ -21,9 +21,9 @@ import type { components } from "@/api/schema";
 type Schemas = components["schemas"];
 
 /** One of the laptop's own notes, by name: the pull cursor, the server-time offset, the last server
- * time seen, a receipt counter (03 §6.1). Each card that keeps a note names its key. The next
- * device_seq may not live here: a reset of this database must never start the count again from 1,
- * so where it is kept is SYNC-8's choice (its note, v1.57). */
+ * time seen, the last record's number, a receipt counter (03 §6.1). Each card that keeps a note names
+ * its key (sync/meta.ts). A reset of this database wipes the record number too, so it must never start
+ * the count again from 1: the bootstrap that fills it again brings back the server's (SYNC-8). */
 export interface MetaRow {
   key: string;
   value: string | number;
@@ -85,8 +85,10 @@ export interface SentDocumentRow extends DocumentRow {
    * order, as every push must (03 §6.3). */
   device_seq: number;
   sent_at: string;
-  /** The shop's change number the server gave it when it was accepted. */
-  posted_seq: number;
+  /** The shop's change number the server gave it when it was accepted: null when its save changed
+   * nothing a laptop keeps a copy of (PushedDocument.posted_seq). Not a search key, so allowing null
+   * needs no new version: only a drawer's name or its search keys do. */
+  posted_seq: number | null;
 }
 
 /** One step in the database's life: its number, its drawers, and an upgrade if old rows must change.
