@@ -102,6 +102,20 @@ describe("the offline lock", () => {
     ).rejects.toMatchObject({ params: { wait: 60 } });
   });
 
+  it("never keeps her locked for more than an hour, even after the clock went back", async () => {
+    await wrongPins(5, EIGHT_AM);
+    // Someone moves the laptop's clock back a day: the minute's lock would last a day and a minute.
+    const dayBefore = EIGHT_AM - 24 * 60 * MINUTE;
+
+    await expect(
+      checkPinOffline(db, ASHA_ROW.id, ASHA_PIN, dayBefore),
+    ).rejects.toMatchObject({ code: "pin.locked", params: { wait: 3600 } });
+    // An hour on, by that same clock, her right PIN lets her in.
+    expect(
+      await checkPinOffline(db, ASHA_ROW.id, ASHA_PIN, dayBefore + 60 * MINUTE),
+    ).toEqual(ASHA_ROW);
+  });
+
   it("starts the count again after her right PIN", async () => {
     expect(await wrongPins(4, EIGHT_AM)).toMatchObject({ code: "pin.wrong" });
     await checkPinOffline(db, ASHA_ROW.id, ASHA_PIN, EIGHT_AM);

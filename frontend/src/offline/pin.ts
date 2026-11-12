@@ -14,7 +14,8 @@
 //              (dropOutdatedChecks, at each pull and bootstrap)
 //
 // Honest limits, beside 03 §5.9's (a check on a stolen laptop can be guessed, by someone with the skills):
-// - The lock reads the laptop's clock. Someone who moves it forward shortens a lock; back, lengthens it.
+// - The lock reads the laptop's clock. Someone who moves it forward shortens a lock; moved back, a lock
+//   lasts longer, though never more than an hour from the try that finds it.
 // - Anyone who can open the browser's developer tools on the laptop can write a check of their own, for
 //   any person, and log in as them offline. A PIN stops coworkers using each other's names, not a thief;
 //   what they do offline still reaches the server under that name, with the laptop's own.
@@ -161,9 +162,15 @@ async function countTry(
     return new PinRefused("pin.offline_first");
   }
 
-  // Locked: refused with no check, so a flood of tries costs the laptop nothing.
-  if (held.locked_until !== null && now < held.locked_until)
-    return locked(held.locked_until, now);
+  // Locked: refused with no check, so a flood of tries costs the laptop nothing. Never for more than the
+  // longest lock from now: a clock moved back since the lock began would make it last as much longer, a day
+  // back a day more, and a coworker could keep a person out that way. The lock is written down shorter.
+  if (held.locked_until !== null && now < held.locked_until) {
+    const longest = now + LONGEST_LOCK_MINUTES * MINUTE;
+    if (held.locked_until <= longest) return locked(held.locked_until, now);
+    await db.pin_checks.put({ ...held, locked_until: longest });
+    return locked(longest, now);
+  }
 
   // This try, counted. The fifth starts a lock, and the next lock will last twice as long.
   const tried: PinCheckRow = { ...held, wrong_tries: held.wrong_tries + 1 };
