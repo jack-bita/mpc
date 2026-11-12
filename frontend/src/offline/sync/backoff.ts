@@ -20,6 +20,13 @@ const FIRST_WAIT_MS = 30_000;
 /** The longest wait: however long the trouble, the laptop tries again every 5 minutes. */
 const LONGEST_WAIT_MS = 5 * 60_000;
 
+/** How early a moment may land and still count as the wait's end. The 30 s ticks (triggers.tsx) and the
+ * wait start a few milliseconds apart: the tick fires, then the sync reads its notes, then the push goes.
+ * So the tick 30 s later lands a hair before the wait ends, and without this it would skip the push,
+ * making every wait one tick longer than 03 §6.5 says. Far shorter than a second, so a wait never ends
+ * a whole second early. */
+const ON_TIME_MS = 500;
+
 // A note's number, or none: a note an older app wrote some other way reads as none.
 async function readNumber(
   db: ShopDatabase,
@@ -36,16 +43,24 @@ export async function mayPush(db: ShopDatabase): Promise<boolean> {
   const left = until - Date.now();
   // No real wait is longer than the longest: more left means the laptop's clock was put back (a shop
   // laptop's clock is often wrong, 03 §6.6), and the wait would run on for as long as it moved.
-  return left <= 0 || left > LONGEST_WAIT_MS;
+  return left <= ON_TIME_MS || left > LONGEST_WAIT_MS;
 }
 
-/** The server said "try later", or the push failed: the next one waits, longer than the last time. Read
- * and written in one transaction, so two failures at once never both start from the same length. */
-export async function pushFailed(db: ShopDatabase): Promise<void> {
+/**
+ * The server said "try later", or the push failed: the next one waits, longer than the last time. The
+ * wait counts from `pushedAt`, when the push went, not from when its answer came: on a slow line the
+ * answer may take seconds, and a wait counted from it would end after the next tick, so the push would
+ * wait a whole tick more. Read and written in one transaction, so two failures at once never both start
+ * from the same length.
+ */
+export async function pushFailed(
+  db: ShopDatabase,
+  pushedAt: number,
+): Promise<void> {
   await db.transaction("rw", db.meta, async () => {
     const length = (await readNumber(db, PUSH_WAIT_NEXT)) ?? FIRST_WAIT_MS;
     await db.meta.bulkPut([
-      { key: PUSH_WAIT_UNTIL, value: Date.now() + length },
+      { key: PUSH_WAIT_UNTIL, value: pushedAt + length },
       { key: PUSH_WAIT_NEXT, value: Math.min(length * 2, LONGEST_WAIT_MS) },
     ]);
   });

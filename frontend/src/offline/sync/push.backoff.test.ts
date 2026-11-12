@@ -52,9 +52,11 @@ async function clockIn(shopId = SHOP): Promise<void> {
   });
 }
 
-/** The server has trouble saving: it answers the first record with retry. */
-function serverSaysTryLater(): void {
+/** The server has trouble saving: it answers the first record with retry, `takes` seconds after the push
+ * went, by the laptop's clock (a slow line). */
+function serverSaysTryLater(takes = 0): void {
   answer("POST", PUSH, async (request) => {
+    vi.setSystemTime(Date.now() + takes * 1000);
     const [first] = ((await request.json()) as PushBody).documents;
     return Response.json({
       answers: [
@@ -127,6 +129,32 @@ describe("the wait before the next push", () => {
 
     secondsLater(30);
     await syncShop(SHOP);
+    expect(count(PUSH)).toBe(2);
+  });
+
+  it("counts from when the push went, so a slow answer costs no extra tick", async () => {
+    // The answer takes 3 s on the shop's line. Counted from the answer, the wait would end at 33 s,
+    // after the 30 s tick, and the push would wait for the tick at 60 s.
+    await filledLaptop();
+    serverSaysTryLater(3);
+    await syncShop(SHOP);
+
+    secondsLater(30);
+    await syncShop(SHOP);
+
+    expect(count(PUSH)).toBe(2);
+  });
+
+  it("lets a moment a hair before the wait's end count as on time", async () => {
+    // The 30 s tick and the push it starts are a few milliseconds apart: the tick 30 s later lands
+    // that much before the wait ends, and must still push.
+    await filledLaptop();
+    serverSaysTryLater();
+    await syncShop(SHOP);
+
+    vi.setSystemTime(START + 30_000 - 20);
+    await syncShop(SHOP);
+
     expect(count(PUSH)).toBe(2);
   });
 

@@ -133,17 +133,19 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   let pushFailure: { error: unknown } | null = null;
   if (sendNow || (await mayPush(db))) {
     let result: PushResult | null = null;
+    // The wait after a failure counts from here, when the push went (backoff.ts says why).
+    const pushedAt = Date.now();
     try {
       result = await push(db);
     } catch (error) {
-      await pushFailed(db);
+      await pushFailed(db, pushedAt);
       // Blocked, or a key that opens no device: ask nothing more (answer.ts has kept it).
       if (isAboutTheDevice(error)) throw error;
       // Any other failure, a 5xx on the push route say, still lets the pull run: the office's
       // changes, a suspension among them (X2), must not wait for the push to work again.
       pushFailure = { error };
     }
-    if (result === "retry") await pushFailed(db);
+    if (result === "retry") await pushFailed(db, pushedAt);
     else if (result === "sent") await pushSettled(db);
   }
   await pull(db);
