@@ -110,9 +110,32 @@ async function bodies(): Promise<PushBody[]> {
 }
 
 describe("the push", () => {
-  it("sends what waits in number order, each with its envelope", async () => {
+  it("sends what waits in number order, never in id order", async () => {
+    // Ids that run the other way from the numbers, as two laptops' clocks or a restored copy can give:
+    // a push that read the outbox by id would send #60 first, and the server would flag the gap.
     await filledLaptop();
-    const [first, second, third] = await saved(3);
+    const ids = [
+      "019a7000-0000-7000-8000-0000000000c3",
+      "019a7000-0000-7000-8000-0000000000b2",
+      "019a7000-0000-7000-8000-0000000000a1",
+    ];
+    await db.documents.bulkPut(
+      ids.map((id) => ({
+        id,
+        ...CLOCK_IN,
+        client_time: "2026-11-12T05:00:00.000Z",
+      })),
+    );
+    await db.outbox.bulkPut(
+      ids.map((id, i) => ({
+        id,
+        type: "clock",
+        device_seq: 58 + i,
+        status: "waiting" as const,
+        attempts: 0,
+        last_error: null,
+      })),
+    );
     acceptsAll();
 
     await push(db);
@@ -121,19 +144,27 @@ describe("the push", () => {
     expect(body!.documents.map((document) => document.device_seq)).toEqual([
       58, 59, 60,
     ]);
-    expect(body!.documents[0]).toEqual({
-      id: first!.id,
-      type: "clock",
-      schema_version: 1,
-      device_seq: 58,
-      client_time: first!.client_time,
-      created_by: ASHA.id,
-      payload: CLOCK_IN.payload,
-    });
-    expect(body!.documents.map((document) => document.id)).toEqual([
-      first!.id,
-      second!.id,
-      third!.id,
+    expect(body!.documents.map((document) => document.id)).toEqual(ids);
+  });
+
+  it("sends each record with its whole envelope", async () => {
+    await filledLaptop();
+    const [first] = await saved(1);
+    acceptsAll();
+
+    await push(db);
+
+    const [body] = await bodies();
+    expect(body!.documents).toEqual([
+      {
+        id: first!.id,
+        type: "clock",
+        schema_version: 1,
+        device_seq: 58,
+        client_time: first!.client_time,
+        created_by: ASHA.id,
+        payload: CLOCK_IN.payload,
+      },
     ]);
   });
 
@@ -245,7 +276,9 @@ describe("the push", () => {
       },
     ]);
     expect(
-      (await db.sent_archive.toArray()).map((row) => row.device_seq),
+      (await db.sent_archive.orderBy("device_seq").toArray()).map(
+        (row) => row.device_seq,
+      ),
     ).toEqual([58, 60]);
   });
 
