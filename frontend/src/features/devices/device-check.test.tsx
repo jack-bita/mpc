@@ -142,6 +142,11 @@ describe("DeviceCheck", () => {
     const renamed = { ...DAWA_SIDE, name: "Duka la Dawa" };
     answer("GET", ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
     answer("GET", "/api/sync/v1/bootstrap/", { status: 200, body: BOOTSTRAP });
+    // Nothing waits to go: the push before the pull is the laptop's report alone (SYNC-8).
+    answer("POST", "/api/sync/v1/push/", {
+      status: 200,
+      body: { answers: [] },
+    });
     answer("GET", "/api/sync/v1/pull/", {
       status: 200,
       body: {
