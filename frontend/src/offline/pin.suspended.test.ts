@@ -10,7 +10,6 @@ import {
   ASHA_ROW,
   ashaLoggedInOnline,
   laptopWithStaff,
-  throwAway,
 } from "@/test/pins";
 
 import type { ShopDatabase } from "./db";
@@ -52,9 +51,9 @@ beforeEach(async () => {
   db = await laptopWithStaff();
   await ashaLoggedInOnline(db);
 });
-afterEach(async () => {
+// The database itself is closed and deleted after each test (vitest.setup.ts).
+afterEach(() => {
   vi.restoreAllMocks();
-  await throwAway(db);
 });
 
 describe("a suspended person", () => {

@@ -12,7 +12,6 @@ import {
   EIGHT_AM,
   FEW_TURNS,
   laptopWithStaff,
-  throwAway,
 } from "@/test/pins";
 
 import type { ShopDatabase } from "./db";
@@ -32,9 +31,9 @@ beforeEach(async () => {
   db = await laptopWithStaff();
   await ashaLoggedInOnline(db);
 });
-afterEach(async () => {
+// The database itself is closed and deleted after each test (vitest.setup.ts).
+afterEach(() => {
   vi.restoreAllMocks();
-  await throwAway(db);
 });
 
 /** Asha's tile, `times` wrong PINs at `at`: the last answer's refusal. */

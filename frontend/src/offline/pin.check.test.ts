@@ -1,7 +1,7 @@
 // pin.check.test.ts — a PIN checked on the laptop itself (SYNC-10, 03 §5.9): someone who logged in
 // once online can log in offline; someone who never did can't; and the laptop keeps a salted check of
 // the PIN, never the PIN.
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   ASHA_PIN,
@@ -12,7 +12,6 @@ import {
   FEW_TURNS,
   laptopWithStaff,
   PIN_CHANGED_AT,
-  throwAway,
 } from "@/test/pins";
 
 import type { ShopDatabase } from "./db";
@@ -27,7 +26,6 @@ let db: ShopDatabase;
 beforeEach(async () => {
   db = await laptopWithStaff();
 });
-afterEach(() => throwAway(db));
 
 describe("an offline PIN login", () => {
   it("lets in someone who logged in once online on this laptop", async () => {

@@ -9,6 +9,9 @@ import { ASHA } from "./shop-lists";
 
 type StaffRecord = components["schemas"]["StaffRecord"];
 
+/** When the server set every test person's PIN. */
+export const PIN_SET_AT = "2026-11-01T08:00:00Z";
+
 /** A person's staff row as the laptop keeps it: active, with a PIN, and the rest as Asha's. */
 export function staffRow(
   id: string,
@@ -20,7 +23,7 @@ export function staffRow(
     id,
     full_name: fullName,
     display_name: displayName,
-    pin_changed_at: "2026-11-01T08:00:00Z",
+    pin_changed_at: PIN_SET_AT,
   };
 }
 

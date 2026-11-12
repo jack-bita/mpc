@@ -16,7 +16,6 @@ import {
   FEW_TURNS,
   laptopWithStaff,
   PIN_CHANGED_AT,
-  throwAway,
 } from "@/test/pins";
 import { BOOTSTRAP } from "@/test/shop-lists";
 
@@ -55,9 +54,9 @@ beforeEach(async () => {
   db = await laptopWithStaff();
   await ashaLoggedInOnline(db);
 });
-afterEach(async () => {
+// The database itself is closed and deleted after each test (vitest.setup.ts).
+afterEach(() => {
   vi.restoreAllMocks();
-  await throwAway(db);
 });
 
 /** A sync lands while the blender runs: `sync` writes what a pull would, then the blender goes on. */
