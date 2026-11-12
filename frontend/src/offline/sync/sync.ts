@@ -1,10 +1,10 @@
 // sync.ts — one sync of this laptop's shop: the bootstrap if the database was never filled, then the
 // push of what waits in the outbox (SYNC-8), then pulls until nothing more waits (SYNC-7, 03 §6.4); and
-// the line each shop's syncs wait in, so they run one after another (SYNC-9, 03 §6.5).
+// the line each shop's syncs wait in, and the lock that keeps two tabs from syncing at once, so they run
+// one after another (SYNC-9, 03 §6.5).
 //
 // It runs at the moments triggers.tsx keeps: as the app opens, when the network comes back, 2 s after a
-// save, every 30 s while online, and from Tuma sasa (03 §6.5). SYNC-9 also brings a lock so two tabs
-// never sync at once (Web Locks).
+// save, every 30 s while online, and from Tuma sasa (03 §6.5).
 import { shopDatabase } from "../this-shop";
 import { isAboutTheDevice } from "./answer";
 import { bootstrap, needsBootstrap } from "./bootstrap";
@@ -22,7 +22,7 @@ export interface SyncAsk {
 
 // A shop's syncs in this tab: the one running, and at most one asked for while it runs. Kept by shop: a
 // laptop moved to another shop mid-sync starts that shop's own, never waiting behind the old shop's.
-// This tab only: two tabs are kept apart by the lock SYNC-9 brings.
+// This tab only: two tabs are kept apart by the lock (inTurn, below).
 interface Line {
   running: Promise<void>;
   next: Next | null;
@@ -85,10 +85,40 @@ async function runInLine(
   sendNow: boolean,
 ): Promise<void> {
   try {
-    await syncOnce(shopId, sendNow);
+    await inTurn(shopId, () => syncOnce(shopId, sendNow));
   } finally {
     if (line.next === null && lines.get(shopId) === line) lines.delete(shopId);
   }
+}
+
+/** The lock's name: one per shop, as its database is (db.ts), so the practice shop's sync never waits for
+ * the live shop's. */
+export function syncLockName(shopId: string): string {
+  return `mpc-sync-${shopId}`;
+}
+
+/**
+ * Runs a sync once no other tab of the app is syncing the same shop (03 §6.5). Two tabs syncing at once
+ * would send the same records together and apply the same pages twice; one at a time, each starts where
+ * the last one ended.
+ *
+ * The browser's Web Locks: a lock by name, shared by every tab of the app's address, given to one at a
+ * time, in the order asked, and handed on as soon as the work ends, however it ended, or as its tab
+ * closes. A tab that asks while another holds it waits, never skips: a record it just saved must still
+ * go, and the other tab's push may have read its outbox before the save.
+ *
+ * Chrome and Edge, the shop's browsers (03 §7.3), have had it for years. A browser without it, and the
+ * tests' jsdom, sync as before: one at a time in each tab.
+ *
+ * Honest limit: a call that never ends holds the lock, and every other tab waits behind it. The server
+ * ends any call after 30 seconds (gunicorn's own limit), and the browser ends one whose network drops.
+ */
+async function inTurn(
+  shopId: string,
+  work: () => Promise<void>,
+): Promise<void> {
+  if (!("locks" in navigator)) return work();
+  await navigator.locks.request(syncLockName(shopId), work);
 }
 
 async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
