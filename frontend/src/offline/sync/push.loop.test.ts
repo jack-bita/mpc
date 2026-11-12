@@ -357,6 +357,58 @@ describe("the push", () => {
     expect(waiting[0]).toMatchObject({ attempts: 1, last_error: "retry" });
   });
 
+  it("sends the laptop's clock afresh at each try", async () => {
+    // A retry sent with the first try's time would show the clock as off by the wait, and every
+    // offline clock-in in it as unverified (ATT-1, the card's v1.58 note).
+    await filledLaptop();
+    const [first] = await saved(1);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-12T08:00:00Z"));
+    answer("POST", PUSH, {
+      status: 200,
+      body: { answers: [retry(first!.id)] },
+    });
+    await push(db);
+
+    vi.setSystemTime(new Date("2026-11-12T08:00:30Z"));
+    acceptsAll();
+    await push(db);
+
+    expect((await bodies()).map((body) => body.sent_at)).toEqual([
+      "2026-11-12T08:00:00.000Z",
+      "2026-11-12T08:00:30.000Z",
+    ]);
+  });
+
+  it("applies none of a batch's answers when one can't be read", async () => {
+    // A duplicate naming no first answer is the server's bug: the answers already read are undone too,
+    // so no row is both archived and still waiting. Sent again, each gets its answer as before.
+    await filledLaptop();
+    const [first, second] = await saved(2);
+    answer("POST", PUSH, {
+      status: 200,
+      body: {
+        answers: [
+          accepted(first!.id, 201),
+          { ...accepted(second!.id, 202), status: "duplicate", first: null },
+        ],
+      },
+    });
+
+    await expect(push(db)).rejects.toThrow("no first answer");
+
+    expect(await db.sent_archive.count()).toBe(0);
+    expect(
+      (await db.outbox.orderBy("device_seq").toArray()).map((row) => [
+        row.device_seq,
+        row.status,
+      ]),
+    ).toEqual([
+      [58, "waiting"],
+      [59, "waiting"],
+    ]);
+  });
+
   it("sends 150 as 100, then 50, each saying how many else wait", async () => {
     await filledLaptop();
     await saved(150);
