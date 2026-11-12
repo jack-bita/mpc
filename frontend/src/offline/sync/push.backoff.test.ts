@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NoConnection } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { DAWA_LAPTOP } from "@/test/devices";
+import { giveCsrfToken } from "@/test/csrf";
 import { answer, sent } from "@/test/fake-server";
 import { ASHA } from "@/test/shop-lists";
 
@@ -98,6 +99,8 @@ const count = (path: string) =>
   sent.filter((request) => new URL(request.url).pathname === path).length;
 
 beforeEach(() => {
+  // A working laptop has its CSRF token, from the device check's answer: the push needs it (sync.ts).
+  giveCsrfToken();
   // Only the clock is fake: Dexie and the fake server keep their own timers.
   vi.useFakeTimers({ toFake: ["Date"] });
   secondsLater(0);

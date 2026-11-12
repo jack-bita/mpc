@@ -54,6 +54,12 @@ export function csrfHeader(): Record<string, string> {
   return token ? { [CSRF_HEADER]: token } : {};
 }
 
+/** Whether the server has given this browser a CSRF token yet: without one, every change is refused. The
+ * sync's push asks first, so it doesn't send a change bound to fail (SYNC-9). */
+export function hasCsrfToken(): boolean {
+  return Object.keys(csrfHeader()).length > 0;
+}
+
 const csrfToken: Middleware = {
   onRequest({ request }) {
     if (CHANGES.has(request.method))

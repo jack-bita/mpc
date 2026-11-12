@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiRefusal, NoConnection } from "@/api/refusal";
 import { saveBlocked, saveDevice } from "@/features/devices/this-device";
 import { DAWA_LAPTOP } from "@/test/devices";
+import { giveCsrfToken } from "@/test/csrf";
 import { answer, sent } from "@/test/fake-server";
 import { ASHA, BOOTSTRAP, DAWA_SIDE } from "@/test/shop-lists";
 
@@ -208,6 +209,11 @@ describe("the moments", () => {
 });
 
 describe("on the laptop", () => {
+  beforeEach(() => {
+    // A working laptop has its CSRF token, from the device check's answer: the push needs it (sync.ts).
+    giveCsrfToken();
+  });
+
   it("fill a fresh laptop's database as the app opens, then pull", async () => {
     // A change made in the office after the copy: the first pull brings it.
     saveDevice(DAWA_LAPTOP);

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiRefusal } from "@/api/refusal";
 import { DAWA_LAPTOP } from "@/test/devices";
+import { giveCsrfToken } from "@/test/csrf";
 import { answer, refusal, sent } from "@/test/fake-server";
 import {
   installFakeLocks,
@@ -39,6 +40,8 @@ const PAGE = {
 let locks: FakeLocks;
 
 beforeEach(() => {
+  // A working laptop has its CSRF token, from the device check's answer: the push needs it (sync.ts).
+  giveCsrfToken();
   locks = installFakeLocks();
   answer("POST", PUSH, { status: 200, body: { answers: [] } });
   answer("GET", PULL, { status: 200, body: PAGE });

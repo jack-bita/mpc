@@ -13,6 +13,7 @@ import Dexie from "dexie";
 import { afterEach, vi } from "vitest";
 
 import { closeShopDatabases } from "@/offline/this-shop";
+import { forgetCsrfToken } from "@/test/csrf";
 import { resetFakeServer } from "@/test/fake-server";
 import { resetRouter } from "@/test/router";
 
@@ -41,6 +42,9 @@ afterEach(async () => {
   // The same for the device's saved copy (src/features/devices/this-device.ts), so each test starts as
   // a new device, not yet registered.
   if (typeof window !== "undefined") window.localStorage.clear();
+  // The CSRF token's cookie a sync test started with (src/test/csrf.ts), so the next test starts with
+  // none, as a new device does. Tests that set their own expire it too, which does no harm twice.
+  if (typeof document !== "undefined") forgetCsrfToken();
   // The fake server's routes and the requests it saw (src/test/fake-server.ts), so no test meets
   // another's answers.
   resetFakeServer();

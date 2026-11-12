@@ -11,12 +11,14 @@ import {
 } from "@/features/devices/this-device";
 
 import { DAWA_LAPTOP } from "@/test/devices";
+import { forgetCsrfToken, giveCsrfToken } from "@/test/csrf";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { ASHA, BOOTSTRAP } from "@/test/shop-lists";
 
 import { saveDocument } from "../outbox";
 import { shopDatabase } from "../this-shop";
 import { SYNC_CALL_LIMIT_MS } from "./answer";
+import { mayPush } from "./backoff";
 import { readCursor } from "./meta";
 import { syncShop } from "./sync";
 
@@ -31,6 +33,8 @@ const PUSH = "/api/sync/v1/push/";
 
 // Every sync pushes first: with nothing waiting, the push is the laptop's report alone (push.loop.test.ts).
 beforeEach(() => {
+  // A working laptop has its CSRF token, from the device check's answer: the push needs it (sync.ts).
+  giveCsrfToken();
   answer("POST", PUSH, { status: 200, body: { answers: [] } });
 });
 
@@ -336,6 +340,24 @@ describe("a sync", () => {
     expect(paths()).toEqual([PUSH, PULL]);
     expect(await readCursor(shopDatabase(SHOP))).toBe(131);
     expect(log).toHaveBeenCalledWith("the push's wait was not kept", full);
+  });
+
+  it("pushes nothing before the server has given a CSRF token, starts no wait, and still pulls", async () => {
+    // The browser lost its cookies but kept the device's copy: the app opens and syncs before the
+    // device check's answer brings the token. The push would be refused, so it waits for the token.
+    forgetCsrfToken();
+    await filledLaptop();
+    await clockIn();
+    answer("GET", PULL, emptyPage(130));
+
+    await syncShop(SHOP);
+    expect(paths()).toEqual([PULL]);
+    expect(await mayPush(shopDatabase(SHOP))).toBe(true);
+
+    // The check's answer brings the token: the next sync pushes at once, with no wait to sit out.
+    giveCsrfToken();
+    await syncShop(SHOP);
+    expect(paths()).toEqual([PULL, PUSH, PULL]);
   });
 
   it("pulls nothing once the push says the laptop is blocked", async () => {

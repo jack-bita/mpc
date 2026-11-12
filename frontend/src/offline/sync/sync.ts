@@ -5,6 +5,7 @@
 //
 // It runs at the moments triggers.tsx keeps: as the app opens, when the network comes back, 2 s after a
 // save, every 30 s while online, and from Tuma sasa (03 §6.5).
+import { hasCsrfToken } from "@/api/client";
 import { savedBlocked } from "@/features/devices/this-device";
 
 import type { ShopDatabase } from "../db";
@@ -138,8 +139,13 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   // try later still lets the pull run: the server's trouble saving one record doesn't stop the office's
   // changes coming down. After a failure, the next push waits a while (backoff.ts), in every tab, as the
   // wait is kept in the database; unless someone pressed Tuma sasa. The pull never waits.
+  //
+  // No push before the server has given this browser its CSRF token: the push is a change, and would be
+  // refused (403), then wait 30 s for nothing. The token comes with the device check's answer
+  // (DeviceMeView), a moment after the app opens, and the next moment pushes. A laptop has it already,
+  // from its last visit, unless the browser lost it; the pull, a read, needs none.
   let pushFailure: { error: unknown } | null = null;
-  if (sendNow || (await mayPush(db))) {
+  if (hasCsrfToken() && (sendNow || (await mayPush(db)))) {
     let result: PushResult | null = null;
     // The wait after a failure counts from here, when the push went (backoff.ts says why).
     const pushedAt = Date.now();
