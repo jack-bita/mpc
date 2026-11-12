@@ -24,6 +24,15 @@ export const LAST_SERVER_TIME = "last_server_time";
  * no number, and is filled again (needsBootstrap). */
 export const LAST_DEVICE_SEQ = "last_device_seq";
 
+/** When the next push may go, in milliseconds by the laptop's clock, after the server said "try later"
+ * or a push failed (backoff.ts). Kept here, not in a tab's memory, so every tab waits alike (SYNC-9).
+ * Missing while no push waits. */
+export const PUSH_WAIT_UNTIL = "push_wait_until_ms";
+
+/** How long the wait after the next failure will be, in milliseconds: twice the last, at most 5 minutes
+ * (backoff.ts). Missing while no push waits, so the next trouble waits 30 s. */
+export const PUSH_WAIT_NEXT = "push_wait_next_ms";
+
 /** The cursor, or null when this database was never filled. */
 export async function readCursor(db: ShopDatabase): Promise<number | null> {
   const row = await db.meta.get(CURSOR);

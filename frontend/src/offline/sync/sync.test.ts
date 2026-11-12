@@ -1,16 +1,24 @@
 // sync.test.ts — one sync of the laptop's shop (SYNC-7): the bootstrap once, then the push (SYNC-8), then
-// pulls; a second check while one runs joins it; a failed one leaves the next free to run.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+// pulls; one asked for while another runs runs once more after it, and asks beyond that join it (SYNC-9);
+// a failed one leaves the next free to run.
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiRefusal } from "@/api/refusal";
-import { saveDevice, savedBlocked } from "@/features/devices/this-device";
+import { ApiRefusal, NoConnection } from "@/api/refusal";
+import {
+  saveBlocked,
+  saveDevice,
+  savedBlocked,
+} from "@/features/devices/this-device";
 
 import { DAWA_LAPTOP } from "@/test/devices";
+import { forgetCsrfToken, giveCsrfToken } from "@/test/csrf";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { ASHA, BOOTSTRAP } from "@/test/shop-lists";
 
 import { saveDocument } from "../outbox";
 import { shopDatabase } from "../this-shop";
+import { SYNC_CALL_LIMIT_MS } from "./answer";
+import { mayPush } from "./backoff";
 import { readCursor } from "./meta";
 import { syncShop } from "./sync";
 
@@ -25,7 +33,14 @@ const PUSH = "/api/sync/v1/push/";
 
 // Every sync pushes first: with nothing waiting, the push is the laptop's report alone (push.loop.test.ts).
 beforeEach(() => {
+  // A working laptop has its CSRF token, from the device check's answer: the push needs it (sync.ts).
+  giveCsrfToken();
   answer("POST", PUSH, { status: 200, body: { answers: [] } });
+});
+
+afterEach(() => {
+  // The time limit a test stood in for (AbortSignal.timeout), back as the browser has it.
+  vi.restoreAllMocks();
 });
 
 const emptyPage = (cursor: number) => ({
@@ -40,6 +55,43 @@ const emptyPage = (cursor: number) => ({
 });
 
 const paths = () => sent.map((request) => new URL(request.url).pathname);
+
+/** A filled laptop: its cursor and its last number, as a bootstrap leaves them. */
+async function filledLaptop(): Promise<void> {
+  await shopDatabase(SHOP).meta.bulkPut([
+    { key: "pull_cursor", value: 130 },
+    { key: "last_device_seq", value: 57 },
+  ]);
+}
+
+/** Asha's clock-in, saved on the laptop. */
+const clockIn = () =>
+  saveDocument(shopDatabase(SHOP), {
+    type: "clock",
+    schema_version: 1,
+    created_by: ASHA.id,
+    payload: { kind: "in", last_server_time: "2026-11-12T04:58:00Z" },
+  });
+
+/**
+ * The pull's first answer, held until the test lets it go: a sync stopped halfway, its push gone, while
+ * the test asks again. `pulls` counts the pulls asked for, so a test can wait for the first to arrive.
+ */
+function holdTheFirstPull(): { release: () => void; pulls: () => number } {
+  let release = nothing;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let pulls = 0;
+  answer("GET", PULL, async () => {
+    pulls += 1;
+    if (pulls === 1) await held;
+    return Response.json(emptyPage(130).body);
+  });
+  return { release: () => release(), pulls: () => pulls };
+}
+
+function nothing(): void {}
 
 describe("a sync", () => {
   it("bootstraps a fresh laptop, pushes, then pulls from its cursor", async () => {
@@ -135,16 +187,138 @@ describe("a sync", () => {
     expect(await db.outbox.count()).toBe(1);
   });
 
-  it("joins the sync already running instead of starting a second", async () => {
-    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+  it("runs once more after the running one, and the asks after that join it", async () => {
+    await filledLaptop();
+    const pull = holdTheFirstPull();
+
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pull.pulls()).toBe(1));
+    const second = syncShop(SHOP);
+    const third = syncShop(SHOP);
+    // Two at most: never two at once, and never a third waiting.
+    expect(second).not.toBe(first);
+    expect(third).toBe(second);
+    expect(paths()).toEqual([PUSH, PULL]);
+
+    pull.release();
+    await Promise.all([first, second]);
+
+    expect(paths()).toEqual([PUSH, PULL, PUSH, PULL]);
+  });
+
+  it("runs one more after the second too, when asked while the second runs", async () => {
+    // The sync after the running one is pulling when Baraka clocks in: one more runs after it, so his
+    // record doesn't wait for the next moment either. Joined to the second, it would.
+    await filledLaptop();
+    const releases: (() => void)[] = [];
+    let pulls = 0;
+    answer("GET", PULL, async () => {
+      pulls += 1;
+      if (pulls <= 2)
+        await new Promise<void>((resolve) => releases.push(resolve));
+      return Response.json(emptyPage(130).body);
+    });
+
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pulls).toBe(1));
+    const second = syncShop(SHOP);
+    releases[0]!();
+    await vi.waitFor(() => expect(pulls).toBe(2));
+    const third = syncShop(SHOP);
+    expect(third).not.toBe(second);
+    // It waits for the second: never two at once.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(paths()).toEqual([PUSH, PULL, PUSH, PULL]);
+    releases[1]!();
+    await Promise.all([first, second, third]);
+
+    expect(paths()).toEqual([PUSH, PULL, PUSH, PULL, PUSH, PULL]);
+  });
+
+  it("sends a record saved while a sync pulls, right after it", async () => {
+    // The sync had pushed already when Asha clocked in: hers goes at once, not at the next moment.
+    await filledLaptop();
+    const pull = holdTheFirstPull();
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pull.pulls()).toBe(1));
+
+    const made = await clockIn();
+    const second = syncShop(SHOP);
+    pull.release();
+    await Promise.all([first, second]);
+
+    const body = (await sent[2]!.json()) as { documents: { id: string }[] };
+    expect(body.documents.map((document) => document.id)).toEqual([made.id]);
+  });
+
+  it("runs the one asked after it, even when the running one fails", async () => {
+    // The first bootstrap meets the server down; the sync asked meanwhile fills the laptop.
+    let release = nothing;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let bootstraps = 0;
+    answer("GET", BOOTSTRAP_ROUTE, async () => {
+      bootstraps += 1;
+      if (bootstraps > 1) return Response.json(BOOTSTRAP);
+      await held;
+      return Response.json(refusal(500, "server_error").body, { status: 500 });
+    });
     answer("GET", PULL, emptyPage(120));
 
     const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(bootstraps).toBe(1));
     const second = syncShop(SHOP);
+    release();
+
+    await expect(first).rejects.toBeInstanceOf(ApiRefusal);
+    await second;
+    expect(await readCursor(shopDatabase(SHOP))).toBe(120);
+  });
+
+  it("asks nothing in a sync that waited its turn once the laptop is blocked", async () => {
+    // The manager blocks the laptop while a sync is pulling and the next one waits behind it: the next
+    // one must not ask the server again.
+    saveDevice(DAWA_LAPTOP);
+    await filledLaptop();
+    const pull = holdTheFirstPull();
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pull.pulls()).toBe(1));
+    const second = syncShop(SHOP);
+
+    saveBlocked();
+    pull.release();
     await Promise.all([first, second]);
 
-    expect(second).toBe(first);
-    expect(paths()).toEqual([BOOTSTRAP_ROUTE, PUSH, PULL]);
+    expect(paths()).toEqual([PUSH, PULL]);
+  });
+
+  it("gives up on a call left with no answer, as no connection", async () => {
+    // The Wi-Fi is up and its internet gone: the push hangs. Its time limit (2 minutes, stood in for
+    // here) ends it as a lost connection, so the sync ends and the lock goes on to the other tabs.
+    await filledLaptop();
+    const limit = new AbortController();
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(limit.signal);
+    answer(
+      "POST",
+      PUSH,
+      (request) =>
+        new Promise<Response>((_, reject) => {
+          request.signal.addEventListener("abort", () =>
+            reject(request.signal.reason),
+          );
+        }),
+    );
+    answer("GET", PULL, emptyPage(130));
+
+    const sync = syncShop(SHOP);
+    await vi.waitFor(() => expect(paths()).toEqual([PUSH]));
+    limit.abort(new DOMException("No answer in time.", "TimeoutError"));
+
+    await expect(sync).rejects.toBeInstanceOf(NoConnection);
+    expect(timeout).toHaveBeenCalledWith(SYNC_CALL_LIMIT_MS);
   });
 
   it("never joins another shop's sync", async () => {
@@ -175,6 +349,44 @@ describe("a sync", () => {
 
     expect(paths()).toEqual([PUSH, PULL]);
     expect(await readCursor(shopDatabase(SHOP))).toBe(131);
+  });
+
+  it("keeps the push's own failure, and still pulls, when its wait can't be written", async () => {
+    // The server has trouble, and the laptop's disk is full as the wait is written: the server's 500
+    // is still the failure reported, and the office's changes still come down.
+    await filledLaptop();
+    answer("POST", PUSH, refusal(500, "server_error"));
+    answer("GET", PULL, emptyPage(131));
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const full = new Error("disk full");
+    vi.spyOn(shopDatabase(SHOP).meta, "bulkPut").mockRejectedValueOnce(full);
+
+    const error: unknown = await syncShop(SHOP).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(ApiRefusal);
+    expect(paths()).toEqual([PUSH, PULL]);
+    expect(await readCursor(shopDatabase(SHOP))).toBe(131);
+    expect(log).toHaveBeenCalledWith("the push's wait was not kept", full);
+  });
+
+  it("pushes nothing before the server has given a CSRF token, starts no wait, and still pulls", async () => {
+    // The browser lost its cookies but kept the device's copy: the app opens and syncs before the
+    // device check's answer brings the token. The push would be refused, so it waits for the token.
+    forgetCsrfToken();
+    await filledLaptop();
+    await clockIn();
+    answer("GET", PULL, emptyPage(130));
+
+    await syncShop(SHOP);
+    expect(paths()).toEqual([PULL]);
+    expect(await mayPush(shopDatabase(SHOP))).toBe(true);
+
+    // The check's answer brings the token: the next sync pushes at once, with no wait to sit out.
+    giveCsrfToken();
+    await syncShop(SHOP);
+    expect(paths()).toEqual([PULL, PUSH, PULL]);
   });
 
   it("pulls nothing once the push says the laptop is blocked", async () => {

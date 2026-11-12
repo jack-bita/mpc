@@ -12,8 +12,8 @@ import { cleanup } from "@testing-library/react";
 import Dexie from "dexie";
 import { afterEach, vi } from "vitest";
 
-import { forgetPushWaits } from "@/offline/sync/backoff";
 import { closeShopDatabases } from "@/offline/this-shop";
+import { forgetCsrfToken } from "@/test/csrf";
 import { resetFakeServer } from "@/test/fake-server";
 import { resetRouter } from "@/test/router";
 
@@ -31,19 +31,20 @@ vi.mock("next/navigation", async (importOriginal) => {
 afterEach(async () => {
   cleanup();
   // The shop databases a test filled, through the app's own shared copies (src/offline/this-shop.ts),
-  // or as the device check's sync filled them (SYNC-7): closed, then deleted, so the next test opens on
-  // a laptop that never synced. An open database would block its own delete.
+  // or as the sync's moments filled them (SYNC-7, SYNC-9): closed, then deleted, so the next test opens
+  // on a laptop that never synced, and whose push waits for nothing (backoff.ts keeps its wait there).
+  // An open database would block its own delete.
   closeShopDatabases();
   for (const { name } of await indexedDB.databases())
     if (name !== undefined) await Dexie.delete(name);
-  // A push's wait after a failure lives in memory (src/offline/sync/backoff.ts): forgotten, so the next
-  // test's first push goes at once.
-  forgetPushWaits();
   // The language a test chose is kept in the browser's storage (src/i18n/language.ts): forget it, so
   // the next test opens in Swahili, as a new device does. Tests that run in plain Node have no storage.
   // The same for the device's saved copy (src/features/devices/this-device.ts), so each test starts as
   // a new device, not yet registered.
   if (typeof window !== "undefined") window.localStorage.clear();
+  // The CSRF token's cookie a sync test started with (src/test/csrf.ts), so the next test starts with
+  // none, as a new device does. Tests that set their own expire it too, which does no harm twice.
+  if (typeof document !== "undefined") forgetCsrfToken();
   // The fake server's routes and the requests it saw (src/test/fake-server.ts), so no test meets
   // another's answers.
   resetFakeServer();

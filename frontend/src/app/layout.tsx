@@ -3,8 +3,8 @@
 // This file stays a server component, but in a static export a server component runs
 // once, at build time, and becomes plain HTML in out/ — no server runs it later
 // (ADR-0016). That is also why it may export `metadata`, which only server components can.
-// The app's providers wrap every page here: today the word books, the store of server answers, and the
-// device's check of who it is; later the session (03 §7.2).
+// The app's providers wrap every page here: today the word books, the store of server answers, the
+// device's check of who it is, and the sync's moments; later the session (03 §7.2).
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -25,6 +25,9 @@ import { DeviceLock } from "@/features/devices/device-lock";
 import { atkinson, sourceSans } from "@/fonts/fonts";
 // Hands every screen its words from the open book: Swahili, or English after the switch (ADR-0040).
 import { LanguageProvider } from "@/i18n/provider";
+// Syncs the shop's database at its moments: as the app opens, when the network comes back, 2 s after a
+// save, every 30 s, and from Tuma sasa (SYNC-9).
+import { SyncTriggers } from "@/offline/sync/triggers";
 
 // The one global stylesheet: Tailwind and the design tokens, loaded once for every page.
 import "./globals.css";
@@ -46,6 +49,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <DeviceLock>{children}</DeviceLock>
             {/* Outside the lock, so a blocked device still asks, and learns of its unblock. */}
             <DeviceCheck />
+            {/* Beside the check, whose answers it follows: it stops itself while the device is blocked. */}
+            <SyncTriggers />
             <UpdatePrompt />
           </QueryProvider>
         </LanguageProvider>

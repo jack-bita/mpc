@@ -13,7 +13,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import type { ShopDatabase } from "../db";
-import { syncAnswer } from "./answer";
+import { syncAnswer, syncCallLimit } from "./answer";
 import { CLOCK_OFFSET, CURSOR, LAST_SERVER_TIME, readCursor } from "./meta";
 
 type Change = components["schemas"]["Change"];
@@ -55,7 +55,10 @@ export async function pull(db: ShopDatabase): Promise<void> {
     // middle is the best guess of when, on this laptop's clock (03 §6.6).
     const askedAt = Date.now();
     const page: Page = await syncAnswer(
-      api.GET("/api/sync/v1/pull/", { params: { query: { cursor } } }),
+      api.GET("/api/sync/v1/pull/", {
+        params: { query: { cursor } },
+        signal: syncCallLimit(),
+      }),
     );
     const answeredAt = Date.now();
 

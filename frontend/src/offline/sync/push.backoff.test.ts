@@ -1,17 +1,26 @@
 // push.backoff.test.ts — after a push the server told to try later, or one that failed, the next push
 // waits (SYNC-8): 30 s, then twice as long each time, never more than 5 minutes. A push that settles
-// starts the wait again from 30 s. Meanwhile the pull still runs, and each shop waits on its own.
+// starts the wait again from 30 s. Meanwhile the pull still runs, and each shop waits on its own. The wait
+// is kept in the shop's database, so every tab and a reload wait alike (SYNC-9); Tuma sasa doesn't wait.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoConnection } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { DAWA_LAPTOP } from "@/test/devices";
+import { giveCsrfToken } from "@/test/csrf";
 import { answer, sent } from "@/test/fake-server";
 import { ASHA } from "@/test/shop-lists";
 
+import { openShopDatabase } from "../db";
 import { saveDocument } from "../outbox";
-import { shopDatabase } from "../this-shop";
-import { CURSOR, LAST_DEVICE_SEQ } from "./meta";
+import { closeShopDatabases, shopDatabase } from "../this-shop";
+import { mayPush } from "./backoff";
+import {
+  CURSOR,
+  LAST_DEVICE_SEQ,
+  PUSH_WAIT_NEXT,
+  PUSH_WAIT_UNTIL,
+} from "./meta";
 import { syncShop } from "./sync";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -49,9 +58,11 @@ async function clockIn(shopId = SHOP): Promise<void> {
   });
 }
 
-/** The server has trouble saving: it answers the first record with retry. */
-function serverSaysTryLater(): void {
+/** The server has trouble saving: it answers the first record with retry, `takes` seconds after the push
+ * went, by the laptop's clock (a slow line). */
+function serverSaysTryLater(takes = 0): void {
   answer("POST", PUSH, async (request) => {
+    vi.setSystemTime(Date.now() + takes * 1000);
     const [first] = ((await request.json()) as PushBody).documents;
     return Response.json({
       answers: [
@@ -93,6 +104,8 @@ const count = (path: string) =>
   sent.filter((request) => new URL(request.url).pathname === path).length;
 
 beforeEach(() => {
+  // A working laptop has its CSRF token, from the device check's answer: the push needs it (sync.ts).
+  giveCsrfToken();
   // Only the clock is fake: Dexie and the fake server keep their own timers.
   vi.useFakeTimers({ toFake: ["Date"] });
   secondsLater(0);
@@ -124,6 +137,32 @@ describe("the wait before the next push", () => {
 
     secondsLater(30);
     await syncShop(SHOP);
+    expect(count(PUSH)).toBe(2);
+  });
+
+  it("counts from when the push went, so a slow answer costs no extra tick", async () => {
+    // The answer takes 3 s on the shop's line. Counted from the answer, the wait would end at 33 s,
+    // after the 30 s tick, and the push would wait for the tick at 60 s.
+    await filledLaptop();
+    serverSaysTryLater(3);
+    await syncShop(SHOP);
+
+    secondsLater(30);
+    await syncShop(SHOP);
+
+    expect(count(PUSH)).toBe(2);
+  });
+
+  it("lets a moment a hair before the wait's end count as on time", async () => {
+    // The 30 s tick and the push it starts are a few milliseconds apart: the tick 30 s later lands
+    // that much before the wait ends, and must still push.
+    await filledLaptop();
+    serverSaysTryLater();
+    await syncShop(SHOP);
+
+    vi.setSystemTime(START + 30_000 - 20);
+    await syncShop(SHOP);
+
     expect(count(PUSH)).toBe(2);
   });
 
@@ -200,6 +239,93 @@ describe("the wait before the next push", () => {
     secondsLater(-3600);
     await syncShop(SHOP);
 
+    expect(count(PUSH)).toBe(2);
+  });
+
+  it("doesn't hold back Tuma sasa, and its failure makes the next wait longer", async () => {
+    // Asha presses Tuma sasa 5 s into a 30 s wait: it goes (Jack, 12 Nov 2026). The server still has
+    // trouble, so the next wait is the doubled one, 60 s from her press.
+    await filledLaptop();
+    serverSaysTryLater();
+    await syncShop(SHOP);
+
+    secondsLater(5);
+    await syncShop(SHOP, { sendNow: true });
+    expect(count(PUSH)).toBe(2);
+
+    secondsLater(64);
+    await syncShop(SHOP);
+    expect(count(PUSH)).toBe(2);
+    secondsLater(65);
+    await syncShop(SHOP);
+    expect(count(PUSH)).toBe(3);
+  });
+
+  it("makes the sync after the running one push, when Tuma sasa is pressed meanwhile", async () => {
+    // A 30 s sync is pulling, its push held back by the wait, when Asha presses Tuma sasa: the sync
+    // that runs next pushes, even though a plain ask came first.
+    await filledLaptop();
+    serverSaysTryLater();
+    await syncShop(SHOP);
+    secondsLater(5);
+    let release = (): void => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let pulls = 0;
+    answer("GET", PULL, async () => {
+      pulls += 1;
+      // The first pull after this answer was set: the running sync's.
+      if (pulls === 1) await held;
+      return Response.json({
+        changes: [],
+        cursor: 130,
+        has_more: false,
+        server_time: "2026-11-12T08:00:05Z",
+        min_app_version: null,
+      });
+    });
+
+    const running = syncShop(SHOP);
+    await vi.waitFor(() => expect(pulls).toBe(1));
+    const plain = syncShop(SHOP);
+    const pressed = syncShop(SHOP, { sendNow: true });
+    expect(pressed).toBe(plain);
+    release();
+    await Promise.all([running, pressed]);
+
+    expect(count(PUSH)).toBe(2);
+  });
+
+  it("is kept in the shop's database, so another tab and a reload wait too", async () => {
+    // This tab was told to wait. Another tab, with its own connection to the same database, must not
+    // push the moment after: the server in trouble would get the push twice as often.
+    await filledLaptop();
+    serverSaysTryLater();
+    await syncShop(SHOP);
+
+    // The wait is two notes in the database itself, which the other tab reads through its own
+    // connection: nothing of it lives in this tab's memory.
+    const otherTab = openShopDatabase(SHOP);
+    expect(
+      await otherTab.meta.bulkGet([PUSH_WAIT_UNTIL, PUSH_WAIT_NEXT]),
+    ).toEqual([
+      { key: PUSH_WAIT_UNTIL, value: START + 30_000 },
+      { key: PUSH_WAIT_NEXT, value: 60_000 },
+    ]);
+    secondsLater(29);
+    expect(await mayPush(otherTab)).toBe(false);
+    secondsLater(30);
+    expect(await mayPush(otherTab)).toBe(true);
+    otherTab.close();
+
+    // A reload: every connection of this tab gone. Its first sync, 10 s into the next wait, reads the
+    // notes again, and still waits.
+    await syncShop(SHOP);
+    expect(count(PUSH)).toBe(2);
+    closeShopDatabases();
+    secondsLater(40);
+    await syncShop(SHOP);
     expect(count(PUSH)).toBe(2);
   });
 
