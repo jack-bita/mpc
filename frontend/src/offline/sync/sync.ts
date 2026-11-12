@@ -7,8 +7,9 @@
 // a lock so two tabs never sync at once (Web Locks).
 import { shopDatabase } from "../this-shop";
 import { bootstrap, needsBootstrap } from "./bootstrap";
+import { mayPush, pushFailed, pushSettled } from "./backoff";
 import { pull } from "./pull";
-import { push } from "./push";
+import { push, type PushResult } from "./push";
 
 // The sync running now in this tab, for each shop. A check that lands while one still runs joins it
 // instead of starting a second, which would ask for the same pages and write them twice. Kept by shop: a
@@ -31,8 +32,18 @@ export function syncShop(shopId: string): Promise<void> {
     // The push before the pull: what this laptop made goes up first, so the pull that follows brings the
     // server's changes from it, and drops its pending effects as the cursor passes them. A push told to
     // try later still lets the pull run: the server's trouble saving one record doesn't stop the office's
-    // changes coming down.
-    await push(db);
+    // changes coming down. After a failure, the next push waits a while (backoff.ts); the pull doesn't.
+    if (mayPush(shopId)) {
+      let result: PushResult;
+      try {
+        result = await push(db);
+      } catch (error) {
+        pushFailed(shopId);
+        throw error;
+      }
+      if (result === "retry") pushFailed(shopId);
+      else pushSettled(shopId);
+    }
     await pull(db);
   })().finally(() => {
     running.delete(shopId);

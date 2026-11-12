@@ -12,6 +12,7 @@ import { cleanup } from "@testing-library/react";
 import Dexie from "dexie";
 import { afterEach, vi } from "vitest";
 
+import { forgetPushWaits } from "@/offline/sync/backoff";
 import { closeShopDatabases } from "@/offline/this-shop";
 import { resetFakeServer } from "@/test/fake-server";
 import { resetRouter } from "@/test/router";
@@ -35,6 +36,9 @@ afterEach(async () => {
   closeShopDatabases();
   for (const { name } of await indexedDB.databases())
     if (name !== undefined) await Dexie.delete(name);
+  // A push's wait after a failure lives in memory (src/offline/sync/backoff.ts): forgotten, so the next
+  // test's first push goes at once.
+  forgetPushWaits();
   // The language a test chose is kept in the browser's storage (src/i18n/language.ts): forget it, so
   // the next test opens in Swahili, as a new device does. Tests that run in plain Node have no storage.
   // The same for the device's saved copy (src/features/devices/this-device.ts), so each test starts as
