@@ -331,7 +331,7 @@ describe("the pin login with no network (SYNC-10)", () => {
 
     expect(
       await screen.findByText(
-        "Hakuna mtandao. Ingia mara moja kwenye kompyuta hii mtandao ukiwepo, kisha utaweza kuingia bila mtandao.",
+        "Kompyuta hii haiwezi kuthibitisha PIN yako bila mtandao bado. Ingia mara moja hapa mtandao ukiwepo, kisha utaweza kuingia hata bila mtandao.",
       ),
     ).toBeDefined();
   });

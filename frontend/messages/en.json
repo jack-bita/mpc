@@ -357,7 +357,7 @@
     "pin": {
       "wrong": "Wrong PIN.",
       "locked": "Too many wrong PINs. Try again in {minutes} min.",
-      "offline_first": "No network. Log in once on this laptop while the network is on, and then you can log in without it.",
+      "offline_first": "This laptop can't check your PIN on its own yet. Log in here once while the network is on, and then you can log in even without it.",
       "own": "You can't set your own PIN here.",
       "superuser_only": "Only the system admin can set this person's PIN.",
       "more_keys": "This person has permissions you don't, so you can't set their PIN.",
