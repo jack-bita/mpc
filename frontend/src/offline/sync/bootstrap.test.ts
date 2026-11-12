@@ -1,5 +1,6 @@
 // bootstrap.test.ts — a laptop's first full copy (SYNC-7, 03 §6.4): it fills every list and sets the
 // cursor, all at once or not at all, and a refusal about the device is kept as the device check keeps it.
+// It also keeps where the laptop's own count stands, so its next record carries on from it (SYNC-8).
 import Dexie from "dexie";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -15,7 +16,7 @@ import { ASHA, BOOTSTRAP, DAWA_SIDE } from "@/test/shop-lists";
 
 import { openShopDatabase, type ShopDatabase } from "../db";
 import { bootstrap, needsBootstrap } from "./bootstrap";
-import { CURSOR, readCursor } from "./meta";
+import { CURSOR, LAST_DEVICE_SEQ, readCursor, readLastDeviceSeq } from "./meta";
 
 vi.mock("@/api/client", async (importOriginal) =>
   (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
@@ -69,6 +70,28 @@ describe("the bootstrap", () => {
     expect(await needsBootstrap(db)).toBe(false);
   });
 
+  it("keeps the laptop's last number, so its next record carries on from it", async () => {
+    // The server says this laptop's last record was #57: its next one is #58, never #1 (SYNC-8).
+    freshDatabase();
+    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+
+    await bootstrap(db);
+
+    expect(await readLastDeviceSeq(db)).toBe(57);
+  });
+
+  it("keeps its own number when filled again, if it is ahead of the server's", async () => {
+    // Filled again (SYNC-13) while #58 to #70 still wait in its outbox: the server has seen only #57,
+    // and counting from it would give #58 a second time.
+    freshDatabase();
+    await db.meta.put({ key: LAST_DEVICE_SEQ, value: 70 });
+    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+
+    await bootstrap(db);
+
+    expect(await readLastDeviceSeq(db)).toBe(70);
+  });
+
   it("keeps no record the server no longer sends, when filled again", async () => {
     freshDatabase();
     const left = { ...ASHA, id: "019a5e00-0000-7000-8000-0000000000c9" };
@@ -91,6 +114,7 @@ describe("the bootstrap", () => {
 
     expect(await db.side.count()).toBe(0);
     expect(await db.meta.get(CURSOR)).toBeUndefined();
+    expect(await readLastDeviceSeq(db)).toBeNull();
     expect(await needsBootstrap(db)).toBe(true);
   });
 
