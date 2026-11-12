@@ -26,7 +26,7 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button } from "@/components/design/button";
 
 import { PinPad } from "./pin-pad";
-import { type PinScreenStaff, StaffPicker } from "./staff-picker";
+import { StaffPicker, type StaffRow } from "./staff-picker";
 
 export function PinLogin({
   notice,
@@ -42,7 +42,7 @@ export function PinLogin({
   const t = useTranslations("login.pin");
   const store = useQueryClient();
   // Who tapped their tile: nobody yet, so the tiles show.
-  const [person, setPerson] = useState<PinScreenStaff | null>(null);
+  const [person, setPerson] = useState<StaffRow | null>(null);
 
   const login = useMutation({
     mutationFn: (sent: { staff: string; pin: string }) =>

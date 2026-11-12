@@ -84,7 +84,8 @@
     },
     "picker": {
       "title": "Who are you?",
-      "empty": "No one works here yet. Ask the shop's owner to add the staff."
+      "empty": "No one works here yet. Ask the shop's owner to add the staff.",
+      "firstSync": "Wait a moment: this laptop is getting the staff list for the first time."
     },
     "pin": {
       "typePin": "Type your PIN",

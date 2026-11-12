@@ -10,37 +10,39 @@ import { ApiRefusal } from "@/api/refusal";
 import { DeviceCheck } from "@/features/devices/device-check";
 import { savedBlocked } from "@/features/devices/this-device";
 import { setLanguage } from "@/i18n/language";
-import { DAWA_LAPTOP_ANSWER } from "@/test/devices";
+import { saveDevice } from "@/features/devices/this-device";
+import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { swahiliIn } from "@/test/language";
+import { staffRow, theLaptopKnows } from "@/test/laptop";
 import { render } from "@/test/render";
 
 import { PinLogin } from "./pin-login";
-import type { PinScreenStaff } from "./staff-picker";
 
 vi.mock("@/api/client", async (importOriginal) =>
   (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
 );
 
-const STAFF = "/api/devices/v1/staff/";
 const PIN_LOGIN = "/api/auth/pin-login/";
 const DEVICE_ME = "/api/devices/v1/me/";
 
 // Fake people: made-up names.
-const ASHA: PinScreenStaff = {
-  id: "019a5e00-0000-7000-8000-0000000000c2",
-  full_name: "Asha Mfano",
-  display_name: "Asha",
-};
-const JUMA: PinScreenStaff = {
-  id: "019a5e00-0000-7000-8000-0000000000c3",
-  full_name: "Juma Mfano",
-  display_name: "Juma",
-};
+const ASHA = staffRow(
+  "019a5e00-0000-7000-8000-0000000000c2",
+  "Asha Mfano",
+  "Asha",
+);
+const JUMA = staffRow(
+  "019a5e00-0000-7000-8000-0000000000c3",
+  "Juma Mfano",
+  "Juma",
+);
 
-/** The laptop's two people, and how the PIN login answers. */
-function theShop(login: Parameters<typeof answer>[2]) {
-  answer("GET", STAFF, { status: 200, body: [ASHA, JUMA] });
+/** The Dawa laptop, registered, with its two people on it (their tiles come from its own copy, SYNC-10),
+ * and how the PIN login answers. */
+async function theShop(login: Parameters<typeof answer>[2]) {
+  saveDevice(DAWA_LAPTOP);
+  await theLaptopKnows(ASHA, JUMA);
   answer("POST", PIN_LOGIN, login);
 }
 
@@ -55,7 +57,7 @@ async function ashaTypes(pin: string) {
 
 describe("the pin login", () => {
   it("asks the person picked for their PIN, under their name", async () => {
-    theShop({ status: 204 });
+    await theShop({ status: 204 });
     render(<PinLogin />);
 
     fireEvent.click(
@@ -72,7 +74,7 @@ describe("the pin login", () => {
   it("moves the keyboard to each step's heading, and back to it after a refusal", async () => {
     // The tile tapped, Rudi and a key switched off while the PIN is away all leave the page: focus would
     // fall to nothing, and a screen reader would say nothing of the new step (UI-3 did this for its forms).
-    theShop(refusal(400, "pin.wrong"));
+    await theShop(refusal(400, "pin.wrong"));
     render(<PinLogin />);
 
     await ashaTypes("4830");
@@ -88,7 +90,7 @@ describe("the pin login", () => {
   });
 
   it("sends who and the PIN, then forgets the last person's answers", async () => {
-    theShop({ status: 204 });
+    await theShop({ status: 204 });
     // The store as the last person left it: a list from their last screen (UI-2's note on UI-4).
     const store = makeQueryClient();
     store.setQueryData(["devices", "list"], ["Laptop Dawa"]);
@@ -109,7 +111,7 @@ describe("the pin login", () => {
   });
 
   it("says a wrong PIN is wrong, with the pad ready for the next try", async () => {
-    theShop(refusal(400, "pin.wrong"));
+    await theShop(refusal(400, "pin.wrong"));
     render(<PinLogin />);
 
     await ashaTypes("4830");
@@ -129,7 +131,7 @@ describe("the pin login", () => {
   it("keeps no PIN once the server has answered", async () => {
     // Juma tapped Asha's tile by mistake and typed his own PIN: wrong for her, but his real one. Kept, it
     // would sit in the laptop's memory, readable in the browser's tools, after he walks away.
-    theShop(refusal(400, "pin.wrong"));
+    await theShop(refusal(400, "pin.wrong"));
     const store = makeQueryClient();
     render(
       <QueryClientProvider client={store}>
@@ -158,7 +160,7 @@ describe("the pin login", () => {
   it("says how many minutes a locked person waits", async () => {
     // The fifth wrong PIN locks her on this laptop for a minute, doubling each time (AUTH-4): the server
     // sends the wait in seconds, the screen says minutes.
-    theShop(refusal(400, "pin.locked", { wait: 300 }));
+    await theShop(refusal(400, "pin.locked", { wait: 300 }));
     render(<PinLogin />);
 
     await ashaTypes("4830");
@@ -171,7 +173,7 @@ describe("the pin login", () => {
   });
 
   it("tells a suspended person why", async () => {
-    theShop(refusal(403, "staff.suspended"));
+    await theShop(refusal(403, "staff.suspended"));
     render(<PinLogin />);
 
     await ashaTypes("4829");
@@ -184,7 +186,7 @@ describe("the pin login", () => {
   it("takes no key and no Rudi while the PIN is on its way", async () => {
     // A slow 3G answer: nothing the person taps meanwhile may send a second PIN, nor leave the step, as
     // the answer could still log her in behind the picker.
-    theShop(() => new Promise<Response>(() => {}));
+    await theShop(() => new Promise<Response>(() => {}));
     render(<PinLogin />);
 
     await ashaTypes("4829");
@@ -203,7 +205,7 @@ describe("the pin login", () => {
 
   it("goes back to the picker with Rudi, and forgets the last refusal", async () => {
     // Juma tapped Asha's tile by mistake and typed his own PIN.
-    theShop(refusal(400, "pin.wrong"));
+    await theShop(refusal(400, "pin.wrong"));
     render(<PinLogin />);
     await ashaTypes("4830");
     await screen.findByText("PIN si sahihi.");
@@ -213,13 +215,16 @@ describe("the pin login", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
     ).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Juma Mfano Juma" }));
+    // The tiles come a moment after the question: the picker reads the laptop's copy again.
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Juma Mfano Juma" }),
+    );
     expect(screen.queryByText("PIN si sahihi.")).toBeNull();
   });
 
   it("shows why the last session ended above the picker, until someone is picked", async () => {
     // `me` refused the last session: the person was suspended while logged in (AUTH-4).
-    theShop({ status: 204 });
+    await theShop({ status: 204 });
     const ended = new ApiRefusal(403, {
       code: "staff.suspended",
       message: "",
@@ -241,7 +246,7 @@ describe("the pin login", () => {
   });
 
   it("tells the home page when a tile is tapped, so it can drop the notice for good", async () => {
-    theShop({ status: 204 });
+    await theShop({ status: 204 });
     const picked = vi.fn();
     render(<PinLogin onPick={picked} />);
 
@@ -256,7 +261,7 @@ describe("the pin login", () => {
     // Sent through the store, so the device's check hears of the block and the lock comes at once
     // (noticeBlock, UI-3): a call sent around the store would leave the laptop open.
     answer("GET", DEVICE_ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
-    theShop(refusal(401, "device.blocked"));
+    await theShop(refusal(401, "device.blocked"));
     render(
       <>
         <DeviceCheck />
@@ -271,7 +276,7 @@ describe("the pin login", () => {
 
   it("speaks English after the switch, with no Swahili left", async () => {
     setLanguage("en");
-    theShop(refusal(400, "pin.wrong"));
+    await theShop(refusal(400, "pin.wrong"));
     const { container } = render(<PinLogin />);
 
     await ashaTypes("4830");

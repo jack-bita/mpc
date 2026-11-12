@@ -3,7 +3,7 @@
 // session, as Django does for this browser: a PIN login starts it, a logout ends it, and `me` answers for it.
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeQueryClient } from "@/api/query-client";
 import type { components } from "@/api/schema";
@@ -18,6 +18,7 @@ import {
 } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { swahiliIn } from "@/test/language";
+import { staffRow, theLaptopKnows } from "@/test/laptop";
 import { render } from "@/test/render";
 
 import { AtTheDevice } from "./at-the-device";
@@ -27,7 +28,6 @@ vi.mock("@/api/client", async (importOriginal) =>
 );
 
 const ME = "/api/auth/me/";
-const STAFF = "/api/devices/v1/staff/";
 const PIN_LOGIN = "/api/auth/pin-login/";
 const LOGOUT = "/api/auth/logout/";
 
@@ -55,6 +55,19 @@ const JUMA: WhoIsHere = {
   },
 };
 
+// Both people are on the laptop's own copy of the staff, which the tiles read (SYNC-10).
+beforeEach(() =>
+  theLaptopKnows(
+    ...[NEEMA, JUMA].map((person) =>
+      staffRow(
+        person.staff.id,
+        person.user.full_name,
+        person.staff.display_name,
+      ),
+    ),
+  ),
+);
+
 /** The Dawa laptop with `first` logged in. Logout answers as `logout` says; by default, as Django does.
  * A test's own logout calls the `end` it gives back, as Django ends the session. */
 function theLaptop(
@@ -69,14 +82,6 @@ function theLaptop(
       ? Response.json(here)
       : Response.json(nobody.body, { status: nobody.status }),
   );
-  answer("GET", STAFF, {
-    status: 200,
-    body: [NEEMA, JUMA].map((person) => ({
-      id: person.staff.id,
-      full_name: person.user.full_name,
-      display_name: person.staff.display_name,
-    })),
-  });
   answer("POST", PIN_LOGIN, async (request) => {
     const { staff } = (await request.json()) as { staff: string };
     here = [NEEMA, JUMA].find((person) => person.staff.id === staff) ?? null;
@@ -348,16 +353,6 @@ describe("a session the server ends", () => {
       const why = ended ? nobody : suspended;
       return Response.json(why.body, { status: why.status });
     });
-    answer("GET", STAFF, {
-      status: 200,
-      body: [
-        {
-          id: JUMA.staff.id,
-          full_name: JUMA.user.full_name,
-          display_name: JUMA.staff.display_name,
-        },
-      ],
-    });
     answer("POST", LOGOUT, () => {
       ended = true;
       return new Response(null, { status: 204 });
@@ -370,8 +365,11 @@ describe("a session the server ends", () => {
       screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
     ).toBeDefined();
     expect(logouts()).toHaveLength(1);
-    // Juma taps his tile, then Rudi: the reason was for her, and is gone.
-    fireEvent.click(screen.getByRole("button", { name: "Juma Mfano Juma" }));
+    // Juma taps his tile, then Rudi: the reason was for her, and is gone. The tiles come a moment after
+    // the question, from the laptop's copy.
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Juma Mfano Juma" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Rudi" }));
     expect(
       screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
@@ -396,7 +394,6 @@ describe("a session the server ends", () => {
           ? Response.json(nobody.body, { status: nobody.status })
           : Response.json(broken.body, { status: broken.status }),
     );
-    answer("GET", STAFF, { status: 200, body: [] });
     const store = makeQueryClient();
     // A 502 isn't asked again here: the store's own rule would ask twice more, a second and two apart.
     store.setDefaultOptions({ queries: { retry: false } });

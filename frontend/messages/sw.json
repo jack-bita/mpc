@@ -84,7 +84,8 @@
     },
     "picker": {
       "title": "Wewe ni nani?",
-      "empty": "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze."
+      "empty": "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze.",
+      "firstSync": "Subiri kidogo: kompyuta hii inaleta orodha ya wafanyakazi kwa mara ya kwanza."
     },
     "pin": {
       "typePin": "Andika PIN yako",
