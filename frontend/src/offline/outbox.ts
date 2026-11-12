@@ -1,13 +1,18 @@
-// outbox.ts — saving a document on this laptop (SYNC-8, 03 §6.2): the document, its number and its
-// outbox row, written in one transaction.
+// outbox.ts — the laptop's outbox (SYNC-8, 03 §6.2): saving a document, with its number and its outbox
+// row, in one transaction; and the live list of the records the server refused, set aside.
 //
 // A counter screen never sends anything itself. It saves here and is done at once, online or offline;
 // the push (sync/push.ts) takes what waits in the outbox to the server later, in number order. Nothing is
-// lost on the way: a row leaves the outbox only once the server has accepted its document.
+// lost on the way: a row leaves the outbox only once the server has accepted its document, and a record
+// the server refused stays in it, set aside, for someone to look at.
+import Dexie from "dexie";
+import { useLiveQuery } from "dexie-react-hooks";
+
 import { newId } from "@/lib/ids";
 
 import type { DocumentRow, PendingEffectRow, ShopDatabase } from "./db";
 import { LAST_DEVICE_SEQ, readLastDeviceSeq } from "./sync/meta";
+import { useShopDatabase } from "./this-shop";
 
 /** What a screen hands over to save: the document without what the save fills in, its id and its time. */
 export type Draft = Omit<DocumentRow, "id" | "client_time">;
@@ -86,4 +91,47 @@ export async function saveDocument(
       return { ...made, device_seq };
     },
   );
+}
+
+/** A record the server refused (`invalid`), set aside by the push: its document, its number, and the
+ * server's reason, an error code (`document.type_unknown`). */
+export interface SetAside {
+  document: DocumentRow;
+  device_seq: number;
+  reason: string;
+}
+
+/**
+ * The records set aside on this laptop, in their number order, read live: the list redraws by itself
+ * when a push sets one more aside. Undefined while its first read runs, or while the device isn't
+ * registered. No screen shows it yet: SYNC-11 does, with words of its own for each reason, as the
+ * office's sentence for `id.taken` ("Try again.") is wrong here: a resend gets the same answer.
+ */
+export function useNeedsAttention(): SetAside[] | undefined {
+  const db = useShopDatabase();
+  return useLiveQuery(async () => {
+    if (db === null) return undefined;
+    // One read transaction, so the rows and their documents are seen as they stood together.
+    return db.transaction("r", [db.outbox, db.documents], async () => {
+      const rows = await db.outbox
+        .where("[status+device_seq]")
+        .between(
+          ["needs_attention", Dexie.minKey],
+          ["needs_attention", Dexie.maxKey],
+        )
+        .toArray();
+      const documents = await db.documents.bulkGet(rows.map((row) => row.id));
+      return rows.map((row, i) => {
+        const document = documents[i];
+        // Written in one transaction with its row (saveDocument), so never missing.
+        if (document === undefined)
+          throw new Error(`Outbox row ${row.id} has no document.`);
+        return {
+          document,
+          device_seq: row.device_seq,
+          reason: row.last_error ?? "",
+        };
+      });
+    });
+  }, [db]);
 }
