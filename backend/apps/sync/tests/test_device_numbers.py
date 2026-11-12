@@ -32,7 +32,7 @@ from django.db.transaction import TransactionManagementError
 from apps.control.models import Flag, FlagKind, FlagNote, FlagStatus, FlagStep
 from apps.control.services import dismiss_flag, explain_flag
 from apps.core.links import LINK_TYPES
-from apps.core.tenancy import shop_context
+from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
 from apps.people.services import lock_device_numbers
 from apps.shops.models import Shop, Side
@@ -40,7 +40,7 @@ from apps.sync import push as push_module
 from apps.sync.document_types import DOCUMENT_TYPES, Document
 from apps.sync.models import PushedDocument
 from apps.sync.push import HIGHEST_DEVICE_SEQ, Answer, Sent, push
-from apps.sync.selectors import last_device_number
+from apps.sync.selectors import highest_pushed_number, last_device_number
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 from tests.probe.documents import TICKET, TICKET_CODE, post_ticket
 from tests.probe.models import Ticket
@@ -199,6 +199,17 @@ def test_another_laptops_numbers_are_not_this_ones(
     _push_numbers(office, staff_a, 1, 2, 3, 4, 5)
     assert _counted(office) == 5
     assert _counted(device_a) == 0
+
+
+def test_a_laptops_number_is_read_only_inside_its_shop(device_a: Device, staff_a: StaffMember, shop_b: Shop) -> None:
+    # T1, as every read in apps/sync/selectors.py: asked with another shop open, it fails loudly, never answering
+    # a number of another shop's laptop, nor a quiet 0 that would start its count again from #1.
+    _push_numbers(device_a, staff_a, 1, 2)
+    with shop_context(shop_b):
+        with pytest.raises(ShopMismatch):
+            last_device_number(device_a)
+        with pytest.raises(ShopMismatch):
+            highest_pushed_number(device_a)
 
 
 def test_a_late_record_raises_no_new_flag(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:

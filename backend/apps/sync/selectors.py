@@ -134,7 +134,12 @@ def _rows_in_force_or_later(shop: Shop, today: date) -> list[uuid.UUID]:
 
 def highest_pushed_number(device: Device) -> int:
     """The highest number among this laptop's records in the answer log, 0 for a laptop that sent none."""
-    highest = PushedDocument.objects.filter(device=device).aggregate(highest=Max("device_seq"))["highest"]
+    # T1: with another shop open, the guard would hide the laptop's lines and answer a quiet 0, and the laptop would
+    # count again from #1. Refused loudly instead, as every read here.
+    _check_open(device.shop)
+    highest = PushedDocument.objects.filter(shop=device.shop_id, device=device).aggregate(highest=Max("device_seq"))[
+        "highest"
+    ]
     return highest or 0
 
 
@@ -146,7 +151,12 @@ def last_device_number(device: Device) -> int:
     the key's cookie: the server's number is the one that survives, so a laptop filled again carries on from it and
     never numbers from 1 again, which would flag its records and take a sale's number twice (SYNC-5's note).
 
-    Read without the lock the push takes (lock_device_numbers): a laptop being filled sends nothing meanwhile, as it
-    saves nothing before its bootstrap."""
-    kept = Device.objects.filter(pk=device.pk).values_list("last_device_seq", flat=True).get()
+    Read without the lock the push takes (lock_device_numbers). A laptop filled for the first time saves nothing before
+    its bootstrap, so it sends nothing meanwhile. One filled again may have another tab pushing as it asks, and get a
+    number already behind its own: harmless, as the laptop keeps the larger of the two (bootstrap.ts).
+
+    The row is read afresh rather than from `device`, which its caller may have loaded before a push moved the number.
+    """
+    _check_open(device.shop)
+    kept = Device.objects.filter(shop=device.shop_id, pk=device.pk).values_list("last_device_seq", flat=True).get()
     return kept if kept is not None else highest_pushed_number(device)

@@ -34,8 +34,8 @@ def snapshot(device: Device) -> dict[str, Any]:
     shop = device.shop
     # First, before any row: see the file's header.
     answer: dict[str, Any] = {"cursor": last_change_number(shop)}
-    # The laptop's own count, beside the shop's: its order among the rows doesn't matter, as the laptop saves nothing
-    # before its bootstrap, so it can't have moved meanwhile.
+    # The laptop's own count, beside the shop's. Its place among the reads doesn't matter: a laptop filled for the first
+    # time saves nothing before its bootstrap, and one filled again keeps the larger of this and its own (bootstrap.ts).
     answer["last_device_seq"] = last_device_number(device)
     for code, entry in REGISTRY.items():
         # `.data` reads the rows now, in this order, each table after the cursor: a lazy read left for later would
