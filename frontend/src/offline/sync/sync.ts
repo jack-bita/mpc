@@ -112,7 +112,9 @@ export function syncLockName(shopId: string): string {
  * go, and the other tab's push may have read its outbox before the save.
  *
  * Chrome and Edge, the shop's browsers (03 §7.3), have had it for years. A browser without it, and the
- * tests' jsdom, sync as before: one at a time in each tab.
+ * tests' jsdom, sync as before: one at a time in each tab. So does a page opened on a plain http address
+ * other than localhost (a phone trying a developer's laptop over Wi-Fi): browsers give Web Locks only to
+ * https and localhost, and two tabs there are not kept apart. The shop's server and the demo are https.
  *
  * A call left hanging would hold the lock, and every other tab would wait behind it: each sync call gives
  * up after 2 minutes (syncCallLimit, answer.ts), as if the network had dropped, and the lock goes on.

@@ -34,7 +34,9 @@ import { listenForAsks } from "./asks";
 import { syncShop, type SyncAsk } from "./sync";
 
 /** How often an open app syncs while online (03 §6.5, a default): the office's changes reach the counter
- * within half a minute, and the server hears from each laptop as often. */
+ * within half a minute, and the server hears from each open tab as often. Each tab keeps its own ticks:
+ * the lock puts two tabs in turn but doesn't merge them, so a laptop with two tabs open syncs twice as
+ * often (a note for the sync health page, SYNC-14). */
 export const SYNC_EVERY = 30_000;
 
 /** How long after a save the sync goes (03 §6.5): soon enough that a record has most likely left before

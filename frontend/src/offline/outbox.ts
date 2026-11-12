@@ -3,9 +3,10 @@
 //
 // A counter screen never sends anything itself. It saves here and is done at once, online or offline;
 // the push (sync/push.ts) takes what waits in the outbox to the server later, in number order: 2 s after
-// the save, as the save tells the sync's moments (sync/asks.ts, SYNC-9). Nothing is lost on the way: a
-// row leaves the outbox only once the server has accepted its document, and a record the server refused
-// stays in it, set aside, for someone to look at.
+// the save, as the save tells the sync's moments (sync/asks.ts, SYNC-9), or once the network is back, or
+// once a wait after a failed push is over (sync/backoff.ts). Nothing is lost on the way: a row leaves
+// the outbox only once the server has accepted its document, and a record the server refused stays in
+// it, set aside, for someone to look at.
 import Dexie from "dexie";
 import { useLiveQuery } from "dexie-react-hooks";
 
