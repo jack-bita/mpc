@@ -21,7 +21,7 @@ import {
 import { BOOTSTRAP } from "@/test/shop-lists";
 
 import type { ShopDatabase } from "./db";
-import { checkPinOffline, rememberPin } from "./pin";
+import { checkPinOffline, dropOutdatedChecks, rememberPin } from "./pin";
 import { bootstrap } from "./sync/bootstrap";
 import { pull } from "./sync/pull";
 
@@ -55,7 +55,21 @@ beforeEach(async () => {
   db = await laptopWithStaff();
   await ashaLoggedInOnline(db);
 });
-afterEach(() => throwAway(db));
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await throwAway(db);
+});
+
+/** A sync lands while the blender runs: `sync` writes what a pull would, then the blender goes on. */
+function aSyncWhileTheBlenderRuns(sync: () => Promise<unknown>): void {
+  const blend = crypto.subtle.deriveBits.bind(crypto.subtle);
+  vi.spyOn(crypto.subtle, "deriveBits").mockImplementationOnce(
+    async (...given) => {
+      await sync();
+      return blend(...given);
+    },
+  );
+}
 
 describe("after a PIN change on the server", () => {
   it("stops the old PIN working offline once the laptop has pulled", async () => {
@@ -149,5 +163,59 @@ describe("a bootstrap", () => {
     expect(await checkPinOffline(db, BARAKA_ROW.id, BARAKA_PIN)).toEqual(
       BARAKA_ROW,
     );
+  });
+});
+
+describe("a sync while the blender runs", () => {
+  // The blender takes a third of a second, outside any transaction: a pull can land in between. Each
+  // re-reads the rows after it (rememberPin, lift).
+
+  it("saves no check of a PIN whose time changed meanwhile", async () => {
+    // Baraka's online yes, as a pull brings his new PIN: the one he typed may be the old one.
+    aSyncWhileTheBlenderRuns(() =>
+      db.staff.put({ ...BARAKA_ROW, pin_changed_at: PIN_CHANGED_AT }),
+    );
+
+    await rememberPin(db, BARAKA_ROW.id, BARAKA_PIN, FEW_TURNS);
+
+    expect(await db.pin_checks.get(BARAKA_ROW.id)).toBeUndefined();
+  });
+
+  it("refuses the old PIN when the pull drops its check meanwhile", async () => {
+    // As a pull page does: her new row, and the checks it makes outdated, in one transaction.
+    aSyncWhileTheBlenderRuns(() =>
+      db.transaction("rw", [db.staff, db.pin_checks], async () => {
+        await db.staff.put({ ...ASHA_ROW, pin_changed_at: PIN_CHANGED_AT });
+        await dropOutdatedChecks(db);
+      }),
+    );
+
+    await expect(
+      checkPinOffline(db, ASHA_ROW.id, ASHA_PIN),
+    ).rejects.toMatchObject({ code: "pin.offline_first" });
+  });
+
+  it("refuses the old PIN when her row has a new time meanwhile, even with the check still there", async () => {
+    // However the row came to differ: the PIN just checked is the old one.
+    aSyncWhileTheBlenderRuns(() =>
+      db.staff.put({ ...ASHA_ROW, pin_changed_at: PIN_CHANGED_AT }),
+    );
+
+    await expect(
+      checkPinOffline(db, ASHA_ROW.id, ASHA_PIN),
+    ).rejects.toMatchObject({ code: "pin.offline_first" });
+  });
+
+  it("refuses her when a pull takes her off the laptop meanwhile", async () => {
+    aSyncWhileTheBlenderRuns(() =>
+      db.transaction("rw", [db.staff, db.pin_checks], async () => {
+        await db.staff.delete(ASHA_ROW.id);
+        await dropOutdatedChecks(db);
+      }),
+    );
+
+    await expect(
+      checkPinOffline(db, ASHA_ROW.id, ASHA_PIN),
+    ).rejects.toMatchObject({ code: "pin.offline_first" });
   });
 });

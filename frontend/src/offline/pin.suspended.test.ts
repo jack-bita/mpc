@@ -97,3 +97,20 @@ describe("a suspended person", () => {
     expect(await checkPinOffline(db, ASHA_ROW.id, ASHA_PIN)).toEqual(ASHA_ROW);
   });
 });
+
+describe("a suspension while the blender runs", () => {
+  it("refuses her right PIN, as the pull lands in the middle of its check", async () => {
+    // The blender takes a third of a second, outside any transaction; the row is read again after it.
+    const blend = crypto.subtle.deriveBits.bind(crypto.subtle);
+    vi.spyOn(crypto.subtle, "deriveBits").mockImplementationOnce(
+      async (...given) => {
+        await db.staff.put(SUSPENDED);
+        return blend(...given);
+      },
+    );
+
+    await expect(
+      checkPinOffline(db, ASHA_ROW.id, ASHA_PIN),
+    ).rejects.toMatchObject({ code: "staff.suspended" });
+  });
+});

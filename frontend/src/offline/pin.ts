@@ -188,7 +188,15 @@ async function lift(
 ): Promise<StaffRecord | PinRefused> {
   const person = await db.staff.get(counted.staff_id);
   const held = await db.pin_checks.get(counted.staff_id);
-  if (person === undefined || held?.salt !== counted.salt)
+  // Gone, made again, or made for another PIN than her row's now: the PIN just checked may be the old
+  // one. The PIN time too, not only the salt, as the local session is tied to her row's time
+  // (offline-session.ts): a session started with a time its check wasn't made for would never end.
+  if (
+    person === undefined ||
+    held === undefined ||
+    held.salt !== counted.salt ||
+    held.pin_changed_at !== person.pin_changed_at
+  )
     return new PinRefused("pin.offline_first");
   if (person.status !== "active") return new PinRefused("staff.suspended");
   await db.pin_checks.put({
