@@ -2,15 +2,17 @@
 // row, in one transaction; and the live list of the records the server refused, set aside.
 //
 // A counter screen never sends anything itself. It saves here and is done at once, online or offline;
-// the push (sync/push.ts) takes what waits in the outbox to the server later, in number order. Nothing is
-// lost on the way: a row leaves the outbox only once the server has accepted its document, and a record
-// the server refused stays in it, set aside, for someone to look at.
+// the push (sync/push.ts) takes what waits in the outbox to the server later, in number order: 2 s after
+// the save, as the save tells the sync's moments (sync/asks.ts, SYNC-9). Nothing is lost on the way: a
+// row leaves the outbox only once the server has accepted its document, and a record the server refused
+// stays in it, set aside, for someone to look at.
 import Dexie from "dexie";
 import { useLiveQuery } from "dexie-react-hooks";
 
 import { newId } from "@/lib/ids";
 
 import type { DocumentRow, PendingEffectRow, ShopDatabase } from "./db";
+import { tellRecordSaved } from "./sync/asks";
 import { LAST_DEVICE_SEQ, readLastDeviceSeq } from "./sync/meta";
 import { useShopDatabase } from "./this-shop";
 
@@ -96,7 +98,7 @@ export async function saveDocument(
     id: newId(),
     client_time: new Date().toISOString(),
   };
-  return db.transaction(
+  const saved = await db.transaction(
     "rw",
     [db.meta, db.documents, db.outbox, db.pending_effects],
     async () => {
@@ -130,6 +132,9 @@ export async function saveDocument(
       return { ...made, device_seq };
     },
   );
+  // Only once the transaction is in: a sync told sooner could push before the record is there to find.
+  tellRecordSaved();
+  return saved;
 }
 
 /** A record the server refused (`invalid`), set aside by the push: its document, its number, and the

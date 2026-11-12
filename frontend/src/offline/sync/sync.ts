@@ -2,9 +2,9 @@
 // push of what waits in the outbox (SYNC-8), then pulls until nothing more waits (SYNC-7, 03 §6.4); and
 // the line each shop's syncs wait in, so they run one after another (SYNC-9, 03 §6.5).
 //
-// For now it runs after each device check that names a working device (device-check.tsx): as the app
-// opens, when its window comes back to the front, when the network returns, and every 5 minutes. SYNC-9
-// brings the full set of moments (03 §6.5) and a lock so two tabs never sync at once (Web Locks).
+// It runs at the moments triggers.tsx keeps: as the app opens, when the network comes back, 2 s after a
+// save, every 30 s while online, and from Tuma sasa (03 §6.5). SYNC-9 also brings a lock so two tabs
+// never sync at once (Web Locks).
 import { shopDatabase } from "../this-shop";
 import { isAboutTheDevice } from "./answer";
 import { bootstrap, needsBootstrap } from "./bootstrap";
@@ -117,7 +117,7 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
     else if (result === "sent") pushSettled(shopId);
   }
   await pull(db);
-  // Thrown after the pull, so the failure is still reported (device-check.tsx). A pull that fails
+  // Thrown after the pull, so the failure is still reported (triggers.tsx). A pull that fails
   // too, as with no network, throws its own instead, which says the same.
   if (pushFailure !== null) throw pushFailure.error;
 }
