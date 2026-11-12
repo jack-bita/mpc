@@ -318,6 +318,26 @@ describe("a sync", () => {
     expect(await readCursor(shopDatabase(SHOP))).toBe(131);
   });
 
+  it("keeps the push's own failure, and still pulls, when its wait can't be written", async () => {
+    // The server has trouble, and the laptop's disk is full as the wait is written: the server's 500
+    // is still the failure reported, and the office's changes still come down.
+    await filledLaptop();
+    answer("POST", PUSH, refusal(500, "server_error"));
+    answer("GET", PULL, emptyPage(131));
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const full = new Error("disk full");
+    vi.spyOn(shopDatabase(SHOP).meta, "bulkPut").mockRejectedValueOnce(full);
+
+    const error: unknown = await syncShop(SHOP).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(ApiRefusal);
+    expect(paths()).toEqual([PUSH, PULL]);
+    expect(await readCursor(shopDatabase(SHOP))).toBe(131);
+    expect(log).toHaveBeenCalledWith("the push's wait was not kept", full);
+  });
+
   it("pulls nothing once the push says the laptop is blocked", async () => {
     // A blocked laptop must ask nothing more: the lock is on (answer.ts).
     saveDevice(DAWA_LAPTOP);

@@ -7,6 +7,7 @@
 // save, every 30 s while online, and from Tuma sasa (03 §6.5).
 import { savedBlocked } from "@/features/devices/this-device";
 
+import type { ShopDatabase } from "../db";
 import { shopDatabase } from "../this-shop";
 import { isAboutTheDevice } from "./answer";
 import { bootstrap, needsBootstrap } from "./bootstrap";
@@ -145,18 +146,32 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
     try {
       result = await push(db);
     } catch (error) {
-      await pushFailed(db, pushedAt);
+      await waitAfterAFailure(db, pushedAt);
       // Blocked, or a key that opens no device: ask nothing more (answer.ts has kept it).
       if (isAboutTheDevice(error)) throw error;
       // Any other failure, a 5xx on the push route say, still lets the pull run: the office's
       // changes, a suspension among them (X2), must not wait for the push to work again.
       pushFailure = { error };
     }
-    if (result === "retry") await pushFailed(db, pushedAt);
+    if (result === "retry") await waitAfterAFailure(db, pushedAt);
     else if (result === "sent") await pushSettled(db);
   }
   await pull(db);
   // Thrown after the pull, so the failure is still reported (triggers.tsx). A pull that fails
   // too, as with no network, throws its own instead, which says the same.
   if (pushFailure !== null) throw pushFailure.error;
+}
+
+// The wait after a failure, written without hiding the failure itself. A wait the database refused to keep
+// (a full disk, say) costs one early push at most. Thrown, it would take the place of the push's own
+// failure, the one worth reporting, and stop the pull, which must still run (X2): so it is only logged.
+async function waitAfterAFailure(
+  db: ShopDatabase,
+  pushedAt: number,
+): Promise<void> {
+  try {
+    await pushFailed(db, pushedAt);
+  } catch (error) {
+    console.error("the push's wait was not kept", error);
+  }
 }
