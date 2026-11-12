@@ -2,6 +2,9 @@
 // pulls; a second check while one runs joins it; a failed one leaves the next free to run.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ApiRefusal } from "@/api/refusal";
+import { saveDevice, savedBlocked } from "@/features/devices/this-device";
+
 import { DAWA_LAPTOP } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { ASHA, BOOTSTRAP } from "@/test/shop-lists";
@@ -156,6 +159,38 @@ describe("a sync", () => {
 
     expect(second).not.toBe(first);
     expect(await readCursor(shopDatabase(other))).toBe(120);
+  });
+
+  it("still pulls when the push fails, then throws the push's failure", async () => {
+    // The server has trouble with the push route alone: the office's changes, a suspension among them
+    // (X2), must still come down. The failure is thrown after, so it is still reported.
+    await shopDatabase(SHOP).meta.bulkPut([
+      { key: "pull_cursor", value: 130 },
+      { key: "last_device_seq", value: 57 },
+    ]);
+    answer("POST", PUSH, refusal(500, "server_error"));
+    answer("GET", PULL, emptyPage(131));
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(ApiRefusal);
+
+    expect(paths()).toEqual([PUSH, PULL]);
+    expect(await readCursor(shopDatabase(SHOP))).toBe(131);
+  });
+
+  it("pulls nothing once the push says the laptop is blocked", async () => {
+    // A blocked laptop must ask nothing more: the lock is on (answer.ts).
+    saveDevice(DAWA_LAPTOP);
+    await shopDatabase(SHOP).meta.bulkPut([
+      { key: "pull_cursor", value: 130 },
+      { key: "last_device_seq", value: 57 },
+    ]);
+    answer("POST", PUSH, refusal(401, "device.blocked"));
+    answer("GET", PULL, emptyPage(131));
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(ApiRefusal);
+
+    expect(savedBlocked()).toBe(true);
+    expect(paths()).toEqual([PUSH]);
   });
 
   it("leaves the next sync free to run after one fails", async () => {

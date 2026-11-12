@@ -6,6 +6,7 @@
 // enough for an office change to reach the counter. SYNC-9 brings the full set of moments (03 §6.5) and
 // a lock so two tabs never sync at once (Web Locks).
 import { shopDatabase } from "../this-shop";
+import { isAboutTheDevice } from "./answer";
 import { bootstrap, needsBootstrap } from "./bootstrap";
 import { mayPush, pushFailed, pushSettled } from "./backoff";
 import { pull } from "./pull";
@@ -33,18 +34,26 @@ export function syncShop(shopId: string): Promise<void> {
     // server's changes from it, and drops its pending effects as the cursor passes them. A push told to
     // try later still lets the pull run: the server's trouble saving one record doesn't stop the office's
     // changes coming down. After a failure, the next push waits a while (backoff.ts); the pull doesn't.
+    let pushFailure: { error: unknown } | null = null;
     if (mayPush(shopId)) {
-      let result: PushResult;
+      let result: PushResult | null = null;
       try {
         result = await push(db);
       } catch (error) {
         pushFailed(shopId);
-        throw error;
+        // Blocked, or a key that opens no device: ask nothing more (answer.ts has kept it).
+        if (isAboutTheDevice(error)) throw error;
+        // Any other failure, a 5xx on the push route say, still lets the pull run: the office's
+        // changes, a suspension among them (X2), must not wait for the push to work again.
+        pushFailure = { error };
       }
       if (result === "retry") pushFailed(shopId);
-      else pushSettled(shopId);
+      else if (result === "sent") pushSettled(shopId);
     }
     await pull(db);
+    // Thrown after the pull, so the failure is still reported (device-check.tsx). A pull that fails
+    // too, as with no network, throws its own instead, which says the same.
+    if (pushFailure !== null) throw pushFailure.error;
   })().finally(() => {
     running.delete(shopId);
   });
