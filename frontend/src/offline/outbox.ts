@@ -38,6 +38,42 @@ export class NeverFilled extends Error {
   }
 }
 
+/** Refused: a draft the server would refuse with the whole push (PushedEnvelope, a 400). Saved, it would
+ * stop every push after it, for good; a bug in the screen that made it, so it fails at the counter. */
+export class BrokenDraft extends Error {
+  constructor(readonly field: string) {
+    super(`The draft's ${field} is not one the push can send.`);
+    this.name = "BrokenDraft";
+  }
+}
+
+// The server's limits on an envelope (apps/sync/api/serializers.py, PushedEnvelope; apps/sync/push.py).
+const LONGEST_TYPE = 40;
+const HIGHEST_SCHEMA_VERSION = 2 ** 31 - 1;
+const HIGHEST_DEVICE_SEQ = 10 ** 12 - 2;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The parts a screen hands over, checked as the server will check them. The payload must be a plain
+// object, as the server reads it as one (a DictField): a list, a date or a string is refused.
+function checkDraft(draft: Draft): void {
+  if (draft.type.length === 0 || draft.type.length > LONGEST_TYPE)
+    throw new BrokenDraft("type");
+  if (
+    !Number.isInteger(draft.schema_version) ||
+    draft.schema_version < 1 ||
+    draft.schema_version > HIGHEST_SCHEMA_VERSION
+  )
+    throw new BrokenDraft("schema_version");
+  if (!UUID.test(draft.created_by)) throw new BrokenDraft("created_by");
+  const { payload } = draft;
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    Object.getPrototypeOf(payload) !== Object.prototype
+  )
+    throw new BrokenDraft("payload");
+}
+
 /**
  * Saves a document made on this laptop, ready for the push: the document, the next number, its outbox
  * row and its pending effects, in one transaction (03 §6.2). Either all of it lands, or none of it does:
@@ -53,6 +89,7 @@ export async function saveDocument(
   draft: Draft,
   effects: readonly EffectDraft[] = [],
 ): Promise<SavedDocument> {
+  checkDraft(draft);
   // The laptop's own clock, with its zone (`Z`), as every time a laptop sends must name it (ATT-1).
   const made: DocumentRow = {
     ...draft,
@@ -66,6 +103,8 @@ export async function saveDocument(
       const last = await readLastDeviceSeq(db);
       if (last === null) throw new NeverFilled();
       const device_seq = last + 1;
+      // Far past any laptop's life, but a number the server refuses would stop every push after it.
+      if (device_seq > HIGHEST_DEVICE_SEQ) throw new BrokenDraft("device_seq");
       await db.documents.add(made);
       await db.outbox.add({
         id: made.id,

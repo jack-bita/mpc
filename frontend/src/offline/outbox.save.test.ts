@@ -7,7 +7,7 @@ import { DAWA_LAPTOP } from "@/test/devices";
 import { ASHA } from "@/test/shop-lists";
 
 import { openShopDatabase, type ShopDatabase } from "./db";
-import { NeverFilled, saveDocument, type Draft } from "./outbox";
+import { BrokenDraft, NeverFilled, saveDocument, type Draft } from "./outbox";
 import { LAST_DEVICE_SEQ, readLastDeviceSeq } from "./sync/meta";
 
 let db: ShopDatabase;
@@ -118,6 +118,41 @@ describe("saving a document", () => {
         posted_seq: null,
       });
     }
+  });
+
+  // Each a draft the server would refuse with the whole push (PushedEnvelope): saved, it would stop every
+  // push after it, for good. A bug in the screen that made it, so it fails at the counter instead.
+  it.each([
+    ["a type with no name", { type: "" }],
+    ["a type longer than the server keeps", { type: "x".repeat(41) }],
+    ["a version that is no whole number", { schema_version: 1.5 }],
+    ["a version below 1", { schema_version: 0 }],
+    ["a maker that is no id", { created_by: "Asha" }],
+    ["a payload that is a list", { payload: ["in"] }],
+    ["a payload that is no object", { payload: "in" }],
+    ["a payload that is nothing", { payload: null }],
+    ["a payload that is a date", { payload: new Date() }],
+  ])("refuses %s, and writes nothing", async (_, broken) => {
+    await filledLaptop();
+
+    await expect(
+      saveDocument(db, { ...CLOCK_IN, ...broken }),
+    ).rejects.toBeInstanceOf(BrokenDraft);
+
+    expect(await db.documents.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+    expect(await readLastDeviceSeq(db)).toBe(57);
+  });
+
+  it("refuses a number past the largest the server takes", async () => {
+    // 999,999,999,998 (HIGHEST_DEVICE_SEQ): far past any laptop's life, but never sent past it.
+    await filledLaptop(999_999_999_998);
+
+    await expect(saveDocument(db, CLOCK_IN)).rejects.toBeInstanceOf(
+      BrokenDraft,
+    );
+
+    expect(await db.outbox.count()).toBe(0);
   });
 
   it("refuses on a laptop never filled, and writes nothing", async () => {
