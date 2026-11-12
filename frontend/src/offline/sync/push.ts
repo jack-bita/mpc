@@ -168,7 +168,8 @@ async function applyAnswers(
           // still accepted, never a fault, or this one and every record after it would stay stuck.
           const postedSeq = answer.posted_seq;
           await db.outbox.delete(row.id);
-          // Kept 30 days, in case a server restore needs it sent again (03 §6.7).
+          // Kept 30 days, in case a server restore needs it sent again (03 §6.7); clearing it after that is
+          // OPS-11's, so for now nothing does.
           await db.sent_archive.put({
             ...document,
             device_seq: row.device_seq,
