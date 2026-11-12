@@ -1,6 +1,7 @@
 // push.backoff.test.ts — after a push the server told to try later, or one that failed, the next push
 // waits (SYNC-8): 30 s, then twice as long each time, never more than 5 minutes. A push that settles
-// starts the wait again from 30 s. Meanwhile the pull still runs, and each shop waits on its own.
+// starts the wait again from 30 s. Meanwhile the pull still runs, and each shop waits on its own. The wait
+// is kept in the shop's database, so every tab and a reload wait alike (SYNC-9); Tuma sasa doesn't wait.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoConnection } from "@/api/refusal";
@@ -9,8 +10,10 @@ import { DAWA_LAPTOP } from "@/test/devices";
 import { answer, sent } from "@/test/fake-server";
 import { ASHA } from "@/test/shop-lists";
 
+import { openShopDatabase } from "../db";
 import { saveDocument } from "../outbox";
-import { shopDatabase } from "../this-shop";
+import { closeShopDatabases, shopDatabase } from "../this-shop";
+import { mayPush } from "./backoff";
 import { CURSOR, LAST_DEVICE_SEQ } from "./meta";
 import { syncShop } from "./sync";
 
@@ -255,6 +258,30 @@ describe("the wait before the next push", () => {
     release();
     await Promise.all([running, pressed]);
 
+    expect(count(PUSH)).toBe(2);
+  });
+
+  it("is kept in the shop's database, so another tab and a reload wait too", async () => {
+    // This tab was told to wait. Another tab, with its own connection to the same database, must not
+    // push the moment after: the server in trouble would get the push twice as often.
+    await filledLaptop();
+    serverSaysTryLater();
+    await syncShop(SHOP);
+
+    const otherTab = openShopDatabase(SHOP);
+    secondsLater(29);
+    expect(await mayPush(otherTab)).toBe(false);
+    secondsLater(30);
+    expect(await mayPush(otherTab)).toBe(true);
+    otherTab.close();
+
+    // A reload: every connection of this tab gone, nothing left in its memory. Its first sync, 10 s
+    // into the next wait, still waits.
+    await syncShop(SHOP);
+    expect(count(PUSH)).toBe(2);
+    closeShopDatabases();
+    secondsLater(40);
+    await syncShop(SHOP);
     expect(count(PUSH)).toBe(2);
   });
 

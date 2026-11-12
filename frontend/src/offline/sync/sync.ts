@@ -128,23 +128,23 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   // The push before the pull: what this laptop made goes up first, so the pull that follows brings the
   // server's changes from it, and drops its pending effects as the cursor passes them. A push told to
   // try later still lets the pull run: the server's trouble saving one record doesn't stop the office's
-  // changes coming down. After a failure, the next push waits a while (backoff.ts), unless someone
-  // pressed Tuma sasa; the pull never waits.
+  // changes coming down. After a failure, the next push waits a while (backoff.ts), in every tab, as the
+  // wait is kept in the database; unless someone pressed Tuma sasa. The pull never waits.
   let pushFailure: { error: unknown } | null = null;
-  if (sendNow || mayPush(shopId)) {
+  if (sendNow || (await mayPush(db))) {
     let result: PushResult | null = null;
     try {
       result = await push(db);
     } catch (error) {
-      pushFailed(shopId);
+      await pushFailed(db);
       // Blocked, or a key that opens no device: ask nothing more (answer.ts has kept it).
       if (isAboutTheDevice(error)) throw error;
       // Any other failure, a 5xx on the push route say, still lets the pull run: the office's
       // changes, a suspension among them (X2), must not wait for the push to work again.
       pushFailure = { error };
     }
-    if (result === "retry") pushFailed(shopId);
-    else if (result === "sent") pushSettled(shopId);
+    if (result === "retry") await pushFailed(db);
+    else if (result === "sent") await pushSettled(db);
   }
   await pull(db);
   // Thrown after the pull, so the failure is still reported (triggers.tsx). A pull that fails
