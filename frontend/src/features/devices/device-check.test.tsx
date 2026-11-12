@@ -12,6 +12,7 @@ import { render } from "@/test/render";
 import { databaseName } from "@/offline/db";
 import { readCursor } from "@/offline/sync/meta";
 import { AppTooOld } from "@/offline/sync/pull";
+import { BrokenPush } from "@/offline/sync/push";
 import { shopDatabase } from "@/offline/this-shop";
 import { BOOTSTRAP, DAWA_SIDE } from "@/test/shop-lists";
 
@@ -220,5 +221,22 @@ describe("a failed sync", () => {
     reportSyncFailure(tooOld);
 
     expect(log).toHaveBeenCalledWith("sync failed", tooOld);
+  });
+
+  it("goes to the console when the server refuses a push as broken", () => {
+    // A bug in the sync code (SYNC-8): every later push would be refused the same way.
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const broken = new BrokenPush(
+      new ApiRefusal(400, {
+        code: "invalid",
+        message: "",
+        fields: { "documents.0.device_seq": ["invalid"] },
+        params: {},
+      }),
+    );
+
+    reportSyncFailure(broken);
+
+    expect(log).toHaveBeenCalledWith("sync failed", broken);
   });
 });

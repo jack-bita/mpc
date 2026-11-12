@@ -17,6 +17,7 @@
 import Dexie from "dexie";
 
 import { api } from "@/api/client";
+import { ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { APP_VERSION } from "@/lib/version";
 
@@ -33,6 +34,21 @@ export const MOST_DOCUMENTS = 100;
 /** How a push ended: every record sent got an answer that settles it, or the server said to try later. */
 export type PushResult = "sent" | "retry";
 
+/**
+ * The server refused a push as broken (400: an envelope or the report it can't read). A bug in this
+ * code, never one record to set aside: every later push would be refused the same way. Thrown as no
+ * answer of the server's, so the sync's failure report puts it in the console (reportSyncFailure),
+ * where the refused fields name what broke (`documents.0.device_seq`).
+ */
+export class BrokenPush extends Error {
+  constructor(readonly refusal: ApiRefusal) {
+    super(
+      `The server refused the push as broken: ${JSON.stringify(refusal.body.fields)}`,
+    );
+    this.name = "BrokenPush";
+  }
+}
+
 /** One record to send: its outbox row, which holds its number, and its document. */
 interface Waiting {
   row: OutboxRow;
@@ -47,7 +63,7 @@ interface Waiting {
  * and the next push sends it again, which is safe, as the server knows a record by its id (SYNC-4). A
  * block or a "not registered" is kept on the way (answer.ts); an unblock brings back the same key, so
  * the records can still arrive (03 §5.9, step 4). A 400 (a broken envelope) is a bug in this code, never
- * one record to set aside.
+ * one record to set aside: it is thrown as a BrokenPush.
  */
 export async function push(db: ShopDatabase): Promise<PushResult> {
   for (;;) {
@@ -66,7 +82,11 @@ export async function push(db: ShopDatabase): Promise<PushResult> {
           outages: [],
         },
       }),
-    );
+    ).catch((error: unknown) => {
+      if (error instanceof ApiRefusal && error.status === 400)
+        throw new BrokenPush(error);
+      throw error;
+    });
     if (!(await applyAnswers(db, batch, answers, sentAt))) return "retry";
     if (batch.length < MOST_DOCUMENTS) return "sent";
   }

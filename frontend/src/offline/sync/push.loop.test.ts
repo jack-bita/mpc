@@ -15,7 +15,7 @@ import { ASHA } from "@/test/shop-lists";
 import { openShopDatabase, type ShopDatabase } from "../db";
 import { saveDocument, type Draft, type SavedDocument } from "../outbox";
 import { CURSOR, LAST_DEVICE_SEQ } from "./meta";
-import { push } from "./push";
+import { BrokenPush, push } from "./push";
 
 vi.mock("@/api/client", async (importOriginal) =>
   (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
@@ -363,8 +363,9 @@ describe("the push", () => {
     expect(await db.sent_archive.count()).toBe(0);
   });
 
-  it("throws a push refused as broken, and leaves the outbox as it is", async () => {
-    // A bad envelope is a bug in this code, never one document to set aside.
+  it("throws a push refused as broken as a bug, and leaves the outbox as it is", async () => {
+    // A bad envelope is a bug in this code, never one document to set aside. Thrown as no answer of
+    // the server's, so it reaches the console (reportSyncFailure), naming the field the server refused.
     await filledLaptop();
     await saved(1);
     const before = await db.outbox.toArray();
@@ -374,8 +375,13 @@ describe("the push", () => {
       refusal(400, "invalid", {}, { "documents.0.device_seq": ["invalid"] }),
     );
 
-    await expect(push(db)).rejects.toBeInstanceOf(ApiRefusal);
+    const failure = await push(db).catch((error: unknown) => error);
 
+    expect(failure).toBeInstanceOf(BrokenPush);
+    expect(failure).not.toBeInstanceOf(ApiRefusal);
+    expect((failure as BrokenPush).refusal.body.fields).toEqual({
+      "documents.0.device_seq": ["invalid"],
+    });
     expect(await db.outbox.toArray()).toEqual(before);
   });
 
