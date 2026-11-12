@@ -6,6 +6,7 @@
 //
 //   accepted   → the row leaves the outbox for sent_archive, with the server's posted_seq; the
 //                document's pending effects get that posted_seq too, and the pull drops them later
+//                (none when its save changed nothing a laptop keeps: its effects go at once)
 //   invalid    → the row is set aside as needs_attention, with its reason; the rest go on
 //   duplicate  → sent before, its answer lost on the way back: read as that first answer
 //   retry      → the server had trouble saving it: the push stops, and it and the rest wait
@@ -142,9 +143,9 @@ async function applyAnswers(
         const outcome =
           answer.status === "duplicate" ? answer.first : answer.status;
         if (outcome === "accepted") {
+          // Empty when its save changed nothing a laptop keeps a copy of (PushedDocument.posted_seq):
+          // still accepted, never a fault, or this one and every record after it would stay stuck.
           const postedSeq = answer.posted_seq;
-          if (postedSeq === null)
-            throw new Error(`Accepted ${row.id} with no posted_seq.`);
           await db.outbox.delete(row.id);
           // Kept 30 days, in case a server restore needs it sent again (03 §6.7).
           await db.sent_archive.put({
@@ -153,10 +154,13 @@ async function applyAnswers(
             sent_at: sentAt,
             posted_seq: postedSeq,
           });
-          await db.pending_effects
+          const effects = db.pending_effects
             .where("document_id")
-            .equals(row.id)
-            .modify({ posted_seq: postedSeq });
+            .equals(row.id);
+          // With a number, the pull drops them once its cursor passes it (SYNC-7). With none, no pull
+          // will ever bring a change of it: nothing to wait for, so they go now.
+          if (postedSeq === null) await effects.delete();
+          else await effects.modify({ posted_seq: postedSeq });
         } else if (outcome === "invalid") {
           // Set aside for someone to look at, with the server's reason (SYNC-11 shows it); the server
           // has raised a flag about it, and the rest of the batch goes on.

@@ -85,8 +85,10 @@ export interface SentDocumentRow extends DocumentRow {
    * order, as every push must (03 §6.3). */
   device_seq: number;
   sent_at: string;
-  /** The shop's change number the server gave it when it was accepted. */
-  posted_seq: number;
+  /** The shop's change number the server gave it when it was accepted: null when its save changed
+   * nothing a laptop keeps a copy of (PushedDocument.posted_seq). Not a search key, so allowing null
+   * needs no new version: only a drawer's name or its search keys do. */
+  posted_seq: number | null;
 }
 
 /** One step in the database's life: its number, its drawers, and an upgrade if old rows must change.

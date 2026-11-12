@@ -174,6 +174,30 @@ describe("the push", () => {
     expect(effect?.posted_seq).toBe(201);
   });
 
+  it("archives an accepted one that changed nothing a laptop keeps, and the rest go on", async () => {
+    // The server saved it, but its save wrote nothing a laptop keeps a copy of, so no change number
+    // came of it (PushedDocument.posted_seq). Nothing for a pull to bring: its effects go at once.
+    await filledLaptop();
+    const first = await saveDocument(db, CLOCK_IN, [{}]);
+    const second = await saveDocument(db, CLOCK_IN);
+    answer("POST", PUSH, {
+      status: 200,
+      body: {
+        answers: [
+          { ...accepted(first.id, 1), posted_seq: null },
+          accepted(second.id, 201),
+        ],
+      },
+    });
+
+    expect(await push(db)).toBe("sent");
+
+    expect(await db.outbox.count()).toBe(0);
+    expect((await db.sent_archive.get(first.id))?.posted_seq).toBeNull();
+    expect((await db.sent_archive.get(second.id))?.posted_seq).toBe(201);
+    expect(await db.pending_effects.count()).toBe(0);
+  });
+
   it("sends its report with it: the laptop's clock now, its version, what else waits", async () => {
     await filledLaptop();
     await saved(1);
