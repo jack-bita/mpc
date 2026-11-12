@@ -92,8 +92,9 @@ describe("what the laptop keeps", () => {
     // Hex: 16 bytes of salt, 32 of check.
     expect(row?.salt).toMatch(/^[0-9a-f]{32}$/);
     expect(row?.check).toMatch(/^[0-9a-f]{64}$/);
-    // Nowhere in the row, as typed.
-    expect(JSON.stringify(row)).not.toContain(ASHA_PIN);
+    // No field of the row is the PIN as typed. Each field, not the row as one text: 96 random hex
+    // letters of salt and check would hold "2580" by chance about once in 700 runs.
+    expect(Object.values(row ?? {})).not.toContain(ASHA_PIN);
   });
 
   it("gives two people with the same PIN different checks", async () => {

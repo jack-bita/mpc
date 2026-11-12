@@ -95,9 +95,10 @@ describe("the offline lock", () => {
   it("says the wait in whole seconds, rounded up", async () => {
     await wrongPins(5, EIGHT_AM);
 
-    // 59.5 seconds left: "wait 60", never "wait 59" with half a second still to go.
+    // 59.4 seconds left: "wait 60", never "wait 59" with part of a second still to go. Not 59.5, which
+    // plain rounding would also make 60, so the test couldn't tell rounding up from rounding.
     await expect(
-      checkPinOffline(db, ASHA_ROW.id, ASHA_PIN, EIGHT_AM + 500),
+      checkPinOffline(db, ASHA_ROW.id, ASHA_PIN, EIGHT_AM + 600),
     ).rejects.toMatchObject({ params: { wait: 60 } });
   });
 
