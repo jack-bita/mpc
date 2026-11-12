@@ -1,5 +1,6 @@
 // outbox.save.test.ts — saving a document on the laptop (SYNC-8, 03 §6.2): the document, its number
-// and its outbox row, written in one transaction or not at all, its number one past the last.
+// and its outbox row, written in one transaction or not at all, its number one past the last; and once it
+// is in, the sync is told, which can't make the save look failed (SYNC-9).
 import Dexie from "dexie";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -8,6 +9,7 @@ import { ASHA } from "@/test/shop-lists";
 
 import { openShopDatabase, type ShopDatabase } from "./db";
 import { BrokenDraft, NeverFilled, saveDocument, type Draft } from "./outbox";
+import { listenForAsks } from "./sync/asks";
 import { LAST_DEVICE_SEQ, readLastDeviceSeq } from "./sync/meta";
 
 let db: ShopDatabase;
@@ -158,6 +160,39 @@ describe("saving a document", () => {
     );
 
     expect(await db.outbox.count()).toBe(0);
+  });
+
+  it("tells the sync it saved a record, once", async () => {
+    // The sync goes 2 s later (triggers.tsx); a save refused tells nothing (sync.triggers.test.ts).
+    await filledLaptop();
+    const heard: string[] = [];
+    const stop = listenForAsks((kind) => heard.push(kind));
+
+    await saveDocument(db, CLOCK_IN);
+    stop();
+
+    expect(heard).toEqual(["saved"]);
+  });
+
+  it("stays saved when a listener of the sync fails, and the other listeners still hear", async () => {
+    // Asha's clock-in is in: a broken listener must not tell her screen it failed, or she taps again
+    // and clocks in twice.
+    await filledLaptop();
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const broken = new Error("listener broke");
+    const stopBroken = listenForAsks(() => {
+      throw broken;
+    });
+    const heard: string[] = [];
+    const stopHeard = listenForAsks((kind) => heard.push(kind));
+
+    const saved = await saveDocument(db, CLOCK_IN);
+    stopBroken();
+    stopHeard();
+
+    expect(await db.outbox.get(saved.id)).toBeDefined();
+    expect(heard).toEqual(["saved"]);
+    expect(log).toHaveBeenCalledWith("a sync ask failed", broken);
   });
 
   it("refuses on a laptop never filled, and writes nothing", async () => {

@@ -17,8 +17,18 @@ type Listener = (kind: SyncAskKind) => void;
 
 const listeners = new Set<Listener>();
 
+// Each listener is told on its own, and one that fails is only logged. The save that asks is done by the
+// time it tells (outbox.ts): a listener's failure thrown back to it would make a saved record look
+// failed, and a seller who saw "not saved" would tap again, making a second record with a new id, a
+// clock-in twice. A failed listener misses one moment at most; the next 30 s tick still sends.
 function tell(kind: SyncAskKind): void {
-  for (const listener of listeners) listener(kind);
+  for (const listener of listeners) {
+    try {
+      listener(kind);
+    } catch (error) {
+      console.error("a sync ask failed", error);
+    }
+  }
 }
 
 /** A record was saved on this laptop: saveDocument (outbox.ts) says so once its transaction is in. */
