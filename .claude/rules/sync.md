@@ -17,5 +17,5 @@ paths:
 - One sync at a time across tabs (Web Locks). An update never interrupts a busy counter screen, and the outbox is sent before an update.
 - Documents carry `schema_version`; the server accepts the current and the previous one.
 - A new document type needs all four: a server handler with its permission (or none, as a clock-in needs no key), a schema version, the device side, and tests on both sides. The server's half may come a card before the device's (ATT-1, then SYNC-11).
-- Nothing secret syncs: no buying prices, PIN hashes or passwords — tests prove it.
+- Nothing secret syncs: no buying prices, PIN hashes or passwords — tests prove it. The device makes its own PIN checks (`pin_checks`, PBKDF2 with a salt of each check's own) and never sends them; each pull page and bootstrap drops, in its own transaction, the checks the staff rows no longer match (`dropOutdatedChecks`, SYNC-10).
 - A Dexie schema change is a new database version with an upgrade; never edit an old version.
