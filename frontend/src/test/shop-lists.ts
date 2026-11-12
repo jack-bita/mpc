@@ -50,9 +50,11 @@ export const IDLE_RULE: Schemas["SettingKeyRecord"] = {
   default: "10",
 };
 
-/** What GET /api/sync/v1/bootstrap/ answers for that shop, valid at change 120. */
+/** What GET /api/sync/v1/bootstrap/ answers for that shop, valid at change 120, to a laptop whose
+ * last record was #57. */
 export const BOOTSTRAP: Schemas["BootstrapAnswer"] = {
   cursor: 120,
+  last_device_seq: 57,
   side: [DAWA_SIDE],
   payment_account: [DAWA_DRAWER],
   staff: [ASHA],

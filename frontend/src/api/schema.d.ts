@@ -309,6 +309,8 @@ export interface components {
         BootstrapAnswer: {
             /** @description The shop's last change number this copy holds: the first pull asks for what came after. */
             cursor: number;
+            /** @description The laptop's own last number: its next record is this plus one, never 1 again. */
+            last_device_seq: number;
             side: components["schemas"]["SideRecord"][];
             payment_account: components["schemas"]["PaymentAccountRecord"][];
             staff: components["schemas"]["StaffRecord"][];
