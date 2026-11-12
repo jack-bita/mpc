@@ -1,10 +1,11 @@
-// app-frame.test.tsx — the counter, office and setup areas put every screen under the green top bar,
-// with the language button, and give the page its one <main> (UI-1, UI-3, 03 §7.1); and once someone
-// logs in at a device, the bar names them and the side they work on (UI-4).
+// app-frame.test.tsx — the office and setup areas put every screen under the green top bar, with the
+// language button, and give the page its one <main> (UI-1, UI-3, 03 §7.1); and once someone logs in at a
+// device, the bar names them and the side they work on (UI-4). The counter area shows a screen only to
+// someone logged in, and sends anyone else to the name tiles: its frame has tests of its own
+// (app/(counter)/counter-frame.test.tsx, SYNC-11).
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import CounterLayout from "@/app/(counter)/layout";
 import OfficeLayout from "@/app/(office)/layout";
 import SetupLayout from "@/app/(setup)/layout";
 import { saveDevice } from "@/features/devices/this-device";
@@ -15,7 +16,6 @@ import { render } from "@/test/render";
 import { AppFrame } from "./app-frame";
 
 const AREAS = [
-  ["counter", CounterLayout],
   ["office", OfficeLayout],
   ["setup", SetupLayout],
 ] as const;
