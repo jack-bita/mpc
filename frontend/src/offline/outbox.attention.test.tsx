@@ -82,13 +82,15 @@ describe("the needs-attention list", () => {
     );
   });
 
-  it("is nothing on a laptop not registered", async () => {
-    saveDevice(null);
-
+  it("is nothing once the laptop is no longer registered", async () => {
+    // Read first, so the list is there, not still loading: then the laptop forgets its shop (its key
+    // opens no device), and with no shop there is no database to read.
+    await setAside(made[0]!, "document.type_unknown");
     const { result } = renderHook(() => useNeedsAttention());
+    await waitFor(() => expect(result.current).toHaveLength(1));
 
-    // No shop, so no database to read.
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(result.current).toBeUndefined();
+    act(() => saveDevice(null));
+
+    await waitFor(() => expect(result.current).toBeUndefined());
   });
 });

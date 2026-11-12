@@ -132,14 +132,16 @@ describe("the wait before the next push", () => {
     serverSaysTryLater();
 
     let at = 0;
+    let pushes = 0;
     for (const wait of [30, 60, 120, 240, 300, 300]) {
+      // The wait before this one is over (none before the first): the push goes, and is told to wait.
       secondsLater(at);
       await syncShop(SHOP);
-      const pushed = count(PUSH);
-      // A second before the wait ends: still waiting.
+      expect(count(PUSH)).toBe(++pushes);
+      // A second before this wait ends: still waiting.
       secondsLater(at + wait - 1);
       await syncShop(SHOP);
-      expect(count(PUSH)).toBe(pushed);
+      expect(count(PUSH)).toBe(pushes);
       at += wait;
     }
   });
