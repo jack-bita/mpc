@@ -1,5 +1,6 @@
 // rules.ts — which value of a shop's rule is in force on a day, worked out on the laptop from the rows it
-// pulled (SYNC-7, 02 §5, 03 §5.8). Pure calculations: no database, no clock, so each case is a plain test.
+// pulled (SYNC-7, 02 §5, 03 §5.8), and how a value's stored text reads. Pure calculations: no database, no
+// clock, so each case is a plain test.
 //
 // The same answer the server's get_setting gives (apps/shops/selectors.py), so a laptop offline locks its
 // screen after the same minutes, and so on, as the office would say.
@@ -71,4 +72,14 @@ function latest(
       best = row;
   }
   return best;
+}
+
+/**
+ * A rule of the whole-number kind (`kind` "whole" in setting_keys), as the laptop stores it: "15" is 15.
+ * Text that isn't a whole number, as a damaged row would hold, is no value, so the caller's own default
+ * holds rather than a NaN, which every comparison after it would get wrong.
+ */
+export function wholeNumber(stored: string | undefined): number | undefined {
+  if (stored === undefined || !/^[0-9]+$/.test(stored)) return undefined;
+  return Number(stored);
 }

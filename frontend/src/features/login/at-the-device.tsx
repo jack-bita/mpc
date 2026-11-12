@@ -36,15 +36,19 @@ import { useTranslations } from "use-intl";
 import { api } from "@/api/client";
 import { forgetTheLastPerson, mayPassLater } from "@/api/query-client";
 import { answerOf, ApiRefusal } from "@/api/refusal";
-import type { components } from "@/api/schema";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { AppFrame } from "@/components/app-frame";
 import { Button, ButtonLink } from "@/components/design/button";
 import { OfflineBanner } from "@/components/offline-banner";
 import type { ThisDevice } from "@/features/devices/this-device";
 import { useFollowThePerson } from "@/features/people/follow-the-person";
-import { sideAt, useWhoIsHere } from "@/features/people/who-is-here";
+import {
+  sideAt,
+  sideOfStaffRow,
+  useWhoIsHere,
+} from "@/features/people/who-is-here";
 import { useRule, useSides } from "@/offline/reference";
+import { wholeNumber } from "@/offline/rules";
 
 import { useIdleLock } from "./idle-lock";
 import {
@@ -54,8 +58,6 @@ import {
 } from "./offline-session";
 import { PinLogin } from "./pin-login";
 import type { StaffRow } from "./staff-picker";
-
-type SideRecord = components["schemas"]["SideRecord"];
 
 /** What a logout is about: who pressed Toka or Badilisha mtu, or whom the idle lock logged out; and, for a
  * session the server refused, why, to say once. */
@@ -163,7 +165,7 @@ export function AtTheDevice({
   const here = offlinePerson || ended || logoutWaits ? undefined : me.data;
   const sides = useSides();
   const side = offlinePerson
-    ? sideOfRow(offlinePerson, device.homeSide.id, sides ?? [])
+    ? sideOfStaffRow(offlinePerson, device.homeSide.id, sides ?? [])
     : here
       ? sideAt(here, device.homeSide.id)
       : undefined;
@@ -207,7 +209,10 @@ export function AtTheDevice({
   // here: while leaving, or with nobody, there is nothing to lock. Offline, the minutes are the shop's rule
   // as the laptop holds it, stored as text (SYNC-7), since there is no `me` to say them.
   const ruleMinutes = useRule("session.idle_minutes", null);
-  const offlineMinutes = wholeMinutes(ruleMinutes) ?? IDLE_MINUTES_UNKNOWN;
+  // None, or 0, which would switch the lock off: the default, never a laptop left open.
+  const ruleWhole = wholeNumber(ruleMinutes);
+  const offlineMinutes =
+    ruleWhole !== undefined && ruleWhole > 0 ? ruleWhole : IDLE_MINUTES_UNKNOWN;
   useIdleLock(offlinePerson ? offlineMinutes : here?.idle_minutes, leave);
 
   // The status line's words: leaving, or asking `me` with nothing to show yet; else nothing. Not while it
@@ -312,29 +317,4 @@ export function AtTheDevice({
       {children}
     </AppFrame>
   );
-}
-
-/** The side someone logged in offline works on, for the bar, as sideAt does for `me` (who-is-here.ts):
- * the device's home side if they hold a key there, or else the first side they hold one on; none if they
- * hold none. A key on the whole shop holds on every side. */
-function sideOfRow(
-  row: StaffRow,
-  homeSideId: string,
-  sides: SideRecord[],
-): SideRecord | undefined {
-  const held =
-    row.permissions.every_side.length > 0
-      ? sides.map((side) => side.id)
-      : row.permissions.sides
-          .filter((keys) => keys.permissions.length > 0)
-          .map((keys) => keys.side);
-  const id = held.includes(homeSideId) ? homeSideId : held[0];
-  return sides.find((side) => side.id === id);
-}
-
-/** A rule of the whole-number kind, as the laptop stores it: "15" is 15. Anything else is no number. */
-function wholeMinutes(stored: string | undefined): number | undefined {
-  if (stored === undefined || !/^[0-9]+$/.test(stored)) return undefined;
-  const minutes = Number(stored);
-  return minutes > 0 ? minutes : undefined;
 }
