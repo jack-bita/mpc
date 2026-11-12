@@ -19,7 +19,7 @@ const NEEMA_IN_ENGLISH: WhoIsHere = {
 
 /** A frame in miniature: it follows whoever it is handed, and shows one word from the open book. */
 function Frame({ here }: { here: WhoIsHere | undefined }) {
-  useFollowThePerson(here);
+  useFollowThePerson(here?.user);
   const t = useTranslations("login");
   return <p>{t("logout")}</p>;
 }

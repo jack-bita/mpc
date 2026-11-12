@@ -357,6 +357,7 @@
     "pin": {
       "wrong": "PIN si sahihi.",
       "locked": "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika {minutes}.",
+      "offline_first": "Hakuna mtandao. Ingia mara moja kwenye kompyuta hii mtandao ukiwepo, kisha utaweza kuingia bila mtandao.",
       "own": "Huwezi kuweka PIN yako mwenyewe hapa.",
       "superuser_only": "PIN ya mtu huyu inawekwa na msimamizi wa mfumo tu.",
       "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kuweka PIN yake.",

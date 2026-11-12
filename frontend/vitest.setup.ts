@@ -12,6 +12,7 @@ import { cleanup } from "@testing-library/react";
 import Dexie from "dexie";
 import { afterEach, vi } from "vitest";
 
+import { endOfflineSession } from "@/features/login/offline-session";
 import { closeShopDatabases } from "@/offline/this-shop";
 import { forgetCsrfToken } from "@/test/csrf";
 import { resetFakeServer } from "@/test/fake-server";
@@ -50,4 +51,6 @@ afterEach(async () => {
   resetFakeServer();
   // Where a screen sent the person (src/test/router.ts).
   resetRouter();
+  // Whoever a test logged in offline (offline-session.ts), kept in memory as a tab keeps it.
+  endOfflineSession();
 });

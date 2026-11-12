@@ -19,7 +19,12 @@ import {
 import { answer, refusal, sent } from "@/test/fake-server";
 import { swahiliIn } from "@/test/language";
 import { staffRow, theLaptopKnows } from "@/test/laptop";
+import { FEW_TURNS } from "@/test/pins";
 import { render } from "@/test/render";
+import { DAWA_SIDE, IDLE_15, IDLE_RULE } from "@/test/shop-lists";
+
+import { rememberPin } from "@/offline/pin";
+import { shopDatabase } from "@/offline/this-shop";
 
 import { AtTheDevice } from "./at-the-device";
 
@@ -101,6 +106,20 @@ function theLaptop(
   );
   return { end };
 }
+
+/** A fake clock for the idle lock: its timers and the time, and nothing else. shouldAdvanceTime: it still
+ * moves on its own, so the fake server's answers arrive. The test database (fake-indexeddb) runs on
+ * setImmediate, which must stay real, or its transactions end early and the tiles never read (SYNC-10). */
+const IDLE_CLOCK: Parameters<typeof vi.useFakeTimers>[0] = {
+  shouldAdvanceTime: true,
+  toFake: [
+    "setTimeout",
+    "setInterval",
+    "clearTimeout",
+    "clearInterval",
+    "Date",
+  ],
+};
 
 const bar = () => within(screen.getByRole("banner"));
 const logouts = () =>
@@ -206,16 +225,16 @@ describe("leaving the laptop", () => {
 
     fireEvent.click(bar().getByRole("button", { name: "Toka" }));
 
-    // TanStack waits a second before the next try.
+    // The tiles come back already while it waits: the first try got no answer, so the next person logs in
+    // on the laptop's own check meanwhile (SYNC-10).
     expect(
-      await screen.findByRole(
-        "heading",
-        { level: 1, name: "Wewe ni nani?" },
-        { timeout: 3000 },
-      ),
+      await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
     ).toBeDefined();
-    expect(tries).toBe(2);
-    expect(screen.queryByText("Neema")).toBeNull();
+    // TanStack waits a second before the next try, which the server hears.
+    await vi.waitFor(() => expect(tries).toBe(2), { timeout: 3000 });
+    // Gone as the person here: neither in the bar nor welcomed. Her tile is there, as everyone's is.
+    expect(bar().queryByText("Neema")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Karibu, Neema" })).toBeNull();
   });
 
   it("says why a refused logout failed, and leaves the person where they are", async () => {
@@ -238,7 +257,7 @@ describe("leaving the laptop", () => {
   it("logs the person out by itself after the idle minutes untouched", async () => {
     // Neema walks away from the counter. Her `me` says 15 minutes (AUTH-4's setting, UI-4's step 2).
     // shouldAdvanceTime: the fake clock still moves on its own, so the fake server's answers arrive.
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.useFakeTimers(IDLE_CLOCK);
     try {
       theLaptop(NEEMA);
       render(<AtTheDevice device={DAWA_LAPTOP} />);
@@ -287,7 +306,7 @@ describe("leaving the laptop", () => {
     // A manager logged in with a password at the Dawa laptop, as UI-3's hand test did through the Console:
     // `me` names no device for a password (ADR-0038), but the laptop is shared, and locks the same.
     const manager: WhoIsHere = { ...NEEMA, device: null, home_side: null };
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.useFakeTimers(IDLE_CLOCK);
     try {
       theLaptop(manager);
       render(<AtTheDevice device={DAWA_LAPTOP} />);
@@ -525,5 +544,178 @@ describe("each person's own language and font", () => {
 
     await screen.findByRole("heading", { name: "Wewe ni nani?" });
     expect(bar().getByRole("button", { name: "English" })).toBeTruthy();
+  });
+});
+
+describe("with no network (SYNC-10)", () => {
+  const db = () => shopDatabase(DAWA_LAPTOP.shop.id);
+  // Juma on the laptop's copy, as the sync left him: a seller on Dawa, with a PIN set.
+  const JUMA_ROW = {
+    ...staffRow(JUMA.staff.id, JUMA.user.full_name, JUMA.staff.display_name),
+    permissions: {
+      every_side: [],
+      sides: [{ side: DAWA.id, permissions: ["sale.make"] }],
+    },
+  };
+
+  /**
+   * The Dawa laptop, its network gone, with `first`'s session from before still in its cookie: while the
+   * network is gone, every call gets no answer. Juma logged in here online once, with 4829, so the laptop
+   * holds its check of his PIN.
+   */
+  async function aLaptopWithNoNetwork(first: WhoIsHere | null) {
+    saveDevice(DAWA_LAPTOP);
+    await db().staff.put(JUMA_ROW);
+    await db().side.put(DAWA_SIDE);
+    await rememberPin(db(), JUMA.staff.id, "4829", FEW_TURNS);
+    const laptop = { network: false, here: first };
+    const nobody = refusal(403, "not_authenticated");
+    const noAnswer = () => {
+      throw new TypeError("Failed to fetch");
+    };
+    answer("GET", ME, () => {
+      if (!laptop.network) noAnswer();
+      return laptop.here
+        ? Response.json(laptop.here)
+        : Response.json(nobody.body, { status: nobody.status });
+    });
+    answer("POST", LOGOUT, () => {
+      if (!laptop.network) noAnswer();
+      laptop.here = null;
+      return new Response(null, { status: 204 });
+    });
+    return laptop;
+  }
+
+  /** Juma taps his tile and types his PIN, and the laptop lets him in. */
+  async function jumaLogsInHere() {
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Juma Mfano Juma" }),
+    );
+    for (const digit of "4829")
+      fireEvent.click(screen.getByRole("button", { name: digit }));
+    await screen.findByRole("heading", { name: "Karibu, Juma" });
+  }
+
+  const pinLogins = () =>
+    sent.filter((request) => new URL(request.url).pathname === PIN_LOGIN);
+
+  it("shows the tiles after a reload, and lets Juma in on the laptop's own check", async () => {
+    await aLaptopWithNoNetwork(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    await jumaLogsInHere();
+
+    // In the bar, with the side he works on, from his staff row and the laptop's sides.
+    expect(bar().getByText("Juma")).toBeDefined();
+    expect(bar().getByText("MPC · Dawa")).toBeDefined();
+    // Never sent: the laptop checked it.
+    expect(pinLogins()).toEqual([]);
+  });
+
+  it("brings the tiles back at once after Toka, and lets the next person in", async () => {
+    // Neema logged in online; then the network went. Her Toka can't reach the server, and the counter
+    // can't wait all day for it.
+    const laptop = await aLaptopWithNoNetwork(NEEMA);
+    laptop.network = true;
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    laptop.network = false;
+
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+    await jumaLogsInHere();
+
+    expect(bar().queryByText("Neema")).toBeNull();
+    expect(pinLogins()).toEqual([]);
+  });
+
+  it("ends a local session with Toka, back to the tiles", async () => {
+    await aLaptopWithNoNetwork(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
+
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+    ).toBeDefined();
+    expect(bar().queryByText("Juma")).toBeNull();
+  });
+
+  it("ends the session from before once the network is back, so it never comes back", async () => {
+    // A reload with no network, Neema's session still in the cookie. Juma logs in on the laptop. Once the
+    // network is back, the logout sent at his arrival ends hers: after his Toka, nobody is here, not her.
+    const laptop = await aLaptopWithNoNetwork(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
+
+    laptop.network = true;
+    // TanStack waits a second, then two, between the logout's tries.
+    await vi.waitFor(() => expect(laptop.here).toBeNull(), { timeout: 5000 });
+    expect(screen.getByRole("heading", { name: "Karibu, Juma" })).toBeDefined();
+
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+    ).toBeDefined();
+    expect(screen.queryByRole("heading", { name: "Karibu, Neema" })).toBeNull();
+  });
+
+  it("logs a local session out after the shop's idle minutes untouched", async () => {
+    // No `me` to say the minutes: the shop's rule on the laptop, 15.
+    vi.useFakeTimers(IDLE_CLOCK);
+    try {
+      await aLaptopWithNoNetwork(null);
+      await db().setting.put(IDLE_15);
+      await db().setting_keys.put(IDLE_RULE);
+      render(<AtTheDevice device={DAWA_LAPTOP} />);
+      await jumaLogsInHere();
+
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 10 * 1000);
+
+      expect(
+        await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+      ).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows him in his own language and font, from his staff row", async () => {
+    await aLaptopWithNoNetwork(null);
+    await db().staff.put({ ...JUMA_ROW, language: "en", font: "second" });
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Juma Mfano Juma" }),
+    );
+    for (const digit of "4829")
+      fireEvent.click(screen.getByRole("button", { name: digit }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Welcome, Juma" }),
+    ).toBeDefined();
+    expect(document.documentElement.dataset.font).toBe("second");
+  });
+
+  it("ends his session once a sync says he is suspended", async () => {
+    await aLaptopWithNoNetwork(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
+
+    // What a pull writes when the network comes and goes (X2).
+    await act(() => db().staff.put({ ...JUMA_ROW, status: "suspended" }));
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+    ).toBeDefined();
+    expect(screen.queryByRole("heading", { name: "Karibu, Juma" })).toBeNull();
+  });
+
+  it("offers no Mipangilio yangu in a local session: that screen needs the server", async () => {
+    await aLaptopWithNoNetwork(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
+
+    expect(screen.queryByRole("link", { name: "Mipangilio yangu" })).toBeNull();
   });
 });

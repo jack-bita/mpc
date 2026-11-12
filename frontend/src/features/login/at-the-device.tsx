@@ -1,14 +1,23 @@
 // at-the-device.tsx — the home page of a registered device: the PIN login while nobody is logged in here,
 // and who is, once someone is, under the shop's top bar (UI-4, 03 §5.9).
 //
-// It asks `me` (useWhoIsHere), which answers for the session this browser holds:
-//   someone logged in             "Karibu, Asha", Mipangilio yangu, and her name and the side she works on
-//                                 in the bar, all in her own language and font (UI-9)
-//   refused, under 500            the PIN login: nobody here, or a session the server ended, with why
-//   no answer, or the server down  the reason, and Inahitaji mtandao: the PIN login needs the network
+// Someone is here one of two ways:
+//   by the server       `me` (useWhoIsHere) answers for the session this browser holds
+//   by the laptop       an offline PIN check let them in, and their local session lasts (useOfflinePerson,
+//                       offline-session.ts, SYNC-10); it comes first, as the server's session, if any, is
+//                       being ended
+// Either way: "Karibu, Asha", her name and the side she works on in the bar, all in her own language and
+// font (UI-9), Toka and Badilisha mtu, and the idle lock. Mipangilio yangu only by the server: the office
+// screens need its session.
+//
+// Nobody here, the PIN login shows, with its tiles from the laptop's own copy (SYNC-10):
+//   `me` refused, under 500        nobody here, or a session the server ended, with why
+//   no answer, or the server down   with the reason; the PIN is checked on the laptop
+//   a logout not heard yet          its tiles come back once it can't reach the server, and the PIN is
+//                                   checked on the laptop until it does (SYNC-10)
 // A PIN login, a logout and a quick switch forget the last person, which asks `me` again
-// (forgetTheLastPerson), so this follows each by itself. After `me`'s idle minutes untouched, the laptop
-// logs the person out by itself (idle-lock.ts).
+// (forgetTheLastPerson), so this follows each by itself. After the idle minutes untouched, the laptop logs
+// the person out by itself (idle-lock.ts).
 //
 // Until the counter screens come, someone logged in sees only the welcome and her settings' button (UI-4's
 // plan, UI-9). It calls the server, so it lives outside the counter lock (rule 5, ADR-0019).
@@ -16,13 +25,18 @@
 // "use client": it asks the server and reads the device's saved copy, both in the browser only.
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useMutationState,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { forgetTheLastPerson, mayPassLater } from "@/api/query-client";
 import { answerOf, ApiRefusal } from "@/api/refusal";
+import type { components } from "@/api/schema";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { AppFrame } from "@/components/app-frame";
 import { Button, ButtonLink } from "@/components/design/button";
@@ -30,9 +44,18 @@ import { OfflineBanner } from "@/components/offline-banner";
 import type { ThisDevice } from "@/features/devices/this-device";
 import { useFollowThePerson } from "@/features/people/follow-the-person";
 import { sideAt, useWhoIsHere } from "@/features/people/who-is-here";
+import { useRule, useSides } from "@/offline/reference";
 
 import { useIdleLock } from "./idle-lock";
+import {
+  endOfflineSession,
+  startOfflineSession,
+  useOfflinePerson,
+} from "./offline-session";
 import { PinLogin } from "./pin-login";
+import type { StaffRow } from "./staff-picker";
+
+type SideRecord = components["schemas"]["SideRecord"];
 
 /** What a logout is about: who pressed Toka or Badilisha mtu, or whom the idle lock logged out; and, for a
  * session the server refused, why, to say once. */
@@ -40,6 +63,13 @@ interface Leaving {
   by: string | null;
   notice: ApiRefusal | null;
 }
+
+/** Every logout's name in the store, so the screen sees each one still waiting, even one it let go of. */
+const LOGOUT = ["auth", "logout"] as const;
+
+/** The idle lock's minutes for someone logged in offline, if the laptop knows no rule: 03 §5.9's default.
+ * Only a laptop never filled knows none, and its tiles wait for the first sync. */
+const IDLE_MINUTES_UNKNOWN = 15;
 
 export function AtTheDevice({
   device,
@@ -60,6 +90,7 @@ export function AtTheDevice({
   // which asks `me` again, for whoever is next. POST /api/auth/logout/ needs only the session and the
   // CSRF token, so it works on a blocked laptop and for a suspended person too (AUTH-4).
   const logout = useMutation<unknown, unknown, Leaving>({
+    mutationKey: LOGOUT,
     mutationFn: () => answerOf(api.POST("/api/auth/logout/")),
     // Sent again while no answer comes, with no limit, until the server hears it. Offline, TanStack waits
     // for the network by itself, then sends it. Given up, the session would outlive the press: a network
@@ -68,12 +99,27 @@ export function AtTheDevice({
     retry: (_tries, error) => mayPassLater(error),
     onSuccess: () => forgetTheLastPerson(store),
   });
-  // True from the press until the server has heard, offline too: the person is hidden meanwhile.
-  const leaving = logout.isPending;
   // What the last logout was about, kept by the screen's hold on it: forgetTheLastPerson empties the
   // store's list of changes, but this hold keeps what it was sent with, and its error (UI-4's review).
   const leaver = logout.variables?.by ?? null;
   const notice = logout.variables?.notice ?? null;
+
+  // Every logout not heard yet, read from the store, not from this screen's hold, which a tap on a tile
+  // lets go of. While one waits, the server may still hold that session: the person stays hidden, and a
+  // PIN is checked on the laptop, never sent, as a login could land before the logout and be ended by it.
+  const waiting = useMutationState({
+    filters: { mutationKey: LOGOUT, status: "pending" },
+    select: (mutation) => mutation.state,
+  });
+  const logoutWaits = waiting.length > 0;
+  // One that can't reach the server for now: waiting for the network, or tried with no answer. Then the
+  // tiles come back, and the next person logs in on the laptop's own check, rather than wait for a network
+  // that may not come all day (SYNC-10). While one is still on its way with a hope of an answer, a moment
+  // online, the screen says Unatoka…, and shows no tiles.
+  const unheard = waiting.some(
+    (state) => state.isPaused || state.failureCount > 0,
+  );
+  const leaving = logoutWaits && !unheard;
 
   // The server refused this browser's session: nobody is logged in here, or a session ended, as when the
   // person was suspended or a new PIN was set. Under 500 only: a 5xx is the server broken, and says
@@ -89,6 +135,16 @@ export function AtTheDevice({
   const alreadySent =
     endedFor !== null && logout.variables?.notice === endedFor;
   const hasAnswer = me.data !== undefined;
+  // No answer from the server about who is here, and none before: no network (TanStack waits, paused), or
+  // the server can't be reached or is broken. The PIN login then checks on the laptop (SYNC-10). From the
+  // first try that got none (failureReason), not after the store's two more tries, three seconds later:
+  // a laptop reloaded with no network shows its tiles at once.
+  const noAnswer =
+    !hasAnswer &&
+    ended === null &&
+    (me.fetchStatus === "paused" ||
+      mayPassLater(me.error) ||
+      mayPassLater(me.failureReason));
   const { mutate: sendLogout } = logout;
   useEffect(() => {
     // A reason: end that session on the server, and keep the reason with the logout, to say once.
@@ -98,66 +154,110 @@ export function AtTheDevice({
     // 5xx or a dropped network would bring them back, with Toka and the idle lock (UI-4's review).
     else if (ended && !endedFor && hasAnswer) void forgetTheLastPerson(store);
   }, [endedFor, alreadySent, ended, hasAnswer, sendLogout, store]);
-  // Who is logged in, as `me` last said. TanStack keeps the last answer through a failed refresh, so a
-  // dropped network leaves the person where they are. Nobody while they are leaving: hidden at the press.
-  const here = ended || leaving ? undefined : me.data;
-  const side = here ? sideAt(here, device.homeSide.id) : undefined;
-  // Their own language and font, from that same `here`: nobody's from the press of Toka, so the tiles come
-  // back in the laptop's own for whoever is next (UI-9).
-  useFollowThePerson(here);
+
+  // Who is logged in. First, someone the laptop let in offline, whose local session still holds.
+  const offlinePerson = useOfflinePerson();
+  // Else, as `me` last said. TanStack keeps the last answer through a failed refresh, so a dropped network
+  // leaves the person where they are. Nobody while a logout of theirs waits: hidden at the press.
+  const here = offlinePerson || ended || logoutWaits ? undefined : me.data;
+  const sides = useSides();
+  const side = offlinePerson
+    ? sideOfRow(offlinePerson, device.homeSide.id, sides ?? [])
+    : here
+      ? sideAt(here, device.homeSide.id)
+      : undefined;
+  const person = offlinePerson
+    ? { id: offlinePerson.id, name: offlinePerson.display_name }
+    : here
+      ? { id: here.staff.id, name: here.staff.display_name }
+      : undefined;
+  // Their own language and font: from `me`, or from their staff row for someone logged in offline. Nobody's
+  // from the press of Toka, so the tiles come back in the laptop's own for whoever is next (UI-9).
+  useFollowThePerson(offlinePerson ?? here?.user);
   // Focus on the welcome as each person arrives: the pad they typed on has gone, and focus with it.
   const welcome = useRef<HTMLHeadingElement>(null);
-  const hereId = here?.staff.id;
-  useEffect(() => welcome.current?.focus(), [hereId]);
+  useEffect(() => welcome.current?.focus(), [person?.id]);
 
-  // Toka, Badilisha mtu and the idle lock: the logout names who leaves, so a refused one's reason shows
-  // only while they are here.
+  // The laptop's yes to a PIN typed offline: the person's local session starts at once. Then the store
+  // forgets the last person, as at every login, and whatever session this browser holds on the server,
+  // from before the network went (a reload, a logout not heard yet), is ended, sent again until the server
+  // hears it: else, once the network is back, `me` would bring that person back after this one's Toka.
+  // In that order: the forgetting drops a logout still waiting, and the new one takes its place.
+  async function arrivedOffline(arrived: StaffRow) {
+    startOfflineSession(arrived);
+    await forgetTheLastPerson(store);
+    sendLogout({ by: null, notice: null });
+  }
+
+  // Toka, Badilisha mtu and the idle lock. Someone logged in offline: their local session ends, and the
+  // server has nothing to hear, as their arrival already sent the logout. Else the logout names who leaves,
+  // so a refused one's reason shows only while they are here.
   function leave() {
-    logout.mutate({ by: here?.staff.id ?? null, notice: null });
+    if (offlinePerson) endOfflineSession();
+    else logout.mutate({ by: here?.staff.id ?? null, notice: null });
   }
 
   // A seller who walks away is logged out by herself, as if she had pressed Toka. Only while someone is
-  // here: while leaving, or with nobody, there is nothing to lock.
-  useIdleLock(here?.idle_minutes, leave);
+  // here: while leaving, or with nobody, there is nothing to lock. Offline, the minutes are the shop's rule
+  // as the laptop holds it, stored as text (SYNC-7), since there is no `me` to say them.
+  const ruleMinutes = useRule("session.idle_minutes", null);
+  const offlineMinutes = wholeMinutes(ruleMinutes) ?? IDLE_MINUTES_UNKNOWN;
+  useIdleLock(offlinePerson ? offlineMinutes : here?.idle_minutes, leave);
 
-  // The status line's words: leaving, or waiting for `me` with nothing to show yet; else nothing.
-  const status = leaving ? t("leaving") : me.isPending ? t("waiting") : null;
+  // The status line's words: leaving, or asking `me` with nothing to show yet; else nothing. Not while it
+  // waits for a network that isn't there, or asks again after no answer: the tiles say what to do then.
+  const status = person
+    ? null
+    : leaving
+      ? t("leaving")
+      : me.isPending && me.fetchStatus === "fetching" && !noAnswer
+        ? t("waiting")
+        : null;
 
   function whatShows() {
     // While the logout is on its way: neither the person nor the tiles yet, only the status line below. A
     // PIN login sent meanwhile could be ended by her logout, if it landed after his login.
-    if (leaving) return null;
-    if (here)
+    if (person === undefined && leaving) return null;
+    if (person)
       return (
         <>
           {/* A logout the server refused: why, and the person stays where they are. Only to them. */}
-          <ApiErrorAlert
-            error={leaver === here.staff.id ? logout.error : null}
-          />
+          {here && (
+            <ApiErrorAlert
+              error={leaver === here.staff.id ? logout.error : null}
+            />
+          )}
           <h1
             ref={welcome}
             tabIndex={-1}
             className="text-3xl font-semibold outline-none"
           >
-            {t("welcome", { name: here.staff.display_name })}
+            {t("welcome", { name: person.name })}
           </h1>
           {/* The person's own language and font, one tap from the welcome: someone logged in by PIN
-              never sees the office's home page (UI-9). */}
-          <div>
-            <ButtonLink href="/my-settings/" kind="second" size="normal">
-              {settings("title")}
-            </ButtonLink>
-          </div>
+              never sees the office's home page (UI-9). Only by the server's session: its screen calls the
+              server as that person, which a local session can't (SYNC-10). */}
+          {here && (
+            <div>
+              <ButtonLink href="/my-settings/" kind="second" size="normal">
+                {settings("title")}
+              </ButtonLink>
+            </div>
+          )}
         </>
       );
     // Plain "nobody is logged in" is no error to show: only a session that ended for a reason says why,
-    // and only until the first tile is tapped, which forgets it for good, Rudi included.
-    if (ended)
+    // and only until the first tile is tapped, which forgets it for good, Rudi included. No answer at all:
+    // the reason above the tiles, as the PIN is checked on the laptop.
+    if (ended || noAnswer || unheard)
       return (
         <>
+          {noAnswer && <ApiErrorAlert error={me.error} />}
           <PinLogin
             notice={notice ?? undefined}
             onPick={() => logout.reset()}
+            serverAway={noAnswer || logoutWaits}
+            onOffline={arrivedOffline}
           />
           {/* The way in for someone with a password and no PIN, as the owner may be: the password login
               (/login/). The second kind, under the tiles, which are what the counter is for (Jack,
@@ -169,14 +269,14 @@ export function AtTheDevice({
           </div>
         </>
       );
-    // Nothing while `me` is on its way; the reason once it failed with no answer at all.
+    // Nothing while `me` is on its way; the reason once it failed for another reason, a bug.
     return <ApiErrorAlert error={me.error} />;
   }
 
   // The bar's two buttons, only while someone is here. Both end the session the same way, and bring the
   // tiles back: Toka for someone leaving, Badilisha mtu for the next person stepping up (UI-4's plan).
   // The bar kind: the only kind that can sit on the green; normal height, as the language button's.
-  const buttons = here ? (
+  const buttons = person ? (
     <>
       <Button kind="bar" size="normal" onClick={leave}>
         {t("switch")}
@@ -191,7 +291,7 @@ export function AtTheDevice({
     <AppFrame
       area="login"
       notice={<OfflineBanner />}
-      person={here?.staff.display_name}
+      person={person?.name}
       side={side ? { name: side.name } : undefined}
       actions={buttons}
     >
@@ -206,4 +306,29 @@ export function AtTheDevice({
       {children}
     </AppFrame>
   );
+}
+
+/** The side someone logged in offline works on, for the bar, as sideAt does for `me` (who-is-here.ts):
+ * the device's home side if they hold a key there, or else the first side they hold one on; none if they
+ * hold none. A key on the whole shop holds on every side. */
+function sideOfRow(
+  row: StaffRow,
+  homeSideId: string,
+  sides: SideRecord[],
+): SideRecord | undefined {
+  const held =
+    row.permissions.every_side.length > 0
+      ? sides.map((side) => side.id)
+      : row.permissions.sides
+          .filter((keys) => keys.permissions.length > 0)
+          .map((keys) => keys.side);
+  const id = held.includes(homeSideId) ? homeSideId : held[0];
+  return sides.find((side) => side.id === id);
+}
+
+/** A rule of the whole-number kind, as the laptop stores it: "15" is 15. Anything else is no number. */
+function wholeMinutes(stored: string | undefined): number | undefined {
+  if (stored === undefined || !/^[0-9]+$/.test(stored)) return undefined;
+  const minutes = Number(stored);
+  return minutes > 0 ? minutes : undefined;
 }

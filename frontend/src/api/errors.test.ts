@@ -121,6 +121,8 @@ const CODES_THE_API_SENDS = [
   // browser holds a session (409), and a switched-off person with the right password (401).
   "login.already_in",
   "login.switched_off",
+  // One the laptop says itself, at a PIN login with no network: no check of this PIN here (SYNC-10).
+  "pin.offline_first",
 ];
 
 function wordsIn(language: Language): Words {

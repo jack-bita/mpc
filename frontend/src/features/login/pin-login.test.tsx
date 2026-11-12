@@ -3,7 +3,7 @@
 // the fake server answering as AUTH-4's route does.
 import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { makeQueryClient } from "@/api/query-client";
 import { ApiRefusal } from "@/api/refusal";
@@ -15,7 +15,11 @@ import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { swahiliIn } from "@/test/language";
 import { staffRow, theLaptopKnows } from "@/test/laptop";
+import { FEW_TURNS } from "@/test/pins";
 import { render } from "@/test/render";
+
+import { checkPinOffline, rememberPin } from "@/offline/pin";
+import { shopDatabase } from "@/offline/this-shop";
 
 import { PinLogin } from "./pin-login";
 
@@ -285,5 +289,182 @@ describe("the pin login", () => {
     expect(screen.getByText("Type your PIN")).toBeDefined();
     expect(screen.getByRole("button", { name: "Back" })).toBeDefined();
     expect(swahiliIn(container)).toEqual([]);
+  });
+});
+
+describe("the pin login with no network (SYNC-10)", () => {
+  const db = () => shopDatabase(DAWA_LAPTOP.shop.id);
+  // Asha logged in here online before, with 2580: the laptop saved its check of it.
+  const ashaWasHereOnline = () => rememberPin(db(), ASHA.id, "2580", FEW_TURNS);
+  const noNetwork = () =>
+    vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+  const posts = () => sent.filter((request) => request.method === "POST");
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("lets in someone who logged in once online here, and sends nothing", async () => {
+    await theShop({ status: 204 });
+    await ashaWasHereOnline();
+    noNetwork();
+    const arrived = vi.fn();
+    render(<PinLogin onOffline={arrived} />);
+
+    await ashaTypes("2580");
+
+    // Handed to the home page, which starts her local session.
+    await vi.waitFor(() =>
+      expect(arrived).toHaveBeenCalledWith(
+        expect.objectContaining({ id: ASHA.id }),
+      ),
+    );
+    expect(posts()).toEqual([]);
+  });
+
+  it("tells someone who never logged in here online to do that once", async () => {
+    await theShop({ status: 204 });
+    noNetwork();
+    render(<PinLogin onOffline={vi.fn()} />);
+
+    await ashaTypes("2580");
+
+    expect(
+      await screen.findByText(
+        "Hakuna mtandao. Ingia mara moja kwenye kompyuta hii mtandao ukiwepo, kisha utaweza kuingia bila mtandao.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("says a wrong PIN is wrong, in the server's words", async () => {
+    await theShop({ status: 204 });
+    await ashaWasHereOnline();
+    noNetwork();
+    const arrived = vi.fn();
+    render(<PinLogin onOffline={arrived} />);
+
+    await ashaTypes("2581");
+
+    expect(await screen.findByText("PIN si sahihi.")).toBeDefined();
+    expect(arrived).not.toHaveBeenCalled();
+  });
+
+  it("locks her for a minute after five wrong PINs", async () => {
+    await theShop({ status: 204 });
+    await ashaWasHereOnline();
+    noNetwork();
+    render(<PinLogin onOffline={vi.fn()} />);
+
+    await ashaTypes("2581");
+    for (let tries = 2; tries <= 5; tries++) {
+      // The pad comes back after each answer: wait for it, then type again.
+      await vi.waitFor(() =>
+        expect(
+          (screen.getByRole("button", { name: "2" }) as HTMLButtonElement)
+            .disabled,
+        ).toBe(false),
+      );
+      for (const digit of "2581")
+        fireEvent.click(screen.getByRole("button", { name: digit }));
+    }
+
+    expect(
+      await screen.findByText(
+        "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika 1.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("checks on the laptop when the home page says the server is away", async () => {
+    // The network is on, but `me` got no answer, or a logout waits unheard: nothing is sent.
+    await theShop({ status: 204 });
+    await ashaWasHereOnline();
+    const arrived = vi.fn();
+    render(<PinLogin serverAway onOffline={arrived} />);
+
+    await ashaTypes("2580");
+
+    await vi.waitFor(() => expect(arrived).toHaveBeenCalledOnce());
+    expect(posts()).toEqual([]);
+  });
+
+  it("checks on the laptop when the server gives no answer", async () => {
+    // The network went as the PIN was sent.
+    await theShop(() => {
+      throw new TypeError("Failed to fetch");
+    });
+    await ashaWasHereOnline();
+    const arrived = vi.fn();
+    render(<PinLogin onOffline={arrived} />);
+
+    await ashaTypes("2580");
+
+    await vi.waitFor(() => expect(arrived).toHaveBeenCalledOnce());
+  });
+
+  it("checks on the laptop when the server is broken", async () => {
+    // A deploy's 502, as the server restarts.
+    await theShop(refusal(502, "server_error"));
+    await ashaWasHereOnline();
+    const arrived = vi.fn();
+    render(<PinLogin onOffline={arrived} />);
+
+    await ashaTypes("2580");
+
+    await vi.waitFor(() => expect(arrived).toHaveBeenCalledOnce());
+  });
+
+  it("keeps the server's no, never asking the laptop", async () => {
+    // A manager gave Asha a new PIN; this laptop hasn't pulled it yet. The server knows best: 2580 is wrong.
+    await theShop(refusal(400, "pin.wrong"));
+    await ashaWasHereOnline();
+    const arrived = vi.fn();
+    render(<PinLogin onOffline={arrived} />);
+
+    await ashaTypes("2580");
+
+    expect(await screen.findByText("PIN si sahihi.")).toBeDefined();
+    expect(arrived).not.toHaveBeenCalled();
+  });
+
+  it("saves the laptop's check of a PIN the server said yes to", async () => {
+    // Her first online login here: from now on she can log in on this laptop with no network.
+    await theShop({ status: 204 });
+    render(<PinLogin />);
+
+    await ashaTypes("2580");
+
+    // Made at the real cost, after the answer, so she never waits for it.
+    await vi.waitFor(
+      async () => expect(await db().pin_checks.get(ASHA.id)).toBeDefined(),
+      { timeout: 3000 },
+    );
+    expect(await checkPinOffline(db(), ASHA.id, "2580")).toMatchObject({
+      id: ASHA.id,
+    });
+  });
+
+  it("keeps no PIN once the laptop has answered", async () => {
+    await theShop({ status: 204 });
+    await ashaWasHereOnline();
+    noNetwork();
+    const store = makeQueryClient();
+    render(
+      <QueryClientProvider client={store}>
+        <PinLogin onOffline={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    await ashaTypes("2581");
+    await screen.findByText("PIN si sahihi.");
+
+    expect(
+      JSON.stringify(
+        store
+          .getMutationCache()
+          .getAll()
+          .map((change) => change.state.variables),
+      ),
+    ).not.toContain("2581");
   });
 });
