@@ -8,11 +8,9 @@ to list or look up.
 
 from django.urls import path
 
-from apps.people.api.views import DeviceMeView, DeviceStaffView, PairingView
+from apps.people.api.views import DeviceMeView, PairingView
 
 urlpatterns = [
     path("pairing/", PairingView.as_view(), name="device-pairing"),
     path("me/", DeviceMeView.as_view(), name="device-me"),
-    # The PIN screen's people (UI-4).
-    path("staff/", DeviceStaffView.as_view(), name="device-staff"),
 ]

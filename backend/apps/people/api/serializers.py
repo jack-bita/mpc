@@ -143,18 +143,6 @@ class DeviceMeSerializer(serializers.Serializer[Device]):
         raise NotImplementedError
 
 
-class PinScreenStaffSerializer(serializers.ModelSerializer[StaffMember]):
-    # One tile on a shared device's PIN screen (UI-4): the full name in large letters, the nickname under it, and the id
-    # the PIN login sends back. A photo joins with PPL-4. Names only: no phone or email, which the next person at the
-    # laptop could read, and nothing that says whether a person has a PIN (03 §5.9).
-    full_name = serializers.CharField(source="user.full_name", read_only=True)
-
-    class Meta:
-        model = StaffMember
-        fields = ["id", "full_name", "display_name"]
-        read_only_fields = fields
-
-
 class MeUserSerializer(serializers.ModelSerializer[User]):
     # The person, as the screens greet them, in their own language and font (03 §7.4, UI-9): the app applies both at
     # every login, so they follow the person to any device. No phone and no email: a screen on a shared laptop doesn't

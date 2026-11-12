@@ -43,8 +43,8 @@ function useTiles(): StaffRow[] | null | undefined {
   }, [db]);
 }
 
-// A to Z by full name, then nickname, then id: the server's order (pin_screen_staff), so two people of one
-// name keep one order on every laptop.
+// A to Z by full name, then nickname, then id: the order the server sends the rows in (staff_rows,
+// apps/sync/selectors.py), so two people of one name keep one order on every laptop.
 function byName(a: StaffRow, b: StaffRow): number {
   return (
     a.full_name.localeCompare(b.full_name) ||
