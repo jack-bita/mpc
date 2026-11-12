@@ -15,7 +15,12 @@ import { openShopDatabase } from "../db";
 import { saveDocument } from "../outbox";
 import { closeShopDatabases, shopDatabase } from "../this-shop";
 import { mayPush } from "./backoff";
-import { CURSOR, LAST_DEVICE_SEQ } from "./meta";
+import {
+  CURSOR,
+  LAST_DEVICE_SEQ,
+  PUSH_WAIT_NEXT,
+  PUSH_WAIT_UNTIL,
+} from "./meta";
 import { syncShop } from "./sync";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -299,15 +304,23 @@ describe("the wait before the next push", () => {
     serverSaysTryLater();
     await syncShop(SHOP);
 
+    // The wait is two notes in the database itself, which the other tab reads through its own
+    // connection: nothing of it lives in this tab's memory.
     const otherTab = openShopDatabase(SHOP);
+    expect(
+      await otherTab.meta.bulkGet([PUSH_WAIT_UNTIL, PUSH_WAIT_NEXT]),
+    ).toEqual([
+      { key: PUSH_WAIT_UNTIL, value: START + 30_000 },
+      { key: PUSH_WAIT_NEXT, value: 60_000 },
+    ]);
     secondsLater(29);
     expect(await mayPush(otherTab)).toBe(false);
     secondsLater(30);
     expect(await mayPush(otherTab)).toBe(true);
     otherTab.close();
 
-    // A reload: every connection of this tab gone, nothing left in its memory. Its first sync, 10 s
-    // into the next wait, still waits.
+    // A reload: every connection of this tab gone. Its first sync, 10 s into the next wait, reads the
+    // notes again, and still waits.
     await syncShop(SHOP);
     expect(count(PUSH)).toBe(2);
     closeShopDatabases();

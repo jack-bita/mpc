@@ -206,6 +206,35 @@ describe("a sync", () => {
     expect(paths()).toEqual([PUSH, PULL, PUSH, PULL]);
   });
 
+  it("runs one more after the second too, when asked while the second runs", async () => {
+    // The sync after the running one is pulling when Baraka clocks in: one more runs after it, so his
+    // record doesn't wait for the next moment either. Joined to the second, it would.
+    await filledLaptop();
+    const releases: (() => void)[] = [];
+    let pulls = 0;
+    answer("GET", PULL, async () => {
+      pulls += 1;
+      if (pulls <= 2)
+        await new Promise<void>((resolve) => releases.push(resolve));
+      return Response.json(emptyPage(130).body);
+    });
+
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pulls).toBe(1));
+    const second = syncShop(SHOP);
+    releases[0]!();
+    await vi.waitFor(() => expect(pulls).toBe(2));
+    const third = syncShop(SHOP);
+    expect(third).not.toBe(second);
+    // It waits for the second: never two at once.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(paths()).toEqual([PUSH, PULL, PUSH, PULL]);
+    releases[1]!();
+    await Promise.all([first, second, third]);
+
+    expect(paths()).toEqual([PUSH, PULL, PUSH, PULL, PUSH, PULL]);
+  });
+
   it("sends a record saved while a sync pulls, right after it", async () => {
     // The sync had pushed already when Asha clocked in: hers goes at once, not at the next moment.
     await filledLaptop();

@@ -171,7 +171,8 @@ describe("the moments", () => {
     expect(sync).toHaveBeenCalledTimes(2);
   });
 
-  it("send now when Tuma sasa is pressed, the push even during a wait", () => {
+  it("send now when Tuma sasa is pressed, asking the push to skip any wait", () => {
+    // That the push then skips it is the sync's to show (push.backoff.test.ts).
     const sync = fakeSync();
     stop = startSyncTriggers(SHOP, sync);
 
@@ -179,6 +180,18 @@ describe("the moments", () => {
 
     expect(sync).toHaveBeenCalledTimes(2);
     expect(sync).toHaveBeenLastCalledWith(SHOP, { sendNow: true });
+  });
+
+  it("send nothing for a save made just before they stop", () => {
+    // Asha's save started the 2 s wait, and the laptop was blocked within it: the wait ends with them.
+    const sync = fakeSync();
+    stop = startSyncTriggers(SHOP, sync);
+
+    tellRecordSaved();
+    stop();
+    vi.advanceTimersByTime(AFTER_A_SAVE);
+
+    expect(sync).toHaveBeenCalledTimes(1);
   });
 
   it("all stop once stopped", () => {
@@ -253,6 +266,31 @@ describe("on the laptop", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(sent).toHaveLength(0);
+  });
+
+  it("send nothing for a save waiting its 2 s once the device is blocked", async () => {
+    vi.useFakeTimers({ toFake: [...TIMERS] });
+    saveDevice(DAWA_LAPTOP);
+    await filledLaptop();
+    answer("POST", PUSH, { status: 200, body: { answers: [] } });
+    answer("GET", PULL, {
+      status: 200,
+      body: {
+        changes: [],
+        cursor: 130,
+        has_more: false,
+        server_time: "2026-11-12T08:00:00Z",
+        min_app_version: null,
+      },
+    });
+    renderHook(() => useSyncTriggers());
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+
+    act(() => tellRecordSaved());
+    act(() => saveBlocked());
+    await act(() => vi.advanceTimersByTimeAsync(AFTER_A_SAVE));
+
+    expect(sent).toHaveLength(2);
   });
 
   it("stop while the device is blocked, and sync at once when it is unblocked", async () => {
