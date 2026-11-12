@@ -3,7 +3,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { saveDevice } from "@/features/devices/this-device";
+import { saveBlocked, saveDevice } from "@/features/devices/this-device";
 import { shopDatabase } from "@/offline/this-shop";
 import { DAWA_LAPTOP } from "@/test/devices";
 import { staffRow, theLaptopKnows } from "@/test/laptop";
@@ -106,6 +106,46 @@ describe("a local session", () => {
     });
 
     await waitFor(() => expect(result.current?.id).toBe(JUMA.id));
+  });
+
+  it("ends with a block of the laptop, so an unblock brings nobody back", async () => {
+    // The block's lock covers every page; unblocked in this same tab, Asha must type her PIN again.
+    const { result } = renderHook(() => useOfflineSession());
+    act(() => startOfflineSession(ASHA));
+
+    act(() => saveBlocked());
+    expect(result.current).toBeNull();
+    act(() => saveDevice(DAWA_LAPTOP));
+    expect(result.current).toBeNull();
+  });
+
+  it("ends when the laptop is forgotten, or paired again as another device", () => {
+    const { result } = renderHook(() => useOfflineSession());
+    act(() => startOfflineSession(ASHA));
+    act(() =>
+      saveDevice({
+        ...DAWA_LAPTOP,
+        id: "019a5e00-0000-7000-8000-000000000002",
+      }),
+    );
+    expect(result.current).toBeNull();
+
+    act(() => {
+      saveDevice(DAWA_LAPTOP);
+      startOfflineSession(ASHA);
+    });
+    act(() => saveDevice(null));
+    expect(result.current).toBeNull();
+  });
+
+  it("goes on when the device check saves the laptop again, renamed", () => {
+    // The check runs every few minutes, online: it must never end the session of the person at work.
+    const { result } = renderHook(() => useOfflineSession());
+    act(() => startOfflineSession(ASHA));
+
+    act(() => saveDevice({ ...DAWA_LAPTOP, name: "Laptop ya Dawa" }));
+
+    expect(result.current?.staffId).toBe(ASHA.id);
   });
 
   it("gives nobody while there is none", async () => {

@@ -195,6 +195,13 @@ export function saveBlocked(): void {
   save({ device: savedDevice(), blocked: true });
 }
 
+/** Calls `listener` each time the saved copy changes, in this tab or another, until the function it gives
+ * back is called. For code outside React that must follow the device: a local session ends with a block
+ * (offline-session.ts, SYNC-10). */
+export function watchThisDevice(listener: () => void): () => void {
+  return subscribe(listener);
+}
+
 /**
  * This device, or null while it isn't registered. useSyncExternalStore is React's way to read something
  * kept outside React. The build has no browser, so pages are built knowing no device (the last

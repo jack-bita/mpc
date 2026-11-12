@@ -8,7 +8,8 @@
 //
 // It holds the person's id and the PIN time their check was made for, and it holds only while the laptop's
 // copy still lets them in: a sync that brings their suspension, a new PIN, or their leaving ends it at once,
-// as the server ends a session at the next click after the same (03 §5.9, what a session holds).
+// as the server ends a session at the next click after the same (03 §5.9, what a session holds). So does a
+// block of the laptop, or a laptop forgotten or paired again, as a server's session ends with its device.
 //
 // Selling uses the device's key, not a session, so a local session is all a counter screen needs, online
 // too (SYNC-11 reads it). The office screens need the server's, and say so.
@@ -16,18 +17,27 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useSyncExternalStore } from "react";
 
 import type { components } from "@/api/schema";
+import {
+  savedBlocked,
+  savedDevice,
+  watchThisDevice,
+} from "@/features/devices/this-device";
 import { useShopDatabase } from "@/offline/this-shop";
 
 type StaffRow = components["schemas"]["StaffRecord"];
 
-/** Who logged in here offline, and the PIN time the laptop checked them against. */
+/** Who logged in here offline, the PIN time the laptop checked them against, and the device they logged
+ * in on, as the laptop's saved copy named it then. */
 export interface OfflineSession {
   staffId: string;
   pinChangedAt: string | null;
+  deviceId: string | undefined;
 }
 
 let current: OfflineSession | null = null;
 const listeners = new Set<() => void>();
+// The watch on the laptop's saved copy while a session lasts.
+let stopWatching: (() => void) | null = null;
 
 function tellEveryScreen(): void {
   for (const listener of listeners) listener();
@@ -40,12 +50,28 @@ function subscribe(listener: () => void): () => void {
 
 /** After the laptop's own yes to a PIN (checkPinOffline): this person is here. */
 export function startOfflineSession(person: StaffRow): void {
-  current = { staffId: person.id, pinChangedAt: person.pin_changed_at };
+  stopWatching?.();
+  current = {
+    staffId: person.id,
+    pinChangedAt: person.pin_changed_at,
+    deviceId: savedDevice()?.id,
+  };
+  // Blocked, forgotten (its key opens no device), or paired again as another device: the session ends
+  // there. The block's lock covers every page, so the home page isn't on show to end it, and an unblock in
+  // this same tab would bring the person back with no PIN. A copy saved again unchanged tells nobody, and a
+  // laptop renamed keeps its id, so the device check every few minutes ends nothing.
+  stopWatching = watchThisDevice(() => {
+    if (current === null) return;
+    if (savedBlocked() || savedDevice()?.id !== current.deviceId)
+      endOfflineSession();
+  });
   tellEveryScreen();
 }
 
-/** Toka, Badilisha mtu, the idle lock, or the laptop's copy no longer letting them in. */
+/** Toka, Badilisha mtu, the idle lock, the laptop's copy no longer letting them in, or the laptop blocked. */
 export function endOfflineSession(): void {
+  stopWatching?.();
+  stopWatching = null;
   if (current === null) return;
   current = null;
   tellEveryScreen();
