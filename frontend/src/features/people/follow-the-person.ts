@@ -1,7 +1,8 @@
 // follow-the-person.ts — the app shows whoever is logged in here in their own language and font, and this
 // laptop's own once nobody is (UI-9, ADR-0039, 03 §7.4).
 //
-// Both choices are saved on the person (Mipangilio yangu, my-settings.tsx), and `me` answers them. The two
+// Both choices are saved on the person (Mipangilio yangu, my-settings.tsx), and `me` answers them; with no
+// network, the person's staff row on the laptop carries the same two, for an offline login (SYNC-10). The two
 // places that learn who is here call this with the person they show: the home page of a registered device
 // (at-the-device.tsx), after each PIN login, logout and quick switch, and the office's frame
 // (office-frame.tsx), after a password's login. Each hands in its own `here`, which is already nobody from
@@ -22,12 +23,17 @@ import { useEffect } from "react";
 
 import { isLanguage, setPersonsLanguage } from "@/i18n/language";
 
-import type { WhoIsHere } from "./who-is-here";
+/** A person's two choices: from `me` (`user`), or from their staff row on the laptop, for someone logged
+ * in offline, who has no `me` (SYNC-10). */
+export interface PersonsChoices {
+  language: string;
+  font: string;
+}
 
-export function useFollowThePerson(here: WhoIsHere | undefined): void {
+export function useFollowThePerson(here: PersonsChoices | undefined): void {
   // The two values, not the whole answer: a refresh of `me` that changes nothing else redoes nothing.
-  const language = here?.user.language;
-  const font = here?.user.font;
+  const language = here?.language;
+  const font = here?.font;
 
   useEffect(() => {
     // Nobody here: the laptop's own, which the last person's undoing below has already brought back.

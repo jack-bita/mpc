@@ -13,6 +13,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import type { ShopDatabase } from "../db";
+import { dropOutdatedChecks } from "../pin";
 import { syncAnswer, syncCallLimit } from "./answer";
 import { CLOCK_OFFSET, CURSOR, LAST_SERVER_TIME, readCursor } from "./meta";
 
@@ -91,7 +92,8 @@ function checkPage(page: Page, askedFrom: number): void {
   }
 }
 
-/** One page, whole, in one transaction: its changes in order, then the cursor and the clock. */
+/** One page, whole, in one transaction: its changes in order, the offline PIN checks they make
+ * outdated, then the cursor and the clock. */
 async function applyPage(
   db: ShopDatabase,
   page: Page,
@@ -106,11 +108,16 @@ async function applyPage(
       db.setting,
       db.meta,
       db.pending_effects,
+      db.pin_checks,
     ],
     async () => {
       // In order: a record may come on several lines of one page, each as it was then, and the last
       // line is how it is now.
       for (const change of page.changes) await applyChange(db, change);
+
+      // A new PIN, or someone who left: their offline check goes with the same page that brings it, so
+      // the old PIN stops working offline the moment the laptop knows (SYNC-10, 03 §5.9).
+      await dropOutdatedChecks(db);
 
       await db.meta.put({ key: CURSOR, value: page.cursor });
 

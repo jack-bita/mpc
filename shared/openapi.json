@@ -224,45 +224,6 @@
                 }
             }
         },
-        "/api/devices/v1/staff/": {
-            "get": {
-                "operationId": "devices_v1_staff_list",
-                "tags": [
-                    "devices"
-                ],
-                "security": [
-                    {
-                        "deviceKey": []
-                    },
-                    {}
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/PinScreenStaff"
-                                    }
-                                }
-                            }
-                        },
-                        "description": ""
-                    },
-                    "default": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/api/health/": {
             "get": {
                 "operationId": "health_retrieve",
@@ -1774,29 +1735,6 @@
                 "required": [
                     "pin",
                     "staff"
-                ]
-            },
-            "PinScreenStaff": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "readOnly": true
-                    },
-                    "full_name": {
-                        "type": "string",
-                        "readOnly": true
-                    },
-                    "display_name": {
-                        "type": "string",
-                        "readOnly": true
-                    }
-                },
-                "required": [
-                    "display_name",
-                    "full_name",
-                    "id"
                 ]
             },
             "PullAnswer": {

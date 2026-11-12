@@ -84,7 +84,8 @@
     },
     "picker": {
       "title": "Who are you?",
-      "empty": "No one works here yet. Ask the shop's owner to add the staff."
+      "empty": "No one works here yet. Ask the shop's owner to add the staff.",
+      "firstSync": "Wait a moment: this laptop is getting the staff list for the first time."
     },
     "pin": {
       "typePin": "Type your PIN",
@@ -356,6 +357,7 @@
     "pin": {
       "wrong": "Wrong PIN.",
       "locked": "Too many wrong PINs. Try again in {minutes} min.",
+      "offline_first": "This laptop can't check your PIN on its own yet. Log in here once while the network is on, and then you can log in even without it.",
       "own": "You can't set your own PIN here.",
       "superuser_only": "Only the system admin can set this person's PIN.",
       "more_keys": "This person has permissions you don't, so you can't set their PIN.",

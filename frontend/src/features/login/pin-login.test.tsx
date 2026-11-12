@@ -3,44 +3,50 @@
 // the fake server answering as AUTH-4's route does.
 import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { makeQueryClient } from "@/api/query-client";
 import { ApiRefusal } from "@/api/refusal";
 import { DeviceCheck } from "@/features/devices/device-check";
 import { savedBlocked } from "@/features/devices/this-device";
 import { setLanguage } from "@/i18n/language";
-import { DAWA_LAPTOP_ANSWER } from "@/test/devices";
+import { saveDevice } from "@/features/devices/this-device";
+import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { swahiliIn } from "@/test/language";
+import { staffRow, theLaptopKnows } from "@/test/laptop";
+import { FEW_TURNS } from "@/test/pins";
 import { render } from "@/test/render";
 
+import { checkPinOffline, rememberPin } from "@/offline/pin";
+import { shopDatabase } from "@/offline/this-shop";
+
 import { PinLogin } from "./pin-login";
-import type { PinScreenStaff } from "./staff-picker";
 
 vi.mock("@/api/client", async (importOriginal) =>
   (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
 );
 
-const STAFF = "/api/devices/v1/staff/";
 const PIN_LOGIN = "/api/auth/pin-login/";
 const DEVICE_ME = "/api/devices/v1/me/";
 
 // Fake people: made-up names.
-const ASHA: PinScreenStaff = {
-  id: "019a5e00-0000-7000-8000-0000000000c2",
-  full_name: "Asha Mfano",
-  display_name: "Asha",
-};
-const JUMA: PinScreenStaff = {
-  id: "019a5e00-0000-7000-8000-0000000000c3",
-  full_name: "Juma Mfano",
-  display_name: "Juma",
-};
+const ASHA = staffRow(
+  "019a5e00-0000-7000-8000-0000000000c2",
+  "Asha Mfano",
+  "Asha",
+);
+const JUMA = staffRow(
+  "019a5e00-0000-7000-8000-0000000000c3",
+  "Juma Mfano",
+  "Juma",
+);
 
-/** The laptop's two people, and how the PIN login answers. */
-function theShop(login: Parameters<typeof answer>[2]) {
-  answer("GET", STAFF, { status: 200, body: [ASHA, JUMA] });
+/** The Dawa laptop, registered, with its two people on it (their tiles come from its own copy, SYNC-10),
+ * and how the PIN login answers. */
+async function theShop(login: Parameters<typeof answer>[2]) {
+  saveDevice(DAWA_LAPTOP);
+  await theLaptopKnows(ASHA, JUMA);
   answer("POST", PIN_LOGIN, login);
 }
 
@@ -55,7 +61,7 @@ async function ashaTypes(pin: string) {
 
 describe("the pin login", () => {
   it("asks the person picked for their PIN, under their name", async () => {
-    theShop({ status: 204 });
+    await theShop({ status: 204 });
     render(<PinLogin />);
 
     fireEvent.click(
@@ -72,7 +78,7 @@ describe("the pin login", () => {
   it("moves the keyboard to each step's heading, and back to it after a refusal", async () => {
     // The tile tapped, Rudi and a key switched off while the PIN is away all leave the page: focus would
     // fall to nothing, and a screen reader would say nothing of the new step (UI-3 did this for its forms).
-    theShop(refusal(400, "pin.wrong"));
+    await theShop(refusal(400, "pin.wrong"));
     render(<PinLogin />);
 
     await ashaTypes("4830");
@@ -88,7 +94,7 @@ describe("the pin login", () => {
   });
 
   it("sends who and the PIN, then forgets the last person's answers", async () => {
-    theShop({ status: 204 });
+    await theShop({ status: 204 });
     // The store as the last person left it: a list from their last screen (UI-2's note on UI-4).
     const store = makeQueryClient();
     store.setQueryData(["devices", "list"], ["Laptop Dawa"]);
@@ -109,7 +115,7 @@ describe("the pin login", () => {
   });
 
   it("says a wrong PIN is wrong, with the pad ready for the next try", async () => {
-    theShop(refusal(400, "pin.wrong"));
+    await theShop(refusal(400, "pin.wrong"));
     render(<PinLogin />);
 
     await ashaTypes("4830");
@@ -129,7 +135,7 @@ describe("the pin login", () => {
   it("keeps no PIN once the server has answered", async () => {
     // Juma tapped Asha's tile by mistake and typed his own PIN: wrong for her, but his real one. Kept, it
     // would sit in the laptop's memory, readable in the browser's tools, after he walks away.
-    theShop(refusal(400, "pin.wrong"));
+    await theShop(refusal(400, "pin.wrong"));
     const store = makeQueryClient();
     render(
       <QueryClientProvider client={store}>
@@ -158,7 +164,7 @@ describe("the pin login", () => {
   it("says how many minutes a locked person waits", async () => {
     // The fifth wrong PIN locks her on this laptop for a minute, doubling each time (AUTH-4): the server
     // sends the wait in seconds, the screen says minutes.
-    theShop(refusal(400, "pin.locked", { wait: 300 }));
+    await theShop(refusal(400, "pin.locked", { wait: 300 }));
     render(<PinLogin />);
 
     await ashaTypes("4830");
@@ -171,7 +177,7 @@ describe("the pin login", () => {
   });
 
   it("tells a suspended person why", async () => {
-    theShop(refusal(403, "staff.suspended"));
+    await theShop(refusal(403, "staff.suspended"));
     render(<PinLogin />);
 
     await ashaTypes("4829");
@@ -184,7 +190,7 @@ describe("the pin login", () => {
   it("takes no key and no Rudi while the PIN is on its way", async () => {
     // A slow 3G answer: nothing the person taps meanwhile may send a second PIN, nor leave the step, as
     // the answer could still log her in behind the picker.
-    theShop(() => new Promise<Response>(() => {}));
+    await theShop(() => new Promise<Response>(() => {}));
     render(<PinLogin />);
 
     await ashaTypes("4829");
@@ -203,7 +209,7 @@ describe("the pin login", () => {
 
   it("goes back to the picker with Rudi, and forgets the last refusal", async () => {
     // Juma tapped Asha's tile by mistake and typed his own PIN.
-    theShop(refusal(400, "pin.wrong"));
+    await theShop(refusal(400, "pin.wrong"));
     render(<PinLogin />);
     await ashaTypes("4830");
     await screen.findByText("PIN si sahihi.");
@@ -213,13 +219,16 @@ describe("the pin login", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
     ).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Juma Mfano Juma" }));
+    // The tiles come a moment after the question: the picker reads the laptop's copy again.
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Juma Mfano Juma" }),
+    );
     expect(screen.queryByText("PIN si sahihi.")).toBeNull();
   });
 
   it("shows why the last session ended above the picker, until someone is picked", async () => {
     // `me` refused the last session: the person was suspended while logged in (AUTH-4).
-    theShop({ status: 204 });
+    await theShop({ status: 204 });
     const ended = new ApiRefusal(403, {
       code: "staff.suspended",
       message: "",
@@ -241,7 +250,7 @@ describe("the pin login", () => {
   });
 
   it("tells the home page when a tile is tapped, so it can drop the notice for good", async () => {
-    theShop({ status: 204 });
+    await theShop({ status: 204 });
     const picked = vi.fn();
     render(<PinLogin onPick={picked} />);
 
@@ -256,7 +265,7 @@ describe("the pin login", () => {
     // Sent through the store, so the device's check hears of the block and the lock comes at once
     // (noticeBlock, UI-3): a call sent around the store would leave the laptop open.
     answer("GET", DEVICE_ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
-    theShop(refusal(401, "device.blocked"));
+    await theShop(refusal(401, "device.blocked"));
     render(
       <>
         <DeviceCheck />
@@ -271,7 +280,7 @@ describe("the pin login", () => {
 
   it("speaks English after the switch, with no Swahili left", async () => {
     setLanguage("en");
-    theShop(refusal(400, "pin.wrong"));
+    await theShop(refusal(400, "pin.wrong"));
     const { container } = render(<PinLogin />);
 
     await ashaTypes("4830");
@@ -280,5 +289,182 @@ describe("the pin login", () => {
     expect(screen.getByText("Type your PIN")).toBeDefined();
     expect(screen.getByRole("button", { name: "Back" })).toBeDefined();
     expect(swahiliIn(container)).toEqual([]);
+  });
+});
+
+describe("the pin login with no network (SYNC-10)", () => {
+  const db = () => shopDatabase(DAWA_LAPTOP.shop.id);
+  // Asha logged in here online before, with 2580: the laptop saved its check of it.
+  const ashaWasHereOnline = () => rememberPin(db(), ASHA.id, "2580", FEW_TURNS);
+  const noNetwork = () =>
+    vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+  const posts = () => sent.filter((request) => request.method === "POST");
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("lets in someone who logged in once online here, and sends nothing", async () => {
+    await theShop({ status: 204 });
+    await ashaWasHereOnline();
+    noNetwork();
+    const arrived = vi.fn();
+    render(<PinLogin onOffline={arrived} />);
+
+    await ashaTypes("2580");
+
+    // Handed to the home page, which starts her local session.
+    await vi.waitFor(() =>
+      expect(arrived).toHaveBeenCalledWith(
+        expect.objectContaining({ id: ASHA.id }),
+      ),
+    );
+    expect(posts()).toEqual([]);
+  });
+
+  it("tells someone who never logged in here online to do that once", async () => {
+    await theShop({ status: 204 });
+    noNetwork();
+    render(<PinLogin onOffline={vi.fn()} />);
+
+    await ashaTypes("2580");
+
+    expect(
+      await screen.findByText(
+        "Kompyuta hii haiwezi kuthibitisha PIN yako bila mtandao bado. Ingia mara moja hapa mtandao ukiwepo, kisha utaweza kuingia hata bila mtandao.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("says a wrong PIN is wrong, in the server's words", async () => {
+    await theShop({ status: 204 });
+    await ashaWasHereOnline();
+    noNetwork();
+    const arrived = vi.fn();
+    render(<PinLogin onOffline={arrived} />);
+
+    await ashaTypes("2581");
+
+    expect(await screen.findByText("PIN si sahihi.")).toBeDefined();
+    expect(arrived).not.toHaveBeenCalled();
+  });
+
+  it("locks her for a minute after five wrong PINs", async () => {
+    await theShop({ status: 204 });
+    await ashaWasHereOnline();
+    noNetwork();
+    render(<PinLogin onOffline={vi.fn()} />);
+
+    await ashaTypes("2581");
+    for (let tries = 2; tries <= 5; tries++) {
+      // The pad comes back after each answer: wait for it, then type again.
+      await vi.waitFor(() =>
+        expect(
+          (screen.getByRole("button", { name: "2" }) as HTMLButtonElement)
+            .disabled,
+        ).toBe(false),
+      );
+      for (const digit of "2581")
+        fireEvent.click(screen.getByRole("button", { name: digit }));
+    }
+
+    expect(
+      await screen.findByText(
+        "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika 1.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("checks on the laptop when the home page says the server is away", async () => {
+    // The network is on, but `me` got no answer, or a logout waits unheard: nothing is sent.
+    await theShop({ status: 204 });
+    await ashaWasHereOnline();
+    const arrived = vi.fn();
+    render(<PinLogin serverAway onOffline={arrived} />);
+
+    await ashaTypes("2580");
+
+    await vi.waitFor(() => expect(arrived).toHaveBeenCalledOnce());
+    expect(posts()).toEqual([]);
+  });
+
+  it("checks on the laptop when the server gives no answer", async () => {
+    // The network went as the PIN was sent.
+    await theShop(() => {
+      throw new TypeError("Failed to fetch");
+    });
+    await ashaWasHereOnline();
+    const arrived = vi.fn();
+    render(<PinLogin onOffline={arrived} />);
+
+    await ashaTypes("2580");
+
+    await vi.waitFor(() => expect(arrived).toHaveBeenCalledOnce());
+  });
+
+  it("checks on the laptop when the server is broken", async () => {
+    // A deploy's 502, as the server restarts.
+    await theShop(refusal(502, "server_error"));
+    await ashaWasHereOnline();
+    const arrived = vi.fn();
+    render(<PinLogin onOffline={arrived} />);
+
+    await ashaTypes("2580");
+
+    await vi.waitFor(() => expect(arrived).toHaveBeenCalledOnce());
+  });
+
+  it("keeps the server's no, never asking the laptop", async () => {
+    // A manager gave Asha a new PIN; this laptop hasn't pulled it yet. The server knows best: 2580 is wrong.
+    await theShop(refusal(400, "pin.wrong"));
+    await ashaWasHereOnline();
+    const arrived = vi.fn();
+    render(<PinLogin onOffline={arrived} />);
+
+    await ashaTypes("2580");
+
+    expect(await screen.findByText("PIN si sahihi.")).toBeDefined();
+    expect(arrived).not.toHaveBeenCalled();
+  });
+
+  it("saves the laptop's check of a PIN the server said yes to", async () => {
+    // Her first online login here: from now on she can log in on this laptop with no network.
+    await theShop({ status: 204 });
+    render(<PinLogin />);
+
+    await ashaTypes("2580");
+
+    // Made at the real cost, after the answer, so she never waits for it.
+    await vi.waitFor(
+      async () => expect(await db().pin_checks.get(ASHA.id)).toBeDefined(),
+      { timeout: 3000 },
+    );
+    expect(await checkPinOffline(db(), ASHA.id, "2580")).toMatchObject({
+      id: ASHA.id,
+    });
+  });
+
+  it("keeps no PIN once the laptop has answered", async () => {
+    await theShop({ status: 204 });
+    await ashaWasHereOnline();
+    noNetwork();
+    const store = makeQueryClient();
+    render(
+      <QueryClientProvider client={store}>
+        <PinLogin onOffline={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    await ashaTypes("2581");
+    await screen.findByText("PIN si sahihi.");
+
+    expect(
+      JSON.stringify(
+        store
+          .getMutationCache()
+          .getAll()
+          .map((change) => change.state.variables),
+      ),
+    ).not.toContain("2581");
   });
 });

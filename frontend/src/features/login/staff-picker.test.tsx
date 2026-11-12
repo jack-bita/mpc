@@ -1,33 +1,35 @@
 // staff-picker.test.tsx — the PIN screen's first step on a shared laptop: a tile for each person who works
-// at the shop, and a tap on your own (UI-4, 03 §5.9). The list comes from the device's own route, which the
-// fake server answers here.
-import { fireEvent, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+// at the shop, and a tap on your own (UI-4, 03 §5.9). The list is the laptop's own copy of the staff
+// (SYNC-10), so it shows with no network, and the server is never asked.
+import { act, fireEvent, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { saveDevice } from "@/features/devices/this-device";
 import { setLanguage } from "@/i18n/language";
-import { answer, refusal } from "@/test/fake-server";
+import { shopDatabase } from "@/offline/this-shop";
+import { DAWA_LAPTOP } from "@/test/devices";
+import { sent } from "@/test/fake-server";
 import { swahiliIn } from "@/test/language";
+import { staffRow, theLaptopKnows } from "@/test/laptop";
 import { render } from "@/test/render";
 
-import { type PinScreenStaff, StaffPicker } from "./staff-picker";
+import { StaffPicker } from "./staff-picker";
 
 vi.mock("@/api/client", async (importOriginal) =>
   (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
 );
 
-const STAFF = "/api/devices/v1/staff/";
-
-// Fake people: made-up names. In the server's order, A to Z by full name.
-const ASHA: PinScreenStaff = {
-  id: "019a5e00-0000-7000-8000-0000000000c2",
-  full_name: "Asha Mfano",
-  display_name: "Asha",
-};
-const JUMA: PinScreenStaff = {
-  id: "019a5e00-0000-7000-8000-0000000000c3",
-  full_name: "Juma Mfano",
-  display_name: "Juma",
-};
+// Fake people: made-up names.
+const ASHA = staffRow(
+  "019a5e00-0000-7000-8000-0000000000c2",
+  "Asha Mfano",
+  "Asha",
+);
+const JUMA = staffRow(
+  "019a5e00-0000-7000-8000-0000000000c3",
+  "Juma Mfano",
+  "Juma",
+);
 
 /** Everyone's tile, as a screen reader lists them. */
 async function tiles() {
@@ -35,9 +37,13 @@ async function tiles() {
   return within(list).getAllByRole("button");
 }
 
+// The Dawa laptop, registered. Each test fills its database as it needs.
+beforeEach(() => saveDevice(DAWA_LAPTOP));
+
 describe("the staff picker", () => {
-  it("asks who you are, with a tile for each person, in the server's order", async () => {
-    answer("GET", STAFF, { status: 200, body: [ASHA, JUMA] });
+  it("asks who you are, with a tile for each person, A to Z", async () => {
+    // Saved in the other order: the tiles sort them, as the server did.
+    await theLaptopKnows(JUMA, ASHA);
     render(<StaffPicker onPick={vi.fn()} />);
 
     expect(
@@ -57,9 +63,18 @@ describe("the staff picker", () => {
     expect(within(asha).getByText("Asha")).toBeDefined();
   });
 
+  it("shows the tiles with no network, and never asks the server", async () => {
+    // The way in to an offline PIN login (SYNC-10).
+    await theLaptopKnows(ASHA, JUMA);
+    render(<StaffPicker onPick={vi.fn()} />);
+
+    expect(await tiles()).toHaveLength(2);
+    expect(sent).toEqual([]);
+  });
+
   it("puts the keyboard on its question as it shows", async () => {
     // A screen reader says where the person is; Tab goes on from the question to the tiles.
-    answer("GET", STAFF, { status: 200, body: [ASHA, JUMA] });
+    await theLaptopKnows(ASHA, JUMA);
     render(<StaffPicker onPick={vi.fn()} />);
 
     // The heading itself, not only its words: the page's <body> holds the same words until the tiles come.
@@ -69,7 +84,7 @@ describe("the staff picker", () => {
   });
 
   it("picks the person whose tile is tapped", async () => {
-    answer("GET", STAFF, { status: 200, body: [ASHA, JUMA] });
+    await theLaptopKnows(ASHA, JUMA);
     const picked = vi.fn();
     render(<StaffPicker onPick={picked} />);
 
@@ -82,16 +97,39 @@ describe("the staff picker", () => {
   });
 
   it("has big tiles, sized for a finger at the counter", async () => {
-    answer("GET", STAFF, { status: 200, body: [ASHA, JUMA] });
+    await theLaptopKnows(ASHA, JUMA);
     render(<StaffPicker onPick={vi.fn()} />);
 
     for (const tile of await tiles())
       expect(tile.className).toContain("min-h-(--control-big)");
   });
 
+  it("gives a suspended person no tile", async () => {
+    // Her row says so since the last sync: she can't log in today, online or off (X2).
+    await theLaptopKnows(ASHA, { ...JUMA, status: "suspended" });
+    render(<StaffPicker onPick={vi.fn()} />);
+
+    expect((await tiles()).map((tile) => tile.textContent)).toEqual([
+      "Asha Mfano Asha",
+    ]);
+  });
+
+  it("gives a tile to someone a sync adds, with no reload", async () => {
+    await theLaptopKnows(ASHA);
+    render(<StaffPicker onPick={vi.fn()} />);
+    expect(await tiles()).toHaveLength(1);
+
+    // What a pull writes when the owner adds Juma in the office.
+    await act(() => shopDatabase(DAWA_LAPTOP.shop.id).staff.put(JUMA));
+
+    expect(
+      await screen.findByRole("button", { name: "Juma Mfano Juma" }),
+    ).toBeDefined();
+  });
+
   it("says so when nobody works here yet", async () => {
     // A new shop, before the owner adds its people: no tile to tap, and the reason why.
-    answer("GET", STAFF, { status: 200, body: [] });
+    await theLaptopKnows();
     render(<StaffPicker onPick={vi.fn()} />);
 
     expect(
@@ -102,18 +140,25 @@ describe("the staff picker", () => {
     expect(screen.queryByRole("list")).toBeNull();
   });
 
-  it("shows a refusal in the shop's words", async () => {
-    // A browser that isn't a registered device: the route is only for the shop's own.
-    answer("GET", STAFF, refusal(401, "not_authenticated"));
+  it("waits for the first sync on a laptop just registered", async () => {
+    // No copy yet: the shop isn't empty, the laptop just doesn't know its people.
     render(<StaffPicker onPick={vi.fn()} />);
 
-    expect(await screen.findByText("Ingia kwanza.")).toBeDefined();
-    expect(screen.queryByRole("list")).toBeNull();
+    expect(
+      await screen.findByText(
+        "Subiri kidogo: kompyuta hii inaleta orodha ya wafanyakazi kwa mara ya kwanza.",
+      ),
+    ).toBeDefined();
+    expect(
+      screen.queryByText(
+        "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze.",
+      ),
+    ).toBeNull();
   });
 
   it("speaks English after the switch, with no Swahili left", async () => {
     setLanguage("en");
-    answer("GET", STAFF, { status: 200, body: [] });
+    await theLaptopKnows();
     const { container } = render(<StaffPicker onPick={vi.fn()} />);
 
     expect(
@@ -122,6 +167,18 @@ describe("the staff picker", () => {
       ),
     ).toBeDefined();
     expect(screen.getByRole("heading", { name: "Who are you?" })).toBeDefined();
+    expect(swahiliIn(container)).toEqual([]);
+  });
+
+  it("speaks English while it waits for the first sync", async () => {
+    setLanguage("en");
+    const { container } = render(<StaffPicker onPick={vi.fn()} />);
+
+    expect(
+      await screen.findByText(
+        "Wait a moment: this laptop is getting the staff list for the first time.",
+      ),
+    ).toBeDefined();
     expect(swahiliIn(container)).toEqual([]);
   });
 });

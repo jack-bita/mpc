@@ -30,13 +30,29 @@ export interface MetaRow {
 }
 
 /** An offline PIN check value this device made itself at a person's online login (SYNC-10, 03 §5.9).
- * Never the server's PIN hash: nothing secret syncs. */
+ * Never the server's PIN hash: nothing secret syncs. Its rules live in pin.ts. None of these fields is a
+ * search key, so adding one needs no new version. */
 export interface PinCheckRow {
   staff_id: string;
+  /** 16 random bytes, as hex, made on this laptop for this one check. Not a secret: the check needs it
+   * again offline. It makes two people with the same PIN, or one PIN on two laptops, give different
+   * checks, so no list made in advance fits them. */
   salt: string;
+  /** PBKDF2 with SHA-256 of the PIN and the salt: 32 bytes, as hex. */
   check: string;
-  /** The person's pin_changed_at when the value was made: a newer one on their staff row drops it. */
-  pin_changed_at: string;
+  /** How many turns of the blender made it. The check is read with the same number, so a later app
+   * that makes new checks with more still reads the old ones. */
+  iterations: number;
+  /** The person's pin_changed_at when the value was made: a different one on their staff row drops it.
+   * Null if their row on the laptop said no PIN yet: a row behind the server's, which the next sync
+   * brings up to date, and the check with it. */
+  pin_changed_at: string | null;
+  /** Wrong tries since the last lock or right PIN, each counted before its check (pin.ts). */
+  wrong_tries: number;
+  /** How long the next lock lasts, in minutes: 1, then twice as long after each lock, up to 60. */
+  next_lock_minutes: number;
+  /** Until when, on this laptop's clock in ms, the person is locked here; null when they aren't. */
+  locked_until: number | null;
 }
 
 /** A document made on this device: a clock-in now, a sale or a repayment later (03 §6.1). It holds

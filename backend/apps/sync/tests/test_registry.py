@@ -207,8 +207,8 @@ def test_people_at_work_are_sent_and_people_gone_are_not(
 ) -> None:
     # A to Z by full name. Neema is suspended: still sent, marked so, so an offline laptop refuses her PIN as the
     # server does (X2, SYNC-10). Baraka left, for good, and Zuhura was switched off (User.is_active), until someone
-    # switches her on: neither can log in here now, so neither is sent, as the PIN screen shows neither
-    # (pin_screen_staff). Shop B's person is never sent.
+    # switches her on: neither can log in here now, so neither is sent, and the laptop's PIN screen, which reads
+    # these rows, gives neither a tile. Shop B's person is never sent.
     asha = hire(shop_a, "Asha Mfano", "Asha")
     neema = hire(shop_a, "Neema Mfano", "Neema")
     baraka = hire(shop_a, "Baraka Mfano", "Baraka")

@@ -6,7 +6,7 @@ import type { components } from "@/api/schema";
 import { DAWA, VYAKULA } from "@/test/devices";
 import { IDLE_15, IDLE_RULE } from "@/test/shop-lists";
 
-import { ruleInForce, shopToday } from "./rules";
+import { ruleInForce, shopToday, wholeNumber } from "./rules";
 
 type SettingRow = components["schemas"]["SettingRecord"];
 
@@ -92,5 +92,18 @@ describe("the shop's day", () => {
 
     expect(shopToday("Africa/Dar_es_Salaam", lateEvening)).toBe("2026-11-11");
     expect(shopToday("Europe/London", lateEvening)).toBe("2026-11-10");
+  });
+});
+
+describe("wholeNumber", () => {
+  it("reads a whole-number rule's stored text", () => {
+    expect(wholeNumber("15")).toBe(15);
+    expect(wholeNumber("0")).toBe(0);
+  });
+
+  it("reads anything else as no value, never a NaN", () => {
+    // A damaged row, or no rule at all: the caller's own default holds.
+    for (const stored of [undefined, "", "1.5", "-3", "15 ", "kumi na tano"])
+      expect(wholeNumber(stored)).toBeUndefined();
   });
 });

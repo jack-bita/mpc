@@ -17,6 +17,8 @@ import type { components } from "@/api/schema";
 
 export type WhoIsHere = components["schemas"]["WhoIsHere"];
 export type SideKeys = components["schemas"]["MeSideKeys"];
+type StaffRecord = components["schemas"]["StaffRecord"];
+type SideRecord = components["schemas"]["SideRecord"];
 
 /** The answer's place in the store of server answers. */
 export const WHO_IS_HERE = ["auth", "me"] as const;
@@ -46,4 +48,23 @@ export function sideAt(
   // A Vyakula seller at the Dawa laptop sells Vyakula's goods: the bar says where she works, so nobody
   // has to guess which side a sale will go to.
   return sides.find((side) => side.id === homeSideId) ?? sides[0];
+}
+
+/**
+ * The same for someone logged in offline (SYNC-10), who has no `me`: from their staff row on the laptop
+ * and the laptop's sides. A key on the whole shop holds on every side, as the server counts it for `me`.
+ */
+export function sideOfStaffRow(
+  row: StaffRecord,
+  homeSideId: string,
+  sides: SideRecord[],
+): SideRecord | undefined {
+  const held =
+    row.permissions.every_side.length > 0
+      ? sides.map((side) => side.id)
+      : row.permissions.sides
+          .filter((keys) => keys.permissions.length > 0)
+          .map((keys) => keys.side);
+  const id = held.includes(homeSideId) ? homeSideId : held[0];
+  return sides.find((side) => side.id === id);
 }

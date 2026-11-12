@@ -1,49 +1,66 @@
 // staff-picker.tsx — the PIN screen's first step on a shared laptop: "Wewe ni nani?", with a tile for each
 // person who works at the shop, and a tap on your own (UI-4, 03 §5.9). The PIN pad comes next.
 //
-// The people come from the device's own route, GET /api/devices/v1/staff/, asked with its key: names only,
-// A to Z, and only those who can log in today. Sync will keep a copy on the device, so the picker works
-// offline too (SYNC-2, SYNC-10); until then it needs the network, as the PIN login itself does.
+// The people come from the laptop's own copy of the staff list (SYNC-2), which the sync keeps up to date
+// every 30 seconds (SYNC-9): never from the server, so the tiles show the same with no network, the way
+// in to an offline PIN login (SYNC-10). A person added in the office gets a tile at the next sync. Only
+// those who can log in today: someone who left or was switched off isn't on the laptop at all, and a
+// suspended person's row says so, so neither gets a tile, as the server's old route sent neither.
 //
 // A tile shows the full name in large letters with the nickname under it, until photos come (PPL-4; 02 §5).
 //
-// "use client": it asks the server and its words, both in the browser only.
+// "use client": it reads the laptop's database and its words, both in the browser only.
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useRef } from "react";
 import { useTranslations } from "use-intl";
 
-import { api } from "@/api/client";
-import { answerOf } from "@/api/refusal";
 import type { components } from "@/api/schema";
-import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button } from "@/components/design/button";
+import { readCursor } from "@/offline/sync/meta";
+import { useShopDatabase } from "@/offline/this-shop";
 
-/** One person, as the server sends a tile's worth: id, full name, nickname. */
-export type PinScreenStaff = components["schemas"]["PinScreenStaff"];
+/** One person, as the laptop keeps them: their staff row (SYNC-2). */
+export type StaffRow = components["schemas"]["StaffRecord"];
 
-/** The list's place in the store of server answers. */
-export const SHOP_STAFF = ["devices", "staff"] as const;
+/**
+ * Who gets a tile: the active people, A to Z. Undefined while the first read runs, so nothing flashes;
+ * null while this laptop has had no first sync, whose copy the tiles wait for. Live: a sync that adds,
+ * renames or suspends someone redraws the tiles by itself.
+ */
+function useTiles(): StaffRow[] | null | undefined {
+  const db = useShopDatabase();
+  return useLiveQuery(async () => {
+    if (db === null) return null;
+    // One read, so the cursor and the rows are seen as they stood together.
+    return db.transaction("r", [db.meta, db.staff], async () => {
+      // No cursor: no copy yet. An empty list then would say the shop has nobody, which isn't so.
+      if ((await readCursor(db)) === null) return null;
+      const people = await db.staff.toArray();
+      return people.filter((person) => person.status === "active").sort(byName);
+    });
+  }, [db]);
+}
 
-/** Who works here, asked with the device's key. */
-function useShopStaff() {
-  return useQuery({
-    queryKey: SHOP_STAFF,
-    queryFn: () => answerOf(api.GET("/api/devices/v1/staff/")),
-  });
+// A to Z by full name, then nickname, then id: the order the server sends the rows in (staff_rows,
+// apps/sync/selectors.py), so two people of one name keep one order on every laptop.
+function byName(a: StaffRow, b: StaffRow): number {
+  return (
+    a.full_name.localeCompare(b.full_name) ||
+    a.display_name.localeCompare(b.display_name) ||
+    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  );
 }
 
 export function StaffPicker({
   onPick,
 }: {
   /** Called with the person whose tile was tapped. */
-  onPick: (person: PinScreenStaff) => void;
+  onPick: (person: StaffRow) => void;
 }) {
   const t = useTranslations("login.picker");
-  const staff = useShopStaff();
-  // Empty while the answer is on its way, and when the read failed with nothing read before it.
-  const people = staff.data;
+  const people = useTiles();
   // The tiles' step has come, and whatever had focus (a tapped tile, Rudi, Toka) left with the last one:
   // focus moves to the question, so a screen reader says it, and Tab goes on from here (as UI-3's forms
   // do).
@@ -61,9 +78,8 @@ export function StaffPicker({
       >
         {t("title")}
       </h1>
-      {/* Nothing while there is no error. Above the tiles, not in their place: if a refresh fails, the
-          people last read stay, with the reason above them. */}
-      <ApiErrorAlert error={staff.error} />
+      {/* A laptop just registered, before its first sync: what it waits for, not an empty shop. */}
+      {people === null && <p>{t("firstSync")}</p>}
       {/* A new shop, before the owner adds its people: the reason, not an empty screen. */}
       {people?.length === 0 && <p>{t("empty")}</p>}
       {people && people.length > 0 && (

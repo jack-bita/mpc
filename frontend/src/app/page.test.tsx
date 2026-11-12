@@ -5,7 +5,7 @@
 // the word books, jsdom, Testing Library). Later cards (REPO-4, OPS-1) check for
 // this same word in the real browser. The English switch is checked in src/i18n/language.test.tsx.
 import { fireEvent, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
 import { saveDevice } from "@/features/devices/this-device";
@@ -17,6 +17,7 @@ import {
   whoIsHere,
 } from "@/test/devices";
 import { answer, refusal } from "@/test/fake-server";
+import { staffRow, theLaptopKnows } from "@/test/laptop";
 import { render } from "@/test/render";
 
 import HomePage from "./page";
@@ -26,7 +27,6 @@ vi.mock("@/api/client", async (importOriginal) =>
 );
 
 const ME = "/api/auth/me/";
-const STAFF = "/api/devices/v1/staff/";
 const PIN_LOGIN = "/api/auth/pin-login/";
 
 type WhoIsHere = components["schemas"]["WhoIsHere"];
@@ -41,6 +41,15 @@ function neemaAtTheLaptop(keys: Parameters<typeof whoIsHere>[0]): WhoIsHere {
   };
 }
 
+// Neema, on the Dawa laptop's own copy of the staff, which the tiles read (SYNC-10). It registers
+// nothing: a new device's tests still find none.
+const NEEMA = whoIsHere([]);
+beforeEach(() =>
+  theLaptopKnows(
+    staffRow(NEEMA.staff.id, NEEMA.user.full_name, NEEMA.staff.display_name),
+  ),
+);
+
 /**
  * The Dawa laptop, registered, with nobody logged in yet: `me` says so until a PIN login works, and
  * then answers `after`. Neema is the shop's one tile.
@@ -54,16 +63,6 @@ function theLaptop(after: WhoIsHere) {
       ? Response.json(after)
       : Response.json(nobody.body, { status: nobody.status }),
   );
-  answer("GET", STAFF, {
-    status: 200,
-    body: [
-      {
-        id: after.staff.id,
-        full_name: after.user.full_name,
-        display_name: after.staff.display_name,
-      },
-    ],
-  });
   answer("POST", PIN_LOGIN, () => {
     loggedIn = true;
     return new Response(null, { status: 204 });
@@ -168,7 +167,6 @@ describe("HomePage", () => {
       ended = true;
       return new Response(null, { status: 204 });
     });
-    answer("GET", STAFF, { status: 200, body: [] });
 
     render(<HomePage />);
 

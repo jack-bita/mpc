@@ -84,7 +84,8 @@
     },
     "picker": {
       "title": "Wewe ni nani?",
-      "empty": "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze."
+      "empty": "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze.",
+      "firstSync": "Subiri kidogo: kompyuta hii inaleta orodha ya wafanyakazi kwa mara ya kwanza."
     },
     "pin": {
       "typePin": "Andika PIN yako",
@@ -356,6 +357,7 @@
     "pin": {
       "wrong": "PIN si sahihi.",
       "locked": "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika {minutes}.",
+      "offline_first": "Kompyuta hii haiwezi kuthibitisha PIN yako bila mtandao bado. Ingia mara moja hapa mtandao ukiwepo, kisha utaweza kuingia hata bila mtandao.",
       "own": "Huwezi kuweka PIN yako mwenyewe hapa.",
       "superuser_only": "PIN ya mtu huyu inawekwa na msimamizi wa mfumo tu.",
       "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kuweka PIN yake.",

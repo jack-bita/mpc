@@ -12,6 +12,7 @@
 import { api } from "@/api/client";
 
 import type { ShopDatabase } from "../db";
+import { dropOutdatedChecks } from "../pin";
 import { syncAnswer, syncCallLimit } from "./answer";
 import { CURSOR, LAST_DEVICE_SEQ, readCursor, readLastDeviceSeq } from "./meta";
 
@@ -59,6 +60,7 @@ export async function bootstrap(db: ShopDatabase): Promise<void> {
       db.setting,
       db.setting_keys,
       db.meta,
+      db.pin_checks,
     ],
     async () => {
       // One line per list, by the list's code, which is also its drawer's name (db.ts).
@@ -68,6 +70,9 @@ export async function bootstrap(db: ShopDatabase): Promise<void> {
       await db.payment_account.bulkPut(copy.payment_account);
       await db.staff.clear();
       await db.staff.bulkPut(copy.staff);
+      // The laptop's own checks aren't emptied with the lists: a person whose PIN is the same keeps
+      // logging in offline. Only those the new copy no longer matches go (SYNC-10).
+      await dropOutdatedChecks(db);
       await db.setting.clear();
       await db.setting.bulkPut(copy.setting);
       await db.setting_keys.clear();

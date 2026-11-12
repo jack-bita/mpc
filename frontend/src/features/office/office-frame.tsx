@@ -99,7 +99,7 @@ export function OfficeFrame({ children }: { children: ReactNode }) {
   const here = refused || leaving ? undefined : me.data;
   // Their own language and font, as on the PIN screen (at-the-device.tsx): a password's login lands here
   // (UI-9).
-  useFollowThePerson(here);
+  useFollowThePerson(here?.user);
   // At a registered laptop, the side the person works on, as the PIN login names it (UI-4); a phone knows
   // no side, and the bar names only the shop.
   const side = here && device ? sideAt(here, device.homeSide.id) : undefined;

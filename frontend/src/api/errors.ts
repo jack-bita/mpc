@@ -1,13 +1,15 @@
 // errors.ts — a failed call to the server, in the shop's words (UI-2, ADR-0040).
 //
 // A failed call is one of three things: the server refused it (ApiRefusal, with a code), no answer came
-// at all (NoConnection), or something else was thrown, a bug. A refusal's code becomes its sentence in
+// at all (NoConnection), or something else was thrown, a bug. A PIN checked with no network has a fourth:
+// the laptop's own no (PinRefused, src/offline/pin.ts), shown the same way. A refusal's code becomes its sentence in
 // src/i18n/codes.ts, which counter screens can use too; this file says what to show for each failure.
 //
 // "use client": its hook asks use-intl for words, through useCodeWords() (use-client.test.ts).
 "use client";
 
 import { codeMessage, useCodeWords, type Words } from "@/i18n/codes";
+import { PinRefused } from "@/offline/pin";
 
 import { ApiRefusal, NoConnection } from "./refusal";
 
@@ -15,6 +17,10 @@ import { ApiRefusal, NoConnection } from "./refusal";
 export function apiErrorMessage(t: Words, error: unknown): string {
   if (error instanceof ApiRefusal)
     return codeMessage(t, error.body.code, error.body.params);
+  // The laptop's own no to a PIN typed with no network (SYNC-10): the server's codes, in the server's
+  // words, so a wrong PIN or a lock reads the same either way.
+  if (error instanceof PinRefused)
+    return codeMessage(t, error.code, error.params);
   // No answer came at all: the network dropped, or the server can't be reached (client.ts). Office
   // screens also show Inahitaji mtandao while the device is offline (UI-1).
   if (error instanceof NoConnection) return t("errorFallback.noConnection");
