@@ -12,6 +12,7 @@ import { cleanup } from "@testing-library/react";
 import Dexie from "dexie";
 import { afterEach, vi } from "vitest";
 
+import { leaveHeard, nobodyAtCounter } from "@/features/login/at-the-counter";
 import { endOfflineSession } from "@/features/login/offline-session";
 import { closeShopDatabases } from "@/offline/this-shop";
 import { forgetCsrfToken } from "@/test/csrf";
@@ -53,4 +54,8 @@ afterEach(async () => {
   resetRouter();
   // Whoever a test logged in offline (offline-session.ts), kept in memory as a tab keeps it.
   endOfflineSession();
+  // The counter's note of who is here, and a leave a counter screen asked for (at-the-counter.ts, SYNC-11),
+  // kept in memory the same way.
+  nobodyAtCounter();
+  leaveHeard();
 });

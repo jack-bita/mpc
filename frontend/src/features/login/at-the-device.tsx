@@ -19,8 +19,12 @@
 // (forgetTheLastPerson), so this follows each by itself. After the idle minutes untouched, the laptop logs
 // the person out by itself (idle-lock.ts).
 //
-// Until the counter screens come, someone logged in sees only the welcome and her settings' button (UI-4's
-// plan, UI-9). It calls the server, so it lives outside the counter lock (rule 5, ADR-0019).
+// The counter screens never ask the server who is here, so this page tells them: a note of whoever it shows,
+// with the minutes their screen may sit untouched (at-the-counter.ts, SYNC-11). And it hears them: Toka on a
+// counter screen hides the person there and asks this page, opened next, to log them out, as its own Toka
+// does. The logout calls the server, so it stays here, outside the counter lock (UI-4's note).
+//
+// It calls the server, so it lives outside the counter lock (rule 5, ADR-0019).
 //
 // "use client": it asks the server and reads the device's saved copy, both in the browser only.
 "use client";
@@ -47,9 +51,15 @@ import {
   sideOfStaffRow,
   useWhoIsHere,
 } from "@/features/people/who-is-here";
-import { useRule, useSides } from "@/offline/reference";
+import { useRule, useSides, useStaff } from "@/offline/reference";
 import { wholeNumber } from "@/offline/rules";
 
+import {
+  arriveAtCounter,
+  leaveHeard,
+  nobodyAtCounter,
+  useLeaveAsked,
+} from "./at-the-counter";
 import { useIdleLock } from "./idle-lock";
 import {
   endOfflineSession,
@@ -158,11 +168,26 @@ export function AtTheDevice({
     else if (ended && !endedFor && hasAnswer) void forgetTheLastPerson(store);
   }, [endedFor, alreadySent, ended, hasAnswer, sendLogout, store]);
 
+  // Whom a counter screen asked to log out, not heard yet (SYNC-11): hidden from the first drawing, as
+  // the next person is already at the counter.
+  const leaveAsked = useLeaveAsked();
   // Who is logged in. First, someone the laptop let in offline, whose local session still holds.
-  const offlinePerson = useOfflinePerson();
+  const offlineRow = useOfflinePerson();
+  const offlinePerson =
+    offlineRow !== undefined && offlineRow.id === leaveAsked
+      ? undefined
+      : offlineRow;
   // Else, as `me` last said. TanStack keeps the last answer through a failed refresh, so a dropped network
-  // leaves the person where they are. Nobody while a logout of theirs waits: hidden at the press.
-  const here = offlinePerson || ended || logoutWaits ? undefined : me.data;
+  // leaves the person where they are. Nobody while a logout of theirs waits: hidden at the press, here or
+  // on a counter screen. offlineRow, not offlinePerson: one leaving still holds the laptop, and the
+  // server's session from before them is being ended.
+  const here =
+    offlineRow ||
+    ended ||
+    logoutWaits ||
+    (leaveAsked !== null && me.data?.staff.id === leaveAsked)
+      ? undefined
+      : me.data;
   const sides = useSides();
   const side = offlinePerson
     ? sideOfStaffRow(offlinePerson, device.homeSide.id, sides ?? [])
@@ -213,7 +238,68 @@ export function AtTheDevice({
   const ruleWhole = wholeNumber(ruleMinutes);
   const offlineMinutes =
     ruleWhole !== undefined && ruleWhole > 0 ? ruleWhole : IDLE_MINUTES_UNKNOWN;
-  useIdleLock(offlinePerson ? offlineMinutes : here?.idle_minutes, leave);
+  const idleMinutes = offlinePerson ? offlineMinutes : here?.idle_minutes;
+  useIdleLock(idleMinutes, leave);
+
+  // The counter's note (SYNC-11): whoever this page shows, by their row on the laptop, with the same
+  // minutes as the lock above, so a counter screen locks as this page would. Nobody else: the note goes
+  // as the person is hidden, at the press of Toka. Someone with no row on the laptop's copy, as before its
+  // first sync, is nobody at the counter: it has no row to read them by.
+  const staff = useStaff();
+  const rowHere =
+    offlinePerson ??
+    (here ? staff?.find((row) => row.id === here.staff.id) : undefined);
+  useEffect(() => {
+    if (rowHere !== undefined && idleMinutes !== undefined)
+      arriveAtCounter(rowHere, idleMinutes);
+    else nobodyAtCounter();
+  }, [rowHere, idleMinutes]);
+
+  // A counter screen asked to log someone out (SYNC-11). A ref, not state: the page may draw again before
+  // the store shows the logout waiting, and that drawing must not send a second one.
+  const leaveSentFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (leaveAsked === null) {
+      leaveSentFor.current = null;
+      return;
+    }
+    // Someone the laptop let in: their local session ends here, and the server has nothing to hear, as
+    // their arrival already sent the logout.
+    if (offlineRow?.id === leaveAsked) {
+      endOfflineSession();
+      leaveHeard();
+      return;
+    }
+    // A logout on its way, the one sent for this ask or one from before: it ends the one session this
+    // browser holds, and hides the person from then on, as Toka here does. A second would add nothing.
+    if (logoutWaits) {
+      leaveHeard();
+      return;
+    }
+    // Sent, and answered before the store showed it waiting: heard once `me` no longer names them.
+    if (leaveSentFor.current === leaveAsked) {
+      if (me.data?.staff.id !== leaveAsked) leaveHeard();
+      return;
+    }
+    // The server's session: the logout, named for them, as Toka here sends it.
+    if (me.data?.staff.id === leaveAsked && ended === null) {
+      leaveSentFor.current = leaveAsked;
+      sendLogout({ by: leaveAsked, notice: null });
+      return;
+    }
+    // Someone else here, or nobody, as when their session had ended by itself: nothing to log out, and an
+    // ask kept would end their next login. Not while `me` has said nothing yet: it may name them.
+    if (offlineRow !== undefined || me.data !== undefined || ended || noAnswer)
+      leaveHeard();
+  }, [
+    leaveAsked,
+    offlineRow,
+    me.data,
+    ended,
+    noAnswer,
+    logoutWaits,
+    sendLogout,
+  ]);
 
   // The status line's words: leaving, or asking `me` with nothing to show yet; else nothing. Not while it
   // waits for a network that isn't there, or asks again after no answer: the tiles say what to do then.
