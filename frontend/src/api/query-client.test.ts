@@ -57,7 +57,7 @@ describe("shouldRetry", () => {
 });
 
 describe("forgetTheLastPerson", () => {
-  it("forgets every answer and every change, and asks again for what a screen shows", async () => {
+  it("forgets every answer and every change done, and asks again for what a screen shows", async () => {
     // Asha has just used the laptop; Juma logs in after her (UI-4).
     const store = makeQueryClient();
     // A list from her last screen, which no screen shows now.
@@ -86,6 +86,41 @@ describe("forgetTheLastPerson", () => {
     expect(asked).toBe(2);
     expect(screen.getCurrentResult().data).toBe("answer 2");
     stop();
+  });
+  it("keeps a change still on its way in its place, and sends it once the network is back", async () => {
+    // Juma logs in on the laptop's own check while Neema's logout waits for the network (SYNC-10's review).
+    // Taken off the list, the logout would never be sent, or wake later and end the next person's login;
+    // and a change made after it could pass it.
+    const store = makeQueryClient();
+    store.mount();
+    const order: string[] = [];
+    const logout = new MutationObserver(store, {
+      mutationFn: () => {
+        order.push("logout");
+        return Promise.resolve();
+      },
+    });
+    const login = new MutationObserver(store, {
+      mutationFn: () => {
+        order.push("login");
+        return Promise.resolve();
+      },
+    });
+    try {
+      onlineManager.setOnline(false);
+      const leaving = logout.mutate();
+
+      await forgetTheLastPerson(store);
+      expect(store.getMutationCache().getAll()).toHaveLength(1);
+      const arriving = login.mutate();
+      onlineManager.setOnline(true);
+      await Promise.all([leaving, arriving]);
+
+      expect(order).toEqual(["logout", "login"]);
+    } finally {
+      onlineManager.setOnline(true);
+      store.unmount();
+    }
   });
 });
 

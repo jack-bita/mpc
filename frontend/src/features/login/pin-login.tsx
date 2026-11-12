@@ -12,7 +12,8 @@
 // person to the home page, which starts a local session (offline-session.ts). It checks it itself when:
 //   the browser says there is no network       the call could only fail
 //   the home page says the server is away      no answer to `me`, or a logout not heard yet: a login sent
-//                                              then could land before the logout and be ended by it (UI-4)
+//                                              then would wait behind the logout, in the one queue of
+//                                              changes, for the network
 //   the call itself gets no answer, or a 5xx   the network or the server went as the PIN was sent
 // Its no reads as the server's would, in the same words: a wrong PIN, a lock, a suspension; and one of its
 // own, for someone this laptop has no check of: log in once with the network.

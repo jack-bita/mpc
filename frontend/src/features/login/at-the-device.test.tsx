@@ -3,7 +3,7 @@
 // session, as Django does for this browser: a PIN login starts it, a logout ends it, and `me` answers for it.
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeQueryClient } from "@/api/query-client";
 import type { components } from "@/api/schema";
@@ -549,6 +549,17 @@ describe("each person's own language and font", () => {
 
 describe("with no network (SYNC-10)", () => {
   const db = () => shopDatabase(DAWA_LAPTOP.shop.id);
+
+  // Every test here on the fake clock, which still moves on its own. A test that ends with its network
+  // gone leaves a logout trying again with no end; its next try sleeps on this clock, and the sleep is
+  // thrown away with the clock as the test ends. Left on the real one, it would wake in a later test and
+  // reach that test's server, and could make it pass, or fail, for the wrong reason.
+  beforeEach(() => {
+    vi.useFakeTimers(IDLE_CLOCK);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   // Juma on the laptop's copy, as the sync left him: a seller on Dawa, with a PIN set.
   const JUMA_ROW = {
     ...staffRow(JUMA.staff.id, JUMA.user.full_name, JUMA.staff.display_name),
@@ -568,7 +579,8 @@ describe("with no network (SYNC-10)", () => {
     await db().staff.put(JUMA_ROW);
     await db().side.put(DAWA_SIDE);
     await rememberPin(db(), JUMA.staff.id, "4829", FEW_TURNS);
-    const laptop = { network: false, here: first };
+    // `logoutsHeard`: the logouts that reached the server.
+    const laptop = { network: false, here: first, logoutsHeard: 0 };
     const nobody = refusal(403, "not_authenticated");
     const noAnswer = () => {
       throw new TypeError("Failed to fetch");
@@ -581,7 +593,15 @@ describe("with no network (SYNC-10)", () => {
     });
     answer("POST", LOGOUT, () => {
       if (!laptop.network) noAnswer();
+      laptop.logoutsHeard += 1;
       laptop.here = null;
+      return new Response(null, { status: 204 });
+    });
+    answer("POST", PIN_LOGIN, async (request) => {
+      if (!laptop.network) noAnswer();
+      const { staff } = (await request.json()) as { staff: string };
+      laptop.here =
+        [NEEMA, JUMA].find((person) => person.staff.id === staff) ?? null;
       return new Response(null, { status: 204 });
     });
     return laptop;
@@ -589,12 +609,15 @@ describe("with no network (SYNC-10)", () => {
 
   /** Juma taps his tile and types his PIN, and the laptop lets him in. */
   async function jumaLogsInHere() {
+    // Up to 3 s, not Testing Library's 1: the tiles, the check and the welcome each read the database,
+    // which a full run, many files at once, can slow down.
+    const wait = { timeout: 3000 };
     fireEvent.click(
-      await screen.findByRole("button", { name: "Juma Mfano Juma" }),
+      await screen.findByRole("button", { name: "Juma Mfano Juma" }, wait),
     );
     for (const digit of "4829")
       fireEvent.click(screen.getByRole("button", { name: digit }));
-    await screen.findByRole("heading", { name: "Karibu, Juma" });
+    await screen.findByRole("heading", { name: "Karibu, Juma" }, wait);
   }
 
   const pinLogins = () =>
@@ -661,25 +684,58 @@ describe("with no network (SYNC-10)", () => {
     expect(screen.queryByRole("heading", { name: "Karibu, Neema" })).toBeNull();
   });
 
+  it("never lets a logout from before end the next person's online login", async () => {
+    // SYNC-10's review. Neema's Toka gets no answer; Juma logs in on the laptop; the internet comes back;
+    // Juma leaves; Neema logs in online. Her old logout must have gone once, in its turn, and never wake
+    // up later to end her new session.
+    const laptop = await aLaptopWithNoNetwork(NEEMA);
+    laptop.network = true;
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    laptop.network = false;
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+    await jumaLogsInHere();
+
+    // The internet is back: the logout waiting since her Toka lands at its next try.
+    laptop.network = true;
+    await vi.waitFor(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(laptop.logoutsHeard).toBe(1);
+    });
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Neema Mfano Neema" }),
+    );
+    for (const digit of "3690")
+      fireEvent.click(screen.getByRole("button", { name: digit }));
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    // Longer than the longest wait between a logout's tries (30 s).
+    await vi.advanceTimersByTimeAsync(31_000);
+
+    expect(
+      screen.getByRole("heading", { name: "Karibu, Neema" }),
+    ).toBeDefined();
+    expect(laptop.logoutsHeard).toBe(1);
+    expect(laptop.here).toBe(NEEMA);
+  });
+
   it("logs a local session out after the shop's idle minutes untouched", async () => {
     // No `me` to say the minutes: the shop's rule on the laptop, 15.
-    vi.useFakeTimers(IDLE_CLOCK);
-    try {
-      await aLaptopWithNoNetwork(null);
-      await db().setting.put(IDLE_15);
-      await db().setting_keys.put(IDLE_RULE);
-      render(<AtTheDevice device={DAWA_LAPTOP} />);
-      await jumaLogsInHere();
+    await aLaptopWithNoNetwork(null);
+    await db().setting.put(IDLE_15);
+    await db().setting_keys.put(IDLE_RULE);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
 
-      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 10 * 1000);
+    await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 10 * 1000);
 
-      expect(
-        await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
-      ).toBeDefined();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+    ).toBeDefined();
+    // 15 s, not Vitest's 5: fifteen minutes of the clock run about 90 of the lock's checks and the waiting
+    // logout's tries, which a full run can slow past 5 s.
+  }, 15_000);
 
   it("shows him in his own language and font, from his staff row", async () => {
     await aLaptopWithNoNetwork(null);

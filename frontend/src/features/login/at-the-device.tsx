@@ -106,7 +106,8 @@ export function AtTheDevice({
 
   // Every logout not heard yet, read from the store, not from this screen's hold, which a tap on a tile
   // lets go of. While one waits, the server may still hold that session: the person stays hidden, and a
-  // PIN is checked on the laptop, never sent, as a login could land before the logout and be ended by it.
+  // PIN is checked on the laptop, never sent: a login sent then would wait in the one queue of changes
+  // behind the logout (CHANGES_IN_ORDER), for a network that may not come all day.
   const waiting = useMutationState({
     filters: { mutationKey: LOGOUT, status: "pending" },
     select: (mutation) => mutation.state,
@@ -178,15 +179,20 @@ export function AtTheDevice({
   const welcome = useRef<HTMLHeadingElement>(null);
   useEffect(() => welcome.current?.focus(), [person?.id]);
 
-  // The laptop's yes to a PIN typed offline: the person's local session starts at once. Then the store
-  // forgets the last person, as at every login, and whatever session this browser holds on the server,
-  // from before the network went (a reload, a logout not heard yet), is ended, sent again until the server
-  // hears it: else, once the network is back, `me` would bring that person back after this one's Toka.
-  // In that order: the forgetting drops a logout still waiting, and the new one takes its place.
+  // The laptop's yes to a PIN typed offline: the person's local session starts at once. Whatever session
+  // this browser holds on the server, from before the network went (a reload), is ended, sent again until
+  // the server hears it: else, once the network is back, `me` would bring that person back after this
+  // one's Toka. A logout already waiting does the same, so none is added then. Then the store forgets the
+  // last person, as at every login; a logout on its way keeps its place (forgetTheLastPerson). In that
+  // order, so a logout is in the store from the first moment: the forgetting waits for every screen's
+  // read to be asked again, seconds with no network, and meanwhile `me` could answer with the old session.
   async function arrivedOffline(arrived: StaffRow) {
     startOfflineSession(arrived);
+    const waitingNow = store
+      .getMutationCache()
+      .findAll({ mutationKey: LOGOUT, status: "pending" });
+    if (waitingNow.length === 0) sendLogout({ by: null, notice: null });
     await forgetTheLastPerson(store);
-    sendLogout({ by: null, notice: null });
   }
 
   // Toka, Badilisha mtu and the idle lock. Someone logged in offline: their local session ends, and the
@@ -215,8 +221,8 @@ export function AtTheDevice({
         : null;
 
   function whatShows() {
-    // While the logout is on its way: neither the person nor the tiles yet, only the status line below. A
-    // PIN login sent meanwhile could be ended by her logout, if it landed after his login.
+    // While the logout is on its way: neither the person nor the tiles yet, only the status line below, a
+    // moment online (UI-4's screens). A PIN login sent meanwhile would wait behind the logout anyway.
     if (person === undefined && leaving) return null;
     if (person)
       return (

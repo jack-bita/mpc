@@ -56,17 +56,23 @@ export function makeQueryClient(): QueryClient {
 export const CHANGES_IN_ORDER = "changes-in-order";
 
 /**
- * Forgets the last person at this device: every answer the store holds and every change sent, and asks
+ * Forgets the last person at this device: every answer the store holds and every change done, and asks
  * again for what the screens on show read. A PIN login, a logout and a quick switch call it (UI-4), and
  * the password's login and logout (UI-5): one browser serves many people, and Juma must never see Asha's
- * rows from her last screen, offline either, where a new read waits for the network.
+ * rows from her last screen, offline either, where a new read waits for the network. A change still on
+ * its way keeps its place in the queue (SYNC-10's review).
  */
 export async function forgetTheLastPerson(store: QueryClient): Promise<void> {
-  // The changes sent, a PIN login among them: each keeps what it was sent with, the PIN too. A change
-  // still waiting for the network would go too, and TanStack sends again only what this list holds when
-  // the network is back (resumePausedMutations). None waits by the time a logout forgets: every change is
-  // in one queue (CHANGES_IN_ORDER), so the logout is sent only after those made before it (UI-5's review).
-  store.getMutationCache().clear();
+  // The changes done, a PIN login among them: each keeps what it was sent with, the PIN too. Not one still
+  // on its way. Taken off the list, such a change doesn't stop: TanStack's tries go on outside the list.
+  // It only loses its place in the queue (CHANGES_IN_ORDER), so a change made after it could pass it, and
+  // one waiting for the network would never be sent, as TanStack sends again only what the list holds when
+  // the network is back (resumePausedMutations). So a logout waiting for the network, forgotten as someone
+  // logs in on the laptop's own check, would wake later and end the next person's online login (SYNC-10).
+  // Kept, it goes in its turn, as the person who made it meant, and is let go of once done.
+  const changes = store.getMutationCache();
+  for (const change of changes.getAll())
+    if (change.state.status !== "pending") changes.remove(change);
   // Every answer back to nothing, and the screens showing one told, so those on show ask again, for the
   // new person. Not store.clear(): it drops the answers without telling the screens that show them,
   // which then keep the last person's answer until they happen to draw again (TanStack's
