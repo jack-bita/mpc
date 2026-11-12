@@ -7,7 +7,8 @@
 //   accepted   → the row leaves the outbox for sent_archive, with the server's posted_seq; the
 //                document's pending effects get that posted_seq too, and the pull drops them later
 //                (none when its save changed nothing a laptop keeps: its effects go at once)
-//   invalid    → the row is set aside as needs_attention, with its reason; the rest go on
+//   invalid    → the row is set aside as needs_attention, with its reason, and its pending effects go,
+//                as the server saved nothing of it; the rest go on
 //   duplicate  → sent before, its answer lost on the way back: read as that first answer
 //   retry      → the server had trouble saving it: the push stops, and it and the rest wait
 //
@@ -188,6 +189,9 @@ async function applyAnswers(
             status: "needs_attention",
             last_error: answer.code,
           });
+          // The server saved nothing of it, so no pull will ever bring a change of it: its stock or
+          // balance change must not go on being counted on this laptop.
+          await db.pending_effects.where("document_id").equals(row.id).delete();
         } else {
           throw new Error(`Duplicate ${row.id} with no first answer.`);
         }

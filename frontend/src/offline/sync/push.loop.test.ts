@@ -249,6 +249,28 @@ describe("the push", () => {
     ).toEqual([58, 60]);
   });
 
+  it("drops a refused one's pending effects, as the server saved nothing of it", async () => {
+    // A refused sale's stock change would otherwise be counted on the laptop for good: no pull will
+    // ever bring a change of it. Another record's effects stay.
+    await filledLaptop();
+    const refused = await saveDocument(db, CLOCK_IN, [{}]);
+    const waiting = await saveDocument(db, CLOCK_IN, [{}]);
+    answer("POST", PUSH, {
+      status: 200,
+      body: {
+        answers: [
+          invalid(refused.id, "document.type_unknown"),
+          retry(waiting.id),
+        ],
+      },
+    });
+
+    await push(db);
+
+    const left = await db.pending_effects.toArray();
+    expect(left.map((effect) => effect.document_id)).toEqual([waiting.id]);
+  });
+
   it("reads a duplicate as its first answer", async () => {
     // Both were sent before, and the answer was lost on the way back: the server says what it said then.
     await filledLaptop();
