@@ -4,7 +4,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiRefusal } from "@/api/refusal";
-import { saveDevice, savedBlocked } from "@/features/devices/this-device";
+import {
+  saveBlocked,
+  saveDevice,
+  savedBlocked,
+} from "@/features/devices/this-device";
 
 import { DAWA_LAPTOP } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
@@ -231,6 +235,23 @@ describe("a sync", () => {
     await expect(first).rejects.toBeInstanceOf(ApiRefusal);
     await second;
     expect(await readCursor(shopDatabase(SHOP))).toBe(120);
+  });
+
+  it("asks nothing in a sync that waited its turn once the laptop is blocked", async () => {
+    // The manager blocks the laptop while a sync is pulling and the next one waits behind it: the next
+    // one must not ask the server again.
+    saveDevice(DAWA_LAPTOP);
+    await filledLaptop();
+    const pull = holdTheFirstPull();
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pull.pulls()).toBe(1));
+    const second = syncShop(SHOP);
+
+    saveBlocked();
+    pull.release();
+    await Promise.all([first, second]);
+
+    expect(paths()).toEqual([PUSH, PULL]);
   });
 
   it("never joins another shop's sync", async () => {

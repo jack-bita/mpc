@@ -5,6 +5,8 @@
 //
 // It runs at the moments triggers.tsx keeps: as the app opens, when the network comes back, 2 s after a
 // save, every 30 s while online, and from Tuma sasa (03 §6.5).
+import { savedBlocked } from "@/features/devices/this-device";
+
 import { shopDatabase } from "../this-shop";
 import { isAboutTheDevice } from "./answer";
 import { bootstrap, needsBootstrap } from "./bootstrap";
@@ -122,6 +124,11 @@ async function inTurn(
 }
 
 async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
+  // A sync that waited its turn, behind this tab's last one or another tab's, may start after the
+  // laptop heard of its block (a refusal kept by answer.ts, in any tab). It then asks nothing: the server
+  // would refuse it, and a blocked laptop must stop asking (03 §5.9, step 4). The moments stop too
+  // (triggers.tsx); this catches the one already in line.
+  if (savedBlocked()) return;
   const db = shopDatabase(shopId);
   // The first pull asks from the bootstrap's cursor, so the copy and the changes after it meet.
   if (await needsBootstrap(db)) await bootstrap(db);
