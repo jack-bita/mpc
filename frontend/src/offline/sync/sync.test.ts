@@ -1,5 +1,6 @@
 // sync.test.ts — one sync of the laptop's shop (SYNC-7): the bootstrap once, then the push (SYNC-8), then
-// pulls; a second check while one runs joins it; a failed one leaves the next free to run.
+// pulls; one asked for while another runs runs once more after it, and asks beyond that join it (SYNC-9);
+// a failed one leaves the next free to run.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiRefusal } from "@/api/refusal";
@@ -40,6 +41,43 @@ const emptyPage = (cursor: number) => ({
 });
 
 const paths = () => sent.map((request) => new URL(request.url).pathname);
+
+/** A filled laptop: its cursor and its last number, as a bootstrap leaves them. */
+async function filledLaptop(): Promise<void> {
+  await shopDatabase(SHOP).meta.bulkPut([
+    { key: "pull_cursor", value: 130 },
+    { key: "last_device_seq", value: 57 },
+  ]);
+}
+
+/** Asha's clock-in, saved on the laptop. */
+const clockIn = () =>
+  saveDocument(shopDatabase(SHOP), {
+    type: "clock",
+    schema_version: 1,
+    created_by: ASHA.id,
+    payload: { kind: "in", last_server_time: "2026-11-12T04:58:00Z" },
+  });
+
+/**
+ * The pull's first answer, held until the test lets it go: a sync stopped halfway, its push gone, while
+ * the test asks again. `pulls` counts the pulls asked for, so a test can wait for the first to arrive.
+ */
+function holdTheFirstPull(): { release: () => void; pulls: () => number } {
+  let release = nothing;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let pulls = 0;
+  answer("GET", PULL, async () => {
+    pulls += 1;
+    if (pulls === 1) await held;
+    return Response.json(emptyPage(130).body);
+  });
+  return { release: () => release(), pulls: () => pulls };
+}
+
+function nothing(): void {}
 
 describe("a sync", () => {
   it("bootstraps a fresh laptop, pushes, then pulls from its cursor", async () => {
@@ -135,16 +173,64 @@ describe("a sync", () => {
     expect(await db.outbox.count()).toBe(1);
   });
 
-  it("joins the sync already running instead of starting a second", async () => {
-    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+  it("runs once more after the running one, and the asks after that join it", async () => {
+    await filledLaptop();
+    const pull = holdTheFirstPull();
+
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pull.pulls()).toBe(1));
+    const second = syncShop(SHOP);
+    const third = syncShop(SHOP);
+    // Two at most: never two at once, and never a third waiting.
+    expect(second).not.toBe(first);
+    expect(third).toBe(second);
+    expect(paths()).toEqual([PUSH, PULL]);
+
+    pull.release();
+    await Promise.all([first, second]);
+
+    expect(paths()).toEqual([PUSH, PULL, PUSH, PULL]);
+  });
+
+  it("sends a record saved while a sync pulls, right after it", async () => {
+    // The sync had pushed already when Asha clocked in: hers goes at once, not at the next moment.
+    await filledLaptop();
+    const pull = holdTheFirstPull();
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pull.pulls()).toBe(1));
+
+    const made = await clockIn();
+    const second = syncShop(SHOP);
+    pull.release();
+    await Promise.all([first, second]);
+
+    const body = (await sent[2]!.json()) as { documents: { id: string }[] };
+    expect(body.documents.map((document) => document.id)).toEqual([made.id]);
+  });
+
+  it("runs the one asked after it, even when the running one fails", async () => {
+    // The first bootstrap meets the server down; the sync asked meanwhile fills the laptop.
+    let release = nothing;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let bootstraps = 0;
+    answer("GET", BOOTSTRAP_ROUTE, async () => {
+      bootstraps += 1;
+      if (bootstraps > 1) return Response.json(BOOTSTRAP);
+      await held;
+      return Response.json(refusal(500, "server_error").body, { status: 500 });
+    });
     answer("GET", PULL, emptyPage(120));
 
     const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(bootstraps).toBe(1));
     const second = syncShop(SHOP);
-    await Promise.all([first, second]);
+    release();
 
-    expect(second).toBe(first);
-    expect(paths()).toEqual([BOOTSTRAP_ROUTE, PUSH, PULL]);
+    await expect(first).rejects.toBeInstanceOf(ApiRefusal);
+    await second;
+    expect(await readCursor(shopDatabase(SHOP))).toBe(120);
   });
 
   it("never joins another shop's sync", async () => {

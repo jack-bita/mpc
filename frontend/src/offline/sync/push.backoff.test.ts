@@ -203,6 +203,61 @@ describe("the wait before the next push", () => {
     expect(count(PUSH)).toBe(2);
   });
 
+  it("doesn't hold back Tuma sasa, and its failure makes the next wait longer", async () => {
+    // Asha presses Tuma sasa 5 s into a 30 s wait: it goes (Jack, 12 Nov 2026). The server still has
+    // trouble, so the next wait is the doubled one, 60 s from her press.
+    await filledLaptop();
+    serverSaysTryLater();
+    await syncShop(SHOP);
+
+    secondsLater(5);
+    await syncShop(SHOP, { sendNow: true });
+    expect(count(PUSH)).toBe(2);
+
+    secondsLater(64);
+    await syncShop(SHOP);
+    expect(count(PUSH)).toBe(2);
+    secondsLater(65);
+    await syncShop(SHOP);
+    expect(count(PUSH)).toBe(3);
+  });
+
+  it("makes the sync after the running one push, when Tuma sasa is pressed meanwhile", async () => {
+    // A 30 s sync is pulling, its push held back by the wait, when Asha presses Tuma sasa: the sync
+    // that runs next pushes, even though a plain ask came first.
+    await filledLaptop();
+    serverSaysTryLater();
+    await syncShop(SHOP);
+    secondsLater(5);
+    let release = (): void => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let pulls = 0;
+    answer("GET", PULL, async () => {
+      pulls += 1;
+      // The first pull after this answer was set: the running sync's.
+      if (pulls === 1) await held;
+      return Response.json({
+        changes: [],
+        cursor: 130,
+        has_more: false,
+        server_time: "2026-11-12T08:00:05Z",
+        min_app_version: null,
+      });
+    });
+
+    const running = syncShop(SHOP);
+    await vi.waitFor(() => expect(pulls).toBe(1));
+    const plain = syncShop(SHOP);
+    const pressed = syncShop(SHOP, { sendNow: true });
+    expect(pressed).toBe(plain);
+    release();
+    await Promise.all([running, pressed]);
+
+    expect(count(PUSH)).toBe(2);
+  });
+
   it("is each shop's own", async () => {
     // The laptop's other shop (the practice shop, say) has no trouble: it pushes at once.
     const other = "019a5e00-0000-7000-8000-0000000000a2";
