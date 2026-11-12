@@ -19,8 +19,9 @@ export const LAST_SERVER_TIME = "last_server_time";
  * two records share a number (SYNC-4). The first bootstrap sets it from the server's count (SYNC-8),
  * and each save moves it in the save's own transaction (outbox.ts). Here, though a reset of this
  * database wipes it: the server's count survives a wipe, and the bootstrap that fills the laptop again
- * brings it back, where the browser's other storage would be wiped with the database. Missing until the
- * first bootstrap, so a laptop never filled saves nothing. */
+ * brings it back, where the browser's other storage would be wiped with the database. Missing until a
+ * bootstrap brings it, so a laptop never filled saves nothing; one filled before SYNC-8 has a cursor but
+ * no number, and is filled again (needsBootstrap). */
 export const LAST_DEVICE_SEQ = "last_device_seq";
 
 /** The cursor, or null when this database was never filled. */

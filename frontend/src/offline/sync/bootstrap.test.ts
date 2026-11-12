@@ -92,6 +92,20 @@ describe("the bootstrap", () => {
     expect(await readLastDeviceSeq(db)).toBe(70);
   });
 
+  it("is needed again by a laptop filled before its number was kept", async () => {
+    // Filled by SYNC-7, before the bootstrap named the laptop's last number: it has a cursor but no
+    // number, so it could never save. It fills itself again, once, and learns where its count stands.
+    freshDatabase();
+    await db.meta.put({ key: CURSOR, value: 110 });
+    expect(await needsBootstrap(db)).toBe(true);
+    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+
+    await bootstrap(db);
+
+    expect(await readLastDeviceSeq(db)).toBe(57);
+    expect(await needsBootstrap(db)).toBe(false);
+  });
+
   it("keeps no record the server no longer sends, when filled again", async () => {
     freshDatabase();
     const left = { ...ASHA, id: "019a5e00-0000-7000-8000-0000000000c9" };

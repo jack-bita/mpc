@@ -51,12 +51,26 @@ describe("a sync", () => {
   });
 
   it("only pushes and pulls on a laptop already filled", async () => {
-    await shopDatabase(SHOP).meta.put({ key: "pull_cursor", value: 130 });
+    await shopDatabase(SHOP).meta.bulkPut([
+      { key: "pull_cursor", value: 130 },
+      { key: "last_device_seq", value: 57 },
+    ]);
     answer("GET", PULL, emptyPage(130));
 
     await syncShop(SHOP);
 
     expect(paths()).toEqual([PUSH, PULL]);
+  });
+
+  it("fills again a laptop filled before its number was kept", async () => {
+    // A laptop SYNC-7 filled has a cursor but no number of its own: one more bootstrap gives it one.
+    await shopDatabase(SHOP).meta.put({ key: "pull_cursor", value: 110 });
+    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+    answer("GET", PULL, emptyPage(120));
+
+    await syncShop(SHOP);
+
+    expect(paths()).toEqual([BOOTSTRAP_ROUTE, PUSH, PULL]);
   });
 
   it("sends what waits before it pulls", async () => {

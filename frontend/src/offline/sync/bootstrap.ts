@@ -15,9 +15,14 @@ import type { ShopDatabase } from "../db";
 import { syncAnswer } from "./answer";
 import { CURSOR, LAST_DEVICE_SEQ, readCursor, readLastDeviceSeq } from "./meta";
 
-/** Whether this database still needs its first copy: it has no cursor yet. */
+/** Whether this database still needs a copy: it has no cursor yet, or no number of its own. A laptop
+ * filled before the bootstrap named its last number (SYNC-7's) has a cursor but no number, and could
+ * never save a document (outbox.ts): it is filled again, once, which is safe, as a bootstrap empties
+ * each list before it fills it and keeps the larger number. */
 export async function needsBootstrap(db: ShopDatabase): Promise<boolean> {
-  return (await readCursor(db)) === null;
+  return (
+    (await readCursor(db)) === null || (await readLastDeviceSeq(db)) === null
+  );
 }
 
 /**
