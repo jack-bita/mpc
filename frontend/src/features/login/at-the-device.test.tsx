@@ -1,7 +1,7 @@
 // at-the-device.test.tsx — leaving a shared laptop: Toka and Badilisha mtu end the session on the server,
 // forget the person, and show the tiles for whoever is next (UI-4, 03 §5.9). The fake server keeps one
 // session, as Django does for this browser: a PIN login starts it, a logout ends it, and `me` answers for it.
-import { QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -559,7 +559,18 @@ describe("with no network (SYNC-10)", () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+    // The browser's network back on, for the next test, if this one switched it off.
+    onlineManager.setOnline(true);
+    vi.restoreAllMocks();
   });
+
+  /** The browser itself says there is no network: navigator.onLine false, and TanStack told so, as its
+   * own watch of the browser's "offline" event would tell it. Reads and changes wait (paused), and none is
+   * sent. */
+  function theBrowserIsOffline() {
+    vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+    onlineManager.setOnline(false);
+  }
   // Juma on the laptop's copy, as the sync left him: a seller on Dawa, with a PIN set.
   const JUMA_ROW = {
     ...staffRow(JUMA.staff.id, JUMA.user.full_name, JUMA.staff.display_name),
@@ -650,6 +661,39 @@ describe("with no network (SYNC-10)", () => {
 
     expect(bar().queryByText("Neema")).toBeNull();
     expect(pinLogins()).toEqual([]);
+  });
+
+  it("shows the tiles at once on a reload the browser knows is offline, and sends nothing", async () => {
+    // `me` isn't even tried (TanStack waits for the network), so no failure comes to wait for.
+    await aLaptopWithNoNetwork(null);
+    theBrowserIsOffline();
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    await jumaLogsInHere();
+
+    // Nothing reached the server: not `me`, not his PIN, and the logout sent at his arrival waits.
+    expect(sent).toEqual([]);
+    // No "Subiri kidogo…" for an answer that can't come.
+    expect(screen.queryByText("Subiri kidogo…")).toBeNull();
+  });
+
+  it("brings the tiles back after Toka while the browser knows it is offline, and sends the logout once it is back", async () => {
+    const laptop = await aLaptopWithNoNetwork(NEEMA);
+    laptop.network = true;
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    theBrowserIsOffline();
+
+    // Her logout waits, paused, never tried: the tiles come back all the same.
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+    await jumaLogsInHere();
+    expect(laptop.logoutsHeard).toBe(0);
+
+    // The network is back: the browser says so, and the logout goes, once.
+    vi.restoreAllMocks();
+    onlineManager.setOnline(true);
+    await vi.waitFor(() => expect(laptop.logoutsHeard).toBe(1));
+    expect(screen.getByRole("heading", { name: "Karibu, Juma" })).toBeDefined();
   });
 
   it("ends a local session with Toka, back to the tiles", async () => {
