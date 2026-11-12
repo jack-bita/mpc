@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.46 · 12 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.47 · 12 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.47** (12 Nov 2026, SYNC-9): when sync runs (§6.5, 04 v1.62): a sync asked for while one runs runs once more after it; *Tuma sasa* sends even during the wait after a failed push (Jack's choice); the wait is kept in the shop's database, so every tab sees it; and Background Sync is SYNC-16's. Marked **(v1.47)**.
 
 **Changes in v1.46** (12 Nov 2026, SYNC-8): how a laptop saves and sends what it makes (§6.2, §6.3, 04 v1.61): one Dexie transaction per document, its number kept in `meta` and brought back by the bootstrap after a wipe (§6.1, §6.4); the push in number order, its four answers, and a wait after a failure (§6.5). Marked **(v1.46)**.
 
@@ -583,9 +585,9 @@ How it is built **(v1.46)**: `saveDocument(db, draft, effects)` (`src/offline/ou
 
 ### 6.5 When sync runs
 
-On app start; when the network comes back; 2 seconds after a new document; every 30 seconds while online *(default)*; through Background Sync where the browser supports it (Chrome on Android); and from the *Tuma sasa* (send now) button. Only one sync runs at a time, even with several tabs open (Web Locks). Every sync also reports the device's unsent count and app version — used to stop a drawer approval while a device still holds records (M8) and for the sync health page.
+On app start; when the network comes back; 2 seconds after a new document; every 30 seconds while online *(default)*; through Background Sync where the browser supports it (Chrome on Android; SYNC-16 **(v1.47)**); and from the *Tuma sasa* (send now) button. Only one sync runs at a time, even with several tabs open (Web Locks); one asked for while it runs runs once more after it, so a record saved meanwhile doesn't wait for the next moment **(v1.47)**. Every sync also reports the device's unsent count and app version — used to stop a drawer approval while a device still holds records (M8) and for the sync health page.
 
-After a `retry`, or a push that failed, the next push waits **(v1.46)**: 30 seconds, then twice as long each time, at most 5 minutes, and back to 30 seconds after a push that settles; a clock put back never makes it longer. Only the push waits: the pull still runs, so the office's changes keep coming down. The wait is kept in memory, per shop (`src/offline/sync/backoff.ts`), so a reload tries at once.
+After a `retry`, or a push that failed, the next push waits **(v1.46)**: 30 seconds, then twice as long each time, at most 5 minutes, and back to 30 seconds after a push that settles; a clock put back never makes it longer. Only the push waits: the pull still runs, so the office's changes keep coming down. *Tuma sasa* doesn't wait: someone pressed it and is waiting to see it go (Jack, 12 Nov 2026), and a failure still makes the next wait longer. The wait is kept in the shop's database (`meta`, `src/offline/sync/backoff.ts`), so every tab sees it, and a reload waits too **(v1.47)**.
 
 ### 6.6 Time
 

@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.61 · 12 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.62 · 12 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.62** (12 Nov 2026, SYNC-9): two choices by Jack, made while planning SYNC-9. Background Sync moves to a new card, SYNC-16, after SYNC-11, as no screen saves a record before it, so its test on the shop phone can't run sooner; UI-3's note on it goes there. And *Tuma sasa* sends even during the wait after a failed push. The wait itself moves to `meta`, so every tab sees it (03 v1.47); the *Tuma sasa* button goes on SYNC-11's screen. SYNC-9's *Done when* now names its own moments and the shared wait. Marked **(v1.62)**.
 
 **Changes in v1.61** (12 Nov 2026, SYNC-8): the SYNC-8 card says what it built: the bootstrap names the laptop's last number, kept in `meta` (the larger of the server's and the laptop's own); `saveDocument` writes a document, its number, its outbox row and its pending effects in one Dexie transaction (`outbox.ts`); the push sends the outbox in number order and reads its four answers (`push.ts`), before the pull; the next push waits after a failure (`backoff.ts`); and a live list of the records set aside, whose screen Jack gave to SYNC-11 (03 v1.46). One change to the card, in the plan Jack approved: each test in the commit of the code it proves, as on SYNC-4, and five commits, one idea each. From its review, every finding fixed, each in its own commit. Notes for SYNC-9, SYNC-11, SYNC-12, SYNC-13, SYNC-14, SALE-4 and OPS-11. Marked **(v1.61)**.
 
@@ -1027,16 +1029,15 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 
 ### SYNC-9 · When sync runs
 `M` · Claude-led · after SYNC-8, SPIKE-1 · branch `feat/sync-9-sync-triggers`
-**Build:** sync runs on app start, when the network comes back, 2 s after a new document, every 30 s while online, and from *Tuma sasa* (03 §6.5); one sync at a time across tabs (Web Locks); Background Sync on Chrome for Android, so records leave even after the app is closed.
-**Watch out:** From UI-3 **(v1.45)**: Background Sync runs in the service worker, which has no `localStorage`, so it can't call `saveBlocked()`: a block it meets must reach the page another way, a message to the open pages, or a mark in Dexie that `this-device.ts` reads too. Decide here.
+**Build:** sync runs on app start, when the network comes back, 2 s after a new document, every 30 s while online, and from *Tuma sasa*, which sends even during a wait (03 §6.5); one sync at a time across tabs (Web Locks), the wait after a failed push shared by every tab. Background Sync is SYNC-16's **(v1.62)**.
 **Watch out** **(v1.60)**: from SYNC-7: until this card, a sync runs after each device check that names a working device (`DeviceCheck`, `device-check.tsx`, calling `syncShop`); move that trigger here, and keep the failure report (`reportSyncFailure`). `syncShop` joins a sync already running for the same shop in the same tab only; the Web Lock covers the tabs.
 **Watch out** **(v1.61)**: from SYNC-8: `syncShop` is bootstrap → push → pull. The wait after a failed push (`mayPush`, `pushFailed`, `pushSettled`, `src/offline/sync/backoff.ts`) lives in memory, per shop and per tab: with the Web Lock, keep it where every tab sees it (a `meta` note), or one tab's wait won't hold another's push. While a wait runs, "2 s after a new document" and *Tuma sasa* skip the push too: decide whether *Tuma sasa*, pressed by someone waiting for the answer, goes anyway. A sync with a full last batch pushes again in the same sync, so 250 waiting records go as three pushes. A failed push is thrown after the pull, and `reportSyncFailure` logs a `BrokenPush`; Background Sync needs the same `push()`.
+**Watch out** **(v1.62)**: settled while planning (Jack, 12 Nov 2026). Background Sync moves to a new card, SYNC-16, after SYNC-11: no screen saves a record before SYNC-11, so its test on the shop phone can't run here; UI-3's note on it goes with it. Jack's choice (A): *Tuma sasa* sends even during a wait, as someone is there waiting to see it go. The technical choices, in the plan Jack approved: the wait moves to `meta`, so every tab sees it, and a reload no longer forgets it (03 §6.5); a sync asked for while one runs in the tab runs once more after it; a second tab waits for the lock, never skips, so a record it just saved still goes; the first save starts the 2 s, and later saves don't restart it; a window back in front no longer syncs, as the 30 s covers it; this card makes the way to press *Tuma sasa*, and the button itself goes on the first counter screen (SYNC-11).
 **Done when:**
-- [ ] Two tabs never push at once.
-- [ ] On the shop Android phone, a record saved offline, with the app then closed, reaches the server when the network returns.
-- [ ] Browsers without Background Sync carry on as before.
+- [ ] Sync runs on app start, when the network comes back, 2 s after a new document, every 30 s while online, and from *Tuma sasa*, even during a wait **(v1.62)**.
+- [ ] Two tabs never push at once, and share the wait after a failed push **(v1.62)**.
 **Tests:** `sync.triggers.test.ts` · `sync.single-tab.test.ts`
-**Commits:** `feat(frontend): sync triggers` → `feat(frontend): one sync at a time` → `feat(frontend): background sync`
+**Commits:** `docs: move background sync to its own card` → `feat(frontend): send now, and a sync asked mid-sync runs once more` → `feat(frontend): sync triggers` → `feat(frontend): one sync at a time` → `feat(frontend): every tab keeps the same wait after a failed push` **(v1.62)**
 
 ### SYNC-10 · Offline PIN check
 `M` · Jack-led · after AUTH-4, SYNC-6 · branch `feat/sync-10-offline-pin`
@@ -1062,11 +1063,21 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 **Watch out** **(v1.59)**: from SYNC-6: today's list reads the `documents` drawer by `[type+client_time]`, the day's range in the shop's own time zone, made UTC, as `client_time` is written with `Z`.
 **Watch out** **(v1.60)**: from SYNC-7: the last server time is `meta`'s `last_server_time`, the clock offset its `clock_offset_ms` (`src/offline/sync/meta.ts`), and the shop's zone `mpc.device`'s `shop.timezone`; `shopToday` (`src/offline/rules.ts`) gives the shop's day. Live hooks redraw on a change to what they read, not at midnight: today's list must turn to the new day by itself.
 **Watch out** **(v1.61)**: from SYNC-8: save a tap with `saveDocument(db, {type: "clock", schema_version: 1, created_by, payload: {kind, last_server_time}})` (`src/offline/outbox.ts`), `db` from `useShopDatabase()` and `last_server_time` read from `meta` as the tap is saved. It refuses with `NeverFilled` on a laptop not filled yet (a new laptop before its first sync): words of its own, "wait for the first sync", not an error; and with `BrokenDraft`, a bug in the screen. The needs-attention screen is this card's (Jack, 12 Nov 2026): `useNeedsAttention()` gives each set-aside record with its document, its number and the server's code (`document.type_unknown`, `document.version_unknown`, `document.maker_unknown`, `id.taken`). Give each code words of its own in `sw.json` and `en.json`, as the office's sentences say "Try again.", which a resend can't mend. A refused clock-in stays in `documents`: decide whether today's list shows it, and how. If the screen pushes the card past its size, split it.
+**Watch out** **(v1.62)**: from SYNC-9's plan, which Jack approved (12 Nov 2026): the *Tuma sasa* button goes on this first counter screen. SYNC-9 makes the way to press it, which never calls the server, so a counter screen may use it; its card names it.
 **Done when:**
 - [ ] The exit test passes: offline → clock in → reload → still there → online → exactly one event on the server; pushing again changes nothing.
 - [ ] The counter code stays under its size budget in CI.
 **Tests:** `e2e/clock-in-offline.spec.ts`
 **Commits:** `feat(frontend): clock-in screen` → `test(e2e): offline clock-in` → `ci: counter bundle budget`
+
+### SYNC-16 · Background Sync
+`M` · Claude-led · after SYNC-9, SYNC-11 · branch `feat/sync-16-background-sync` **(v1.62)**
+**Build:** Background Sync on Chrome for Android, so records saved offline leave when the network returns, even after the app is closed (03 §6.5); browsers without it carry on as before.
+**Watch out** **(v1.62)**: moved here from SYNC-9 (Jack, 12 Nov 2026): no screen saves a record before SYNC-11, so the phone test can't run sooner. From UI-3 **(v1.45)**: Background Sync runs in the service worker, which has no `localStorage`, so it can't call `saveBlocked()`: a block it meets must reach the page another way, a message to the open pages, or a mark in Dexie that `this-device.ts` reads too. Decide here. From SYNC-8: it needs the same `push()` (`src/offline/sync/push.ts`), which reaches `this-device.ts` through `answer.ts`, and whose client reads the CSRF token from `document.cookie` (`src/api/client.ts`); a service worker has neither, and `tsconfig.sw.json` checks it with the worker's types, so the build shows it. It has no `mpc.device` either, so it learns which shop's database to send some other way. From SYNC-9: the lock and the shared wait are in its card; the service worker takes the same lock and keeps the same wait.
+**Done when:**
+- [ ] On the shop Android phone, a record saved offline, with the app then closed, reaches the server when the network returns.
+- [ ] Browsers without Background Sync carry on as before.
+**Commits:** `feat(frontend): background sync`
 
 ### SYNC-12 · Keeping offline data safe
 `M` · Claude-led · after SYNC-8 · branch `feat/sync-12-data-safety`
