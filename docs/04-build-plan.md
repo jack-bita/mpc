@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.66 · 13 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.67 · 13 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.67** (13 Nov 2026, SYNC-12's review): Jack chose to fix every finding in this card, which roughly doubles it. The rescue import checks each record as the server checks its envelope, so a file edited by hand can't stop the loading laptop's pushes. A record another laptop sent first still counts in the sending laptop's numbers, so a dying laptop back to life raises no `device_gap`. The push gains an optional `carried_from` (where a rescued record was made, and who loaded the file), kept on the answer log's line (`sync` migration 0003): the server checks the record's time against the laptop that made it, not the one that loaded it, and flags a loader without `device.manage` (03 v1.51). A note for SALE-4: the rescue file carries no pending effects, as a clock-in has none; a sale's go in the file's next format. Marked **(v1.67)**.
 
 **Changes in v1.66** (13 Nov 2026, SYNC-12): Jack's choice, while planning SYNC-12: *Toka* with unsent records shows a note and still logs out, instead of a warning that stops the logout. Logging out loses nothing: the laptop sends its own records with its key, whoever is logged in (SYNC-8, SYNC-16), so a stop would guard nothing and teach staff to tap past warnings. In the plan he approved: the export and import live on a new counter page, *Kompyuta hii*; anyone logged in may export, as a dying laptop can't wait for the manager, and only someone with `device.manage` may import, as an edited file could clock in a colleague who never came; set-aside records stay out of the file (parking lot 23 decides them). Marked **(v1.66)**.
 
@@ -1099,6 +1101,7 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 **Done when:**
 - [ ] *Toka* with unsent records says how many wait and that they are safe; a test proves logging out keeps them **(v1.66)**.
 - [ ] An exported file, imported on another device, posts each record once.
+**From its review** **(v1.67)**: every finding fixed, by Jack's choice, each in its own commit: a stricter import; a carried record's number counted for the laptop that sent it; `carried_from` on the push and the answer log, so a rescued clock-in is checked against the laptop that made it and names who loaded it; and the smaller fixes.
 **Commits:** `feat(frontend): persistent storage and install` → `feat(frontend): unsent note at logout` **(v1.66)** → `feat(frontend): export and import unsent`
 
 ### SYNC-13 · Safe app updates
