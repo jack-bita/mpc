@@ -55,8 +55,7 @@ export class BrokenDraft extends Error {
 const LONGEST_TYPE = 40;
 const HIGHEST_SCHEMA_VERSION = 2 ** 31 - 1;
 export const HIGHEST_DEVICE_SEQ = 10 ** 12 - 2;
-export const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // The parts a screen hands over, checked as the server will check them. The payload must be a plain
 // object, as the server reads it as one (a DictField): a list, a date or a string is refused. The import of

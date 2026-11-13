@@ -24,7 +24,6 @@ import {
   HIGHEST_DEVICE_SEQ,
   NeverFilled,
   BrokenDraft,
-  UUID,
 } from "./outbox";
 import { tellRecordSaved } from "./sync/asks";
 import { LAST_DEVICE_SEQ, readLastDeviceSeq } from "./sync/meta";
@@ -121,25 +120,46 @@ function readFile(text: string, shopId: string): RescueFile {
   return file as RescueFile;
 }
 
-// One record, checked as the push's server will check it, so a broken one is refused here, at the
-// manager's hands, not saved to stop every push after it.
+// A UUID of version 7, as the server's `uuid7_only` takes for a record's id (ADR-0007): the version digit is
+// the 13th, and the variant digit, 8 to b, the 17th. Every id this app makes is one (lib/ids.ts); a file
+// edited by hand may carry a random one, which the server refuses with the whole push.
+const UUID7 =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// A time as the server's ZonedDateTimeField takes one: an ISO 8601 date and time, ending in its zone, `Z` or
+// an offset like +03:00. A day alone, or a time with no zone, is refused there with the whole push (ATT-1).
+const ZONED_TIME =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i;
+
+// One record, checked exactly as the push's server checks its envelope (PushedEnvelope,
+// apps/sync/api/serializers.py), so a broken one is refused here, at the manager's hands. Let through, it would
+// be saved in the outbox, and the server would refuse every push from this laptop with it, for good: every
+// clock-in made here after it would stop reaching the server (SYNC-12's review). Each part's kind is checked
+// first, as a file's JSON may hold a list or a number where text belongs.
 function checkRecord(document: RescuedDocument): void {
-  if (typeof document !== "object" || document === null)
+  if (
+    typeof document !== "object" ||
+    document === null ||
+    typeof document.type !== "string" ||
+    typeof document.created_by !== "string" ||
+    typeof document.id !== "string" ||
+    !UUID7.test(document.id) ||
+    typeof document.client_time !== "string" ||
+    !ZONED_TIME.test(document.client_time) ||
+    Number.isNaN(Date.parse(document.client_time)) ||
+    !Number.isInteger(document.device_seq) ||
+    document.device_seq < 1 ||
+    document.device_seq > HIGHEST_DEVICE_SEQ
+  )
     throw new RescueRefused("broken_record");
+  // The rest as a save checks a screen's draft: the type's length, the shape's version, the maker's id, and
+  // a payload that is a plain object.
   try {
     checkDraft(document);
   } catch (error) {
     if (error instanceof BrokenDraft) throw new RescueRefused("broken_record");
     throw error;
   }
-  if (
-    typeof document.id !== "string" ||
-    !UUID.test(document.id) ||
-    typeof document.client_time !== "string" ||
-    Number.isNaN(Date.parse(document.client_time)) ||
-    !Number.isInteger(document.device_seq)
-  )
-    throw new RescueRefused("broken_record");
 }
 
 /** What an import did: how many records it added to this laptop's outbox, and how many it found here

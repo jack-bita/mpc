@@ -206,6 +206,49 @@ describe("the import", () => {
     expect(await vyakula.outbox.count()).toBe(0);
   });
 
+  // Each one the server would refuse with the whole push, so the laptop that loaded it could never send again
+  // (PushedEnvelope, apps/sync/api/serializers.py; SYNC-12's review).
+  it.each<[string, (record: Record<string, unknown>) => void]>([
+    [
+      "an id of version 4",
+      (r) => (r.id = "0b8c5a6e-4f1d-4a2b-9c3d-5e6f7a8b9c0d"),
+    ],
+    [
+      "an id with no version 7 variant",
+      (r) => (r.id = "019a5e00-0000-7000-0000-000000000001"),
+    ],
+    ["a time with no zone", (r) => (r.client_time = "2026-11-13T07:30:00")],
+    ["a day alone", (r) => (r.client_time = "2026-11-13")],
+    ["a type that isn't text", (r) => (r.type = ["clock"])],
+    ["no type at all", (r) => (r.type = null)],
+    ["a maker that isn't text", (r) => (r.created_by = 42)],
+    ["a number below 1", (r) => (r.device_seq = 0)],
+    ["a number that isn't whole", (r) => (r.device_seq = 5.5)],
+    ["a payload that is a list", (r) => (r.payload = [])],
+  ])("refuses a record with %s", async (_, breakIt) => {
+    const { text } = await dyingLaptop();
+    const file = JSON.parse(text) as { documents: Record<string, unknown>[] };
+    breakIt(file.documents[1]!);
+    const vyakula = await laptop("vyakula-test", 140);
+
+    await expect(
+      importWaiting(vyakula, SHOP, JSON.stringify(file)),
+    ).rejects.toEqual(new RescueRefused("broken_record"));
+    expect(await vyakula.outbox.count()).toBe(0);
+  });
+
+  it("takes a time with an offset, as the server does", async () => {
+    const { text } = await dyingLaptop();
+    const file = JSON.parse(text) as { documents: Record<string, unknown>[] };
+    file.documents[1]!.client_time = "2026-11-13T07:30:00.123+03:00";
+    const vyakula = await laptop("vyakula-test", 140);
+
+    expect(await importWaiting(vyakula, SHOP, JSON.stringify(file))).toEqual({
+      added: 3,
+      alreadyHere: 0,
+    });
+  });
+
   it("refuses on a laptop never filled, which doesn't know where its count stands", async () => {
     const { text } = await dyingLaptop();
     const fresh = openShopDatabase("fresh-test");
