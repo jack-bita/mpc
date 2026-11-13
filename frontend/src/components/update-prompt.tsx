@@ -66,6 +66,10 @@ export function UpdatePrompt() {
   // only at the next redraw, after the tap's first wait, so a second press before it, a fast double tap
   // or a press during the bar's own try below, would read it unchanged and send and switch twice.
   const tapping = useRef(false);
+  // The version switched to, by a tap or by the bar itself, once: a reload that doesn't come leaves the
+  // bar for a tap, rather than telling the worker again at every redraw. A try that a new sale stopped is
+  // forgotten, so the next quiet moment tries again.
+  const triedAlone = useRef<ApplyUpdate | null>(null);
 
   // Looked at once more as the tap lands: another tab's sale may have started since the bar's last look
   // (busy.ts looks every 2 s). Busy now, the tap does nothing, and the bar hides at its next look.
@@ -81,7 +85,11 @@ export function UpdatePrompt() {
       // Looked at again after the send: a sale may have started in the seconds it took. The bar then
       // hides until it is finished, and the next tap sends again, nothing by then, and switches.
       const switching = await counterIsQuiet();
-      if (switching) apply();
+      if (switching) {
+        // Switched to, by this tap or by the bar itself: the bar's own try below leaves this version alone.
+        triedAlone.current = apply;
+        apply();
+      }
       return switching;
     } finally {
       // Ready for another tap, however the tap ended: the switch reloads the page in a moment, and if it
@@ -105,10 +113,6 @@ export function UpdatePrompt() {
     () => 0,
   );
   const tooOld = told > 0;
-  // The version it switched to by itself, once: a reload that doesn't come leaves the bar for a tap,
-  // rather than telling the worker again at every redraw. A try that a new sale stopped is forgotten, so
-  // the next quiet moment tries again.
-  const triedAlone = useRef<ApplyUpdate | null>(null);
   // A try refused by a busy counter comes again at the bar's next look. The sale that refused it may be
   // over before then, and the bar's look then finds it quiet, as it was: nothing the bar reads changes, so
   // nothing would redraw it. This redraws it, once per refused try; a sale still open at that look hides
@@ -122,6 +126,8 @@ export function UpdatePrompt() {
   // Each sync that finds the app too old redraws the bar too.
   useEffect(() => {
     if (!(tooOld || takenOver) || !shown || sending) return;
+    // Switched to already, by the bar or a tap. A try that met a tap on its way was refused as a second tap
+    // and forgotten; once that tap switches, this version is marked, so the try never sends again.
     if (triedAlone.current === apply) return;
     triedAlone.current = apply;
     void tap().then((switched) => {

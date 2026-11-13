@@ -426,6 +426,25 @@ describe("UpdatePrompt on an app too old for the server", () => {
     expect(sendBeforeUpdate).toHaveBeenCalledTimes(2);
   });
 
+  it("sends and switches once when a sync finds it too old just as Asha taps", async () => {
+    // Her tap has started and not yet sent; the bar's own try lands in that moment. One send, one switch:
+    // the tap's switch counts for the try, and the try never starts beside the tap.
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    // The send takes a moment, as on the shop's line, so the bar redraws while it goes and after.
+    const release = holdTheSend();
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+
+    syncFoundItTooOld();
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+    release();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+    expect(apply).toHaveBeenCalledOnce();
+  });
+
   it("switches by itself once per version, and leaves the bar for a tap if the reload doesn't come", async () => {
     render(<UpdatePrompt />);
     syncFoundItTooOld();
