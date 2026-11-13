@@ -46,11 +46,8 @@ import { Button, ButtonLink } from "@/components/design/button";
 import { OfflineBanner } from "@/components/offline-banner";
 import type { ThisDevice } from "@/features/devices/this-device";
 import { useFollowThePerson } from "@/features/people/follow-the-person";
-import {
-  sideAt,
-  sideOfStaffRow,
-  useWhoIsHere,
-} from "@/features/people/who-is-here";
+import { sideOfStaffRow } from "@/features/people/side-of-row";
+import { sideAt, useWhoIsHere } from "@/features/people/who-is-here";
 import { useRule, useSides, useStaff } from "@/offline/reference";
 import { wholeNumber } from "@/offline/rules";
 

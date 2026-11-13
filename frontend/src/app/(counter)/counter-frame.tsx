@@ -35,7 +35,7 @@ import {
 } from "@/features/login/at-the-counter";
 import { useIdleLock } from "@/features/login/idle-lock";
 import { useFollowThePerson } from "@/features/people/follow-the-person";
-import { sideOfStaffRow } from "@/features/people/who-is-here";
+import { sideOfStaffRow } from "@/features/people/side-of-row";
 import { useSides } from "@/offline/reference";
 
 export function CounterFrame({ children }: { children: ReactNode }) {
