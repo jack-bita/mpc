@@ -70,13 +70,22 @@ export function useCounterBusy(busy: boolean): void {
   }, [busy]);
 }
 
-/** Whether no counter screen is busy, in this tab or, where the browser has Web Locks, in any other. */
+/** Whether no counter screen is busy, in this tab or, where the browser has Web Locks, in any other.
+ * Never fails: a look the browser can't answer counts as busy. */
 export async function counterIsQuiet(): Promise<boolean> {
   if (busyHere > 0) return false;
   if (!hasLocks()) return true;
-  // Waiting counts as busy too: a screen that has just asked for its mark is busy already.
-  const { held = [], pending = [] } = await navigator.locks.query();
-  return ![...held, ...pending].some((lock) => lock.name === BUSY_LOCK);
+  try {
+    // Waiting counts as busy too: a screen that has just asked for its mark is busy already.
+    const { held = [], pending = [] } = await navigator.locks.query();
+    return ![...held, ...pending].some((lock) => lock.name === BUSY_LOCK);
+  } catch (error) {
+    // Never guessed quiet: an update can wait for the next look, a sale lost to a reload can't come back.
+    // No browser of the shop's should fail this, so a developer looking at a laptop that never updates
+    // finds it in the console.
+    console.error("counter look failed", error);
+    return false;
+  }
 }
 
 /**

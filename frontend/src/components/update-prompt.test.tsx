@@ -255,6 +255,32 @@ describe("UpdatePrompt sends the records first", () => {
     await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
   });
 
+  it("is ready again when its last look fails, and switches at the next tap", async () => {
+    // The browser fails to answer the look after the send: the bar must not stay on "Inatuma…", disabled,
+    // with no way on.
+    const locks = installFakeLocks();
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const release = holdTheSend();
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+    vi.spyOn(locks, "query").mockRejectedValueOnce(
+      new Error("lock manager gone"),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    release();
+
+    expect(await screen.findByText("Toleo jipya liko tayari")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Sasisha" }).hasAttribute("disabled"),
+    ).toBe(false);
+    expect(apply).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Sasisha" }));
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+
   it("sends once for two quick taps", async () => {
     // Asha taps Sasisha twice, fast, before the bar has redrawn: one send, one switch.
     render(<UpdatePrompt />);

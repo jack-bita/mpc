@@ -76,11 +76,12 @@ export function UpdatePrompt() {
       // hides until it is finished, and the next tap sends again, nothing by then, and switches.
       const switching = await counterIsQuiet();
       if (switching) apply();
-      // Ready for another tap: the switch reloads the page in a moment, and if it doesn't, a disabled bar
-      // would leave the laptop on the old version with no way on.
-      setSending(false);
       return switching;
     } finally {
+      // Ready for another tap, however the tap ended: the switch reloads the page in a moment, and if it
+      // doesn't, or anything above failed, a bar left disabled on "Inatuma…" would keep the laptop on the
+      // old version with no way on, and the bar's own try below waits while it is.
+      setSending(false);
       tapping.current = false;
     }
   };

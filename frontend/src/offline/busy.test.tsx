@@ -97,6 +97,16 @@ describe("counterIsQuiet across tabs", () => {
     );
   });
 
+  it("counts a look the browser fails to answer as busy, and logs it", async () => {
+    // Never guess quiet: an update can wait, a sale lost to a reload can't come back.
+    const locks = installFakeLocks();
+    vi.spyOn(locks, "query").mockRejectedValue(new Error("lock manager gone"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(await counterIsQuiet()).toBe(false);
+    expect(log).toHaveBeenCalledOnce();
+  });
+
   it("never counts the sync's lock as busy", async () => {
     // The sync runs beside every screen all day (lock.ts): it must not keep an update away.
     const locks = installFakeLocks();
