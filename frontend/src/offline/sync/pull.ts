@@ -23,7 +23,9 @@ type Change = components["schemas"]["Change"];
 type Page = components["schemas"]["PullAnswer"];
 
 /** The lists a pull can change, by the code a change names in `entity`, which is its drawer's name too
- * (db.ts). A list the server adds later comes with its card, here and as a new database version. */
+ * (db.ts). A list the server adds later comes with its card, here and as a new database version, and
+ * raises APP_NUMBER (src/lib/version.ts). Kept on one line: a backend test reads it, and fails while it
+ * isn't the app number's lists (apps/sync/tests/test_app_number.py). */
 const LISTS = ["side", "payment_account", "staff", "setting"] as const;
 
 /**
