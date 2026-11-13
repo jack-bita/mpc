@@ -3,7 +3,8 @@ it is valid at (SYNC-2; 03 §6.4).
 
 A new Dawa laptop asks once and gets every table in the registry (apps/sync/registry.py), each rule's default, and the
 cursor: the shop's last change number. Its pulls then ask for what came after that number (SYNC-3). It also gets its
-own last number (last_device_seq), so a laptop filled again after a wipe counts its records on from there (SYNC-8).
+own last number (last_device_seq), so a laptop filled again after a wipe counts its records on from there (SYNC-8), and
+the shop's id, so it fills only that shop's database (SYNC-13).
 
 The one rule this file keeps is the order of its reads: the cursor first, then the rows.
 
@@ -29,11 +30,17 @@ from apps.sync.selectors import last_change_number, last_device_number
 
 
 def snapshot(device: Device) -> dict[str, Any]:
-    """The bootstrap's answer for `device`, whose shop must be the one open: the cursor, the laptop's own last number,
-    then each registry table's rows by its code, in the registry's order, then each rule's default (setting_keys)."""
+    """The bootstrap's answer for `device`, whose shop must be the one open: the shop's id, the cursor, the laptop's own
+    last number, then each registry table's rows by its code, in the registry's order, then each rule's default
+    (setting_keys)."""
     shop = device.shop
+    # Whose copy this is (SYNC-13). The laptop asks with its key, and keeps one database per shop (db.ts), named by the
+    # shop its saved copy of itself names (mpc.device). A laptop paired to another shop between that copy and this call
+    # would fill the old shop's database with the new shop's lists; with the id it sees the answer isn't that shop's,
+    # and writes nothing. Read from the device, not the database, so it costs no query and its place doesn't matter.
+    answer: dict[str, Any] = {"shop": shop.id}
     # First, before any row: see the file's header.
-    answer: dict[str, Any] = {"cursor": last_change_number(shop)}
+    answer["cursor"] = last_change_number(shop)
     # The laptop's own count, beside the shop's. Its place among the reads doesn't matter: a laptop filled for the first
     # time saves nothing before its bootstrap, and one filled again keeps the larger of this and its own (bootstrap.ts).
     answer["last_device_seq"] = last_device_number(device)

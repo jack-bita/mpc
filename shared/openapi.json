@@ -984,6 +984,11 @@
             "BootstrapAnswer": {
                 "type": "object",
                 "properties": {
+                    "shop": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The shop this copy is of: a laptop fills only that shop's database, and writes nothing for another."
+                    },
                     "cursor": {
                         "type": "integer",
                         "minimum": 0,
@@ -1031,6 +1036,7 @@
                     "payment_account",
                     "setting",
                     "setting_keys",
+                    "shop",
                     "side",
                     "staff"
                 ]

@@ -291,6 +291,11 @@ export interface components {
             };
         };
         BootstrapAnswer: {
+            /**
+             * Format: uuid
+             * @description The shop this copy is of: a laptop fills only that shop's database, and writes nothing for another.
+             */
+            shop: string;
             /** @description The shop's last change number this copy holds: the first pull asks for what came after. */
             cursor: number;
             /** @description The laptop's own last number: its next record is this plus one, never 1 again. */

@@ -127,6 +127,9 @@ class BootstrapAnswer(serializers.Serializer[Any]):
     # The bootstrap's answer, as the API schema and the app's types describe it. The answer itself is built by snapshot
     # (apps/sync/bootstrap.py) from the registry; this names the same tables with the same fields, which
     # test_answer_shape_names_every_registry_table holds, so a table added to the registry is added here too.
+    shop = serializers.UUIDField(
+        help_text="The shop this copy is of: a laptop fills only that shop's database, and writes nothing for another."
+    )
     cursor = serializers.IntegerField(
         min_value=0, help_text="The shop's last change number this copy holds: the first pull asks for what came after."
     )

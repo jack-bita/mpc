@@ -20,6 +20,7 @@ import { saveDocument } from "../outbox";
 import { shopDatabase } from "../this-shop";
 import { SYNC_CALL_LIMIT_MS } from "./answer";
 import { mayPush } from "./backoff";
+import { WrongShop } from "./bootstrap";
 import { readCursor } from "./meta";
 import { AppTooOld } from "./pull";
 import { syncShop } from "./sync";
@@ -347,16 +348,24 @@ describe("a sync", () => {
   });
 
   it("never joins another shop's sync", async () => {
-    // The laptop was moved to another shop while its old shop's sync still ran.
+    // The laptop was moved to another shop while its old shop's sync still ran. The server answers by the
+    // key, so as the new shop, to both: the old shop's sync writes nothing into its database (WrongShop,
+    // SYNC-13), and the new shop's fills its own.
     const other = "019a5e00-0000-7000-8000-0000000000a2";
-    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+    answer("GET", BOOTSTRAP_ROUTE, {
+      status: 200,
+      body: { ...BOOTSTRAP, shop: other },
+    });
     answer("GET", PULL, emptyPage(120));
 
     const first = syncShop(SHOP);
     const second = syncShop(other);
-    await Promise.all([first, second]);
+    const [old, moved] = await Promise.allSettled([first, second]);
 
     expect(second).not.toBe(first);
+    expect(old.status === "rejected" && old.reason).toBeInstanceOf(WrongShop);
+    expect(moved.status).toBe("fulfilled");
+    expect(await readCursor(shopDatabase(SHOP))).toBeNull();
     expect(await readCursor(shopDatabase(other))).toBe(120);
   });
 
