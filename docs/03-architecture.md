@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.52 · 13 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.53 · 13 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.53** (13 Nov 2026, SYNC-13's review): the bootstrap names its shop and the lowest app it serves (§6.4); `min_app_version` is a whole number, compared with the app's own (§6.4, §6.8); and a record shape leaves the server's list only a release after the minimum passed the apps that write it (§6.8, 04 v1.69). Marked **(v1.53)**.
 
 **Changes in v1.52** (13 Nov 2026, SYNC-13): app updates are built (§6.8, 04 v1.68). By Jack's choices, the *Toleo jipya* bar stays hidden while a counter screen is busy, in any tab, and an app too old for the server updates by itself, with no tap, once the counter is quiet. A tap sends the outbox first, and switches anyway when it can't; the app looks for a new version every hour, when the network comes back, and when it is found too old; `min_app_version` is a whole number compared with the app's own; the bootstrap names its shop (§6.4). Marked **(v1.52)**.
 
