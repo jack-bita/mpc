@@ -137,3 +137,29 @@ export function formatDate(at: string, timezone: string): string {
     parts.find((each) => each.type === type)?.value ?? "";
   return `${part("day")}/${part("month")}/${part("year")}`;
 }
+
+/** The part of the day a time falls in, by the shop's clock: what a Swahili screen names after the time. */
+export type DayPart = "morning" | "afternoon" | "evening" | "night";
+
+/**
+ * The part of the day of `at`, in the shop's own zone: asubuhi from 05:00, mchana from 12:00, jioni from
+ * 16:00, usiku from 19:00 to 04:59. A Swahili screen writes it after the time, "saa 07:55 asubuhi", so
+ * nobody reads 07:55 as Swahili time, where saa saba is 13:00 (Jack, SYNC-11). Its words are in the books
+ * (attendance.timeOfDay); English shows the time alone, its sentence naming the part with nothing for it, as
+ * both books must fill in the same blanks (messages.test.ts).
+ */
+export function dayPart(at: string, timezone: string): DayPart {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: timezone,
+      hour: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(Date.parse(at))
+      .find((each) => each.type === "hour")?.value,
+  );
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 16) return "afternoon";
+  if (hour >= 16 && hour < 19) return "evening";
+  return "night";
+}

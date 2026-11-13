@@ -167,6 +167,7 @@
     "notInYet": "Hujaingia kazini leo.",
     "inSince": "Uliingia kazini saa {time}.",
     "outSince": "Ulitoka kazini saa {time}.",
+    "timeOfDay": "{time} {part, select, morning {asubuhi} afternoon {mchana} evening {jioni} other {usiku}}",
     "savedIn": "Umeingia kazini saa {time}.",
     "savedOut": "Umetoka kazini saa {time}. Kwaheri!",
     "firstSync": "Subiri kidogo: kompyuta hii bado inaleta data za duka kwa mara ya kwanza. Jaribu tena baada ya muda mfupi.",

@@ -22,7 +22,7 @@ import { useTranslations } from "use-intl";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
 import { useThisDevice } from "@/features/devices/this-device";
-import { formatDate, formatTime } from "@/lib/format";
+import { dayPart, formatDate, formatTime } from "@/lib/format";
 import { CLOCK, useClockDay } from "@/offline/clock-today";
 import { type SetAside, useNeedsAttention } from "@/offline/outbox";
 import { useStaff } from "@/offline/reference";
@@ -77,7 +77,10 @@ export function NeedsAttention() {
       const clock = {
         name: nameOf(document.created_by),
         action: attendance(kind === "in" ? "clockIn" : "clockOut"),
-        time: formatTime(document.client_time, zone),
+        time: attendance("timeOfDay", {
+          time: formatTime(document.client_time, zone),
+          part: dayPart(document.client_time, zone),
+        }),
       };
       return date ? t("clockOnDay", { ...clock, date }) : t("clock", clock);
     }

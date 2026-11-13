@@ -22,7 +22,8 @@
 // count for the button, so she may clock in again. Under the button, who clocked in today on this laptop (todays-list.tsx), read from the same taps; then how
 // many records wait to be sent, with Tuma sasa (send-now.tsx).
 //
-// Times as "07:55", 24 hours, in the shop's zone (formatTime, Jack, SYNC-11).
+// Times as "07:55", 24 hours, in the shop's zone, and in Swahili with the part of the day, "saa 07:55
+// asubuhi", so nobody reads them as Swahili time (formatTime, dayPart; Jack, SYNC-11).
 //
 // "use client": it asks use-intl for words, and reads and writes the laptop's database, in the browser only.
 "use client";
@@ -37,7 +38,7 @@ import {
   askToLeave,
   usePersonAtCounter,
 } from "@/features/login/at-the-counter";
-import { formatTime } from "@/lib/format";
+import { dayPart, formatTime } from "@/lib/format";
 import {
   CLOCK,
   CLOCK_VERSION,
@@ -82,7 +83,14 @@ export function AttendanceScreen() {
   const row = person?.row;
   // Her last tap today on this laptop. Others' taps say nothing about her.
   const last = today?.taps.filter((tap) => tap.staffId === row?.id).at(-1);
-  const time = (at: string) => (timezone ? formatTime(at, timezone) : "");
+  // "07:55 asubuhi" in Swahili, "07:55" in English (attendance.timeOfDay).
+  const time = (at: string) =>
+    timezone
+      ? t("timeOfDay", {
+          time: formatTime(at, timezone),
+          part: dayPart(at, timezone),
+        })
+      : "";
 
   // After Toka kazini: the goodbye, then the logout, as her own Toka would. She is leaving the shop, so the
   // screen going during the goodbye logs her out at once: Back in the browser, or any other way off it,

@@ -28,11 +28,14 @@ const PULL = "/api/sync/v1/pull/";
 // The name the manager gives this story's laptop: the tests share one database, so each pairs its own.
 const LAPTOP = "Laptop Mahudhurio";
 
-/** A sentence of the word book as a pattern, its {time} standing for a time of day ("07:55"), caught. */
+/** A sentence of the word book as a pattern, its {time} standing for a time of day with its part of the day,
+ * as a Swahili screen writes it ("07:55 asubuhi", attendance.timeOfDay), caught. */
 function withATime(sentence: string): RegExp {
   // The sentence's own signs, its full stop among them, taken as they are.
   const plain = sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^${plain.replace("\\{time\\}", "(\\d{2}:\\d{2})")}$`);
+  return new RegExp(
+    `^${plain.replace("\\{time\\}", "(\\d{2}:\\d{2} [a-z]+)")}$`,
+  );
 }
 
 /** A plural sentence's words for one ("Kumbukumbu 1 inasubiri kutumwa."), as use-intl picks them. */

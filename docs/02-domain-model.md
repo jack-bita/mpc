@@ -698,7 +698,7 @@ One word per idea, the same in code, docs and UI. The Swahili is a draft — Jac
 | Flag | Tofauti | A difference someone must explain |
 | Document | Kumbukumbu | A record a device saves at the counter and sends to the server: a sale, a clock-in; English screens say *record* **(v1.21)** |
 
-Times of day are written as the shop's clocks show them: `07:55`, `18:02`, 24 hours, in the shop's own zone, never in Swahili time (`saa 1:55 asubuhi`), so a screen reads as the shop's rules do ("late after 08:00") (Jack, SYNC-11) **(v1.24)**.
+Times of day are written as the shop's clocks show them: `07:55`, `18:02`, 24 hours, in the shop's own zone, never in Swahili time (`saa 1:55 asubuhi`), so a screen reads as the shop's rules do ("late after 08:00") (Jack, SYNC-11) **(v1.24)**. Swahili screens add the part of the day, so `07:55` is never read as Swahili time, where *saa saba* is 13:00: *asubuhi* from 05:00, *mchana* from 12:00, *jioni* from 16:00, *usiku* from 19:00 ("saa 07:55 asubuhi", "saa 18:02 jioni"); English shows the time alone (Jack, SYNC-11's review) **(v1.24)**.
 
 ## Appendix A — Diagram
 

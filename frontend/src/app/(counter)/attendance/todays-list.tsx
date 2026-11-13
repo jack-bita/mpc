@@ -17,12 +17,13 @@ import { useId } from "react";
 import { useTranslations } from "use-intl";
 
 import { useThisDevice } from "@/features/devices/this-device";
-import { formatTime } from "@/lib/format";
+import { dayPart, formatTime } from "@/lib/format";
 import { peopleToday, useTodaysTaps } from "@/offline/clock-today";
 import { useStaff } from "@/offline/reference";
 
 export function TodaysList() {
   const t = useTranslations("attendance.list");
+  const attendance = useTranslations("attendance");
   const heading = useId();
   const today = useTodaysTaps();
   const staff = useStaff();
@@ -35,7 +36,14 @@ export function TodaysList() {
   const people = peopleToday(today.taps);
   const nameOf = (staffId: string) =>
     staff.find((row) => row.id === staffId)?.display_name ?? t("unknown");
-  const time = (at: string | null) => (at ? formatTime(at, timezone) : "");
+  // "07:55 asubuhi" in Swahili, "07:55" in English (attendance.timeOfDay).
+  const time = (at: string | null) =>
+    at
+      ? attendance("timeOfDay", {
+          time: formatTime(at, timezone),
+          part: dayPart(at, timezone),
+        })
+      : "";
 
   return (
     <section aria-labelledby={heading} className="grid gap-3">

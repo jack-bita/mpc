@@ -105,8 +105,8 @@ describe("today's list", () => {
 
     // Rows first: the list draws nothing until both reads are in.
     expect(await rows()).toEqual([
-      ["Juma", "07:40", ""],
-      ["Asha", "07:55", "18:02"],
+      ["Juma", "07:40 asubuhi", ""],
+      ["Asha", "07:55 asubuhi", "18:02 jioni"],
     ]);
     expect(
       screen.getByRole("heading", { name: "Leo kwenye kompyuta hii" }),
@@ -139,7 +139,7 @@ describe("today's list", () => {
       await screen.findByRole("button", { name: "Ingia kazini" }),
     );
 
-    expect(await rows()).toEqual([["Asha", "07:55", ""]]);
+    expect(await rows()).toEqual([["Asha", "07:55 asubuhi", ""]]);
   });
 
   it("starts the new day empty at midnight, by itself", async () => {
@@ -147,7 +147,7 @@ describe("today's list", () => {
     await tapped(ASHA, "in", "2026-11-13T20:50:00Z");
     vi.setSystemTime(new Date("2026-11-13T20:59:30Z"));
     render(<TodaysList />);
-    expect(await rows()).toEqual([["Asha", "23:50", ""]]);
+    expect(await rows()).toEqual([["Asha", "23:50 usiku", ""]]);
 
     await act(() => vi.advanceTimersByTimeAsync(DAY_CHECK_EVERY));
 
@@ -164,7 +164,9 @@ describe("today's list", () => {
 
     render(<TodaysList />);
 
-    expect(await rows()).toEqual([["Mfanyakazi asiyejulikana", "07:40", ""]]);
+    expect(await rows()).toEqual([
+      ["Mfanyakazi asiyejulikana", "07:40 asubuhi", ""],
+    ]);
   });
 
   it("leaves out a tap the server refused: the attendance book never got it", async () => {
@@ -182,7 +184,7 @@ describe("today's list", () => {
 
     render(<TodaysList />);
 
-    expect(await rows()).toEqual([["Juma", "07:40", ""]]);
+    expect(await rows()).toEqual([["Juma", "07:40 asubuhi", ""]]);
   });
 
   it("speaks English, with no Swahili left", async () => {
@@ -195,7 +197,8 @@ describe("today's list", () => {
     expect(
       await screen.findByRole("heading", { name: "Today on this laptop" }),
     ).toBeDefined();
-    await rows();
+    // In English, the time alone: 24 hours read clearly there.
+    expect(await rows()).toEqual([["Asha", "07:55", ""]]);
     expect(swahiliIn(container)).toEqual([]);
   });
 });

@@ -92,7 +92,9 @@ describe("the records the server refused", () => {
     render(<NeedsAttention />);
 
     const warning = within(await theWarning());
-    expect(warning.getByText("Asha: Ingia kazini, saa 07:55")).toBeDefined();
+    expect(
+      warning.getByText("Asha: Ingia kazini, saa 07:55 asubuhi"),
+    ).toBeDefined();
     expect(
       warning.getByText(
         "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili.",
@@ -167,7 +169,7 @@ describe("the records the server refused", () => {
 
     const warning = within(await theWarning());
     expect(
-      warning.getByText("Asha: Ingia kazini, 10/11/2026 saa 07:55"),
+      warning.getByText("Asha: Ingia kazini, 10/11/2026 saa 07:55 asubuhi"),
     ).toBeDefined();
     expect(
       warning.getByText(`Kumbukumbu namba ${sale.device_seq}, 10/11/2026`),
@@ -182,7 +184,7 @@ describe("the records the server refused", () => {
 
     expect(
       within(await theWarning()).getByText(
-        "Mfanyakazi asiyejulikana: Ingia kazini, saa 07:55",
+        "Mfanyakazi asiyejulikana: Ingia kazini, saa 07:55 asubuhi",
       ),
     ).toBeDefined();
   });

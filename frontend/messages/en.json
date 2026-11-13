@@ -167,6 +167,7 @@
     "notInYet": "You haven't clocked in today.",
     "inSince": "You clocked in at {time}.",
     "outSince": "You clocked out at {time}.",
+    "timeOfDay": "{time}{part, select, other {}}",
     "savedIn": "Clocked in at {time}.",
     "savedOut": "Clocked out at {time}. Goodbye!",
     "firstSync": "Wait a moment: this laptop is still getting the shop's data for the first time. Try again shortly.",

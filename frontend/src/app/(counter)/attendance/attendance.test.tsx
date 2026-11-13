@@ -126,7 +126,9 @@ describe("clocking in", () => {
       await screen.findByRole("button", { name: "Ingia kazini" }),
     );
 
-    expect(await screen.findByText("Umeingia kazini saa 07:55.")).toBeDefined();
+    expect(
+      await screen.findByText("Umeingia kazini saa 07:55 asubuhi."),
+    ).toBeDefined();
     const saved = await db().documents.toArray();
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({
@@ -151,7 +153,7 @@ describe("clocking in", () => {
     fireEvent.click(button);
     fireEvent.click(button);
 
-    await screen.findByText("Umeingia kazini saa 07:55.");
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
     expect(clockIn()).toBeNull();
     expect(clockOut()).toBeNull();
     expect(await db().documents.count()).toBe(1);
@@ -164,7 +166,7 @@ describe("clocking in", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Ingia kazini" }),
     );
-    await screen.findByText("Umeingia kazini saa 07:55.");
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
 
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -220,7 +222,9 @@ describe("clocking out", () => {
 
     await theScreen();
 
-    expect(await screen.findByText("Uliingia kazini saa 07:55.")).toBeDefined();
+    expect(
+      await screen.findByText("Uliingia kazini saa 07:55 asubuhi."),
+    ).toBeDefined();
     expect(clockOut()).not.toBeNull();
     expect(clockIn()).toBeNull();
   });
@@ -234,7 +238,7 @@ describe("clocking out", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Toka kazini" }));
 
     expect(
-      await screen.findByText("Umetoka kazini saa 18:02. Kwaheri!"),
+      await screen.findByText("Umetoka kazini saa 18:02 jioni. Kwaheri!"),
     ).toBeDefined();
     // Long enough to read it: not logged out yet.
     expect(leaveAsked()).toBeNull();
@@ -263,7 +267,7 @@ describe("clocking out", () => {
     expect(await screen.findByRole("link", { name: "Rudi" })).toBeDefined();
 
     fireEvent.click(await screen.findByRole("button", { name: "Toka kazini" }));
-    await screen.findByText("Umetoka kazini saa 18:02. Kwaheri!");
+    await screen.findByText("Umetoka kazini saa 18:02 jioni. Kwaheri!");
     expect(screen.queryByRole("link", { name: "Rudi" })).toBeNull();
 
     unmount();
@@ -280,7 +284,9 @@ describe("clocking out", () => {
 
     await theScreen();
 
-    expect(await screen.findByText("Ulitoka kazini saa 07:50.")).toBeDefined();
+    expect(
+      await screen.findByText("Ulitoka kazini saa 07:50 asubuhi."),
+    ).toBeDefined();
     expect(clockIn()).not.toBeNull();
   });
 
@@ -291,7 +297,9 @@ describe("clocking out", () => {
 
     await theScreen();
 
-    expect(await screen.findByText("Ulitoka kazini saa 12:30.")).toBeDefined();
+    expect(
+      await screen.findByText("Ulitoka kazini saa 12:30 mchana."),
+    ).toBeDefined();
     expect(clockIn()).not.toBeNull();
   });
 });
