@@ -934,6 +934,28 @@ describe("the way to Mahudhurio (SYNC-11)", () => {
   });
 });
 
+describe("the way to Kompyuta hii (SYNC-12)", () => {
+  const kompyutaHii = () =>
+    screen.queryByRole("link", { name: "Kompyuta hii" });
+
+  it("is on her welcome, and opens the counter's screen", async () => {
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    await waitFor(() => expect(kompyutaHii()).not.toBeNull());
+    expect(kompyutaHii()?.getAttribute("href")).toMatch(/^\/this-laptop\/?$/);
+  });
+
+  it("isn't there while nobody is logged in", async () => {
+    theLaptop(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" });
+    expect(kompyutaHii()).toBeNull();
+  });
+});
+
 describe("what the counter knows (SYNC-11)", () => {
   // A counter screen never asks the server who is here (rule 5), so the home page, which may, keeps a
   // note for it (at-the-counter.ts), and hears a counter screen say "this person is leaving".

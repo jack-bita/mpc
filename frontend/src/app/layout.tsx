@@ -4,7 +4,7 @@
 // once, at build time, and becomes plain HTML in out/ — no server runs it later
 // (ADR-0016). That is also why it may export `metadata`, which only server components can.
 // The app's providers wrap every page here: today the word books, the store of server answers, the
-// device's check of who it is, and the sync's moments; later the session (03 §7.2).
+// device's check of who it is, the sync's moments, and the ask to keep the data; later the session (03 §7.2).
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -25,6 +25,8 @@ import { DeviceLock } from "@/features/devices/device-lock";
 import { atkinson, sourceSans } from "@/fonts/fonts";
 // Hands every screen its words from the open book: Swahili, or English after the switch (ADR-0040).
 import { LanguageProvider } from "@/i18n/provider";
+// Asks the browser to keep the shop's data for good, and listens for its install offer (SYNC-12).
+import { KeepDataAtStart } from "@/offline/keep-data-at-start";
 // Syncs the shop's database at its moments: as the app opens, when the network comes back, 2 s after a
 // save, every 30 s, and from Tuma sasa (SYNC-9).
 import { SyncTriggers } from "@/offline/sync/triggers";
@@ -52,6 +54,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             {/* Beside the check, whose answers it follows: it stops itself while the device is blocked. */}
             <SyncTriggers />
             <UpdatePrompt />
+            <KeepDataAtStart />
           </QueryProvider>
         </LanguageProvider>
       </body>

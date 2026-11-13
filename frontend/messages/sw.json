@@ -203,6 +203,22 @@
       "other": "Seva imeikataa. Msimbo: {code}"
     }
   },
+  "thisLaptop": {
+    "title": "Kompyuta hii",
+    "back": "Rudi",
+    "keep": {
+      "title": "Kuhifadhi data",
+      "kept": "Kivinjari kimekubali kuhifadhi data za duka kwenye kompyuta hii kwa kudumu.",
+      "notKept": "Kivinjari hakijakubali kuhifadhi data za duka kwa kudumu: kikikosa nafasi, kinaweza kuzifuta, pamoja na kumbukumbu ambazo bado hazijatumwa. Sakinisha programu hii, kisha fungua ukurasa huu tena.",
+      "cannotAsk": "Kivinjari hiki hakiwezi kuhifadhi data za duka kwa kudumu. Tumia Chrome au Edge."
+    },
+    "install": {
+      "title": "Kusakinisha programu",
+      "installed": "Programu imesakinishwa kwenye kompyuta hii.",
+      "button": "Sakinisha",
+      "steps": "Fungua menyu ya kivinjari (⋮ au ⋯), kisha chagua Sakinisha."
+    }
+  },
   "stock": {
     "part": "{unit} {count}"
   },

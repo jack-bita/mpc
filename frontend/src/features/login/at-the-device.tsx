@@ -94,6 +94,7 @@ export function AtTheDevice({
   const t = useTranslations("login");
   const settings = useTranslations("mySettings");
   const attendance = useTranslations("attendance");
+  const thisLaptop = useTranslations("thisLaptop");
   const me = useWhoIsHere();
   const store = useQueryClient();
 
@@ -350,6 +351,13 @@ export function AtTheDevice({
             {rowHere && (
               <ButtonLink href="/attendance/" size="normal">
                 {attendance("title")}
+              </ButtonLink>
+            )}
+            {/* Kompyuta hii (SYNC-12): whether the laptop keeps the shop's data, and the install. A counter
+                screen, so the same rule as Mahudhurio: only for someone the counter's note names. */}
+            {rowHere && (
+              <ButtonLink href="/this-laptop/" kind="second" size="normal">
+                {thisLaptop("title")}
               </ButtonLink>
             )}
             {/* The person's own language and font, one tap from the welcome: someone logged in by PIN

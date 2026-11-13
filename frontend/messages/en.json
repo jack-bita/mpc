@@ -203,6 +203,22 @@
       "other": "The server refused it. Code: {code}"
     }
   },
+  "thisLaptop": {
+    "title": "This laptop",
+    "back": "Back",
+    "keep": {
+      "title": "Keeping the data",
+      "kept": "The browser has agreed to keep the shop's data on this laptop for good.",
+      "notKept": "The browser hasn't agreed to keep the shop's data for good: short of space, it may delete it, records not yet sent included. Install this app, then open this page again.",
+      "cannotAsk": "This browser can't keep the shop's data for good. Use Chrome or Edge."
+    },
+    "install": {
+      "title": "Installing the app",
+      "installed": "The app is installed on this laptop.",
+      "button": "Install",
+      "steps": "Open the browser's menu (⋮ or ⋯), then choose Install."
+    }
+  },
   "stock": {
     "part": "{count} {unit}"
   },
