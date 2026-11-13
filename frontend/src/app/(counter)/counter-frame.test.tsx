@@ -41,7 +41,8 @@ const IDLE_MINUTES = 15;
 
 const db = () => shopDatabase(DAWA_LAPTOP.shop.id);
 const bar = () => within(screen.getByRole("banner"));
-const leaveAsked = () => renderHook(() => useLeaveAsked()).result.current;
+const leaveAsked = () =>
+  renderHook(() => useLeaveAsked()).result.current?.staffId ?? null;
 
 // The Dawa laptop, registered, with Asha and the Dawa side on its copy.
 beforeEach(async () => {
@@ -52,7 +53,7 @@ beforeEach(async () => {
 
 /** A counter screen, with Asha logged in at the home page before it opened. */
 async function ashaAtTheCounter() {
-  arriveAtCounter(ASHA, IDLE_MINUTES);
+  arriveAtCounter(ASHA, IDLE_MINUTES, "server");
   render(
     <CounterLayout>
       <p>screen</p>
@@ -86,7 +87,7 @@ describe("the counter's frame", () => {
 
   it("waits while her row is read, and sends her nowhere meanwhile", () => {
     // The first drawing knows the note but not yet her row: still reading is not nobody.
-    arriveAtCounter(ASHA, IDLE_MINUTES);
+    arriveAtCounter(ASHA, IDLE_MINUTES, "server");
     render(
       <CounterLayout>
         <p>screen</p>

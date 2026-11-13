@@ -18,7 +18,10 @@
 //
 // Toka on a counter screen: the logout calls the server, so it stays with the home page (UI-4's note).
 // The screen asks here (askToLeave): the person is hidden at once, for every screen, and the home page,
-// which the screen opens next, logs them out and says it has heard (leaveHeard).
+// which the screen opens next, logs them out and says it has heard (leaveHeard). The note keeps how they
+// came in, by the server or by the laptop's own check, so the home page knows what to end even when it
+// can't ask `me`: the store forgets an answer no screen read for 5 minutes, and the network may be gone.
+// A server's session then gets its logout all the same, sent again until the server hears it.
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useSyncExternalStore } from "react";
 
@@ -32,9 +35,14 @@ import { useShopDatabase } from "@/offline/this-shop";
 
 type StaffRow = components["schemas"]["StaffRecord"];
 
+/** How the person came in: by the server's session (a PIN the server said yes to, or a password), or by
+ * the laptop's own check, a local session (SYNC-10). Each ends its own way. */
+export type CameInBy = "server" | "laptop";
+
 /** Who is here, as the home page last said. */
 export interface CounterNote {
   staffId: string;
+  by: CameInBy;
   /** Their PIN's time on the laptop's copy as they arrived: a new PIN since takes the note away. */
   pinChangedAt: string | null;
   /** How long the counter may sit untouched before it logs them out: `me`'s minutes, or offline the
@@ -42,6 +50,12 @@ export interface CounterNote {
   idleMinutes: number;
   /** The device they arrived on, as the laptop's saved copy named it then. */
   deviceId: string | undefined;
+}
+
+/** Whom a counter screen asked to log out, and how they came in, so the home page ends the right session. */
+export interface LeaveAsk {
+  staffId: string;
+  by: CameInBy;
 }
 
 /** The person at the counter: their row on the laptop now (a new nickname shows at once), and the
@@ -52,9 +66,9 @@ export interface PersonAtCounter {
 }
 
 let note: CounterNote | null = null;
-// Whom a counter screen asked to log out, by staff id, until the home page has heard. Apart from the
-// note: the note goes at the press, so the person is hidden at once, and this stays until the logout.
-let leaving: string | null = null;
+// Whom a counter screen asked to log out, until the home page has heard. Apart from the note: the note
+// goes at the press, so the person is hidden at once, and this stays until the logout.
+let leaving: LeaveAsk | null = null;
 const listeners = new Set<() => void>();
 // The watch on the laptop's saved copy while a note lasts.
 let stopWatching: (() => void) | null = null;
@@ -74,11 +88,17 @@ function takeNoteAway(): void {
   note = null;
 }
 
-/** The home page: this person is here now, and the counter locks after these minutes untouched. */
-export function arriveAtCounter(person: StaffRow, idleMinutes: number): void {
+/** The home page: this person is here now, came in this way, and the counter locks after these minutes
+ * untouched. */
+export function arriveAtCounter(
+  person: StaffRow,
+  idleMinutes: number,
+  by: CameInBy,
+): void {
   // The same person again, as the home page draws each time: nothing changes, and no screen redraws.
   if (
     note?.staffId === person.id &&
+    note.by === by &&
     note.pinChangedAt === person.pin_changed_at &&
     note.idleMinutes === idleMinutes
   )
@@ -86,6 +106,7 @@ export function arriveAtCounter(person: StaffRow, idleMinutes: number): void {
   takeNoteAway();
   note = {
     staffId: person.id,
+    by,
     pinChangedAt: person.pin_changed_at,
     idleMinutes,
     deviceId: savedDevice()?.id,
@@ -113,7 +134,7 @@ export function nobodyAtCounter(): void {
  * and the home page, opened next, logs them out. Nobody here, nothing to ask. */
 export function askToLeave(): void {
   if (note === null) return;
-  leaving = note.staffId;
+  leaving = { staffId: note.staffId, by: note.by };
   takeNoteAway();
   tellEveryScreen();
 }
@@ -135,8 +156,9 @@ export function useAtTheCounter(): CounterNote | null {
   );
 }
 
-/** Whom a counter screen asked to log out, by staff id, not yet heard by the home page; null for none. */
-export function useLeaveAsked(): string | null {
+/** Whom a counter screen asked to log out, and how they came in, not yet heard by the home page; null for
+ * none. */
+export function useLeaveAsked(): LeaveAsk | null {
   return useSyncExternalStore(
     subscribe,
     () => leaving,

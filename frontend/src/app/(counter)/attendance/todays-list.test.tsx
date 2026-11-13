@@ -127,7 +127,7 @@ describe("today's list", () => {
   it("shows a tap the moment it is saved", async () => {
     // Live: the screen reads the laptop's database, and redraws when a save changes it.
     vi.setSystemTime(new Date("2026-11-13T04:55:00Z"));
-    arriveAtCounter(ASHA, 15);
+    arriveAtCounter(ASHA, 15, "server");
     render(
       <CounterLayout>
         <AttendancePage />

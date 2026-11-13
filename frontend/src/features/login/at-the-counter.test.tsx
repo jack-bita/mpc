@@ -45,7 +45,7 @@ beforeEach(async () => {
 /** Asha, logged in at the home page, as a counter screen reads her once her row is read. */
 async function ashaIsHere() {
   const hook = renderHook(() => usePersonAtCounter());
-  act(() => arriveAtCounter(ASHA, IDLE_MINUTES));
+  act(() => arriveAtCounter(ASHA, IDLE_MINUTES, "server"));
   await waitFor(() => expect(hook.result.current?.row.id).toBe(ASHA.id));
   return hook;
 }
@@ -55,7 +55,7 @@ describe("the counter's note of who is here", () => {
     const one = renderHook(() => useAtTheCounter());
     const two = renderHook(() => useAtTheCounter());
 
-    act(() => arriveAtCounter(ASHA, IDLE_MINUTES));
+    act(() => arriveAtCounter(ASHA, IDLE_MINUTES, "server"));
     expect(one.result.current?.staffId).toBe(ASHA.id);
     expect(two.result.current?.staffId).toBe(ASHA.id);
 
@@ -82,7 +82,7 @@ describe("the counter's note of who is here", () => {
     const { result } = renderHook(() => usePersonAtCounter());
     expect(result.current).toBeNull();
 
-    act(() => arriveAtCounter(ASHA, IDLE_MINUTES));
+    act(() => arriveAtCounter(ASHA, IDLE_MINUTES, "server"));
     expect(result.current).toBeUndefined();
 
     await waitFor(() => expect(result.current?.row.id).toBe(ASHA.id));
@@ -126,7 +126,7 @@ describe("the counter's note of who is here", () => {
 
     act(() => {
       nobodyAtCounter();
-      arriveAtCounter(JUMA, IDLE_MINUTES);
+      arriveAtCounter(JUMA, IDLE_MINUTES, "server");
     });
 
     await waitFor(() => expect(result.current?.row.id).toBe(JUMA.id));
@@ -136,7 +136,7 @@ describe("the counter's note of who is here", () => {
     // The block's lock covers every page; unblocked in this same tab, the counter must not open on
     // Asha with no PIN typed.
     const { result } = renderHook(() => useAtTheCounter());
-    act(() => arriveAtCounter(ASHA, IDLE_MINUTES));
+    act(() => arriveAtCounter(ASHA, IDLE_MINUTES, "server"));
 
     act(() => saveBlocked());
     expect(result.current).toBeNull();
@@ -146,7 +146,7 @@ describe("the counter's note of who is here", () => {
 
   it("goes when the laptop is forgotten, or paired again as another device", () => {
     const { result } = renderHook(() => useAtTheCounter());
-    act(() => arriveAtCounter(ASHA, IDLE_MINUTES));
+    act(() => arriveAtCounter(ASHA, IDLE_MINUTES, "server"));
     act(() =>
       saveDevice({
         ...DAWA_LAPTOP,
@@ -157,7 +157,7 @@ describe("the counter's note of who is here", () => {
 
     act(() => {
       saveDevice(DAWA_LAPTOP);
-      arriveAtCounter(ASHA, IDLE_MINUTES);
+      arriveAtCounter(ASHA, IDLE_MINUTES, "server");
     });
     act(() => saveDevice(null));
     expect(result.current).toBeNull();
@@ -166,7 +166,7 @@ describe("the counter's note of who is here", () => {
   it("stays when the device check saves the laptop again, renamed", () => {
     // The check runs every few minutes, online: it must never send away the person at work.
     const { result } = renderHook(() => useAtTheCounter());
-    act(() => arriveAtCounter(ASHA, IDLE_MINUTES));
+    act(() => arriveAtCounter(ASHA, IDLE_MINUTES, "server"));
 
     act(() => saveDevice({ ...DAWA_LAPTOP, name: "Laptop ya Dawa" }));
 
@@ -180,13 +180,13 @@ describe("a counter screen saying the person is leaving", () => {
     // (rule 5). It says so here, and the home page, which may call the server, does the logout.
     const note = renderHook(() => useAtTheCounter());
     const asked = renderHook(() => useLeaveAsked());
-    act(() => arriveAtCounter(ASHA, IDLE_MINUTES));
+    act(() => arriveAtCounter(ASHA, IDLE_MINUTES, "server"));
     expect(asked.result.current).toBeNull();
 
     act(() => askToLeave());
     // Hidden at the press, as on the home page (UI-4): the next person must not see her meanwhile.
     expect(note.result.current).toBeNull();
-    expect(asked.result.current).toBe(ASHA.id);
+    expect(asked.result.current?.staffId).toBe(ASHA.id);
 
     act(() => leaveHeard());
     expect(asked.result.current).toBeNull();

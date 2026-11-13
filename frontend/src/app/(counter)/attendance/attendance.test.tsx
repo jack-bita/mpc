@@ -51,7 +51,8 @@ const MORNING = new Date("2026-11-13T04:55:00Z");
 const EVENING = new Date("2026-11-13T15:02:00Z");
 
 const db = () => shopDatabase(DAWA_LAPTOP.shop.id);
-const leaveAsked = () => renderHook(() => useLeaveAsked()).result.current;
+const leaveAsked = () =>
+  renderHook(() => useLeaveAsked()).result.current?.staffId ?? null;
 const clockIn = () => screen.queryByRole("button", { name: "Ingia kazini" });
 const clockOut = () => screen.queryByRole("button", { name: "Toka kazini" });
 
@@ -72,7 +73,7 @@ async function tappedEarlier(
 
 /** The screen, inside the counter's frame, with Asha logged in at the home page before it opened. */
 async function theScreen() {
-  arriveAtCounter(ASHA, 15);
+  arriveAtCounter(ASHA, 15, "server");
   render(
     <CounterLayout>
       <AttendancePage />
@@ -298,7 +299,7 @@ describe("a laptop not ready to save", () => {
 describe("the screen's words", () => {
   it("speak English to someone who reads it, with no Swahili left", async () => {
     await db().staff.put({ ...ASHA, language: "en" });
-    arriveAtCounter({ ...ASHA, language: "en" }, 15);
+    arriveAtCounter({ ...ASHA, language: "en" }, 15, "server");
     render(
       <CounterLayout>
         <AttendancePage />

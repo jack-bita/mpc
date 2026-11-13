@@ -850,6 +850,40 @@ describe("with no network (SYNC-10)", () => {
     ).toBeDefined();
   });
 
+  it("sends the logout of a counter's Toka with no answer about her at all, so she never comes back (SYNC-11)", async () => {
+    // Neema came in by the server, then stayed over 5 minutes on a counter screen: the store forgot `me`'s
+    // answer about her (TanStack's gcTime), and the network is gone. Her Toka there must still end her
+    // session, or the network's return would bring her welcome back for anyone to use.
+    const laptop = await aLaptopWithNoNetwork(NEEMA);
+    arriveAtCounter(rowOf(NEEMA), 15, "server");
+    askToLeave();
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    // The tiles for the next person, at once: her logout waits for the network.
+    expect(
+      await screen.findByRole(
+        "heading",
+        { level: 1, name: "Wewe ni nani?" },
+        { timeout: 3000 },
+      ),
+    ).toBeDefined();
+    expect(laptop.logoutsHeard).toBe(0);
+
+    // The network comes back, and the store asks `me` again as it does then.
+    laptop.network = true;
+    act(() => {
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+    });
+
+    await vi.waitFor(() => expect(laptop.logoutsHeard).toBe(1), {
+      timeout: 8000,
+    });
+    expect(laptop.here).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Karibu, Neema" })).toBeNull();
+    expect(bar().queryByText("Neema")).toBeNull();
+  }, 15_000);
+
   it("ends a local session when a counter screen says he is leaving (SYNC-11)", async () => {
     await aLaptopWithNoNetwork(null);
     render(<AtTheDevice device={DAWA_LAPTOP} />);
@@ -903,7 +937,8 @@ describe("the way to Mahudhurio (SYNC-11)", () => {
 describe("what the counter knows (SYNC-11)", () => {
   // A counter screen never asks the server who is here (rule 5), so the home page, which may, keeps a
   // note for it (at-the-counter.ts), and hears a counter screen say "this person is leaving".
-  const leaveAsked = () => renderHook(() => useLeaveAsked()).result.current;
+  const leaveAsked = () =>
+    renderHook(() => useLeaveAsked()).result.current?.staffId ?? null;
 
   it("names whoever is logged in, with the minutes her screen may sit untouched", async () => {
     theLaptop(NEEMA);
@@ -946,13 +981,36 @@ describe("what the counter knows (SYNC-11)", () => {
     expect(leaveAsked()).toBeNull();
   });
 
+  it("says why when the server refuses a counter's logout, and keeps her where she is", async () => {
+    // As Toka here does: a refusal the server meant is shown to her, never a blank page with no tiles.
+    theLaptop(NEEMA, refusal(403, "permission_denied"));
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    const note = renderHook(() => useAtTheCounter());
+    await waitFor(() =>
+      expect(note.result.current?.staffId).toBe(NEEMA.staff.id),
+    );
+
+    act(() => askToLeave());
+
+    expect(
+      await screen.findByText("Huna ruhusa ya kufanya hili."),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("heading", { name: "Karibu, Neema" }),
+    ).toBeDefined();
+    expect(leaveAsked()).toBeNull();
+    // Asked once: a refusal the server meant gets the same no again.
+    expect(logouts()).toHaveLength(1);
+  });
+
   it("never shows her welcome on the way out, when the home page opens after the counter asked", async () => {
     // The real order: Toka on a counter screen, then the home page opens, with her `me` still in the
     // store. The logout's answer never comes here, so the page stays as its first drawing left it.
     theLaptop(NEEMA, () => new Promise<Response>(() => {}));
     const store = makeQueryClient();
     store.setQueryData(WHO_IS_HERE, NEEMA);
-    arriveAtCounter(rowOf(NEEMA), 15);
+    arriveAtCounter(rowOf(NEEMA), 15, "server");
     askToLeave();
 
     render(
@@ -970,7 +1028,7 @@ describe("what the counter knows (SYNC-11)", () => {
 
   it("logs nobody out when the one who asked to leave is no longer here", async () => {
     // Neema's ask found nobody to hear it, as her session had ended by itself. Juma is here now.
-    arriveAtCounter(rowOf(NEEMA), 15);
+    arriveAtCounter(rowOf(NEEMA), 15, "server");
     askToLeave();
     theLaptop(JUMA);
     render(<AtTheDevice device={DAWA_LAPTOP} />);
@@ -983,7 +1041,7 @@ describe("what the counter knows (SYNC-11)", () => {
 
   it("forgets a leave nobody heard, so her next login isn't ended by it", async () => {
     // Her session had ended by itself before the home page opened: the tiles show, and the ask waits.
-    arriveAtCounter(rowOf(NEEMA), 15);
+    arriveAtCounter(rowOf(NEEMA), 15, "server");
     askToLeave();
     theLaptop(null);
     render(<AtTheDevice device={DAWA_LAPTOP} />);

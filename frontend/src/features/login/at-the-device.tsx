@@ -56,6 +56,7 @@ import { wholeNumber } from "@/offline/rules";
 
 import {
   arriveAtCounter,
+  type LeaveAsk,
   leaveHeard,
   nobodyAtCounter,
   useLeaveAsked,
@@ -175,7 +176,7 @@ export function AtTheDevice({
   // Who is logged in. First, someone the laptop let in offline, whose local session still holds.
   const offlineRow = useOfflinePerson();
   const offlinePerson =
-    offlineRow !== undefined && offlineRow.id === leaveAsked
+    offlineRow !== undefined && offlineRow.id === leaveAsked?.staffId
       ? undefined
       : offlineRow;
   // Else, as `me` last said. TanStack keeps the last answer through a failed refresh, so a dropped network
@@ -186,7 +187,7 @@ export function AtTheDevice({
     offlineRow ||
     ended ||
     logoutWaits ||
-    (leaveAsked !== null && me.data?.staff.id === leaveAsked)
+    (leaveAsked !== null && me.data?.staff.id === leaveAsked.staffId)
       ? undefined
       : me.data;
   const sides = useSides();
@@ -250,24 +251,26 @@ export function AtTheDevice({
   const rowHere =
     offlinePerson ??
     (here ? staff?.find((row) => row.id === here.staff.id) : undefined);
+  // How they came in, so a counter's Toka ends the right session: the local one, or the server's.
+  const cameInBy = offlinePerson ? "laptop" : "server";
   useEffect(() => {
     if (rowHere !== undefined && idleMinutes !== undefined)
-      arriveAtCounter(rowHere, idleMinutes);
+      arriveAtCounter(rowHere, idleMinutes, cameInBy);
     else nobodyAtCounter();
-  }, [rowHere, idleMinutes]);
+  }, [rowHere, idleMinutes, cameInBy]);
 
   // A counter screen asked to log someone out (SYNC-11). A ref, not state: the page may draw again before
   // the store shows the logout waiting, and that drawing must not send a second one.
-  const leaveSentFor = useRef<string | null>(null);
+  const leaveSentFor = useRef<LeaveAsk | null>(null);
   useEffect(() => {
     if (leaveAsked === null) {
       leaveSentFor.current = null;
       return;
     }
-    // Someone the laptop let in: their local session ends here, and the server has nothing to hear, as
-    // their arrival already sent the logout.
-    if (offlineRow?.id === leaveAsked) {
-      endOfflineSession();
+    // Someone the laptop let in: their local session ends here, if it still holds, and the server has
+    // nothing to hear, as their arrival already sent the logout.
+    if (leaveAsked.by === "laptop") {
+      if (offlineRow?.id === leaveAsked.staffId) endOfflineSession();
       leaveHeard();
       return;
     }
@@ -277,21 +280,31 @@ export function AtTheDevice({
       leaveHeard();
       return;
     }
-    // Sent, and answered before the store showed it waiting: heard once `me` no longer names them.
-    if (leaveSentFor.current === leaveAsked) {
-      if (me.data?.staff.id !== leaveAsked) leaveHeard();
-      return;
-    }
-    // The server's session: the logout, named for them, as Toka here sends it.
-    if (me.data?.staff.id === leaveAsked && ended === null) {
-      leaveSentFor.current = leaveAsked;
-      sendLogout({ by: leaveAsked, notice: null });
-      return;
-    }
-    // Someone else here, or nobody, as when their session had ended by itself: nothing to log out, and an
-    // ask kept would end their next login. Not while `me` has said nothing yet: it may name them.
-    if (offlineRow !== undefined || me.data !== undefined || ended || noAnswer)
+    // Sent, its answer still to come: heard when it comes (onSettled, below), or once the store shows it
+    // waiting (above).
+    if (leaveSentFor.current === leaveAsked) return;
+    // Her session is gone already: the server says nobody is here, or names someone else, or someone the
+    // laptop let in has taken the counter, whose arrival sent the logout. A logout now would end theirs.
+    const someoneElse =
+      (me.data !== undefined && me.data.staff.id !== leaveAsked.staffId) ||
+      offlineRow !== undefined;
+    if (ended !== null || someoneElse) {
       leaveHeard();
+      return;
+    }
+    // `me` still on its way, with no failure yet: it may name her, or someone else, whose session a logout
+    // would end. Wait for it.
+    if (me.data === undefined && !noAnswer) return;
+    // Else the server's session gets its logout, as Toka here sends it: `me` names her, or can't answer at
+    // all. After 5 minutes on a counter screen the store has forgotten `me`'s answer (TanStack's gcTime),
+    // and with no network or a 5xx it can't ask again. Taken for nobody, the session would outlive the
+    // press, and bring her back once the network returned. The logout waits, and is sent again until the
+    // server hears it. Its answer is the ask's end: a refusal leaves her here with why, as Toka here does.
+    leaveSentFor.current = leaveAsked;
+    sendLogout(
+      { by: leaveAsked.staffId, notice: null },
+      { onSettled: () => leaveHeard() },
+    );
   }, [
     leaveAsked,
     offlineRow,
