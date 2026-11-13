@@ -19,7 +19,11 @@ import { useTranslations } from "use-intl";
 import { Button } from "@/components/design/button";
 import { ON_GREEN } from "@/components/design/top-bar";
 import { cn } from "@/lib/utils";
-import { counterIsQuiet, useCounterQuiet } from "@/offline/busy";
+import {
+  counterIsQuiet,
+  QUIET_CHECK_EVERY,
+  useCounterQuiet,
+} from "@/offline/busy";
 import {
   type ApplyUpdate,
   registerServiceWorker,
@@ -105,14 +109,29 @@ export function UpdatePrompt() {
   // rather than telling the worker again at every redraw. A try that a new sale stopped is forgotten, so
   // the next quiet moment tries again.
   const triedAlone = useRef<ApplyUpdate | null>(null);
+  // A try refused by a busy counter comes again at the bar's next look. The sale that refused it may be
+  // over before then, and the bar's look then finds it quiet, as it was: nothing the bar reads changes, so
+  // nothing would redraw it. This redraws it, once per refused try; a sale still open at that look hides
+  // the bar, and the try waits for it to show again.
+  const [, redrawToTryAgain] = useState(0);
+  const tryAgainLater = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  useEffect(() => () => clearTimeout(tryAgainLater.current), []);
   // No list of what it reads: it looks again after every redraw, and does nothing until all of it holds.
-  // Each sync that finds the app too old redraws the bar, so a try refused is tried again then.
+  // Each sync that finds the app too old redraws the bar too.
   useEffect(() => {
     if (!(tooOld || takenOver) || !shown || sending) return;
     if (triedAlone.current === apply) return;
     triedAlone.current = apply;
     void tap().then((switched) => {
-      if (!switched) triedAlone.current = null;
+      if (switched) return;
+      triedAlone.current = null;
+      clearTimeout(tryAgainLater.current);
+      tryAgainLater.current = setTimeout(
+        () => redrawToTryAgain((times) => times + 1),
+        QUIET_CHECK_EVERY,
+      );
     });
   });
 

@@ -482,6 +482,29 @@ describe("UpdatePrompt on a tab another tab has switched", () => {
     await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
   });
 
+  it("tries again at the next look after a refused try", async () => {
+    // The bar's look says quiet; its try's own look, a moment later, meets the other tab's sale, which is
+    // finished before the bar's next look, 2 s on. Nothing the bar reads changes, so nothing redraws it:
+    // the try comes again at that next look all the same.
+    vi.useFakeTimers();
+    const locks = installFakeLocks();
+    vi.spyOn(locks, "query")
+      .mockResolvedValueOnce({ held: [], pending: [] })
+      .mockResolvedValueOnce({
+        held: [{ name: BUSY_LOCK, mode: "shared" }],
+        pending: [],
+      });
+    render(<UpdatePrompt />);
+    const reload = vi.fn();
+
+    anotherTabSwitched(reload);
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(reload).not.toHaveBeenCalled();
+
+    await act(() => vi.advanceTimersByTimeAsync(QUIET_CHECK_EVERY));
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
   it("waits for the sale in this tab to finish", async () => {
     // A sale open on the old code: it finishes there, then the tab reloads.
     const view = render(<Counter busy />);
