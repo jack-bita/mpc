@@ -6,6 +6,8 @@
 import { api } from "@/api/client";
 import { saveBlocked, saveDevice } from "@/features/devices/this-device";
 
+import type { ShopDatabase } from "../db";
+import { DEVICE_REFUSED, readDeviceRefused } from "./meta";
 import type { DeviceRefusal, SyncPlace } from "./place";
 
 /**
@@ -22,3 +24,23 @@ export function keepOnThisPage(refusal: DeviceRefusal): void {
 
 /** The page's place: what sync.ts hands the push. */
 export const pagePlace: SyncPlace = { api, hear: keepOnThisPage };
+
+/**
+ * Takes the note the service worker left (meta.ts, DEVICE_REFUSED) and keeps its refusal on this page, as
+ * if the page had heard it itself: a phone blocked while the app was closed locks as it opens, with or
+ * without a network (03 §5.9, step 4). True when there was one.
+ *
+ * Read and removed in one transaction, so two tabs opening at once don't both take it, and taken once
+ * only: kept, it would block the laptop again after the manager's unblock. An unblock the device check
+ * hears after this puts it right, as for any block (device-check.tsx).
+ */
+export async function heardInTheBackground(db: ShopDatabase): Promise<boolean> {
+  const refusal = await db.transaction("rw", db.meta, async () => {
+    const note = await readDeviceRefused(db);
+    if (note !== null) await db.meta.delete(DEVICE_REFUSED);
+    return note;
+  });
+  if (refusal === null) return false;
+  keepOnThisPage(refusal);
+  return true;
+}

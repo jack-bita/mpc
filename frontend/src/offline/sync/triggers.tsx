@@ -30,7 +30,9 @@ import {
   useThisDevice,
 } from "@/features/devices/this-device";
 
+import { shopDatabase } from "../this-shop";
 import { listenForAsks } from "./asks";
+import { heardInTheBackground } from "./page-place";
 import { syncShop, type SyncAsk } from "./sync";
 
 /** How often an open app syncs while online (03 §6.5, a default): the office's changes reach the counter
@@ -113,6 +115,9 @@ export function useSyncTriggers(): void {
   const blocked = useDeviceBlocked();
   useEffect(() => {
     if (shopId === undefined || blocked) return;
+    // A block the service worker heard while the app was closed (SYNC-16) is taken as the app opens,
+    // before any moment and with no network too: kept, it makes `blocked` true, and this stops again.
+    heardInTheBackground(shopDatabase(shopId)).catch(reportSyncFailure);
     return startSyncTriggers(shopId);
   }, [shopId, blocked]);
 }

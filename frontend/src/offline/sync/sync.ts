@@ -13,7 +13,7 @@ import { shopDatabase } from "../this-shop";
 import { isAboutTheDevice } from "./answer";
 import { bootstrap, needsBootstrap } from "./bootstrap";
 import { mayPush, pushFailed, pushSettled } from "./backoff";
-import { pagePlace } from "./page-place";
+import { heardInTheBackground, pagePlace } from "./page-place";
 import { pull } from "./pull";
 import { push, type PushResult } from "./push";
 
@@ -135,6 +135,9 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   // (triggers.tsx); this catches the one already in line.
   if (savedBlocked()) return;
   const db = shopDatabase(shopId);
+  // The same for a block the service worker heard while this page was open (SYNC-16): it is kept now,
+  // and nothing is asked.
+  if (await heardInTheBackground(db)) return;
   // The first pull asks from the bootstrap's cursor, so the copy and the changes after it meet.
   if (await needsBootstrap(db)) await bootstrap(db);
   // The push before the pull: what this laptop made goes up first, so the pull that follows brings the
