@@ -81,18 +81,20 @@ export async function pull(db: ShopDatabase): Promise<void> {
 // Every change on the page is one the app can apply, or nothing is: checked before the transaction, so
 // a page the app can't read changes nothing at all.
 function checkPage(page: Page, askedFrom: number): void {
+  // The server no longer serves this app: whatever the page holds, it may be written for a newer one. An
+  // empty page too, so an app left open learns it at its next sync, a quiet shop's too. First, before the
+  // cursor's check: a server restored from a backup (OPS-11) is behind every laptop's cursor, so each page
+  // fails that check, and an app too old for it must still learn it, as updating is its only way on.
+  if (page.min_app_version > APP_NUMBER)
+    throw new AppTooOld(
+      `The server serves app number ${page.min_app_version} and up; this app is ${APP_NUMBER}.`,
+    );
   // The cursor only ever moves on: a page that took it back would read old changes as new. And a page
   // that says more wait must have moved it, or the next ask is the same ask, and the pull would never end.
   // Neither comes from a working server; better to stop and try again at the next sync.
   if (page.cursor < askedFrom || (page.has_more && page.cursor === askedFrom))
     throw new Error(
       `Page cursor ${page.cursor} after ${askedFrom} doesn't move on.`,
-    );
-  // The server no longer serves this app: whatever the page holds, it may be written for a newer one. An
-  // empty page too, so an app left open learns it at its next sync, a quiet shop's too.
-  if (page.min_app_version > APP_NUMBER)
-    throw new AppTooOld(
-      `The server serves app number ${page.min_app_version} and up; this app is ${APP_NUMBER}.`,
     );
   for (const change of page.changes) {
     if (!(LISTS as readonly string[]).includes(change.entity))

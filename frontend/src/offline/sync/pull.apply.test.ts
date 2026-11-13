@@ -417,6 +417,16 @@ describe("a pull", () => {
     expect(await readCursor(db)).toBe(120);
   });
 
+  it("says too old before anything else, a cursor gone back included", async () => {
+    // The server was restored from a backup (OPS-11), and its log is behind this laptop's cursor: every page
+    // fails the cursor's check. If that release also raised the minimum, the app must still learn it, as
+    // updating is its only way on.
+    serverGives({ ...page([], 100), min_app_version: APP_NUMBER + 1 });
+
+    await expect(pull(db)).rejects.toBeInstanceOf(AppTooOld);
+    expect(await readCursor(db)).toBe(120);
+  });
+
   it("stops at an empty page too, once the minimum is above this app's", async () => {
     // A quiet shop, with nothing new: the app still learns at its next sync that it must update.
     serverGives({ ...page([], 120), min_app_version: APP_NUMBER + 1 });
