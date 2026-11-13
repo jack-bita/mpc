@@ -42,6 +42,19 @@ function forOne(sentence: string): string {
   return one.replace("#", "1");
 }
 
+/** The minutes left in the day in Dar es Salaam, the demo shop's zone, at `now`. */
+function minutesLeftInDarsDay(now: number): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Dar_es_Salaam",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const part = (type: string) =>
+    Number(parts.find((each) => each.type === type)?.value ?? "0");
+  return 24 * 60 - (part("hour") * 60 + part("minute"));
+}
+
 /** How many PIN checks the laptop keeps (SYNC-10), read from its own database inside the page. */
 function pinChecksOnTheLaptop(counter: Page): Promise<number> {
   return counter.evaluate(async () => {
@@ -105,6 +118,19 @@ test("a clock-in made offline survives a reload and reaches the server once", as
     (await Promise.all(pushes)).filter((push) =>
       push.sent.documents.some((document) => document.type === "clock"),
     );
+  // Every push the laptop tried to send with a clock-in, answered or not: with no network, no answer comes,
+  // so only the try can show that something went out.
+  let clockInPushesTried = 0;
+  counter.on("request", (request) => {
+    if (
+      new URL(request.url()).pathname === PUSH &&
+      request.method() === "POST" &&
+      (request.postDataJSON() as PushBatch).documents.some(
+        (document) => document.type === "clock",
+      )
+    )
+      clockInPushesTried += 1;
+  });
 
   const tiles = counter.getByRole("heading", { name: sw.login.picker.title });
   const mahudhurio = counter.getByRole("heading", {
@@ -139,6 +165,11 @@ test("a clock-in made offline survives a reload and reaches the server once", as
 
   const time =
     await test.step("the network goes; Asha logs in on the laptop's own check and clocks in", async () => {
+      // A story that started a few minutes before Dar's midnight would tap on one day and reload on the
+      // next, where the list starts empty. The laptop's clock then moves past midnight first: only the
+      // laptop's, which the server's time check may flag, and still takes.
+      const left = minutesLeftInDarsDay(Date.now());
+      if (left <= 3) await laptop.clock.fastForward((left + 1) * 60_000);
       await laptop.setOffline(true);
       await logsIn(counter, ASHA);
       await counter
@@ -189,8 +220,8 @@ test("a clock-in made offline survives a reload and reaches the server once", as
       counter.getByRole("row", { name: `${ASHA.name} ${time}` }),
     ).toBeVisible();
     await expect(oneWaiting).toBeVisible();
-    // Nothing left the laptop while the network was gone.
-    expect(await pushesWithAClockIn()).toEqual([]);
+    // The laptop didn't even try to send it while the network was gone: no sync runs then (triggers.tsx).
+    expect(clockInPushesTried).toBe(0);
   });
 
   const accepted =
