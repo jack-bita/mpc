@@ -149,9 +149,7 @@ def _answer(device: Device, sent: Sent, received_at: datetime, sent_at: datetime
         # the answers before it kept, not a refusal of the whole push.
         stored = _stored(sent.id)
         if stored is not None:
-            if stored.device_id != device.pk:
-                _count_number_of_a_carried_record(device, sent.device_seq)
-            return _replay(stored)
+            return _repeat(device, sent, stored)
         return _post(device, sent, received_at, sent_at)
     except Exception:
         # A server problem, not the document's: a bug, or a database that went away. Nothing of it was saved (its
@@ -160,6 +158,15 @@ def _answer(device: Device, sent: Sent, received_at: datetime, sent_at: datetime
         # server error's, the traceback can quote the row the database refused (03 §5.17).
         logger.exception("Push: server error on document %s (%s) from device %s.", sent.id, sent.type, device.pk)
         return Answer(id=sent.id, status=RETRY)
+
+
+def _repeat(device: Device, sent: Sent, line: PushedDocument) -> Answer:
+    # A document saved already: found before its save, or by a twin that won the race while it was saving. Its first
+    # answer, and, when another laptop's line holds it, its number counted for this laptop all the same, on every path,
+    # or the race would bring back the gap the count is for (SYNC-12's second review).
+    if line.device_id != device.pk:
+        _count_number_of_a_carried_record(device, sent.device_seq)
+    return _replay(line)
 
 
 def _count_number_of_a_carried_record(device: Device, device_seq: int) -> None:
@@ -308,7 +315,7 @@ def _save(
         # answer is the answer (CORE-6), so the answer log is read again after every refusal, not only a clash.
         twin = _stored(sent.id)
         if twin is not None:
-            return _replay(twin)
+            return _repeat(device, sent, twin)
         if isinstance(refusal, ValidationError):
             # A refusal of the saving code's own, for what can't be saved even with a flag. Its check before the insert
             # (full_clean) reads through the shop's guard: it calls an id of a row of this shop "unique", while another
@@ -354,7 +361,7 @@ def _invalid(
         twin = _stored(sent.id)
         if twin is None:
             raise
-        return _replay(twin)
+        return _repeat(device, sent, twin)
     return Answer(id=sent.id, status=INVALID, code=code, fields=fields)
 
 

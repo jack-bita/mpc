@@ -16,7 +16,7 @@ import dataclasses
 import datetime as dt
 import uuid
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -630,3 +630,35 @@ def test_a_repeat_from_the_same_laptop_moves_no_number(shop_a: Model, device_a: 
     _push(device_a, batch[:1])
     with shop_context(shop_a):
         assert Device.objects.get(pk=device_a.pk).last_device_seq == 2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_carried_twin_still_counts_in_this_laptops_numbers(
+    shop_a: Model, device_a: Device, device_a2: Device, staff_a: StaffMember
+) -> None:
+    # The race: the Vyakula laptop sends Dawa's rescued #5 as its #3 while Dawa, back to life, sends its own #5 and #6
+    # at the same moment. Dawa's #5 starts saving, waits on the Vyakula copy's rows, clashes once they commit, and
+    # finds that line: a repeat, whose number must still count for Dawa, or its #6 raises a gap no line can close
+    # (SYNC-12's second review).
+    _push(device_a, [_sent(seq, staff_a) for seq in range(1, 5)])
+    _push(device_a2, [_sent(seq, staff_a) for seq in range(1, 3)])
+    carried = uuid.uuid7()
+    with shop_context(shop_a), transaction.atomic():
+        (first,) = push(
+            device_a2,
+            [_sent(3, staff_a, id=carried)],
+            received_at=RECEIVED_AT,
+            sent_at=RECEIVED_AT,
+            unsent_count=0,
+            app_version=APP_VERSION,
+            outages=[],
+        )
+        dawa, ended = in_another_transaction(
+            lambda: _push(device_a, [_sent(5, staff_a, id=carried), _sent(6, staff_a)])
+        )
+        wait_until_someone_waits_for_me()
+    dawa.join()
+    (answers,) = ended
+    assert first.status == "accepted"
+    assert [answer.status for answer in cast(list[Answer], answers)] == ["duplicate", "accepted"]
+    assert _flags(shop_a, FlagKind.DEVICE_GAP) == []
