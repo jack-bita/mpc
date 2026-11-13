@@ -301,6 +301,23 @@ export interface components {
             setting: components["schemas"]["SettingRecord"][];
             setting_keys: components["schemas"]["SettingKeyRecord"][];
         };
+        CarriedEnvelopeRequest: {
+            /**
+             * Format: uuid
+             * @description The laptop that made it.
+             */
+            device: string;
+            /**
+             * Format: int64
+             * @description Its number on the laptop that made it.
+             */
+            device_seq: number;
+            /**
+             * Format: uuid
+             * @description The staff member who loaded the rescue file on the sending laptop.
+             */
+            loaded_by: string;
+        };
         Change: components["schemas"]["SideChange"] | components["schemas"]["PaymentAccountChange"] | components["schemas"]["StaffChange"] | components["schemas"]["SettingChange"];
         /**
          * @description * `upsert` - Added or changed
@@ -611,6 +628,8 @@ export interface components {
             payload: {
                 [key: string]: unknown;
             };
+            /** @description Only for a record a rescue file carried here: where it was made. */
+            carried_from?: components["schemas"]["CarriedEnvelopeRequest"];
         };
         /**
          * @description * `accepted` - Accepted

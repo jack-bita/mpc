@@ -10,6 +10,9 @@ transaction of its own, each answered once, and the same way every time it comes
       ... or fills a gap's last place?   → that gap's flag closes itself, with the system's note (SYNC-5)
       its maker holds no key for it?     → a permission_break flag about its line, naming them (SYNC-5)
       made while its maker wasn't working? → a suspended_staff_activity flag, naming them (SYNC-5, X2)
+      carried from another laptop?       → checked against that laptop's records, and its line says where it was made
+                                         and who loaded the file; a loader with no device.manage, a permission_break
+                                         flag naming them (SYNC-12)
       a server problem?                  → retry, and the batch stops here
     then the laptop's report on itself  → its row: last synced, records still unsent, app version; its outages (SYNC-5)
 
@@ -40,6 +43,7 @@ from apps.core.api.errors import INVALID as ONLY_FIELDS_WRONG
 from apps.core.api.errors import refusal_parts
 from apps.core.changes import recording_changes
 from apps.core.links import link_type_of
+from apps.core.permissions import Permission
 from apps.people.models import Device, StaffMember
 from apps.people.permissions import given_permissions
 from apps.people.selectors import was_working_at
@@ -66,6 +70,15 @@ HIGHEST_DEVICE_SEQ = 10**12 - 2
 
 
 @dataclass(frozen=True)
+class Carried:
+    # Where a carried record was made (SYNC-12, 03 §6.7): a dying laptop's record, brought in a rescue file to the
+    # laptop that sends it. The laptop that made it, its number there, and the staff member who loaded the file.
+    device: uuid.UUID
+    device_seq: int
+    loaded_by: uuid.UUID
+
+
+@dataclass(frozen=True)
 class Sent:
     # One document as the laptop sent it, its envelope already checked by the route (03 §6.3): its id, made on the
     # laptop (ADR-0007), its type and the version of its shape, the laptop's number for it, the laptop's clock, and
@@ -77,6 +90,8 @@ class Sent:
     client_time: datetime
     created_by: uuid.UUID
     payload: dict[str, Any]
+    # Set only for a record a rescue file carried here from another laptop (SYNC-12).
+    carried_from: Carried | None = None
 
 
 @dataclass(frozen=True)
@@ -176,10 +191,42 @@ def _post(device: Device, sent: Sent, received_at: datetime, sent_at: datetime) 
             )
         shape = kind.payload(data=sent.payload)
         shape.is_valid(raise_exception=True)
+        origin = _origin(device, sent.carried_from)
     except (ValidationError, exceptions.ValidationError) as refusal:
         code, fields = refusal_parts(refusal)
         return _invalid(device, sent, received_at, maker, code, fields)
-    return _save(device, sent, received_at, sent_at, kind, maker, shape.validated_data)
+    return _save(device, sent, received_at, sent_at, kind, maker, shape.validated_data, origin)
+
+
+@dataclass(frozen=True)
+class _Origin:
+    # A carried record's origin, checked: the laptop that made it and the person who loaded the file, both of this
+    # shop, and its number there.
+    device: Device
+    device_seq: int
+    loaded_by: StaffMember
+
+
+def _origin(device: Device, carried: Carried | None) -> _Origin | None:
+    # Where a carried record was made, read through the shop's guard, as its maker is: another laptop of this shop, and
+    # a staff member of it, or the record is set aside. One of another shop, or none, gets the same answer, so it tells
+    # nothing of other shops (03 §5.4). The laptop that sends it is no origin either: it sends its own records as its
+    # own, and a file that says so was made by hand.
+    if carried is None:
+        return None
+    origin = Device.objects.filter(pk=carried.device).exclude(pk=device.pk).first()
+    if origin is None:
+        raise ValidationError(
+            "The laptop a carried record was made on is no other laptop of this shop.",
+            code="document.carried_from_unknown",
+        )
+    loader = StaffMember.objects.filter(pk=carried.loaded_by).first()
+    if loader is None:
+        raise ValidationError(
+            "The person who loaded a carried record is no staff member of this shop.",
+            code="document.loaded_by_unknown",
+        )
+    return _Origin(device=origin, device_seq=carried.device_seq, loaded_by=loader)
 
 
 def _save(
@@ -190,6 +237,7 @@ def _save(
     kind: DocumentType,
     maker: StaffMember,
     payload: dict[str, Any],
+    origin: _Origin | None,
 ) -> Answer:
     try:
         # One document, one transaction (03 §5.5): its rows, its change lines, its line in the answer log and its
@@ -202,7 +250,14 @@ def _save(
             last = _last_number(device)
             # The document as its saving code gets it. Built under the laptop's lock, so its record before it is read
             # once every record of this laptop that came before it has finished saving (ATT-1).
-            time_before, made_before_by = _record_before(device, sent.device_seq)
+            # A carried record's is its own laptop's record before it, by its number there: Asha's 07:30 on the Dawa
+            # laptop is checked against what Dawa made before it, not against Baraka's 10:00 on the laptop that
+            # loaded the file, which would look like a clock moved back (SYNC-12's review).
+            time_before, made_before_by = (
+                _record_before(device.pk, sent.device_seq)
+                if origin is None
+                else _record_before(origin.device.pk, origin.device_seq)
+            )
             document = Document(
                 id=sent.id,
                 device=device,
@@ -218,6 +273,7 @@ def _save(
             # numbers, the shop's counter stays locked until the commit, and every save of the shop waits (SYNC-1).
             with _checks_of_our_own():
                 broken = _maker_breaks(device, kind, maker, made_at=sent.client_time)
+                loader_breaks = origin is not None and not _may_load_files(origin.loaded_by, device)
             with recording_changes(device.shop_id) as numbers:
                 flags = kind.post(document, payload)
             flagged = [{"id": str(flag.pk), "kind": flag.kind} for flag in flags]
@@ -226,11 +282,25 @@ def _save(
             # the line, the laptop's number and the flags, and, for a late record alone, the two reads that say
             # whether its gap is whole, as they count the line just saved.
             line = _line(device, sent, received_at, maker, status=ACCEPTED, posted_seq=numbers.last, flags=flagged)
+            if origin is not None:
+                line.carried_from = origin.device
+                line.carried_seq = origin.device_seq
+                line.loaded_by = origin.loaded_by
             line.save()
             with _checks_of_our_own():
                 _check_number(device, line, last)
                 for broken_rule in broken:
                     raise_flag(kind=broken_rule, subject=line, side=device.home_side, people=[maker], by=None)
+                if loader_breaks and origin is not None:
+                    # Loaded by someone the laptop shouldn't have let: kept (accept, then flag), and a flag naming
+                    # them, as a file edited by hand could clock in a colleague who never came (SYNC-12).
+                    raise_flag(
+                        kind=FlagKind.PERMISSION_BREAK,
+                        subject=line,
+                        side=device.home_side,
+                        people=[origin.loaded_by],
+                        by=None,
+                    )
     except (ValidationError, IntegrityError) as refusal:
         # Refused, and all of it rolled back. Perhaps by a twin: another copy of this document, sent at the same
         # moment, that finished while this one was saving, so its rows or its line clash with this copy's. Its
@@ -317,20 +387,38 @@ def _last_number(device: Device) -> int:
     return highest_pushed_number(device)
 
 
-def _record_before(device: Device, device_seq: int) -> tuple[datetime | None, uuid.UUID | None]:
+def _record_before(device_id: uuid.UUID, device_seq: int) -> tuple[datetime | None, uuid.UUID | None]:
     # The laptop's own time on the record it numbered last before this one, of those the server holds, and who made
     # it (ATT-1): the evidence a clock-in's time check reads, as only this log holds every record of the laptop,
     # whatever its type; (None, None) when it holds none. A set-aside one counts too: it was made at the counter all
     # the same. After a laptop reset, which numbers again from 1 (SYNC-5), two lines can share a number: the newer is
     # the new count's, so it is the one before. Read through the index on (shop, device, device_seq): one row, however
     # many records the laptop has sent.
-    found = (
-        PushedDocument.objects.filter(device=device, device_seq__lt=device_seq)
+    #
+    # A laptop's records may also have reached the server from another laptop, carried in a rescue file (SYNC-12): its
+    # #5, sent by the Vyakula laptop, is still the record before its #6. So the carried lines from this laptop count
+    # too, by their number here, read through their own index; the higher number of the two is the one before. Two
+    # lines with one number, one sent and one carried, is a reset's count beside the old one: the laptop's own wins.
+    # And the lines this laptop sent but only carried are left out of its own: their time is another laptop's clock,
+    # so they say nothing of this one's.
+    own = (
+        PushedDocument.objects.filter(device_id=device_id, device_seq__lt=device_seq, carried_from__isnull=True)
         .order_by("-device_seq", "-created_at", "-id")
-        .values_list("client_time", "created_by_id")
+        .values_list("device_seq", "client_time", "created_by_id")
         .first()
     )
-    return (None, None) if found is None else found
+    carried = (
+        PushedDocument.objects.filter(carried_from_id=device_id, carried_seq__lt=device_seq)
+        .order_by("-carried_seq", "-created_at", "-id")
+        .values_list("carried_seq", "client_time", "created_by_id")
+        .first()
+    )
+    found = [line for line in (own, carried) if line is not None]
+    if not found:
+        return None, None
+    # A carried line's number is never empty: its rule says all three or none (sync_pusheddocument_carried_whole).
+    _, client_time, made_by = max(found, key=lambda line: line[0] or 0)
+    return client_time, made_by
 
 
 def _check_number(device: Device, line: PushedDocument, last: int) -> None:
@@ -379,6 +467,12 @@ def _maker_breaks(device: Device, kind: DocumentType, maker: StaffMember, *, mad
     if not was_working_at(maker, made_at):
         broken.append(FlagKind.SUSPENDED_STAFF_ACTIVITY)
     return broken
+
+
+def _may_load_files(loader: StaffMember, device: Device) -> bool:
+    # Whether the person who loaded a rescue file holds device.manage on the laptop's side, the key the laptop asks
+    # before it shows its button (SYNC-12): checked again here, as every rule a laptop checks is (SYNC-5).
+    return Permission.DEVICE_MANAGE in given_permissions(loader).on(device.home_side_id)
 
 
 def _flag_numbers(device: Device, line: PushedDocument, awaited: int) -> None:

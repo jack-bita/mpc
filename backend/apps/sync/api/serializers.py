@@ -27,7 +27,7 @@ from apps.people.models import APP_VERSION_LENGTH, Font, StaffMember
 from apps.people.permissions import held_permissions
 from apps.shops.models import PaymentAccount, Setting, Side
 from apps.sync.models import PushedStatus
-from apps.sync.push import ACCEPTED, DUPLICATE, HIGHEST_DEVICE_SEQ, INVALID, RETRY
+from apps.sync.push import ACCEPTED, DUPLICATE, HIGHEST_DEVICE_SEQ, INVALID, RETRY, Carried
 
 
 class SideRecord(serializers.ModelSerializer[Side]):
@@ -242,6 +242,20 @@ class PullAnswer(serializers.Serializer[Any]):
     min_app_version = serializers.CharField(allow_null=True)
 
 
+class CarriedEnvelope(serializers.Serializer[Any]):
+    # Where a carried record was made (SYNC-12, 03 §6.7): only on a record a rescue file brought from another laptop of
+    # the shop. Its laptop's number checked as any laptop number is. Who these name is checked by the push, through the
+    # shop's guard, as a document's maker is: one not of this shop sets the record aside, never the whole push.
+    device = serializers.UUIDField(help_text="The laptop that made it.")
+    device_seq = serializers.IntegerField(
+        min_value=1, max_value=HIGHEST_DEVICE_SEQ, help_text="Its number on the laptop that made it."
+    )
+    loaded_by = serializers.UUIDField(help_text="The staff member who loaded the rescue file on the sending laptop.")
+
+    def to_internal_value(self, data: Any) -> Carried:
+        return Carried(**super().to_internal_value(data))
+
+
 class PushedEnvelope(serializers.Serializer[Any]):
     # One document as a laptop sends it (03 §6.3): the parts every type has, checked here, around its payload, which
     # its own type's shape checks (apps/sync/push.py). A broken envelope is a bug in the laptop's sync code, not a
@@ -257,6 +271,10 @@ class PushedEnvelope(serializers.Serializer[Any]):
     client_time = ZonedDateTimeField(help_text="The laptop's clock when it was made: kept, never trusted.")
     created_by = serializers.UUIDField(help_text="The staff member who made it at the counter.")
     payload = serializers.DictField(help_text="The document itself, in its type's shape.")
+    # Left out for every record made on the laptop that sends it, so an app from before SYNC-12 still pushes.
+    carried_from = CarriedEnvelope(
+        required=False, help_text="Only for a record a rescue file carried here: where it was made."
+    )
 
 
 # The most documents one push takes (03 §6.3), so one push stays short on a shop's slow line.

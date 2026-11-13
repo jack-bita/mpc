@@ -393,7 +393,9 @@
     "document": {
       "type_unknown": "Seva haipokei aina hii ya kumbukumbu. Sasisha programu.",
       "version_unknown": "Kumbukumbu hii ni ya toleo jingine la programu. Sasisha programu.",
-      "maker_unknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili."
+      "maker_unknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili.",
+      "carried_from_unknown": "Kumbukumbu hii inasema imetoka kwenye kompyuta ambayo si nyingine ya duka hili.",
+      "loaded_by_unknown": "Aliyepakia faili la kumbukumbu hii hafanyi kazi katika duka hili."
     },
     "session": {
       "wrong_device": "Kuingia huku ni kwa kifaa kingine. Ingia tena hapa."

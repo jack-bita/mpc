@@ -101,6 +101,10 @@ const CODES_THE_API_SENDS = [
   "document.type_unknown",
   "document.version_unknown",
   "document.maker_unknown",
+  // A record a rescue file carried from another laptop (SYNC-12): named as made on a laptop that is no other
+  // laptop of this shop, or loaded by someone not of this shop.
+  "document.carried_from_unknown",
+  "document.loaded_by_unknown",
   // Sides (CORE-6).
   "side.code_invalid",
   "side.code_taken",

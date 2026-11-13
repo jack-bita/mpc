@@ -1035,6 +1035,33 @@
                     "staff"
                 ]
             },
+            "CarriedEnvelopeRequest": {
+                "type": "object",
+                "properties": {
+                    "device": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The laptop that made it."
+                    },
+                    "device_seq": {
+                        "type": "integer",
+                        "maximum": 999999999998,
+                        "minimum": 1,
+                        "format": "int64",
+                        "description": "Its number on the laptop that made it."
+                    },
+                    "loaded_by": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The staff member who loaded the rescue file on the sending laptop."
+                    }
+                },
+                "required": [
+                    "device",
+                    "device_seq",
+                    "loaded_by"
+                ]
+            },
             "Change": {
                 "oneOf": [
                     {
@@ -1936,6 +1963,14 @@
                         "type": "object",
                         "additionalProperties": {},
                         "description": "The document itself, in its type's shape."
+                    },
+                    "carried_from": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CarriedEnvelopeRequest"
+                            }
+                        ],
+                        "description": "Only for a record a rescue file carried here: where it was made."
                     }
                 },
                 "required": [
