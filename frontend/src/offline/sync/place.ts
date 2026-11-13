@@ -5,7 +5,7 @@
 // the client to call (whose CSRF token comes from that place's own cookies) and what to do when the
 // server says the device itself is refused. The page's place is page-place.ts; the worker's is sw.ts's.
 
-import type { ApiClient } from "@/api/client";
+import type { ApiClient } from "@/api/make-client";
 
 /** The two answers about the device itself (answer.ts): blocked by the manager, or a key that opens no
  * device. */

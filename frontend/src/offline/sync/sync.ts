@@ -1,21 +1,21 @@
 // sync.ts — one sync of this laptop's shop: the bootstrap if the database was never filled, then the
 // push of what waits in the outbox (SYNC-8), then pulls until nothing more waits (SYNC-7, 03 §6.4); and
-// the line each shop's syncs wait in, and the lock that keeps two tabs from syncing at once, so they run
-// one after another (SYNC-9, 03 §6.5).
+// the line each shop's syncs wait in, and the lock that keeps two tabs from syncing at once (lock.ts), so
+// they run one after another (SYNC-9, 03 §6.5).
 //
 // It runs at the moments triggers.tsx keeps: as the app opens, when the network comes back, 2 s after a
 // save, every 30 s while online, and from Tuma sasa (03 §6.5).
 import { hasCsrfToken } from "@/api/client";
 import { savedBlocked } from "@/features/devices/this-device";
 
-import type { ShopDatabase } from "../db";
 import { shopDatabase } from "../this-shop";
 import { isAboutTheDevice } from "./answer";
 import { bootstrap, needsBootstrap } from "./bootstrap";
-import { mayPush, pushFailed, pushSettled } from "./backoff";
+import { mayPush } from "./backoff";
+import { inTurn } from "./lock";
 import { heardInTheBackground, pagePlace } from "./page-place";
 import { pull } from "./pull";
-import { push, type PushResult } from "./push";
+import { pushKeepingTheWait } from "./push";
 
 /** What a sync is asked for. */
 export interface SyncAsk {
@@ -96,38 +96,6 @@ async function runInLine(
   }
 }
 
-/** The lock's name: one per shop, as its database is (db.ts), so the practice shop's sync never waits for
- * the live shop's. */
-export function syncLockName(shopId: string): string {
-  return `mpc-sync-${shopId}`;
-}
-
-/**
- * Runs a sync once no other tab of the app is syncing the same shop (03 §6.5). Two tabs syncing at once
- * would send the same records together and apply the same pages twice; one at a time, each starts where
- * the last one ended.
- *
- * The browser's Web Locks: a lock by name, shared by every tab of the app's address, given to one at a
- * time, in the order asked, and handed on as soon as the work ends, however it ended, or as its tab
- * closes. A tab that asks while another holds it waits, never skips: a record it just saved must still
- * go, and the other tab's push may have read its outbox before the save.
- *
- * Chrome and Edge, the shop's browsers (03 §7.3), have had it for years. A browser without it, and the
- * tests' jsdom, sync as before: one at a time in each tab. So does a page opened on a plain http address
- * other than localhost (a phone trying a developer's laptop over Wi-Fi): browsers give Web Locks only to
- * https and localhost, and two tabs there are not kept apart. The shop's server and the demo are https.
- *
- * A call left hanging would hold the lock, and every other tab would wait behind it: each sync call gives
- * up after 2 minutes (syncCallLimit, answer.ts), as if the network had dropped, and the lock goes on.
- */
-async function inTurn(
-  shopId: string,
-  work: () => Promise<void>,
-): Promise<void> {
-  if (!("locks" in navigator)) return work();
-  await navigator.locks.request(syncLockName(shopId), work);
-}
-
 async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   // A sync that waited its turn, behind this tab's last one or another tab's, may start after the
   // laptop heard of its block (a refusal kept by answer.ts, in any tab). It then asks nothing: the server
@@ -152,38 +120,18 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   // from its last visit, unless the browser lost it; the pull, a read, needs none.
   let pushFailure: { error: unknown } | null = null;
   if (hasCsrfToken() && (sendNow || (await mayPush(db)))) {
-    let result: PushResult | null = null;
-    // The wait after a failure counts from here, when the push went (backoff.ts says why).
-    const pushedAt = Date.now();
     try {
-      result = await push(db, pagePlace);
+      await pushKeepingTheWait(db, pagePlace);
     } catch (error) {
-      await waitAfterAFailure(db, pushedAt);
       // Blocked, or a key that opens no device: ask nothing more (answer.ts has kept it).
       if (isAboutTheDevice(error)) throw error;
       // Any other failure, a 5xx on the push route say, still lets the pull run: the office's
       // changes, a suspension among them (X2), must not wait for the push to work again.
       pushFailure = { error };
     }
-    if (result === "retry") await waitAfterAFailure(db, pushedAt);
-    else if (result === "sent") await pushSettled(db);
   }
   await pull(db);
   // Thrown after the pull, so the failure is still reported (triggers.tsx). A pull that fails
   // too, as with no network, throws its own instead, which says the same.
   if (pushFailure !== null) throw pushFailure.error;
-}
-
-// The wait after a failure, written without hiding the failure itself. A wait the database refused to keep
-// (a full disk, say) costs one early push at most. Thrown, it would take the place of the push's own
-// failure, the one worth reporting, and stop the pull, which must still run (X2): so it is only logged.
-async function waitAfterAFailure(
-  db: ShopDatabase,
-  pushedAt: number,
-): Promise<void> {
-  try {
-    await pushFailed(db, pushedAt);
-  } catch (error) {
-    console.error("the push's wait was not kept", error);
-  }
 }

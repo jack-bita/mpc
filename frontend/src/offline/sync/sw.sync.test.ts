@@ -1,0 +1,224 @@
+// sw.sync.test.ts — the service worker's push (SYNC-16, 03 §6.5): what waits in the outbox goes when the
+// browser wakes the worker, with the app closed; it takes the tabs' lock, keeps their wait after a
+// failure, leaves a block as a note for the page, and tells the browser to try again later when it must.
+//
+// The worker's push runs here with a client of its own, made the way sw.ts makes it, over the fake
+// server, with a CSRF token handed in as the Cookie Store would give it. The other tab is played through
+// a stand-in lock (src/test/locks.ts).
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createApiClient } from "@/api/make-client";
+import type { components } from "@/api/schema";
+import { DAWA_LAPTOP } from "@/test/devices";
+import { answer, fakeFetch, refusal, sent } from "@/test/fake-server";
+import {
+  installFakeLocks,
+  removeFakeLocks,
+  type FakeLocks,
+} from "@/test/locks";
+import { ASHA } from "@/test/shop-lists";
+
+import { saveDocument } from "../outbox";
+import { shopDatabase } from "../this-shop";
+import { waitingInOrder } from "../waiting";
+import {
+  backgroundPush,
+  backgroundSyncTag,
+  shopOfTag,
+  TryLater,
+  type WorkerTools,
+} from "./background";
+import { mayPush } from "./backoff";
+import { syncLockName } from "./lock";
+import {
+  CURSOR,
+  LAST_DEVICE_SEQ,
+  noteDeviceRefused,
+  PUSH_WAIT_UNTIL,
+  readDeviceRefused,
+} from "./meta";
+
+type PushedAnswer = components["schemas"]["PushedAnswer"];
+
+const SHOP = DAWA_LAPTOP.shop.id;
+const PUSH = "/api/sync/v1/push/";
+
+let locks: FakeLocks;
+let token: string | null;
+
+/** The worker's tools, as sw.ts makes them: its own client, its token read at each change. */
+const tools: WorkerTools = {
+  api: createApiClient(
+    { baseUrl: "http://shop.test", fetch: fakeFetch },
+    (): Record<string, string> =>
+      token === null ? {} : { "X-CSRFToken": token },
+  ),
+  hasCsrfToken: () => Promise.resolve(token !== null),
+};
+
+const accepted = (id: string, posted_seq: number): PushedAnswer => ({
+  id,
+  status: "accepted",
+  first: null,
+  posted_seq,
+  flags: [],
+  code: "",
+  fields: {},
+});
+
+beforeEach(async () => {
+  token = "token-from-django";
+  locks = installFakeLocks();
+  // A filled phone: its cursor and its last number, as a bootstrap leaves them.
+  await shopDatabase(SHOP).meta.bulkPut([
+    { key: CURSOR, value: 130 },
+    { key: LAST_DEVICE_SEQ, value: 57 },
+  ]);
+  answer("POST", PUSH, async (request) => {
+    const body = (await request.json()) as { documents: { id: string }[] };
+    return Response.json({
+      answers: body.documents.map((document) => accepted(document.id, 131)),
+    });
+  });
+});
+
+afterEach(() => {
+  removeFakeLocks();
+});
+
+/** Asha's clock-in, saved on the phone with no network, before the app was closed. */
+const clockIn = () =>
+  saveDocument(shopDatabase(SHOP), {
+    type: "clock",
+    schema_version: 1,
+    created_by: ASHA.id,
+    payload: { kind: "in", last_server_time: "2026-11-13T04:58:00Z" },
+  });
+
+const waiting = () => waitingInOrder(shopDatabase(SHOP)).count();
+
+/** A moment for anything that was going to start. */
+const aMoment = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+describe("the service worker's push", () => {
+  it("sends what waits, with the CSRF token, and the outbox empties", async () => {
+    const made = await clockIn();
+
+    await backgroundPush(SHOP, tools);
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.headers.get("X-CSRFToken")).toBe("token-from-django");
+    const body = (await sent[0]!.json()) as { documents: { id: string }[] };
+    expect(body.documents.map((document) => document.id)).toEqual([made.id]);
+    expect(await waiting()).toBe(0);
+  });
+
+  it("sends nothing when nothing waits: the open app sent it first", async () => {
+    await backgroundPush(SHOP, tools);
+
+    expect(sent).toHaveLength(0);
+  });
+
+  it("waits while a tab syncs the shop, then sends what is left", async () => {
+    // The app is open after all, and its sync holds the lock: the worker waits its turn, never skips.
+    await clockIn();
+    const tab = locks.holdInAnotherTab(syncLockName(SHOP));
+    await tab.granted;
+
+    const worker = backgroundPush(SHOP, tools);
+    await aMoment();
+    expect(sent).toHaveLength(0);
+
+    tab.release();
+    await worker;
+    expect(sent).toHaveLength(1);
+  });
+
+  it("keeps the wait after a failure, and asks the browser to try later", async () => {
+    // The server is in trouble: the worker's push must not come back every few seconds either.
+    await clockIn();
+    answer("POST", PUSH, refusal(503, "server.unavailable"));
+
+    await expect(backgroundPush(SHOP, tools)).rejects.toThrow();
+
+    // The same wait the tabs read (backoff.ts): the open app's next push waits too.
+    expect(await mayPush(shopDatabase(SHOP))).toBe(false);
+    expect(await waiting()).toBe(1);
+  });
+
+  it("asks the browser to try later when the server says retry", async () => {
+    await clockIn();
+    answer("POST", PUSH, async (request) => {
+      const body = (await request.json()) as { documents: { id: string }[] };
+      return Response.json({
+        answers: [
+          {
+            id: body.documents[0]!.id,
+            status: "retry",
+            first: null,
+            posted_seq: null,
+            flags: [],
+            code: "",
+            fields: {},
+          } satisfies PushedAnswer,
+        ],
+      });
+    });
+
+    await expect(backgroundPush(SHOP, tools)).rejects.toBeInstanceOf(TryLater);
+    expect(await mayPush(shopDatabase(SHOP))).toBe(false);
+  });
+
+  it("sends nothing during a wait, and asks the browser to try later", async () => {
+    // A worker the browser woke is no one pressing Tuma sasa: the wait holds.
+    await clockIn();
+    await shopDatabase(SHOP).meta.put({
+      key: PUSH_WAIT_UNTIL,
+      value: Date.now() + 60_000,
+    });
+
+    await expect(backgroundPush(SHOP, tools)).rejects.toBeInstanceOf(TryLater);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("sends nothing with no CSRF token, and asks the browser to try later", async () => {
+    // Sent with none, the push would be refused (403) and wait 30 s for nothing.
+    await clockIn();
+    token = null;
+
+    await expect(backgroundPush(SHOP, tools)).rejects.toBeInstanceOf(TryLater);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("leaves a block as a note for the page, and doesn't try again", async () => {
+    // The manager blocked the phone while the app was closed. The worker has no localStorage.
+    await clockIn();
+    answer("POST", PUSH, refusal(401, "device.blocked"));
+
+    await backgroundPush(SHOP, tools);
+
+    expect(await readDeviceRefused(shopDatabase(SHOP))).toBe("device.blocked");
+    // The records stay, so an unblock finds them still there.
+    expect(await waiting()).toBe(1);
+  });
+
+  it("asks nothing once a block was heard, until the page takes the note", async () => {
+    await clockIn();
+    await noteDeviceRefused(shopDatabase(SHOP), "device.blocked");
+
+    await backgroundPush(SHOP, tools);
+
+    expect(sent).toHaveLength(0);
+  });
+});
+
+describe("a background sync's name", () => {
+  it("carries the shop's id, as the worker has no saved device", () => {
+    expect(shopOfTag(backgroundSyncTag(SHOP))).toBe(SHOP);
+  });
+
+  it("is ours only with our start and a shop", () => {
+    expect(shopOfTag("mpc-sync-")).toBeNull();
+    expect(shopOfTag("someone-else")).toBeNull();
+  });
+});

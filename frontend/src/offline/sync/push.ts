@@ -24,8 +24,9 @@ import type { components } from "@/api/schema";
 import { APP_VERSION } from "@/lib/version";
 
 import type { DocumentRow, OutboxRow, ShopDatabase } from "../db";
-import { waitingInOrder } from "../outbox";
+import { waitingInOrder } from "../waiting";
 import { syncAnswer, syncCallLimit } from "./answer";
+import { pushFailed, pushSettled } from "./backoff";
 import type { SyncPlace } from "./place";
 
 type Envelope = components["schemas"]["PushedEnvelopeRequest"];
@@ -98,6 +99,46 @@ export async function push(
     });
     if (!(await applyAnswers(db, batch, answers, sentAt))) return "retry";
     if (batch.length < MOST_DOCUMENTS) return "sent";
+  }
+}
+
+/**
+ * A push, with the wait it leaves (backoff.ts): after a "try later" or a failure the next push waits
+ * longer, in every tab and in the service worker, as the wait is kept in the database; after one that
+ * settles, it waits no more. The page's sync and the worker's push both go through here, so they keep
+ * the same wait (SYNC-9, SYNC-16). Whether the push may go now (mayPush) is the caller's: Tuma sasa
+ * sends during a wait. A failure is thrown on, once the wait is kept.
+ */
+export async function pushKeepingTheWait(
+  db: ShopDatabase,
+  place: SyncPlace,
+): Promise<PushResult> {
+  // The wait after a failure counts from here, when the push went (backoff.ts says why).
+  const pushedAt = Date.now();
+  let result: PushResult;
+  try {
+    result = await push(db, place);
+  } catch (error) {
+    await waitAfterAFailure(db, pushedAt);
+    throw error;
+  }
+  if (result === "retry") await waitAfterAFailure(db, pushedAt);
+  else await pushSettled(db);
+  return result;
+}
+
+// The wait after a failure, written without hiding the failure itself. A wait the database refused to keep
+// (a full disk, say) costs one early push at most. Thrown, it would take the place of the push's own
+// failure, the one worth reporting, and stop the page's pull, which must still run (X2): so it is only
+// logged.
+async function waitAfterAFailure(
+  db: ShopDatabase,
+  pushedAt: number,
+): Promise<void> {
+  try {
+    await pushFailed(db, pushedAt);
+  } catch (error) {
+    console.error("the push's wait was not kept", error);
   }
 }
 
