@@ -178,6 +178,12 @@
       "came": "In",
       "left": "Out",
       "unknown": "Unknown worker"
+    },
+    "sendNow": {
+      "waiting": "{count, plural, one {# record waiting to be sent.} other {# records waiting to be sent.}}",
+      "allSent": "Every record has been sent.",
+      "button": "Send now",
+      "offline": "No internet: they will be sent once it is back."
     }
   },
   "stock": {

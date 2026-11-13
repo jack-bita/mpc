@@ -18,7 +18,8 @@
 // bootstrap but never pulled, or never filled at all (NeverFilled), saves nothing and says to wait for the
 // first sync: the server would refuse such a tap, and it would sit set aside.
 //
-// Under the button, who clocked in today on this laptop (todays-list.tsx), read from the same taps.
+// Under the button, who clocked in today on this laptop (todays-list.tsx), read from the same taps; then how
+// many records wait to be sent, with Tuma sasa (send-now.tsx).
 //
 // Times as "07:55", 24 hours, in the shop's zone (formatTime, Jack, SYNC-11).
 //
@@ -47,6 +48,7 @@ import { NeverFilled, saveDocument } from "@/offline/outbox";
 import { readLastServerTime } from "@/offline/sync/meta";
 import { useShopDatabase } from "@/offline/this-shop";
 
+import { SendNow } from "./send-now";
 import { TodaysList } from "./todays-list";
 
 /** How long the goodbye shows after Toka kazini, before the laptop logs her out: long enough to read it
@@ -163,6 +165,8 @@ export function AttendanceScreen() {
       )}
       {/* Who else is in today, on this laptop: under the button, as the button is what she came for. */}
       <TodaysList />
+      {/* What waits to leave this laptop, and Tuma sasa: the first counter screen carries the button (SYNC-9). */}
+      <SendNow />
     </div>
   );
 }

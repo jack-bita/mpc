@@ -178,6 +178,12 @@
       "came": "Aliingia",
       "left": "Alitoka",
       "unknown": "Mfanyakazi asiyejulikana"
+    },
+    "sendNow": {
+      "waiting": "{count, plural, one {Kumbukumbu # inasubiri kutumwa.} other {Kumbukumbu # zinasubiri kutumwa.}}",
+      "allSent": "Kumbukumbu zote zimetumwa.",
+      "button": "Tuma sasa",
+      "offline": "Hakuna mtandao: zitatumwa mtandao ukirudi."
     }
   },
   "stock": {
