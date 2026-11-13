@@ -97,6 +97,30 @@ function holdTheFirstPull(): { release: () => void; pulls: () => number } {
 function nothing(): void {}
 
 describe("a sync", () => {
+  it("of an app below min_app_version sends its outbox before a refused fill, then stops", async () => {
+    // A newer version's database upgrade removed the cursor, so this old tab must fill again, with Asha's
+    // clock-in still waiting. The fill says the app is too old and writes nothing (bootstrap.ts); the
+    // clock-in still goes first, in the shape this app wrote it (03 §6.8), and the pull, with no cursor to
+    // ask from, never runs.
+    await filledLaptop();
+    const { id } = await clockIn();
+    await shopDatabase(SHOP).meta.delete("pull_cursor");
+    answer("GET", BOOTSTRAP_ROUTE, {
+      status: 200,
+      body: { ...BOOTSTRAP, min_app_version: APP_NUMBER + 1 },
+    });
+    answer("POST", PUSH, {
+      status: 200,
+      body: { answers: [{ id, status: "accepted", posted_seq: 131 }] },
+    });
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(AppTooOld);
+
+    expect(paths()).toEqual([BOOTSTRAP_ROUTE, PUSH]);
+    expect(await shopDatabase(SHOP).outbox.count()).toBe(0);
+    expect(await readCursor(shopDatabase(SHOP))).toBeNull();
+  });
+
   it("of an app below min_app_version sends its outbox, then stops before the page", async () => {
     // Done when: an app below min_app_version sends its outbox, then updates (03 §6.8). Asha's clock-in goes
     // up first; then the page says the server serves this app no longer, and the pull stops before it, the

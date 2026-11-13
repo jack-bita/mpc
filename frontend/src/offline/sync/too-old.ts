@@ -3,8 +3,9 @@
 // A pull says so in two ways (pull.ts, AppTooOld): the server's minimum app number is above this app's
 // (APP_NUMBER, src/lib/version.ts), or a page names a list this app has no drawer for. Either way the pull
 // stops before that page, its cursor where it was, so nothing is passed over, and until the app updates it
-// gets no change from the office, a suspension included. The push before it has gone already (sync.ts):
-// the records go first, as 03 §6.8 asks.
+// gets no change from the office, a suspension included. A bootstrap says so too, from the same minimum,
+// and fills nothing (bootstrap.ts). Either way the push goes before the sync stops (sync.ts): the records
+// go first, as 03 §6.8 asks.
 //
 // The sync tells it here (triggers.tsx, reportSyncFailure); two listen: the service worker's looks, which
 // look for the new version at once (service-worker.ts), and the update bar, which switches by itself, with
