@@ -555,7 +555,8 @@ export interface components {
             has_more: boolean;
             /** Format: date-time */
             server_time: string;
-            min_app_version: string | null;
+            /** @description The lowest app number that may still sync: an app whose own number is lower sends what it holds, then updates. */
+            min_app_version: number;
         };
         PushAnswer: {
             answers: components["schemas"]["PushedAnswer"][];

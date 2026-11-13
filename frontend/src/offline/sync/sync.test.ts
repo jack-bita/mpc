@@ -50,7 +50,7 @@ const emptyPage = (cursor: number) => ({
     cursor,
     has_more: false,
     server_time: "2026-11-11T09:00:00Z",
-    min_app_version: null,
+    min_app_version: 1,
   },
 });
 

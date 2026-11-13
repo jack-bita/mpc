@@ -73,7 +73,8 @@ def page(shop: Shop, cursor: int) -> dict[str, Any]:
         # For the device's clock: it keeps how far its own is off, and stamps its documents by it (03 §6.6). Every
         # page, an empty one too, so a quiet shop still checks its clock at every sync.
         "server_time": timezone.now(),
-        # The oldest app that may still sync (03 §6.8): an older one sends its outbox, then updates. None: any app may.
+        # The lowest app number that may still sync (03 §6.8): an app below it sends its outbox, then updates (SYNC-13).
+        # Every page, so an app left open learns it at its next sync.
         "min_app_version": settings.MIN_APP_VERSION,
     }
 

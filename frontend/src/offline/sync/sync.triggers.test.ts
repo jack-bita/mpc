@@ -249,7 +249,7 @@ describe("on the laptop", () => {
         cursor: 121,
         has_more: false,
         server_time: "2026-11-11T09:00:00Z",
-        min_app_version: null,
+        min_app_version: 1,
       },
     });
 
@@ -280,7 +280,7 @@ describe("on the laptop", () => {
         cursor: 130,
         has_more: false,
         server_time: "2026-11-12T08:00:00Z",
-        min_app_version: null,
+        min_app_version: 1,
       },
     });
     renderHook(() => useSyncTriggers());
@@ -304,7 +304,7 @@ describe("on the laptop", () => {
         cursor: 130,
         has_more: false,
         server_time: "2026-11-12T08:00:00Z",
-        min_app_version: null,
+        min_app_version: 1,
       },
     });
     renderHook(() => useSyncTriggers());

@@ -53,7 +53,7 @@ beforeEach(() => {
       cursor: 130,
       has_more: false,
       server_time: "2026-11-13T05:00:00Z",
-      min_app_version: null,
+      min_app_version: 1,
     },
   });
 });

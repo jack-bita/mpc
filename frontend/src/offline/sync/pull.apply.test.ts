@@ -37,7 +37,7 @@ function page(changes: Change[], cursor: number, hasMore = false): Page {
     cursor,
     has_more: hasMore,
     server_time: SERVER_TIME,
-    min_app_version: null,
+    min_app_version: 1,
   };
 }
 

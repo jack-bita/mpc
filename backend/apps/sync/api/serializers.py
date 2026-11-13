@@ -239,7 +239,11 @@ class PullAnswer(serializers.Serializer[Any]):
         " 1,000 changes and still have more after it."
     )
     server_time = serializers.DateTimeField()
-    min_app_version = serializers.CharField(allow_null=True)
+    min_app_version = serializers.IntegerField(
+        min_value=1,
+        help_text="The lowest app number that may still sync: an app whose own number is lower sends what it holds,"
+        " then updates.",
+    )
 
 
 class CarriedEnvelope(serializers.Serializer[Any]):
