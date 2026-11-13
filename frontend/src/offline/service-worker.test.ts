@@ -298,3 +298,81 @@ describe("the regular looks for a new version", () => {
     expect(registration.update).not.toHaveBeenCalled();
   });
 });
+
+describe("a switch another tab made", () => {
+  /** Another tab tapped Sasisha: the new version takes over this page too, as the browser does. */
+  function anotherTabSwitched(
+    container: EventTarget & { controller: unknown },
+  ) {
+    container.controller = new FakeWorker();
+    container.dispatchEvent(new Event("controllerchange"));
+  }
+
+  it("offers this old tab a reload, marked as taken over", async () => {
+    // The Dawa laptop has two tabs open, and Asha switched in the other one. This tab still runs the
+    // old code, served by a worker that has deleted the old version's files (SPIKE-1).
+    const { container } = fakeServiceWorkers();
+    const reload = vi.fn();
+    const onUpdateReady = vi.fn();
+    await registerServiceWorker(onUpdateReady, reload);
+
+    anotherTabSwitched(container);
+
+    expect(onUpdateReady).toHaveBeenCalledOnce();
+    expect(onUpdateReady.mock.calls[0]![1]).toBe("taken_over");
+    // The reload waits for the bar, which waits for a quiet counter (update-prompt.tsx).
+    expect(reload).not.toHaveBeenCalled();
+    (onUpdateReady.mock.calls[0]![0] as () => void)();
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("offers nothing when the very first version takes charge", async () => {
+    // A laptop's first visit: no version ran this page, so nothing old is left in it (sw.ts: clientsClaim).
+    const { container } = fakeServiceWorkers({ controlled: false });
+    const onUpdateReady = vi.fn();
+    await registerServiceWorker(onUpdateReady);
+
+    anotherTabSwitched(container);
+
+    expect(onUpdateReady).not.toHaveBeenCalled();
+  });
+
+  it("offers a later switch to a page the first version took charge of", async () => {
+    // That page stayed open all day: by the next deploy a version runs it, and the switch is a switch.
+    const { container } = fakeServiceWorkers({ controlled: false });
+    const onUpdateReady = vi.fn();
+    await registerServiceWorker(onUpdateReady);
+    anotherTabSwitched(container);
+
+    anotherTabSwitched(container);
+
+    expect(onUpdateReady).toHaveBeenCalledOnce();
+    expect(onUpdateReady.mock.calls[0]![1]).toBe("taken_over");
+  });
+
+  it("offers nothing more to the tab that switched itself, which reloads once", async () => {
+    const { container, registration } = fakeServiceWorkers();
+    const reload = vi.fn();
+    const onUpdateReady = vi.fn();
+    await registerServiceWorker(onUpdateReady, reload);
+    registration.findUpdate().become("installed");
+    expect(onUpdateReady.mock.calls[0]![1]).toBe("waiting");
+
+    (onUpdateReady.mock.calls[0]![0] as () => void)();
+    anotherTabSwitched(container);
+
+    expect(onUpdateReady).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("stops listening once stopped", async () => {
+    const { container } = fakeServiceWorkers();
+    const onUpdateReady = vi.fn();
+    const stop = await registerServiceWorker(onUpdateReady);
+
+    stop();
+    anotherTabSwitched(container);
+
+    expect(onUpdateReady).not.toHaveBeenCalled();
+  });
+});

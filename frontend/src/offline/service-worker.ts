@@ -15,6 +15,10 @@ import { listenForTooOld } from "./sync/too-old";
 /** Switches to the waiting version: the new worker takes over, then the page reloads from it. */
 export type ApplyUpdate = () => void;
 
+/** What an offered switch is: a new version waiting to take over, or one that has taken over already,
+ * as another tab switched, while this page still runs the old version's code. */
+export type UpdateKind = "waiting" | "taken_over";
+
 /** How often an open app asks the browser to look for a new version (03 §6.8, a default): a deploy
  * reaches a counter left open all day within the hour. Each look fetches only sw.js, a small file, and
  * downloads the rest only when it has changed. */
@@ -28,7 +32,7 @@ export const UPDATE_CHECK_EVERY = 60 * 60 * 1000;
  * `reload` is replaced only by tests, because jsdom can't reload a page.
  */
 export async function registerServiceWorker(
-  onUpdateReady: (apply: ApplyUpdate) => void,
+  onUpdateReady: (apply: ApplyUpdate, kind: UpdateKind) => void,
   reload: () => void = () => window.location.reload(),
 ): Promise<() => void> {
   // Only the built app has a service worker: `serwist build` runs after `next build`, and `next dev`
@@ -51,11 +55,16 @@ export async function registerServiceWorker(
     return nothing;
   }
 
+  // Set once this page asks a new version to take over, so its own switch, which reloads it below, is
+  // never taken for another tab's.
+  let askedHere = false;
+
   // An update is something to offer only when a version already runs this page. On the very first
   // install there is nothing to replace: the new worker takes charge by itself (sw.ts: clientsClaim).
   const offer = (worker: ServiceWorker) => {
     if (!navigator.serviceWorker.controller) return;
     onUpdateReady(() => {
+      askedHere = true;
       // Past "installed", the new version is taking over or has taken over already: another tab
       // switched first. The browser announced it (controllerchange) as the version began taking over,
       // so waiting for that announcement now would wait forever. Only this page is old: reload it.
@@ -72,8 +81,24 @@ export async function registerServiceWorker(
       );
       // Serwist, in sw.ts, listens for this message and stops waiting.
       worker.postMessage({ type: "SKIP_WAITING" });
-    });
+    }, "waiting");
   };
+
+  // Another tab switched (SYNC-13): the new version now serves this page too, but the page still runs
+  // the old version's code, and the new worker has deleted the old version's files (SPIKE-1). The first
+  // screen that needs one of them would fail, perhaps in the middle of a sale. So this page is offered a
+  // reload, taken over: the bar reloads it by itself once the counter is quiet, as it updates an app too
+  // old for the server (update-prompt.tsx). Not when no version ran the page before, the very first
+  // install (sw.ts: clientsClaim), as nothing old is in it; a page that first install took charge of is
+  // run by a version from then on, so a later switch is offered. Never the page that asked: it reloads.
+  let ranBy = navigator.serviceWorker.controller;
+  const tookOver = () => {
+    const before = ranBy;
+    ranBy = navigator.serviceWorker.controller;
+    if (before === null || askedHere) return;
+    onUpdateReady(() => reload(), "taken_over");
+  };
+  navigator.serviceWorker.addEventListener("controllerchange", tookOver);
 
   // A version that finished downloading on an earlier visit and still waits: offer it at once.
   if (registration.waiting) offer(registration.waiting);
@@ -107,6 +132,7 @@ export async function registerServiceWorker(
     clearInterval(every);
     window.removeEventListener("online", look);
     stopHearing();
+    navigator.serviceWorker.removeEventListener("controllerchange", tookOver);
   };
 }
 

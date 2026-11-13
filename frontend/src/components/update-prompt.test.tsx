@@ -36,7 +36,14 @@ vi.mock("@/offline/sync/before-update", () => ({
 function newVersionReady(apply: ApplyUpdate) {
   const onUpdateReady = vi.mocked(registerServiceWorker).mock.calls[0]![0];
   // act: let React finish redrawing before the test looks at the page.
-  act(() => onUpdateReady(apply));
+  act(() => onUpdateReady(apply, "waiting"));
+}
+
+/** Plays the browser's part when another tab switched: this tab runs the old code, and `reload` loads
+ * the new (service-worker.ts). */
+function anotherTabSwitched(reload: ApplyUpdate) {
+  const onUpdateReady = vi.mocked(registerServiceWorker).mock.calls[0]![0];
+  act(() => onUpdateReady(reload, "taken_over"));
 }
 
 /** A counter screen that is busy while `busy` is true: a sale with items in it. */
@@ -375,5 +382,31 @@ describe("UpdatePrompt on an app too old for the server", () => {
     // The bar is still there, for someone to tap.
     fireEvent.click(screen.getByRole("button", { name: "Sasisha" }));
     await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("UpdatePrompt on a tab another tab has switched", () => {
+  it("reloads by itself, with no tap, the records first", async () => {
+    // Asha switched in the other tab: this one still runs the old code, and must not stay on it.
+    render(<UpdatePrompt />);
+    const reload = vi.fn();
+
+    anotherTabSwitched(reload);
+
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+  });
+
+  it("waits for the sale in this tab to finish", async () => {
+    // A sale open on the old code: it finishes there, then the tab reloads.
+    const view = render(<Counter busy />);
+    const reload = vi.fn();
+    anotherTabSwitched(reload);
+    await barLooked();
+    expect(reload).not.toHaveBeenCalled();
+
+    view.rerender(<Counter busy={false} />);
+
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
   });
 });

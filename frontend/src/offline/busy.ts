@@ -19,7 +19,9 @@
 import { useEffect, useState } from "react";
 
 /** The shared lock every busy counter screen holds, in every tab. Not a shop's own, as the sync's lock
- * is: the app's version is the whole browser's, whichever shop its tabs show. */
+ * is: the app's version is the whole browser's, whichever shop its tabs show. Never rename it: during an
+ * update an old tab and a new one run side by side, two versions of this file, and each must see the
+ * other's marks. */
 export const BUSY_LOCK = "mpc-counter-busy";
 
 /** How often a watching bar looks again (useCounterQuiet). Another tab tells this one nothing when its

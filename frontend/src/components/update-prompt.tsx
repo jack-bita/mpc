@@ -32,6 +32,8 @@ export function UpdatePrompt() {
   const [apply, setApply] = useState<ApplyUpdate | null>(null);
   // True from the tap until the switch: the records go first, which may take a few seconds.
   const [sending, setSending] = useState(false);
+  // Another tab switched, and this one still runs the old code (service-worker.ts): it reloads by itself.
+  const [takenOver, setTakenOver] = useState(false);
 
   // After the page is on screen, so registering never slows the first paint. The empty list []: only
   // once, when the component first appears, not on every redraw. The regular looks for a new version run
@@ -39,7 +41,10 @@ export function UpdatePrompt() {
   useEffect(() => {
     // setApply(() => next), not setApply(next): given a function, a React setter calls it to work out
     // the new value. Wrapping it in one more function stores the switch function itself.
-    const stopping = registerServiceWorker((next) => setApply(() => next));
+    const stopping = registerServiceWorker((next, kind) => {
+      setApply(() => next);
+      if (kind === "taken_over") setTakenOver(true);
+    });
     return () => {
       void stopping.then((stop) => stop());
     };
@@ -72,7 +77,8 @@ export function UpdatePrompt() {
   // Too old for the server (sync/too-old.ts): the pulls have stopped, and no change from the office
   // arrives, a suspension included, until the app updates. So it switches by itself, with no tap (Jack,
   // 13 Nov 2026), as soon as a version is ready and the counter is quiet: the same steps as a tap, the
-  // records first. The service worker looks for the version at once (service-worker.ts).
+  // records first. The service worker looks for the version at once (service-worker.ts). A tab another
+  // tab switched does the same: its old code would fail at the first file the new version deleted.
   const tooOld = useSyncExternalStore(
     listenForTooOld,
     appIsTooOld,
@@ -85,7 +91,8 @@ export function UpdatePrompt() {
   const triedAlone = useRef<ApplyUpdate | null>(null);
   // No list of what it reads: it looks again after every redraw, and does nothing until all of it holds.
   useEffect(() => {
-    if (!tooOld || !shown || sending || triedAlone.current === apply) return;
+    if (!(tooOld || takenOver) || !shown || sending) return;
+    if (triedAlone.current === apply) return;
     triedAlone.current = apply;
     void tap().then((switched) => {
       if (!switched) triedAlone.current = null;
