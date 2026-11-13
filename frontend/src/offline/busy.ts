@@ -33,6 +33,9 @@ export const QUIET_CHECK_EVERY = 2_000;
 let busyHere = 0;
 const watchers = new Set<() => void>();
 
+// Whether the last look the browser was asked failed: a run of failures is said once (counterIsQuiet).
+let lookFailing = false;
+
 function tellWatchers(): void {
   for (const look of watchers) look();
 }
@@ -78,12 +81,15 @@ export async function counterIsQuiet(): Promise<boolean> {
   try {
     // Waiting counts as busy too: a screen that has just asked for its mark is busy already.
     const { held = [], pending = [] } = await navigator.locks.query();
+    lookFailing = false;
     return ![...held, ...pending].some((lock) => lock.name === BUSY_LOCK);
   } catch (error) {
     // Never guessed quiet: an update can wait for the next look, a sale lost to a reload can't come back.
     // No browser of the shop's should fail this, so a developer looking at a laptop that never updates
-    // finds it in the console.
-    console.error("counter look failed", error);
+    // finds it in the console: once for a run of failures, as the bar looks every 2 s while a version
+    // waits, and once more after a look that worked.
+    if (!lookFailing) console.error("counter look failed", error);
+    lookFailing = true;
     return false;
   }
 }

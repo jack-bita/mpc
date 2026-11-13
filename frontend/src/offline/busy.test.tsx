@@ -100,11 +100,36 @@ describe("counterIsQuiet across tabs", () => {
   it("counts a look the browser fails to answer as busy, and logs it", async () => {
     // Never guess quiet: an update can wait, a sale lost to a reload can't come back.
     const locks = installFakeLocks();
+    // A look that works first: a run of failures left by another test is over, and this one is said.
+    expect(await counterIsQuiet()).toBe(true);
     vi.spyOn(locks, "query").mockRejectedValue(new Error("lock manager gone"));
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
 
     expect(await counterIsQuiet()).toBe(false);
     expect(log).toHaveBeenCalledOnce();
+  });
+
+  it("says a run of failed looks once, and a new run once more", async () => {
+    // A version waits, and the bar looks every 2 s: a browser whose answer keeps failing would fill the
+    // console. Once a look works again, the next failure is news, and is said.
+    const locks = installFakeLocks();
+    expect(await counterIsQuiet()).toBe(true);
+    const query = vi.spyOn(locks, "query");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const gone = new Error("lock manager gone");
+
+    query
+      .mockRejectedValueOnce(gone)
+      .mockRejectedValueOnce(gone)
+      .mockRejectedValueOnce(gone);
+    for (let look = 0; look < 3; look++)
+      expect(await counterIsQuiet()).toBe(false);
+    expect(log).toHaveBeenCalledOnce();
+
+    expect(await counterIsQuiet()).toBe(true);
+    query.mockRejectedValueOnce(gone);
+    expect(await counterIsQuiet()).toBe(false);
+    expect(log).toHaveBeenCalledTimes(2);
   });
 
   it("never counts the sync's lock as busy", async () => {
