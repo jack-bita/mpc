@@ -55,11 +55,17 @@ def _lists_out_of_step(lists: list[str], app_number: int) -> str | None:
     return None
 
 
-def _apps_drawers() -> list[str]:
-    # The lists the app has a drawer for, from the one line that writes them (`const LISTS = [...] as const;`).
-    found = re.findall(r"^const LISTS = \[(.*?)\] as const;$", PULL_FILE.read_text(), flags=re.MULTILINE)
-    assert len(found) == 1, f"{PULL_FILE} must write `const LISTS = [...] as const;` once, on one line."
+def _drawers_in(code: str) -> list[str]:
+    # The lists the app has a drawer for, from where pull.ts writes them (`const LISTS = [...] as const;`), on one line
+    # or split one list a line, as Prettier lays it out once it is longer than 80 columns: everything up to the first
+    # closing bracket, line breaks included, as no list's name holds one.
+    found = re.findall(r"^const LISTS = \[([^\]]*)\] as const;$", code, flags=re.MULTILINE)
+    assert len(found) == 1, f"{PULL_FILE} must write `const LISTS = [...] as const;` once."
     return re.findall(r'"([a-z_]+)"', found[0])
+
+
+def _apps_drawers() -> list[str]:
+    return _drawers_in(PULL_FILE.read_text())
 
 
 def test_the_registry_keeps_the_lists_of_the_apps_number() -> None:
@@ -84,3 +90,13 @@ def test_the_guard_catches_a_list_added_without_a_new_number() -> None:
     # The check above, shown to fail: CAT-6's products added, the number still 1.
     assert _lists_out_of_step([*LISTS_BY_APP_NUMBER[1], "product"], 1) is not None
     assert _lists_out_of_step(LISTS_BY_APP_NUMBER[1], 2) is not None
+
+
+def test_the_drawers_are_read_however_prettier_lays_them_out() -> None:
+    # A fifth list makes the line longer than Prettier's 80 columns, and the commit hook splits it, one list a line:
+    # CAT-6's own commit would fail here for its layout, not its lists.
+    one_line = 'const LISTS = ["side", "payment_account", "staff", "setting"] as const;\n'
+    split = 'const LISTS = [\n  "side",\n  "payment_account",\n  "staff",\n  "setting",\n  "product",\n] as const;\n'
+
+    assert _drawers_in(one_line) == ["side", "payment_account", "staff", "setting"]
+    assert _drawers_in(split) == ["side", "payment_account", "staff", "setting", "product"]
