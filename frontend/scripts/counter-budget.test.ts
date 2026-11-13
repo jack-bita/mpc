@@ -62,7 +62,17 @@ describe("the counter screens' size check", () => {
     ]);
   });
 
-  it("weighs a page by its scripts, compressed, as a laptop downloads them", () => {
+  it("leaves out a script only browsers too old for the app would load", () => {
+    // Next.js's polyfills for browsers with no modules: the shop's Chrome and Edge never fetch them.
+    const html = [
+      '<script src="/_next/static/chunks/polyfills.js" noModule=""></script>',
+      '<script src="/_next/static/chunks/react.js" async=""></script>',
+    ].join("");
+
+    expect(scriptsOf(html)).toEqual(["/_next/static/chunks/react.js"]);
+  });
+
+  it("weighs a page by its scripts, compressed, as a laptop downloads them", async () => {
     const out = mkdtempSync(join(tmpdir(), "budget-out-"));
     mkdirSync(join(out, "attendance"), { recursive: true });
     mkdirSync(join(out, "_next/static/chunks"), { recursive: true });

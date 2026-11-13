@@ -10,14 +10,18 @@
 //   1. its page is every page.tsx under src/app/(counter)/, found by its file, so a new screen is weighed
 //      with no list to keep: (counter)/attendance/page.tsx is out/attendance/index.html;
 //   2. its code is every script that page loads or gets ready to load (<script src>, and <link as="script">,
-//      which Next.js uses for a chunk it fetches soon after), each counted once;
+//      which Next.js uses for a chunk it fetches soon after), each counted once, but a nomodule script,
+//      which only browsers too old for the app fetch;
 //   3. each file is compressed with gzip, as a server sends it, and the sizes added up. Gzip, not the smaller
 //      brotli a browser may also accept: the weight a slow line can count on.
 // Only scripts: the code a laptop must download and run before the screen works. The shared stylesheet and
 // the fonts are counted by nobody yet.
 //
 // Most of a screen's weight is what every page shares (React, Next.js, the word books, Dexie, the sync): the
-// clock-in screen itself adds about 1.4 KB of its 273 (SYNC-11).
+// clock-in screen itself adds about 1.4 KB of its 234.6 (SYNC-11).
+//
+// Honest limit: a chunk a screen fetches later with a dynamic import() isn't named in its page, so it isn't
+// weighed; the screen's first load is.
 //
 // Run from frontend/, after the build:
 //   node scripts/counter-budget.mjs
@@ -62,8 +66,13 @@ export function counterPages(appDir) {
  */
 export function scriptsOf(html) {
   const found = new Set();
-  for (const [, src] of html.matchAll(/<script\b[^>]*\ssrc="([^"]+)"/g))
-    found.add(src);
+  for (const [tag] of html.matchAll(/<script\b[^>]*>/g)) {
+    // A nomodule script is for browsers too old to run modules: every browser this app supports skips it,
+    // without downloading it (03 §7.3). Next.js adds one, its old-browser polyfills, of about 40 KB.
+    if (/\snomodule\b/i.test(tag)) continue;
+    const src = /\ssrc="([^"]+)"/.exec(tag)?.[1];
+    if (src !== undefined) found.add(src);
+  }
   // A link that gets a script ready: as="script", before or after its href.
   for (const [tag] of html.matchAll(/<link\b[^>]*>/g)) {
     if (!/\sas="script"/.test(tag)) continue;

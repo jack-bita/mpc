@@ -47,7 +47,7 @@ paths:
 ## Screens
 
 - Laptops are keyboard first (`/` focuses search, Enter adds); phones get big tap targets and a numeric keypad for cash and kg.
-- Budgets: counter code under 300 KB compressed, per counter page, checked after the build by `frontend/scripts/counter-budget.mjs` in `make check-frontend` (SYNC-11: `/attendance/` 273.3 KB, nearly all shared); confirming a sale under 0.3 s; search under 50 ms for 5,000 products.
+- Budgets: counter code under 300 KB compressed, per counter page, checked after the build by `frontend/scripts/counter-budget.mjs` in `make check-frontend` (SYNC-11: `/attendance/` 234.6 KB, nearly all shared); confirming a sale under 0.3 s; search under 50 ms for 5,000 products.
 
 ## Tests and commands
 

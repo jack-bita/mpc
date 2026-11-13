@@ -847,7 +847,7 @@ Lineserve takes M-Pesa, bank transfer or card; paying yearly costs ten months fo
 | Opening the installed app | under 2 s on a mid-range Android phone |
 | Counter screens' code | under 300 KB compressed *(default; checked in CI)* |
 
-How the counter's size is checked **(v1.49)**: after `pnpm build`, `make check-frontend`, and so CI, runs `frontend/scripts/counter-budget.mjs`. It weighs each page under `app/(counter)/`, found by its file: every script the built page loads or gets ready to load, each once, compressed with gzip, as a slow line receives it. Over the budget, it fails and names the screen. At SYNC-11, `/attendance/` weighs 273.3 KB, nearly all of it the code every page shares (React, Next.js, the word books, Dexie, the sync).
+How the counter's size is checked **(v1.49)**: after `pnpm build`, `make check-frontend`, and so CI, runs `frontend/scripts/counter-budget.mjs`. It weighs each page under `app/(counter)/`, found by its file: every script the built page loads or gets ready to load, each once, but the polyfills only browsers too old for the app fetch (`nomodule`), compressed with gzip, as a slow line receives it. Over the budget, it fails and names the screen. A chunk fetched later by a dynamic `import()` isn't weighed. At SYNC-11, `/attendance/` weighs 234.6 KB, nearly all of it the code every page shares (React, Next.js, the word books, Dexie, the sync).
 
 ## 15. By release
 
