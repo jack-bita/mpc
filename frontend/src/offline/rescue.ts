@@ -151,16 +151,42 @@ function readFile(text: string, shopId: string): RescueFile {
 const UUID7 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// A time as the server's ZonedDateTimeField takes one: an ISO 8601 date and time, ending in its zone, `Z` or
-// an offset like +03:00. A day alone, or a time with no zone, is refused there with the whole push (ATT-1).
 // Any UUID, as the server's check of a laptop's id takes one: laptops' ids are the server's own.
 const ANY_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// A time as the server's ZonedDateTimeField takes one: an ISO 8601 date and time, ending in its zone, a capital
+// `Z` or an offset like +03:00. A day alone, a time with no zone, or a small `z`, is refused there with the
+// whole push (ATT-1, SYNC-12's second review). Its parts are kept, so the day and time can be checked too.
 const ZONED_TIME =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i;
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/;
 
-// One record, checked exactly as the push's server checks its envelope (PushedEnvelope,
+// True for a time the server reads as one: the shape above, and a day and time that exist. JavaScript's own
+// reading moves 30 February on to 2 March without a word; the server refuses it.
+function isZonedTime(text: string): boolean {
+  const parts = ZONED_TIME.exec(text);
+  if (parts === null) return false;
+  const [year, month, day, hour, minute, second] = parts
+    .slice(1)
+    .map((part) => Number(part ?? "0"));
+  const date = new Date(Date.UTC(year!, month! - 1, day!));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month! - 1 &&
+    date.getUTCDate() === day &&
+    hour! <= 23 &&
+    minute! <= 59 &&
+    second! <= 59
+  );
+}
+
+// A type as the server's text field takes one: it trims the spaces at both ends, so a type of spaces alone is
+// empty there, and it refuses the null character, which some databases can't hold.
+function isTypeText(type: string): boolean {
+  return type.trim().length > 0 && !type.includes("\0");
+}
+
+// One record, checked as the push's server checks its envelope (PushedEnvelope,
 // apps/sync/api/serializers.py), so a broken one is refused here, at the manager's hands. Let through, it would
 // be saved in the outbox, and the server would refuse every push from this laptop with it, for good: every
 // clock-in made here after it would stop reaching the server (SYNC-12's review). Each part's kind is checked
@@ -170,12 +196,12 @@ function checkRecord(document: RescuedDocument): void {
     typeof document !== "object" ||
     document === null ||
     typeof document.type !== "string" ||
+    !isTypeText(document.type) ||
     typeof document.created_by !== "string" ||
     typeof document.id !== "string" ||
     !UUID7.test(document.id) ||
     typeof document.client_time !== "string" ||
-    !ZONED_TIME.test(document.client_time) ||
-    Number.isNaN(Date.parse(document.client_time)) ||
+    !isZonedTime(document.client_time) ||
     !Number.isInteger(document.device_seq) ||
     document.device_seq < 1 ||
     document.device_seq > HIGHEST_DEVICE_SEQ ||

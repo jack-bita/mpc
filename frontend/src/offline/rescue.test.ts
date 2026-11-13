@@ -270,6 +270,15 @@ describe("the import", () => {
       (r) => (r.id = "019a5e00-0000-7000-0000-000000000001"),
     ],
     ["a time with no zone", (r) => (r.client_time = "2026-11-13T07:30:00")],
+    ["a small z for its zone", (r) => (r.client_time = "2026-11-13T07:30:00z")],
+    [
+      "a day that doesn't exist",
+      (r) => (r.client_time = "2026-02-30T07:30:00Z"),
+    ],
+    ["a 31 November", (r) => (r.client_time = "2026-11-31T07:30:00Z")],
+    ["an hour past 23", (r) => (r.client_time = "2026-11-13T24:30:00Z")],
+    ["a type of spaces alone", (r) => (r.type = "   ")],
+    ["a type with a null character", (r) => (r.type = "clo\u0000ck")],
     ["a day alone", (r) => (r.client_time = "2026-11-13")],
     ["a type that isn't text", (r) => (r.type = ["clock"])],
     ["no type at all", (r) => (r.type = null)],
@@ -296,6 +305,23 @@ describe("the import", () => {
       importWaiting(vyakula, SHOP, VYAKULA_LAPTOP, JSON.stringify(file), NEEMA),
     ).rejects.toEqual(new RescueRefused("broken_record"));
     expect(await vyakula.outbox.count()).toBe(0);
+  });
+
+  it("takes 29 February in a leap year", async () => {
+    const { text } = await dyingLaptop();
+    const file = JSON.parse(text) as { documents: Record<string, unknown>[] };
+    file.documents[1]!.client_time = "2028-02-29T07:30:00Z";
+    const vyakula = await laptop("vyakula-test", 140);
+
+    expect(
+      await importWaiting(
+        vyakula,
+        SHOP,
+        VYAKULA_LAPTOP,
+        JSON.stringify(file),
+        NEEMA,
+      ),
+    ).toEqual({ added: 3, alreadyHere: 0 });
   });
 
   it("takes a time with an offset, as the server does", async () => {
