@@ -6,9 +6,11 @@
 // no timer of its own: a counter left open all day would see a deploy only after a reload (SPIKE-1). So
 // the page asks it to look every UPDATE_CHECK_EVERY, when the network comes back, and as soon as a sync
 // finds the app too old for the server (SYNC-13, sync/too-old.ts).
-// A new version downloads in the background, then waits (sw.ts: skipWaiting false) until someone taps
-// Sasisha on the Toleo jipya bar, or until every window of the app is closed: the app must never
-// reload in the middle of a sale (03 §6.7).
+// A new version downloads in the background, then waits (sw.ts: skipWaiting false) until the Toleo jipya
+// bar switches, at a tap of Sasisha or by itself for an app too old for the server, each once the counter
+// is quiet, or until every window of the app is closed: the app must never reload in the middle of a sale
+// (03 §6.8). A tab another tab switched is offered a reload too, as its old code can't run on the new
+// version's files.
 
 import { listenForTooOld } from "./sync/too-old";
 

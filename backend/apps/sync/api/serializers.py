@@ -321,8 +321,9 @@ class PushBatch(serializers.Serializer[Any]):
     sent_at = ZonedDateTimeField(help_text="The laptop's clock as it sends this push.")
     # The laptop's report on itself, sent at every sync (03 §6.6; SYNC-5), kept on its row (apps/people/services.py,
     # record_sync). Both needed, as the envelope's parts are: the laptop's sync code writes them, so one left out is a
-    # bug in the app, refused loudly. The version is kept as the app names itself, only its length checked: the
-    # office reads it, nothing compares it yet (SYNC-13).
+    # bug in the app, refused loudly. The version is kept as the app names itself, only its length checked: the git
+    # commit it was built from, which the office reads (SYNC-14's page). Nothing compares it: a commit can't say
+    # whether it is older or newer, so the app's number does that, against min_app_version on each pull (SYNC-13).
     app_version = serializers.CharField(max_length=APP_VERSION_LENGTH, help_text="The app's version on the laptop.")
     unsent_count = serializers.IntegerField(
         min_value=0,

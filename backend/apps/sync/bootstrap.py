@@ -65,7 +65,8 @@ def setting_keys() -> list[dict[str, str]]:
     read its stored text ("time": "07:35"), where it may be set, and its default, as the rule's kind writes it
     ("1000.00", "07:35"). A device works a rule out as get_setting does (apps/shops/selectors.py): the side's row, else
     the shop's, else this default; a new shop has no rows at all. Code, not a shop's data, so the same for every shop;
-    a rule a later release adds reaches a device at its next bootstrap (SYNC-13's note)."""
+    a rule a later release adds reaches a device at its next bootstrap, which that release's database version asks for
+    by removing the cursor (SYNC-13)."""
     return [
         {"key": key.key, "kind": key.kind.code, "scope": key.scope.value, "default": key.kind.to_text(key.default)}
         for key in KEYS
