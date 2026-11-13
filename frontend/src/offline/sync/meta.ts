@@ -2,6 +2,7 @@
 // read (SYNC-7, 03 §6.1). Kept in one file so the bootstrap, the pull and the screens that read the
 // clock (SYNC-11) agree on every name.
 import type { ShopDatabase } from "../db";
+import type { DeviceRefusal } from "./place";
 
 /** The shop's last change number this database holds: the next pull asks for what came after it.
  * Missing until the first bootstrap, which is how the app knows a laptop still needs one. */
@@ -33,6 +34,13 @@ export const PUSH_WAIT_UNTIL = "push_wait_until_ms";
  * (backoff.ts). Missing while no push waits, so the next trouble waits 30 s. */
 export const PUSH_WAIT_NEXT = "push_wait_next_ms";
 
+/** What the server said about the device to the service worker, when it answered a background push with
+ * a block or a "not registered" (SYNC-16): "device.blocked" or "not_authenticated". The worker has no
+ * localStorage, where the page keeps the device's standing (this-device.ts), so it leaves this note, and
+ * the page takes it as it opens and before each sync (page-place.ts). Missing while there is nothing to
+ * tell. Kept in the shop's database, as the worker knows the shop and nothing else. */
+export const DEVICE_REFUSED = "device_refused";
+
 /** The cursor, or null when this database was never filled. */
 export async function readCursor(db: ShopDatabase): Promise<number | null> {
   const row = await db.meta.get(CURSOR);
@@ -54,4 +62,22 @@ export async function readLastDeviceSeq(
 ): Promise<number | null> {
   const row = await db.meta.get(LAST_DEVICE_SEQ);
   return typeof row?.value === "number" ? row.value : null;
+}
+
+/** The refusal the service worker heard, or null: a note some other app wrote reads as none. */
+export async function readDeviceRefused(
+  db: ShopDatabase,
+): Promise<DeviceRefusal | null> {
+  const row = await db.meta.get(DEVICE_REFUSED);
+  return row?.value === "device.blocked" || row?.value === "not_authenticated"
+    ? row.value
+    : null;
+}
+
+/** Leaves the note for the page: the service worker's way of keeping a refusal (SYNC-16). */
+export async function noteDeviceRefused(
+  db: ShopDatabase,
+  refusal: DeviceRefusal,
+): Promise<void> {
+  await db.meta.put({ key: DEVICE_REFUSED, value: refusal });
 }

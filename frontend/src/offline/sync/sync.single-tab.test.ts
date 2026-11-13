@@ -18,7 +18,8 @@ import { ASHA } from "@/test/shop-lists";
 import { saveDocument } from "../outbox";
 import { shopDatabase } from "../this-shop";
 import { CURSOR, LAST_DEVICE_SEQ } from "./meta";
-import { syncLockName, syncShop } from "./sync";
+import { syncLockName } from "./lock";
+import { syncShop } from "./sync";
 
 vi.mock("@/api/client", async (importOriginal) =>
   (await import("@/test/fake-server")).withFakeServer(await importOriginal()),

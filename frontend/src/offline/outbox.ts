@@ -15,6 +15,7 @@ import { newId } from "@/lib/ids";
 import type { DocumentRow, PendingEffectRow, ShopDatabase } from "./db";
 import { tellRecordSaved } from "./sync/asks";
 import { LAST_DEVICE_SEQ, readLastDeviceSeq } from "./sync/meta";
+import { waitingInOrder } from "./waiting";
 import { useShopDatabase } from "./this-shop";
 
 /** What a screen hands over to save: the document without what the save fills in, its id and its time. */
@@ -138,15 +139,7 @@ export async function saveDocument(
   return saved;
 }
 
-/** The outbox rows still waiting, in their number order, through the index made for it (db.ts): what the
- * push sends next (push.ts), and what Tuma sasa counts (SYNC-11). A row set aside is left out: it reached
- * the server already, as refused. Here, beside the save, not in push.ts: the push calls the server, and a
- * counter screen that imported it would bring the API client with it (rule 5). */
-export function waitingInOrder(db: ShopDatabase) {
-  return db.outbox
-    .where("[status+device_seq]")
-    .between(["waiting", Dexie.minKey], ["waiting", Dexie.maxKey]);
-}
+export { waitingInOrder } from "./waiting";
 
 /** How many records wait to be sent from this laptop, read live: the count drops by itself as the push
  * sends them. Undefined while its first read runs, or while the device isn't registered. */

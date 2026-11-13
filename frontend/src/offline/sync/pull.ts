@@ -15,6 +15,7 @@ import type { components } from "@/api/schema";
 import type { ShopDatabase } from "../db";
 import { dropOutdatedChecks } from "../pin";
 import { syncAnswer, syncCallLimit } from "./answer";
+import { keepOnThisPage } from "./page-place";
 import { CLOCK_OFFSET, CURSOR, LAST_SERVER_TIME, readCursor } from "./meta";
 
 type Change = components["schemas"]["Change"];
@@ -60,6 +61,7 @@ export async function pull(db: ShopDatabase): Promise<void> {
         params: { query: { cursor } },
         signal: syncCallLimit(),
       }),
+      keepOnThisPage,
     );
     const answeredAt = Date.now();
 

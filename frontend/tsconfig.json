@@ -41,5 +41,5 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "out", "src/sw.ts"]
+  "exclude": ["node_modules", "out", "src/sw.ts", "src/sw-env.d.ts"]
 }

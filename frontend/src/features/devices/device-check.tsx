@@ -13,8 +13,9 @@
 // A block also shows at the device's next request of any kind: every answer in the store of server
 // answers is watched for device.blocked. A PIN session's office routes send it as a 403 (AUTH-4). Sync's
 // pull and push (SYNC-7, SYNC-8) don't go through the store, so nothing here sees their answers: each
-// calls saveBlocked() itself, and Background Sync, in the service worker, which has no localStorage,
-// finds its own way to tell the page (SYNC-16).
+// keeps a block itself (page-place.ts), and Background Sync, in the service worker, which has no
+// localStorage, leaves a note in the shop's database that the page takes. A working answer here throws
+// that note away, so an old one can't lock the app again after an unblock (SYNC-16).
 //
 // The root layout puts it on every page, the counter's included. That is not a counter screen asking the
 // server for the shop's data (rule 5): it is the device asking about itself, and offline it simply fails
@@ -32,6 +33,8 @@ import { useEffect } from "react";
 import { api } from "@/api/client";
 import { answerOf, ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
+import { forgetBackgroundRefusal } from "@/offline/sync/page-place";
+import { shopDatabase } from "@/offline/this-shop";
 
 import { saveBlocked, saveDevice, type ThisDevice } from "./this-device";
 
@@ -89,6 +92,9 @@ export function noticeBlock(error: unknown): void {
 export async function checkThisDevice(): Promise<ThisDevice | null> {
   try {
     const device = fromAnswer(await answerOf(api.GET("/api/devices/v1/me/")));
+    // A working device: a refusal the service worker heard before is over, so its note goes first, or
+    // the page would take it after the unblock below and lock again (SYNC-16).
+    await forgetBackgroundRefusal(shopDatabase(device.shop.id));
     // A working device, so no longer blocked, if it was: an unblock opens the lock here.
     saveDevice(device);
     return device;
