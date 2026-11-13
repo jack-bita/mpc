@@ -28,6 +28,7 @@ from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember
 from apps.people.services import suspend
 from apps.shops.models import Shop, Side
+from apps.shops.services import add_side
 from apps.staffpay.models import AttendanceEvent, TimeCheck
 from apps.sync.api.serializers import PushedEnvelope
 from apps.sync.document_types import DOCUMENT_TYPES, Document
@@ -370,3 +371,29 @@ def test_a_carried_record_set_aside_keeps_where_it_was_made(
     _push(device_a, [_sent(6, staff_a, _at(7, 40))])
 
     assert handed[-2:] == [(3, _at(10)), (6, _at(7, 30))]
+
+
+def test_a_carried_records_maker_is_checked_on_the_side_it_was_made_on(
+    shop_a: Shop,
+    device_a: Device,
+    side_a: Side,
+    staff_a: StaffMember,
+    staff_a2: StaffMember,
+    give_role: GiveRole,
+) -> None:
+    # Asha sells on Dawa, and holds the ticket's key there only. Her sale, rescued from the Dawa laptop, is sent by a
+    # laptop of the Vyakula side, where she holds none: she made it where she held the key, so no flag names her, and
+    # any flag about it goes to Dawa's managers (SYNC-12's second review).
+    with shop_context(shop_a):
+        vyakula = add_side(shop=shop_a, code="F", name="Vyakula", by=None)
+        foods_laptop = Device.objects.create(
+            shop=shop_a, home_side=vyakula, name="Laptop ya Vyakula", code=2, key_hash="d" * 64
+        )
+    give_role(staff_a, RoleTemplate.SELLER, side_a)
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    sent = _sent(1, staff_a, _at(7), Carried(device=device_a.pk, device_seq=5, loaded_by=staff_a2.pk))
+
+    (answer,) = _push(foods_laptop, [sent])
+
+    assert answer.status == "accepted"
+    assert _flags_naming(shop_a, FlagKind.PERMISSION_BREAK, staff_a) == []

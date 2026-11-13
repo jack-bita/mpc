@@ -289,7 +289,11 @@ def _save(
             # What is wrong with its maker, read now, before the block: once the block has taken the shop's change
             # numbers, the shop's counter stays locked until the commit, and every save of the shop waits (SYNC-1).
             with _checks_of_our_own():
-                broken = _maker_breaks(device, kind, maker, made_at=sent.client_time)
+                # The maker made it at the counter of the laptop that made it: for a carried record, that laptop's side,
+                # not the side of the laptop that loaded the file (SYNC-12's second review). A seller of Dawa, whose
+                # sale was rescued through the Vyakula laptop, held the key where she sold.
+                made_on = device if origin is None else origin.device
+                broken = _maker_breaks(made_on, kind, maker, made_at=sent.client_time)
                 loader_breaks = [] if origin is None else _loader_breaks(origin.loaded_by, device, at=received_at)
             with recording_changes(device.shop_id) as numbers:
                 flags = kind.post(document, payload)
@@ -305,7 +309,7 @@ def _save(
             with _checks_of_our_own():
                 _check_number(device, line, last)
                 for broken_rule in broken:
-                    raise_flag(kind=broken_rule, subject=line, side=device.home_side, people=[maker], by=None)
+                    raise_flag(kind=broken_rule, subject=line, side=made_on.home_side, people=[maker], by=None)
                 for broken_rule in loader_breaks:
                     # Loaded by someone the laptop shouldn't have let: kept (accept, then flag), and a flag naming
                     # them, as a file edited by hand could clock in a colleague who never came (SYNC-12).
@@ -467,7 +471,8 @@ def _maker_breaks(device: Device, kind: DocumentType, maker: StaffMember, *, mad
     # The rules the maker broke by making this record, checked again on the server (SYNC-5): the laptop checked them at
     # the counter, but against its own copy of the shop, which can be old, on a laptop that can be tampered with. Each
     # becomes one flag about the record's line, naming the maker, on the laptop's side, for its managers to see; none
-    # refuses the record (accept, then flag).
+    # refuses the record (accept, then flag). `device` is the laptop the record was made on: for a carried record, not
+    # the one that sent it (SYNC-12).
     broken = []
     # The key for this type, on the laptop's own side, as its counter asks (X1): a seller of Vyakula holds no key on
     # the Dawa laptop. Among the keys the person was given, whatever their status: a suspended maker's sale is the
