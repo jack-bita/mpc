@@ -180,3 +180,23 @@ def test_the_clock_error_is_the_laptops_clock_minus_the_servers() -> None:
     # Kept on the line as evidence, whatever the answer: 40 minutes slow is minus 40 minutes; right is zero.
     assert check_time(morning(sent_at=arusha(11, 20))).clock_error == dt.timedelta(minutes=-40)
     assert check_time(morning()).clock_error == dt.timedelta(0)
+
+
+def test_a_carried_clock_in_always_waits_for_a_manager() -> None:
+    # Brought in a rescue file and sent by another laptop (SYNC-12): never trusted, not even "sent at once", as its
+    # time came from a file anyone could edit. A tap set to 07:20 by hand, sent at 07:20:02, would otherwise pass as
+    # one the server saw, and the late fine would go (Jack, SYNC-12's review). Its only sign is that it was carried.
+    at_once = check_time(morning(sent_at=arusha(7, 20, 2), received_at=arusha(7, 20, 3), carried=True))
+    assert (at_once.time_check, at_once.trusted_time, at_once.signs) == (
+        TimeCheck.UNVERIFIED,
+        None,
+        frozenset({Sign.CARRIED}),
+    )
+    later = check_time(morning(carried=True))
+    assert (later.time_check, later.trusted_time, later.signs) == (
+        TimeCheck.UNVERIFIED,
+        None,
+        frozenset({Sign.CARRIED}),
+    )
+    # The sending laptop's clock error is still kept, as the line always keeps one.
+    assert later.clock_error == dt.timedelta(0)

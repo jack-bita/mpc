@@ -26,6 +26,7 @@ from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember
 from apps.shops.models import Shop, Side
+from apps.staffpay.models import AttendanceEvent, TimeCheck
 from apps.sync.api.serializers import PushedEnvelope
 from apps.sync.document_types import DOCUMENT_TYPES, Document
 from apps.sync.models import PushedDocument
@@ -275,3 +276,39 @@ def test_the_envelope_reads_where_a_carried_record_was_made() -> None:
     )
     assert not broken.is_valid()
     assert "carried_from" in broken.errors
+
+
+def test_a_carried_clock_in_waits_for_a_manager_naming_only_its_worker(
+    shop_a: Model, device_a: Device, vyakula_laptop: Device, staff_a: StaffMember, neema: StaffMember
+) -> None:
+    # Asha's 07:30 tap on Dawa, rescued, sent by Vyakula at once, at 07:31: never trusted, as its time came from a file
+    # (Jack, SYNC-12's review). The flag names Asha alone: no other record disagreed.
+    tapped = dt.datetime(2026, 11, 10, 4, 30, tzinfo=dt.UTC)
+    sent = Sent(
+        id=uuid.uuid7(),
+        type="clock",
+        schema_version=1,
+        device_seq=1,
+        client_time=tapped,
+        created_by=staff_a.pk,
+        payload={"kind": "in", "last_server_time": "2026-11-10T03:50:00Z"},
+        carried_from=Carried(device=device_a.pk, device_seq=5, loaded_by=neema.pk),
+    )
+    with shop_context(vyakula_laptop.shop_id):
+        (answer,) = push(
+            vyakula_laptop,
+            [sent],
+            received_at=tapped + dt.timedelta(minutes=1),
+            sent_at=tapped + dt.timedelta(minutes=1),
+            unsent_count=0,
+            app_version="2026.11.1",
+            outages=[],
+        )
+
+    assert answer.status == "accepted"
+    with shop_context(shop_a):
+        event = AttendanceEvent.objects.get(pk=sent.id)
+        (flag,) = Flag.objects.filter(kind=FlagKind.UNVERIFIED_TIME)
+        named = list(FlagPerson.objects.filter(flag=flag).values_list("staff_id", flat=True))
+    assert (event.time_check, event.trusted_time) == (TimeCheck.UNVERIFIED, None)
+    assert named == [staff_a.pk]

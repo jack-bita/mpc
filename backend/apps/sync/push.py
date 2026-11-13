@@ -268,6 +268,7 @@ def _save(
                 time_before=time_before,
                 made_before_by=made_before_by,
                 created_by=maker,
+                carried=origin is not None,
             )
             # What is wrong with its maker, read now, before the block: once the block has taken the shop's change
             # numbers, the shop's counter stays locked until the commit, and every save of the shop waits (SYNC-1).
