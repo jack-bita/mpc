@@ -90,6 +90,7 @@ beforeEach(async () => {
   await db().meta.put({ key: LAST_DEVICE_SEQ, value: 57 });
 });
 afterEach(() => {
+  vi.useRealTimers();
   forgetKeepData();
   vi.restoreAllMocks();
 });
@@ -119,6 +120,53 @@ describe("saving to a file", () => {
     expect(file.documents.map((document) => document.id)).toEqual(
       saved.map((document) => document.id),
     );
+  });
+
+  it("names the file by the laptop and the shop's day, and lets the link go only later", async () => {
+    // 01:30 on 13 November in Arusha is still the 12th by UTC: the file is the 13th's.
+    vi.useFakeTimers({
+      shouldAdvanceTime: true,
+      toFake: ["Date", "setTimeout", "clearTimeout"],
+    });
+    vi.setSystemTime(new Date("2026-11-12T22:30:00Z"));
+    await clockIn();
+    const revoke = vi.fn();
+    Object.assign(URL, {
+      createObjectURL: () => "blob:rescue",
+      revokeObjectURL: revoke,
+    });
+    let name = "";
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      name = this.download;
+    });
+    await theScreen(ASHA);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Hifadhi kwenye faili" }),
+    );
+
+    await vi.waitFor(() => expect(name).not.toBe(""));
+    expect(name).toBe("mpc-unsent-laptop-1-2026-11-13.json");
+    // Still held as the click returns, as Firefox and Safari read it then; let go a minute on.
+    expect(revoke).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(60 * 1000);
+    expect(revoke).toHaveBeenCalledWith("blob:rescue");
+  });
+
+  it("says so when the records can't be read to save them", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    // An outbox row whose document is gone: the read stops, as a database that refused would.
+    const saved = await clockIn();
+    await db().documents.delete(saved.id);
+    await theScreen(ASHA);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Hifadhi kwenye faili" }),
+    );
+
+    expect(
+      await screen.findByText("Haikufanikiwa. Jaribu tena."),
+    ).toBeDefined();
   });
 
   it("has no button with nothing to save", async () => {

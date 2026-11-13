@@ -20,6 +20,10 @@
 // clock moved back (SYNC-12's review); and it names the person who loaded it, who must hold device.manage.
 // A record carried twice, Dawa to Vyakula to a third laptop, keeps Dawa as where it was made.
 //
+// Loaded, a record is in the Vyakula laptop's own documents drawer, as if made there: its "today" list
+// (SYNC-11) shows a rescued clock-in of today with the rest, by its maker and its time on the Dawa laptop's
+// clock. That is what the shop needs to see: who came in today, whichever laptop sends it.
+//
 // Only the `waiting` records go in the file. The set-aside ones reached the server already, as refused,
 // and sending them again changes nothing (Jack's plan; parking lot 23 decides what to do with them). No
 // pending effects either: a clock-in has none. The sale and payment cards, whose records change stock and

@@ -26,7 +26,11 @@ import {
   type RescueProblem,
   RescueRefused,
 } from "@/offline/rescue";
+import { shopToday } from "@/offline/rules";
 import { useShopDatabase } from "@/offline/this-shop";
+
+/** How long the download's link is kept after its click, in ms: long enough for any browser to start. */
+const LET_GO_AFTER = 60 * 1000;
 
 /** The key that lets a person load a file: the manager's, who pairs and blocks laptops too. */
 const LOADS_FILES = "device.manage";
@@ -59,17 +63,27 @@ export function Rescue() {
   async function save() {
     if (db === null || device === null) return;
     setProblem(null);
-    const file = await exportWaiting(db, device.shop.id, device.id);
-    // The browser's own download: a link to the file, clicked, then let go. The name says which laptop and
-    // which day, for someone choosing between two files on a stick.
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `mpc-unsent-laptop-${device.code}-${file.made_at.slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    setLoaded(null);
+    try {
+      const file = await exportWaiting(db, device.shop.id, device.id);
+      // The browser's own download: a link to the file, clicked. The name says which laptop and which day, the
+      // shop's day, not the laptop's zone's: a file saved at 01:00 in Arusha is that day's, not yesterday's.
+      const day = shopToday(device.shop.timezone, Date.parse(file.made_at));
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `mpc-unsent-laptop-${device.code}-${day}.json`;
+      link.click();
+      // Let go a minute later, not at once: Firefox and Safari read the link after the click returns, and
+      // one let go too soon cancels the download.
+      setTimeout(() => URL.revokeObjectURL(url), LET_GO_AFTER);
+    } catch (error) {
+      // A database that refused to read: nothing was saved, and she must know, as a load's failure says.
+      console.error("the unsent records were not saved to a file", error);
+      setProblem("failed");
+    }
   }
 
   async function load(file: File) {

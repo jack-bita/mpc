@@ -354,8 +354,9 @@ export function AtTheDevice({
                 {attendance("title")}
               </ButtonLink>
             )}
-            {/* Kompyuta hii (SYNC-12): whether the laptop keeps the shop's data, and the install. A counter
-                screen, so the same rule as Mahudhurio: only for someone the counter's note names. */}
+            {/* Kompyuta hii (SYNC-12): whether the laptop keeps the shop's data, the install, and the rescue
+                of unsent records in a file. A counter screen, so the same rule as Mahudhurio: only for someone
+                the counter's note names. */}
             {rowHere && (
               <ButtonLink href="/this-laptop/" kind="second" size="normal">
                 {thisLaptop("title")}
