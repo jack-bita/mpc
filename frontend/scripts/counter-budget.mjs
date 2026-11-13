@@ -21,7 +21,8 @@
 //
 // Run from frontend/, after the build:
 //   node scripts/counter-budget.mjs
-// `make check-frontend` runs it after `pnpm build`, so CI runs it too. It needs only Node's own modules.
+// `make check-frontend` runs it after `pnpm build`, so CI runs it too. It needs only Node's own modules. Its test is
+// beside it (counter-budget.test.ts).
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";

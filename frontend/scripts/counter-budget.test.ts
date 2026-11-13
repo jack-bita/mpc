@@ -3,6 +3,10 @@
 // `make check-frontend` and so in CI (scripts/counter-budget.mjs); this proves its parts on small made-up
 // pages, as the build isn't there when the tests run.
 //
+// Here beside the script, not in src/: the server image copies src/ but not scripts/ (backend/Dockerfile.dockerignore),
+// and its `next build` checks the types of every file in src/, so a test there that imports the script stops the
+// image's build.
+//
 // It runs in plain Node, as it only reads files.
 // @vitest-environment node
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -17,7 +21,7 @@ import {
   overBudget,
   scriptsOf,
   weigh,
-} from "../../../scripts/counter-budget.mjs";
+} from "./counter-budget.mjs";
 
 describe("the counter screens' size check", () => {
   it("is 300 KB, compressed, as 03 §14 sets it", () => {
