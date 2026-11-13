@@ -84,13 +84,18 @@ export function AttendanceScreen() {
   const last = today?.taps.filter((tap) => tap.staffId === row?.id).at(-1);
   const time = (at: string) => (timezone ? formatTime(at, timezone) : "");
 
-  // After Toka kazini: the goodbye, then the logout, as her own Toka would. Toka pressed meanwhile, or the
-  // screen gone, and the timer goes with it: askToLeave then finds nobody, and asks nothing.
+  // After Toka kazini: the goodbye, then the logout, as her own Toka would. She is leaving the shop, so the
+  // screen going during the goodbye logs her out at once: Back in the browser, or any other way off it,
+  // must not cancel the logout and leave the laptop open in her name. Toka pressed meanwhile already did
+  // it: askToLeave then finds nobody, and asks nothing.
   const leaving = saved?.kind === "out";
   useEffect(() => {
     if (!leaving) return;
     const timer = setTimeout(askToLeave, GOODBYE_FOR);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      askToLeave();
+    };
   }, [leaving]);
 
   async function tap(kind: ClockKind) {
@@ -143,11 +148,14 @@ export function AttendanceScreen() {
 
   return (
     <div className="grid max-w-md gap-6">
-      <div>
-        <ButtonLink href="/" kind="second" size="normal">
-          {t("back")}
-        </ButtonLink>
-      </div>
+      {/* Rudi to her welcome, but not during the goodbye: she has clocked out, and is on her way out. */}
+      {!leaving && (
+        <div>
+          <ButtonLink href="/" kind="second" size="normal">
+            {t("back")}
+          </ButtonLink>
+        </div>
+      )}
       <h1 className="text-3xl font-semibold">{t("title")}</h1>
       {/* role="status": a screen reader says what was saved as it changes. Always on the page, as a status
           line that comes with its words in it often goes unsaid (offline-banner.tsx). */}

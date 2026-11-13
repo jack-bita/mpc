@@ -249,6 +249,28 @@ describe("clocking out", () => {
     ).toEqual(["in", "out"]);
   });
 
+  it("offers no Rudi during the goodbye, and leaving the screen then logs her out at once", async () => {
+    // Asha taps Toka kazini, then Back in the browser out of habit, and walks out. The laptop must not stay
+    // on her welcome for the next 15 minutes, for anyone to clock in as her.
+    await tappedEarlier(ASHA, "in", MORNING);
+    vi.setSystemTime(EVENING);
+    arriveAtCounter(ASHA, 15, "server");
+    const { unmount } = render(
+      <CounterLayout>
+        <AttendancePage />
+      </CounterLayout>,
+    );
+    expect(await screen.findByRole("link", { name: "Rudi" })).toBeDefined();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Toka kazini" }));
+    await screen.findByText("Umetoka kazini saa 18:02. Kwaheri!");
+    expect(screen.queryByRole("link", { name: "Rudi" })).toBeNull();
+
+    unmount();
+
+    expect(leaveAsked()).toBe(ASHA.id);
+  });
+
   it("offers Ingia kazini again after she clocked out, as after lunch", async () => {
     await tappedEarlier(ASHA, "in", MORNING);
     await tappedEarlier(ASHA, "out", new Date("2026-11-13T09:30:00Z"));
