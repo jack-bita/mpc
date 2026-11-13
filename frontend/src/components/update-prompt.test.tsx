@@ -22,7 +22,10 @@ import { render } from "@/test/render";
 
 import { UpdatePrompt } from "./update-prompt";
 
-vi.mock("@/offline/service-worker", () => ({ registerServiceWorker: vi.fn() }));
+// Registered at once, with regular looks that a test never needs to stop.
+vi.mock("@/offline/service-worker", () => ({
+  registerServiceWorker: vi.fn(() => Promise.resolve(() => {})),
+}));
 // Sent at once, unless a test holds it.
 vi.mock("@/offline/sync/before-update", () => ({
   sendBeforeUpdate: vi.fn(),

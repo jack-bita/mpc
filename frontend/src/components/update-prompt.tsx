@@ -32,11 +32,15 @@ export function UpdatePrompt() {
   const [sending, setSending] = useState(false);
 
   // After the page is on screen, so registering never slows the first paint. The empty list []: only
-  // once, when the component first appears, not on every redraw.
+  // once, when the component first appears, not on every redraw. The regular looks for a new version run
+  // until the bar leaves the page, which on the root layout is when the tab closes.
   useEffect(() => {
     // setApply(() => next), not setApply(next): given a function, a React setter calls it to work out
     // the new value. Wrapping it in one more function stores the switch function itself.
-    void registerServiceWorker((next) => setApply(() => next));
+    const stopping = registerServiceWorker((next) => setApply(() => next));
+    return () => {
+      void stopping.then((stop) => stop());
+    };
   }, []);
 
   // Hidden while any counter screen, in any tab, is busy: a switch reloads the page, and a reload in the

@@ -1,12 +1,12 @@
-// service-worker.test.ts — the page registers the service worker only where one exists, and offers a
-// new version only when one is ready to take over (SPIKE-1, 03 §6.8).
+// service-worker.test.ts — the page registers the service worker only where one exists, offers a new
+// version only when one is ready to take over, and looks for one regularly (SPIKE-1, SYNC-13, 03 §6.8).
 //
 // jsdom, the fake browser, has no service workers, so these tests build small fakes on EventTarget, the
 // browser's own way of sending events. Whether a real browser installs and switches is checked on the
 // shop's devices.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { registerServiceWorker } from "./service-worker";
+import { registerServiceWorker, UPDATE_CHECK_EVERY } from "./service-worker";
 
 /** A fake worker: it has a state, and records the messages the page sends it. */
 class FakeWorker extends EventTarget {
@@ -24,6 +24,8 @@ class FakeWorker extends EventTarget {
 class FakeRegistration extends EventTarget {
   installing: FakeWorker | null = null;
   waiting: FakeWorker | null = null;
+  // The page asking the browser to look for a new version now (SYNC-13): found nothing, unless a test says.
+  update = vi.fn(() => Promise.resolve());
 
   /** A new version starts downloading, as after a deploy. */
   findUpdate(): FakeWorker {
@@ -56,6 +58,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   // Remove the fake, so each test starts from jsdom's navigator again.
   Reflect.deleteProperty(navigator, "serviceWorker");
 });
@@ -81,7 +85,9 @@ describe("registerServiceWorker", () => {
   it("does nothing in a browser without service workers", async () => {
     expect("serviceWorker" in navigator).toBe(false);
 
-    await expect(registerServiceWorker(vi.fn())).resolves.toBeUndefined();
+    // Hands back a stop that has nothing to stop.
+    const stop = await registerServiceWorker(vi.fn());
+    expect(() => stop()).not.toThrow();
   });
 
   it("offers a new version once it has fully installed", async () => {
@@ -177,9 +183,106 @@ describe("registerServiceWorker", () => {
     // Silence the expected log line, and check it was written.
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await expect(registerServiceWorker(vi.fn())).resolves.toBeUndefined();
+    const stop = await registerServiceWorker(vi.fn());
 
     expect(log).toHaveBeenCalledOnce();
+    expect(() => stop()).not.toThrow();
     log.mockRestore();
+  });
+});
+
+describe("the regular looks for a new version", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it("a counter left open all day still gets the bar after a deploy, with no reload", async () => {
+    // The Dawa laptop opened the app at 07:00 and never reloaded it. A deploy lands at 09:30.
+    const { registration } = fakeServiceWorkers();
+    registration.update.mockImplementation(() => {
+      registration.findUpdate().become("installed");
+      return Promise.resolve();
+    });
+    const reload = vi.fn();
+    const onUpdateReady = vi.fn();
+    await registerServiceWorker(onUpdateReady, reload);
+
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_EVERY);
+
+    expect(onUpdateReady).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("looks every hour, and not before", async () => {
+    const { registration } = fakeServiceWorkers();
+    await registerServiceWorker(vi.fn());
+
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_EVERY - 1);
+    expect(registration.update).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(registration.update).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_EVERY);
+    expect(registration.update).toHaveBeenCalledTimes(2);
+  });
+
+  it("looks as soon as the network comes back", async () => {
+    // Offline at the hour, the laptop would otherwise wait for the next one.
+    const { registration } = fakeServiceWorkers();
+    await registerServiceWorker(vi.fn());
+
+    window.dispatchEvent(new Event("online"));
+
+    expect(registration.update).toHaveBeenCalledOnce();
+  });
+
+  it("doesn't look while the browser says there is no network", async () => {
+    const { registration } = fakeServiceWorkers();
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    await registerServiceWorker(vi.fn());
+
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_EVERY);
+
+    expect(registration.update).not.toHaveBeenCalled();
+  });
+
+  it("passes over a look that fails, quietly, and looks again at the next hour", async () => {
+    // A router whose mobile data is down: sw.js can't be fetched.
+    const { registration } = fakeServiceWorkers();
+    // A plain function, not a vi.fn: a vi.fn watches the promises it hands back, and its watching would
+    // count as catching the failure, so a look that never caught it would still pass here.
+    let looks = 0;
+    Object.defineProperty(registration, "update", {
+      value: () => {
+        looks += 1;
+        return Promise.reject(new TypeError("Failed to fetch"));
+      },
+    });
+    const log = vi.spyOn(console, "error");
+    // A failure nobody caught: Node tells this listener once the work at hand is done. Vitest alone
+    // doesn't fail this test for it, so the test listens itself.
+    const uncaught = vi.fn();
+    process.on("unhandledRejection", uncaught);
+    await registerServiceWorker(vi.fn());
+
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_EVERY * 2);
+    // A real turn of the clock, so Node has had its chance to tell.
+    vi.useRealTimers();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    process.off("unhandledRejection", uncaught);
+
+    expect(looks).toBe(2);
+    expect(log).not.toHaveBeenCalled();
+    expect(uncaught).not.toHaveBeenCalled();
+  });
+
+  it("stops looking once stopped", async () => {
+    const { registration } = fakeServiceWorkers();
+    const stop = await registerServiceWorker(vi.fn());
+
+    stop();
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_EVERY * 2);
+    window.dispatchEvent(new Event("online"));
+
+    expect(registration.update).not.toHaveBeenCalled();
   });
 });
