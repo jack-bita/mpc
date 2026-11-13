@@ -5,7 +5,7 @@
 // The worker's push runs here with a client of its own, made the way sw.ts makes it, over the fake
 // server, with a CSRF token handed in as the Cookie Store would give it. The other tab is played through
 // a stand-in lock (src/test/locks.ts).
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Dexie from "dexie";
 
@@ -27,8 +27,11 @@ import { waitingInOrder } from "../waiting";
 import {
   backgroundPush,
   backgroundSyncTag,
+  listenForBackgroundSync,
   shopOfTag,
+  type SyncEvent,
   TryLater,
+  workerTools,
   type WorkerTools,
 } from "./background";
 import { mayPush } from "./backoff";
@@ -214,6 +217,20 @@ describe("the service worker's push", () => {
     expect(await waiting()).toBe(1);
   });
 
+  it('leaves a "not registered" as a note too, and doesn\'t try again', async () => {
+    // The key opens no device any more: the page must forget its copy, and the worker can't tell it.
+    await clockIn();
+    answer("GET", ME, refusal(401, "not_authenticated"));
+
+    await expect(backgroundPush(SHOP, tools)).resolves.toBeUndefined();
+
+    expect(await readDeviceRefused(shopDatabase(SHOP))).toBe(
+      "not_authenticated",
+    );
+    expect(pushes()).toHaveLength(0);
+    expect(await waiting()).toBe(1);
+  });
+
   it("asks nothing once a block was heard, until the page takes the note", async () => {
     await clockIn();
     await noteDeviceRefused(shopDatabase(SHOP), "device.blocked");
@@ -266,6 +283,70 @@ describe("a shop with no database here", () => {
 
     expect(sent).toHaveLength(0);
     expect(await Dexie.exists(databaseName(gone))).toBe(false);
+  });
+});
+
+describe("the worker's wiring (sw.ts)", () => {
+  /** A stand-in for the worker's `self`: it keeps the listener, so a test can wake it as the browser
+   * would. */
+  function aWorker() {
+    let listener: ((event: SyncEvent) => void) | undefined;
+    const scope = {
+      addEventListener: (_type: "sync", given: (event: SyncEvent) => void) => {
+        listener = given;
+      },
+    };
+    const wake = (tag: string) => {
+      const waitUntil = vi.fn<(work: Promise<unknown>) => void>();
+      listener!({ tag, waitUntil });
+      return waitUntil;
+    };
+    return { scope, wake };
+  }
+
+  it("pushes the shop the sync names, and keeps the worker alive until it ends", async () => {
+    await clockIn();
+    const worker = aWorker();
+    listenForBackgroundSync(worker.scope, tools);
+
+    const waitUntil = worker.wake(backgroundSyncTag(SHOP));
+
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    await waitUntil.mock.calls[0]![0];
+    expect(pushes()).toHaveLength(1);
+  });
+
+  it("leaves a sync that isn't ours alone", () => {
+    const worker = aWorker();
+    listenForBackgroundSync(worker.scope, tools);
+
+    expect(worker.wake("someone-else")).not.toHaveBeenCalled();
+  });
+
+  it("reads the CSRF token from the Cookie Store at each change", async () => {
+    // The worker has no document.cookie: the browser's Cookie Store gives it Django's csrftoken.
+    await clockIn();
+    const cookies = {
+      get: vi.fn((name: string) =>
+        Promise.resolve(
+          name === "csrftoken" ? { value: "token-from-the-store" } : null,
+        ),
+      ),
+    };
+    const fromTheStore = workerTools(cookies, {
+      baseUrl: "http://shop.test",
+      fetch: fakeFetch,
+    });
+
+    expect(await fromTheStore.hasCsrfToken()).toBe(true);
+    await backgroundPush(SHOP, fromTheStore);
+    expect(pushes()[0]!.headers.get("X-CSRFToken")).toBe(
+      "token-from-the-store",
+    );
+  });
+
+  it("finds no token with no Cookie Store, so it pushes nothing", async () => {
+    expect(await workerTools(undefined).hasCsrfToken()).toBe(false);
   });
 });
 

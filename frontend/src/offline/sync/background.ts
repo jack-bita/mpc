@@ -14,7 +14,12 @@
 // It only pushes: getting the records out is the job, and the app pulls the office's changes as it opens.
 //
 // It imports nothing of the page's: TypeScript checks it with the worker's types (tsconfig.sw.json).
-import type { ApiClient } from "@/api/make-client";
+import {
+  type ApiClient,
+  createApiClient,
+  CSRF_COOKIE,
+  CSRF_HEADER,
+} from "@/api/make-client";
 
 import Dexie from "dexie";
 
@@ -129,4 +134,54 @@ export async function backgroundPush(
   } finally {
     db.close();
   }
+}
+
+/** The part of the Cookie Store the worker reads: one cookie by name (the browser's own, self.cookieStore). */
+export interface Cookies {
+  get(name: string): Promise<{ value?: string } | null | undefined>;
+}
+
+/**
+ * The worker's tools, from its Cookie Store: a client whose CSRF token is the cookie, read at each change,
+ * never kept, as the page's client does (client.ts: a login gives a new token). The worker has no
+ * document.cookie. Every browser with Background Sync has a Cookie Store; in one without (`undefined`),
+ * the worker finds no token and pushes nothing, so the open app sends the records.
+ */
+export function workerTools(
+  cookies: Cookies | undefined,
+  // Tests only: a full address and a fake fetch, as Node can't call a relative address.
+  options: Parameters<typeof createApiClient>[0] = {},
+): WorkerTools {
+  const csrfHeader = async (): Promise<Record<string, string>> => {
+    const token = (await cookies?.get(CSRF_COOKIE))?.value;
+    return token ? { [CSRF_HEADER]: token } : {};
+  };
+  return {
+    api: createApiClient(options, csrfHeader),
+    hasCsrfToken: async () => Object.keys(await csrfHeader()).length > 0,
+  };
+}
+
+/** Background Sync's event, which TypeScript's own types don't have yet: the sync's name, and waitUntil,
+ * which keeps the worker alive until the push ends, and tells the browser to try again if it failed. */
+export interface SyncEvent {
+  readonly tag: string;
+  waitUntil(work: Promise<unknown>): void;
+}
+
+/** Where the worker listens: the service worker itself (self). */
+interface SyncScope {
+  addEventListener(type: "sync", listener: (event: SyncEvent) => void): void;
+}
+
+/** Pushes a shop's outbox each time the browser wakes the worker for one of our syncs; a sync with a
+ * name that isn't ours is left alone, for whoever asked for it. */
+export function listenForBackgroundSync(
+  scope: SyncScope,
+  tools: WorkerTools,
+): void {
+  scope.addEventListener("sync", (event) => {
+    const shopId = shopOfTag(event.tag);
+    if (shopId !== null) event.waitUntil(backgroundPush(shopId, tools));
+  });
 }

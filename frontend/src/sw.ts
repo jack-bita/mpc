@@ -9,14 +9,11 @@
 // Sync, where the browser has it (SYNC-16, 03 §6.5; the push itself is background.ts).
 import { type PrecacheEntry, Serwist } from "serwist";
 
-import { CSRF_COOKIE, CSRF_HEADER, createApiClient } from "./api/make-client";
-import { backgroundPush, shopOfTag } from "./offline/sync/background";
-
-// Background Sync's event, which TypeScript's own types don't have yet: its name, and waitUntil, which
-// keeps the worker alive until the push ends, and tells the browser to try again if it failed.
-interface SyncEvent extends ExtendableEvent {
-  readonly tag: string;
-}
+import {
+  listenForBackgroundSync,
+  type SyncEvent,
+  workerTools,
+} from "./offline/sync/background";
 
 // Two facts TypeScript can't know by itself:
 // - `self` is this service worker, not a window (tsconfig.sw.json gives it the worker's types);
@@ -52,23 +49,6 @@ const serwist = new Serwist({
 // (delete the old version's files) and fetch (answer each request from the cache).
 serwist.addEventListeners();
 
-// The CSRF cookie, read with the Cookie Store, the way a worker can: it has no document.cookie. Read at
-// each change, never kept, as the page's client does (client.ts: a login gives a new token). Every
-// browser with Background Sync has it; in one without, the worker finds no token and pushes nothing, so
-// the open app sends the records (background.ts).
-async function csrfHeader(): Promise<Record<string, string>> {
-  const token = (await self.cookieStore?.get(CSRF_COOKIE))?.value;
-  return token ? { [CSRF_HEADER]: token } : {};
-}
-
-const tools = {
-  api: createApiClient({}, csrfHeader),
-  hasCsrfToken: async () => Object.keys(await csrfHeader()).length > 0,
-};
-
-// The browser wakes the worker when the network is there for a sync the page asked for. A name that
-// isn't ours is left alone.
-self.addEventListener("sync", (event) => {
-  const shopId = shopOfTag(event.tag);
-  if (shopId !== null) event.waitUntil(backgroundPush(shopId, tools));
-});
+// Background Sync: the browser wakes the worker when the network is there, and the worker pushes the
+// outbox (background.ts, which also says how it reads the CSRF cookie with no document.cookie).
+listenForBackgroundSync(self, workerTools(self.cookieStore));
