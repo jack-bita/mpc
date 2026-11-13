@@ -96,6 +96,7 @@ export function Rescue() {
         await importWaiting(
           db,
           device.shop.id,
+          device.id,
           await file.text(),
           person.row.id,
         ),

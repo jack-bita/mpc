@@ -215,11 +215,12 @@ export interface ImportResult {
 /**
  * Loads a rescue file's records into this laptop's outbox, each with its own id, this laptop's next number,
  * and where it was made, with `loadedBy`, the staff member loading it; in one transaction, then tells the
- * sync, as a save does.
+ * sync, as a save does. `deviceId` is this laptop's: a record made here goes as this laptop's own.
  */
 export async function importWaiting(
   db: ShopDatabase,
   shopId: string,
+  deviceId: string,
   text: string,
   loadedBy: string,
 ): Promise<ImportResult> {
@@ -242,11 +243,6 @@ export async function importWaiting(
       for (const rescued of inOrder) {
         // Only the document's own fields, by name: the saving laptop's number stays behind, and anything
         // else a file may carry never reaches the database. Where it was made goes with it, for the push.
-        const carried_from: CarriedFrom = {
-          device: rescued.made_on.device,
-          device_seq: rescued.made_on.device_seq,
-          loaded_by: loadedBy,
-        };
         const document: DocumentRow = {
           id: rescued.id,
           type: rescued.type,
@@ -254,8 +250,18 @@ export async function importWaiting(
           client_time: rescued.client_time,
           created_by: rescued.created_by,
           payload: rescued.payload,
-          carried_from,
         };
+        // Made on this very laptop: a laptop whose browser data was wiped keeps its key, so it is the same
+        // laptop, loading the file it saved itself. Its records go as its own, as they would have: the server
+        // refuses a record "carried" from the laptop that sends it (SYNC-12's second review).
+        if (rescued.made_on.device !== deviceId) {
+          const carried_from: CarriedFrom = {
+            device: rescued.made_on.device,
+            device_seq: rescued.made_on.device_seq,
+            loaded_by: loadedBy,
+          };
+          document.carried_from = carried_from;
+        }
         // Here already: in documents (made here, or loaded before), or sent from here and archived. Added
         // again it would break the outbox's one row per id, and a second number would be a gap the
         // server flags.

@@ -97,7 +97,7 @@ describe("the export", () => {
     // Vyakula loaded Dawa's file, and is dying too before it sent them: its own file still says Dawa, #58.
     const { saved, text } = await dyingLaptop();
     const vyakula = await laptop("vyakula-test", 140);
-    await importWaiting(vyakula, SHOP, text, NEEMA);
+    await importWaiting(vyakula, SHOP, VYAKULA_LAPTOP, text, NEEMA);
 
     const again = await exportWaiting(vyakula, SHOP, VYAKULA_LAPTOP);
     expect(again.documents[0]).toMatchObject({
@@ -129,7 +129,9 @@ describe("the import", () => {
     const { saved, text } = await dyingLaptop();
     const vyakula = await laptop("vyakula-test", 140);
 
-    expect(await importWaiting(vyakula, SHOP, text, NEEMA)).toEqual({
+    expect(
+      await importWaiting(vyakula, SHOP, VYAKULA_LAPTOP, text, NEEMA),
+    ).toEqual({
       added: 3,
       alreadyHere: 0,
     });
@@ -155,12 +157,29 @@ describe("the import", () => {
     });
   });
 
+  it("sends a laptop's own records as its own, when it loads the file it saved itself", async () => {
+    // Dawa's browser data was wiped, and its key kept, so it is the same laptop: it loads its own file. The
+    // server refuses a record "carried" from the laptop that sends it, so these carry nothing (SYNC-12's
+    // second review).
+    const { saved, text } = await dyingLaptop();
+    const wiped = await laptop("dawa-wiped-test", 60);
+
+    expect(
+      await importWaiting(wiped, SHOP, DAWA_LAPTOP.id, text, NEEMA),
+    ).toEqual({ added: 3, alreadyHere: 0 });
+    const document = await wiped.documents.get(saved[0]!.id);
+    expect(document).toEqual(withoutNumber(saved[0]!));
+    expect(document).not.toHaveProperty("carried_from");
+  });
+
   it("adds each record once when the same file is loaded twice", async () => {
     const { text } = await dyingLaptop();
     const vyakula = await laptop("vyakula-test", 140);
-    await importWaiting(vyakula, SHOP, text, NEEMA);
+    await importWaiting(vyakula, SHOP, VYAKULA_LAPTOP, text, NEEMA);
 
-    expect(await importWaiting(vyakula, SHOP, text, NEEMA)).toEqual({
+    expect(
+      await importWaiting(vyakula, SHOP, VYAKULA_LAPTOP, text, NEEMA),
+    ).toEqual({
       added: 0,
       alreadyHere: 3,
     });
@@ -178,7 +197,9 @@ describe("the import", () => {
       posted_seq: 300,
     });
 
-    expect(await importWaiting(vyakula, SHOP, text, NEEMA)).toEqual({
+    expect(
+      await importWaiting(vyakula, SHOP, VYAKULA_LAPTOP, text, NEEMA),
+    ).toEqual({
       added: 2,
       alreadyHere: 1,
     });
@@ -190,7 +211,7 @@ describe("the import", () => {
     const heard = vi.fn();
     const stop = listenForAsks(heard);
 
-    await importWaiting(vyakula, SHOP, text, NEEMA);
+    await importWaiting(vyakula, SHOP, VYAKULA_LAPTOP, text, NEEMA);
     expect(heard).toHaveBeenCalledWith("saved");
     stop();
   });
@@ -200,7 +221,7 @@ describe("the import", () => {
     const vyakula = await laptop("vyakula-test", 140);
 
     await expect(
-      importWaiting(vyakula, OTHER_SHOP, text, NEEMA),
+      importWaiting(vyakula, OTHER_SHOP, VYAKULA_LAPTOP, text, NEEMA),
     ).rejects.toEqual(new RescueRefused("wrong_shop"));
     expect(await vyakula.outbox.count()).toBe(0);
   });
@@ -219,9 +240,9 @@ describe("the import", () => {
     ],
   ])("refuses %s", async (_, text) => {
     const vyakula = await laptop("vyakula-test", 140);
-    await expect(importWaiting(vyakula, SHOP, text, NEEMA)).rejects.toEqual(
-      new RescueRefused("not_rescue_file"),
-    );
+    await expect(
+      importWaiting(vyakula, SHOP, VYAKULA_LAPTOP, text, NEEMA),
+    ).rejects.toEqual(new RescueRefused("not_rescue_file"));
   });
 
   it("refuses the whole file when one record is broken, as a file edited by hand may be", async () => {
@@ -231,7 +252,7 @@ describe("the import", () => {
     const vyakula = await laptop("vyakula-test", 140);
 
     await expect(
-      importWaiting(vyakula, SHOP, JSON.stringify(file), NEEMA),
+      importWaiting(vyakula, SHOP, VYAKULA_LAPTOP, JSON.stringify(file), NEEMA),
     ).rejects.toEqual(new RescueRefused("broken_record"));
     // Not the first two either: the file lands whole or not at all.
     expect(await vyakula.outbox.count()).toBe(0);
@@ -272,7 +293,7 @@ describe("the import", () => {
     const vyakula = await laptop("vyakula-test", 140);
 
     await expect(
-      importWaiting(vyakula, SHOP, JSON.stringify(file), NEEMA),
+      importWaiting(vyakula, SHOP, VYAKULA_LAPTOP, JSON.stringify(file), NEEMA),
     ).rejects.toEqual(new RescueRefused("broken_record"));
     expect(await vyakula.outbox.count()).toBe(0);
   });
@@ -284,7 +305,13 @@ describe("the import", () => {
     const vyakula = await laptop("vyakula-test", 140);
 
     expect(
-      await importWaiting(vyakula, SHOP, JSON.stringify(file), NEEMA),
+      await importWaiting(
+        vyakula,
+        SHOP,
+        VYAKULA_LAPTOP,
+        JSON.stringify(file),
+        NEEMA,
+      ),
     ).toEqual({
       added: 3,
       alreadyHere: 0,
@@ -297,7 +324,7 @@ describe("the import", () => {
     opened.push(fresh);
 
     await expect(
-      importWaiting(fresh, SHOP, text, NEEMA),
+      importWaiting(fresh, SHOP, VYAKULA_LAPTOP, text, NEEMA),
     ).rejects.toBeInstanceOf(NeverFilled);
     expect(await fresh.outbox.count()).toBe(0);
   });
