@@ -44,9 +44,27 @@ export async function registerServiceWorker(
   // browser may not. The app then still works online, only not offline.
   if (!("serviceWorker" in navigator)) return nothing;
 
+  // A new version took over (SYNC-13), at this page's own ask or another tab's: it now serves this page,
+  // but the page still runs the old version's code, and the new worker has deleted the old version's files
+  // (SPIKE-1). The first screen that needs one of them would fail, perhaps in the middle of a sale. So this
+  // page is offered a reload, taken over: the bar reloads it by itself once the counter is quiet, as it
+  // updates an app too old for the server (update-prompt.tsx). Not when no version ran the page before, the
+  // very first install (sw.ts: clientsClaim), as nothing old is in it; a page that first install took
+  // charge of is run by a version from then on, so a later switch is offered. Noted, and heard, before
+  // registering, which waits for the browser after the page's first paint: a switch another tab makes in
+  // that moment would otherwise reach no listener, and the page would stay on the old code.
+  let ranBy = navigator.serviceWorker.controller;
+  const tookOver = () => {
+    const before = ranBy;
+    ranBy = navigator.serviceWorker.controller;
+    if (before === null) return;
+    onUpdateReady(() => reload(), "taken_over");
+  };
+  navigator.serviceWorker.addEventListener("controllerchange", tookOver);
+
   // scope "/": the worker looks after every page of the app. A failed registration (sw.js missing or
   // of the wrong type, the connection dropping, service workers switched off) is only logged: this
-  // function runs again on the next page load and tries again.
+  // function runs again on the next page load and tries again. Nothing is heard until then.
   let registration: ServiceWorkerRegistration;
   try {
     registration = await navigator.serviceWorker.register("/sw.js", {
@@ -54,6 +72,7 @@ export async function registerServiceWorker(
     });
   } catch (error) {
     console.error("service worker registration failed", error);
+    navigator.serviceWorker.removeEventListener("controllerchange", tookOver);
     return nothing;
   }
 
@@ -77,22 +96,6 @@ export async function registerServiceWorker(
       worker.postMessage({ type: "SKIP_WAITING" });
     }, "waiting");
   };
-
-  // A new version took over (SYNC-13), at this page's own ask or another tab's: it now serves this page,
-  // but the page still runs the old version's code, and the new worker has deleted the old version's files
-  // (SPIKE-1). The first screen that needs one of them would fail, perhaps in the middle of a sale. So this
-  // page is offered a reload, taken over: the bar reloads it by itself once the counter is quiet, as it
-  // updates an app too old for the server (update-prompt.tsx). Not when no version ran the page before, the
-  // very first install (sw.ts: clientsClaim), as nothing old is in it; a page that first install took
-  // charge of is run by a version from then on, so a later switch is offered.
-  let ranBy = navigator.serviceWorker.controller;
-  const tookOver = () => {
-    const before = ranBy;
-    ranBy = navigator.serviceWorker.controller;
-    if (before === null) return;
-    onUpdateReady(() => reload(), "taken_over");
-  };
-  navigator.serviceWorker.addEventListener("controllerchange", tookOver);
 
   // A version that finished downloading on an earlier visit and still waits: offer it at once.
   if (registration.waiting) offer(registration.waiting);

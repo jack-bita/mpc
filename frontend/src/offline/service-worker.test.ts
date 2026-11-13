@@ -376,6 +376,39 @@ describe("a switch another tab made", () => {
     expect(onUpdateReady.mock.calls[1]![1]).toBe("taken_over");
   });
 
+  it("hears a switch that lands while this page is still registering", async () => {
+    // Registering waits for the browser, after the page's first paint. Another tab may switch in that
+    // moment: this page runs the old code all the same, and must still be offered the reload.
+    const { container, registration } = fakeServiceWorkers();
+    let registered: (done: FakeRegistration) => void = () => {};
+    container.register.mockReturnValue(
+      new Promise<FakeRegistration>((resolve) => {
+        registered = resolve;
+      }),
+    );
+    const onUpdateReady = vi.fn();
+    const registering = registerServiceWorker(onUpdateReady);
+
+    anotherTabSwitched(container);
+    registered(registration);
+    await registering;
+
+    expect(onUpdateReady).toHaveBeenCalledOnce();
+    expect(onUpdateReady.mock.calls[0]![1]).toBe("taken_over");
+  });
+
+  it("stops listening when registering fails", async () => {
+    const { container } = fakeServiceWorkers();
+    container.register.mockRejectedValue(new TypeError("bad script type"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const onUpdateReady = vi.fn();
+    await registerServiceWorker(onUpdateReady);
+
+    anotherTabSwitched(container);
+
+    expect(onUpdateReady).not.toHaveBeenCalled();
+  });
+
   it("stops listening once stopped", async () => {
     const { container } = fakeServiceWorkers();
     const onUpdateReady = vi.fn();
