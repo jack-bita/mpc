@@ -105,7 +105,8 @@
     "logout": "Toka",
     "leaving": "Unatoka…",
     "waiting": "Subiri kidogo…",
-    "withPassword": "Ingia kwa nenosiri"
+    "withPassword": "Ingia kwa nenosiri",
+    "unsent": "{count, plural, one {Kumbukumbu # bado haijatumwa. Iko salama kwenye kompyuta hii, na itatumwa yenyewe.} other {Kumbukumbu # bado hazijatumwa. Ziko salama kwenye kompyuta hii, na zitatumwa zenyewe.}}"
   },
   "passwordField": {
     "show": "Onyesha nenosiri"

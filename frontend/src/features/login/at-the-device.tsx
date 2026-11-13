@@ -65,6 +65,7 @@ import {
   useOfflinePerson,
 } from "./offline-session";
 import { PinLogin } from "./pin-login";
+import { UnsentNote } from "./unsent-note";
 import type { StaffRow } from "./staff-picker";
 
 /** What a logout is about: who pressed Toka or Badilisha mtu, or whom the idle lock logged out; and, for a
@@ -378,6 +379,8 @@ export function AtTheDevice({
       return (
         <>
           {noAnswer && <ApiErrorAlert error={me.error} />}
+          {/* Records still waiting to leave the laptop, after a Toka: safe here, sent by themselves (SYNC-12). */}
+          <UnsentNote />
           <PinLogin
             notice={notice ?? undefined}
             onPick={() => logout.reset()}

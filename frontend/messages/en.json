@@ -105,7 +105,8 @@
     "logout": "Log out",
     "leaving": "Logging out…",
     "waiting": "One moment…",
-    "withPassword": "Log in with a password"
+    "withPassword": "Log in with a password",
+    "unsent": "{count, plural, one {# record not sent yet. It is safe on this laptop, and will be sent by itself.} other {# records not sent yet. They are safe on this laptop, and will be sent by themselves.}}"
   },
   "passwordField": {
     "show": "Show password"

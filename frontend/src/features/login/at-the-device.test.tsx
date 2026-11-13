@@ -956,6 +956,55 @@ describe("the way to Kompyuta hii (SYNC-12)", () => {
   });
 });
 
+describe("records not sent yet, at Toka (SYNC-12)", () => {
+  /** Puts `count` clock-ins in the laptop's outbox, waiting to be sent. */
+  async function waitingOnTheLaptop(count: number) {
+    await shopDatabase(DAWA_LAPTOP.shop.id).outbox.bulkAdd(
+      Array.from({ length: count }, (_, i) => ({
+        id: `019a5e00-0000-7000-8000-00000000f0${i}0`,
+        type: "attendance.clock",
+        device_seq: 60 + i,
+        status: "waiting" as const,
+        attempts: 0,
+        last_error: null,
+      })),
+    );
+  }
+
+  it("lets her log out, says how many wait and that they are safe, and keeps every one", async () => {
+    // Neema clocked in three times offline; the internet is still out as she leaves (Jack's choice A).
+    await waitingOnTheLaptop(3);
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+
+    // No stop: the tiles are back, as after any Toka, with the note above them.
+    await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" });
+    expect(
+      await screen.findByText(
+        "Kumbukumbu 3 bado hazijatumwa. Ziko salama kwenye kompyuta hii, na zitatumwa zenyewe.",
+      ),
+    ).toBeDefined();
+    // Logging out took nothing from the outbox: the laptop sends them, whoever is logged in.
+    expect(await shopDatabase(DAWA_LAPTOP.shop.id).outbox.count()).toBe(3);
+  });
+
+  it("goes by itself once the push has sent them", async () => {
+    await waitingOnTheLaptop(1);
+    theLaptop(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    const note = await screen.findByText(
+      "Kumbukumbu 1 bado haijatumwa. Iko salama kwenye kompyuta hii, na itatumwa yenyewe.",
+    );
+
+    // The push's accepted answer takes the row out of the outbox (push.ts).
+    await shopDatabase(DAWA_LAPTOP.shop.id).outbox.clear();
+    await waitFor(() => expect(note.isConnected).toBe(false));
+  });
+});
+
 describe("what the counter knows (SYNC-11)", () => {
   // A counter screen never asks the server who is here (rule 5), so the home page, which may, keeps a
   // note for it (at-the-counter.ts), and hears a counter screen say "this person is leaving".
