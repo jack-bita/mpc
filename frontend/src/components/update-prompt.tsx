@@ -91,6 +91,12 @@ export function UpdatePrompt() {
         apply();
       }
       return switching;
+    } catch (error) {
+      // Nothing above should fail: the send and the looks each keep their own failures (before-update.ts,
+      // busy.ts). One that did is a bug: the console says so, as for a sync's (triggers.tsx), and the bar
+      // is ready again below, rather than the failure escaping unseen.
+      console.error("update failed", error);
+      return false;
     } finally {
       // Ready for another tap, however the tap ended: the switch reloads the page in a moment, and if it
       // doesn't, or anything above failed, a bar left disabled on "Inatuma…" would keep the laptop on the

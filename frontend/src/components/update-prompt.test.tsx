@@ -281,6 +281,28 @@ describe("UpdatePrompt sends the records first", () => {
     await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
   });
 
+  it("is ready again after a failure it never expected, and says so in the console", async () => {
+    // Nothing in a tap should fail: the send and the looks keep their own failures. A bug that did would
+    // otherwise leave the bar disabled on "Inatuma…", with no way on, and leave no trace.
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const bug = new TypeError("Cannot read properties of undefined");
+    vi.mocked(sendBeforeUpdate).mockRejectedValueOnce(bug);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+
+    await vi.waitFor(() =>
+      expect(log).toHaveBeenCalledWith("update failed", bug),
+    );
+    expect(screen.getByText("Toleo jipya liko tayari")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Sasisha" }).hasAttribute("disabled"),
+    ).toBe(false);
+    expect(apply).not.toHaveBeenCalled();
+  });
+
   it("sends once for two quick taps", async () => {
     // Asha taps Sasisha twice, fast, before the bar has redrawn: one send, one switch.
     render(<UpdatePrompt />);
