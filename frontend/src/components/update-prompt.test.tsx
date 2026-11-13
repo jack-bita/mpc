@@ -255,6 +255,23 @@ describe("UpdatePrompt sends the records first", () => {
     await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
   });
 
+  it("sends once for two quick taps", async () => {
+    // Asha taps Sasisha twice, fast, before the bar has redrawn: one send, one switch.
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const release = holdTheSend();
+    const button = await screen.findByRole("button", { name: "Sasisha" });
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+    release();
+
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+  });
+
   it("doesn't switch when a sale opened while the records were going", async () => {
     const view = render(<Counter busy={false} />);
     const apply = vi.fn();

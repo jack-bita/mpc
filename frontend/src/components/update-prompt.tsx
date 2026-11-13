@@ -56,22 +56,33 @@ export function UpdatePrompt() {
   const quiet = useCounterQuiet(apply !== null);
   const shown = apply !== null && quiet;
 
+  // One tap at a time, from the press to the switch. A ref, not the `sending` state: the state changes
+  // only at the next redraw, after the tap's first wait, so a second press before it, a fast double tap
+  // or a press during the bar's own try below, would read it unchanged and send and switch twice.
+  const tapping = useRef(false);
+
   // Looked at once more as the tap lands: another tab's sale may have started since the bar's last look
   // (busy.ts looks every 2 s). Busy now, the tap does nothing, and the bar hides at its next look.
   // Then the records still waiting go first; at most a few seconds, and the switch goes ahead whatever
   // the send's end (before-update.ts says why nothing is lost). Says whether it switched.
   const tap = async (): Promise<boolean> => {
-    if (apply === null || sending || !(await counterIsQuiet())) return false;
-    setSending(true);
-    await sendBeforeUpdate();
-    // Looked at again after the send: a sale may have started in the seconds it took. The bar then hides
-    // until it is finished, and the next tap sends again, nothing by then, and switches.
-    const switching = await counterIsQuiet();
-    if (switching) apply();
-    // Ready for another tap: the switch reloads the page in a moment, and if it doesn't, a disabled bar
-    // would leave the laptop on the old version with no way on.
-    setSending(false);
-    return switching;
+    if (apply === null || tapping.current) return false;
+    tapping.current = true;
+    try {
+      if (!(await counterIsQuiet())) return false;
+      setSending(true);
+      await sendBeforeUpdate();
+      // Looked at again after the send: a sale may have started in the seconds it took. The bar then
+      // hides until it is finished, and the next tap sends again, nothing by then, and switches.
+      const switching = await counterIsQuiet();
+      if (switching) apply();
+      // Ready for another tap: the switch reloads the page in a moment, and if it doesn't, a disabled bar
+      // would leave the laptop on the old version with no way on.
+      setSending(false);
+      return switching;
+    } finally {
+      tapping.current = false;
+    }
   };
 
   // Too old for the server (sync/too-old.ts): the pulls have stopped, and no change from the office
