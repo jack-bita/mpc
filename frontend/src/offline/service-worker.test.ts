@@ -7,6 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { registerServiceWorker, UPDATE_CHECK_EVERY } from "./service-worker";
+import { tellAppTooOld } from "./sync/too-old";
 
 /** A fake worker: it has a state, and records the messages the page sends it. */
 class FakeWorker extends EventTarget {
@@ -275,6 +276,16 @@ describe("the regular looks for a new version", () => {
     expect(uncaught).not.toHaveBeenCalled();
   });
 
+  it("looks at once when a sync finds the app too old", async () => {
+    // The pulls have stopped: the new version can't wait for the hour.
+    const { registration } = fakeServiceWorkers();
+    await registerServiceWorker(vi.fn());
+
+    tellAppTooOld();
+
+    expect(registration.update).toHaveBeenCalledOnce();
+  });
+
   it("stops looking once stopped", async () => {
     const { registration } = fakeServiceWorkers();
     const stop = await registerServiceWorker(vi.fn());
@@ -282,6 +293,7 @@ describe("the regular looks for a new version", () => {
     stop();
     await vi.advanceTimersByTimeAsync(UPDATE_CHECK_EVERY * 2);
     window.dispatchEvent(new Event("online"));
+    tellAppTooOld();
 
     expect(registration.update).not.toHaveBeenCalled();
   });

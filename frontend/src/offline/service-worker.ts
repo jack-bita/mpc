@@ -4,10 +4,13 @@
 // Registering asks the browser to install /sw.js and keep it for this site. From then on the browser
 // checks /sw.js for a new version by itself each time a page of the app loads with internet. It sets
 // no timer of its own: a counter left open all day would see a deploy only after a reload (SPIKE-1). So
-// the page asks it to look every UPDATE_CHECK_EVERY, and when the network comes back (SYNC-13).
+// the page asks it to look every UPDATE_CHECK_EVERY, when the network comes back, and as soon as a sync
+// finds the app too old for the server (SYNC-13, sync/too-old.ts).
 // A new version downloads in the background, then waits (sw.ts: skipWaiting false) until someone taps
 // Sasisha on the Toleo jipya bar, or until every window of the app is closed: the app must never
 // reload in the middle of a sale (03 §6.7).
+
+import { listenForTooOld } from "./sync/too-old";
 
 /** Switches to the waiting version: the new worker takes over, then the page reloads from it. */
 export type ApplyUpdate = () => void;
@@ -19,8 +22,9 @@ export const UPDATE_CHECK_EVERY = 60 * 60 * 1000;
 
 /**
  * Asks the browser to install the service worker, calls `onUpdateReady` when a new version waits, and
- * looks for one every UPDATE_CHECK_EVERY and when the network comes back, until the function it hands
- * back is called. Safe on every page load: the browser installs the same sw.js only once.
+ * looks for one every UPDATE_CHECK_EVERY, when the network comes back and when the app is too old, until
+ * the function it hands back is called. Safe on every page load: the browser installs the same sw.js
+ * only once.
  * `reload` is replaced only by tests, because jsdom can't reload a page.
  */
 export async function registerServiceWorker(
@@ -96,9 +100,13 @@ export async function registerServiceWorker(
   };
   const every = setInterval(look, UPDATE_CHECK_EVERY);
   window.addEventListener("online", look);
+  // Too old to sync: the pulls have stopped, so the new version is wanted now, not within the hour. Each
+  // sync that finds it looks again, in case the last look failed.
+  const stopHearing = listenForTooOld(look);
   return () => {
     clearInterval(every);
     window.removeEventListener("online", look);
+    stopHearing();
   };
 }
 

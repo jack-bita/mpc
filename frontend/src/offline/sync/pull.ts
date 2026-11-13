@@ -11,6 +11,7 @@ import type { EntityTable, IDType } from "dexie";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { APP_NUMBER } from "@/lib/version";
 
 import type { ShopDatabase } from "../db";
 import { dropOutdatedChecks } from "../pin";
@@ -26,13 +27,15 @@ type Page = components["schemas"]["PullAnswer"];
 const LISTS = ["side", "payment_account", "staff", "setting"] as const;
 
 /**
- * A page named a list this app has no drawer for: the server is newer than the app. The pull stops
- * before that page, so its changes are never passed over: once the app updates, the same page comes
- * again (SYNC-13's note). Moving the cursor past it would lose those records on this laptop for good.
+ * The server is newer than this app: its page names a lowest app number above this app's own
+ * (`min_app_version`, APP_NUMBER), or a list this app has no drawer for. The pull stops before that page,
+ * so its changes are never passed over: once the app updates, the same page comes again. Moving the
+ * cursor past it would lose those records on this laptop for good. The sync tells it on (triggers.tsx,
+ * too-old.ts), and the app updates by itself (SYNC-13, 03 §6.8).
  */
 export class AppTooOld extends Error {
-  constructor(readonly entity: string) {
-    super(`No drawer for the list "${entity}".`);
+  constructor(why: string) {
+    super(why);
     this.name = "AppTooOld";
   }
 }
@@ -85,9 +88,15 @@ function checkPage(page: Page, askedFrom: number): void {
     throw new Error(
       `Page cursor ${page.cursor} after ${askedFrom} doesn't move on.`,
     );
+  // The server no longer serves this app: whatever the page holds, it may be written for a newer one. An
+  // empty page too, so an app left open learns it at its next sync, a quiet shop's too.
+  if (page.min_app_version > APP_NUMBER)
+    throw new AppTooOld(
+      `The server serves app number ${page.min_app_version} and up; this app is ${APP_NUMBER}.`,
+    );
   for (const change of page.changes) {
     if (!(LISTS as readonly string[]).includes(change.entity))
-      throw new AppTooOld(change.entity);
+      throw new AppTooOld(`No drawer for the list "${change.entity}".`);
     // An upsert brings the record as it is now. One with none is not a page this app understands.
     if (change.op === "upsert" && change.data === null)
       throw new Error(`Change ${change.seq} has no record.`);

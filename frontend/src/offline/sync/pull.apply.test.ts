@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
 import { ApiRefusal } from "@/api/refusal";
+import { APP_NUMBER } from "@/lib/version";
 import {
   saveDevice,
   savedBlocked,
@@ -394,10 +395,42 @@ describe("a pull", () => {
       ),
     );
 
-    await expect(pull(db)).rejects.toEqual(new AppTooOld("product"));
+    await expect(pull(db)).rejects.toEqual(
+      new AppTooOld('No drawer for the list "product".'),
+    );
 
     expect(await db.staff.get(ASHA.id)).toEqual(ASHA);
     expect(await readCursor(db)).toBe(120);
+  });
+
+  it("stops before a page whose lowest app number is above this app's, and changes nothing", async () => {
+    // A release raised the minimum to APP_NUMBER + 1: this app may not read the pages any more. Mama Asha's
+    // new name waits for the new version, which asks from the same cursor.
+    serverGives({
+      ...page([renamed(121)], 121),
+      min_app_version: APP_NUMBER + 1,
+    });
+
+    await expect(pull(db)).rejects.toBeInstanceOf(AppTooOld);
+
+    expect(await db.staff.get(ASHA.id)).toEqual(ASHA);
+    expect(await readCursor(db)).toBe(120);
+  });
+
+  it("stops at an empty page too, once the minimum is above this app's", async () => {
+    // A quiet shop, with nothing new: the app still learns at its next sync that it must update.
+    serverGives({ ...page([], 120), min_app_version: APP_NUMBER + 1 });
+
+    await expect(pull(db)).rejects.toBeInstanceOf(AppTooOld);
+  });
+
+  it("goes on for a page whose minimum is this app's own number", async () => {
+    // The usual day: the server's minimum and the app's number are the same (test_app_number.py).
+    serverGives({ ...page([renamed(121)], 121), min_app_version: APP_NUMBER });
+
+    await pull(db);
+
+    expect(await db.staff.get(ASHA.id)).toEqual(RENAMED);
   });
 
   it("changes nothing for an upsert that brings no record", async () => {

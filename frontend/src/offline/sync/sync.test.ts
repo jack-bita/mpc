@@ -14,12 +14,14 @@ import { DAWA_LAPTOP } from "@/test/devices";
 import { forgetCsrfToken, giveCsrfToken } from "@/test/csrf";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { ASHA, BOOTSTRAP } from "@/test/shop-lists";
+import { APP_NUMBER } from "@/lib/version";
 
 import { saveDocument } from "../outbox";
 import { shopDatabase } from "../this-shop";
 import { SYNC_CALL_LIMIT_MS } from "./answer";
 import { mayPush } from "./backoff";
 import { readCursor } from "./meta";
+import { AppTooOld } from "./pull";
 import { syncShop } from "./sync";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -94,6 +96,29 @@ function holdTheFirstPull(): { release: () => void; pulls: () => number } {
 function nothing(): void {}
 
 describe("a sync", () => {
+  it("of an app below min_app_version sends its outbox, then stops before the page", async () => {
+    // Done when: an app below min_app_version sends its outbox, then updates (03 §6.8). Asha's clock-in goes
+    // up first; then the page says the server serves this app no longer, and the pull stops before it, the
+    // cursor where it was. The update follows from AppTooOld: triggers.tsx tells it (too-old.ts), and the
+    // bar switches by itself (update-prompt.test.tsx).
+    await filledLaptop();
+    const { id } = await clockIn();
+    answer("POST", PUSH, {
+      status: 200,
+      body: { answers: [{ id, status: "accepted", posted_seq: 131 }] },
+    });
+    answer("GET", PULL, {
+      status: 200,
+      body: { ...emptyPage(131).body, min_app_version: APP_NUMBER + 1 },
+    });
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(AppTooOld);
+
+    expect(paths()).toEqual([PUSH, PULL]);
+    expect(await shopDatabase(SHOP).outbox.count()).toBe(0);
+    expect(await readCursor(shopDatabase(SHOP))).toBe(130);
+  });
+
   it("bootstraps a fresh laptop, pushes, then pulls from its cursor", async () => {
     answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
     answer("GET", PULL, emptyPage(120));

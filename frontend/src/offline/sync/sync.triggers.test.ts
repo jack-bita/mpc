@@ -22,6 +22,7 @@ import { CURSOR, LAST_DEVICE_SEQ, readCursor } from "./meta";
 import { AppTooOld } from "./pull";
 import { BrokenPush } from "./push";
 import type { SyncAsk } from "./sync";
+import { appIsTooOld } from "./too-old";
 import {
   AFTER_A_SAVE,
   reportSyncFailure,
@@ -208,16 +209,28 @@ describe("the moments", () => {
 
   it("go on after a failed sync, which goes to the console when it is no answer of the server's", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const tooOld = new AppTooOld("product");
-    const sync = fakeSync().mockRejectedValueOnce(tooOld);
+    const bug = new TypeError("Cannot read properties of undefined");
+    const sync = fakeSync().mockRejectedValueOnce(bug);
     stop = startSyncTriggers(SHOP, sync);
     await vi.waitFor(() =>
-      expect(log).toHaveBeenCalledWith("sync failed", tooOld),
+      expect(log).toHaveBeenCalledWith("sync failed", bug),
     );
 
     vi.advanceTimersByTime(SYNC_EVERY);
 
     expect(sync).toHaveBeenCalledTimes(2);
+  });
+
+  it("tell an app too old for the server, so it updates, and log nothing", async () => {
+    // Not a bug: the server's minimum is above this app's number (pull.ts). The update side listens.
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sync = fakeSync().mockRejectedValueOnce(
+      new AppTooOld('No drawer for the list "product".'),
+    );
+    stop = startSyncTriggers(SHOP, sync);
+
+    await vi.waitFor(() => expect(appIsTooOld()).toBe(true));
+    expect(log).not.toHaveBeenCalled();
   });
 });
 

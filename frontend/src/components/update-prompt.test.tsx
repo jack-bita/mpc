@@ -16,6 +16,7 @@ import {
   registerServiceWorker,
 } from "@/offline/service-worker";
 import { sendBeforeUpdate } from "@/offline/sync/before-update";
+import { tellAppTooOld } from "@/offline/sync/too-old";
 import { installFakeLocks, removeFakeLocks } from "@/test/locks";
 import { swahiliIn } from "@/test/language";
 import { render } from "@/test/render";
@@ -282,5 +283,97 @@ describe("UpdatePrompt sends the records first", () => {
 
     expect(await screen.findByText("Sending records first…")).toBeTruthy();
     expect(swahiliIn(document.body)).toEqual([]);
+  });
+});
+
+describe("UpdatePrompt on an app too old for the server", () => {
+  /** A sync found the app too old (too-old.ts), as triggers.tsx tells it. */
+  function syncFoundItTooOld() {
+    act(() => tellAppTooOld());
+  }
+
+  it("sends the records, then switches by itself, with no tap", async () => {
+    // The server's minimum is above this app's number: its pulls have stopped.
+    render(<UpdatePrompt />);
+    syncFoundItTooOld();
+    const apply = vi.fn();
+
+    newVersionReady(apply);
+
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+    // The records first, then the switch (03 §6.8).
+    expect(
+      vi.mocked(sendBeforeUpdate).mock.invocationCallOrder[0],
+    ).toBeLessThan(apply.mock.invocationCallOrder[0]!);
+  });
+
+  it("switches as soon as it hears, when the bar was already up", async () => {
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    await screen.findByRole("button", { name: "Sasisha" });
+    expect(apply).not.toHaveBeenCalled();
+
+    syncFoundItTooOld();
+
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+
+  it("waits for the sale to finish, even too old", async () => {
+    // Asha's sale is never cut off: the switch comes once she has finished it (Jack, 13 Nov 2026).
+    const view = render(<Counter busy />);
+    syncFoundItTooOld();
+    const apply = vi.fn();
+    newVersionReady(apply);
+    await barLooked();
+    expect(apply).not.toHaveBeenCalled();
+
+    view.rerender(<Counter busy={false} />);
+
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+
+  it("tries again once quiet, after a sale opened while the records were going", async () => {
+    const view = render(<Counter busy={false} />);
+    syncFoundItTooOld();
+    const apply = vi.fn();
+    const release = holdTheSend();
+    newVersionReady(apply);
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+
+    view.rerender(<Counter busy />);
+    release();
+    await barLooked();
+    await barLooked();
+    expect(apply).not.toHaveBeenCalled();
+
+    view.rerender(<Counter busy={false} />);
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    expect(sendBeforeUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it("switches by itself once per version, and leaves the bar for a tap if the reload doesn't come", async () => {
+    render(<UpdatePrompt />);
+    syncFoundItTooOld();
+    const apply = vi.fn();
+    // The records take a moment to go, as on the shop's line, so the bar redraws while they go and again
+    // after. A send done at once would never redraw it, and a second switch would never get its chance.
+    const release = holdTheSend();
+    newVersionReady(apply);
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+    release();
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+
+    // More syncs find it too old, and the bar redraws: no second switch by itself. A tenth of a second,
+    // as a second try by itself would take a few steps (two looks at the counter, the send) to land.
+    syncFoundItTooOld();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+    expect(apply).toHaveBeenCalledOnce();
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+
+    // The bar is still there, for someone to tap.
+    fireEvent.click(screen.getByRole("button", { name: "Sasisha" }));
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(2));
   });
 });

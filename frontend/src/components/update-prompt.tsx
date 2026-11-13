@@ -2,7 +2,8 @@
 // new version is ready and no counter screen is busy (SPIKE-1, SYNC-13, 03 §6.8). layout.tsx renders it
 // once, on every page.
 //
-// A tap sends the records still waiting first, then switches (03 §6.8: send the outbox, then update).
+// A tap sends the records still waiting first, then switches (03 §6.8: send the outbox, then update). An
+// app a sync found too old for the server takes the same steps by itself, with no tap (sync/too-old.ts).
 //
 // A client component: registering runs in the browser, after the page has loaded, never during the
 // build. When a version counts as ready is decided in src/offline/service-worker.ts, when the counter is
@@ -10,7 +11,7 @@
 // file only shows the bar and passes the tap on.
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/design/button";
@@ -22,6 +23,7 @@ import {
   registerServiceWorker,
 } from "@/offline/service-worker";
 import { sendBeforeUpdate } from "@/offline/sync/before-update";
+import { appIsTooOld, listenForTooOld } from "@/offline/sync/too-old";
 
 export function UpdatePrompt() {
   // The words come from the open book, Swahili or English (ADR-0040).
@@ -52,18 +54,43 @@ export function UpdatePrompt() {
   // Looked at once more as the tap lands: another tab's sale may have started since the bar's last look
   // (busy.ts looks every 2 s). Busy now, the tap does nothing, and the bar hides at its next look.
   // Then the records still waiting go first; at most a few seconds, and the switch goes ahead whatever
-  // the send's end (before-update.ts says why nothing is lost).
-  const tap = async () => {
-    if (apply === null || sending || !(await counterIsQuiet())) return;
+  // the send's end (before-update.ts says why nothing is lost). Says whether it switched.
+  const tap = async (): Promise<boolean> => {
+    if (apply === null || sending || !(await counterIsQuiet())) return false;
     setSending(true);
     await sendBeforeUpdate();
     // Looked at again after the send: a sale may have started in the seconds it took. The bar then hides
     // until it is finished, and the next tap sends again, nothing by then, and switches.
-    if (await counterIsQuiet()) apply();
+    const switching = await counterIsQuiet();
+    if (switching) apply();
     // Ready for another tap: the switch reloads the page in a moment, and if it doesn't, a disabled bar
     // would leave the laptop on the old version with no way on.
     setSending(false);
+    return switching;
   };
+
+  // Too old for the server (sync/too-old.ts): the pulls have stopped, and no change from the office
+  // arrives, a suspension included, until the app updates. So it switches by itself, with no tap (Jack,
+  // 13 Nov 2026), as soon as a version is ready and the counter is quiet: the same steps as a tap, the
+  // records first. The service worker looks for the version at once (service-worker.ts).
+  const tooOld = useSyncExternalStore(
+    listenForTooOld,
+    appIsTooOld,
+    // The build has no browser and no sync: not too old.
+    () => false,
+  );
+  // The version it switched to by itself, once: a reload that doesn't come leaves the bar for a tap,
+  // rather than telling the worker again at every redraw. A try that a new sale stopped is forgotten, so
+  // the next quiet moment tries again.
+  const triedAlone = useRef<ApplyUpdate | null>(null);
+  // No list of what it reads: it looks again after every redraw, and does nothing until all of it holds.
+  useEffect(() => {
+    if (!tooOld || !shown || sending || triedAlone.current === apply) return;
+    triedAlone.current = apply;
+    void tap().then((switched) => {
+      if (!switched) triedAlone.current = null;
+    });
+  });
 
   return (
     // Always on the page, hidden from the eye (sr-only) until a new version is ready and the counter is
