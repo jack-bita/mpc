@@ -130,6 +130,11 @@ class BootstrapAnswer(serializers.Serializer[Any]):
     shop = serializers.UUIDField(
         help_text="The shop this copy is of: a laptop fills only that shop's database, and writes nothing for another."
     )
+    min_app_version = serializers.IntegerField(
+        min_value=1,
+        help_text="The lowest app number that may still sync, as on every pull page: an app whose own number is lower"
+        " fills nothing, and updates first.",
+    )
     cursor = serializers.IntegerField(
         min_value=0, help_text="The shop's last change number this copy holds: the first pull asks for what came after."
     )

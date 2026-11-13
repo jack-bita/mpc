@@ -54,6 +54,7 @@ export const IDLE_RULE: Schemas["SettingKeyRecord"] = {
  * laptop whose last record was #57. */
 export const BOOTSTRAP: Schemas["BootstrapAnswer"] = {
   shop: DAWA_LAPTOP.shop.id,
+  min_app_version: 1,
   cursor: 120,
   last_device_seq: 57,
   side: [DAWA_SIDE],

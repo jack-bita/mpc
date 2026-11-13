@@ -989,6 +989,11 @@
                         "format": "uuid",
                         "description": "The shop this copy is of: a laptop fills only that shop's database, and writes nothing for another."
                     },
+                    "min_app_version": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "The lowest app number that may still sync, as on every pull page: an app whose own number is lower fills nothing, and updates first."
+                    },
                     "cursor": {
                         "type": "integer",
                         "minimum": 0,
@@ -1033,6 +1038,7 @@
                 "required": [
                     "cursor",
                     "last_device_seq",
+                    "min_app_version",
                     "payment_account",
                     "setting",
                     "setting_keys",

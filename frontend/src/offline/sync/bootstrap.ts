@@ -10,13 +10,16 @@
 // after it. That change comes again in the first pull, which saves the record as it is then: nothing is
 // lost, and a record saved twice is still one record.
 //
-// The answer names its shop, and only that shop's database is filled (SYNC-13).
+// The answer names its shop, and only that shop's database is filled; and the lowest app number the
+// server serves, so an app below it fills nothing and updates first (SYNC-13).
 import { api } from "@/api/client";
+import { APP_NUMBER } from "@/lib/version";
 
 import { databaseName, type ShopDatabase } from "../db";
 import { dropOutdatedChecks } from "../pin";
 import { syncAnswer, syncCallLimit } from "./answer";
 import { keepOnThisPage } from "./page-place";
+import { AppTooOld } from "./pull";
 import { CURSOR, LAST_DEVICE_SEQ, readCursor, readLastDeviceSeq } from "./meta";
 
 /** The server's copy is of another shop than this database's: the laptop was paired to another shop
@@ -52,6 +55,12 @@ export async function needsBootstrap(db: ShopDatabase): Promise<boolean> {
  *
  * A refusal is thrown, after keeping a block or a "not registered" (answer.ts), and changes nothing.
  *
+ * An app below the server's lowest app number is thrown too (AppTooOld, as a pull throws it), and
+ * changes nothing: the sync tells it, and the app updates first (too-old.ts). An old tab's sync can reach
+ * the bootstrap before its update, after a release whose new database version removed the cursor to fill
+ * again; the old code has no drawer for the list that release added, and would set the cursor past its
+ * lines for good.
+ *
  * A copy of another shop is thrown too (WrongShop), and changes nothing. The answer is the shop of the
  * device key the browser sends now; this database is the shop the device's saved copy names (mpc.device,
  * perhaps from an earlier visit). A laptop paired to another shop between that copy and this call would
@@ -69,6 +78,10 @@ export async function bootstrap(db: ShopDatabase): Promise<void> {
   // shop's id (db.ts), so the name says whose it is.
   if (databaseName(copy.shop) !== db.name)
     throw new WrongShop(copy.shop, db.name);
+  if (copy.min_app_version > APP_NUMBER)
+    throw new AppTooOld(
+      `The server serves app number ${copy.min_app_version} and up; this app is ${APP_NUMBER}.`,
+    );
 
   await db.transaction(
     "rw",
