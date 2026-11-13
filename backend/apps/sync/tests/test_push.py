@@ -592,12 +592,41 @@ def test_twin_sent_at_the_same_moment_answers_duplicate(
 def test_a_record_carried_to_another_laptop_posts_once(
     shop_a: Model, device_a: Device, device_a2: Device, staff_a: StaffMember
 ) -> None:
-    # The Dawa laptop was dying with #5 unsent; its rescue file was loaded on the Vyakula laptop, which sent it as its
-    # own #141, with the record's id kept (SYNC-12, 03 §6.7). Then the Dawa laptop came back and sent #5 too. The server
-    # knows the id, so the second copy gets the first answer, and the record is saved once.
+    # The Dawa laptop had sent up to #4 and was dying with #5 unsent; its rescue file was loaded on the Vyakula laptop,
+    # which sent it as its own #3, with the record's id kept (SYNC-12, 03 §6.7). Then the Dawa laptop came back and
+    # sent #5 and #6. The server knows #5's id, so the second copy gets the first answer, and the record is saved once.
+    # And #5 still counts in Dawa's numbers: #6 follows it with no gap (SYNC-12's review).
+    _push(device_a, [_sent(seq, staff_a) for seq in range(1, 5)])
+    _push(device_a2, [_sent(seq, staff_a) for seq in range(1, 3)])
     carried = uuid.uuid7()
-    (first,) = _push(device_a2, [_sent(141, staff_a, id=carried)])
-    (again,) = _push(device_a, [_sent(5, staff_a, id=carried)])
+    (first,) = _push(device_a2, [_sent(3, staff_a, id=carried, text="rescued")])
+    again, sixth = _push(device_a, [_sent(5, staff_a, id=carried, text="rescued"), _sent(6, staff_a)])
     assert first.status == "accepted"
     assert again == _again(first)
-    assert _tickets(shop_a) == [(141, "2 bags of pumba")]
+    assert sixth.status == "accepted"
+    assert [ticket for ticket in _tickets(shop_a) if ticket[1] == "rescued"] == [(3, "rescued")]
+    assert _flags(shop_a, FlagKind.DEVICE_GAP) == []
+
+
+def test_a_record_sent_first_by_its_own_laptop_counts_on_the_carrying_one(
+    shop_a: Model, device_a: Device, device_a2: Device, staff_a: StaffMember
+) -> None:
+    # The other way round: the Dawa laptop sent #5 itself after all, and the Vyakula laptop, which loaded the file
+    # meanwhile, sends its copy as #3, then its own #4. The copy is a repeat, and #3 still counts for Vyakula.
+    _push(device_a, [_sent(seq, staff_a) for seq in range(1, 5)])
+    _push(device_a2, [_sent(seq, staff_a) for seq in range(1, 3)])
+    carried = uuid.uuid7()
+    _push(device_a, [_sent(5, staff_a, id=carried)])
+    again, next_one = _push(device_a2, [_sent(3, staff_a, id=carried), _sent(4, staff_a)])
+    assert again.status == "duplicate"
+    assert next_one.status == "accepted"
+    assert _flags(shop_a, FlagKind.DEVICE_GAP) == []
+
+
+def test_a_repeat_from_the_same_laptop_moves_no_number(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # A plain repeat, the answer lost on the way back, counted its number the first time: sent again, nothing moves.
+    batch = [_sent(1, staff_a), _sent(2, staff_a)]
+    _push(device_a, batch)
+    _push(device_a, batch[:1])
+    with shop_context(shop_a):
+        assert Device.objects.get(pk=device_a.pk).last_device_seq == 2

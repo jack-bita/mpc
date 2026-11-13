@@ -2,7 +2,8 @@
 transaction of its own, each answered once, and the same way every time it comes again (SYNC-4; 03 §5.5, §6.3).
 
     for each document, by its laptop number (device_seq):
-      in the answer log already?       → duplicate, with the first answer
+      in the answer log already?       → duplicate, with the first answer; one another laptop sent first, as a
+                                         rescue file carries it, still counts in this laptop's numbers (SYNC-12)
       type, maker and shape all right?   no → invalid: its line and a flag, and the batch goes on
       save it, in one transaction        → accepted: the document, its change lines, its line, its change number
       its laptop number skips some?      → a device_gap flag about its line, in the same transaction (SYNC-5)
@@ -133,6 +134,8 @@ def _answer(device: Device, sent: Sent, received_at: datetime, sent_at: datetime
         # the answers before it kept, not a refusal of the whole push.
         stored = _stored(sent.id)
         if stored is not None:
+            if stored.device_id != device.pk:
+                _count_number_of_a_carried_record(device, sent.device_seq)
             return _replay(stored)
         return _post(device, sent, received_at, sent_at)
     except Exception:
@@ -142,6 +145,21 @@ def _answer(device: Device, sent: Sent, received_at: datetime, sent_at: datetime
         # server error's, the traceback can quote the row the database refused (03 §5.17).
         logger.exception("Push: server error on document %s (%s) from device %s.", sent.id, sent.type, device.pk)
         return Answer(id=sent.id, status=RETRY)
+
+
+def _count_number_of_a_carried_record(device: Device, device_seq: int) -> None:
+    # A record this laptop numbered, saved already from another laptop of the shop: a dying laptop's rescue file
+    # loaded there carried it (SYNC-12, 03 §6.7). Its answer is the first one's, as any repeat's, but this laptop used
+    # the number all the same, so it counts here: the Dawa laptop, back to life, sends its #5, which the Vyakula laptop
+    # sent first, then its #6, and #6 must not flag #5 as missing, a flag no line of Dawa's could ever close. A plain
+    # repeat from the laptop that sent it first counted its number then, and never comes here.
+    #
+    # Only the next number moves the count, under the same lock as a saved record's. Anything else is left to the next
+    # record's own check (_check_number): a carried number past a real gap stays inside that gap's flag, and one below
+    # the count changes nothing. Both are a record lost and another rescued around it, for a manager to read.
+    with transaction.atomic():
+        if device_seq == _last_number(device) + 1:
+            move_device_number(device, device_seq)
 
 
 def _post(device: Device, sent: Sent, received_at: datetime, sent_at: datetime) -> Answer:
