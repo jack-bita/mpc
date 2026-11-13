@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.51 · 13 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.52 · 13 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.52** (13 Nov 2026, SYNC-13): app updates are built (§6.8, 04 v1.68). By Jack's choices, the *Toleo jipya* bar stays hidden while a counter screen is busy, in any tab, and an app too old for the server updates by itself, with no tap, once the counter is quiet. A tap sends the outbox first, and switches anyway when it can't; the app looks for a new version every hour, when the network comes back, and when it is found too old; `min_app_version` is a whole number compared with the app's own; the bootstrap names its shop (§6.4). Marked **(v1.52)**.
 
 **Changes in v1.51** (13 Nov 2026, SYNC-12): keeping offline data safe is built (§6.7, 04 v1.66 and v1.67). By Jack's choice, *Toka* with unsent records shows a note and still logs out, as logging out loses nothing. The rescue file carries each record's id and where it was made, and the push gains an optional `carried_from`, so the server checks a rescued record against the laptop that made it and names who loaded the file (§6.3); by Jack's choice, a rescued clock-in always waits for a manager (02 v1.25). Marked **(v1.51)**.
 
@@ -617,9 +619,11 @@ How it is built **(v1.43)**: each push carries `sent_at`, the laptop's clock as 
 
 ### 6.8 App updates
 
-- The service worker downloads a new version in the background; the app shows *Toleo jipya* and switches when no sale is open.
-- Order: send the outbox → update the app → upgrade the local database (Dexie versions).
-- Documents carry `schema_version`; the server accepts the current and the previous version ✚. If the server needs a newer app (`min_app_version`), the device sends its outbox first, then updates.
+- The service worker downloads a new version in the background; the app shows *Toleo jipya* and switches when no sale is open. The browser looks for one only when a page loads, so the app asks it to look every hour *(default)*, when the network comes back, and when a sync finds the app too old **(v1.52)**.
+- No sale is open means no counter screen is busy, in any tab: a screen with work open holds a shared Web Lock while it is, and the bar stays hidden until none holds it (Jack's choice) **(v1.52)**.
+- Order: send the outbox → update the app → upgrade the local database (Dexie versions). A tap of *Sasisha* sends what waits first, for at most 10 s *(default)*, then switches; with no network, a failed send or no answer it switches anyway, as the records stay in the outbox for the new version, the server reads their shape, and the browser switches by itself anyway once every window is closed. The new version upgrades the database as it opens it **(v1.52)**.
+- Documents carry `schema_version`; the server accepts the current and the previous version ✚, and a test keeps the previous one on its list **(v1.52)**. If the server needs a newer app (`min_app_version`), the device sends its outbox first, then updates. `min_app_version` is a whole number, compared with the app's own (`APP_NUMBER`), both raised by hand in a release that must retire older apps, and kept in step by a test; a git commit can't say whether it is older or newer. Below it, or meeting a list it has no drawer for, the app stops its pull before that page, so nothing is passed over, and updates by itself, with no tap, once the counter is quiet (Jack's choice) **(v1.52)**.
+- A release that adds a list to the registry raises both numbers, and its database version removes the cursor, so the laptop bootstraps again: a laptop already past the new list's lines would never pull its rows. The same for a release whose app reads a rule a bootstrap hasn't brought. The bootstrap names its shop, and a laptop fills only that shop's database **(v1.52)**.
 
 ### 6.9 What works offline
 
