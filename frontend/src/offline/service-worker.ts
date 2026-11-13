@@ -57,47 +57,39 @@ export async function registerServiceWorker(
     return nothing;
   }
 
-  // Set once this page asks a new version to take over, so its own switch, which reloads it below, is
-  // never taken for another tab's.
-  let askedHere = false;
-
   // An update is something to offer only when a version already runs this page. On the very first
   // install there is nothing to replace: the new worker takes charge by itself (sw.ts: clientsClaim).
   const offer = (worker: ServiceWorker) => {
     if (!navigator.serviceWorker.controller) return;
     onUpdateReady(() => {
-      askedHere = true;
       // Past "installed", the new version is taking over or has taken over already: another tab
       // switched first. The browser announced it (controllerchange) as the version began taking over,
-      // so waiting for that announcement now would wait forever. Only this page is old: reload it.
+      // so waiting for that announcement now would wait forever. Only this page is old, and the bar
+      // looked at the counter just now: reload it.
       if (worker.state !== "installed") {
         reload();
         return;
       }
-      // Reload only once the new version has taken over, so the reloaded page comes from it.
-      // once: the listener removes itself, so a later switch can't reload this page again.
-      navigator.serviceWorker.addEventListener(
-        "controllerchange",
-        () => reload(),
-        { once: true },
-      );
-      // Serwist, in sw.ts, listens for this message and stops waiting.
+      // Serwist, in sw.ts, listens for this message and stops waiting. The reload comes once the new
+      // version has taken over, so the reloaded page comes from it: offered below (tookOver), as to every
+      // other tab, never done on the spot. Taking over can take a while, as the new version waits for the
+      // old one's last work, a background push say, and a sale started meanwhile must finish first.
       worker.postMessage({ type: "SKIP_WAITING" });
     }, "waiting");
   };
 
-  // Another tab switched (SYNC-13): the new version now serves this page too, but the page still runs
-  // the old version's code, and the new worker has deleted the old version's files (SPIKE-1). The first
-  // screen that needs one of them would fail, perhaps in the middle of a sale. So this page is offered a
-  // reload, taken over: the bar reloads it by itself once the counter is quiet, as it updates an app too
-  // old for the server (update-prompt.tsx). Not when no version ran the page before, the very first
-  // install (sw.ts: clientsClaim), as nothing old is in it; a page that first install took charge of is
-  // run by a version from then on, so a later switch is offered. Never the page that asked: it reloads.
+  // A new version took over (SYNC-13), at this page's own ask or another tab's: it now serves this page,
+  // but the page still runs the old version's code, and the new worker has deleted the old version's files
+  // (SPIKE-1). The first screen that needs one of them would fail, perhaps in the middle of a sale. So this
+  // page is offered a reload, taken over: the bar reloads it by itself once the counter is quiet, as it
+  // updates an app too old for the server (update-prompt.tsx). Not when no version ran the page before, the
+  // very first install (sw.ts: clientsClaim), as nothing old is in it; a page that first install took
+  // charge of is run by a version from then on, so a later switch is offered.
   let ranBy = navigator.serviceWorker.controller;
   const tookOver = () => {
     const before = ranBy;
     ranBy = navigator.serviceWorker.controller;
-    if (before === null || askedHere) return;
+    if (before === null) return;
     onUpdateReady(() => reload(), "taken_over");
   };
   navigator.serviceWorker.addEventListener("controllerchange", tookOver);

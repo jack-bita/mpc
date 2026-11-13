@@ -126,7 +126,7 @@ describe("registerServiceWorker", () => {
     expect(onUpdateReady).toHaveBeenCalledOnce();
   });
 
-  it("on apply, tells the new version to stop waiting, and reloads only once it has taken over", async () => {
+  it("on apply, tells the new version to stop waiting, and offers the reload once it has taken over", async () => {
     const { container, registration } = fakeServiceWorkers();
     const reload = vi.fn();
     const onUpdateReady = vi.fn();
@@ -140,7 +140,14 @@ describe("registerServiceWorker", () => {
     // A reload now would load the old version again: the new one hasn't taken over yet.
     expect(reload).not.toHaveBeenCalled();
 
+    // Taken over: offered as to any other tab, never a reload on the spot. The new version can take a while
+    // to take over, and a sale started meanwhile must finish first (update-prompt.tsx waits for it).
+    container.controller = new FakeWorker();
     container.dispatchEvent(new Event("controllerchange"));
+    expect(reload).not.toHaveBeenCalled();
+    expect(onUpdateReady).toHaveBeenCalledTimes(2);
+    expect(onUpdateReady.mock.calls[1]![1]).toBe("taken_over");
+    (onUpdateReady.mock.calls[1]![0] as () => void)();
     expect(reload).toHaveBeenCalledOnce();
   });
 
@@ -350,7 +357,10 @@ describe("a switch another tab made", () => {
     expect(onUpdateReady.mock.calls[0]![1]).toBe("taken_over");
   });
 
-  it("offers nothing more to the tab that switched itself, which reloads once", async () => {
+  it("offers the tab that switched itself the reload once, as taken over", async () => {
+    // Asha tapped Sasisha here. The new version can take a while to take over (it waits for the old one's
+    // last work, a background push say), and Juma may start a sale in this tab meanwhile: this tab waits
+    // for a quiet counter like every other.
     const { container, registration } = fakeServiceWorkers();
     const reload = vi.fn();
     const onUpdateReady = vi.fn();
@@ -361,8 +371,9 @@ describe("a switch another tab made", () => {
     (onUpdateReady.mock.calls[0]![0] as () => void)();
     anotherTabSwitched(container);
 
-    expect(onUpdateReady).toHaveBeenCalledOnce();
-    expect(reload).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
+    expect(onUpdateReady).toHaveBeenCalledTimes(2);
+    expect(onUpdateReady.mock.calls[1]![1]).toBe("taken_over");
   });
 
   it("stops listening once stopped", async () => {

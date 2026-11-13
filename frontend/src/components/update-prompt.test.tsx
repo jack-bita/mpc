@@ -463,6 +463,25 @@ describe("UpdatePrompt on a tab another tab has switched", () => {
     expect(sendBeforeUpdate).toHaveBeenCalledOnce();
   });
 
+  it("waits, in the tab that tapped, for a sale started before the new version took over", async () => {
+    // Asha taps Sasisha; the new version takes a few seconds to take over, and Juma starts a sale here
+    // meanwhile. The switch, when it lands, waits for his sale, as in every other tab.
+    const view = render(<Counter busy={false} />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    view.rerender(<Counter busy />);
+    const reload = vi.fn();
+
+    anotherTabSwitched(reload);
+    await barLooked();
+    expect(reload).not.toHaveBeenCalled();
+
+    view.rerender(<Counter busy={false} />);
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+  });
+
   it("waits for the sale in this tab to finish", async () => {
     // A sale open on the old code: it finishes there, then the tab reloads.
     const view = render(<Counter busy />);

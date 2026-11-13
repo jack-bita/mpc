@@ -3,7 +3,9 @@
 // once, on every page.
 //
 // A tap sends the records still waiting first, then switches (03 §6.8: send the outbox, then update). An
-// app a sync found too old for the server takes the same steps by itself, with no tap (sync/too-old.ts).
+// app a sync found too old for the server takes the same steps by itself, with no tap (sync/too-old.ts),
+// and so does a tab the new version has taken over, the tab that tapped included: it reloads once the
+// counter is quiet (service-worker.ts).
 //
 // A client component: registering runs in the browser, after the page has loaded, never during the
 // build. When a version counts as ready is decided in src/offline/service-worker.ts, when the counter is
