@@ -1,9 +1,10 @@
 """apps/sync/models.py — the answer log: the answer the push gave each document a laptop sent, kept so that the
 same document sent again gets the same answer (SYNC-4; 03 §5.5, §6.3).
 
-    shop  document  laptop          #   answer    change no.  flags   reason
-    MPC   0193…a7   Laptop ya Dawa  12  accepted  43          —       —
-    MPC   0193…b2   Laptop ya Dawa  13  invalid   —           1 flag  document.type_unknown
+    shop  document  laptop          #   answer    change no.  flags   reason                  carried from
+    MPC   0193…a7   Laptop ya Dawa  12  accepted  43          —       —                       —
+    MPC   0193…b2   Laptop ya Dawa  13  invalid   —           1 flag  document.type_unknown   —
+    MPC   0193…c9   Laptop Vyakula  41  accepted  57          —       —                       Dawa #14, by Neema
 
 Written only by the push, in the same transaction as the document it answers, so a saved document always has its line
 and a repeat always finds it. A ledger: never changed, never deleted (ADR-0021).
@@ -47,6 +48,20 @@ class PushedDocument(AppendOnly, CounterRecord):  # type: ignore[misc]
     # Invalid: why, as the API's error shape says it: the code, and each wrong field of the payload with its codes.
     reason = models.CharField(max_length=100, blank=True)
     reason_fields = models.JSONField(default=dict, blank=True)
+    # Carried: a record another laptop of the shop made, which a rescue file brought to the laptop that sent it
+    # (SYNC-12, 03 §6.7). The laptop that made it and its number there, so its time is checked against that laptop's
+    # record before it, not the sending laptop's (ATT-1's sign 1); and who loaded the file, as rule 7 wants every
+    # change to name its person. All three or none. An invalid line keeps them too, when they passed their checks: its
+    # time is still that laptop's clock, which the time checks around it must know (SYNC-12's second review). No
+    # index on who loaded it: nothing reads lines by it, and nobody is ever deleted (rule 7), so PROTECT never
+    # searches it.
+    carried_from = models.ForeignKey(
+        "people.Device", on_delete=models.PROTECT, related_name="+", null=True, blank=True, db_index=False
+    )
+    carried_seq = models.PositiveBigIntegerField(null=True, blank=True)
+    loaded_by = models.ForeignKey(
+        "people.StaffMember", on_delete=models.PROTECT, related_name="+", null=True, blank=True, db_index=False
+    )
 
     class Meta(AppendOnly.Meta, CounterRecord.Meta):
         # Both bases' Meta, so the guard stays the default manager (CORE-1, ADR-0042). No error codes on these rules:
@@ -55,6 +70,13 @@ class PushedDocument(AppendOnly, CounterRecord):  # type: ignore[misc]
             # A laptop's lines by its number, leading with `shop`: the record before a clock-in, the laptop's highest
             # number, a gap's lines (apps/sync/push.py) each read a few rows of one laptop, not the whole log (ATT-1).
             models.Index(fields=["shop", "device", "device_seq"], name="sync_pusheddocument_device_seq"),
+            # The lines carried from a laptop, by their number there, for the record before one of that laptop's
+            # (apps/sync/push.py, _record_before). Only the carried lines, which are few: a rescue is a last resort.
+            models.Index(
+                fields=["shop", "carried_from", "carried_seq"],
+                name="sync_pusheddocument_carried",
+                condition=models.Q(carried_from__isnull=False),
+            ),
         ]
         constraints = [
             # One line per document in a shop: two copies of one sale sent at the same moment can't both be written,
@@ -81,6 +103,16 @@ class PushedDocument(AppendOnly, CounterRecord):  # type: ignore[misc]
             # from 1 would have every new sale refused. SYNC-5, which owns the numbers and their gaps, decides that.
             models.CheckConstraint(
                 condition=models.Q(device_seq__gte=1), name="sync_pusheddocument_device_seq_from_one"
+            ),
+            # A carried line names where it was made, its number there and who loaded it, all three, or none.
+            models.CheckConstraint(
+                condition=models.Q(carried_from__isnull=True, carried_seq__isnull=True, loaded_by__isnull=True)
+                | models.Q(carried_from__isnull=False, carried_seq__gte=1, loaded_by__isnull=False),
+                name="sync_pusheddocument_carried_whole",
+            ),
+            # Carried from another laptop, never from the one that sent it: that one sends its own records as its own.
+            models.CheckConstraint(
+                condition=~models.Q(carried_from=models.F("device")), name="sync_pusheddocument_carried_from_another"
             ),
         ]
 

@@ -105,7 +105,8 @@
     "logout": "Log out",
     "leaving": "Logging out…",
     "waiting": "One moment…",
-    "withPassword": "Log in with a password"
+    "withPassword": "Log in with a password",
+    "unsent": "{count, plural, one {# record not sent yet. It is safe on this laptop, and will be sent by itself.} other {# records not sent yet. They are safe on this laptop, and will be sent by themselves.}}"
   },
   "passwordField": {
     "show": "Show password"
@@ -200,7 +201,40 @@
       "versionUnknown": "This record is from another version of the app.",
       "makerUnknown": "Whoever made this record doesn't work at this shop.",
       "idTaken": "The server already has another record with this id.",
+      "carriedFromUnknown": "This record says it came from a laptop that isn't another laptop of this shop.",
+      "loadedByUnknown": "Whoever loaded this record's file doesn't work at this shop.",
       "other": "The server refused it. Code: {code}"
+    }
+  },
+  "thisLaptop": {
+    "title": "This laptop",
+    "back": "Back",
+    "keep": {
+      "title": "Keeping the data",
+      "kept": "The browser has agreed to keep the shop's data on this laptop for good.",
+      "notKept": "The browser hasn't agreed to keep the shop's data for good: short of space, it may delete it, records not yet sent included. Install this app, then open this page again.",
+      "cannotAsk": "This browser can't keep the shop's data for good. Use Chrome or Edge."
+    },
+    "install": {
+      "title": "Installing the app",
+      "installed": "The app is installed on this laptop.",
+      "button": "Install",
+      "steps": "Open the browser's menu (⋮ or ⋯), then choose Install."
+    },
+    "rescue": {
+      "title": "Records not sent yet",
+      "none": "No records are waiting to be sent from this laptop.",
+      "waiting": "{count, plural, one {# record is waiting to be sent.} other {# records are waiting to be sent.}}",
+      "why": "If this laptop breaks before sending them, save them to a file. Then a manager loads it on another laptop of this shop, which sends them.",
+      "save": "Save to a file",
+      "load": "Load a file",
+      "added": "{count, plural, one {# record added, and it will be sent by itself.} other {# records added, and they will be sent by themselves.}}",
+      "alreadyHere": "{count, plural, one {# record was here already.} other {# records were here already.}}",
+      "notRescueFile": "This file isn't the shop's records. Choose a file saved on this page.",
+      "wrongShop": "This file belongs to another shop: it was not loaded.",
+      "brokenRecord": "This file is damaged: it was not loaded.",
+      "firstSync": "Wait a little: this laptop is still bringing the shop's data for the first time. Try again shortly.",
+      "failed": "It didn't work. Try again."
     }
   },
   "stock": {
@@ -361,7 +395,9 @@
     "document": {
       "type_unknown": "The server doesn't take this kind of record. Update the app.",
       "version_unknown": "This record comes from another version of the app. Update the app.",
-      "maker_unknown": "The person who made this record doesn't work at this shop."
+      "maker_unknown": "The person who made this record doesn't work at this shop.",
+      "carried_from_unknown": "This record says it came from a laptop that isn't another laptop of this shop.",
+      "loaded_by_unknown": "Whoever loaded this record's file doesn't work at this shop."
     },
     "session": {
       "wrong_device": "This login belongs to another device. Log in again here."

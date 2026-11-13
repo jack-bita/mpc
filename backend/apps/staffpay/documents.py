@@ -48,6 +48,8 @@ class Pushed(Protocol):
     def made_before_by(self) -> uuid.UUID | None: ...
     @property
     def created_by(self) -> StaffMember: ...
+    @property
+    def carried(self) -> bool: ...
 
 
 class ClockShape(serializers.Serializer[Any]):
@@ -72,6 +74,7 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
             time_before=document.time_before,
             received_at=document.received_at,
             last_server_time=payload["last_server_time"],
+            carried=document.carried,
         )
     )
     with recording_changes(shop_id):
@@ -96,8 +99,9 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
         record_change(event)
     if checked.time_check != TimeCheck.UNVERIFIED:
         return []
-    # A sign the laptop's clock moved: the line is kept, and flagged for a manager, naming the worker (02 §12). On no
-    # side: attendance belongs to the whole shop, as its rules do, so the flag is the shop's.
+    # A sign the laptop's clock moved, or a record carried in a rescue file: the line is kept, and flagged for a
+    # manager, naming the worker (02 §12, SYNC-12). On no side: attendance belongs to the whole shop, as its rules do,
+    # so the flag is the shop's. A carried one has no sign 1, so its flag names nobody else.
     people = [document.created_by]
     # Sign 1 says two records disagree, not whose clock moved: back for this tap, or forward for the one before. So the
     # flag names that record's maker too, for a manager to check both (Jack, ATT-1's review). Read only now, through

@@ -105,7 +105,8 @@
     "logout": "Toka",
     "leaving": "Unatoka…",
     "waiting": "Subiri kidogo…",
-    "withPassword": "Ingia kwa nenosiri"
+    "withPassword": "Ingia kwa nenosiri",
+    "unsent": "{count, plural, one {Kumbukumbu # bado haijatumwa. Iko salama kwenye kompyuta hii, na itatumwa yenyewe.} other {Kumbukumbu # bado hazijatumwa. Ziko salama kwenye kompyuta hii, na zitatumwa zenyewe.}}"
   },
   "passwordField": {
     "show": "Onyesha nenosiri"
@@ -200,7 +201,40 @@
       "versionUnknown": "Kumbukumbu hii ni ya toleo jingine la programu.",
       "makerUnknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili.",
       "idTaken": "Seva ina kumbukumbu nyingine yenye namba hii ya utambulisho.",
+      "carriedFromUnknown": "Kumbukumbu hii inasema imetoka kwenye kompyuta ambayo si nyingine ya duka hili.",
+      "loadedByUnknown": "Aliyepakia faili la kumbukumbu hii hafanyi kazi katika duka hili.",
       "other": "Seva imeikataa. Msimbo: {code}"
+    }
+  },
+  "thisLaptop": {
+    "title": "Kompyuta hii",
+    "back": "Rudi",
+    "keep": {
+      "title": "Kuhifadhi data",
+      "kept": "Kivinjari kimekubali kuhifadhi data za duka kwenye kompyuta hii kwa kudumu.",
+      "notKept": "Kivinjari hakijakubali kuhifadhi data za duka kwa kudumu: kikikosa nafasi, kinaweza kuzifuta, pamoja na kumbukumbu ambazo bado hazijatumwa. Sakinisha programu hii, kisha fungua ukurasa huu tena.",
+      "cannotAsk": "Kivinjari hiki hakiwezi kuhifadhi data za duka kwa kudumu. Tumia Chrome au Edge."
+    },
+    "install": {
+      "title": "Kusakinisha programu",
+      "installed": "Programu imesakinishwa kwenye kompyuta hii.",
+      "button": "Sakinisha",
+      "steps": "Fungua menyu ya kivinjari (⋮ au ⋯), kisha chagua Sakinisha."
+    },
+    "rescue": {
+      "title": "Kumbukumbu ambazo hazijatumwa",
+      "none": "Hakuna kumbukumbu inayosubiri kutumwa kutoka kompyuta hii.",
+      "waiting": "{count, plural, one {Kumbukumbu # inasubiri kutumwa.} other {Kumbukumbu # zinasubiri kutumwa.}}",
+      "why": "Kompyuta hii ikiharibika kabla ya kuzituma, zihifadhi kwenye faili. Kisha meneja azipakie kwenye kompyuta nyingine ya duka hili, nayo itazituma.",
+      "save": "Hifadhi kwenye faili",
+      "load": "Pakia faili",
+      "added": "{count, plural, one {Kumbukumbu # imeongezwa, na itatumwa yenyewe.} other {Kumbukumbu # zimeongezwa, na zitatumwa zenyewe.}}",
+      "alreadyHere": "{count, plural, one {Kumbukumbu # ilikuwepo tayari.} other {Kumbukumbu # zilikuwepo tayari.}}",
+      "notRescueFile": "Faili hili si la kumbukumbu za duka. Chagua faili lililohifadhiwa kwenye ukurasa huu.",
+      "wrongShop": "Faili hili ni la duka jingine: halikupakiwa.",
+      "brokenRecord": "Faili hili limeharibika: halikupakiwa.",
+      "firstSync": "Subiri kidogo: kompyuta hii bado inaleta data za duka kwa mara ya kwanza. Jaribu tena baada ya muda mfupi.",
+      "failed": "Haikufanikiwa. Jaribu tena."
     }
   },
   "stock": {
@@ -361,7 +395,9 @@
     "document": {
       "type_unknown": "Seva haipokei aina hii ya kumbukumbu. Sasisha programu.",
       "version_unknown": "Kumbukumbu hii ni ya toleo jingine la programu. Sasisha programu.",
-      "maker_unknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili."
+      "maker_unknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili.",
+      "carried_from_unknown": "Kumbukumbu hii inasema imetoka kwenye kompyuta ambayo si nyingine ya duka hili.",
+      "loaded_by_unknown": "Aliyepakia faili la kumbukumbu hii hafanyi kazi katika duka hili."
     },
     "session": {
       "wrong_device": "Kuingia huku ni kwa kifaa kingine. Ingia tena hapa."

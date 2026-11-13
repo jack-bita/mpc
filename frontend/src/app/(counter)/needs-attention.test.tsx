@@ -117,6 +117,14 @@ describe("the records the server refused", () => {
       "id.taken",
       "Seva ina kumbukumbu nyingine yenye namba hii ya utambulisho.",
     ],
+    [
+      "document.carried_from_unknown",
+      "Kumbukumbu hii inasema imetoka kwenye kompyuta ambayo si nyingine ya duka hili.",
+    ],
+    [
+      "document.loaded_by_unknown",
+      "Aliyepakia faili la kumbukumbu hii hafanyi kazi katika duka hili.",
+    ],
   ])("gives %s words of its own, with no try again", async (code, words) => {
     // The office's sentence for id.taken says "Jaribu tena", which a refused record can't do: it is never
     // sent again.

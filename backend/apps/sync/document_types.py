@@ -50,6 +50,9 @@ class Document:
     # clock-in's flag names them too (Jack, ATT-1's review).
     made_before_by: uuid.UUID | None
     created_by: StaffMember
+    # Brought in a rescue file from another laptop of the shop (SYNC-12): its time came from a file, which a clock-in
+    # never trusts. time_before and made_before_by are then the laptop's that made it, by its number there.
+    carried: bool = False
 
 
 @dataclass(frozen=True)

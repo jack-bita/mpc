@@ -23,11 +23,13 @@ CLOCK_SLACK = dt.timedelta(minutes=2)
 
 class Sign(enum.Enum):
     # The four signs that a laptop's clock moved (02 §12), by name, so the saving code knows which it found: sign 1
-    # says two records disagree, and its flag names the maker of the record before too (Jack, ATT-1's review).
+    # says two records disagree, and its flag names the maker of the record before too (Jack, ATT-1's review). And a
+    # fifth reason no time can be trusted, which is no clock's: the record came in a rescue file (SYNC-12).
     RECORD_BEFORE_IS_LATER = "record_before_is_later"  # 1. its record before has a later time
     BEFORE_THE_LAST_SERVER_TIME = "before_the_last_server_time"  # 2. it is before a time the server had told it
     CLOCK_OFF_AT_SENDING = "clock_off_at_sending"  # 3. the laptop's clock was off as it sent
     AFTER_SENDING = "after_sending"  # 4. it is after the laptop's own clock as it sent
+    CARRIED = "carried"  # 5. it came in a rescue file from another laptop, plain text anyone could edit
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,8 @@ class Evidence:
     # And two the laptop's clock can't move.
     received_at: dt.datetime  # the server's clock as the push arrived
     last_server_time: dt.datetime  # the last time the server told the laptop, before the tap
+    # Brought in a rescue file from a dying laptop and sent by another (SYNC-12): its time was read from a file.
+    carried: bool = False
 
 
 @dataclass(frozen=True)
@@ -55,8 +59,14 @@ class CheckedTime:
 def check_time(evidence: Evidence) -> CheckedTime:
     """How far one clock-in's time can be trusted (02 §12): the server's time when it was sent at once; else the
     laptop's, when no sign says its clock moved; else none, for a manager to decide (ATT-6)."""
-    # How far off the laptop's clock was as it sent: kept whatever the answer, so a manager can see it.
+    # How far off the laptop's clock was as it sent: kept whatever the answer, so a manager can see it. For a carried
+    # record, the clock of the laptop that sent it, not the one that made it: what that laptop said of itself.
     clock_error = evidence.sent_at - evidence.received_at
+    # Carried in a rescue file: never trusted, whatever the other signs say, and never "sent at once", which compares
+    # two laptops' clocks. A file is plain text: a time set to "now" by hand would pass as a tap the server saw, and a
+    # late fine would go. A rescue is rare, so a manager confirms the few it brings (Jack, SYNC-12's review; ATT-6).
+    if evidence.carried:
+        return CheckedTime(TimeCheck.UNVERIFIED, None, clock_error, frozenset({Sign.CARRIED}))
     # How long it waited on the laptop, both ends by the laptop's own clock: a wrong clock is wrong at both ends, so
     # the wait is right. Below zero, the clock went back between the tap and the push, which is not "at once": sign
     # 4 below looks at it.

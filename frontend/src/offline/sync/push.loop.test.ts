@@ -169,6 +169,44 @@ describe("the push", () => {
     ]);
   });
 
+  it("sends where a carried record was made, and keeps it in the archive", async () => {
+    // A record a rescue file brought from the Dawa laptop, its #5, loaded by Neema (SYNC-12): the server checks
+    // its time against Dawa's records, so the push names them; and a replay after a server restore sends it the
+    // same way, from the archive (03 §6.7).
+    await filledLaptop();
+    const carried_from = {
+      device: "019a5e00-0000-7000-8000-0000000000e9",
+      device_seq: 5,
+      loaded_by: "019a5e00-0000-7000-8000-0000000000c4",
+    };
+    const id = "019a7000-0000-7000-8000-0000000000d4";
+    await db.documents.put({
+      id,
+      ...CLOCK_IN,
+      client_time: "2026-11-12T04:30:00.000Z",
+      carried_from,
+    });
+    await db.outbox.put({
+      id,
+      type: "clock",
+      device_seq: 58,
+      status: "waiting",
+      attempts: 0,
+      last_error: null,
+    });
+    acceptsAll();
+
+    await push(db, pagePlace);
+
+    const [body] = await bodies();
+    expect(body!.documents[0]).toMatchObject({
+      id,
+      device_seq: 58,
+      carried_from,
+    });
+    expect((await db.sent_archive.get(id))?.carried_from).toEqual(carried_from);
+  });
+
   it("moves each accepted one from the outbox to the archive, and keeps the document", async () => {
     await filledLaptop();
     vi.useFakeTimers({ toFake: ["Date"] });

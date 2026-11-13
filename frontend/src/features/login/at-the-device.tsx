@@ -65,6 +65,7 @@ import {
   useOfflinePerson,
 } from "./offline-session";
 import { PinLogin } from "./pin-login";
+import { UnsentNote } from "./unsent-note";
 import type { StaffRow } from "./staff-picker";
 
 /** What a logout is about: who pressed Toka or Badilisha mtu, or whom the idle lock logged out; and, for a
@@ -94,6 +95,7 @@ export function AtTheDevice({
   const t = useTranslations("login");
   const settings = useTranslations("mySettings");
   const attendance = useTranslations("attendance");
+  const thisLaptop = useTranslations("thisLaptop");
   const me = useWhoIsHere();
   const store = useQueryClient();
 
@@ -352,6 +354,14 @@ export function AtTheDevice({
                 {attendance("title")}
               </ButtonLink>
             )}
+            {/* Kompyuta hii (SYNC-12): whether the laptop keeps the shop's data, the install, and the rescue
+                of unsent records in a file. A counter screen, so the same rule as Mahudhurio: only for someone
+                the counter's note names. */}
+            {rowHere && (
+              <ButtonLink href="/this-laptop/" kind="second" size="normal">
+                {thisLaptop("title")}
+              </ButtonLink>
+            )}
             {/* The person's own language and font, one tap from the welcome: someone logged in by PIN
                 never sees the office's home page (UI-9). Only by the server's session: its screen calls
                 the server as that person, which a local session can't (SYNC-10). */}
@@ -370,6 +380,8 @@ export function AtTheDevice({
       return (
         <>
           {noAnswer && <ApiErrorAlert error={me.error} />}
+          {/* Records still waiting to leave the laptop, after a Toka: safe here, sent by themselves (SYNC-12). */}
+          <UnsentNote />
           <PinLogin
             notice={notice ?? undefined}
             onPick={() => logout.reset()}

@@ -54,12 +54,13 @@ export class BrokenDraft extends Error {
 // The server's limits on an envelope (apps/sync/api/serializers.py, PushedEnvelope; apps/sync/push.py).
 const LONGEST_TYPE = 40;
 const HIGHEST_SCHEMA_VERSION = 2 ** 31 - 1;
-const HIGHEST_DEVICE_SEQ = 10 ** 12 - 2;
+export const HIGHEST_DEVICE_SEQ = 10 ** 12 - 2;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // The parts a screen hands over, checked as the server will check them. The payload must be a plain
-// object, as the server reads it as one (a DictField): a list, a date or a string is refused.
-function checkDraft(draft: Draft): void {
+// object, as the server reads it as one (a DictField): a list, a date or a string is refused. The import of
+// a rescue file checks each record with it too (rescue.ts), as a file can hold anything.
+export function checkDraft(draft: Draft): void {
   if (draft.type.length === 0 || draft.type.length > LONGEST_TYPE)
     throw new BrokenDraft("type");
   if (
