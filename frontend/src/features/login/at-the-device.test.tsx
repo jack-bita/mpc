@@ -2,7 +2,14 @@
 // forget the person, and show the tiles for whoever is next (UI-4, 03 §5.9). The fake server keeps one
 // session, as Django does for this browser: a PIN login starts it, a logout ends it, and `me` answers for it.
 import { onlineManager, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeQueryClient } from "@/api/query-client";
@@ -26,6 +33,13 @@ import { DAWA_SIDE, IDLE_15, IDLE_RULE } from "@/test/shop-lists";
 import { rememberPin } from "@/offline/pin";
 import { shopDatabase } from "@/offline/this-shop";
 
+import {
+  arriveAtCounter,
+  askToLeave,
+  useAtTheCounter,
+  useLeaveAsked,
+  usePersonAtCounter,
+} from "./at-the-counter";
 import { AtTheDevice } from "./at-the-device";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -60,18 +74,12 @@ const JUMA: WhoIsHere = {
   },
 };
 
+/** A person's row on the laptop's own copy of the staff, from what `me` answers for them. */
+const rowOf = (person: WhoIsHere) =>
+  staffRow(person.staff.id, person.user.full_name, person.staff.display_name);
+
 // Both people are on the laptop's own copy of the staff, which the tiles read (SYNC-10).
-beforeEach(() =>
-  theLaptopKnows(
-    ...[NEEMA, JUMA].map((person) =>
-      staffRow(
-        person.staff.id,
-        person.user.full_name,
-        person.staff.display_name,
-      ),
-    ),
-  ),
-);
+beforeEach(() => theLaptopKnows(rowOf(NEEMA), rowOf(JUMA)));
 
 /** The Dawa laptop with `first` logged in. Logout answers as `logout` says; by default, as Django does.
  * A test's own logout calls the `end` it gives back, as Django ends the session. */
@@ -817,5 +825,238 @@ describe("with no network (SYNC-10)", () => {
     await jumaLogsInHere();
 
     expect(screen.queryByRole("link", { name: "Mipangilio yangu" })).toBeNull();
+  });
+
+  it("tells the counter who the laptop let in, with the shop's idle minutes (SYNC-11)", async () => {
+    // No `me` to say the minutes: the shop's rule on the laptop, 15, goes with him to the counter.
+    await aLaptopWithNoNetwork(null);
+    await db().setting.put(IDLE_15);
+    await db().setting_keys.put(IDLE_RULE);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
+
+    const { result } = renderHook(() => usePersonAtCounter());
+    await waitFor(() => expect(result.current?.row.id).toBe(JUMA.staff.id));
+    expect(result.current?.idleMinutes).toBe(15);
+  });
+
+  it("offers Mahudhurio in a local session too: the counter needs no server (SYNC-11)", async () => {
+    await aLaptopWithNoNetwork(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
+
+    expect(
+      await screen.findByRole("link", { name: "Mahudhurio" }),
+    ).toBeDefined();
+  });
+
+  it("sends the logout of a counter's Toka with no answer about her at all, so she never comes back (SYNC-11)", async () => {
+    // Neema came in by the server, then stayed over 5 minutes on a counter screen: the store forgot `me`'s
+    // answer about her (TanStack's gcTime), and the network is gone. Her Toka there must still end her
+    // session, or the network's return would bring her welcome back for anyone to use.
+    const laptop = await aLaptopWithNoNetwork(NEEMA);
+    arriveAtCounter(rowOf(NEEMA), 15, "server");
+    askToLeave();
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    // The tiles for the next person, at once: her logout waits for the network.
+    expect(
+      await screen.findByRole(
+        "heading",
+        { level: 1, name: "Wewe ni nani?" },
+        { timeout: 3000 },
+      ),
+    ).toBeDefined();
+    expect(laptop.logoutsHeard).toBe(0);
+
+    // The network comes back, and the store asks `me` again as it does then.
+    laptop.network = true;
+    act(() => {
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+    });
+
+    await vi.waitFor(() => expect(laptop.logoutsHeard).toBe(1), {
+      timeout: 8000,
+    });
+    expect(laptop.here).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Karibu, Neema" })).toBeNull();
+    expect(bar().queryByText("Neema")).toBeNull();
+  }, 15_000);
+
+  it("ends a local session when a counter screen says he is leaving (SYNC-11)", async () => {
+    await aLaptopWithNoNetwork(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
+    const note = renderHook(() => useAtTheCounter());
+    await waitFor(() =>
+      expect(note.result.current?.staffId).toBe(JUMA.staff.id),
+    );
+
+    act(() => askToLeave());
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+    ).toBeDefined();
+    expect(bar().queryByText("Juma")).toBeNull();
+  });
+});
+
+describe("the way to Mahudhurio (SYNC-11)", () => {
+  const mahudhurio = () => screen.queryByRole("link", { name: "Mahudhurio" });
+
+  it("is on her welcome, and opens the counter's screen", async () => {
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    await waitFor(() => expect(mahudhurio()).not.toBeNull());
+    // The slash at the end is the build's (trailingSlash, next.config.ts), which a test's Next leaves off.
+    expect(mahudhurio()?.getAttribute("href")).toMatch(/^\/attendance\/?$/);
+  });
+
+  it("isn't there while nobody is logged in", async () => {
+    theLaptop(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" });
+    expect(mahudhurio()).toBeNull();
+  });
+
+  it("isn't offered to someone the laptop has no row of: the counter could not name them", async () => {
+    // A laptop paired a moment ago, before its first sync, with a password's login on it.
+    await shopDatabase(DAWA_LAPTOP.shop.id).staff.clear();
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    expect(mahudhurio()).toBeNull();
+  });
+});
+
+describe("what the counter knows (SYNC-11)", () => {
+  // A counter screen never asks the server who is here (rule 5), so the home page, which may, keeps a
+  // note for it (at-the-counter.ts), and hears a counter screen say "this person is leaving".
+  const leaveAsked = () =>
+    renderHook(() => useLeaveAsked()).result.current?.staffId ?? null;
+
+  it("names whoever is logged in, with the minutes her screen may sit untouched", async () => {
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    const { result } = renderHook(() => usePersonAtCounter());
+    await waitFor(() => expect(result.current?.row.id).toBe(NEEMA.staff.id));
+    expect(result.current?.idleMinutes).toBe(15);
+  });
+
+  it("names nobody once she has pressed Toka", async () => {
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    const { result } = renderHook(() => useAtTheCounter());
+    await waitFor(() => expect(result.current?.staffId).toBe(NEEMA.staff.id));
+
+    fireEvent.click(bar().getByRole("button", { name: "Toka" }));
+
+    await waitFor(() => expect(result.current).toBeNull());
+  });
+
+  it("logs her out on the server when a counter screen says she is leaving", async () => {
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    const note = renderHook(() => useAtTheCounter());
+    await waitFor(() =>
+      expect(note.result.current?.staffId).toBe(NEEMA.staff.id),
+    );
+
+    act(() => askToLeave());
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
+    ).toBeDefined();
+    expect(logouts()).toHaveLength(1);
+    // Heard: the same ask must not end her next login too.
+    expect(leaveAsked()).toBeNull();
+  });
+
+  it("says why when the server refuses a counter's logout, and keeps her where she is", async () => {
+    // As Toka here does: a refusal the server meant is shown to her, never a blank page with no tiles.
+    theLaptop(NEEMA, refusal(403, "permission_denied"));
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    const note = renderHook(() => useAtTheCounter());
+    await waitFor(() =>
+      expect(note.result.current?.staffId).toBe(NEEMA.staff.id),
+    );
+
+    act(() => askToLeave());
+
+    expect(
+      await screen.findByText("Huna ruhusa ya kufanya hili."),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("heading", { name: "Karibu, Neema" }),
+    ).toBeDefined();
+    expect(leaveAsked()).toBeNull();
+    // Asked once: a refusal the server meant gets the same no again.
+    expect(logouts()).toHaveLength(1);
+  });
+
+  it("never shows her welcome on the way out, when the home page opens after the counter asked", async () => {
+    // The real order: Toka on a counter screen, then the home page opens, with her `me` still in the
+    // store. The logout's answer never comes here, so the page stays as its first drawing left it.
+    theLaptop(NEEMA, () => new Promise<Response>(() => {}));
+    const store = makeQueryClient();
+    store.setQueryData(WHO_IS_HERE, NEEMA);
+    arriveAtCounter(rowOf(NEEMA), 15, "server");
+    askToLeave();
+
+    render(
+      <QueryClientProvider client={store}>
+        <AtTheDevice device={DAWA_LAPTOP} />
+      </QueryClientProvider>,
+    );
+
+    // Not for a moment: the next person is already standing at the counter.
+    expect(screen.queryByRole("heading", { name: "Karibu, Neema" })).toBeNull();
+    expect(bar().queryByText("Neema")).toBeNull();
+    expect(await screen.findByText("Unatoka…")).toBeDefined();
+    await vi.waitFor(() => expect(logouts()).toHaveLength(1));
+  });
+
+  it("logs nobody out when the one who asked to leave is no longer here", async () => {
+    // Neema's ask found nobody to hear it, as her session had ended by itself. Juma is here now.
+    arriveAtCounter(rowOf(NEEMA), 15, "server");
+    askToLeave();
+    theLaptop(JUMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    await screen.findByRole("heading", { name: "Karibu, Juma" });
+    await waitFor(() => expect(leaveAsked()).toBeNull());
+    expect(logouts()).toHaveLength(0);
+    expect(screen.getByRole("heading", { name: "Karibu, Juma" })).toBeDefined();
+  });
+
+  it("forgets a leave nobody heard, so her next login isn't ended by it", async () => {
+    // Her session had ended by itself before the home page opened: the tiles show, and the ask waits.
+    arriveAtCounter(rowOf(NEEMA), 15, "server");
+    askToLeave();
+    theLaptop(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    // She logs in again: the tap on her tile forgets the old ask.
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Neema Mfano Neema" }),
+    );
+    for (const digit of "2580")
+      fireEvent.click(screen.getByRole("button", { name: digit }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Karibu, Neema" }),
+    ).toBeDefined();
+    expect(leaveAsked()).toBeNull();
+    expect(logouts()).toHaveLength(0);
   });
 });

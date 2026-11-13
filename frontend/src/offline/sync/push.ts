@@ -15,14 +15,13 @@
 // Each push also carries the laptop's report on itself (SYNC-5): its clock as it sends, its version,
 // and how many records still wait. With nothing waiting, an empty push still goes, so the office sees
 // the laptop is alive (SYNC-14).
-import Dexie from "dexie";
-
 import { api } from "@/api/client";
 import { ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { APP_VERSION } from "@/lib/version";
 
 import type { DocumentRow, OutboxRow, ShopDatabase } from "../db";
+import { waitingInOrder } from "../outbox";
 import { syncAnswer, syncCallLimit } from "./answer";
 
 type Envelope = components["schemas"]["PushedEnvelopeRequest"];
@@ -92,14 +91,6 @@ export async function push(db: ShopDatabase): Promise<PushResult> {
     if (!(await applyAnswers(db, batch, answers, sentAt))) return "retry";
     if (batch.length < MOST_DOCUMENTS) return "sent";
   }
-}
-
-// The outbox rows still waiting, in their number order, through the index made for it (db.ts). A row
-// set aside is left out: it reached the server already.
-function waitingInOrder(db: ShopDatabase) {
-  return db.outbox
-    .where("[status+device_seq]")
-    .between(["waiting", Dexie.minKey], ["waiting", Dexie.maxKey]);
 }
 
 // The next batch and how many others wait, read together, in one transaction, so the count matches it.

@@ -138,6 +138,26 @@ export async function saveDocument(
   return saved;
 }
 
+/** The outbox rows still waiting, in their number order, through the index made for it (db.ts): what the
+ * push sends next (push.ts), and what Tuma sasa counts (SYNC-11). A row set aside is left out: it reached
+ * the server already, as refused. Here, beside the save, not in push.ts: the push calls the server, and a
+ * counter screen that imported it would bring the API client with it (rule 5). */
+export function waitingInOrder(db: ShopDatabase) {
+  return db.outbox
+    .where("[status+device_seq]")
+    .between(["waiting", Dexie.minKey], ["waiting", Dexie.maxKey]);
+}
+
+/** How many records wait to be sent from this laptop, read live: the count drops by itself as the push
+ * sends them. Undefined while its first read runs, or while the device isn't registered. */
+export function useWaitingCount(): number | undefined {
+  const db = useShopDatabase();
+  return useLiveQuery(
+    async () => (db === null ? undefined : waitingInOrder(db).count()),
+    [db],
+  );
+}
+
 /** A record the server refused (`invalid`), set aside by the push: its document, its number, and the
  * server's reason, an error code (`document.type_unknown`). */
 export interface SetAside {
@@ -149,8 +169,9 @@ export interface SetAside {
 /**
  * The records set aside on this laptop, in their number order, read live: the list redraws by itself
  * when a push sets one more aside. Undefined while its first read runs, or while the device isn't
- * registered. No screen shows it yet: SYNC-11 does, with words of its own for each reason, as the
- * office's sentence for `id.taken` ("Try again.") is wrong here: a resend gets the same answer.
+ * registered. The counter shows it (app/(counter)/needs-attention.tsx, SYNC-11), with words of its own for
+ * each reason, as the office's sentence for `id.taken` ("Try again.") is wrong here: a resend gets the
+ * same answer.
  */
 export function useNeedsAttention(): SetAside[] | undefined {
   const db = useShopDatabase();

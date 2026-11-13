@@ -19,8 +19,12 @@
 // (forgetTheLastPerson), so this follows each by itself. After the idle minutes untouched, the laptop logs
 // the person out by itself (idle-lock.ts).
 //
-// Until the counter screens come, someone logged in sees only the welcome and her settings' button (UI-4's
-// plan, UI-9). It calls the server, so it lives outside the counter lock (rule 5, ADR-0019).
+// The counter screens never ask the server who is here, so this page tells them: a note of whoever it shows,
+// with the minutes their screen may sit untouched (at-the-counter.ts, SYNC-11). And it hears them: Toka on a
+// counter screen hides the person there and asks this page, opened next, to log them out, as its own Toka
+// does. The logout calls the server, so it stays here, outside the counter lock (UI-4's note).
+//
+// It calls the server, so it lives outside the counter lock (rule 5, ADR-0019).
 //
 // "use client": it asks the server and reads the device's saved copy, both in the browser only.
 "use client";
@@ -42,14 +46,18 @@ import { Button, ButtonLink } from "@/components/design/button";
 import { OfflineBanner } from "@/components/offline-banner";
 import type { ThisDevice } from "@/features/devices/this-device";
 import { useFollowThePerson } from "@/features/people/follow-the-person";
-import {
-  sideAt,
-  sideOfStaffRow,
-  useWhoIsHere,
-} from "@/features/people/who-is-here";
-import { useRule, useSides } from "@/offline/reference";
+import { sideOfStaffRow } from "@/features/people/side-of-row";
+import { sideAt, useWhoIsHere } from "@/features/people/who-is-here";
+import { useRule, useSides, useStaff } from "@/offline/reference";
 import { wholeNumber } from "@/offline/rules";
 
+import {
+  arriveAtCounter,
+  type LeaveAsk,
+  leaveHeard,
+  nobodyAtCounter,
+  useLeaveAsked,
+} from "./at-the-counter";
 import { useIdleLock } from "./idle-lock";
 import {
   endOfflineSession,
@@ -85,6 +93,7 @@ export function AtTheDevice({
 }) {
   const t = useTranslations("login");
   const settings = useTranslations("mySettings");
+  const attendance = useTranslations("attendance");
   const me = useWhoIsHere();
   const store = useQueryClient();
 
@@ -158,11 +167,26 @@ export function AtTheDevice({
     else if (ended && !endedFor && hasAnswer) void forgetTheLastPerson(store);
   }, [endedFor, alreadySent, ended, hasAnswer, sendLogout, store]);
 
+  // Whom a counter screen asked to log out, not heard yet (SYNC-11): hidden from the first drawing, as
+  // the next person is already at the counter.
+  const leaveAsked = useLeaveAsked();
   // Who is logged in. First, someone the laptop let in offline, whose local session still holds.
-  const offlinePerson = useOfflinePerson();
+  const offlineRow = useOfflinePerson();
+  const offlinePerson =
+    offlineRow !== undefined && offlineRow.id === leaveAsked?.staffId
+      ? undefined
+      : offlineRow;
   // Else, as `me` last said. TanStack keeps the last answer through a failed refresh, so a dropped network
-  // leaves the person where they are. Nobody while a logout of theirs waits: hidden at the press.
-  const here = offlinePerson || ended || logoutWaits ? undefined : me.data;
+  // leaves the person where they are. Nobody while a logout of theirs waits: hidden at the press, here or
+  // on a counter screen. offlineRow, not offlinePerson: one leaving still holds the laptop, and the
+  // server's session from before them is being ended.
+  const here =
+    offlineRow ||
+    ended ||
+    logoutWaits ||
+    (leaveAsked !== null && me.data?.staff.id === leaveAsked.staffId)
+      ? undefined
+      : me.data;
   const sides = useSides();
   const side = offlinePerson
     ? sideOfStaffRow(offlinePerson, device.homeSide.id, sides ?? [])
@@ -213,7 +237,80 @@ export function AtTheDevice({
   const ruleWhole = wholeNumber(ruleMinutes);
   const offlineMinutes =
     ruleWhole !== undefined && ruleWhole > 0 ? ruleWhole : IDLE_MINUTES_UNKNOWN;
-  useIdleLock(offlinePerson ? offlineMinutes : here?.idle_minutes, leave);
+  const idleMinutes = offlinePerson ? offlineMinutes : here?.idle_minutes;
+  useIdleLock(idleMinutes, leave);
+
+  // The counter's note (SYNC-11): whoever this page shows, by their row on the laptop, with the same
+  // minutes as the lock above, so a counter screen locks as this page would. Nobody else: the note goes
+  // as the person is hidden, at the press of Toka. Someone with no row on the laptop's copy, as before its
+  // first sync, is nobody at the counter: it has no row to read them by.
+  const staff = useStaff();
+  const rowHere =
+    offlinePerson ??
+    (here ? staff?.find((row) => row.id === here.staff.id) : undefined);
+  // How they came in, so a counter's Toka ends the right session: the local one, or the server's.
+  const cameInBy = offlinePerson ? "laptop" : "server";
+  useEffect(() => {
+    if (rowHere !== undefined && idleMinutes !== undefined)
+      arriveAtCounter(rowHere, idleMinutes, cameInBy);
+    else nobodyAtCounter();
+  }, [rowHere, idleMinutes, cameInBy]);
+
+  // A counter screen asked to log someone out (SYNC-11). A ref, not state: the page may draw again before
+  // the store shows the logout waiting, and that drawing must not send a second one.
+  const leaveSentFor = useRef<LeaveAsk | null>(null);
+  useEffect(() => {
+    if (leaveAsked === null) {
+      leaveSentFor.current = null;
+      return;
+    }
+    // Someone the laptop let in: their local session ends here, if it still holds, and the server has
+    // nothing to hear, as their arrival already sent the logout.
+    if (leaveAsked.by === "laptop") {
+      if (offlineRow?.id === leaveAsked.staffId) endOfflineSession();
+      leaveHeard();
+      return;
+    }
+    // A logout on its way, the one sent for this ask or one from before: it ends the one session this
+    // browser holds, and hides the person from then on, as Toka here does. A second would add nothing.
+    if (logoutWaits) {
+      leaveHeard();
+      return;
+    }
+    // Sent, its answer still to come: heard when it comes (onSettled, below), or once the store shows it
+    // waiting (above).
+    if (leaveSentFor.current === leaveAsked) return;
+    // Her session is gone already: the server says nobody is here, or names someone else, or someone the
+    // laptop let in has taken the counter, whose arrival sent the logout. A logout now would end theirs.
+    const someoneElse =
+      (me.data !== undefined && me.data.staff.id !== leaveAsked.staffId) ||
+      offlineRow !== undefined;
+    if (ended !== null || someoneElse) {
+      leaveHeard();
+      return;
+    }
+    // `me` still on its way, with no failure yet: it may name her, or someone else, whose session a logout
+    // would end. Wait for it.
+    if (me.data === undefined && !noAnswer) return;
+    // Else the server's session gets its logout, as Toka here sends it: `me` names her, or can't answer at
+    // all. After 5 minutes on a counter screen the store has forgotten `me`'s answer (TanStack's gcTime),
+    // and with no network or a 5xx it can't ask again. Taken for nobody, the session would outlive the
+    // press, and bring her back once the network returned. The logout waits, and is sent again until the
+    // server hears it. Its answer is the ask's end: a refusal leaves her here with why, as Toka here does.
+    leaveSentFor.current = leaveAsked;
+    sendLogout(
+      { by: leaveAsked.staffId, notice: null },
+      { onSettled: () => leaveHeard() },
+    );
+  }, [
+    leaveAsked,
+    offlineRow,
+    me.data,
+    ended,
+    noAnswer,
+    logoutWaits,
+    sendLogout,
+  ]);
 
   // The status line's words: leaving, or asking `me` with nothing to show yet; else nothing. Not while it
   // waits for a network that isn't there, or asks again after no answer: the tiles say what to do then.
@@ -245,16 +342,25 @@ export function AtTheDevice({
           >
             {t("welcome", { name: person.name })}
           </h1>
-          {/* The person's own language and font, one tap from the welcome: someone logged in by PIN
-              never sees the office's home page (UI-9). Only by the server's session: its screen calls the
-              server as that person, which a local session can't (SYNC-10). */}
-          {here && (
-            <div>
+          <div className="flex flex-wrap gap-3">
+            {/* The counter's first screen (SYNC-11): clocking in and out. Online or offline alike, as the
+                counter needs no server; only for someone the counter's note names (rowHere), as a person
+                the laptop has no row of would be sent straight back. Next's own link: the page moves with no
+                reload, and the note, kept in this tab's memory, goes with her. */}
+            {rowHere && (
+              <ButtonLink href="/attendance/" size="normal">
+                {attendance("title")}
+              </ButtonLink>
+            )}
+            {/* The person's own language and font, one tap from the welcome: someone logged in by PIN
+                never sees the office's home page (UI-9). Only by the server's session: its screen calls
+                the server as that person, which a local session can't (SYNC-10). */}
+            {here && (
               <ButtonLink href="/my-settings/" kind="second" size="normal">
                 {settings("title")}
               </ButtonLink>
-            </div>
-          )}
+            )}
+          </div>
         </>
       );
     // Plain "nobody is logged in" is no error to show: only a session that ended for a reason says why,

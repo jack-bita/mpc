@@ -159,6 +159,50 @@
     "saved": "Saved.",
     "back": "Back"
   },
+  "attendance": {
+    "title": "Attendance",
+    "back": "Back",
+    "clockIn": "Clock in",
+    "clockOut": "Clock out",
+    "notInYet": "You haven't clocked in today.",
+    "inSince": "You clocked in at {time}.",
+    "outSince": "You clocked out at {time}.",
+    "timeOfDay": "{time}{part, select, other {}}",
+    "savedIn": "Clocked in at {time}.",
+    "savedOut": "Clocked out at {time}. Goodbye!",
+    "firstSync": "Wait a moment: this laptop is still getting the shop's data for the first time. Try again shortly.",
+    "failed": "Not saved. Try again; if it fails again, tell the manager.",
+    "list": {
+      "title": "Today on this laptop",
+      "empty": "Nobody has clocked in today yet.",
+      "name": "Name",
+      "came": "In",
+      "left": "Out",
+      "unknown": "Unknown worker"
+    },
+    "sendNow": {
+      "waiting": "{count, plural, one {# record waiting to be sent.} other {# records waiting to be sent.}}",
+      "allSent": "Every record has been sent.",
+      "button": "Send now",
+      "offline": "No internet: they will be sent once it is back."
+    }
+  },
+  "needsAttention": {
+    "title": "Records the server refused",
+    "clock": "{name}: {action}, at {time}",
+    "clockOnDay": "{name}: {action}, {date} at {time}",
+    "other": "Record number {number}",
+    "otherOnDay": "Record number {number}, {date}",
+    "unknownPerson": "Unknown worker",
+    "notAgain": "It won't be sent again. Tell the manager.",
+    "reasons": {
+      "typeUnknown": "The server doesn't take this kind of record.",
+      "versionUnknown": "This record is from another version of the app.",
+      "makerUnknown": "Whoever made this record doesn't work at this shop.",
+      "idTaken": "The server already has another record with this id.",
+      "other": "The server refused it. Code: {code}"
+    }
+  },
   "stock": {
     "part": "{count} {unit}"
   },

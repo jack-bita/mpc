@@ -88,6 +88,9 @@ check-backend: ## only the backend and the Python tools (CI's backend job)
 #   description it is made from (ADR-0025). This job has no Python, so it trusts that file; the
 #   backend job's test_committed_schema_matches_the_code keeps the file true to the code. Together:
 #   a serializer changed without `pnpm gen:api` turns one of the two red (UI-2).
+# - After the build, each counter screen's code is weighed, compressed: over 300 KB fails (03 §14,
+#   SYNC-11). Called with node, not as a script in package.json: a change there would make the image's
+#   build install every frontend package again.
 check-frontend: ## only the frontend (CI's frontend job)
 	cd frontend && pnpm install --frozen-lockfile
 	cd frontend && pnpm check:api
@@ -95,6 +98,7 @@ check-frontend: ## only the frontend (CI's frontend job)
 	cd frontend && pnpm typecheck
 	cd frontend && pnpm test
 	cd frontend && pnpm build
+	cd frontend && node scripts/counter-budget.mjs
 
 # The backend image, which the next two parts both use. It is built from the repo root (the build
 # context, backend/Dockerfile). Needs Docker, as the database already does. A target of its own, named

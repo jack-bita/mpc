@@ -1,4 +1,5 @@
-// format.ts — money and stock as people read them: "TSh 41,000" and "mifuko 26 + kilo 35.5" (03 §7.4).
+// format.ts — money, stock, times of day and dates as people read them: "TSh 41,000", "mifuko 26 + kilo 35.5",
+// "07:55" and "13/11/2026" (03 §7.4).
 //
 // Every screen and slip writes numbers through here, so 41000 never shows as "41000.00" on one screen
 // and "TSh 41,000" on another. Writing never rounds: a value that would need rounding is refused, so
@@ -97,4 +98,68 @@ export function formatStock(
     parts.push(writePart({ count: formatQuantity(rest), unit: base }));
   const stock = parts.join(" + ");
   return quantity.lt("0") ? `${MINUS}(${stock})` : stock;
+}
+
+/**
+ * A time of day as the shop reads it: "07:55", 24 hours, in the shop's own zone, like a phone's clock and
+ * the shop's rules ("late after 08:00"), never Swahili time, "saa 1:55 asubuhi" (Jack, SYNC-11). `at` is
+ * an ISO time with its zone, as a record's client_time ("2026-11-13T04:55:00.000Z"). Read in `timezone`,
+ * as a laptop's own zone may be anything.
+ */
+export function formatTime(at: string, timezone: string): string {
+  // h23 counts the hours 0 to 23: with a plain 24-hour clock some browsers write five past midnight as
+  // 24:05. Each part is read by name, as shopToday reads a date's, so no locale's own order leaks in.
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(Date.parse(at));
+  const part = (type: string) =>
+    parts.find((each) => each.type === type)?.value ?? "";
+  return `${part("hour")}:${part("minute")}`;
+}
+
+/**
+ * A date as the shop reads it: "13/11/2026", day, month, year, the order Tanzania writes a date in, in the
+ * shop's own zone. With no month name, so it reads the same in both languages. `at` is an ISO time with its
+ * zone, as a record's client_time.
+ */
+export function formatDate(at: string, timezone: string): string {
+  // Each part read by name, as for a time of day.
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).formatToParts(Date.parse(at));
+  const part = (type: string) =>
+    parts.find((each) => each.type === type)?.value ?? "";
+  return `${part("day")}/${part("month")}/${part("year")}`;
+}
+
+/** The part of the day a time falls in, by the shop's clock: what a Swahili screen names after the time. */
+export type DayPart = "morning" | "afternoon" | "evening" | "night";
+
+/**
+ * The part of the day of `at`, in the shop's own zone: asubuhi from 05:00, mchana from 12:00, jioni from
+ * 16:00, usiku from 19:00 to 04:59. A Swahili screen writes it after the time, "saa 07:55 asubuhi", so
+ * nobody reads 07:55 as Swahili time, where saa saba is 13:00 (Jack, SYNC-11). Its words are in the books
+ * (attendance.timeOfDay); English shows the time alone, its sentence naming the part with nothing for it, as
+ * both books must fill in the same blanks (messages.test.ts).
+ */
+export function dayPart(at: string, timezone: string): DayPart {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: timezone,
+      hour: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(Date.parse(at))
+      .find((each) => each.type === "hour")?.value,
+  );
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 16) return "afternoon";
+  if (hour >= 16 && hour < 19) return "evening";
+  return "night";
 }

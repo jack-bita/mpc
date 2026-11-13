@@ -159,6 +159,50 @@
     "saved": "Imehifadhiwa.",
     "back": "Rudi"
   },
+  "attendance": {
+    "title": "Mahudhurio",
+    "back": "Rudi",
+    "clockIn": "Ingia kazini",
+    "clockOut": "Toka kazini",
+    "notInYet": "Hujaingia kazini leo.",
+    "inSince": "Uliingia kazini saa {time}.",
+    "outSince": "Ulitoka kazini saa {time}.",
+    "timeOfDay": "{time} {part, select, morning {asubuhi} afternoon {mchana} evening {jioni} other {usiku}}",
+    "savedIn": "Umeingia kazini saa {time}.",
+    "savedOut": "Umetoka kazini saa {time}. Kwaheri!",
+    "firstSync": "Subiri kidogo: kompyuta hii bado inaleta data za duka kwa mara ya kwanza. Jaribu tena baada ya muda mfupi.",
+    "failed": "Haikuhifadhiwa. Jaribu tena; ikishindikana tena, mwambie meneja.",
+    "list": {
+      "title": "Leo kwenye kompyuta hii",
+      "empty": "Bado hakuna aliyeingia kazini leo.",
+      "name": "Jina",
+      "came": "Aliingia",
+      "left": "Alitoka",
+      "unknown": "Mfanyakazi asiyejulikana"
+    },
+    "sendNow": {
+      "waiting": "{count, plural, one {Kumbukumbu # inasubiri kutumwa.} other {Kumbukumbu # zinasubiri kutumwa.}}",
+      "allSent": "Kumbukumbu zote zimetumwa.",
+      "button": "Tuma sasa",
+      "offline": "Hakuna mtandao: zitatumwa mtandao ukirudi."
+    }
+  },
+  "needsAttention": {
+    "title": "Kumbukumbu zilizokataliwa na seva",
+    "clock": "{name}: {action}, saa {time}",
+    "clockOnDay": "{name}: {action}, {date} saa {time}",
+    "other": "Kumbukumbu namba {number}",
+    "otherOnDay": "Kumbukumbu namba {number}, {date}",
+    "unknownPerson": "Mfanyakazi asiyejulikana",
+    "notAgain": "Haitatumwa tena. Mwambie meneja.",
+    "reasons": {
+      "typeUnknown": "Seva haipokei aina hii ya kumbukumbu.",
+      "versionUnknown": "Kumbukumbu hii ni ya toleo jingine la programu.",
+      "makerUnknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili.",
+      "idTaken": "Seva ina kumbukumbu nyingine yenye namba hii ya utambulisho.",
+      "other": "Seva imeikataa. Msimbo: {code}"
+    }
+  },
   "stock": {
     "part": "{unit} {count}"
   },
