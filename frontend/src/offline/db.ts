@@ -68,6 +68,18 @@ export interface DocumentRow {
   created_by: string;
   /** What the document says, in its type's shape. */
   payload: unknown;
+  /** Only on a record a rescue file carried here from another laptop of the shop (SYNC-12, 03 §6.7): where
+   * it was made and who loaded the file. The push sends it, so the server checks the record against the
+   * laptop that made it. Not a search key, so adding it needs no new version. */
+  carried_from?: CarriedFrom;
+}
+
+/** Where a carried record was made: the laptop, its number there, and the staff member who loaded the
+ * rescue file on this laptop (the push's CarriedEnvelope). */
+export interface CarriedFrom {
+  device: string;
+  device_seq: number;
+  loaded_by: string;
 }
 
 /** One document not yet accepted (SYNC-8, 03 §6.2). Only unsent ones: an accepted document leaves

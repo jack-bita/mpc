@@ -14,11 +14,17 @@
 // can't use saveDocument(), which makes a new id, and writes its rows itself, in one transaction, as the
 // save does: either the whole file lands, or none of it.
 //
+// Each record also keeps where it was made: the Dawa laptop and its number there, and the import adds who
+// loaded the file (carried_from, db.ts). The push sends it, and the server checks the record's time against
+// the Dawa laptop's record before it, not against the Vyakula laptop's last one, which would look like a
+// clock moved back (SYNC-12's review); and it names the person who loaded it, who must hold device.manage.
+// A record carried twice, Dawa to Vyakula to a third laptop, keeps Dawa as where it was made.
+//
 // Only the `waiting` records go in the file. The set-aside ones reached the server already, as refused,
 // and sending them again changes nothing (Jack's plan; parking lot 23 decides what to do with them). No
 // pending effects either: a clock-in has none. The sale and payment cards, whose records change stock and
 // balances, add theirs to the file's next format.
-import type { DocumentRow, ShopDatabase } from "./db";
+import type { CarriedFrom, DocumentRow, ShopDatabase } from "./db";
 import {
   checkDraft,
   HIGHEST_DEVICE_SEQ,
@@ -34,9 +40,18 @@ export const RESCUE_KIND = "mpc.unsent";
 /** The file's format. A later format, which this app can't read, is refused, not half read. */
 export const RESCUE_FORMAT = 1;
 
-/** One record as the file carries it: the document, and its number on the laptop that made it, which
- * keeps the file's order. */
-export type RescuedDocument = DocumentRow & { device_seq: number };
+/** Where a record was first made: the laptop and its number there. */
+export interface MadeOn {
+  device: string;
+  device_seq: number;
+}
+
+/** One record as the file carries it: the document, its number on the laptop that saved the file, which
+ * keeps the file's order, and where it was first made. */
+export type RescuedDocument = Omit<DocumentRow, "carried_from"> & {
+  device_seq: number;
+  made_on: MadeOn;
+};
 
 /** What the file holds. */
 export interface RescueFile {
@@ -67,6 +82,7 @@ export class RescueRefused extends Error {
 export async function exportWaiting(
   db: ShopDatabase,
   shopId: string,
+  deviceId: string,
 ): Promise<RescueFile> {
   const documents = await db.transaction(
     "r",
@@ -79,7 +95,12 @@ export async function exportWaiting(
         // Written in one transaction with its row (saveDocument), so never missing.
         if (document === undefined)
           throw new Error(`Outbox row ${row.id} has no document.`);
-        return { ...document, device_seq: row.device_seq };
+        // Made here: this laptop and its number. Carried here already: where it was first made, kept.
+        const { carried_from, ...rest } = document;
+        const made_on: MadeOn = carried_from
+          ? { device: carried_from.device, device_seq: carried_from.device_seq }
+          : { device: deviceId, device_seq: row.device_seq };
+        return { ...rest, device_seq: row.device_seq, made_on };
       });
     },
   );
@@ -128,6 +149,10 @@ const UUID7 =
 
 // A time as the server's ZonedDateTimeField takes one: an ISO 8601 date and time, ending in its zone, `Z` or
 // an offset like +03:00. A day alone, or a time with no zone, is refused there with the whole push (ATT-1).
+// Any UUID, as the server's check of a laptop's id takes one: laptops' ids are the server's own.
+const ANY_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const ZONED_TIME =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i;
 
@@ -149,7 +174,8 @@ function checkRecord(document: RescuedDocument): void {
     Number.isNaN(Date.parse(document.client_time)) ||
     !Number.isInteger(document.device_seq) ||
     document.device_seq < 1 ||
-    document.device_seq > HIGHEST_DEVICE_SEQ
+    document.device_seq > HIGHEST_DEVICE_SEQ ||
+    !madeOnIsWhole(document.made_on)
   )
     throw new RescueRefused("broken_record");
   // The rest as a save checks a screen's draft: the type's length, the shape's version, the maker's id, and
@@ -162,6 +188,19 @@ function checkRecord(document: RescuedDocument): void {
   }
 }
 
+// Where it was made, as the server's CarriedEnvelope takes it: a laptop's id and a laptop number.
+function madeOnIsWhole(madeOn: unknown): boolean {
+  if (typeof madeOn !== "object" || madeOn === null) return false;
+  const { device, device_seq } = madeOn as Partial<MadeOn>;
+  return (
+    typeof device === "string" &&
+    ANY_UUID.test(device) &&
+    Number.isInteger(device_seq) &&
+    (device_seq as number) >= 1 &&
+    (device_seq as number) <= HIGHEST_DEVICE_SEQ
+  );
+}
+
 /** What an import did: how many records it added to this laptop's outbox, and how many it found here
  * already (made here, or loaded from this file before). */
 export interface ImportResult {
@@ -170,13 +209,15 @@ export interface ImportResult {
 }
 
 /**
- * Loads a rescue file's records into this laptop's outbox, each with its own id and this laptop's next
- * number, in one transaction, then tells the sync, as a save does.
+ * Loads a rescue file's records into this laptop's outbox, each with its own id, this laptop's next number,
+ * and where it was made, with `loadedBy`, the staff member loading it; in one transaction, then tells the
+ * sync, as a save does.
  */
 export async function importWaiting(
   db: ShopDatabase,
   shopId: string,
   text: string,
+  loadedBy: string,
 ): Promise<ImportResult> {
   const file = readFile(text, shopId);
   // In the order they were made on the dying laptop: the push sends them in that order from here too.
@@ -195,8 +236,13 @@ export async function importWaiting(
       let added = 0;
       let alreadyHere = 0;
       for (const rescued of inOrder) {
-        // Only the document's own fields, by name: the dying laptop's number stays behind, and anything
-        // else a file may carry never reaches the database.
+        // Only the document's own fields, by name: the saving laptop's number stays behind, and anything
+        // else a file may carry never reaches the database. Where it was made goes with it, for the push.
+        const carried_from: CarriedFrom = {
+          device: rescued.made_on.device,
+          device_seq: rescued.made_on.device_seq,
+          loaded_by: loadedBy,
+        };
         const document: DocumentRow = {
           id: rescued.id,
           type: rescued.type,
@@ -204,6 +250,7 @@ export async function importWaiting(
           client_time: rescued.client_time,
           created_by: rescued.created_by,
           payload: rescued.payload,
+          carried_from,
         };
         // Here already: in documents (made here, or loaded before), or sent from here and archived. Added
         // again it would break the outbox's one row per id, and a second number would be a gap the

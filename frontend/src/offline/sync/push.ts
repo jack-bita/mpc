@@ -173,6 +173,9 @@ function envelope({ row, document }: Waiting): Envelope {
     client_time: document.client_time,
     created_by: document.created_by,
     payload: document.payload as Envelope["payload"],
+    // Only for a record a rescue file carried here (SYNC-12): where it was made, so the server checks it
+    // against that laptop's records, not this one's. Left out otherwise, as the push sent it before.
+    ...(document.carried_from && { carried_from: document.carried_from }),
   };
 }
 

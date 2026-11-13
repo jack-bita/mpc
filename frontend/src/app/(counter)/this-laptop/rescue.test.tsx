@@ -70,7 +70,12 @@ async function aFileFromTheDawaLaptop(shopId = DAWA_LAPTOP.shop.id) {
     created_by: ASHA.id,
     payload: { kind: "in", last_server_time: "2026-11-13T04:00:00Z" },
   });
-  const file = await exportWaiting(other, shopId);
+  // The dying laptop's id: another laptop of the Dawa shop, not this one.
+  const file = await exportWaiting(
+    other,
+    shopId,
+    "019a5e00-0000-7000-8000-0000000000e9",
+  );
   other.close();
   await Dexie.delete(other.name);
   return new File([JSON.stringify(file)], "mpc-unsent.json", {
@@ -147,6 +152,9 @@ describe("loading a file", () => {
     expect(
       await screen.findByText("Kumbukumbu 1 inasubiri kutumwa."),
     ).toBeDefined();
+    // Loaded by Neema, the one at the counter: the push names her to the server, which checks her key.
+    const [document] = await db().documents.toArray();
+    expect(document?.carried_from?.loaded_by).toBe(NEEMA.id);
   });
 
   it("refuses another shop's file, and says so", async () => {

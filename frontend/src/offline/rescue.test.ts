@@ -27,6 +27,10 @@ import { LAST_DEVICE_SEQ, readLastDeviceSeq } from "./sync/meta";
 import { waitingInOrder } from "./waiting";
 
 const SHOP = DAWA_LAPTOP.shop.id;
+/** The Vyakula laptop's id, for a file it saves itself. */
+const VYAKULA_LAPTOP = "019a5e00-0000-7000-8000-0000000000e2";
+/** The manager who loads the file on the Vyakula laptop. */
+const NEEMA = "019a5e00-0000-7000-8000-0000000000c4";
 const OTHER_SHOP = "019a5e00-0000-7000-8000-00000000ffff";
 
 const opened: ShopDatabase[] = [];
@@ -69,19 +73,40 @@ async function dyingLaptop() {
     await saveDocument(dawa, clock("out")),
     await saveDocument(dawa, clock("in")),
   ];
-  const text = JSON.stringify(await exportWaiting(dawa, SHOP));
+  const text = JSON.stringify(await exportWaiting(dawa, SHOP, DAWA_LAPTOP.id));
   return { dawa, saved, text };
 }
 
 describe("the export", () => {
-  it("writes every waiting record, in its order, with its id and number", async () => {
+  it("writes every waiting record, in its order, with its id, its number and where it was made", async () => {
     const { saved, text } = await dyingLaptop();
     const file = JSON.parse(text) as Record<string, unknown>;
 
     expect(file.kind).toBe(RESCUE_KIND);
     expect(file.format).toBe(RESCUE_FORMAT);
     expect(file.shop_id).toBe(SHOP);
-    expect(file.documents).toEqual(saved);
+    expect(file.documents).toEqual(
+      saved.map((document) => ({
+        ...document,
+        made_on: { device: DAWA_LAPTOP.id, device_seq: document.device_seq },
+      })),
+    );
+  });
+
+  it("keeps where a record carried here was first made, when it is carried on again", async () => {
+    // Vyakula loaded Dawa's file, and is dying too before it sent them: its own file still says Dawa, #58.
+    const { saved, text } = await dyingLaptop();
+    const vyakula = await laptop("vyakula-test", 140);
+    await importWaiting(vyakula, SHOP, text, NEEMA);
+
+    const again = await exportWaiting(vyakula, SHOP, VYAKULA_LAPTOP);
+    expect(again.documents[0]).toMatchObject({
+      id: saved[0]!.id,
+      device_seq: 141,
+      made_on: { device: DAWA_LAPTOP.id, device_seq: 58 },
+    });
+    // The loader stays behind: the next laptop names its own.
+    expect(again.documents[0]).not.toHaveProperty("carried_from");
   });
 
   it("leaves out a record the server refused: it reached the server already", async () => {
@@ -91,7 +116,7 @@ describe("the export", () => {
       last_error: "document.type_unknown",
     });
 
-    const file = await exportWaiting(dawa, SHOP);
+    const file = await exportWaiting(dawa, SHOP, DAWA_LAPTOP.id);
     expect(file.documents.map((document) => document.id)).toEqual([
       saved[0]!.id,
       saved[2]!.id,
@@ -104,7 +129,7 @@ describe("the import", () => {
     const { saved, text } = await dyingLaptop();
     const vyakula = await laptop("vyakula-test", 140);
 
-    expect(await importWaiting(vyakula, SHOP, text)).toEqual({
+    expect(await importWaiting(vyakula, SHOP, text, NEEMA)).toEqual({
       added: 3,
       alreadyHere: 0,
     });
@@ -118,18 +143,24 @@ describe("the import", () => {
       [saved[2]!.id, 143],
     ]);
     expect(await readLastDeviceSeq(vyakula)).toBe(143);
-    // The documents as made, on the Dawa laptop's clock: the dying laptop's number stays behind.
-    expect(await vyakula.documents.get(saved[0]!.id)).toEqual(
-      withoutNumber(saved[0]!),
-    );
+    // The documents as made, on the Dawa laptop's clock, the dying laptop's number left behind; and where each
+    // was made, with who loaded it, for the push to tell the server (SYNC-12's review).
+    expect(await vyakula.documents.get(saved[0]!.id)).toEqual({
+      ...withoutNumber(saved[0]!),
+      carried_from: {
+        device: DAWA_LAPTOP.id,
+        device_seq: 58,
+        loaded_by: NEEMA,
+      },
+    });
   });
 
   it("adds each record once when the same file is loaded twice", async () => {
     const { text } = await dyingLaptop();
     const vyakula = await laptop("vyakula-test", 140);
-    await importWaiting(vyakula, SHOP, text);
+    await importWaiting(vyakula, SHOP, text, NEEMA);
 
-    expect(await importWaiting(vyakula, SHOP, text)).toEqual({
+    expect(await importWaiting(vyakula, SHOP, text, NEEMA)).toEqual({
       added: 0,
       alreadyHere: 3,
     });
@@ -147,7 +178,7 @@ describe("the import", () => {
       posted_seq: 300,
     });
 
-    expect(await importWaiting(vyakula, SHOP, text)).toEqual({
+    expect(await importWaiting(vyakula, SHOP, text, NEEMA)).toEqual({
       added: 2,
       alreadyHere: 1,
     });
@@ -159,7 +190,7 @@ describe("the import", () => {
     const heard = vi.fn();
     const stop = listenForAsks(heard);
 
-    await importWaiting(vyakula, SHOP, text);
+    await importWaiting(vyakula, SHOP, text, NEEMA);
     expect(heard).toHaveBeenCalledWith("saved");
     stop();
   });
@@ -168,9 +199,9 @@ describe("the import", () => {
     const { text } = await dyingLaptop();
     const vyakula = await laptop("vyakula-test", 140);
 
-    await expect(importWaiting(vyakula, OTHER_SHOP, text)).rejects.toEqual(
-      new RescueRefused("wrong_shop"),
-    );
+    await expect(
+      importWaiting(vyakula, OTHER_SHOP, text, NEEMA),
+    ).rejects.toEqual(new RescueRefused("wrong_shop"));
     expect(await vyakula.outbox.count()).toBe(0);
   });
 
@@ -188,7 +219,7 @@ describe("the import", () => {
     ],
   ])("refuses %s", async (_, text) => {
     const vyakula = await laptop("vyakula-test", 140);
-    await expect(importWaiting(vyakula, SHOP, text)).rejects.toEqual(
+    await expect(importWaiting(vyakula, SHOP, text, NEEMA)).rejects.toEqual(
       new RescueRefused("not_rescue_file"),
     );
   });
@@ -200,7 +231,7 @@ describe("the import", () => {
     const vyakula = await laptop("vyakula-test", 140);
 
     await expect(
-      importWaiting(vyakula, SHOP, JSON.stringify(file)),
+      importWaiting(vyakula, SHOP, JSON.stringify(file), NEEMA),
     ).rejects.toEqual(new RescueRefused("broken_record"));
     // Not the first two either: the file lands whole or not at all.
     expect(await vyakula.outbox.count()).toBe(0);
@@ -225,6 +256,15 @@ describe("the import", () => {
     ["a number below 1", (r) => (r.device_seq = 0)],
     ["a number that isn't whole", (r) => (r.device_seq = 5.5)],
     ["a payload that is a list", (r) => (r.payload = [])],
+    ["no laptop it was made on", (r) => delete r.made_on],
+    [
+      "a laptop that isn't an id",
+      (r) => (r.made_on = { device: "Laptop Dawa", device_seq: 58 }),
+    ],
+    [
+      "a number on its laptop below 1",
+      (r) => (r.made_on = { device: DAWA_LAPTOP.id, device_seq: 0 }),
+    ],
   ])("refuses a record with %s", async (_, breakIt) => {
     const { text } = await dyingLaptop();
     const file = JSON.parse(text) as { documents: Record<string, unknown>[] };
@@ -232,7 +272,7 @@ describe("the import", () => {
     const vyakula = await laptop("vyakula-test", 140);
 
     await expect(
-      importWaiting(vyakula, SHOP, JSON.stringify(file)),
+      importWaiting(vyakula, SHOP, JSON.stringify(file), NEEMA),
     ).rejects.toEqual(new RescueRefused("broken_record"));
     expect(await vyakula.outbox.count()).toBe(0);
   });
@@ -243,7 +283,9 @@ describe("the import", () => {
     file.documents[1]!.client_time = "2026-11-13T07:30:00.123+03:00";
     const vyakula = await laptop("vyakula-test", 140);
 
-    expect(await importWaiting(vyakula, SHOP, JSON.stringify(file))).toEqual({
+    expect(
+      await importWaiting(vyakula, SHOP, JSON.stringify(file), NEEMA),
+    ).toEqual({
       added: 3,
       alreadyHere: 0,
     });
@@ -254,9 +296,9 @@ describe("the import", () => {
     const fresh = openShopDatabase("fresh-test");
     opened.push(fresh);
 
-    await expect(importWaiting(fresh, SHOP, text)).rejects.toBeInstanceOf(
-      NeverFilled,
-    );
+    await expect(
+      importWaiting(fresh, SHOP, text, NEEMA),
+    ).rejects.toBeInstanceOf(NeverFilled);
     expect(await fresh.outbox.count()).toBe(0);
   });
 });

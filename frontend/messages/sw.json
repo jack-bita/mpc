@@ -201,6 +201,8 @@
       "versionUnknown": "Kumbukumbu hii ni ya toleo jingine la programu.",
       "makerUnknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili.",
       "idTaken": "Seva ina kumbukumbu nyingine yenye namba hii ya utambulisho.",
+      "carriedFromUnknown": "Kumbukumbu hii inasema imetoka kwenye kompyuta ambayo si nyingine ya duka hili.",
+      "loadedByUnknown": "Aliyepakia faili la kumbukumbu hii hafanyi kazi katika duka hili.",
       "other": "Seva imeikataa. Msimbo: {code}"
     }
   },

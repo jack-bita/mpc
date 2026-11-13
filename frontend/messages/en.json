@@ -201,6 +201,8 @@
       "versionUnknown": "This record is from another version of the app.",
       "makerUnknown": "Whoever made this record doesn't work at this shop.",
       "idTaken": "The server already has another record with this id.",
+      "carriedFromUnknown": "This record says it came from a laptop that isn't another laptop of this shop.",
+      "loadedByUnknown": "Whoever loaded this record's file doesn't work at this shop.",
       "other": "The server refused it. Code: {code}"
     }
   },

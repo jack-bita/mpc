@@ -59,7 +59,7 @@ export function Rescue() {
   async function save() {
     if (db === null || device === null) return;
     setProblem(null);
-    const file = await exportWaiting(db, device.shop.id);
+    const file = await exportWaiting(db, device.shop.id, device.id);
     // The browser's own download: a link to the file, clicked, then let go. The name says which laptop and
     // which day, for someone choosing between two files on a stick.
     const url = URL.createObjectURL(
@@ -73,11 +73,19 @@ export function Rescue() {
   }
 
   async function load(file: File) {
-    if (db === null || device === null) return;
+    if (db === null || device === null || person == null) return;
     setProblem(null);
     setLoaded(null);
     try {
-      setLoaded(await importWaiting(db, device.shop.id, await file.text()));
+      // Loaded by whoever is at the counter: the push names them to the server, which checks their key.
+      setLoaded(
+        await importWaiting(
+          db,
+          device.shop.id,
+          await file.text(),
+          person.row.id,
+        ),
+      );
     } catch (error) {
       if (error instanceof RescueRefused)
         setProblem(PROBLEM_WORDS[error.problem]);

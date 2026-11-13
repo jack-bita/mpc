@@ -34,6 +34,10 @@ const REASONS = {
   "document.type_unknown": "typeUnknown",
   "document.version_unknown": "versionUnknown",
   "document.maker_unknown": "makerUnknown",
+  // A record a rescue file carried here (SYNC-12): named as made on no other laptop of the shop, or loaded
+  // by someone not of it. A file edited by hand, most likely: the manager decides.
+  "document.carried_from_unknown": "carriedFromUnknown",
+  "document.loaded_by_unknown": "loadedByUnknown",
   "id.taken": "idTaken",
 } as const;
 
