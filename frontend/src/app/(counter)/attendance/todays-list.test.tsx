@@ -167,6 +167,24 @@ describe("today's list", () => {
     expect(await rows()).toEqual([["Mfanyakazi asiyejulikana", "07:40", ""]]);
   });
 
+  it("leaves out a tap the server refused: the attendance book never got it", async () => {
+    // The refused records' warning names it instead (needs-attention.tsx).
+    await tapped(JUMA, "in", "2026-11-13T04:40:00Z");
+    await tapped(ASHA, "in", "2026-11-13T04:55:00Z");
+    const ashas = (await db().documents.toArray()).find(
+      (each) => each.created_by === ASHA.id,
+    );
+    await db().outbox.update(ashas?.id ?? "", {
+      status: "needs_attention",
+      last_error: "document.maker_unknown",
+    });
+    vi.setSystemTime(EVENING);
+
+    render(<TodaysList />);
+
+    expect(await rows()).toEqual([["Juma", "07:40", ""]]);
+  });
+
   it("speaks English, with no Swahili left", async () => {
     await tapped(ASHA, "in", "2026-11-13T04:55:00Z");
     vi.setSystemTime(EVENING);

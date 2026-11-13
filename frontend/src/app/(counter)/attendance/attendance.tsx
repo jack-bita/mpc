@@ -18,7 +18,8 @@
 // bootstrap but never pulled, or never filled at all (NeverFilled), saves nothing and says to wait for the
 // first sync: the server would refuse such a tap, and it would sit set aside.
 //
-// Under the button, who clocked in today on this laptop (todays-list.tsx), read from the same taps; then how
+// Above the button, any record the server refused, with why (needs-attention.tsx): a refused tap doesn't
+// count for the button, so she may clock in again. Under the button, who clocked in today on this laptop (todays-list.tsx), read from the same taps; then how
 // many records wait to be sent, with Tuma sasa (send-now.tsx).
 //
 // Times as "07:55", 24 hours, in the shop's zone (formatTime, Jack, SYNC-11).
@@ -48,6 +49,7 @@ import { NeverFilled, saveDocument } from "@/offline/outbox";
 import { readLastServerTime } from "@/offline/sync/meta";
 import { useShopDatabase } from "@/offline/this-shop";
 
+import { NeedsAttention } from "../needs-attention";
 import { SendNow } from "./send-now";
 import { TodaysList } from "./todays-list";
 
@@ -157,6 +159,8 @@ export function AttendanceScreen() {
           <AlertDescription>{t(problem)}</AlertDescription>
         </Alert>
       )}
+      {/* A tap the server refused, above the button: she sees why before she taps again (SYNC-11). */}
+      <NeedsAttention />
       {next && (
         // The main kind and the big size: the one thing this screen is for, easy to hit on a phone too.
         <Button size="big" disabled={saving} onClick={() => void tap(next)}>

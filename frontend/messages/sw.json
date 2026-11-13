@@ -186,6 +186,20 @@
       "offline": "Hakuna mtandao: zitatumwa mtandao ukirudi."
     }
   },
+  "needsAttention": {
+    "title": "Kumbukumbu zilizokataliwa na seva",
+    "clock": "{name}: {action}, saa {time}",
+    "other": "Kumbukumbu namba {number}",
+    "unknownPerson": "Mfanyakazi asiyejulikana",
+    "notAgain": "Haitatumwa tena. Mwambie meneja.",
+    "reasons": {
+      "typeUnknown": "Seva haipokei aina hii ya kumbukumbu.",
+      "versionUnknown": "Kumbukumbu hii ni ya toleo jingine la programu.",
+      "makerUnknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili.",
+      "idTaken": "Seva ina kumbukumbu nyingine yenye namba hii ya utambulisho.",
+      "other": "Seva imeikataa. Msimbo: {code}"
+    }
+  },
   "stock": {
     "part": "{unit} {count}"
   },

@@ -169,8 +169,9 @@ export interface SetAside {
 /**
  * The records set aside on this laptop, in their number order, read live: the list redraws by itself
  * when a push sets one more aside. Undefined while its first read runs, or while the device isn't
- * registered. No screen shows it yet: SYNC-11 does, with words of its own for each reason, as the
- * office's sentence for `id.taken` ("Try again.") is wrong here: a resend gets the same answer.
+ * registered. The counter shows it (app/(counter)/needs-attention.tsx, SYNC-11), with words of its own for
+ * each reason, as the office's sentence for `id.taken` ("Try again.") is wrong here: a resend gets the
+ * same answer.
  */
 export function useNeedsAttention(): SetAside[] | undefined {
   const db = useShopDatabase();

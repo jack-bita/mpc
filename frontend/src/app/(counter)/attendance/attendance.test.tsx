@@ -189,6 +189,29 @@ describe("clocking in", () => {
   });
 });
 
+describe("a clock-in the server refused", () => {
+  it("doesn't count: she is offered Ingia kazini again, and the warning says why", async () => {
+    // Set aside by the push (push.ts): it never reached the attendance book, so she isn't in on the server.
+    await tappedEarlier(ASHA, "in", MORNING);
+    const [first] = await db().outbox.toArray();
+    await db().outbox.update(first?.id ?? "", {
+      status: "needs_attention",
+      last_error: "document.maker_unknown",
+    });
+    vi.setSystemTime(new Date("2026-11-13T05:10:00Z"));
+
+    await theScreen();
+
+    expect(await screen.findByText("Hujaingia kazini leo.")).toBeDefined();
+    expect(clockIn()).not.toBeNull();
+    expect(
+      await screen.findByRole("alert", {
+        name: "Kumbukumbu zilizokataliwa na seva",
+      }),
+    ).toBeDefined();
+  });
+});
+
 describe("clocking out", () => {
   it("offers Toka kazini once she is in, with the time she came", async () => {
     await tappedEarlier(ASHA, "in", MORNING);

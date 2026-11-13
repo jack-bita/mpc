@@ -144,8 +144,8 @@ export function useClockDay(): string | undefined {
   return timezone === undefined ? undefined : shopToday(timezone, now);
 }
 
-/** Today's taps on this laptop, everyone's, by time, read live: a tap saved shows at once. Undefined
- * while the first read runs, or on a laptop with no shop. */
+/** Today's taps on this laptop, everyone's, by time, read live: a tap saved shows at once. A tap the
+ * server refused is left out. Undefined while the first read runs, or on a laptop with no shop. */
 export function useTodaysTaps(): TodaysTaps | undefined {
   const db = useShopDatabase();
   const timezone = useThisDevice()?.shop.timezone;
@@ -154,10 +154,19 @@ export function useTodaysTaps(): TodaysTaps | undefined {
     if (db === null || timezone === undefined || day === undefined)
       return undefined;
     const [from, to] = dayWindow(day);
-    const documents = await db.documents
-      .where("[type+client_time]")
-      .between([CLOCK, from], [CLOCK, to], true, true)
-      .toArray();
-    return { day, taps: tapsOnDay(documents, timezone, day) };
+    // One read transaction, so the documents and their outbox rows are seen as they stood together.
+    return db.transaction("r", [db.documents, db.outbox], async () => {
+      const documents = await db.documents
+        .where("[type+client_time]")
+        .between([CLOCK, from], [CLOCK, to], true, true)
+        .toArray();
+      // A tap the server refused never reached the attendance book: it says nothing of who is in, and
+      // the refused records' warning names it (needs-attention.tsx). Sent and waiting ones both count.
+      const rows = await db.outbox.bulkGet(documents.map((each) => each.id));
+      const kept = documents.filter(
+        (_, at) => rows[at]?.status !== "needs_attention",
+      );
+      return { day, taps: tapsOnDay(kept, timezone, day) };
+    });
   }, [db, timezone, day]);
 }

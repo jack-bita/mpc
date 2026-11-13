@@ -186,6 +186,20 @@
       "offline": "No internet: they will be sent once it is back."
     }
   },
+  "needsAttention": {
+    "title": "Records the server refused",
+    "clock": "{name}: {action}, at {time}",
+    "other": "Record number {number}",
+    "unknownPerson": "Unknown worker",
+    "notAgain": "It won't be sent again. Tell the manager.",
+    "reasons": {
+      "typeUnknown": "The server doesn't take this kind of record.",
+      "versionUnknown": "This record is from another version of the app.",
+      "makerUnknown": "Whoever made this record doesn't work at this shop.",
+      "idTaken": "The server already has another record with this id.",
+      "other": "The server refused it. Code: {code}"
+    }
+  },
   "stock": {
     "part": "{count} {unit}"
   },
