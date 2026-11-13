@@ -132,7 +132,9 @@ describe("the counter's frame", () => {
     await db().staff.put({ ...ASHA, language: "en", font: "second" });
     await ashaAtTheCounter();
 
-    expect(bar().getByRole("button", { name: "Log out" })).toBeDefined();
+    // Waited for: her language opens just after the screen's first drawing (follow-the-person.ts), so a
+    // slow run can still show the laptop's Swahili for a moment.
+    expect(await bar().findByRole("button", { name: "Log out" })).toBeDefined();
     expect(swahiliIn(screen.getByRole("banner"))).toEqual([]);
     expect(document.documentElement.dataset.font).toBe("second");
   });
