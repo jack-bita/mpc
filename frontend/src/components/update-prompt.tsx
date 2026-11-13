@@ -2,9 +2,12 @@
 // new version is ready and no counter screen is busy (SPIKE-1, SYNC-13, 03 §6.8). layout.tsx renders it
 // once, on every page.
 //
+// A tap sends the records still waiting first, then switches (03 §6.8: send the outbox, then update).
+//
 // A client component: registering runs in the browser, after the page has loaded, never during the
-// build. When a version counts as ready is decided in src/offline/service-worker.ts, and when the counter
-// is busy in src/offline/busy.ts; this file only shows the bar and passes the tap on.
+// build. When a version counts as ready is decided in src/offline/service-worker.ts, when the counter is
+// busy in src/offline/busy.ts, and how the records go first in src/offline/sync/before-update.ts; this
+// file only shows the bar and passes the tap on.
 "use client";
 
 import { useEffect, useState } from "react";
@@ -18,12 +21,15 @@ import {
   type ApplyUpdate,
   registerServiceWorker,
 } from "@/offline/service-worker";
+import { sendBeforeUpdate } from "@/offline/sync/before-update";
 
 export function UpdatePrompt() {
   // The words come from the open book, Swahili or English (ADR-0040).
   const t = useTranslations("update");
   // null while there is no new version; the switch function once one is ready.
   const [apply, setApply] = useState<ApplyUpdate | null>(null);
+  // True from the tap until the switch: the records go first, which may take a few seconds.
+  const [sending, setSending] = useState(false);
 
   // After the page is on screen, so registering never slows the first paint. The empty list []: only
   // once, when the component first appears, not on every redraw.
@@ -41,8 +47,18 @@ export function UpdatePrompt() {
 
   // Looked at once more as the tap lands: another tab's sale may have started since the bar's last look
   // (busy.ts looks every 2 s). Busy now, the tap does nothing, and the bar hides at its next look.
+  // Then the records still waiting go first; at most a few seconds, and the switch goes ahead whatever
+  // the send's end (before-update.ts says why nothing is lost).
   const tap = async () => {
-    if (apply !== null && (await counterIsQuiet())) apply();
+    if (apply === null || sending || !(await counterIsQuiet())) return;
+    setSending(true);
+    await sendBeforeUpdate();
+    // Looked at again after the send: a sale may have started in the seconds it took. The bar then hides
+    // until it is finished, and the next tap sends again, nothing by then, and switches.
+    if (await counterIsQuiet()) apply();
+    // Ready for another tap: the switch reloads the page in a moment, and if it doesn't, a disabled bar
+    // would leave the laptop on the old version with no way on.
+    setSending(false);
   };
 
   return (
@@ -63,11 +79,14 @@ export function UpdatePrompt() {
         "print:hidden",
       )}
     >
-      <p role="status">{shown ? t("ready") : null}</p>
+      <p role="status">
+        {shown ? (sending ? t("sending") : t("ready")) : null}
+      </p>
       {/* The bar kind, the only button that can sit on the green (button.tsx). Big: 52 px high, a
-          finger's tap target on a phone (03 §7.3). */}
+          finger's tap target on a phone (03 §7.3). Disabled while the records go, so a second tap
+          doesn't send them again beside the first. */}
       {shown ? (
-        <Button kind="bar" onClick={() => void tap()}>
+        <Button kind="bar" disabled={sending} onClick={() => void tap()}>
           {t("apply")}
         </Button>
       ) : null}

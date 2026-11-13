@@ -1,9 +1,10 @@
 // update-prompt.test.tsx — the Toleo jipya bar shows only when a new version is ready and no counter
 // screen is busy, and its button switches to it (SPIKE-1, SYNC-13, 03 §6.8).
 //
-// The real registration is swapped for a fake (vi.mock), so these tests check only what the bar shows
-// and does. When a version counts as ready is checked in src/offline/service-worker.test.ts, and when
-// the counter is busy in src/offline/busy.test.tsx.
+// The real registration and the send before the switch are swapped for fakes (vi.mock), so these tests
+// check only what the bar shows and does. When a version counts as ready is checked in
+// src/offline/service-worker.test.ts, when the counter is busy in src/offline/busy.test.tsx, and how the
+// records go in src/offline/sync/before-update.test.ts.
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,6 +15,7 @@ import {
   type ApplyUpdate,
   registerServiceWorker,
 } from "@/offline/service-worker";
+import { sendBeforeUpdate } from "@/offline/sync/before-update";
 import { installFakeLocks, removeFakeLocks } from "@/test/locks";
 import { swahiliIn } from "@/test/language";
 import { render } from "@/test/render";
@@ -21,6 +23,10 @@ import { render } from "@/test/render";
 import { UpdatePrompt } from "./update-prompt";
 
 vi.mock("@/offline/service-worker", () => ({ registerServiceWorker: vi.fn() }));
+// Sent at once, unless a test holds it.
+vi.mock("@/offline/sync/before-update", () => ({
+  sendBeforeUpdate: vi.fn(),
+}));
 
 /** Plays the browser's part: a new version is ready, and `apply` switches to it. */
 function newVersionReady(apply: ApplyUpdate) {
@@ -50,8 +56,20 @@ async function barLooked() {
   await act(async () => {});
 }
 
+/** The send before the switch, held until the test lets it go: the records on their way. */
+function holdTheSend(): () => void {
+  let release = () => {};
+  vi.mocked(sendBeforeUpdate).mockReturnValue(
+    new Promise<void>((resolve) => {
+      release = resolve;
+    }),
+  );
+  return () => release();
+}
+
 beforeEach(() => {
   vi.mocked(registerServiceWorker).mockClear();
+  vi.mocked(sendBeforeUpdate).mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -201,5 +219,65 @@ describe("UpdatePrompt beside a busy counter", () => {
 
     expect(apply).not.toHaveBeenCalled();
     other.release();
+  });
+});
+
+describe("UpdatePrompt sends the records first", () => {
+  it("sends what waits, then switches", async () => {
+    // Asha's clock-in still waits in the outbox when she taps Sasisha.
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const release = holdTheSend();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+
+    // On its way: the bar says so, the button can't be tapped twice, and nothing has switched yet.
+    expect(await screen.findByText("Inatuma kumbukumbu kwanza…")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Sasisha" }).hasAttribute("disabled"),
+    ).toBe(true);
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+    expect(apply).not.toHaveBeenCalled();
+
+    release();
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+
+  it("doesn't switch when a sale opened while the records were going", async () => {
+    const view = render(<Counter busy={false} />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const release = holdTheSend();
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+
+    // A customer comes in during the seconds the send takes, and Asha starts the sale.
+    view.rerender(<Counter busy />);
+    release();
+    await barLooked();
+    await barLooked();
+
+    expect(apply).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button")).toBeNull();
+
+    // The sale is finished: the bar is back, ready for a tap that sends again and switches.
+    view.rerender(<Counter busy={false} />);
+    expect(await screen.findByText("Toleo jipya liko tayari")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Sasisha" }));
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    expect(sendBeforeUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it("says it in English when English is chosen", async () => {
+    setLanguage("en");
+    render(<UpdatePrompt />);
+    newVersionReady(vi.fn());
+    holdTheSend();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Update" }));
+
+    expect(await screen.findByText("Sending records first…")).toBeTruthy();
+    expect(swahiliIn(document.body)).toEqual([]);
   });
 });
