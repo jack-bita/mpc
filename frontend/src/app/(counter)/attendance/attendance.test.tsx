@@ -271,6 +271,19 @@ describe("clocking out", () => {
     expect(leaveAsked()).toBe(ASHA.id);
   });
 
+  it("follows the tap she made last, even when the laptop's clock went back between the two", async () => {
+    // In at 08:00 by the laptop's clock; then the clock is set back 10 minutes, and she clocks out at what it
+    // calls 07:50. Her last tap is the out, by its number on the laptop, whatever the clock says.
+    await tappedEarlier(ASHA, "in", new Date("2026-11-13T05:00:00Z"));
+    await tappedEarlier(ASHA, "out", new Date("2026-11-13T04:50:00Z"));
+    vi.setSystemTime(new Date("2026-11-13T05:10:00Z"));
+
+    await theScreen();
+
+    expect(await screen.findByText("Ulitoka kazini saa 07:50.")).toBeDefined();
+    expect(clockIn()).not.toBeNull();
+  });
+
   it("offers Ingia kazini again after she clocked out, as after lunch", async () => {
     await tappedEarlier(ASHA, "in", MORNING);
     await tappedEarlier(ASHA, "out", new Date("2026-11-13T09:30:00Z"));

@@ -76,8 +76,8 @@ function isClockKind(kind: unknown): kind is ClockKind {
 }
 
 /**
- * Of these clock documents, the taps made on `day` in `timezone`, in the order given (the drawer's, by
- * time). One whose payload names no kind of tap, as a damaged row or another app's could, is left out:
+ * Of these clock documents, the taps made on `day` in `timezone`, in the order given (useTodaysTaps gives
+ * them by number). One whose payload names no kind of tap, as a damaged row or another app's could, is left out:
  * read as a tap, it would show someone in or out who never tapped.
  */
 export function tapsOnDay(
@@ -144,8 +144,9 @@ export function useClockDay(): string | undefined {
   return timezone === undefined ? undefined : shopToday(timezone, now);
 }
 
-/** Today's taps on this laptop, everyone's, by time, read live: a tap saved shows at once. A tap the
- * server refused is left out. Undefined while the first read runs, or on a laptop with no shop. */
+/** Today's taps on this laptop, everyone's, in the order they were made, read live: a tap saved shows at
+ * once. A tap the server refused is left out. Undefined while the first read runs, or on a laptop with no
+ * shop. */
 export function useTodaysTaps(): TodaysTaps | undefined {
   const db = useShopDatabase();
   const timezone = useThisDevice()?.shop.timezone;
@@ -154,19 +155,39 @@ export function useTodaysTaps(): TodaysTaps | undefined {
     if (db === null || timezone === undefined || day === undefined)
       return undefined;
     const [from, to] = dayWindow(day);
-    // One read transaction, so the documents and their outbox rows are seen as they stood together.
-    return db.transaction("r", [db.documents, db.outbox], async () => {
-      const documents = await db.documents
-        .where("[type+client_time]")
-        .between([CLOCK, from], [CLOCK, to], true, true)
-        .toArray();
-      // A tap the server refused never reached the attendance book: it says nothing of who is in, and
-      // the refused records' warning names it (needs-attention.tsx). Sent and waiting ones both count.
-      const rows = await db.outbox.bulkGet(documents.map((each) => each.id));
-      const kept = documents.filter(
-        (_, at) => rows[at]?.status !== "needs_attention",
-      );
-      return { day, taps: tapsOnDay(kept, timezone, day) };
-    });
+    // One read transaction, so the documents, their outbox rows and their sent copies are seen as they
+    // stood together.
+    return db.transaction(
+      "r",
+      [db.documents, db.outbox, db.sent_archive],
+      async () => {
+        const documents = await db.documents
+          .where("[type+client_time]")
+          .between([CLOCK, from], [CLOCK, to], true, true)
+          .toArray();
+        const ids = documents.map((each) => each.id);
+        const waiting = await db.outbox.bulkGet(ids);
+        const sent = await db.sent_archive.bulkGet(ids);
+        // A tap the server refused never reached the attendance book: it says nothing of who is in, and
+        // the refused records' warning names it (needs-attention.tsx). Sent and waiting ones both count.
+        // In the order they were made, by their number on the laptop, its outbox row's while unsent, its
+        // sent copy's after: a clock set back between two taps would put them the wrong way round by time,
+        // and show her the wrong button. The server too reads the record before by number (ATT-1). A tap
+        // with neither, which a save never leaves, goes last, in time order.
+        const kept = documents
+          .map((document, at) => ({
+            document,
+            refused: waiting[at]?.status === "needs_attention",
+            seq:
+              waiting[at]?.device_seq ??
+              sent[at]?.device_seq ??
+              Number.POSITIVE_INFINITY,
+          }))
+          .filter((each) => !each.refused)
+          .sort((one, other) => one.seq - other.seq)
+          .map((each) => each.document);
+        return { day, taps: tapsOnDay(kept, timezone, day) };
+      },
+    );
   }, [db, timezone, day]);
 }
