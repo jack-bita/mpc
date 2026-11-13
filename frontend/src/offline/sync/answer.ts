@@ -1,6 +1,6 @@
 // answer.ts — the answer of a sync call, with the device's standing kept on the way (SYNC-7, 03 §5.9).
 //
-// The bootstrap, the pull and later the push call the server outside TanStack Query, so the store's
+// The bootstrap, the pull and the push call the server outside TanStack Query, so the store's
 // watcher (noticeBlock, device-check.tsx) never sees their refusals. Each passes its call through here
 // instead, and the two answers about the device itself are kept as the device check keeps them:
 // - 401 device.blocked: the manager blocked this laptop. The lock goes on at once (03 §5.9, step 4); the
@@ -9,10 +9,15 @@
 //   naming a shop this browser can't act for.
 // Either way the refusal is thrown on, so the sync stops there and changes nothing.
 //
+// How each is kept is the caller's (HearDevice, place.ts): a page keeps it in localStorage
+// (page-place.ts), and the service worker, which has none, leaves a note for the page (SYNC-16). So this
+// file imports nothing of the page's, and the worker can use it.
+//
 // Each sync call also gets a time limit here (syncCallLimit, SYNC-9): a call left hanging would hold the
 // sync's lock, and every other tab of the app would wait behind it (sync.ts).
 import { ApiRefusal, answerOf } from "@/api/refusal";
-import { saveBlocked, saveDevice } from "@/features/devices/this-device";
+
+import type { HearDevice } from "./place";
 
 type Answer<D> = { data?: D; error?: unknown; response: Response };
 
@@ -27,15 +32,20 @@ export function syncCallLimit(): AbortSignal {
   return AbortSignal.timeout(SYNC_CALL_LIMIT_MS);
 }
 
-/** The call's answer, or its refusal thrown, after keeping a block or a "not registered". */
-export async function syncAnswer<D>(call: Promise<Answer<D>>): Promise<D> {
+/** The call's answer, or its refusal thrown, after `hear` kept a block or a "not registered". */
+export async function syncAnswer<D>(
+  call: Promise<Answer<D>>,
+  hear: HearDevice,
+): Promise<D> {
   try {
     return await answerOf(call);
   } catch (error) {
-    if (error instanceof ApiRefusal) {
-      if (error.body.code === "device.blocked") saveBlocked();
-      else if (error.body.code === "not_authenticated") saveDevice(null);
-    }
+    if (
+      error instanceof ApiRefusal &&
+      (error.body.code === "device.blocked" ||
+        error.body.code === "not_authenticated")
+    )
+      await hear(error.body.code);
     throw error;
   }
 }

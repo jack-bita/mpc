@@ -60,18 +60,29 @@ export function hasCsrfToken(): boolean {
   return Object.keys(csrfHeader()).length > 0;
 }
 
-const csrfToken: Middleware = {
-  onRequest({ request }) {
-    if (CHANGES.has(request.method))
-      for (const [name, value] of Object.entries(csrfHeader()))
-        request.headers.set(name, value);
-    return request;
-  },
-};
+/** Where a client finds the CSRF header for a change. A page reads it from document.cookie (csrfHeader);
+ * the service worker has no `document`, so it reads the same cookie its own way (SYNC-16). */
+export type CsrfSource = () =>
+  Record<string, string> | Promise<Record<string, string>>;
 
-/** A client with the CSRF token on every change. Screens use `api` below; tests make their own, with a
- * full address and a fake fetch, as Node can't call a relative address. */
-export function createApiClient(options: ClientOptions = {}) {
+function withCsrfToken(source: CsrfSource): Middleware {
+  return {
+    async onRequest({ request }) {
+      if (CHANGES.has(request.method))
+        for (const [name, value] of Object.entries(await source()))
+          request.headers.set(name, value);
+      return request;
+    },
+  };
+}
+
+/** A client with the CSRF token on every change, read from `csrf` (the page's cookies unless told
+ * otherwise). Screens use `api` below; tests make their own, with a full address and a fake fetch, as
+ * Node can't call a relative address. */
+export function createApiClient(
+  options: ClientOptions = {},
+  csrf: CsrfSource = csrfHeader,
+) {
   const client = createClient<paths>({
     // Same origin: the app and the API come from one address, Caddy's on the real server and Django's own
     // on the demo (03 §12, §13), so a call to /api/... goes to the server that sent the page.
@@ -82,9 +93,12 @@ export function createApiClient(options: ClientOptions = {}) {
     ...options,
     fetch: noConnectionWhenNoAnswer(options.fetch),
   });
-  client.use(csrfToken);
+  client.use(withCsrfToken(csrf));
   return client;
 }
+
+/** A client as createApiClient makes it: the page's `api`, or the service worker's own (SYNC-16). */
+export type ApiClient = ReturnType<typeof createApiClient>;
 
 // fetch throws a TypeError when no answer comes at all, and so does a bug in a screen ("x is not a
 // function"): told apart here, where only fetch can have thrown, so the screen says "check the internet"

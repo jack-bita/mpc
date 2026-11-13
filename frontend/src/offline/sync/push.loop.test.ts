@@ -15,6 +15,7 @@ import { ASHA } from "@/test/shop-lists";
 import { openShopDatabase, type ShopDatabase } from "../db";
 import { saveDocument, type Draft, type SavedDocument } from "../outbox";
 import { CURSOR, LAST_DEVICE_SEQ } from "./meta";
+import { pagePlace } from "./page-place";
 import { BrokenPush, push } from "./push";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -138,7 +139,7 @@ describe("the push", () => {
     );
     acceptsAll();
 
-    await push(db);
+    await push(db, pagePlace);
 
     const [body] = await bodies();
     expect(body!.documents.map((document) => document.device_seq)).toEqual([
@@ -152,7 +153,7 @@ describe("the push", () => {
     const [first] = await saved(1);
     acceptsAll();
 
-    await push(db);
+    await push(db, pagePlace);
 
     const [body] = await bodies();
     expect(body!.documents).toEqual([
@@ -176,7 +177,7 @@ describe("the push", () => {
     vi.setSystemTime(new Date("2026-11-12T06:30:00Z"));
     acceptsAll(201);
 
-    await push(db);
+    await push(db, pagePlace);
 
     expect(await db.outbox.count()).toBe(0);
     expect(await db.sent_archive.get(first!.id)).toEqual({
@@ -195,7 +196,7 @@ describe("the push", () => {
     const made = await saveDocument(db, CLOCK_IN, [{}]);
     acceptsAll(201);
 
-    await push(db);
+    await push(db, pagePlace);
 
     const [effect] = await db.pending_effects
       .where("document_id")
@@ -221,7 +222,7 @@ describe("the push", () => {
       },
     });
 
-    expect(await push(db)).toBe("sent");
+    expect(await push(db, pagePlace)).toBe("sent");
 
     expect(await db.outbox.count()).toBe(0);
     expect((await db.sent_archive.get(first.id))?.posted_seq).toBeNull();
@@ -236,7 +237,7 @@ describe("the push", () => {
     vi.setSystemTime(new Date("2026-11-12T07:15:00Z"));
     acceptsAll();
 
-    await push(db);
+    await push(db, pagePlace);
 
     const [body] = await bodies();
     expect(body).toMatchObject({
@@ -263,7 +264,7 @@ describe("the push", () => {
       },
     });
 
-    await push(db);
+    await push(db, pagePlace);
 
     expect(await db.outbox.toArray()).toEqual([
       {
@@ -298,7 +299,7 @@ describe("the push", () => {
       },
     });
 
-    await push(db);
+    await push(db, pagePlace);
 
     const left = await db.pending_effects.toArray();
     expect(left.map((effect) => effect.document_id)).toEqual([waiting.id]);
@@ -326,7 +327,7 @@ describe("the push", () => {
       },
     });
 
-    await push(db);
+    await push(db, pagePlace);
 
     expect((await db.sent_archive.get(first!.id))?.posted_seq).toBe(150);
     expect(await db.outbox.get(second!.id)).toMatchObject({
@@ -344,7 +345,7 @@ describe("the push", () => {
       body: { answers: [accepted(first!.id, 201), retry(second!.id)] },
     });
 
-    expect(await push(db)).toBe("retry");
+    expect(await push(db, pagePlace)).toBe("retry");
 
     expect(await bodies()).toHaveLength(1);
     expect(await db.sent_archive.count()).toBe(1);
@@ -368,11 +369,11 @@ describe("the push", () => {
       status: 200,
       body: { answers: [retry(first!.id)] },
     });
-    await push(db);
+    await push(db, pagePlace);
 
     vi.setSystemTime(new Date("2026-11-12T08:00:30Z"));
     acceptsAll();
-    await push(db);
+    await push(db, pagePlace);
 
     expect((await bodies()).map((body) => body.sent_at)).toEqual([
       "2026-11-12T08:00:00.000Z",
@@ -395,7 +396,7 @@ describe("the push", () => {
       },
     });
 
-    await expect(push(db)).rejects.toThrow("no first answer");
+    await expect(push(db, pagePlace)).rejects.toThrow("no first answer");
 
     expect(await db.sent_archive.count()).toBe(0);
     expect(
@@ -414,7 +415,7 @@ describe("the push", () => {
     await saved(150);
     acceptsAll();
 
-    expect(await push(db)).toBe("sent");
+    expect(await push(db, pagePlace)).toBe("sent");
 
     const [first, second] = await bodies();
     expect(first!.documents).toHaveLength(100);
@@ -436,7 +437,7 @@ describe("the push", () => {
     });
     acceptsAll();
 
-    await push(db);
+    await push(db, pagePlace);
 
     const [body] = await bodies();
     expect(body!.documents.map((document) => document.device_seq)).toEqual([
@@ -449,7 +450,7 @@ describe("the push", () => {
     await filledLaptop();
     acceptsAll();
 
-    expect(await push(db)).toBe("sent");
+    expect(await push(db, pagePlace)).toBe("sent");
 
     const [body] = await bodies();
     expect(body).toMatchObject({ documents: [], unsent_count: 0 });
@@ -463,7 +464,7 @@ describe("the push", () => {
     const before = await db.outbox.toArray();
     answer("POST", PUSH, refusal(401, "device.blocked"));
 
-    await expect(push(db)).rejects.toBeInstanceOf(ApiRefusal);
+    await expect(push(db, pagePlace)).rejects.toBeInstanceOf(ApiRefusal);
 
     expect(savedBlocked()).toBe(true);
     expect(await db.outbox.toArray()).toEqual(before);
@@ -482,7 +483,7 @@ describe("the push", () => {
       refusal(400, "invalid", {}, { "documents.0.device_seq": ["invalid"] }),
     );
 
-    const failure = await push(db).catch((error: unknown) => error);
+    const failure = await push(db, pagePlace).catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(BrokenPush);
     expect(failure).not.toBeInstanceOf(ApiRefusal);
@@ -500,7 +501,7 @@ describe("the push", () => {
       throw new TypeError("Failed to fetch");
     });
 
-    await expect(push(db)).rejects.toBeInstanceOf(NoConnection);
+    await expect(push(db, pagePlace)).rejects.toBeInstanceOf(NoConnection);
 
     expect(await db.outbox.toArray()).toEqual(before);
   });

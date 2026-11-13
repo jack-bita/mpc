@@ -13,6 +13,7 @@ import { shopDatabase } from "../this-shop";
 import { isAboutTheDevice } from "./answer";
 import { bootstrap, needsBootstrap } from "./bootstrap";
 import { mayPush, pushFailed, pushSettled } from "./backoff";
+import { pagePlace } from "./page-place";
 import { pull } from "./pull";
 import { push, type PushResult } from "./push";
 
@@ -152,7 +153,7 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
     // The wait after a failure counts from here, when the push went (backoff.ts says why).
     const pushedAt = Date.now();
     try {
-      result = await push(db);
+      result = await push(db, pagePlace);
     } catch (error) {
       await waitAfterAFailure(db, pushedAt);
       // Blocked, or a key that opens no device: ask nothing more (answer.ts has kept it).

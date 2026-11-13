@@ -15,7 +15,10 @@
 // Each push also carries the laptop's report on itself (SYNC-5): its clock as it sends, its version,
 // and how many records still wait. With nothing waiting, an empty push still goes, so the office sees
 // the laptop is alive (SYNC-14).
-import { api } from "@/api/client";
+//
+// It runs in two places: in the page (sync.ts), and in the service worker, when the network comes back
+// with the app closed (SYNC-16). So it is handed its place (place.ts), the client to call and how to keep
+// a block, and imports nothing of the page's itself.
 import { ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { APP_VERSION } from "@/lib/version";
@@ -23,6 +26,7 @@ import { APP_VERSION } from "@/lib/version";
 import type { DocumentRow, OutboxRow, ShopDatabase } from "../db";
 import { waitingInOrder } from "../outbox";
 import { syncAnswer, syncCallLimit } from "./answer";
+import type { SyncPlace } from "./place";
 
 type Envelope = components["schemas"]["PushedEnvelopeRequest"];
 type PushedAnswer = components["schemas"]["PushedAnswer"];
@@ -65,14 +69,17 @@ interface Waiting {
  * the records can still arrive (03 §5.9, step 4). A 400 (a broken envelope) is a bug in this code, never
  * one record to set aside: it is thrown as a BrokenPush.
  */
-export async function push(db: ShopDatabase): Promise<PushResult> {
+export async function push(
+  db: ShopDatabase,
+  place: SyncPlace,
+): Promise<PushResult> {
   for (;;) {
     const { batch, others } = await nextBatch(db);
     // Read afresh at each try: a retry sent with the first try's time would show the laptop's clock as
     // off by the wait, and every offline clock-in in it as unverified (ATT-1).
     const sentAt = new Date().toISOString();
     const { answers } = await syncAnswer(
-      api.POST("/api/sync/v1/push/", {
+      place.api.POST("/api/sync/v1/push/", {
         signal: syncCallLimit(),
         body: {
           documents: batch.map(envelope),
@@ -83,6 +90,7 @@ export async function push(db: ShopDatabase): Promise<PushResult> {
           outages: [],
         },
       }),
+      place.hear,
     ).catch((error: unknown) => {
       if (error instanceof ApiRefusal && error.status === 400)
         throw new BrokenPush(error);
