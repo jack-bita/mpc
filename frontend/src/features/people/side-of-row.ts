@@ -12,7 +12,8 @@ type SideRecord = components["schemas"]["SideRecord"];
 
 /**
  * The side a person works on at this device, for the top bar, from their staff row on the laptop and the
- * laptop's sides: someone logged in offline (SYNC-10), who has no `me`, and anyone at the counter (SYNC-11). A key on the whole shop holds on every side, as the server counts it for `me`.
+ * laptop's sides: someone logged in offline (SYNC-10), who has no `me`, and anyone at the counter
+ * (SYNC-11). A key on the whole shop holds on every side, as the server counts it for `me`.
  */
 export function sideOfStaffRow(
   row: StaffRecord,

@@ -19,8 +19,9 @@
 // first sync: the server would refuse such a tap, and it would sit set aside.
 //
 // Above the button, any record the server refused, with why (needs-attention.tsx): a refused tap doesn't
-// count for the button, so she may clock in again. Under the button, who clocked in today on this laptop (todays-list.tsx), read from the same taps; then how
-// many records wait to be sent, with Tuma sasa (send-now.tsx).
+// count for the button, so she may clock in again. Under the button, who clocked in today on this laptop
+// (todays-list.tsx), read from the same taps; then how many records wait to be sent, with Tuma sasa
+// (send-now.tsx).
 //
 // Times as "07:55", 24 hours, in the shop's zone, and in Swahili with the part of the day, "saa 07:55
 // asubuhi", so nobody reads them as Swahili time (formatTime, dayPart; Jack, SYNC-11).

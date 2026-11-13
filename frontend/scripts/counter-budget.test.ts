@@ -9,11 +9,11 @@
 //
 // It runs in plain Node, as it only reads files.
 // @vitest-environment node
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   BUDGET,
@@ -22,6 +22,18 @@ import {
   scriptsOf,
   weigh,
 } from "./counter-budget.mjs";
+
+// The made-up folders a test writes, removed after it, so a run leaves nothing behind in the system's temp.
+const made: string[] = [];
+const aFolder = (name: string) => {
+  const folder = mkdtempSync(join(tmpdir(), name));
+  made.push(folder);
+  return folder;
+};
+afterEach(() => {
+  for (const folder of made.splice(0))
+    rmSync(folder, { recursive: true, force: true });
+});
 
 describe("the counter screens' size check", () => {
   it("is 300 KB, compressed, as 03 §14 sets it", () => {
@@ -36,7 +48,7 @@ describe("the counter screens' size check", () => {
   });
 
   it("finds a page inside a folder of its own, and leaves the area's other files out", () => {
-    const app = mkdtempSync(join(tmpdir(), "budget-"));
+    const app = aFolder("budget-");
     mkdirSync(join(app, "(counter)/sale/view"), { recursive: true });
     writeFileSync(join(app, "(counter)/layout.tsx"), "");
     writeFileSync(join(app, "(counter)/counter-frame.tsx"), "");
@@ -73,7 +85,7 @@ describe("the counter screens' size check", () => {
   });
 
   it("weighs a page by its scripts, compressed, as a laptop downloads them", async () => {
-    const out = mkdtempSync(join(tmpdir(), "budget-out-"));
+    const out = aFolder("budget-out-");
     mkdirSync(join(out, "attendance"), { recursive: true });
     mkdirSync(join(out, "_next/static/chunks"), { recursive: true });
     // Text that repeats squeezes small: 100,000 letters weigh far less once compressed.
