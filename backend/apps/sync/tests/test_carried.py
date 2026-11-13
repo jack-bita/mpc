@@ -343,3 +343,30 @@ def test_a_loader_who_was_suspended_is_flagged_and_the_record_kept(
     (flag,) = _flags_naming(shop_a, FlagKind.SUSPENDED_STAFF_ACTIVITY, neema)
     with shop_context(shop_a):
         assert flag.subject_id == _line(shop_a, sent).pk
+
+
+def test_a_carried_record_set_aside_keeps_where_it_was_made(
+    handed: list[tuple[int, dt.datetime | None]],
+    shop_a: Model,
+    device_a: Device,
+    vyakula_laptop: Device,
+    staff_a: StaffMember,
+    neema: StaffMember,
+) -> None:
+    # Dawa's #5, rescued, is of a type this server doesn't take, so it is set aside. Its time is still Dawa's clock:
+    # its line keeps where it was made, so Vyakula's next record leaves it out of its own, and Dawa's next reads it as
+    # its record before (SYNC-12's second review).
+    _push(vyakula_laptop, [_sent(1, staff_a, _at(10))])
+    refused = dataclasses.replace(
+        _sent(2, staff_a, _at(7, 30), Carried(device=device_a.pk, device_seq=5, loaded_by=neema.pk)),
+        type="no_such_type",
+    )
+    (answer,) = _push(vyakula_laptop, [refused])
+    assert (answer.status, answer.code) == ("invalid", "document.type_unknown")
+    line = _line(shop_a, refused)
+    assert (line.carried_from_id, line.carried_seq, line.loaded_by_id) == (device_a.pk, 5, neema.pk)
+
+    _push(vyakula_laptop, [_sent(3, staff_a, _at(10, 5))])
+    _push(device_a, [_sent(6, staff_a, _at(7, 40))])
+
+    assert handed[-2:] == [(3, _at(10)), (6, _at(7, 30))]

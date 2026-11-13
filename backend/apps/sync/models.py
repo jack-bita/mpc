@@ -51,7 +51,8 @@ class PushedDocument(AppendOnly, CounterRecord):  # type: ignore[misc]
     # Carried: a record another laptop of the shop made, which a rescue file brought to the laptop that sent it
     # (SYNC-12, 03 §6.7). The laptop that made it and its number there, so its time is checked against that laptop's
     # record before it, not the sending laptop's (ATT-1's sign 1); and who loaded the file, as rule 7 wants every
-    # change to name its person. All three or none. Empty on an invalid line: a record refused names nothing more. No
+    # change to name its person. All three or none. An invalid line keeps them too, when they passed their checks: its
+    # time is still that laptop's clock, which the time checks around it must know (SYNC-12's second review). No
     # index on who loaded it: nothing reads lines by it, and nobody is ever deleted (rule 7), so PROTECT never
     # searches it.
     carried_from = models.ForeignKey(
@@ -112,11 +113,6 @@ class PushedDocument(AppendOnly, CounterRecord):  # type: ignore[misc]
             # Carried from another laptop, never from the one that sent it: that one sends its own records as its own.
             models.CheckConstraint(
                 condition=~models.Q(carried_from=models.F("device")), name="sync_pusheddocument_carried_from_another"
-            ),
-            # Only an accepted line keeps where it came from (above).
-            models.CheckConstraint(
-                condition=models.Q(status=PushedStatus.ACCEPTED) | models.Q(carried_from__isnull=True),
-                name="sync_pusheddocument_only_accepted_carried",
             ),
         ]
 

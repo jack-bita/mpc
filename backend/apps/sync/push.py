@@ -189,8 +189,16 @@ def _post(device: Device, sent: Sent, received_at: datetime, sent_at: datetime) 
     # here, the same answer as an id no shop has, so the answer tells nothing of other shops (03 §5.4). A maker who
     # was suspended is still found: their document is kept, and SYNC-5 flags it (X2).
     maker = StaffMember.objects.filter(pk=sent.created_by).first()
+    # Where a carried record was made, read first, so a record set aside for another reason still keeps it on its line:
+    # its time is the laptop's that made it, and the time checks around it must know (SYNC-12's second review). Its
+    # refusal waits its turn below.
     try:
-        # The checks, in this order, so the first thing wrong is the one named: the type, the maker, the shape.
+        origin, origin_refused = _origin(device, sent.carried_from), None
+    except ValidationError as refusal:
+        origin, origin_refused = None, refusal
+    try:
+        # The checks, in this order, so the first thing wrong is the one named: the type, the maker, the shape, and
+        # for a carried record, where it was made and who loaded it.
         kind = document_type(sent.type, sent.schema_version)
         if maker is None:
             raise ValidationError(
@@ -198,10 +206,11 @@ def _post(device: Device, sent: Sent, received_at: datetime, sent_at: datetime) 
             )
         shape = kind.payload(data=sent.payload)
         shape.is_valid(raise_exception=True)
-        origin = _origin(device, sent.carried_from)
+        if origin_refused is not None:
+            raise origin_refused
     except (ValidationError, exceptions.ValidationError) as refusal:
         code, fields = refusal_parts(refusal)
-        return _invalid(device, sent, received_at, maker, code, fields)
+        return _invalid(device, sent, received_at, maker, code, fields, origin)
     return _save(device, sent, received_at, sent_at, kind, maker, shape.validated_data, origin)
 
 
@@ -289,11 +298,9 @@ def _save(
             # block has ended. The shop's counter stays locked from here to the commit, so only writes come after it:
             # the line, the laptop's number and the flags, and, for a late record alone, the two reads that say
             # whether its gap is whole, as they count the line just saved.
-            line = _line(device, sent, received_at, maker, status=ACCEPTED, posted_seq=numbers.last, flags=flagged)
-            if origin is not None:
-                line.carried_from = origin.device
-                line.carried_seq = origin.device_seq
-                line.loaded_by = origin.loaded_by
+            line = _line(
+                device, sent, received_at, maker, origin, status=ACCEPTED, posted_seq=numbers.last, flags=flagged
+            )
             line.save()
             with _checks_of_our_own():
                 _check_number(device, line, last)
@@ -325,12 +332,12 @@ def _save(
             code, fields = refusal_parts(refusal)
             fields, an_id_was_taken = _without_ids_taken(fields)
             if an_id_was_taken and not fields and code == ONLY_FIELDS_WRONG:
-                return _invalid(device, sent, received_at, maker, "id.taken", {})
-            return _invalid(device, sent, received_at, maker, code, fields)
+                return _invalid(device, sent, received_at, maker, "id.taken", {}, origin)
+            return _invalid(device, sent, received_at, maker, code, fields, origin)
         if _id_taken(refusal):
             # No twin, yet an id clashes: a row this shop can't see has it, another shop's (03 §5.4). Answered without
             # a word about that row, not even which table it is in.
-            return _invalid(device, sent, received_at, maker, "id.taken", {})
+            return _invalid(device, sent, received_at, maker, "id.taken", {}, origin)
         # Another database rule, which the saving code should have checked first: a bug, so a retry (_answer).
         raise
     return Answer(id=sent.id, status=ACCEPTED, posted_seq=numbers.last, flags=flagged)
@@ -343,15 +350,16 @@ def _invalid(
     maker: StaffMember | None,
     code: str,
     fields: dict[str, list[str]],
+    origin: _Origin | None,
 ) -> Answer:
     # Set aside: its line, with the reason, and a flag about the line, naming its maker if known, in one transaction
     # of their own, so a repeat gets the same answer and raises no second flag (03 §6.3). The laptop keeps the
     # document under "needs attention". It came, so its number is not missing: it moves the laptop's number as a
-    # saved one does, in the same transaction.
+    # saved one does, in the same transaction. A carried one keeps where it was made, when that passed its checks.
     try:
         with transaction.atomic():
             last = _last_number(device)
-            line = _line(device, sent, received_at, maker, status=INVALID, reason=code, reason_fields=fields)
+            line = _line(device, sent, received_at, maker, origin, status=INVALID, reason=code, reason_fields=fields)
             line.save()
             raise_flag(kind=FlagKind.INVALID_DOCUMENT, subject=line, people=[] if maker is None else [maker], by=None)
             with _checks_of_our_own():
@@ -544,10 +552,19 @@ def _every_number_came(device: Device, gap: Flag) -> bool:
 
 
 def _line(
-    device: Device, sent: Sent, received_at: datetime, maker: StaffMember | None, **answer: Any
+    device: Device,
+    sent: Sent,
+    received_at: datetime,
+    maker: StaffMember | None,
+    origin: _Origin | None,
+    **answer: Any,
 ) -> PushedDocument:
-    # The document's line in the answer log: what the laptop sent, as it sent it, and the answer it got.
+    # The document's line in the answer log: what the laptop sent, as it sent it, and the answer it got; and for a
+    # carried record, where it was made and who loaded it (SYNC-12).
     return PushedDocument(
+        carried_from=None if origin is None else origin.device,
+        carried_seq=None if origin is None else origin.device_seq,
+        loaded_by=None if origin is None else origin.loaded_by,
         shop_id=device.shop_id,
         device=device,
         device_seq=sent.device_seq,
