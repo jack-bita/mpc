@@ -1,17 +1,20 @@
-// update-prompt.test.tsx — the Toleo jipya bar shows only when a new version is ready, and its button
-// switches to it (SPIKE-1, 03 §6.8).
+// update-prompt.test.tsx — the Toleo jipya bar shows only when a new version is ready and no counter
+// screen is busy, and its button switches to it (SPIKE-1, SYNC-13, 03 §6.8).
 //
 // The real registration is swapped for a fake (vi.mock), so these tests check only what the bar shows
-// and does. When a version counts as ready is checked in src/offline/service-worker.test.ts.
+// and does. When a version counts as ready is checked in src/offline/service-worker.test.ts, and when
+// the counter is busy in src/offline/busy.test.tsx.
 import { act, fireEvent, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ON_GREEN } from "@/components/design/top-bar";
 import { setLanguage } from "@/i18n/language";
+import { BUSY_LOCK, QUIET_CHECK_EVERY, useCounterBusy } from "@/offline/busy";
 import {
   type ApplyUpdate,
   registerServiceWorker,
 } from "@/offline/service-worker";
+import { installFakeLocks, removeFakeLocks } from "@/test/locks";
 import { swahiliIn } from "@/test/language";
 import { render } from "@/test/render";
 
@@ -26,8 +29,34 @@ function newVersionReady(apply: ApplyUpdate) {
   act(() => onUpdateReady(apply));
 }
 
+/** A counter screen that is busy while `busy` is true: a sale with items in it. */
+function Sale({ busy }: { busy: boolean }) {
+  useCounterBusy(busy);
+  return null;
+}
+
+/** The bar beside a counter screen, as layout.tsx puts it beside every page. */
+function Counter({ busy }: { busy: boolean }) {
+  return (
+    <>
+      <Sale busy={busy} />
+      <UpdatePrompt />
+    </>
+  );
+}
+
+/** Lets the bar's first look at the counter answer (busy.ts): it shows only after it. */
+async function barLooked() {
+  await act(async () => {});
+}
+
 beforeEach(() => {
   vi.mocked(registerServiceWorker).mockClear();
+});
+
+afterEach(() => {
+  removeFakeLocks();
+  vi.useRealTimers();
 });
 
 describe("UpdatePrompt", () => {
@@ -42,20 +71,22 @@ describe("UpdatePrompt", () => {
     expect(box.parentElement?.classList.contains("sr-only")).toBe(true);
   });
 
-  it("puts its words into the same status box when a version is ready", () => {
+  it("puts its words into the same status box when a version is ready", async () => {
     render(<UpdatePrompt />);
     const before = screen.getByRole("status");
 
     newVersionReady(vi.fn());
+    await barLooked();
 
     // The same element, not a new one: a box that appears with its words in it may not be said.
     expect(screen.getByRole("status")).toBe(before);
     expect(before.textContent).toBe("Toleo jipya liko tayari");
   });
 
-  it("sits on the green with the bar's button, and a white focus ring", () => {
+  it("sits on the green with the bar's button, and a white focus ring", async () => {
     render(<UpdatePrompt />);
     newVersionReady(vi.fn());
+    await barLooked();
 
     const bar = screen.getByRole("status").parentElement;
     // ON_GREEN paints the green and sets --ring to white for the button on it (top-bar.tsx).
@@ -68,29 +99,32 @@ describe("UpdatePrompt", () => {
     );
   });
 
-  it("shows the bar once a new version is ready", () => {
+  it("shows the bar once a new version is ready", async () => {
     render(<UpdatePrompt />);
     newVersionReady(vi.fn());
+    await barLooked();
 
     // The words themselves, not the message keys: a wrong translation fails here too.
     expect(screen.getByText("Toleo jipya liko tayari")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sasisha" })).toBeTruthy();
   });
 
-  it("speaks English when English is chosen", () => {
+  it("speaks English when English is chosen", async () => {
     // The bar sits outside every page, so the check on every page (language.test.tsx) doesn't see it.
     setLanguage("en");
     render(<UpdatePrompt />);
     newVersionReady(vi.fn());
+    await barLooked();
 
     expect(screen.getByText("A new version is ready")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Update" })).toBeTruthy();
     expect(swahiliIn(document.body)).toEqual([]);
   });
 
-  it("stays off the paper when a page is printed", () => {
+  it("stays off the paper when a page is printed", async () => {
     render(<UpdatePrompt />);
     newVersionReady(vi.fn());
+    await barLooked();
 
     // Checked by its class, because jsdom doesn't print. The slip's own button relies on the same class.
     expect(screen.getByRole("status").parentElement?.className).toContain(
@@ -98,13 +132,74 @@ describe("UpdatePrompt", () => {
     );
   });
 
-  it("switches to the new version when Sasisha is tapped", () => {
+  it("switches to the new version when Sasisha is tapped", async () => {
     render(<UpdatePrompt />);
     const apply = vi.fn();
     newVersionReady(apply);
+    await barLooked();
 
     fireEvent.click(screen.getByRole("button", { name: "Sasisha" }));
 
-    expect(apply).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+});
+
+describe("UpdatePrompt beside a busy counter", () => {
+  it("stays hidden while a sale is open, and shows once it is finished", async () => {
+    // Asha has three items in a sale, and the customer waits. A new version arrives.
+    const view = render(<Counter busy />);
+    newVersionReady(vi.fn());
+    await barLooked();
+
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("");
+
+    // The sale is finished: the bar shows, with no wait for the next look.
+    view.rerender(<Counter busy={false} />);
+    expect(await screen.findByRole("button", { name: "Sasisha" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe(
+      "Toleo jipya liko tayari",
+    );
+  });
+
+  it("hides again when a new sale starts before anyone taps", async () => {
+    const view = render(<Counter busy={false} />);
+    newVersionReady(vi.fn());
+    expect(await screen.findByRole("button", { name: "Sasisha" })).toBeTruthy();
+
+    view.rerender(<Counter busy />);
+    await vi.waitFor(() => expect(screen.queryByRole("button")).toBeNull());
+  });
+
+  it("stays hidden while another tab's sale is open, and shows at its next look after", async () => {
+    // The Dawa laptop has the counter open in two tabs, and a sale is open in the other one.
+    vi.useFakeTimers();
+    const locks = installFakeLocks();
+    const other = locks.holdInAnotherTab(BUSY_LOCK, "shared");
+    render(<UpdatePrompt />);
+    newVersionReady(vi.fn());
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(screen.queryByRole("button")).toBeNull();
+
+    other.release();
+    await act(() => vi.advanceTimersByTimeAsync(QUIET_CHECK_EVERY));
+    expect(screen.getByRole("button", { name: "Sasisha" })).toBeTruthy();
+  });
+
+  it("does nothing when tapped just after another tab's sale started", async () => {
+    // The bar showed; then, before its next look, a sale opened in the other tab, and Asha taps here.
+    const locks = installFakeLocks();
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const button = await screen.findByRole("button", { name: "Sasisha" });
+    const other = locks.holdInAnotherTab(BUSY_LOCK, "shared");
+    await other.granted;
+
+    fireEvent.click(button);
+    await barLooked();
+
+    expect(apply).not.toHaveBeenCalled();
+    other.release();
   });
 });
