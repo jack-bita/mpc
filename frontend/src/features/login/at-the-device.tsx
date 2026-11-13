@@ -95,6 +95,7 @@ export function AtTheDevice({
 }) {
   const t = useTranslations("login");
   const settings = useTranslations("mySettings");
+  const attendance = useTranslations("attendance");
   const me = useWhoIsHere();
   const store = useQueryClient();
 
@@ -331,16 +332,25 @@ export function AtTheDevice({
           >
             {t("welcome", { name: person.name })}
           </h1>
-          {/* The person's own language and font, one tap from the welcome: someone logged in by PIN
-              never sees the office's home page (UI-9). Only by the server's session: its screen calls the
-              server as that person, which a local session can't (SYNC-10). */}
-          {here && (
-            <div>
+          <div className="flex flex-wrap gap-3">
+            {/* The counter's first screen (SYNC-11): clocking in and out. Online or offline alike, as the
+                counter needs no server; only for someone the counter's note names (rowHere), as a person
+                the laptop has no row of would be sent straight back. Next's own link: the page moves with no
+                reload, and the note, kept in this tab's memory, goes with her. */}
+            {rowHere && (
+              <ButtonLink href="/attendance/" size="normal">
+                {attendance("title")}
+              </ButtonLink>
+            )}
+            {/* The person's own language and font, one tap from the welcome: someone logged in by PIN
+                never sees the office's home page (UI-9). Only by the server's session: its screen calls
+                the server as that person, which a local session can't (SYNC-10). */}
+            {here && (
               <ButtonLink href="/my-settings/" kind="second" size="normal">
                 {settings("title")}
               </ButtonLink>
-            </div>
-          )}
+            )}
+          </div>
         </>
       );
     // Plain "nobody is logged in" is no error to show: only a session that ended for a reason says why,

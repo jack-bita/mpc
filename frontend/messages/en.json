@@ -159,6 +159,19 @@
     "saved": "Saved.",
     "back": "Back"
   },
+  "attendance": {
+    "title": "Attendance",
+    "back": "Back",
+    "clockIn": "Clock in",
+    "clockOut": "Clock out",
+    "notInYet": "You haven't clocked in today.",
+    "inSince": "You clocked in at {time}.",
+    "outSince": "You clocked out at {time}.",
+    "savedIn": "Clocked in at {time}.",
+    "savedOut": "Clocked out at {time}. Goodbye!",
+    "firstSync": "Wait a moment: this laptop is still getting the shop's data for the first time. Try again shortly.",
+    "failed": "Not saved. Try again; if it fails again, tell the manager."
+  },
   "stock": {
     "part": "{count} {unit}"
   },

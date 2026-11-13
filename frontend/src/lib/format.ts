@@ -1,4 +1,5 @@
-// format.ts — money and stock as people read them: "TSh 41,000" and "mifuko 26 + kilo 35.5" (03 §7.4).
+// format.ts — money, stock and times of day as people read them: "TSh 41,000", "mifuko 26 + kilo 35.5"
+// and "07:55" (03 §7.4).
 //
 // Every screen and slip writes numbers through here, so 41000 never shows as "41000.00" on one screen
 // and "TSh 41,000" on another. Writing never rounds: a value that would need rounding is refused, so
@@ -97,4 +98,24 @@ export function formatStock(
     parts.push(writePart({ count: formatQuantity(rest), unit: base }));
   const stock = parts.join(" + ");
   return quantity.lt("0") ? `${MINUS}(${stock})` : stock;
+}
+
+/**
+ * A time of day as the shop reads it: "07:55", 24 hours, in the shop's own zone, like a phone's clock and
+ * the shop's rules ("late after 08:00"), never Swahili time, "saa 1:55 asubuhi" (Jack, SYNC-11). `at` is
+ * an ISO time with its zone, as a record's client_time ("2026-11-13T04:55:00.000Z"). Read in `timezone`,
+ * as a laptop's own zone may be anything.
+ */
+export function formatTime(at: string, timezone: string): string {
+  // h23 counts the hours 0 to 23: with a plain 24-hour clock some browsers write five past midnight as
+  // 24:05. Each part is read by name, as shopToday reads a date's, so no locale's own order leaks in.
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(Date.parse(at));
+  const part = (type: string) =>
+    parts.find((each) => each.type === type)?.value ?? "";
+  return `${part("hour")}:${part("minute")}`;
 }

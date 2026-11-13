@@ -39,6 +39,15 @@ export async function readCursor(db: ShopDatabase): Promise<number | null> {
   return typeof row?.value === "number" ? row.value : null;
 }
 
+/** The server's time at the last pull, as it sent it, or null before the laptop's first pull: a bootstrap
+ * alone doesn't bring it. A clock-in needs it, as the server refuses one without (ATT-1, SYNC-11). */
+export async function readLastServerTime(
+  db: ShopDatabase,
+): Promise<string | null> {
+  const row = await db.meta.get(LAST_SERVER_TIME);
+  return typeof row?.value === "string" ? row.value : null;
+}
+
 /** The laptop's last record number, or null when this database was never filled. */
 export async function readLastDeviceSeq(
   db: ShopDatabase,

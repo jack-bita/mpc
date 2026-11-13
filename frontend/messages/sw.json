@@ -159,6 +159,19 @@
     "saved": "Imehifadhiwa.",
     "back": "Rudi"
   },
+  "attendance": {
+    "title": "Mahudhurio",
+    "back": "Rudi",
+    "clockIn": "Ingia kazini",
+    "clockOut": "Toka kazini",
+    "notInYet": "Hujaingia kazini leo.",
+    "inSince": "Uliingia kazini saa {time}.",
+    "outSince": "Ulitoka kazini saa {time}.",
+    "savedIn": "Umeingia kazini saa {time}.",
+    "savedOut": "Umetoka kazini saa {time}. Kwaheri!",
+    "firstSync": "Subiri kidogo: kompyuta hii bado inaleta data za duka kwa mara ya kwanza. Jaribu tena baada ya muda mfupi.",
+    "failed": "Haikuhifadhiwa. Jaribu tena; ikishindikana tena, mwambie meneja."
+  },
   "stock": {
     "part": "{unit} {count}"
   },

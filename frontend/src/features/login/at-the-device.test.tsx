@@ -840,6 +840,16 @@ describe("with no network (SYNC-10)", () => {
     expect(result.current?.idleMinutes).toBe(15);
   });
 
+  it("offers Mahudhurio in a local session too: the counter needs no server (SYNC-11)", async () => {
+    await aLaptopWithNoNetwork(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await jumaLogsInHere();
+
+    expect(
+      await screen.findByRole("link", { name: "Mahudhurio" }),
+    ).toBeDefined();
+  });
+
   it("ends a local session when a counter screen says he is leaving (SYNC-11)", async () => {
     await aLaptopWithNoNetwork(null);
     render(<AtTheDevice device={DAWA_LAPTOP} />);
@@ -855,6 +865,38 @@ describe("with no network (SYNC-10)", () => {
       await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" }),
     ).toBeDefined();
     expect(bar().queryByText("Juma")).toBeNull();
+  });
+});
+
+describe("the way to Mahudhurio (SYNC-11)", () => {
+  const mahudhurio = () => screen.queryByRole("link", { name: "Mahudhurio" });
+
+  it("is on her welcome, and opens the counter's screen", async () => {
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    await waitFor(() => expect(mahudhurio()).not.toBeNull());
+    // The slash at the end is the build's (trailingSlash, next.config.ts), which a test's Next leaves off.
+    expect(mahudhurio()?.getAttribute("href")).toMatch(/^\/attendance\/?$/);
+  });
+
+  it("isn't there while nobody is logged in", async () => {
+    theLaptop(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    await screen.findByRole("heading", { level: 1, name: "Wewe ni nani?" });
+    expect(mahudhurio()).toBeNull();
+  });
+
+  it("isn't offered to someone the laptop has no row of: the counter could not name them", async () => {
+    // A laptop paired a moment ago, before its first sync, with a password's login on it.
+    await shopDatabase(DAWA_LAPTOP.shop.id).staff.clear();
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+    expect(mahudhurio()).toBeNull();
   });
 });
 
