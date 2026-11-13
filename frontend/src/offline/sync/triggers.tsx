@@ -1,6 +1,7 @@
 // triggers.tsx — when this laptop syncs (SYNC-9, 03 §6.5): as the app opens, when the network comes back,
 // 2 s after a record is saved, every 30 s while online, and when someone presses Tuma sasa; and what a
-// failed sync leaves.
+// failed sync leaves. After each save it also asks the browser for a background sync, which sends the
+// record with the app closed, where the browser has it (ask-background.ts, SYNC-16).
 //
 // Each moment asks syncShop (sync.ts), which runs one sync at a time in this tab, and once more after it
 // when asked meanwhile: moments that land together cost one extra sync at most.
@@ -31,6 +32,7 @@ import {
 } from "@/features/devices/this-device";
 
 import { shopDatabase } from "../this-shop";
+import { askForBackgroundSync } from "./ask-background";
 import { listenForAsks } from "./asks";
 import { heardInTheBackground } from "./page-place";
 import { syncShop, type SyncAsk } from "./sync";
@@ -90,6 +92,9 @@ export function startSyncTriggers(
       run({ sendNow: true });
       return;
     }
+    // Asked of the browser too, online or not: closed before the 2 s, or offline, the app can't send it,
+    // and the service worker will, once the network is there (SYNC-16).
+    void askForBackgroundSync(shopId);
     if (soon !== undefined) return;
     soon = setTimeout(() => {
       soon = undefined;
