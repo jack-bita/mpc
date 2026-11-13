@@ -1,6 +1,7 @@
 // this-laptop.tsx — the Kompyuta hii screen (SYNC-12, 03 §6.7): what keeps the shop's records safe on this
 // laptop. It owns how both answers of keep-data.ts are shown: whether the browser keeps the data for good,
-// and whether the app is installed, with a button or the menu's steps to install it.
+// and whether the app is installed, with a button or the menu's steps to install it. Under them, the rescue
+// of a dying laptop's unsent records, in a file (rescue.tsx).
 //
 // A counter screen: it reads only what the browser says on this laptop, never the server, so it works the
 // same offline (rule 5, ADR-0019). The counter's frame shows it only to someone logged in.
@@ -14,6 +15,8 @@ import { useTranslations } from "use-intl";
 import { Alert, AlertDescription } from "@/components/design/alert";
 import { Button, ButtonLink } from "@/components/design/button";
 import { askToKeepData, install, useKeepData } from "@/offline/keep-data";
+
+import { Rescue } from "./rescue";
 
 export function ThisLaptopScreen() {
   const t = useTranslations("thisLaptop");
@@ -65,6 +68,8 @@ export function ThisLaptopScreen() {
             browser's menu installs all the same. */}
         {installState.kind === "steps" && <p>{t("install.steps")}</p>}
       </section>
+
+      <Rescue />
     </div>
   );
 }

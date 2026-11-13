@@ -218,6 +218,21 @@
       "installed": "Programu imesakinishwa kwenye kompyuta hii.",
       "button": "Sakinisha",
       "steps": "Fungua menyu ya kivinjari (⋮ au ⋯), kisha chagua Sakinisha."
+    },
+    "rescue": {
+      "title": "Kumbukumbu ambazo hazijatumwa",
+      "none": "Hakuna kumbukumbu inayosubiri kutumwa kutoka kompyuta hii.",
+      "waiting": "{count, plural, one {Kumbukumbu # inasubiri kutumwa.} other {Kumbukumbu # zinasubiri kutumwa.}}",
+      "why": "Kompyuta hii ikiharibika kabla ya kuzituma, zihifadhi kwenye faili. Kisha meneja azipakie kwenye kompyuta nyingine ya duka hili, nayo itazituma.",
+      "save": "Hifadhi kwenye faili",
+      "load": "Pakia faili",
+      "added": "{count, plural, one {Kumbukumbu # imeongezwa, na itatumwa yenyewe.} other {Kumbukumbu # zimeongezwa, na zitatumwa zenyewe.}}",
+      "alreadyHere": "{count, plural, one {Kumbukumbu # ilikuwepo tayari.} other {Kumbukumbu # zilikuwepo tayari.}}",
+      "notRescueFile": "Faili hili si la kumbukumbu za duka. Chagua faili lililohifadhiwa kwenye ukurasa huu.",
+      "wrongShop": "Faili hili ni la duka jingine: halikupakiwa.",
+      "brokenRecord": "Faili hili limeharibika: halikupakiwa.",
+      "firstSync": "Subiri kidogo: kompyuta hii bado inaleta data za duka kwa mara ya kwanza. Jaribu tena baada ya muda mfupi.",
+      "failed": "Haikufanikiwa. Jaribu tena."
     }
   },
   "stock": {

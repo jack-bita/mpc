@@ -218,6 +218,21 @@
       "installed": "The app is installed on this laptop.",
       "button": "Install",
       "steps": "Open the browser's menu (⋮ or ⋯), then choose Install."
+    },
+    "rescue": {
+      "title": "Records not sent yet",
+      "none": "No records are waiting to be sent from this laptop.",
+      "waiting": "{count, plural, one {# record is waiting to be sent.} other {# records are waiting to be sent.}}",
+      "why": "If this laptop breaks before sending them, save them to a file. Then a manager loads it on another laptop of this shop, which sends them.",
+      "save": "Save to a file",
+      "load": "Load a file",
+      "added": "{count, plural, one {# record added, and it will be sent by itself.} other {# records added, and they will be sent by themselves.}}",
+      "alreadyHere": "{count, plural, one {# record was here already.} other {# records were here already.}}",
+      "notRescueFile": "This file isn't the shop's records. Choose a file saved on this page.",
+      "wrongShop": "This file belongs to another shop: it was not loaded.",
+      "brokenRecord": "This file is damaged: it was not loaded.",
+      "firstSync": "Wait a little: this laptop is still bringing the shop's data for the first time. Try again shortly.",
+      "failed": "It didn't work. Try again."
     }
   },
   "stock": {

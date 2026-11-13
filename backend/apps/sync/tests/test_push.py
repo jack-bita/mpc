@@ -62,6 +62,13 @@ def device_b(shop_b: Shop, side_b: Side) -> Device:
         return Device.objects.create(shop=shop_b, home_side=side_b, name="Laptop B", code=1, key_hash="b" * 64)
 
 
+@pytest.fixture
+def device_a2(shop_a: Shop, side_a: Side) -> Device:
+    # A second laptop of shop A: the one a dying laptop's rescue file is loaded on (SYNC-12).
+    with shop_context(shop_a):
+        return Device.objects.create(shop=shop_a, home_side=side_a, name="Laptop ya Vyakula", code=2, key_hash="c" * 64)
+
+
 def _sent(device_seq: int, maker: StaffMember, *, text: str = "2 bags of pumba", **more: Any) -> Sent:
     # One ticket as the laptop sent it, its number `device_seq`, made by `maker`; `more` adds to its payload, or
     # overrides the envelope (`type`, `schema_version`, `id`).
@@ -580,3 +587,17 @@ def test_twin_sent_at_the_same_moment_answers_duplicate(
     assert ended == [[_again(first)]]
     assert len(_tickets(shop_a)) == (first.status == "accepted")
     assert len(_flags(shop_a, FlagKind.INVALID_DOCUMENT)) == (first.status == "invalid")
+
+
+def test_a_record_carried_to_another_laptop_posts_once(
+    shop_a: Model, device_a: Device, device_a2: Device, staff_a: StaffMember
+) -> None:
+    # The Dawa laptop was dying with #5 unsent; its rescue file was loaded on the Vyakula laptop, which sent it as its
+    # own #141, with the record's id kept (SYNC-12, 03 §6.7). Then the Dawa laptop came back and sent #5 too. The server
+    # knows the id, so the second copy gets the first answer, and the record is saved once.
+    carried = uuid.uuid7()
+    (first,) = _push(device_a2, [_sent(141, staff_a, id=carried)])
+    (again,) = _push(device_a, [_sent(5, staff_a, id=carried)])
+    assert first.status == "accepted"
+    assert again == _again(first)
+    assert _tickets(shop_a) == [(141, "2 bags of pumba")]
