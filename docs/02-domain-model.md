@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.23 · 11 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.24 · 13 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -49,6 +49,8 @@
 **Changes in v1.21** (10 Nov 2026, SYNC-4): a new Flag kind, `invalid_document`: a document a device pushed that the server can't save, raised about its line in the push's answer log, a new append-only record (§13, T2; 03 v1.41). A word for a document a device sends: *kumbukumbu* (Jack, §21). Marked **(v1.21)**.
 
 **Changes in v1.22** (11 Nov 2026, SYNC-5): two choices by Jack. A `device_gap` flag closes itself once every number it was missing has arrived: the system resolves it, with a note of its own that says so. It is the one kind the system may close; every other flag is closed by a person, as v1.8 says (§13, §17; 04 v1.57). And X2 covers a person who has left, as it covers one suspended: what they did offline after they left is flagged (§16). Also what SYNC-5 built: a device's last number and its report on itself (§5), and the offline periods it reports, kept as reported and never changed (§5, T2). Marked **(v1.22)**.
+
+**Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
 **Changes in v1.23** (11 Nov 2026, ATT-1): how an attendance event's time is trusted (§12): sent at once, the server's; sent later, the laptop's, unless a sign says its clock moved, and then none, with a flag. Each event names whose it is and keeps its evidence. One choice by Jack: clocking in needs no key, on any of the shop's laptops (§12; 04 v1.58). Marked **(v1.23)**.
 
@@ -690,10 +692,13 @@ One word per idea, the same in code, docs and UI. The Swahili is a draft — Jac
 | Expense | Matumizi | Money paid out for the shop |
 | Advance | Advansi | Money a worker takes before payday |
 | Attendance | Mahudhurio | Clocking in and out |
+| `clock` `in` · `out` | Ingia kazini · Toka kazini | One tap at a shop laptop as a worker arrives or leaves; *Toka* alone is logging out, *Ingia* logging in **(v1.24)** |
 | PayRun | Mishahara | One month's pay for everyone |
 | Job | Kazi ya mashine | A grinding or mixing order |
 | Flag | Tofauti | A difference someone must explain |
 | Document | Kumbukumbu | A record a device saves at the counter and sends to the server: a sale, a clock-in; English screens say *record* **(v1.21)** |
+
+Times of day are written as the shop's clocks show them: `07:55`, `18:02`, 24 hours, in the shop's own zone, never in Swahili time (`saa 1:55 asubuhi`), so a screen reads as the shop's rules do ("late after 08:00") (Jack, SYNC-11) **(v1.24)**.
 
 ## Appendix A — Diagram
 
