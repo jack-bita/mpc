@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createApiClient } from "@/api/make-client";
 import type { components } from "@/api/schema";
-import { DAWA_LAPTOP } from "@/test/devices";
+import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
 import { answer, fakeFetch, refusal, sent } from "@/test/fake-server";
 import {
   installFakeLocks,
@@ -42,6 +42,7 @@ type PushedAnswer = components["schemas"]["PushedAnswer"];
 
 const SHOP = DAWA_LAPTOP.shop.id;
 const PUSH = "/api/sync/v1/push/";
+const ME = "/api/devices/v1/me/";
 
 let locks: FakeLocks;
 let token: string | null;
@@ -74,6 +75,8 @@ beforeEach(async () => {
     { key: CURSOR, value: 130 },
     { key: LAST_DEVICE_SEQ, value: 57 },
   ]);
+  // The worker asks which shop the key belongs to before it pushes: the Dawa laptop's, MPC.
+  answer("GET", ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
   answer("POST", PUSH, async (request) => {
     const body = (await request.json()) as { documents: { id: string }[] };
     return Response.json({
@@ -81,6 +84,10 @@ beforeEach(async () => {
     });
   });
 });
+
+/** The pushes the worker sent: the question before each is left out. */
+const pushes = () =>
+  sent.filter((request) => new URL(request.url).pathname === PUSH);
 
 afterEach(() => {
   removeFakeLocks();
@@ -106,9 +113,10 @@ describe("the service worker's push", () => {
 
     await backgroundPush(SHOP, tools);
 
-    expect(sent).toHaveLength(1);
-    expect(sent[0]!.headers.get("X-CSRFToken")).toBe("token-from-django");
-    const body = (await sent[0]!.json()) as { documents: { id: string }[] };
+    expect(pushes()).toHaveLength(1);
+    const push = pushes()[0]!;
+    expect(push.headers.get("X-CSRFToken")).toBe("token-from-django");
+    const body = (await push.json()) as { documents: { id: string }[] };
     expect(body.documents.map((document) => document.id)).toEqual([made.id]);
     expect(await waiting()).toBe(0);
   });
@@ -131,7 +139,7 @@ describe("the service worker's push", () => {
 
     tab.release();
     await worker;
-    expect(sent).toHaveLength(1);
+    expect(pushes()).toHaveLength(1);
   });
 
   it("keeps the wait after a failure, and asks the browser to try later", async () => {
@@ -209,6 +217,39 @@ describe("the service worker's push", () => {
     await backgroundPush(SHOP, tools);
 
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("the shop the push is for", () => {
+  it("sends nothing when the browser's key now belongs to another shop", async () => {
+    // A retry the browser kept for minutes, and the laptop paired to another shop in between: the Dawa
+    // shop's clock-in must not be sent as the other shop's.
+    await clockIn();
+    answer("GET", ME, {
+      status: 200,
+      body: {
+        ...DAWA_LAPTOP_ANSWER,
+        shop: {
+          ...DAWA_LAPTOP_ANSWER.shop,
+          id: "019a5e00-0000-7000-8000-0000000000a2",
+        },
+      },
+    });
+
+    await backgroundPush(SHOP, tools);
+
+    expect(pushes()).toHaveLength(0);
+    expect(await waiting()).toBe(1);
+  });
+
+  it("leaves a block heard on the question as a note, and sends nothing", async () => {
+    await clockIn();
+    answer("GET", ME, refusal(401, "device.blocked"));
+
+    await backgroundPush(SHOP, tools);
+
+    expect(pushes()).toHaveLength(0);
+    expect(await readDeviceRefused(shopDatabase(SHOP))).toBe("device.blocked");
   });
 });
 

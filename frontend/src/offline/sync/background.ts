@@ -18,10 +18,11 @@ import type { ApiClient } from "@/api/make-client";
 
 import { openShopDatabase } from "../db";
 import { waitingInOrder } from "../waiting";
-import { isAboutTheDevice } from "./answer";
+import { isAboutTheDevice, syncAnswer, syncCallLimit } from "./answer";
 import { mayPush } from "./backoff";
 import { inTurn } from "./lock";
 import { noteDeviceRefused, readDeviceRefused } from "./meta";
+import type { SyncPlace } from "./place";
 import { pushKeepingTheWait } from "./push";
 
 const TAG_START = "mpc-sync-";
@@ -37,6 +38,16 @@ export function shopOfTag(tag: string): string | null {
   return tag.startsWith(TAG_START) && tag.length > TAG_START.length
     ? tag.slice(TAG_START.length)
     : null;
+}
+
+// Whether this browser's device key belongs to the shop: the device check's own question
+// (/api/devices/v1/me/), asked the worker's way.
+async function belongsTo(shopId: string, place: SyncPlace): Promise<boolean> {
+  const me = await syncAnswer(
+    place.api.GET("/api/devices/v1/me/", { signal: syncCallLimit() }),
+    place.hear,
+  );
+  return me.shop.id === shopId;
 }
 
 /**
@@ -89,6 +100,14 @@ export async function backgroundPush(
       };
       let result;
       try {
+        // The push names no shop: the server files it under the shop of the device whose key the browser
+        // holds now. The page only syncs its device's own shop (mpc.device), but the worker knows the
+        // shop from the sync's name alone, which may be older than the key: a retry the browser keeps for
+        // minutes, and the laptop paired to another shop in between, would send one shop's records as
+        // another's. So it asks first which shop this browser's key belongs to, and leaves the records
+        // where they are when it isn't this one (SYNC-16's review). A block or a "not registered" here
+        // is kept as for the push.
+        if (!(await belongsTo(shopId, place))) return;
         result = await pushKeepingTheWait(db, place);
       } catch (error) {
         // Blocked, or a key that opens no device: the note is left, and trying again can't help.
