@@ -18,6 +18,8 @@
 // bootstrap but never pulled, or never filled at all (NeverFilled), saves nothing and says to wait for the
 // first sync: the server would refuse such a tap, and it would sit set aside.
 //
+// Under the button, who clocked in today on this laptop (todays-list.tsx), read from the same taps.
+//
 // Times as "07:55", 24 hours, in the shop's zone (formatTime, Jack, SYNC-11).
 //
 // "use client": it asks use-intl for words, and reads and writes the laptop's database, in the browser only.
@@ -44,6 +46,8 @@ import {
 import { NeverFilled, saveDocument } from "@/offline/outbox";
 import { readLastServerTime } from "@/offline/sync/meta";
 import { useShopDatabase } from "@/offline/this-shop";
+
+import { TodaysList } from "./todays-list";
 
 /** How long the goodbye shows after Toka kazini, before the laptop logs her out: long enough to read it
  * and see her time was kept. */
@@ -157,6 +161,8 @@ export function AttendanceScreen() {
           {t(next === "in" ? "clockIn" : "clockOut")}
         </Button>
       )}
+      {/* Who else is in today, on this laptop: under the button, as the button is what she came for. */}
+      <TodaysList />
     </div>
   );
 }

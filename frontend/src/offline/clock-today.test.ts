@@ -10,6 +10,8 @@ import { DAWA_LAPTOP } from "@/test/devices";
 import {
   DAY_CHECK_EVERY,
   dayWindow,
+  peopleToday,
+  type Tap,
   tapsOnDay,
   useClockDay,
 } from "./clock-today";
@@ -155,5 +157,96 @@ describe("today on this laptop", () => {
     const { result } = renderHook(() => useClockDay());
 
     expect(result.current).toBeUndefined();
+  });
+});
+
+describe("each person's day so far", () => {
+  /** A tap as the screen reads it: by whom, which kind, and when (UTC). */
+  const read = (
+    id: string,
+    by: string,
+    kind: "in" | "out",
+    at: string,
+  ): Tap => ({
+    id,
+    staffId: by,
+    kind,
+    at,
+  });
+
+  it("gives each person once, in the order they first came, with when they came and, if out, when they left", () => {
+    // Juma came at 07:40 and is still here; Asha came at 07:55 and left at 18:02.
+    const taps = [
+      read(
+        "019a5e00-0000-7000-8000-000000000301",
+        JUMA,
+        "in",
+        "2026-11-13T04:40:00.000Z",
+      ),
+      read(
+        "019a5e00-0000-7000-8000-000000000302",
+        ASHA,
+        "in",
+        "2026-11-13T04:55:00.000Z",
+      ),
+      read(
+        "019a5e00-0000-7000-8000-000000000303",
+        ASHA,
+        "out",
+        "2026-11-13T15:02:00.000Z",
+      ),
+    ];
+
+    expect(peopleToday(taps)).toEqual([
+      { staffId: JUMA, cameAt: "2026-11-13T04:40:00.000Z", leftAt: null },
+      {
+        staffId: ASHA,
+        cameAt: "2026-11-13T04:55:00.000Z",
+        leftAt: "2026-11-13T15:02:00.000Z",
+      },
+    ]);
+  });
+
+  it("keeps the first clock-in, and no leaving time once she is back from lunch", () => {
+    const taps = [
+      read(
+        "019a5e00-0000-7000-8000-000000000304",
+        ASHA,
+        "in",
+        "2026-11-13T04:55:00.000Z",
+      ),
+      read(
+        "019a5e00-0000-7000-8000-000000000305",
+        ASHA,
+        "out",
+        "2026-11-13T09:30:00.000Z",
+      ),
+      read(
+        "019a5e00-0000-7000-8000-000000000306",
+        ASHA,
+        "in",
+        "2026-11-13T10:25:00.000Z",
+      ),
+    ];
+
+    expect(peopleToday(taps)).toEqual([
+      { staffId: ASHA, cameAt: "2026-11-13T04:55:00.000Z", leftAt: null },
+    ]);
+  });
+
+  it("shows a clock-out with no clock-in before it, as one who forgot to clock in", () => {
+    // The manager enters the missing clock-in later (ATT-6); the list shows what this laptop holds.
+    const taps = [
+      read(
+        "019a5e00-0000-7000-8000-000000000307",
+        JUMA,
+        "out",
+        "2026-11-13T15:10:00.000Z",
+      ),
+    ];
+
+    expect(peopleToday(taps)).toEqual([
+      { staffId: JUMA, cameAt: null, leftAt: "2026-11-13T15:10:00.000Z" },
+    ]);
   });
 });

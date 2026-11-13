@@ -100,6 +100,38 @@ export function tapsOnDay(
   return taps;
 }
 
+/** One person's day so far on this laptop, for today's list. */
+export interface PersonsDay {
+  staffId: string;
+  /** Their first clock-in today: when they came. Null for a clock-out with none before it. */
+  cameAt: string | null;
+  /** Their last clock-out, while they are out: null while they are in, back from lunch too. */
+  leftAt: string | null;
+}
+
+/**
+ * Of today's taps, in time order, each person once, in the order they first tapped: when they came, and
+ * when they left if they are out now. The list a shop's sign-in sheet would show; the day's hours, and
+ * whether someone was late, are the server's to work out (AttendanceDay, ATT cards).
+ */
+export function peopleToday(taps: readonly Tap[]): PersonsDay[] {
+  const days = new Map<string, PersonsDay>();
+  for (const tap of taps) {
+    let day = days.get(tap.staffId);
+    if (day === undefined) {
+      day = { staffId: tap.staffId, cameAt: null, leftAt: null };
+      days.set(tap.staffId, day);
+    }
+    if (tap.kind === "in") {
+      day.cameAt ??= tap.at;
+      // Back in after a clock-out, as after lunch: here again, so no leaving time.
+      day.leftAt = null;
+    } else day.leftAt = tap.at;
+  }
+  // A Map gives its entries in the order they were added: the order each person first tapped.
+  return [...days.values()];
+}
+
 /** Today, by the laptop's clock, in the shop's zone ("2026-11-13"); undefined on a laptop with no shop.
  * Worked out again every minute, so it turns at midnight by itself. */
 export function useClockDay(): string | undefined {

@@ -170,7 +170,15 @@
     "savedIn": "Clocked in at {time}.",
     "savedOut": "Clocked out at {time}. Goodbye!",
     "firstSync": "Wait a moment: this laptop is still getting the shop's data for the first time. Try again shortly.",
-    "failed": "Not saved. Try again; if it fails again, tell the manager."
+    "failed": "Not saved. Try again; if it fails again, tell the manager.",
+    "list": {
+      "title": "Today on this laptop",
+      "empty": "Nobody has clocked in today yet.",
+      "name": "Name",
+      "came": "In",
+      "left": "Out",
+      "unknown": "Unknown worker"
+    }
   },
   "stock": {
     "part": "{count} {unit}"

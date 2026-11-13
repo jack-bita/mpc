@@ -170,7 +170,15 @@
     "savedIn": "Umeingia kazini saa {time}.",
     "savedOut": "Umetoka kazini saa {time}. Kwaheri!",
     "firstSync": "Subiri kidogo: kompyuta hii bado inaleta data za duka kwa mara ya kwanza. Jaribu tena baada ya muda mfupi.",
-    "failed": "Haikuhifadhiwa. Jaribu tena; ikishindikana tena, mwambie meneja."
+    "failed": "Haikuhifadhiwa. Jaribu tena; ikishindikana tena, mwambie meneja.",
+    "list": {
+      "title": "Leo kwenye kompyuta hii",
+      "empty": "Bado hakuna aliyeingia kazini leo.",
+      "name": "Jina",
+      "came": "Aliingia",
+      "left": "Alitoka",
+      "unknown": "Mfanyakazi asiyejulikana"
+    }
   },
   "stock": {
     "part": "{unit} {count}"
