@@ -52,8 +52,11 @@ async function belongsTo(shopId: string, place: SyncPlace): Promise<boolean> {
 
 /**
  * Thrown so the browser tries again later: a push that must wait, or the server said "try later". A
- * background sync whose work fails is tried again by the browser itself, a few times, further apart each
- * time; the open app's moments carry on meanwhile.
+ * background sync whose work fails is tried again by the browser itself, but only a few times: Chrome
+ * tries about three times in all, some 5 and then 15 minutes apart, and then drops it. So a server down
+ * for more than about 20 minutes, with the app closed, leaves the records waiting until the app is opened
+ * again, or the next save asks again; the open app's moments carry on meanwhile. Thrown only for a trouble
+ * a later try may find gone: one no try can put right ends quietly instead, so it uses up no try.
  */
 export class TryLater extends Error {
   constructor(why: string) {
@@ -88,9 +91,10 @@ export async function backgroundPush(
       // Most often the open app sent it first (2 s after the save): then there is nothing to do. No empty
       // push either: the report it carries is the open app's to send (SYNC-14).
       if ((await waitingInOrder(db).count()) === 0) return;
-      // A browser that lost its token: the push would be refused (403). The app gets one back as it
-      // opens (DeviceMeView), and pushes then.
-      if (!(await tools.hasCsrfToken())) throw new TryLater("no CSRF token");
+      // A browser that lost its token: the push would be refused (403). Only the app gets one back, as it
+      // opens (DeviceMeView), and pushes then; a try before that would find none either. So this ends
+      // quietly, and uses up none of the browser's few tries (TryLater).
+      if (!(await tools.hasCsrfToken())) return;
       // The wait after a failure holds here too: a worker the browser woke is no one pressing Tuma sasa.
       if (!(await mayPush(db))) throw new TryLater("the push waits");
       const place = {

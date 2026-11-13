@@ -54,7 +54,8 @@ serwist.addEventListeners();
 
 // The CSRF cookie, read with the Cookie Store, the way a worker can: it has no document.cookie. Read at
 // each change, never kept, as the page's client does (client.ts: a login gives a new token). Every
-// browser with Background Sync has it; one without simply sends no token, and is refused.
+// browser with Background Sync has it; in one without, the worker finds no token and pushes nothing, so
+// the open app sends the records (background.ts).
 async function csrfHeader(): Promise<Record<string, string>> {
   const token = (await self.cookieStore?.get(CSRF_COOKIE))?.value;
   return token ? { [CSRF_HEADER]: token } : {};

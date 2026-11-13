@@ -189,12 +189,13 @@ describe("the service worker's push", () => {
     expect(sent).toHaveLength(0);
   });
 
-  it("sends nothing with no CSRF token, and asks the browser to try later", async () => {
-    // Sent with none, the push would be refused (403) and wait 30 s for nothing.
+  it("sends nothing with no CSRF token, and uses up none of the browser's tries", async () => {
+    // Sent with none, the push would be refused (403). Only the app gets a token back, as it opens, so
+    // a later try of the browser's would find none either: it ends quietly.
     await clockIn();
     token = null;
 
-    await expect(backgroundPush(SHOP, tools)).rejects.toBeInstanceOf(TryLater);
+    await expect(backgroundPush(SHOP, tools)).resolves.toBeUndefined();
     expect(sent).toHaveLength(0);
   });
 
