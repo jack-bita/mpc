@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.65 · 13 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.66 · 13 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.66** (13 Nov 2026, SYNC-12): Jack's choice, while planning SYNC-12: *Toka* with unsent records shows a note and still logs out, instead of a warning that stops the logout. Logging out loses nothing: the laptop sends its own records with its key, whoever is logged in (SYNC-8, SYNC-16), so a stop would guard nothing and teach staff to tap past warnings. In the plan he approved: the export and import live on a new counter page, *Kompyuta hii*; anyone logged in may export, as a dying laptop can't wait for the manager, and only someone with `device.manage` may import, as an edited file could clock in a colleague who never came; set-aside records stay out of the file (parking lot 23 decides them). Marked **(v1.66)**.
 
 **Changes in v1.65** (13 Nov 2026, SYNC-16): the SYNC-16 card says what it built and settled. Background Sync works on Chrome and Edge, the laptops too, not only Chrome on Android. Jack's choice: the hand test runs on the laptop's Edge before the PR, and on the shop phone with the live demo after the merge, ticked in the tick PR, as the phone runs a service worker only on https. The technical choices, in the plan Jack approved: a block the worker hears is a note in the shop's database, which the page takes; the worker reads the CSRF token with the Cookie Store and learns the shop from the sync's name; it only pushes. Marked **(v1.65)**.
 
@@ -1091,13 +1093,13 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 
 ### SYNC-12 · Keeping offline data safe
 `M` · Claude-led · after SYNC-8 · branch `feat/sync-12-data-safety`
-**Build:** ask for persistent storage and show its state; install guidance; a warning before logout or clearing data while records are unsent; export unsent records to a file and import them on another device of the same shop (03 §6.7).
+**Build:** ask for persistent storage and show its state; install guidance; a note at *Toka* while records are unsent, which says how many wait and that they are safe, and still logs out **(v1.66)**; export unsent records to a file and import them on another device of the same shop (03 §6.7), on a new counter page, *Kompyuta hii*: anyone logged in exports, only `device.manage` imports, and set-aside records stay out of the file **(v1.66)**.
 **Watch out:** on `localhost`, Chrome refused persistent storage even to the installed app, and granted it on the demo address (SPIKE-1's report). So the *not persistent* state shows in development and in the end-to-end tests (UI-6); only the demo or a real device proves the granted state **(v1.10)**.
 **Watch out** **(v1.61)**: from SYNC-8: the unsent records are the outbox's `waiting` rows (`src/offline/db.ts`); the set-aside ones (`needs_attention`) are on the server already, as refused. An imported record must keep its id, so the server answers `duplicate` for one it already has, and take the importing laptop's next number: `saveDocument` makes a new id, so the import writes its rows its own way, in one transaction as the save does.
 **Done when:**
-- [ ] The warning stops an accidental logout with unsent records.
+- [ ] *Toka* with unsent records says how many wait and that they are safe; a test proves logging out keeps them **(v1.66)**.
 - [ ] An exported file, imported on another device, posts each record once.
-**Commits:** `feat(frontend): persistent storage and install` → `feat(frontend): unsent warning` → `feat(frontend): export and import unsent`
+**Commits:** `feat(frontend): persistent storage and install` → `feat(frontend): unsent note at logout` **(v1.66)** → `feat(frontend): export and import unsent`
 
 ### SYNC-13 · Safe app updates
 `M` · Claude-led · after SYNC-8, SPIKE-1 · branch `feat/sync-13-updates`
