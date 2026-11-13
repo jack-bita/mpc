@@ -1,5 +1,5 @@
-// format.ts — money, stock and times of day as people read them: "TSh 41,000", "mifuko 26 + kilo 35.5"
-// and "07:55" (03 §7.4).
+// format.ts — money, stock, times of day and dates as people read them: "TSh 41,000", "mifuko 26 + kilo 35.5",
+// "07:55" and "13/11/2026" (03 §7.4).
 //
 // Every screen and slip writes numbers through here, so 41000 never shows as "41000.00" on one screen
 // and "TSh 41,000" on another. Writing never rounds: a value that would need rounding is refused, so
@@ -118,4 +118,22 @@ export function formatTime(at: string, timezone: string): string {
   const part = (type: string) =>
     parts.find((each) => each.type === type)?.value ?? "";
   return `${part("hour")}:${part("minute")}`;
+}
+
+/**
+ * A date as the shop reads it: "13/11/2026", day, month, year, the order Tanzania writes a date in, in the
+ * shop's own zone. With no month name, so it reads the same in both languages. `at` is an ISO time with its
+ * zone, as a record's client_time.
+ */
+export function formatDate(at: string, timezone: string): string {
+  // Each part read by name, as for a time of day.
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).formatToParts(Date.parse(at));
+  const part = (type: string) =>
+    parts.find((each) => each.type === type)?.value ?? "";
+  return `${part("day")}/${part("month")}/${part("year")}`;
 }

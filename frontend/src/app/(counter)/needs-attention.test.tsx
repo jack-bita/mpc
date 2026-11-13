@@ -25,16 +25,22 @@ const ASHA = staffRow(
 
 const db = () => shopDatabase(DAWA_LAPTOP.shop.id);
 
-/** A record saved on the laptop at 07:55 in Dar, then refused by the server for `reason`, as the push sets
- * one aside (push.ts). */
+/** Now, as the tests read the warning: 08:10 in Dar on 13 November. */
+const NOW = new Date("2026-11-13T05:10:00Z");
+
+/** A record saved on the laptop, by default at 07:55 in Dar that same morning, then refused by the server for
+ * `reason`, as the push sets one aside (push.ts). The laptop's clock is back at NOW after. */
 async function refused(
   reason: string,
-  draft: { type: string; payload: object } = {
-    type: "clock",
-    payload: { kind: "in", last_server_time: "2026-11-13T04:00:00Z" },
-  },
+  {
+    draft = {
+      type: "clock",
+      payload: { kind: "in", last_server_time: "2026-11-13T04:00:00Z" },
+    },
+    at = "2026-11-13T04:55:00Z",
+  }: { draft?: { type: string; payload: object }; at?: string } = {},
 ) {
-  vi.setSystemTime(new Date("2026-11-13T04:55:00Z"));
+  vi.setSystemTime(new Date(at));
   const saved = await saveDocument(db(), {
     ...draft,
     schema_version: 1,
@@ -44,7 +50,7 @@ async function refused(
     status: "needs_attention",
     last_error: reason,
   });
-  vi.useRealTimers();
+  vi.setSystemTime(NOW);
   return saved;
 }
 
@@ -137,8 +143,7 @@ describe("the records the server refused", () => {
   it("names a record of another kind by its number", async () => {
     // A later card's record (a sale, say): the counter knows only its number on this laptop.
     const saved = await refused("document.type_unknown", {
-      type: "sale",
-      payload: {},
+      draft: { type: "sale", payload: {} },
     });
 
     render(<NeedsAttention />);
@@ -147,6 +152,25 @@ describe("the records the server refused", () => {
       within(await theWarning()).getByText(
         `Kumbukumbu namba ${saved.device_seq}`,
       ),
+    ).toBeDefined();
+  });
+
+  it("dates a record refused on another day, so Monday's never reads as today's", async () => {
+    // Refused on Monday 10 November, and still on the laptop on Thursday: nothing clears it yet.
+    await refused("document.maker_unknown", { at: "2026-11-10T04:55:00Z" });
+    const sale = await refused("document.type_unknown", {
+      draft: { type: "sale", payload: {} },
+      at: "2026-11-10T09:00:00Z",
+    });
+
+    render(<NeedsAttention />);
+
+    const warning = within(await theWarning());
+    expect(
+      warning.getByText("Asha: Ingia kazini, 10/11/2026 saa 07:55"),
+    ).toBeDefined();
+    expect(
+      warning.getByText(`Kumbukumbu namba ${sale.device_seq}, 10/11/2026`),
     ).toBeDefined();
   });
 

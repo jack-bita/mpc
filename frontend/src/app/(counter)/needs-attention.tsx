@@ -22,10 +22,11 @@ import { useTranslations } from "use-intl";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
 import { useThisDevice } from "@/features/devices/this-device";
-import { formatTime } from "@/lib/format";
-import { CLOCK } from "@/offline/clock-today";
+import { formatDate, formatTime } from "@/lib/format";
+import { CLOCK, useClockDay } from "@/offline/clock-today";
 import { type SetAside, useNeedsAttention } from "@/offline/outbox";
 import { useStaff } from "@/offline/reference";
+import { shopToday } from "@/offline/rules";
 
 /** The server's reasons the counter has words for (PushedAnswer's codes, apps/sync/push.py), by the key
  * of their words: a key of the word book can't hold the code's dot. */
@@ -47,6 +48,8 @@ export function NeedsAttention() {
   const refused = useNeedsAttention();
   const staff = useStaff();
   const timezone = useThisDevice()?.shop.timezone;
+  // Today, on the same clock and in the same zone as today's taps (clock-today.ts), to date the others.
+  const today = useClockDay();
 
   // Nothing until the reads are in, and nothing while nothing was refused: most days, nothing at all.
   if (
@@ -56,20 +59,31 @@ export function NeedsAttention() {
     timezone === undefined
   )
     return null;
+  // The shop's zone, known from here on: the functions below are hoisted, so TypeScript can't see the check
+  // above from inside them, and reads this one.
+  const zone: string = timezone;
 
   const nameOf = (staffId: string) =>
     staff.find((row) => row.id === staffId)?.display_name ?? t("unknownPerson");
 
-  /** What the record was: a clock-in by who, which tap and when; any other kind by its number. */
+  /** What the record was: a clock-in by who, which tap and when; any other kind by its number. Made on
+   * another day, with its date: a record set aside stays on the laptop until someone clears it (04 §20), so
+   * Monday's must not read as today's on Friday. */
   function whatItWas({ document, device_seq }: SetAside): string {
+    const day = shopToday(zone, Date.parse(document.client_time));
+    const date = day === today ? null : formatDate(document.client_time, zone);
     const kind = (document.payload as { kind?: unknown } | null)?.kind;
-    if (document.type === CLOCK && (kind === "in" || kind === "out"))
-      return t("clock", {
+    if (document.type === CLOCK && (kind === "in" || kind === "out")) {
+      const clock = {
         name: nameOf(document.created_by),
         action: attendance(kind === "in" ? "clockIn" : "clockOut"),
-        time: formatTime(document.client_time, timezone ?? ""),
-      });
-    return t("other", { number: device_seq });
+        time: formatTime(document.client_time, zone),
+      };
+      return date ? t("clockOnDay", { ...clock, date }) : t("clock", clock);
+    }
+    return date
+      ? t("otherOnDay", { number: device_seq, date })
+      : t("other", { number: device_seq });
   }
 
   function why(code: string): string {

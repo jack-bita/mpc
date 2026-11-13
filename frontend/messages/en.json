@@ -189,7 +189,9 @@
   "needsAttention": {
     "title": "Records the server refused",
     "clock": "{name}: {action}, at {time}",
+    "clockOnDay": "{name}: {action}, {date} at {time}",
     "other": "Record number {number}",
+    "otherOnDay": "Record number {number}, {date}",
     "unknownPerson": "Unknown worker",
     "notAgain": "It won't be sent again. Tell the manager.",
     "reasons": {

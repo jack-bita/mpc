@@ -189,7 +189,9 @@
   "needsAttention": {
     "title": "Kumbukumbu zilizokataliwa na seva",
     "clock": "{name}: {action}, saa {time}",
+    "clockOnDay": "{name}: {action}, {date} saa {time}",
     "other": "Kumbukumbu namba {number}",
+    "otherOnDay": "Kumbukumbu namba {number}, {date}",
     "unknownPerson": "Mfanyakazi asiyejulikana",
     "notAgain": "Haitatumwa tena. Mwambie meneja.",
     "reasons": {
