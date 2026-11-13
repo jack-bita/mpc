@@ -23,7 +23,7 @@ import {
   registerServiceWorker,
 } from "@/offline/service-worker";
 import { sendBeforeUpdate } from "@/offline/sync/before-update";
-import { appIsTooOld, listenForTooOld } from "@/offline/sync/too-old";
+import { listenForTooOld, timesTold } from "@/offline/sync/too-old";
 
 export function UpdatePrompt() {
   // The words come from the open book, Swahili or English (ADR-0040).
@@ -79,17 +79,20 @@ export function UpdatePrompt() {
   // 13 Nov 2026), as soon as a version is ready and the counter is quiet: the same steps as a tap, the
   // records first. The service worker looks for the version at once (service-worker.ts). A tab another
   // tab switched does the same: its old code would fail at the first file the new version deleted.
-  const tooOld = useSyncExternalStore(
+  // Read as a count, so each sync that finds it redraws the bar, and the try below runs again (too-old.ts).
+  const told = useSyncExternalStore(
     listenForTooOld,
-    appIsTooOld,
-    // The build has no browser and no sync: not too old.
-    () => false,
+    timesTold,
+    // The build has no browser and no sync: never told.
+    () => 0,
   );
+  const tooOld = told > 0;
   // The version it switched to by itself, once: a reload that doesn't come leaves the bar for a tap,
   // rather than telling the worker again at every redraw. A try that a new sale stopped is forgotten, so
   // the next quiet moment tries again.
   const triedAlone = useRef<ApplyUpdate | null>(null);
   // No list of what it reads: it looks again after every redraw, and does nothing until all of it holds.
+  // Each sync that finds the app too old redraws the bar, so a try refused is tried again then.
   useEffect(() => {
     if (!(tooOld || takenOver) || !shown || sending) return;
     if (triedAlone.current === apply) return;

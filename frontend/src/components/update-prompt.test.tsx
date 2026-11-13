@@ -327,6 +327,29 @@ describe("UpdatePrompt on an app too old for the server", () => {
     await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
   });
 
+  it("tries again at the next sync after another tab's sale refused its try", async () => {
+    // The other tab's sale opened just as this bar tried, and was finished before the bar's next look, 2 s
+    // later: the bar sees nothing change, so nothing redraws. Only the next sync that finds the app too
+    // old, about 30 s later, gives it another try.
+    const locks = installFakeLocks();
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    await screen.findByRole("button", { name: "Sasisha" });
+    const other = locks.holdInAnotherTab(BUSY_LOCK, "shared");
+    await other.granted;
+    syncFoundItTooOld();
+    await barLooked();
+    await barLooked();
+    expect(apply).not.toHaveBeenCalled();
+    other.release();
+    await barLooked();
+
+    syncFoundItTooOld();
+
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+
   it("waits for the sale to finish, even too old", async () => {
     // Asha's sale is never cut off: the switch comes once she has finished it (Jack, 13 Nov 2026).
     const view = render(<Counter busy />);
