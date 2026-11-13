@@ -27,7 +27,7 @@ import { CURSOR, LAST_DEVICE_SEQ, readCursor } from "./meta";
 import { AppTooOld } from "./pull";
 import { BrokenPush } from "./push";
 import type { SyncAsk } from "./sync";
-import { appIsTooOld } from "./too-old";
+import { timesTold } from "./too-old";
 import {
   AFTER_A_SAVE,
   reportSyncFailure,
@@ -234,7 +234,7 @@ describe("the moments", () => {
     );
     stop = startSyncTriggers(SHOP, sync);
 
-    await vi.waitFor(() => expect(appIsTooOld()).toBe(true));
+    await vi.waitFor(() => expect(timesTold()).toBe(1));
     expect(log).not.toHaveBeenCalled();
   });
 });
