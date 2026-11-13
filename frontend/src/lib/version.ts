@@ -21,9 +21,12 @@ export const APP_VERSION = shortVersion(process.env.NEXT_PUBLIC_APP_VERSION);
  *
  * A commit can't say whether it is older or newer than another, so this whole number does, raised by
  * hand in a release that must retire older apps: one that adds a list to the registry, which an older app
- * has no drawer for, or that drops a record shape an older app still writes. Raise it together with the
- * server's MIN_APP_VERSION (config/settings/base.py); a backend test reads this line, and fails if the
- * server's minimum is ever above it (apps/sync/tests/test_app_number.py). Keep its form: one line,
+ * has no drawer for, or one whose apps stop writing a record shape the server is to drop. Raise it together
+ * with the server's MIN_APP_VERSION (config/settings/base.py); a backend test reads this line, and fails if
+ * the server's minimum is ever above it (apps/sync/tests/test_app_number.py). Keep its form: one line,
  * `export const APP_NUMBER = <n>;`.
- */
+ *
+ * The shape itself leaves the server's list only in a later release. An app below the minimum sends its
+ * outbox first, in the shapes it wrote: in the same release the server would refuse those records, Asha's
+ * waiting clock-in among them, and set them aside for a manager. */
 export const APP_NUMBER = 1;

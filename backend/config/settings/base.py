@@ -360,8 +360,10 @@ APP_VERSION = env("APP_VERSION", "dev")
 # number is lower sends its outbox, then updates (SYNC-13). The app's own is APP_NUMBER in frontend/src/lib/version.ts,
 # built into the same image, and a test keeps this one at or below it (apps/sync/tests/test_app_number.py), so the app a
 # server serves is never too old for it. A whole number, raised by hand, the app's with it, in a release that must
-# retire older apps: one that adds a list to the registry, which an older app has no drawer for, or that drops a record
-# shape an older app still writes. Not APP_VERSION, a git commit, which can't say whether it is older or newer than
-# another; nor the release number, as every merge deploys before its release exists. In the code, not the environment:
-# it belongs to the code a release ships.
+# retire older apps: one that adds a list to the registry, which an older app has no drawer for, or one whose apps stop
+# writing a record shape the server is to drop. The shape leaves DOCUMENT_TYPES only in a later release: an app below
+# the minimum sends its outbox first, in the shapes it wrote, and in the same release the server would refuse them. Not
+# APP_VERSION, a git commit, which can't say whether it is older or newer than another; nor the release number, as
+# every merge deploys before its release exists. In the code, not the environment: it belongs to the code a release
+# ships.
 MIN_APP_VERSION = 1
