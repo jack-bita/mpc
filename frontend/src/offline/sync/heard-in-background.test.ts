@@ -4,14 +4,16 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { checkThisDevice } from "@/features/devices/device-check";
 import {
+  saveBlocked,
   saveDevice,
   savedBlocked,
   savedDevice,
 } from "@/features/devices/this-device";
 import { giveCsrfToken } from "@/test/csrf";
-import { DAWA_LAPTOP } from "@/test/devices";
-import { sent } from "@/test/fake-server";
+import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
+import { answer, sent } from "@/test/fake-server";
 
 import { shopDatabase } from "../this-shop";
 import { DEVICE_REFUSED, noteDeviceRefused, readDeviceRefused } from "./meta";
@@ -89,5 +91,28 @@ describe("a refusal heard in the background", () => {
 
     expect(savedBlocked()).toBe(true);
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("an old note after an unblock", () => {
+  it("is thrown away by the device check's working answer, so the unblock holds", async () => {
+    // The page heard the block itself and locked; the worker's note came too, and the locked page never
+    // took it. Then the manager unblocks.
+    saveDevice(DAWA_LAPTOP);
+    saveBlocked();
+    await noteDeviceRefused(shopDatabase(SHOP), "device.blocked");
+    answer("GET", "/api/devices/v1/me/", {
+      status: 200,
+      body: DAWA_LAPTOP_ANSWER,
+    });
+
+    await checkThisDevice();
+    expect(savedBlocked()).toBe(false);
+
+    // The moments start again, and must not find the old note.
+    renderHook(() => useSyncTriggers());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(savedBlocked()).toBe(false);
+    expect(await readDeviceRefused(shopDatabase(SHOP))).toBeNull();
   });
 });

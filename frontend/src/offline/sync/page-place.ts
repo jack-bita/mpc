@@ -31,8 +31,9 @@ export const pagePlace: SyncPlace = { api, hear: keepOnThisPage };
  * without a network (03 §5.9, step 4). True when there was one.
  *
  * Read and removed in one transaction, so two tabs opening at once don't both take it, and taken once
- * only: kept, it would block the laptop again after the manager's unblock. An unblock the device check
- * hears after this puts it right, as for any block (device-check.tsx).
+ * only: kept, it would block the laptop again after the manager's unblock. A note the page never took,
+ * as it was blocked already (the moments stop, and a sync asks nothing), is thrown away by the device
+ * check's next working answer (forgetBackgroundRefusal), so the unblock that follows doesn't find it.
  */
 export async function heardInTheBackground(db: ShopDatabase): Promise<boolean> {
   const refusal = await db.transaction("rw", db.meta, async () => {
@@ -43,4 +44,21 @@ export async function heardInTheBackground(db: ShopDatabase): Promise<boolean> {
   if (refusal === null) return false;
   keepOnThisPage(refusal);
   return true;
+}
+
+/**
+ * Throws away the service worker's note, if any: the server has just said this device works, so a block
+ * or a "not registered" the worker heard before is over. The device check calls it before it keeps that
+ * answer (device-check.tsx). Without it, a note left while the page was blocked already would lock the
+ * app again the moment the manager's unblock reached it (SYNC-16's review).
+ *
+ * A database that refused the delete is only logged: the answer must still be kept, and the note then
+ * costs one more lock, put right by the next check.
+ */
+export async function forgetBackgroundRefusal(db: ShopDatabase): Promise<void> {
+  try {
+    await db.meta.delete(DEVICE_REFUSED);
+  } catch (error) {
+    console.error("the background's note was not forgotten", error);
+  }
 }
