@@ -1099,8 +1099,8 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 **Watch out:** on `localhost`, Chrome refused persistent storage even to the installed app, and granted it on the demo address (SPIKE-1's report). So the *not persistent* state shows in development and in the end-to-end tests (UI-6); only the demo or a real device proves the granted state **(v1.10)**.
 **Watch out** **(v1.61)**: from SYNC-8: the unsent records are the outbox's `waiting` rows (`src/offline/db.ts`); the set-aside ones (`needs_attention`) are on the server already, as refused. An imported record must keep its id, so the server answers `duplicate` for one it already has, and take the importing laptop's next number: `saveDocument` makes a new id, so the import writes its rows its own way, in one transaction as the save does.
 **Done when:**
-- [ ] *Toka* with unsent records says how many wait and that they are safe; a test proves logging out keeps them **(v1.66)**.
-- [ ] An exported file, imported on another device, posts each record once.
+- [x] *Toka* with unsent records says how many wait and that they are safe; a test proves logging out keeps them **(v1.66)**.
+- [x] An exported file, imported on another device, posts each record once.
 **From its review** **(v1.67)**: every finding fixed, by Jack's choice, each in its own commit: a stricter import; a carried record's number counted for the laptop that sent it; `carried_from` on the push and the answer log, so a rescued record is checked against the laptop that made it and names who loaded it; and the smaller fixes. From a second review, the same: a rescued clock-in always waits for a manager (Jack's choice), and six more fixes.
 **Commits:** `feat(frontend): persistent storage and install` → `feat(frontend): unsent note at logout` **(v1.66)** → `feat(frontend): export and import unsent`
 
