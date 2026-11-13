@@ -281,7 +281,7 @@ def _save(
             # numbers, the shop's counter stays locked until the commit, and every save of the shop waits (SYNC-1).
             with _checks_of_our_own():
                 broken = _maker_breaks(device, kind, maker, made_at=sent.client_time)
-                loader_breaks = origin is not None and not _may_load_files(origin.loaded_by, device)
+                loader_breaks = [] if origin is None else _loader_breaks(origin.loaded_by, device, at=received_at)
             with recording_changes(device.shop_id) as numbers:
                 flags = kind.post(document, payload)
             flagged = [{"id": str(flag.pk), "kind": flag.kind} for flag in flags]
@@ -299,14 +299,14 @@ def _save(
                 _check_number(device, line, last)
                 for broken_rule in broken:
                     raise_flag(kind=broken_rule, subject=line, side=device.home_side, people=[maker], by=None)
-                if loader_breaks and origin is not None:
+                for broken_rule in loader_breaks:
                     # Loaded by someone the laptop shouldn't have let: kept (accept, then flag), and a flag naming
                     # them, as a file edited by hand could clock in a colleague who never came (SYNC-12).
                     raise_flag(
-                        kind=FlagKind.PERMISSION_BREAK,
+                        kind=broken_rule,
                         subject=line,
                         side=device.home_side,
-                        people=[origin.loaded_by],
+                        people=[origin.loaded_by] if origin is not None else [],
                         by=None,
                     )
     except (ValidationError, IntegrityError) as refusal:
@@ -477,10 +477,19 @@ def _maker_breaks(device: Device, kind: DocumentType, maker: StaffMember, *, mad
     return broken
 
 
-def _may_load_files(loader: StaffMember, device: Device) -> bool:
-    # Whether the person who loaded a rescue file holds device.manage on the laptop's side, the key the laptop asks
-    # before it shows its button (SYNC-12): checked again here, as every rule a laptop checks is (SYNC-5).
-    return Permission.DEVICE_MANAGE in given_permissions(loader).on(device.home_side_id)
+def _loader_breaks(loader: StaffMember, device: Device, *, at: datetime) -> list[FlagKind]:
+    # The rules the person who loaded a rescue file broke, checked again here as every rule a laptop checks is (SYNC-5):
+    # the key the laptop asks before it shows its button, device.manage on its side, among the keys they were given;
+    # and whether they were working here, as a maker's is checked (X2), or a manager suspended while the laptop was
+    # offline could still load a file edited by hand (SYNC-12's second review). The load has no time of its own the
+    # server could trust, so it is checked at the push's arrival, the latest it can have been: a manager suspended
+    # between loading and the push is flagged too, for a person to look at.
+    broken = []
+    if Permission.DEVICE_MANAGE not in given_permissions(loader).on(device.home_side_id):
+        broken.append(FlagKind.PERMISSION_BREAK)
+    if not was_working_at(loader, at):
+        broken.append(FlagKind.SUSPENDED_STAFF_ACTIVITY)
+    return broken
 
 
 def _flag_numbers(device: Device, line: PushedDocument, awaited: int) -> None:

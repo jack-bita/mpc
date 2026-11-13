@@ -19,12 +19,14 @@ from typing import Any
 
 import pytest
 from django.db.models import Model
+from django.utils import timezone
 
 from apps.control.models import Flag, FlagKind, FlagPerson
 from apps.core.links import LINK_TYPES
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember
+from apps.people.services import suspend
 from apps.shops.models import Shop, Side
 from apps.staffpay.models import AttendanceEvent, TimeCheck
 from apps.sync.api.serializers import PushedEnvelope
@@ -312,3 +314,32 @@ def test_a_carried_clock_in_waits_for_a_manager_naming_only_its_worker(
         named = list(FlagPerson.objects.filter(flag=flag).values_list("staff_id", flat=True))
     assert (event.time_check, event.trusted_time) == (TimeCheck.UNVERIFIED, None)
     assert named == [staff_a.pk]
+
+
+def test_a_loader_who_was_suspended_is_flagged_and_the_record_kept(
+    shop_a: Model, device_a: Device, vyakula_laptop: Device, staff_a: StaffMember, neema: StaffMember
+) -> None:
+    # Neema, a manager, was suspended while the Vyakula laptop was offline, and loaded a file all the same: her key is
+    # still given, so only her status shows it. Kept (accept, then flag), and a flag naming her (SYNC-12's second
+    # review), as a maker's is (X2).
+    with shop_context(shop_a):
+        suspend(neema, reason="Fake reason for a test", by=None)
+    # The push arrives after her suspension, by the server's clock: the load can have been no later.
+    arrived = timezone.now() + dt.timedelta(minutes=1)
+    sent = _sent(1, staff_a, _at(7), Carried(device=device_a.pk, device_seq=5, loaded_by=neema.pk))
+
+    with shop_context(shop_a):
+        (answer,) = push(
+            vyakula_laptop,
+            [sent],
+            received_at=arrived,
+            sent_at=arrived,
+            unsent_count=0,
+            app_version="2026.11.1",
+            outages=[],
+        )
+
+    assert answer.status == "accepted"
+    (flag,) = _flags_naming(shop_a, FlagKind.SUSPENDED_STAFF_ACTIVITY, neema)
+    with shop_context(shop_a):
+        assert flag.subject_id == _line(shop_a, sent).pk
