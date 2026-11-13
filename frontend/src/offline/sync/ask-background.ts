@@ -6,9 +6,11 @@
 // and the open app's own moments send the record, as before (triggers.tsx). Nor is anything asked where
 // the app has no service worker: `next dev`, or a browser that refused to install it.
 //
-// Asking is cheap. The browser keeps one sync by name, so asks made before it fires count once; with a
-// network, it wakes the worker at once, which most often finds the open app sent the record already and
-// does nothing (background.ts).
+// Asking is cheap. The browser keeps one sync by name, so asks made before it fires count once. With a
+// network, it wakes the worker at once, so while the app is open and online the worker most often sends
+// the record before the page's own 2 s: the page's push then finds nothing waiting. Either way the record
+// goes once, as both take the same lock (lock.ts), and a refusal the worker hears reaches the page as a
+// note (page-place.ts). Asked offline, the worker waits for the network, which is the point.
 import { backgroundSyncTag } from "./background";
 
 // Background Sync's part of a registration, which TypeScript's own types don't have yet.

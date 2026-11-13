@@ -127,7 +127,7 @@ describe("the service worker's push", () => {
     expect(await waiting()).toBe(0);
   });
 
-  it("sends nothing when nothing waits: the open app sent it first", async () => {
+  it("sends nothing when nothing waits: it was sent already", async () => {
     await backgroundPush(SHOP, tools);
 
     expect(sent).toHaveLength(0);

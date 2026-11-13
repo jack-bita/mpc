@@ -93,14 +93,17 @@ export async function backgroundPush(
   if (!(await Dexie.exists(databaseName(shopId)))) return;
   // Its own connection to the database: the worker shares no memory with the pages. Closed at the end,
   // as the browser may keep the worker alive a while, and an open connection would hold up an app
-  // update's new database version.
+  // update's new database version. An update can't catch it halfway with an older version either: a new
+  // worker only takes over once every window of the app is closed (sw.ts, skipWaiting false), so the
+  // worker running is always the one whose version the pages run; and if a newer version is opened
+  // anyway, Dexie closes this connection by itself, and the push fails and is tried again.
   const db = openShopDatabase(shopId);
   try {
     await inTurn(shopId, async () => {
       // Refused already, and the page hasn't taken the note yet: asking again would only be refused.
       if ((await readDeviceRefused(db)) !== null) return;
-      // Most often the open app sent it first (2 s after the save): then there is nothing to do. No empty
-      // push either: the report it carries is the open app's to send (SYNC-14).
+      // Sent already, by the open app or by an earlier wake of this worker: nothing to do. No empty push
+      // either: the report it carries is the open app's to send (SYNC-14).
       if ((await waitingInOrder(db).count()) === 0) return;
       // A browser that lost its token: the push would be refused (403). Only the app gets one back, as it
       // opens (DeviceMeView), and pushes then; a try before that would find none either. So this ends
