@@ -6,10 +6,11 @@ updates. Both are built into one image, so the app the server hands out must alw
 raised the minimum and forgot the app's own number would send every laptop round in updates that never end, and stop
 every shop's pulls. Two numbers in two languages, kept in step by this test, which reads the app's from its file.
 
-The lists a laptop keeps a copy of are kept in step with the app's number too. A release that adds a list to the
-registry (CAT-6's products, STK-2's stock, DEBT-3's customers) must raise both numbers, as an older app has no drawer
-for it, and a pull that meets it stops (AppTooOld): the older app sends what it holds and updates, and never moves its
-cursor past the new list's lines. Forgetting is a test that fails here, not a note someone has to find.
+The lists a laptop keeps a copy of are kept in step with both numbers too. A release that adds a list to the registry
+(CAT-6's products, STK-2's stock, DEBT-3's customers) must raise both, as an older app has no drawer for it: the app's,
+so the app that ships has the drawer, and the server's minimum, so an older app's pull or bootstrap stops (AppTooOld),
+and the older app sends what it holds and updates, never moving its cursor past the new list's lines. Forgetting either
+is a test that fails here, not a note someone has to find.
 """
 
 import re
@@ -64,6 +65,14 @@ def _apps_drawers() -> list[str]:
 def test_the_registry_keeps_the_lists_of_the_apps_number() -> None:
     # The server's side: the registry, the one list of what a device keeps a copy of (apps/sync/registry.py).
     assert _lists_out_of_step(list(REGISTRY), _app_number()) is None
+
+
+def test_the_lowest_app_served_keeps_every_list() -> None:
+    # The server's minimum: every app it still serves has a drawer for every list. A release that added "product" and
+    # raised the app's number alone would leave the minimum at 1: an app-1 tab, its cursor removed by the new version's
+    # database upgrade, would fill the database with the old code, which drops the products, and set the cursor past
+    # their lines for good (the very hole the bootstrap's min_app_version closes).
+    assert _lists_out_of_step(list(REGISTRY), settings.MIN_APP_VERSION) is None
 
 
 def test_the_app_has_a_drawer_for_each_list_of_its_number() -> None:
