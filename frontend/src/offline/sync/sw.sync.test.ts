@@ -7,6 +7,8 @@
 // a stand-in lock (src/test/locks.ts).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import Dexie from "dexie";
+
 import { createApiClient } from "@/api/make-client";
 import type { components } from "@/api/schema";
 import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
@@ -18,6 +20,7 @@ import {
 } from "@/test/locks";
 import { ASHA } from "@/test/shop-lists";
 
+import { databaseName } from "../db";
 import { saveDocument } from "../outbox";
 import { shopDatabase } from "../this-shop";
 import { waitingInOrder } from "../waiting";
@@ -251,6 +254,18 @@ describe("the shop the push is for", () => {
 
     expect(pushes()).toHaveLength(0);
     expect(await readDeviceRefused(shopDatabase(SHOP))).toBe("device.blocked");
+  });
+});
+
+describe("a shop with no database here", () => {
+  it("is left alone: no push, and no empty database made", async () => {
+    // A stale name, from before the site's data was wiped or the laptop paired again.
+    const gone = "019a5e00-0000-7000-8000-0000000000a9";
+
+    await backgroundPush(gone, tools);
+
+    expect(sent).toHaveLength(0);
+    expect(await Dexie.exists(databaseName(gone))).toBe(false);
   });
 });
 

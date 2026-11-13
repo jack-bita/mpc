@@ -16,7 +16,9 @@
 // It imports nothing of the page's: TypeScript checks it with the worker's types (tsconfig.sw.json).
 import type { ApiClient } from "@/api/make-client";
 
-import { openShopDatabase } from "../db";
+import Dexie from "dexie";
+
+import { databaseName, openShopDatabase } from "../db";
 import { waitingInOrder } from "../waiting";
 import { isAboutTheDevice, syncAnswer, syncCallLimit } from "./answer";
 import { mayPush } from "./backoff";
@@ -80,6 +82,10 @@ export async function backgroundPush(
   shopId: string,
   tools: WorkerTools,
 ): Promise<void> {
+  // A name for a shop this device has no database of (a stale one: the site's data was wiped, or the
+  // laptop paired again since): nothing can wait there, and opening it would make an empty one, which
+  // the app would then take for a laptop that holds that shop (SYNC-16's review).
+  if (!(await Dexie.exists(databaseName(shopId)))) return;
   // Its own connection to the database: the worker shares no memory with the pages. Closed at the end,
   // as the browser may keep the worker alive a while, and an open connection would hold up an app
   // update's new database version.
