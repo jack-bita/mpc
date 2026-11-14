@@ -117,7 +117,8 @@
     "picker": {
       "title": "Wewe ni nani?",
       "empty": "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze.",
-      "firstSync": "Subiri kidogo: kompyuta hii inaleta orodha ya wafanyakazi kwa mara ya kwanza."
+      "firstSync": "Subiri kidogo: kompyuta hii inaleta orodha ya wafanyakazi kwa mara ya kwanza.",
+      "demoPin": "PIN {pin}"
     },
     "pin": {
       "typePin": "Andika PIN yako",
