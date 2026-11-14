@@ -85,16 +85,22 @@ def _sent(device_seq: int, maker: StaffMember, *, text: str = "2 bags of pumba",
 
 
 def _push(
-    device: Device, documents: Sequence[Sent], *, unsent_count: int = 0, outages: Sequence[Outage] = ()
+    device: Device,
+    documents: Sequence[Sent],
+    *,
+    unsent_count: int = 0,
+    outages: Sequence[Outage] = (),
+    sent_at: dt.datetime = RECEIVED_AT,
 ) -> list[Answer]:
     # The push as the route runs it: inside the laptop's shop, which its key opened. `unsent_count`: what the laptop
-    # says it holds besides this batch; `outages`: the offline periods it reports.
+    # says it holds besides this batch; `outages`: the offline periods it reports; `sent_at`: its clock as it sent,
+    # right by default.
     with shop_context(device.shop_id):
         return push(
             device,
             documents,
             received_at=RECEIVED_AT,
-            sent_at=RECEIVED_AT,
+            sent_at=sent_at,
             unsent_count=unsent_count,
             app_version=APP_VERSION,
             outages=outages,
@@ -227,6 +233,18 @@ def test_push_records_device_health(shop_a: Model, device_a: Device, staff_a: St
     assert _report(device_a) == (None, None, "")
     _push(device_a, [_sent(1, staff_a), _sent(2, staff_a)], unsent_count=3)
     assert _report(device_a) == (RECEIVED_AT, 3, APP_VERSION)
+
+
+def test_push_keeps_the_laptops_clock_error(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # The Dawa laptop's clock is 6 minutes slow: it sends at 14:59 by its clock as the server reads 15:05. Its row keeps
+    # -6 minutes for the health page (SYNC-14). Read from the push itself, so an empty push, a laptop with nothing to
+    # send, shows it too; and the next push, once a manager has put the clock right, says 0.
+    _push(device_a, [], sent_at=RECEIVED_AT - dt.timedelta(minutes=6))
+    with shop_context(shop_a):
+        assert Device.objects.get(pk=device_a.pk).clock_error == dt.timedelta(minutes=-6)
+    _push(device_a, [_sent(1, staff_a)])
+    with shop_context(shop_a):
+        assert Device.objects.get(pk=device_a.pk).clock_error == dt.timedelta(0)
 
 
 def test_outages_recorded(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:

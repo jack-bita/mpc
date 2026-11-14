@@ -19,10 +19,12 @@ never count: they are the same in every shop.
 The shops and their staff come from backend/conftest.py. Fake data only: the repo is public (03 §10).
 """
 
+import uuid
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
@@ -30,7 +32,7 @@ from apps.core.settings_registry import CASH_TOLERANCE, LATE_FINE
 from apps.core.tenancy import shop_context
 from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import StaffMember
-from apps.people.services import confirm_pairing, start_pairing
+from apps.people.services import Outage, confirm_pairing, record_outages, start_pairing
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.services import add_side
 
@@ -42,8 +44,8 @@ def sweep_shops(
     sweep_sides: tuple[Shop, Shop], sweep_device_keys: tuple[str, str], sweep_settings: tuple[Shop, Shop]
 ) -> tuple[Shop, Shop]:
     # Shop A, whose rows must never show, and shop B, the visitor's own, each filled with every table below: their
-    # sides, a paired device each, which the office device list shows (AUTH-5), and dated rules, which the bootstrap
-    # sends (SYNC-2).
+    # sides, a paired device each, which the office device list shows (AUTH-5), with an offline period the health page
+    # shows (SYNC-14), and dated rules, which the bootstrap sends (SYNC-2).
     return sweep_sides
 
 
@@ -86,6 +88,8 @@ def sweep_device_keys(
     # sweep sends to every device route (sweep_device_clients, AUTH-2). Paired the way the app pairs one: the device
     # asks (start_pairing), and the shop's owner confirms its code on a side of the shop. Each device's name is its
     # shop's alone, so a route that showed shop A's device to shop B's would be caught by the name too, beside its id.
+    # Each device also reported an offline period an hour ago, which the health page shows (SYNC-14): rows of a
+    # second table on the device routes, its ids shop A's alone.
     shop_a, shop_b = sweep_sides
     keys = []
     for owner, shop, side_code, name in (
@@ -95,7 +99,11 @@ def sweep_device_keys(
         give_role(owner, RoleTemplate.OWNER, None)
         asked = start_pairing()
         with shop_context(shop):
-            confirm_pairing(asked.request.code, name=name, home_side=Side.objects.get(code=side_code), by=owner)
+            device = confirm_pairing(
+                asked.request.code, name=name, home_side=Side.objects.get(code=side_code), by=owner
+            )
+            went = timezone.now() - timedelta(hours=1)
+            record_outages(device, [Outage(id=uuid.uuid7(), started_at=went, ended_at=went + timedelta(minutes=10))])
         keys.append(asked.key)
     return keys[0], keys[1]
 

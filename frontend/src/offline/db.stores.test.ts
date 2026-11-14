@@ -87,7 +87,7 @@ describe("the device database", () => {
     );
   });
 
-  it("has the drawers of version 1: the server's five lists and the laptop's own", async () => {
+  it("has its drawers: the server's five lists and the laptop's own", async () => {
     const db = open(MPC);
     await db.open();
     expect(db.tables.map((table) => table.name).sort()).toEqual(
@@ -103,14 +103,15 @@ describe("the device database", () => {
         "outbox",
         "pending_effects",
         "sent_archive",
+        "outages",
       ].sort(),
     );
   });
 
-  it("starts at version 1", async () => {
+  it("starts at its newest version, 2", async () => {
     const db = open(MPC);
     await db.open();
-    expect(db.verno).toBe(1);
+    expect(db.verno).toBe(2);
   });
 
   it("refuses two outbox rows on one device_seq", async () => {

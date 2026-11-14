@@ -76,6 +76,33 @@
       "unblockReason": "Kwa nini unakifungua?",
       "unblockHint": "Mfano: kimepatikana.",
       "unblockConfirm": "Fungua kifaa"
+    },
+    "health": {
+      "title": "Hali ya vifaa",
+      "intro": "Kila kifaa kama kilivyojieleza kilipotuma mara ya mwisho. Muda wa kukosa mtandao ni kwa saa ya kifaa chenyewe.",
+      "notToday": "Hakijatuma leo. Mara ya mwisho: {when}.",
+      "neverSynced": "Hakijatuma bado.",
+      "lastSync": "Kilituma mara ya mwisho: {when}.",
+      "today": "leo, saa {time}",
+      "onDay": "{date}, saa {time}",
+      "waiting": "{count, plural, =0 {Hakuna kumbukumbu inayosubiri kutumwa.} one {Kumbukumbu # inasubiri kutumwa.} other {Kumbukumbu # zinasubiri kutumwa.}}",
+      "clockRight": "Saa yake iko sawa.",
+      "clockAhead": "Saa yake iko mbele kwa dakika {minutes}.",
+      "clockBehind": "Saa yake iko nyuma kwa dakika {minutes}.",
+      "clockUnknown": "Saa yake haijulikani bado.",
+      "version": "Toleo la programu: {version}",
+      "noOutages": "Hakijakosa mtandao wiki hii.",
+      "outages": "Bila mtandao wiki hii: mara {count}, {total} kwa jumla.",
+      "outagesCount": "Bila mtandao wiki hii: mara {count}.",
+      "outagesAtLeast": "Bila mtandao wiki hii: mara {count}, angalau {total} kwa jumla.",
+      "period": "{date}: {from} – {to} ({length})",
+      "periodOdd": "{date}: {from} – {to} (saa ya kifaa ilibadilishwa wakati huo)",
+      "periodUnseenEnd": "{date}: {from} – ? (kifaa kilizimika baada ya {to})",
+      "atDay": "{date} {time}",
+      "underAMinute": "chini ya dakika moja",
+      "minutes": "dakika {minutes}",
+      "hours": "saa {hours}",
+      "hoursMinutes": "saa {hours} na dakika {minutes}"
     }
   },
   "login": {

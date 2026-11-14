@@ -3,7 +3,8 @@
 //
 // Where a manager lands after logging in on their own phone (Jack, 7 Nov 2026): big buttons are easy to
 // tap, and the page grows a button as each office screen comes (products, prices, reports…). Today there
-// is one, Vifaa, for whoever holds device.manage on some side, as its Sajili kifaa is theirs (UI-3).
+// are two, both for whoever holds device.manage on some side: Vifaa, as its Sajili kifaa is theirs
+// (UI-3), and Hali ya vifaa, as keeping the devices working is theirs too (SYNC-14).
 // A button for a screen someone may not use stays off the page; the server still checks every change
 // itself (PPL-5), so this only keeps a door nobody may use out of sight. Under them, for everyone,
 // Mipangilio yangu: a person's own language and font need no key (UI-9).
@@ -26,6 +27,7 @@ import {
 export function OfficeHome() {
   const t = useTranslations("office");
   const devices = useTranslations("device.office");
+  const health = useTranslations("device.health");
   // The PIN login's book, for its "Subiri kidogo…", which the office says the same way.
   const loginWords = useTranslations("login");
   const settings = useTranslations("mySettings");
@@ -43,6 +45,11 @@ export function OfficeHome() {
       {
         href: "/devices/",
         label: devices("title"),
+        open: sidesWhere(here, "device.manage").length > 0,
+      },
+      {
+        href: "/device-health/",
+        label: health("title"),
         open: sidesWhere(here, "device.manage").length > 0,
       },
     ].filter((screen) => screen.open);

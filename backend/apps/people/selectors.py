@@ -31,9 +31,13 @@ every visit (AUTH-4):
                   person suspended: refused, staff.suspended
                   password someone else typed: refused, password.must_change
                   ──▶ the staff member, and the device the visit names in both books (X3)
+
+And the device health page's read (SYNC-14, 03 §5.17): each laptop's offline periods of the last week, as it reported
+them (outages_this_week).
 """
 
-from collections.abc import Mapping
+import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import cast
@@ -48,7 +52,7 @@ from apps.core.settings_registry import IDLE_MINUTES
 from apps.core.tenancy import shop_context
 from apps.people.device_keys import hash_device_key
 from apps.people.login_doors import shop_of_device_key, shops_of_person
-from apps.people.models import Device, DeviceStatus, StaffMember, StaffStatus, User
+from apps.people.models import Device, DeviceOutage, DeviceStatus, StaffMember, StaffStatus, User
 from apps.people.permissions import held_permissions
 from apps.shops.models import Shop, ShopStatus, Side
 from apps.shops.selectors import get_setting
@@ -253,3 +257,29 @@ def who_is_here(staff: StaffMember, *, device_id: str | None, idle_minutes: int 
         whole_shop=sorted(held.on(None)),
         sides=[SideKeys(side=side, permissions=sorted(held.on(side.pk))) for side in sides],
     )
+
+
+# How far back the health page looks for offline periods (SYNC-14): a week, as the card says, counted back from now
+# rather than from a Monday, so on a Monday the page still shows the cuts of the days before; by when the server
+# heard of each, on its own clock (Jack, SYNC-14's review).
+OUTAGE_WEEK = timedelta(days=7)
+
+
+def outages_this_week(devices: Sequence[Device], *, now: datetime) -> dict[uuid.UUID, list[DeviceOutage]]:
+    """Each device's offline periods the server heard of in the week before `now`, newest first by the laptop's own
+    times, by device (SYNC-14): what the health page shows. One query for all of them, through the guarded manager, so
+    only the open shop's rows. A device with none is left out of the answer.
+
+    The week is the server's, by when each period reached it (`created_at`), never the laptop's own times (Jack,
+    SYNC-14's review): a laptop whose clock battery died, its clock in 2020, still shows today's cut, and one whose
+    clock runs months ahead doesn't show every cut it ever sent, for good. A wrong clock is what the page is there to
+    show. A period is reported at the laptop's next sync, minutes after it ends, so the week is the same for a laptop
+    whose clock is right. The times themselves are the laptop's, as kept (02: DeviceOutage), so a period that ends
+    before it starts, after its clock was put back, shows as the laptop said."""
+    found: dict[uuid.UUID, list[DeviceOutage]] = {}
+    rows = DeviceOutage.objects.filter(device__in=devices, created_at__gte=now - OUTAGE_WEEK).order_by(
+        "device_id", "-started_at", "id"
+    )
+    for row in rows:
+        found.setdefault(row.device_id, []).append(row)
+    return found

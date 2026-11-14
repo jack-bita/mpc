@@ -5,6 +5,7 @@ under /api/v1/people/ (apps/people/api/urls.py). Today a shop's devices (AUTH-5)
 
     GET   /api/v1/people/devices/                the shop's devices, of the sides the person sees, in pages
     GET   /api/v1/people/devices/{id}/           one device
+    GET   /api/v1/people/devices/health/         the health page: each device's last sync, clock and outages (SYNC-14)
     POST  /api/v1/people/devices/                a manager says yes to a waiting device, with the code it shows
     PATCH /api/v1/people/devices/{id}/           a manager renames it
     POST  /api/v1/people/devices/{id}/block/     a manager stops it at once, with a reason
@@ -57,6 +58,7 @@ from apps.people.api.pin_session import PIN_SESSION, pin_session_idle_minutes, s
 from apps.people.api.serializers import (
     DeviceConfirmSerializer,
     DeviceEditSerializer,
+    DeviceHealthSerializer,
     DeviceMeSerializer,
     DeviceReasonSerializer,
     DeviceSerializer,
@@ -71,7 +73,7 @@ from apps.people.api.staff_session import MeSessionAuthentication, StaffSessionA
 from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle, PinLoginThrottle
 from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import Device, StaffMember, User
-from apps.people.selectors import LoginRefused, idle_lock_minutes, who_is_here
+from apps.people.selectors import LoginRefused, idle_lock_minutes, outages_this_week, who_is_here
 from apps.people.services import block as block_device
 from apps.people.services import (
     change_own_settings,
@@ -92,11 +94,13 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
     # change is asked on the device's home side, or on the one picked for a new device (03 §5.9).
     side_field = "home_side"
     # Whoever works on a side sees its devices, a seller included, but changes none of them (Jack, 2 Nov 2026): a name
-    # and when it was last seen are no secret. Every change needs device.manage on the home side, which each service
-    # asks again (PPL-5).
+    # and when it was last seen are no secret, nor is how it syncs (SYNC-14): the health page's button is for those
+    # who look after the devices, as the device list's is, but what it shows is the device list's kind. Every change
+    # needs device.manage on the home side, which each service asks again (PPL-5).
     action_permissions = {
         "list": SEES_THE_SIDE,
         "retrieve": SEES_THE_SIDE,
+        "health": SEES_THE_SIDE,
         "create": Permission.DEVICE_MANAGE,
         "partial_update": Permission.DEVICE_MANAGE,
         "block": Permission.DEVICE_MANAGE,
@@ -137,6 +141,17 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
 
     def edit_row(self, row: Device, data: dict[str, Any]) -> Device:
         return rename_device(row, version=data["version"], name=data["name"], by=self.staff)
+
+    # The health page (*Hali ya vifaa*, SYNC-14, 03 §5.17): every device of the sides the person sees, by its number,
+    # with its last push's report and its offline periods of the last week. One answer, not pages: a shop has a
+    # handful of devices, and the page compares them side by side. The rows come from get_queryset(), so they keep to
+    # the person's sides as the list does (PPL-5); the periods are read once for all of them.
+    @extend_schema(responses=DeviceHealthSerializer(many=True))
+    @action(detail=False, methods=["get"], pagination_class=None)
+    def health(self, request: Request) -> Response:
+        devices = list(self.get_queryset().order_by("code"))
+        outages = outages_this_week(devices, now=timezone.now())
+        return Response(DeviceHealthSerializer(devices, many=True, context={"outages": outages}).data)
 
     # Each action names what it takes and answers: the API's description would otherwise read every POST of this route
     # as a confirm (RouteSchema, apps/core/api/schema.py), and the app's types would be wrong (UI-2).

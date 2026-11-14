@@ -26,12 +26,13 @@ const ASHA: components["schemas"]["StaffRecord"] = {
   permissions: { every_side: [], sides: [] },
 };
 
-// A pretend later card: version 2 adds a `debts` drawer, and its upgrade gives every staff member a line
-// owing nothing. Real later versions are added to VERSIONS in db.ts; this one lives only in the test.
-// It counts its runs, so a test can see it ran once, or not at all.
+// A pretend later card: the version after the real ones adds a `debts` drawer, and its upgrade gives every
+// staff member a line owing nothing. Real later versions are added to VERSIONS in db.ts; this one lives only
+// in the test. It counts its runs, so a test can see it ran once, or not at all.
+const NEXT = VERSIONS.length + 1;
 let upgradesRun = 0;
 const LATER: Version = {
-  version: 2,
+  version: NEXT,
   stores: { debts: "id" },
   upgrade: async (tx: Transaction) => {
     upgradesRun += 1;
@@ -83,7 +84,36 @@ describe("the device database's versions", () => {
     });
   });
 
-  it("runs version 2's upgrade on a laptop at version 1, and keeps its rows", async () => {
+  it("keeps version 2 exactly as it is: the offline periods' drawer", () => {
+    // The same rule as version 1's, now that laptops have moved up to it (SYNC-14).
+    expect(VERSIONS[1]).toEqual({ version: 2, stores: { outages: "id" } });
+  });
+
+  it("moves a laptop at version 1 up to version 2 with every row kept", async () => {
+    // The Dawa laptop, before SYNC-14, with a clock-in still waiting: the new drawer comes, empty, and
+    // nothing it held is lost.
+    const before = open(VERSIONS.slice(0, 1));
+    await before.staff.put(ASHA);
+    await before.outbox.add({
+      id: "0192f000-0000-7000-8000-0000000000d1",
+      type: "clock",
+      device_seq: 58,
+      status: "waiting",
+      attempts: 0,
+      last_error: null,
+    });
+    before.close();
+
+    const after = open(VERSIONS);
+    await after.open();
+
+    expect(after.verno).toBe(2);
+    expect(await after.staff.get(ASHA.id)).toEqual(ASHA);
+    expect(await after.outbox.count()).toBe(1);
+    expect(await after.outages.count()).toBe(0);
+  });
+
+  it("runs a later version's upgrade on a laptop at the version before, and keeps its rows", async () => {
     const before = open(VERSIONS);
     await before.staff.put(ASHA);
     before.close();
@@ -91,7 +121,7 @@ describe("the device database's versions", () => {
     const after = open([...VERSIONS, LATER]);
     await after.open();
 
-    expect(after.verno).toBe(2);
+    expect(after.verno).toBe(NEXT);
     expect(upgradesRun).toBe(1);
     expect(await after.table("debts").toArray()).toEqual([
       { id: ASHA.id, owes: "0" },
@@ -103,7 +133,7 @@ describe("the device database's versions", () => {
     const db = open([...VERSIONS, LATER]);
     await db.open();
 
-    expect(db.verno).toBe(2);
+    expect(db.verno).toBe(NEXT);
     expect(upgradesRun).toBe(0);
     expect(await db.table("debts").count()).toBe(0);
   });

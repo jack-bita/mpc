@@ -282,7 +282,7 @@ describe("the push", () => {
       sent_at: "2026-11-12T07:15:00.000Z",
       app_version: APP_VERSION,
       unsent_count: 0,
-      // Recorded from SYNC-14 on.
+      // This laptop was never cut off (push.outages.test.ts sends some).
       outages: [],
     });
   });

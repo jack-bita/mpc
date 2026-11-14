@@ -456,6 +456,13 @@ class Device(Editable):
     last_synced_at = models.DateTimeField(null=True, blank=True, editable=False)
     unsent_count = models.PositiveIntegerField(null=True, blank=True, editable=False)
     app_version = models.CharField(max_length=APP_VERSION_LENGTH, blank=True, editable=False)
+    # How far the laptop's clock was from the server's at that push (SYNC-14, 03 §6.6): its clock as it sent the push
+    # (`sent_at`) minus the server's as it arrived, so a laptop 6 minutes slow says -6 minutes, as a clock-in's own
+    # does (AttendanceEvent.clock_error). The health page shows it, so a manager puts a wrong clock right before it
+    # makes the day's clock-ins wait for review. Empty until the laptop's first push after SYNC-14. Moved with the
+    # report above, by record_sync, so in the same way: its version never moves for it, and its edit history skips it
+    # (migration 0016).
+    clock_error = models.DurationField(null=True, blank=True, editable=False)
     # The number the laptop's next record should follow (SYNC-5, 02 §17): it numbers its records 1, 2, 3 and never
     # skips one, so the next is this + 1, and a jump raises a device_gap flag. Mostly the highest it sent; after a
     # reset that numbers again from 1, the new count's. Empty before its first record. Moved only by the push, record by
@@ -538,8 +545,9 @@ class DeviceOutage(AppendOnly):
     # line went, and when it came back. For the device health page (SYNC-14) and the owner's choice on a local hub
     # (03 AD16). Its id is the laptop's own (ADR-0007), so a push sent again saves each period once. A ledger: written
     # once, by record_outages (apps/people/services.py), and never changed (ADR-0021); `created_at` is when the server
-    # heard of it. The times are kept as reported, even a period that "ends" before it starts (a clock moved back):
-    # refusing it would refuse the laptop's whole push, records and all, again at every sync.
+    # heard of it, which the health page's week is read by. The times are kept as reported, even a period that "ends"
+    # before it starts (a clock moved back): refusing it would refuse the laptop's whole push, records and all, again
+    # at every sync.
 
     # No index of their own, either link: the index below leads with `shop` and then `device` (03 §9), as the answer
     # log's shop link has none (apps/sync/models.py). PROTECT: nothing is deleted (rule 7), so PROTECT never searches
@@ -548,10 +556,16 @@ class DeviceOutage(AppendOnly):
     device = models.ForeignKey(Device, on_delete=models.PROTECT, related_name="+", db_index=False)
     started_at = models.DateTimeField()
     ended_at = models.DateTimeField()
+    # True when the laptop's app lost sight of it before it ended (SYNC-14's review): the laptop went off, its battery
+    # flat in a power cut, or the app was closed or asleep. `ended_at` is then only the last time the app saw it still
+    # cut off, and the real end is unknown: the page shows "18:59 – ?" (Jack's choice), never a short cut the shop
+    # didn't have. False for a period the server's answer ended, and for one an app from before this sent.
+    end_unknown = models.BooleanField(default=False)
 
     class Meta(AppendOnly.Meta):
-        # Built on AppendOnly.Meta, so the guard stays the default manager (CORE-2). The health page's question: this
-        # laptop's periods, this week, oldest first.
+        # Built on AppendOnly.Meta, so the guard stays the default manager (CORE-2). A laptop's periods in the order
+        # they began, as the health page lists them; its week is read by when each reached the server (`created_at`),
+        # which needs no index of its own while a shop's laptops report a few periods a day (SYNC-14).
         indexes = [models.Index(fields=["shop", "device", "started_at"], name="people_deviceoutage_by_device")]
 
     def __str__(self) -> str:

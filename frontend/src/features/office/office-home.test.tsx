@@ -35,6 +35,19 @@ describe("the office's home page", () => {
     expect(link.getAttribute("href")).toMatch(/^\/devices\/?$/);
   });
 
+  it("opens Hali ya vifaa for someone who manages devices (SYNC-14)", async () => {
+    // Keeping the shop's laptops working is theirs: which one is cut off, behind, or not syncing.
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: ["device.manage"] }]),
+    });
+
+    render(<OfficeHome />);
+
+    const link = await screen.findByRole("link", { name: "Hali ya vifaa" });
+    expect(link.getAttribute("href")).toMatch(/^\/device-health\/?$/);
+  });
+
   it("moves focus to its welcome as it opens, where the form that sent the person here had it", async () => {
     // After a login, or Chagua nenosiri lako's Hifadhi, the button that had focus is gone: the welcome
     // takes it, so a screen reader says where the person is, and Tab goes on to the screens.
@@ -76,6 +89,7 @@ describe("the office's home page", () => {
       ),
     ).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Vifaa" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Hali ya vifaa" })).toBeNull();
   });
 
   it("opens Mipangilio yangu for everyone, who needs no key for their own", async () => {

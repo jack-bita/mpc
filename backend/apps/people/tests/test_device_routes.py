@@ -496,12 +496,13 @@ def test_a_manager_who_may_not_work_gets_nothing(
 
 
 def test_device_routes_name_their_permissions() -> None:
-    # Seeing a side's devices needs only to see the side (Jack, 2 Nov 2026); every change, saying yes to one, renaming
-    # it, blocking and unblocking it, needs device.manage on its home side (03 §5.9). Written out in full, so a change
-    # to what a route asks for is a change to this test too.
+    # Seeing a side's devices needs only to see the side (Jack, 2 Nov 2026), their health too (SYNC-14); every change,
+    # saying yes to one, renaming it, blocking and unblocking it, needs device.manage on its home side (03 §5.9).
+    # Written out in full, so a change to what a route asks for is a change to this test too.
     assert DeviceViewSet.action_permissions == {
         "list": base.SEES_THE_SIDE,
         "retrieve": base.SEES_THE_SIDE,
+        "health": base.SEES_THE_SIDE,
         "create": Permission.DEVICE_MANAGE,
         "partial_update": Permission.DEVICE_MANAGE,
         "block": Permission.DEVICE_MANAGE,

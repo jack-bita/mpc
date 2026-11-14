@@ -122,8 +122,9 @@ def push(
     push arrived, the same for the whole batch; `sent_at`: the laptop's clock as it sent it, handed to each document's
     saving code beside it (ATT-1). Stops at the first `retry`: the documents after it get no answer, and
     the laptop sends them again later, in the same order. Then keeps the laptop's report on itself (SYNC-5):
-    `unsent_count`, the records it holds besides this batch; `app_version`, the app it runs; and `outages`, the
-    offline periods it recorded since it last reported."""
+    `unsent_count`, the records it holds besides this batch; `app_version`, the app it runs; `outages`, the
+    offline periods it recorded since it last reported; and its clock error, `sent_at` minus `received_at`
+    (SYNC-14)."""
     answers: list[Answer] = []
     # The laptop's order, not the order they arrived in: #3 may be a repayment of the debt #2 made. sorted() keeps two
     # documents with the same number in the order they were sent.
@@ -138,7 +139,15 @@ def push(
     # say 0 while a sale waits on the laptop.
     answered = sum(1 for answer in answers if answer.status != RETRY)
     record_outages(device, outages)
-    record_sync(device, at=received_at, unsent_count=unsent_count + len(documents) - answered, app_version=app_version)
+    # The clock error as ATT-1 reads it for a clock-in: the laptop's clock as it sent minus the server's as it
+    # arrived. Read from the push, not from a record, so a laptop with nothing to send shows its clock too (SYNC-14).
+    record_sync(
+        device,
+        at=received_at,
+        unsent_count=unsent_count + len(documents) - answered,
+        app_version=app_version,
+        clock_error=sent_at - received_at,
+    )
     return answers
 
 
