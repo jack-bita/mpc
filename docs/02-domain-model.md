@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.26 · 14 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.27 · 14 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -53,6 +53,8 @@
 **Changes in v1.25** (13 Nov 2026, SYNC-12's review): Jack's choice: a clock-in carried in a rescue file from a dying laptop is never trusted, and waits for a manager (§12), as its time came from a file anyone could edit. Marked **(v1.25)**.
 
 **Changes in v1.26** (14 Nov 2026, SYNC-14): a device keeps its clock error from its last push, for the sync health page; and an offline period the device's app lost sight of ends where the app last saw it. Marked **(v1.26)**.
+
+**Changes in v1.27** (14 Nov 2026, SYNC-14's review): Jack's choice: an offline period the device's app lost sight of says its end is unknown (`end_unknown`), as the device may have gone off in a power cut. Marked **(v1.27)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
@@ -263,7 +265,7 @@ A full diagram for GitHub is in Appendix A.
 - `code` (8 characters with no look-alikes such as 0/O or 1/I, valid 10 minutes, works once), `expires_at`, the hash of the device's key while it waits, and, once confirmed, the `Device` it became. Confirming moves the hash to the `Device`: from then on the request holds none (Jack, AUTH-2) **(v1.12)**.
 - No shop: until a manager confirms it, the device belongs to no shop, and anyone may ask. Confirming needs `device.manage` on the home side chosen, and makes the `Device` in the manager's own shop (T1).
 
-**DeviceOutage** [R1] ✚ → Device — one offline period the device recorded: `started_at`, `ended_at`, reported at the next sync **(v1.1)**. Feeds the sync health page and the R2 decision on a local hub (03 AD16). Its id is made on the device, so a resent report keeps it once; its times are the device's clock, kept as reported, and the row is never changed (T2) **(v1.22)**. A period begins when the device can't reach the server and ends when the server answers again; one the device's app lost sight of, closed or asleep, ends where the app last saw it **(v1.26)**.
+**DeviceOutage** [R1] ✚ → Device — one offline period the device recorded: `started_at`, `ended_at`, reported at the next sync **(v1.1)**. Feeds the sync health page and the R2 decision on a local hub (03 AD16). Its id is made on the device, so a resent report keeps it once; its times are the device's clock, kept as reported, and the row is never changed (T2) **(v1.22)**. A period begins when the device can't reach the server and ends when the server answers again; one the device's app lost sight of, closed or asleep, ends where the app last saw it **(v1.26)**, and says its end is unknown (`end_unknown`): the device may have gone off, its battery flat in a power cut, so the cut may have lasted far longer (Jack) **(v1.27)**.
 
 ## 6. Products & prices — module `catalog`
 

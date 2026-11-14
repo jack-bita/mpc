@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.71 · 14 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.72 · 14 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.72** (14 Nov 2026, SYNC-14's review): Jack chose to fix every finding, each in its own commit, and the SYNC-14 card says what they changed. Two choices by Jack: the health page's week counts each cut by when the server heard of it, not by the laptop's clock; and a cut the laptop never saw end, as it went off, shows its end as unknown, "18:59 – ?" (03 v1.56, 02 v1.27). Marked **(v1.72)**.
 
 **Changes in v1.71** (14 Nov 2026, SYNC-14): the SYNC-14 card says what it built and settled. Jack's picture of the page, which he said yes to: one card per laptop, its last sync, the records waiting on it, its clock, its app and its offline periods this week, and a laptop not synced today marked at the top of its card. In the plan he approved: seven commits, not two, as the server needed the clock error on the device's row and a route for the page; a cut is no network, or a sync with no answer; a period the app lost sight of ends where it last saw it; the route shows what the device list shows, to whoever sees the side, with the button for `device.manage` holders (03 v1.55, 02 v1.26). Parking lot 23 stays open. Marked **(v1.71)**.
 
@@ -1142,8 +1144,9 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 **Done when:**
 - [ ] Ten minutes offline shows as one outage of about ten minutes after the next sync.
 - [ ] A device that hasn't synced today is highlighted.
+**From its review** **(v1.72)**: every finding fixed, by Jack's choice, each in its own commit. Jack's choices: the page's week counts each cut by when the server heard of it (`created_at`, `outages_this_week`), not by when it ended on the laptop's clock (v1.71), so a laptop whose clock battery died, its clock in 2020, still shows today's cut, and one whose clock runs ahead doesn't show its cuts for good; and a cut the laptop's app lost sight of, as the laptop went off in a power cut or the app was closed, shows its end as unknown, "18:59 jioni – ? (kifaa kilizimika baada ya 19:04 usiku)", with "angalau" in the week's total, never as the short cut it would read as: `end_unknown` on the laptop's row, an optional field of the push's period, so an app from before still pushes, and a column of `people.DeviceOutage` (migration 0017). And: the page asks the server again every minute (`ASK_AGAIN_EVERY`), so a page left open past midnight reads the new day's syncs; a cut that began after the pull was asked stays open, as the line went again as the answer came; a clock past the slack never reads as "2 minutes", and the server rounds the clock error away from zero, so 120.4 s, which already makes clock-ins wait, is never called right; tests for the too-old and other-shop answers; and the sync rules name `outages.ts` and `lib/ids.ts` among the files the service worker loads.
 **Tests:** `outages.test.ts` · `sync.outages.test.ts` · `push.outages.test.ts` · `health.test.ts` · `device-health.test.tsx` · `test_device_health_route.py` · `e2e/device-health.spec.ts` **(v1.71)**
-**Commits:** `feat(frontend): record offline periods` → `feat(frontend): send offline periods with each push` → `feat(people): keep each laptop's clock error` → `feat(people): the device health route` → `feat(frontend): device health page` → `test(e2e): ten minutes offline shows as one outage` → `docs: what the sync health page settled` **(v1.71)**
+**Commits:** `feat(frontend): record offline periods` → `feat(frontend): send offline periods with each push` → `feat(people): keep each laptop's clock error` → `feat(people): the device health route` → `feat(frontend): device health page` → `test(e2e): ten minutes offline shows as one outage` → `docs: what the sync health page settled` **(v1.71)**; from its review, nine commits: six `fix`, one `test` and two `docs` **(v1.72)**
 
 ### OPS-3 · One-tap demo
 `S` · Claude-led · after SYNC-11, DATA-1 · branch `feat/ops-3-demo-device`
