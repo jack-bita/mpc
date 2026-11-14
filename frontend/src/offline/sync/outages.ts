@@ -70,12 +70,26 @@ export async function noteStillHere(
   });
 }
 
-/** The server answered at `now`: the open period, if any, ends then. */
-export async function noteBack(db: ShopDatabase, now: number): Promise<void> {
+/**
+ * The server answered, by `now`, a call asked at `askedAt`: the open period, if any, ends at `now`. Unless
+ * it began after the call was asked: the line went again just as the answer came, between the answer and
+ * this note, and that is a new cut, still on (SYNC-14's review). Closed, it would end at once, and the
+ * next moment would open another, up to 30 s late: one cut noted as two.
+ *
+ * A period that began after `now` began before the laptop's clock was put back, not after the call: it
+ * ends, as any other.
+ */
+export async function noteBack(
+  db: ShopDatabase,
+  now: number,
+  askedAt: number = now,
+): Promise<void> {
   await db.transaction("rw", db.outages, async () => {
     const open = await settleOpen(db, now);
-    if (open !== null)
-      await db.outages.update(open.id, { ended_at: at(now), seen_at: at(now) });
+    if (open === null) return;
+    const began = Date.parse(open.started_at);
+    if (began > askedAt && began <= now) return;
+    await db.outages.update(open.id, { ended_at: at(now), seen_at: at(now) });
   });
 }
 

@@ -50,6 +50,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -105,6 +106,26 @@ describe("a sync", () => {
     await expect(syncShop(SHOP)).rejects.toBeInstanceOf(NoConnection);
 
     expect(await db().outages.count()).toBe(0);
+  });
+
+  it("keeps open a cut that began after the pull was asked, as the line went again as its answer came", async () => {
+    // The pull is asked at 10:05:00 and its answer arrives; at 10:05:01, before the sync notes it, the
+    // router's power goes. The new cut stays open, rather than closing at once and the next moment
+    // opening another for the same cut (SYNC-14's review).
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-14T10:05:00Z"));
+    answer("POST", PUSH, { status: 200, body: { answers: [] } });
+    answer("GET", PULL, async () => {
+      vi.setSystemTime(new Date("2026-11-14T10:05:01Z"));
+      await noteCutOff(db(), Date.now());
+      return Response.json(emptyPage.body);
+    });
+
+    await syncShop(SHOP);
+
+    expect(await openPeriods()).toEqual([
+      expect.objectContaining({ started_at: "2026-11-14T10:05:01.000Z" }),
+    ]);
   });
 
   it("goes on, and logs it, when the period can't be noted", async () => {

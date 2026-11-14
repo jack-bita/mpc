@@ -110,29 +110,38 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   // The same for a block the service worker heard while this page was open (SYNC-16): it is kept now,
   // and nothing is asked.
   if (await heardInTheBackground(db)) return;
-  let pushFailure: { error: unknown } | null;
+  // When this sync began asking: a refusal answers a call asked since.
+  const startedAt = Date.now();
+  let talked: Talked;
   try {
-    pushFailure = await talkToTheServer(db, sendNow);
+    talked = await talkToTheServer(db, sendNow);
   } catch (error) {
-    await noteHowItEnded(db, error);
+    await noteHowItEnded(db, error, startedAt);
     throw error;
   }
   // The pull got its answer: the server is there, whatever the push did before it. A push that lost its
-  // line while the pull after it worked is no cut.
-  await noteSafely(noteBack(db, Date.now()));
+  // line while the pull after it worked is no cut. A cut that began after the pull was asked is the line
+  // going again as the answer came, and stays open (outages.ts).
+  await noteSafely(noteBack(db, Date.now(), talked.pullAskedAt));
   // Thrown after the pull, so the failure is still reported (triggers.tsx). A pull that fails
   // too, as with no network, throws its own instead, which says the same.
-  if (pushFailure !== null) throw pushFailure.error;
+  if (talked.pushFailure !== null) throw talked.pushFailure.error;
+}
+
+/** How one sync's calls went: a failed push, which still let the pull run, and when the pull was asked. */
+interface Talked {
+  pushFailure: { error: unknown } | null;
+  pullAskedAt: number;
 }
 
 /**
  * The calls of one sync: the bootstrap if the database was never filled, the push, then the pulls. Gives
- * back a failed push, which still let the pull run, for the caller to throw once the pull is done.
+ * back a failed push, for the caller to throw once the pull is done, and when the pull was asked.
  */
 async function talkToTheServer(
   db: ShopDatabase,
   sendNow: boolean,
-): Promise<{ error: unknown } | null> {
+): Promise<Talked> {
   // The first pull asks from the bootstrap's cursor, so the copy and the changes after it meet.
   //
   // A bootstrap that finds the app too old for the server writes nothing (bootstrap.ts), but the push still
@@ -174,8 +183,9 @@ async function talkToTheServer(
   // Too old: the update is what the sync leaves, told on as a pull's would be (triggers.tsx), whatever the
   // push did; a push failure is the new version's to put right, from the same outbox.
   if (tooOld !== null) throw tooOld;
+  const pullAskedAt = Date.now();
   await pull(db);
-  return pushFailure;
+  return { pushFailure, pullAskedAt };
 }
 
 /**
@@ -183,7 +193,11 @@ async function talkToTheServer(
  * answer this app can't use (too old, another shop's copy), is the server there. A bug says nothing
  * either way, so it notes nothing.
  */
-async function noteHowItEnded(db: ShopDatabase, error: unknown): Promise<void> {
+async function noteHowItEnded(
+  db: ShopDatabase,
+  error: unknown,
+  startedAt: number,
+): Promise<void> {
   if (error instanceof NoConnection) {
     await noteSafely(noteCutOff(db, Date.now()));
     return;
@@ -193,7 +207,7 @@ async function noteHowItEnded(db: ShopDatabase, error: unknown): Promise<void> {
     error instanceof AppTooOld ||
     error instanceof WrongShop
   )
-    await noteSafely(noteBack(db, Date.now()));
+    await noteSafely(noteBack(db, Date.now(), startedAt));
 }
 
 /**

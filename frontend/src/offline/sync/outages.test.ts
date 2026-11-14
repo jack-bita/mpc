@@ -204,6 +204,34 @@ describe("an offline period", () => {
     ]);
   });
 
+  it("stays open when it began after the answered call was asked: the line went again as the answer came", async () => {
+    // The pull was asked at 10:05:01 and answered; at 10:05:02, before the answer's note, the router's
+    // power goes. That cut is new and still on: it must not close at once (SYNC-14's review).
+    const db = aTab();
+    await noteCutOff(db, at("10:05:02"));
+    await noteBack(db, at("10:05:03"), at("10:05:01"));
+
+    expect(await db.outages.toArray()).toEqual([
+      expect.objectContaining({
+        started_at: "2026-11-14T10:05:02.000Z",
+        ended_at: null,
+      }),
+    ]);
+  });
+
+  it("ends when it began before the answered call was asked", async () => {
+    const db = aTab();
+    await cutOffFrom(db, at("10:05"), at("10:09:30"));
+    await noteBack(db, at("10:10:02"), at("10:10"));
+
+    expect(await periods(db)).toEqual([
+      {
+        started_at: "2026-11-14T10:05:00.000Z",
+        ended_at: "2026-11-14T10:10:02.000Z",
+      },
+    ]);
+  });
+
   it("notes nothing when the server answers with no period open", async () => {
     const db = aTab();
     await noteBack(db, at("10:00"));
