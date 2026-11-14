@@ -12,6 +12,10 @@
 // moment of its own. True is not sure (a router whose mobile data is down): the sync then fails as any
 // sync with no answer does, and the next moment tries again.
 //
+// The moments also tell the laptop's offline periods what they see (outages.ts, SYNC-14): the network
+// going, and each moment met with none, is a cut; each moment with a network keeps an open period up
+// while its sync waits for an answer, which says whether the server is back (sync.ts).
+//
 // The device check (device-check.tsx) started a sync after each of its answers until this card. It still
 // asks the server about the device on its own times, and starts none. A window back in front is no
 // moment: the 30 s covers it.
@@ -36,6 +40,7 @@ import { shopDatabase } from "../this-shop";
 import { askForBackgroundSync } from "./ask-background";
 import { listenForAsks } from "./asks";
 import { WrongShop } from "./bootstrap";
+import { noteCutOff, noteStillHere } from "./outages";
 import { heardInTheBackground } from "./page-place";
 import { AppTooOld } from "./pull";
 import { syncShop, type SyncAsk } from "./sync";
@@ -90,7 +95,13 @@ export function startSyncTriggers(
   sync: Sync = syncShop,
 ): () => void {
   const run = (ask?: SyncAsk) => {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine) {
+      // No sync, and the laptop is cut off for sure: the period opens, or is seen again.
+      note(noteCutOff(shopDatabase(shopId), Date.now()));
+      return;
+    }
+    // Seen before the sync, which may hang on a lost line for minutes before it says so (sync.ts).
+    note(noteStillHere(shopDatabase(shopId), Date.now()));
     sync(shopId, ask).catch(reportSyncFailure);
   };
 
@@ -99,6 +110,10 @@ export function startSyncTriggers(
 
   const networkBack = () => run();
   window.addEventListener("online", networkBack);
+  // The network going is no moment, as no sync could work, but it is when the cut starts: the next
+  // moment would note it up to 30 s late.
+  const networkGone = () => note(noteCutOff(shopDatabase(shopId), Date.now()));
+  window.addEventListener("offline", networkGone);
 
   const every = setInterval(run, SYNC_EVERY);
 
@@ -122,6 +137,7 @@ export function startSyncTriggers(
 
   return () => {
     window.removeEventListener("online", networkBack);
+    window.removeEventListener("offline", networkGone);
     clearInterval(every);
     clearTimeout(soon);
     stopListening();
@@ -149,6 +165,14 @@ export function useSyncTriggers(): void {
 export function SyncTriggers() {
   useSyncTriggers();
   return null;
+}
+
+/** An offline period that can't be noted, a database that refused the write, is logged, and the moments go
+ * on: the next one notes the line again (outages.ts). */
+function note(noting: Promise<void>): void {
+  noting.catch((error: unknown) =>
+    console.error("the offline period was not noted", error),
+  );
 }
 
 function nothing(): void {}

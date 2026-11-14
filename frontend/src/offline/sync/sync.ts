@@ -4,15 +4,19 @@
 // they run one after another (SYNC-9, 03 §6.5).
 //
 // It runs at the moments triggers.tsx keeps: as the app opens, when the network comes back, 2 s after a
-// save, every 30 s while online, and from Tuma sasa (03 §6.5).
+// save, every 30 s while online, and from Tuma sasa (03 §6.5). How it ended tells the laptop's offline
+// periods whether the server was there (outages.ts, SYNC-14).
 import { hasCsrfToken } from "@/api/client";
+import { ApiRefusal, NoConnection } from "@/api/refusal";
 import { savedBlocked } from "@/features/devices/this-device";
 
+import type { ShopDatabase } from "../db";
 import { shopDatabase } from "../this-shop";
 import { isAboutTheDevice } from "./answer";
-import { bootstrap, needsBootstrap } from "./bootstrap";
+import { bootstrap, needsBootstrap, WrongShop } from "./bootstrap";
 import { mayPush } from "./backoff";
 import { inTurn } from "./lock";
+import { noteBack, noteCutOff } from "./outages";
 import { heardInTheBackground, pagePlace } from "./page-place";
 import { AppTooOld, pull } from "./pull";
 import { pushKeepingTheWait } from "./push";
@@ -106,6 +110,29 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   // The same for a block the service worker heard while this page was open (SYNC-16): it is kept now,
   // and nothing is asked.
   if (await heardInTheBackground(db)) return;
+  let pushFailure: { error: unknown } | null;
+  try {
+    pushFailure = await talkToTheServer(db, sendNow);
+  } catch (error) {
+    await noteHowItEnded(db, error);
+    throw error;
+  }
+  // The pull got its answer: the server is there, whatever the push did before it. A push that lost its
+  // line while the pull after it worked is no cut.
+  await noteSafely(noteBack(db, Date.now()));
+  // Thrown after the pull, so the failure is still reported (triggers.tsx). A pull that fails
+  // too, as with no network, throws its own instead, which says the same.
+  if (pushFailure !== null) throw pushFailure.error;
+}
+
+/**
+ * The calls of one sync: the bootstrap if the database was never filled, the push, then the pulls. Gives
+ * back a failed push, which still let the pull run, for the caller to throw once the pull is done.
+ */
+async function talkToTheServer(
+  db: ShopDatabase,
+  sendNow: boolean,
+): Promise<{ error: unknown } | null> {
   // The first pull asks from the bootstrap's cursor, so the copy and the changes after it meet.
   //
   // A bootstrap that finds the app too old for the server writes nothing (bootstrap.ts), but the push still
@@ -148,7 +175,35 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   // push did; a push failure is the new version's to put right, from the same outbox.
   if (tooOld !== null) throw tooOld;
   await pull(db);
-  // Thrown after the pull, so the failure is still reported (triggers.tsx). A pull that fails
-  // too, as with no network, throws its own instead, which says the same.
-  if (pushFailure !== null) throw pushFailure.error;
+  return pushFailure;
+}
+
+/**
+ * What a sync that failed says about the line (outages.ts): no answer at all is a cut; a refusal, or an
+ * answer this app can't use (too old, another shop's copy), is the server there. A bug says nothing
+ * either way, so it notes nothing.
+ */
+async function noteHowItEnded(db: ShopDatabase, error: unknown): Promise<void> {
+  if (error instanceof NoConnection) {
+    await noteSafely(noteCutOff(db, Date.now()));
+    return;
+  }
+  if (
+    error instanceof ApiRefusal ||
+    error instanceof AppTooOld ||
+    error instanceof WrongShop
+  )
+    await noteSafely(noteBack(db, Date.now()));
+}
+
+/**
+ * A period that can't be noted, a database that refused the write, never stops the sync nor hides how it
+ * ended: it is only logged, and the next moment notes the line again.
+ */
+async function noteSafely(note: Promise<void>): Promise<void> {
+  try {
+    await note;
+  } catch (error) {
+    console.error("the offline period was not noted", error);
+  }
 }

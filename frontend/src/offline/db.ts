@@ -3,7 +3,8 @@
 //
 // It owns the list of drawers (Dexie calls them tables) and their versions. Every offline card reads
 // and writes through it: the pull fills the server's drawers (SYNC-7), saveDocument() writes a document
-// and its outbox row (SYNC-8), and the offline PIN check keeps its values here (SYNC-10).
+// and its outbox row (SYNC-8), the offline PIN check keeps its values here (SYNC-10), and the laptop its
+// offline periods until a push takes them (SYNC-14).
 //
 // One database per shop, named after the shop's id, so the practice shop or the demo never mixes with
 // the live shop on one laptop. Which shop this device belongs to lives outside, in mpc.device
@@ -119,6 +120,21 @@ export interface SentDocumentRow extends DocumentRow {
   posted_seq: number | null;
 }
 
+/** One offline period of this laptop (SYNC-14, 03 §6.11): from when it lost the server to when it heard it
+ * again, by its own clock, as the push reports it (`OutageEnvelope`). Its rules live in sync/outages.ts. */
+export interface OutageRow {
+  /** A UUIDv7 made here, so a period sent twice is kept once on the server (DeviceOutage). */
+  id: string;
+  /** When the laptop lost the server, by its clock, with its zone (`Z`). */
+  started_at: string;
+  /** When it heard the server again, or the last time the app saw it still cut off; null while the
+   * period is still open. Only a closed period is sent. */
+  ended_at: string | null;
+  /** The last time an open app saw the laptop still cut off, by its clock (`Z`). Never sent: it is how a
+   * period whose app was closed, or asleep, ends where the app last saw it, not when it opens again. */
+  seen_at: string;
+}
+
 /** One step in the database's life: its number, its drawers, and an upgrade if old rows must change.
  * A drawer set to null is removed in that step. */
 export interface Version {
@@ -163,6 +179,15 @@ export const VERSIONS: readonly Version[] = [
       sent_archive: "id, sent_at, device_seq",
     },
   },
+  {
+    // SYNC-14: the laptop's offline periods, until a push has taken them (03 §6.11). A new drawer, empty on
+    // every laptop, so no upgrade: the old drawers and their rows stay as they are. Found by id alone: an
+    // open period is found by reading the few rows there are, as IndexedDB can't search a null.
+    version: 2,
+    stores: {
+      outages: "id",
+    },
+  },
 ];
 
 /** Every drawer, typed: TypeScript knows the staff drawer holds staff rows, keyed by id. */
@@ -178,6 +203,7 @@ export type ShopDatabase = Dexie & {
   outbox: EntityTable<OutboxRow, "id">;
   pending_effects: EntityTable<PendingEffectRow, "id">;
   sent_archive: EntityTable<SentDocumentRow, "id">;
+  outages: EntityTable<OutageRow, "id">;
 };
 
 /** The database's name in the browser: one per shop, by the shop's id, which never changes. */

@@ -24,6 +24,7 @@ import { shopDatabase } from "../this-shop";
 import { askToSendNow, tellRecordSaved } from "./asks";
 import { WrongShop } from "./bootstrap";
 import { CURSOR, LAST_DEVICE_SEQ, readCursor } from "./meta";
+import { noteCutOff } from "./outages";
 import { AppTooOld } from "./pull";
 import { BrokenPush } from "./push";
 import type { SyncAsk } from "./sync";
@@ -80,6 +81,15 @@ async function filledLaptop(): Promise<void> {
     { key: CURSOR, value: 130 },
     { key: LAST_DEVICE_SEQ, value: 57 },
   ]);
+}
+
+/** The laptop's offline periods, still open, as the moments left them (outages.ts). Read after the
+ * moments' own writes: IndexedDB starts a read of the drawer only once the writes asked before it are
+ * done. */
+async function periods() {
+  return (await shopDatabase(SHOP).outages.toArray())
+    .filter((row) => row.ended_at === null)
+    .map(({ started_at, seen_at }) => ({ started_at, seen_at }));
 }
 
 // The moments a test started, stopped after it, so none runs into the next test.
@@ -224,6 +234,79 @@ describe("the moments", () => {
     vi.advanceTimersByTime(SYNC_EVERY);
 
     expect(sync).toHaveBeenCalledTimes(2);
+  });
+
+  it("note the cut as the network goes, and at each moment while it is gone (SYNC-14)", async () => {
+    // The router goes off with the power at 10:05: the period opens then, not at the next moment, and
+    // each moment after sees it again, so it is still in sight when the network comes back.
+    vi.useFakeTimers({ toFake: [...TIMERS, "Date"] });
+    vi.setSystemTime(Date.parse("2026-11-14T10:05:10Z"));
+    const sync = fakeSync();
+    stop = startSyncTriggers(SHOP, sync);
+
+    networkGone();
+    window.dispatchEvent(new Event("offline"));
+    await vi.waitFor(async () =>
+      expect(await periods()).toEqual([
+        {
+          started_at: "2026-11-14T10:05:10.000Z",
+          seen_at: "2026-11-14T10:05:10.000Z",
+        },
+      ]),
+    );
+
+    vi.advanceTimersByTime(SYNC_EVERY);
+    await vi.waitFor(async () =>
+      expect(await periods()).toEqual([
+        {
+          started_at: "2026-11-14T10:05:10.000Z",
+          seen_at: "2026-11-14T10:05:40.000Z",
+        },
+      ]),
+    );
+    expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  it("keep an open period in sight at each moment with a network, and open none (SYNC-14)", async () => {
+    // Wi-Fi with no internet: the sync's calls may hang for minutes, and the moments meanwhile keep the
+    // period in sight. Whether the server is back is the sync's to say (sync.outages.test.ts).
+    vi.useFakeTimers({ toFake: [...TIMERS, "Date"] });
+    vi.setSystemTime(Date.parse("2026-11-14T10:05:10Z"));
+    stop = startSyncTriggers(SHOP, fakeSync());
+    await noteCutOff(shopDatabase(SHOP), Date.now());
+
+    vi.advanceTimersByTime(SYNC_EVERY);
+
+    await vi.waitFor(async () =>
+      expect(await periods()).toEqual([
+        {
+          started_at: "2026-11-14T10:05:10.000Z",
+          seen_at: "2026-11-14T10:05:40.000Z",
+        },
+      ]),
+    );
+  });
+
+  it("open no period at a moment with a network (SYNC-14)", async () => {
+    // The app opens online: its first moment sees no cut, so it notes none. Real timers, so the wait
+    // below gives the note time to land, if one were coming.
+    vi.useRealTimers();
+    stop = startSyncTriggers(SHOP, fakeSync());
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await shopDatabase(SHOP).outages.count()).toBe(0);
+  });
+
+  it("note no cut once stopped (SYNC-14)", async () => {
+    // A blocked laptop: no moment, and no period either. Real timers, as above.
+    vi.useRealTimers();
+    startSyncTriggers(SHOP, fakeSync())();
+
+    networkGone();
+    window.dispatchEvent(new Event("offline"));
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await shopDatabase(SHOP).outages.count()).toBe(0);
   });
 
   it("tell an app too old for the server, so it updates, and log nothing", async () => {
