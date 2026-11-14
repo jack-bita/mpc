@@ -1,7 +1,7 @@
 // device-health.test.tsx — Hali ya vifaa on the manager's phone (SYNC-14): what each device's card says,
 // the one that hasn't synced today marked, a clock out by more than 2 minutes, the week's offline
 // periods, one whose clock was put back, and a refusal where the manager sees it.
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
@@ -9,7 +9,7 @@ import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal } from "@/test/fake-server";
 import { render } from "@/test/render";
 
-import { DeviceHealthScreen } from "./device-health";
+import { ASK_AGAIN_EVERY, DeviceHealthScreen } from "./device-health";
 
 vi.mock("@/api/client", async (importOriginal) =>
   (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
@@ -232,6 +232,38 @@ describe("Hali ya vifaa", () => {
     expect(card.getByRole("listitem").textContent).toBe(
       "12/11/2026: 21:30 usiku – 13/11/2026 07:45 asubuhi (saa 10 na dakika 15)",
     );
+  });
+
+  it("asks the server again every minute, so a page left open past midnight reads the new day's syncs", async () => {
+    // The manager leaves the page open on the office laptop at 23:59 in Arusha. The Dawa laptop synced at
+    // 23:58 and syncs again just after midnight: the page's next answer brings that sync, and the card is
+    // not marked "Hakijatuma leo" (SYNC-14's review).
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.setSystemTime(new Date("2026-11-14T20:59:00Z"));
+    let asked = 0;
+    answer("GET", ME, { status: 200, body: OWNER });
+    answer("GET", HEALTH, () => {
+      asked += 1;
+      const last_synced_at =
+        asked === 1 ? "2026-11-14T20:58:00Z" : "2026-11-14T21:00:30Z";
+      return Response.json([{ ...DAWA_LAPTOP, last_synced_at }]);
+    });
+
+    render(<DeviceHealthScreen />);
+    const card = await cardOf("Laptop ya Dawa");
+    expect(
+      within(card).getByText("Kilituma mara ya mwisho: leo, saa 23:58 usiku."),
+    ).toBeTruthy();
+
+    await act(() => vi.advanceTimersByTimeAsync(ASK_AGAIN_EVERY + 40_000));
+
+    expect(asked).toBe(2);
+    expect(
+      await within(card).findByText(
+        "Kilituma mara ya mwisho: leo, saa 00:00 usiku.",
+      ),
+    ).toBeTruthy();
+    expect(card.className).not.toContain("ring-destructive");
   });
 
   it("says why when the server refuses the page", async () => {

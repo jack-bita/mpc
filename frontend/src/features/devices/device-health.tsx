@@ -48,6 +48,11 @@ type Outage = components["schemas"]["DeviceOutage"];
 /** The page's place in the store of server answers. */
 export const DEVICE_HEALTH = ["devices", "health"] as const;
 
+/** How often an open page asks the server again, and moves its own clock: every minute. A laptop syncs
+ * every 30 s (SYNC_EVERY), so a laptop that comes back shows within a minute or so; and the page left
+ * open past midnight reads the new day with the syncs made since, not yesterday's answer alone. */
+export const ASK_AGAIN_EVERY = 60_000;
+
 export function DeviceHealthScreen() {
   const t = useTranslations("device.health");
   const who = useWhoIsHere();
@@ -66,13 +71,17 @@ export function DeviceHealthScreen() {
 
 function HealthList({ me }: { me: WhoIsHere }) {
   const t = useTranslations("device.list");
+  // Asked again every minute while the page is open, not only when the window comes back to the front
+  // (TanStack's own moments): a manager watching for a laptop to come back sees it, and at midnight the
+  // page doesn't mark a laptop that synced a moment later (SYNC-14's review).
   const health = useQuery({
     queryKey: DEVICE_HEALTH,
     queryFn: () => answerOf(api.GET("/api/v1/people/devices/health/")),
+    refetchInterval: ASK_AGAIN_EVERY,
   });
-  // The clock "today" is read by, moved on every minute, so a page left open past midnight marks the
-  // devices that haven't synced on the new day.
-  const now = useNow({ updateInterval: 60_000 }).getTime();
+  // The clock "today" is read by, moved on as often as the page asks again: at midnight every laptop's
+  // last sync is yesterday's for a moment, until the next answer brings the syncs made since.
+  const now = useNow({ updateInterval: ASK_AGAIN_EVERY }).getTime();
   // The sides' names, from `me`, as on Vifaa: the page shows only devices of the sides the person sees,
   // and `me` names every one of those.
   const sideNames = new Map(
