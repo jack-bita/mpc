@@ -18,11 +18,14 @@ from typing import Any
 
 import pytest
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from django.db import connection
+from django.utils import timezone
 from pytest_django import Settings
 from rest_framework.test import APIClient
 
 from apps.core.tenancy import shop_context
+from apps.demo import services
 from apps.demo.services import SHOP_CODE, DemoDevice, register_demo_device, seed_demo
 from apps.people.device_keys import DEVICE_KEY_COOKIE, hash_device_key
 from apps.people.models import Device, PairingRequest, StaffMember, User
@@ -127,10 +130,7 @@ def test_one_tap_demo_refused_without_the_sign(demo_shop: Shop, settings: Settin
     # The real server never sets DEMO_SEED: shut there even if its database somehow held only a demo shop.
     settings.DEMO_SEED = False
 
-    answer = APIClient().post(DEMO)
-
-    assert answer.status_code == 400
-    assert answer.json()["code"] == "demo.closed"
+    assert_refused_as_closed(APIClient().post(DEMO))
     assert not is_open()
 
 
@@ -253,6 +253,31 @@ def test_one_tap_demo_after_a_new_day(demo_shop: Shop) -> None:
     new_shop = Shop.objects.get(kind=ShopKind.DEMO)
     assert new_shop != demo_shop
     assert browser.get(ME).json()["shop"]["id"] == str(new_shop.pk)
+
+
+def test_one_tap_demo_refused_confirm_leaves_nothing(demo_shop: Shop, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The promise of register_demo_device's one transaction: a confirm refused after the start takes the start back
+    # too. No code is left waiting for a manager who will never type it, no device, no new key; and the code this
+    # browser was already waiting with, from Sajili kifaa hiki, is not retired, so its manager can still confirm it.
+    browser = APIClient()
+    browser.post(PAIRING)
+    waiting_key = browser.cookies[DEVICE_KEY_COOKIE].value
+    waiting = PairingRequest.objects.get()
+
+    def refused(*args: object, **kwargs: object) -> None:
+        raise ValidationError("A device of this shop already has this name.", code="device.name_taken")
+
+    monkeypatch.setattr(services, "confirm_pairing", refused)
+
+    answer = browser.post(DEMO)
+
+    assert answer.status_code == 400
+    assert answer.json()["code"] == "device.name_taken"
+    assert list(PairingRequest.objects.all()) == [waiting]
+    waiting.refresh_from_db()
+    assert waiting.expires_at > timezone.now()
+    assert devices_made() == 0
+    assert browser.cookies[DEVICE_KEY_COOKIE].value == waiting_key
 
 
 def test_one_tap_demo_throttled_with_pairing(demo_shop: Shop) -> None:
