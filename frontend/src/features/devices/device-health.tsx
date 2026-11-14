@@ -10,7 +10,8 @@
 //
 // The offline periods are by each laptop's own clock, as it reported them (02: DeviceOutage): the page
 // says so once, under its title, and a period that ends before it starts, its clock put back meanwhile,
-// is shown as the laptop said, with no length. The rules live in health.ts.
+// is shown as the laptop said, with no length. One whose end the laptop never saw, as it went off, ends
+// in "?" (Jack, SYNC-14's review). The rules live in health.ts.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
@@ -38,6 +39,7 @@ import {
   duration,
   outageLength,
   syncedToday,
+  totalWorthSaying,
   weekOfOutages,
   type Duration,
 } from "./health";
@@ -220,14 +222,16 @@ function Outages({
   return (
     <div className="grid gap-1">
       <p>
-        {week.total === null
-          ? t("outagesCount", { count: week.count })
-          : t("outages", {
+        {totalWorthSaying(week)
+          ? // "At least" once a period's end is unknown: its length counts only up to where it was seen.
+            t(week.atLeast ? "outagesAtLeast" : "outages", {
               count: week.count,
               total: length(duration(week.total)),
-            })}
+            })
+          : t("outagesCount", { count: week.count })}
       </p>
-      {/* Newest first, as the server sends them. A period that ends on another day names that day too. */}
+      {/* Newest first, as the server sends them. A period that ends on another day names that day too. One
+          whose end the laptop never saw ends in "?", with the last time it was seen (SYNC-14's review). */}
       <ul role="list" className="grid gap-1 text-muted-foreground">
         {outages.map((outage) => {
           const day = formatDate(outage.started_at, timezone);
@@ -240,12 +244,14 @@ function Outages({
           const words = { date: day, from: time(outage.started_at), to };
           return (
             <li key={outage.id}>
-              {lasted === null
-                ? t("periodOdd", words)
-                : t("period", {
-                    ...words,
-                    length: length(duration(lasted)),
-                  })}
+              {outage.end_unknown
+                ? t("periodUnseenEnd", words)
+                : lasted === null
+                  ? t("periodOdd", words)
+                  : t("period", {
+                      ...words,
+                      length: length(duration(lasted)),
+                    })}
             </li>
           );
         })}

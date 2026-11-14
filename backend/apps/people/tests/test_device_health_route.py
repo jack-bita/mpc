@@ -83,9 +83,9 @@ def laptops(baba: StaffMember, side_a: Side, vyakula: Side) -> tuple[Device, Dev
     return pair(baba, side_a, "Laptop ya Dawa"), pair(baba, vyakula, "Laptop ya Vyakula")
 
 
-def period(device: Device, went: datetime, came_back: datetime) -> uuid.UUID:
+def period(device: Device, went: datetime, came_back: datetime, *, end_unknown: bool = False) -> uuid.UUID:
     # An offline period the laptop reported at a push, by its own clock (record_outages, as the push keeps it).
-    outage = Outage(id=uuid.uuid7(), started_at=went, ended_at=came_back)
+    outage = Outage(id=uuid.uuid7(), started_at=went, ended_at=came_back, end_unknown=end_unknown)
     with shop_context(device.shop_id):
         record_outages(device, [outage])
     return outage.id
@@ -158,6 +158,22 @@ def test_health_shows_the_weeks_outages_newest_first_as_the_laptop_sent_them(
     newest = row["outages"][0]
     assert parse_datetime(newest["started_at"]) == today
     assert parse_datetime(newest["ended_at"]) == today - timedelta(minutes=15)
+
+
+def test_health_says_which_periods_ended_unseen(baba: StaffMember, laptops: tuple[Device, Device]) -> None:
+    # The power went at 18:59 and the Dawa laptop died a moment later: the page shows "18:59 – ?", as its end is
+    # unknown, beside a cut the server's answer ended (SYNC-14's review).
+    dawa, _vyakula = laptops
+    went = timezone.now() - timedelta(hours=14)
+    died = period(dawa, went, went + timedelta(seconds=10), end_unknown=True)
+    seen = period(dawa, went - timedelta(hours=2), went - timedelta(hours=1, minutes=50))
+
+    [row, _other] = health(baba)
+
+    assert [(period["id"], period["end_unknown"]) for period in row["outages"]] == [
+        (str(died), True),
+        (str(seen), False),
+    ]
 
 
 def test_a_cut_shows_for_the_week_after_the_server_heard_of_it(laptops: tuple[Device, Device]) -> None:

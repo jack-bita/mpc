@@ -403,6 +403,7 @@ export interface components {
             readonly started_at: string;
             /** Format: date-time */
             readonly ended_at: string;
+            readonly end_unknown: boolean;
         };
         DeviceReasonRequest: {
             reason: string;
@@ -520,6 +521,11 @@ export interface components {
              * @description When it came back, by its clock.
              */
             ended_at: string;
+            /**
+             * @description True when the laptop's app lost sight of it first: `ended_at` is then the last time it saw it.
+             * @default false
+             */
+            end_unknown: boolean;
         };
         OwnSettingsAnswer: {
             readonly language: components["schemas"]["LanguageEnum"];

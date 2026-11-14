@@ -170,6 +170,40 @@ describe("an offline period", () => {
     ]);
   });
 
+  it("keeps its end unknown when the app lost sight of it, and known when the server's answer ended it", async () => {
+    // The power goes at 18:59 and the laptop dies 10 seconds later: the next morning it knows only that the
+    // cut began then, and when it last saw it. A cut the server's answer ended was seen to its end
+    // (SYNC-14's review).
+    const db = aTab();
+    await cutOffFrom(db, at("18:59"), at("18:59"));
+    const morning = at("18:59") + 12.5 * 60 * MINUTE;
+    await noteBack(db, morning);
+    await cutOffFrom(db, morning + MINUTE, morning + 5 * MINUTE);
+    await noteBack(db, morning + 5.5 * MINUTE);
+
+    const rows = (await db.outages.toArray()).sort((a, b) =>
+      a.started_at.localeCompare(b.started_at),
+    );
+    expect(
+      rows.map(({ started_at, ended_at, end_unknown }) => ({
+        started_at,
+        ended_at,
+        end_unknown,
+      })),
+    ).toEqual([
+      {
+        started_at: "2026-11-14T18:59:00.000Z",
+        ended_at: "2026-11-14T18:59:00.000Z",
+        end_unknown: true,
+      },
+      {
+        started_at: "2026-11-15T07:30:00.000Z",
+        ended_at: "2026-11-15T07:34:30.000Z",
+        end_unknown: false,
+      },
+    ]);
+  });
+
   it("notes nothing when the server answers with no period open", async () => {
     const db = aTab();
     await noteBack(db, at("10:00"));
@@ -202,12 +236,14 @@ describe("an offline period", () => {
         started_at: "2026-11-14T10:04:00.000Z",
         ended_at: null,
         seen_at: "2026-11-14T10:05:00.000Z",
+        end_unknown: false,
       },
       {
         id: "0192f000-0000-7000-8000-0000000000e2",
         started_at: "2026-11-14T10:05:00.000Z",
         ended_at: null,
         seen_at: "2026-11-14T10:05:30.000Z",
+        end_unknown: false,
       },
     ]);
     await noteBack(db, at("10:06"));

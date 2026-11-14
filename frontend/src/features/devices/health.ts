@@ -72,15 +72,29 @@ export function outageLength(outage: Outage): number | null {
 }
 
 /** The week's periods in short: how many, and how long in all, of those whose length can be told; null
- * when none can, so the page never calls an unknown length "under a minute". */
+ * when none can, so the page never calls an unknown length "under a minute". A period whose end the
+ * laptop never saw counts up to where it was last seen, so the total is then only the least the shop was
+ * cut off: `atLeast` says so (SYNC-14's review). */
 export function weekOfOutages(outages: readonly Outage[]): {
   count: number;
   total: number | null;
+  atLeast: boolean;
 } {
   let total: number | null = null;
+  let atLeast = false;
   for (const outage of outages) {
     const length = outageLength(outage);
     if (length !== null) total = (total ?? 0) + length;
+    if (outage.end_unknown) atLeast = true;
   }
-  return { count: outages.length, total };
+  return { count: outages.length, total, atLeast };
+}
+
+/** Whether the page can say how long the week's cuts lasted: not when no length can be told, and not
+ * "at least under a minute", which says nothing. */
+export function totalWorthSaying(week: {
+  total: number | null;
+  atLeast: boolean;
+}): week is { total: number; atLeast: boolean } {
+  return week.total !== null && !(week.atLeast && week.total < MINUTE);
 }

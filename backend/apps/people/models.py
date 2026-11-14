@@ -545,8 +545,9 @@ class DeviceOutage(AppendOnly):
     # line went, and when it came back. For the device health page (SYNC-14) and the owner's choice on a local hub
     # (03 AD16). Its id is the laptop's own (ADR-0007), so a push sent again saves each period once. A ledger: written
     # once, by record_outages (apps/people/services.py), and never changed (ADR-0021); `created_at` is when the server
-    # heard of it. The times are kept as reported, even a period that "ends" before it starts (a clock moved back):
-    # refusing it would refuse the laptop's whole push, records and all, again at every sync.
+    # heard of it, which the health page's week is read by. The times are kept as reported, even a period that "ends"
+    # before it starts (a clock moved back): refusing it would refuse the laptop's whole push, records and all, again
+    # at every sync.
 
     # No index of their own, either link: the index below leads with `shop` and then `device` (03 §9), as the answer
     # log's shop link has none (apps/sync/models.py). PROTECT: nothing is deleted (rule 7), so PROTECT never searches
@@ -555,6 +556,11 @@ class DeviceOutage(AppendOnly):
     device = models.ForeignKey(Device, on_delete=models.PROTECT, related_name="+", db_index=False)
     started_at = models.DateTimeField()
     ended_at = models.DateTimeField()
+    # True when the laptop's app lost sight of it before it ended (SYNC-14's review): the laptop went off, its battery
+    # flat in a power cut, or the app was closed or asleep. `ended_at` is then only the last time the app saw it still
+    # cut off, and the real end is unknown: the page shows "18:59 – ?" (Jack's choice), never a short cut the shop
+    # didn't have. False for a period the server's answer ended, and for one an app from before this sent.
+    end_unknown = models.BooleanField(default=False)
 
     class Meta(AppendOnly.Meta):
         # Built on AppendOnly.Meta, so the guard stays the default manager (CORE-2). A laptop's periods in the order

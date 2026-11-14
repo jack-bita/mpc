@@ -1361,9 +1361,14 @@
                         "type": "string",
                         "format": "date-time",
                         "readOnly": true
+                    },
+                    "end_unknown": {
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "end_unknown",
                     "ended_at",
                     "id",
                     "started_at"
@@ -1686,6 +1691,11 @@
                         "type": "string",
                         "format": "date-time",
                         "description": "When it came back, by its clock."
+                    },
+                    "end_unknown": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "True when the laptop's app lost sight of it first: `ended_at` is then the last time it saw it."
                     }
                 },
                 "required": [

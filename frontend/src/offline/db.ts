@@ -133,6 +133,10 @@ export interface OutageRow {
   /** The last time an open app saw the laptop still cut off, by its clock (`Z`). Never sent: it is how a
    * period whose app was closed, or asleep, ends where the app last saw it, not when it opens again. */
   seen_at: string;
+  /** True once a period the app lost sight of was closed at its last sight: its real end is unknown, as
+   * the laptop went off or the app was closed (SYNC-14's review). Sent with it. Not a search key, so adding
+   * it needs no new version. */
+  end_unknown: boolean;
 }
 
 /** One step in the database's life: its number, its drawers, and an upgrade if old rows must change.

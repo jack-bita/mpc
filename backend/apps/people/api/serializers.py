@@ -36,10 +36,11 @@ class DeviceSerializer(serializers.ModelSerializer[Device]):
 class DeviceOutageSerializer(serializers.ModelSerializer[DeviceOutage]):
     # One offline period a laptop reported (SYNC-14, 02: DeviceOutage): when it lost the server and when it heard it
     # again, by its own clock, as kept. It may end before it starts, after the laptop's clock was put back: the page
-    # shows it as the laptop said, and says so.
+    # shows it as the laptop said, and says so. With `end_unknown`, its end is only the last time the laptop's app saw
+    # it, as the laptop went off: the page shows "– ?".
     class Meta:
         model = DeviceOutage
-        fields = ["id", "started_at", "ended_at"]
+        fields = ["id", "started_at", "ended_at", "end_unknown"]
         read_only_fields = fields
 
 

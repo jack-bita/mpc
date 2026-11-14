@@ -49,6 +49,7 @@ function closed(n: number): OutageRow {
     started_at: new Date(start).toISOString(),
     ended_at: new Date(start + 60_000).toISOString(),
     seen_at: new Date(start + 60_000).toISOString(),
+    end_unknown: false,
   };
 }
 
@@ -58,13 +59,15 @@ const STILL_OPEN: OutageRow = {
   started_at: "2026-11-14T11:00:00.000Z",
   ended_at: null,
   seen_at: "2026-11-14T11:00:30.000Z",
+  end_unknown: false,
 };
 
 /** A period as the push sends it: no seen_at, the laptop's own. */
-const asSent = ({ id, started_at, ended_at }: OutageRow) => ({
+const asSent = ({ id, started_at, ended_at, end_unknown }: OutageRow) => ({
   id,
   started_at,
   ended_at,
+  end_unknown,
 });
 
 /** What each push carried, in order. */
@@ -90,6 +93,21 @@ describe("the push's offline periods", () => {
     const [body] = await bodies();
     expect(body?.outages).toEqual([asSent(closed(1)), asSent(closed(2))]);
     expect(await db.outages.toArray()).toEqual([STILL_OPEN]);
+  });
+
+  it("say when their end is unknown, as the laptop went off before it saw them end", async () => {
+    // The power went at 18:59 and the laptop died: the push says the real end is unknown, so the page shows
+    // "18:59 – ?" (SYNC-14's review).
+    await filledLaptop();
+    const died = { ...closed(1), end_unknown: true };
+    await db.outages.bulkAdd([died, closed(2)]);
+    answer("POST", PUSH, nothingToAnswer);
+
+    await push(db, pagePlace);
+
+    const [body] = await bodies();
+    expect(body?.outages).toEqual([asSent(died), asSent(closed(2))]);
+    expect(body?.outages?.[0]?.end_unknown).toBe(true);
   });
 
   it("stay on the laptop when the push gets no answer, and go again with the next", async () => {

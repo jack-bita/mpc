@@ -45,12 +45,14 @@ const DAWA_LAPTOP: DeviceHealth = {
       id: "019a8000-0000-7000-8000-000000000002",
       started_at: "2026-11-14T07:05:00Z",
       ended_at: "2026-11-14T07:15:00Z",
+      end_unknown: false,
     },
     {
       // Thursday, 15:30 to 15:45.
       id: "019a8000-0000-7000-8000-000000000001",
       started_at: "2026-11-12T12:30:00Z",
       ended_at: "2026-11-12T12:45:00Z",
+      end_unknown: false,
     },
   ],
 };
@@ -74,9 +76,14 @@ function healthAnswers(...devices: DeviceHealth[]) {
   answer("GET", HEALTH, { status: 200, body: devices });
 }
 
-/** One device's card, found by its name. */
+/** One device's card, found by its name. Given 5 s, not Testing Library's 1: the first test of the file pays
+ * for the page's first load, which took over a second while every offline test ran beside it. */
 async function cardOf(name: string): Promise<HTMLElement> {
-  const heading = await screen.findByRole("heading", { name });
+  const heading = await screen.findByRole(
+    "heading",
+    { name },
+    { timeout: 5_000 },
+  );
   const card = heading.closest("[data-slot=card]");
   if (!(card instanceof HTMLElement)) throw new Error(`No card for ${name}`);
   return card;
@@ -200,6 +207,7 @@ describe("Hali ya vifaa", () => {
           id: "019a8000-0000-7000-8000-000000000003",
           started_at: "2026-11-14T07:05:00Z",
           ended_at: "2026-11-14T06:50:00Z",
+          end_unknown: false,
         },
       ],
     });
@@ -213,6 +221,38 @@ describe("Hali ya vifaa", () => {
     expect(card.getByText("Bila mtandao wiki hii: mara 1.")).toBeTruthy();
   });
 
+  it('ends with "?" a cut whose end the laptop never saw, and says the total is the least', async () => {
+    // The power went at 18:59 on Thursday, and the Dawa laptop died at 19:04: all it knows is that the cut
+    // lasted at least until then (Jack, SYNC-14's review). Beside it, today's cut seen to its end.
+    healthAnswers({
+      ...DAWA_LAPTOP,
+      outages: [
+        DAWA_LAPTOP.outages[0]!,
+        {
+          id: "019a8000-0000-7000-8000-000000000005",
+          started_at: "2026-11-12T15:59:00Z",
+          ended_at: "2026-11-12T16:04:00Z",
+          end_unknown: true,
+        },
+      ],
+    });
+
+    render(<DeviceHealthScreen />);
+
+    const card = within(await cardOf("Laptop ya Dawa"));
+    expect(
+      card.getAllByRole("listitem").map((item) => item.textContent),
+    ).toEqual([
+      "14/11/2026: 10:05 asubuhi – 10:15 asubuhi (dakika 10)",
+      "12/11/2026: 18:59 jioni – ? (kifaa kilizimika baada ya 19:04 usiku)",
+    ]);
+    expect(
+      card.getByText(
+        "Bila mtandao wiki hii: mara 2, angalau dakika 15 kwa jumla.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("says hours and minutes for a long cut, and names the next day for one that crossed midnight", async () => {
     // The power went at 21:30 on Thursday and came back at 07:45 on Friday, the laptop kept open.
     healthAnswers({
@@ -222,6 +262,7 @@ describe("Hali ya vifaa", () => {
           id: "019a8000-0000-7000-8000-000000000004",
           started_at: "2026-11-12T18:30:00Z",
           ended_at: "2026-11-13T04:45:00Z",
+          end_unknown: false,
         },
       ],
     });

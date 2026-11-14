@@ -50,6 +50,7 @@ export async function noteCutOff(db: ShopDatabase, now: number): Promise<void> {
       started_at: at(now),
       ended_at: null,
       seen_at: at(now),
+      end_unknown: false,
     });
   });
 }
@@ -80,7 +81,10 @@ export async function noteBack(db: ShopDatabase, now: number): Promise<void> {
 
 /**
  * Closes, at the last time it was seen, each open period the app lost sight of, and gives back the one
- * still in sight, if any. Inside the caller's transaction.
+ * still in sight, if any. Inside the caller's transaction. One closed so says its end is unknown: the
+ * laptop went off, its battery flat in a power cut, or the app was closed or asleep, and the cut may
+ * have gone on long after. The page shows it as "18:59 – ?" (Jack, SYNC-14's review), never as a short
+ * cut the shop didn't have.
  *
  * Only one should ever be open; a second, which a bug could leave, is closed too rather than kept open
  * for good. A clock put back makes `now` earlier than the last sight: that period counts as in sight, as
@@ -99,7 +103,10 @@ async function settleOpen(
       inSight = row;
       continue;
     }
-    await db.outages.update(row.id, { ended_at: row.seen_at });
+    await db.outages.update(row.id, {
+      ended_at: row.seen_at,
+      end_unknown: true,
+    });
   }
   return inSight;
 }
@@ -111,10 +118,12 @@ export const MOST_OUTAGES = 100;
 export type SentOutage = components["schemas"]["OutageEnvelopeRequest"];
 
 /**
- * The closed periods the next push sends, oldest first, at most MOST_OUTAGES. Oldest first, as an id is
- * a UUIDv7 that starts with when it was made, and the drawer is read in id order. An open one waits until
- * it closes: the server keeps a period once, as first sent (DeviceOutage), so it must go whole. Read
- * inside the push's own transaction, with its batch (push.ts).
+ * The closed periods the next push sends, at most MOST_OUTAGES, in the drawer's id order. That is mostly
+ * the order they were made in, an id being a UUIDv7 that starts with this laptop's clock, but not surely:
+ * a clock put back makes a later id smaller (lib/ids.ts). No matter: the server keeps each by its id, in
+ * any order, and the page sorts them itself. An open one waits until it closes: the server keeps a period
+ * once, as first sent (DeviceOutage), so it must go whole. Read inside the push's own transaction, with its
+ * batch (push.ts).
  */
 export async function periodsToSend(db: ShopDatabase): Promise<SentOutage[]> {
   const closed = await db.outages
@@ -122,8 +131,8 @@ export async function periodsToSend(db: ShopDatabase): Promise<SentOutage[]> {
     .limit(MOST_OUTAGES)
     .toArray();
   // The filter kept only the closed ones; asked again here so TypeScript knows `ended_at` is a time.
-  return closed.flatMap(({ id, started_at, ended_at }) =>
-    ended_at === null ? [] : [{ id, started_at, ended_at }],
+  return closed.flatMap(({ id, started_at, ended_at, end_unknown }) =>
+    ended_at === null ? [] : [{ id, started_at, ended_at, end_unknown }],
   );
 }
 

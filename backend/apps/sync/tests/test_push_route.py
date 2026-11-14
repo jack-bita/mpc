@@ -263,11 +263,31 @@ def test_push_takes_the_laptops_offline_periods(shop_a: Shop, laptop: tuple[Devi
     assert answer.status_code == 200
     with shop_context(shop_a):
         [kept] = DeviceOutage.objects.filter(device=device)
-    assert (str(kept.pk), kept.started_at, kept.ended_at) == (
+    assert (str(kept.pk), kept.started_at, kept.ended_at, kept.end_unknown) == (
         offline["id"],
         dt.datetime(2026, 11, 10, 6, 10, tzinfo=dt.UTC),
         dt.datetime(2026, 11, 10, 6, 40, tzinfo=dt.UTC),
+        # Said nothing of it, as an app from before SYNC-14's review: seen to its end.
+        False,
     )
+
+
+def test_push_keeps_a_period_whose_end_the_laptop_never_saw(
+    shop_a: Shop, laptop: tuple[Device, str], staff_a: StaffMember
+) -> None:
+    # The power went at 18:59 and the laptop died a moment later: its app last saw the cut at 18:59:10, and says the
+    # real end is unknown (SYNC-14's review). Kept so, for the page's "18:59 – ?".
+    device, key = laptop
+    offline = {
+        "id": str(uuid.uuid7()),
+        "started_at": "2026-11-10T15:59:00Z",
+        "ended_at": "2026-11-10T15:59:10Z",
+        "end_unknown": True,
+    }
+    assert send(a_browser(key), [], outages=[offline]).status_code == 200
+    with shop_context(shop_a):
+        [kept] = DeviceOutage.objects.filter(device=device)
+    assert kept.end_unknown is True
 
 
 @pytest.mark.parametrize(

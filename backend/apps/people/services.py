@@ -954,10 +954,12 @@ def record_sync(device: Device, *, at: datetime, unsent_count: int, app_version:
 @dataclass(frozen=True)
 class Outage:
     # One offline period as a laptop reported it at a push (SYNC-5): its id, made on the laptop (ADR-0007), and when
-    # its line went and came back, by its clock, in UTC.
+    # its line went and came back, by its clock, in UTC; and whether its real end is unknown, the laptop's app having
+    # lost sight of it first (SYNC-14's review). An app from before that says nothing of it: False.
     id: uuid.UUID
     started_at: datetime
     ended_at: datetime
+    end_unknown: bool = False
 
 
 def record_outages(device: Device, outages: Sequence[Outage]) -> None:
@@ -972,6 +974,7 @@ def record_outages(device: Device, outages: Sequence[Outage]) -> None:
             device=device,
             started_at=outage.started_at,
             ended_at=outage.ended_at,
+            end_unknown=outage.end_unknown,
         )
         for outage in outages
     }

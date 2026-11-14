@@ -305,6 +305,13 @@ class OutageEnvelope(serializers.Serializer[Any]):
     id = serializers.UUIDField(validators=[uuid7_only], help_text="The period's id, made on the laptop (UUIDv7).")
     started_at = ZonedDateTimeField(help_text="When the laptop's line went, by its clock.")
     ended_at = ZonedDateTimeField(help_text="When it came back, by its clock.")
+    # Not required, so an app from before SYNC-14's review, still cached on a laptop until it updates, pushes as before
+    # (03 §6.8): its periods say nothing of it, and count as seen to their end.
+    end_unknown = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="True when the laptop's app lost sight of it first: `ended_at` is then the last time it saw it.",
+    )
 
 
 class PushBatch(serializers.Serializer[Any]):
