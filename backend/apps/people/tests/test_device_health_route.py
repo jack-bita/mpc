@@ -137,6 +137,29 @@ def test_health_shows_each_laptops_last_report(baba: StaffMember, laptops: tuple
     }
 
 
+@pytest.mark.parametrize(
+    ("clock_error", "seconds"),
+    [
+        (timedelta(seconds=120, milliseconds=400), 121),
+        (timedelta(seconds=-120, milliseconds=-400), -121),
+        (timedelta(seconds=120), 120),
+        (timedelta(0), 0),
+    ],
+)
+def test_a_clock_error_rounds_away_from_zero(
+    clock_error: timedelta, seconds: int, baba: StaffMember, laptops: tuple[Device, Device]
+) -> None:
+    # A clock 120.4 s fast already makes its clock-ins wait for review (more than 2 minutes, CLOCK_SLACK): the page
+    # must read it as 121, past the slack, never as 120, within it (SYNC-14's review). The same 120.4 s slow is -121.
+    dawa, _vyakula = laptops
+    with shop_context(dawa.shop_id):
+        record_sync(dawa, at=timezone.now(), unsent_count=0, app_version="2026.11.1", clock_error=clock_error)
+
+    [row, _other] = health(baba)
+
+    assert row["clock_error_seconds"] == seconds
+
+
 def test_health_shows_the_weeks_outages_newest_first_as_the_laptop_sent_them(
     baba: StaffMember, laptops: tuple[Device, Device]
 ) -> None:

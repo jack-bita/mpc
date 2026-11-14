@@ -71,11 +71,17 @@ class DeviceHealthSerializer(serializers.ModelSerializer[Device]):
     @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_clock_error_seconds(self, device: Device) -> int | None:
         # The laptop's clock minus the server's, in whole seconds (a laptop 6 minutes slow is -360): a number the app
-        # reads at once, where Django's own text for a duration ("-1 23:54:00") would need parsing. Rounded down, by a
-        # whole-number division, never through a float; a second either way changes nothing the page says.
+        # reads at once, where Django's own text for a duration ("-1 23:54:00") would need parsing. Rounded away from
+        # zero, never toward it (SYNC-14's review): a clock 120.4 s fast already makes its clock-ins wait for review
+        # (more than 2 minutes, CLOCK_SLACK), so the page must read it as past the slack, 121, never as 120, within it.
+        # By whole-number division, never through a float. divmod rounds down, which is away from zero for a clock
+        # behind; for one ahead, a part-second left over rounds up.
         if device.clock_error is None:
             return None
-        return device.clock_error // timedelta(seconds=1)
+        seconds, left = divmod(device.clock_error, timedelta(seconds=1))
+        if left and seconds >= 0:
+            seconds += 1
+        return seconds
 
     @extend_schema_field(DeviceOutageSerializer(many=True))
     def get_outages(self, device: Device) -> Any:
