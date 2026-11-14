@@ -1,19 +1,22 @@
 // sync.outages.test.ts — what a sync tells the laptop's offline periods (SYNC-14, outages.ts): a pull that
 // got its answer ends the open period; a sync that got no answer opens one, though the browser said it
-// was online; a refusal is the server there; and a push that lost its line while the pull after it worked
-// is no cut.
+// was online; a refusal, or an answer this app can't use, is the server there; and a push that lost its
+// line while the pull after it worked is no cut.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoConnection } from "@/api/refusal";
 import { DAWA_LAPTOP } from "@/test/devices";
 import { giveCsrfToken } from "@/test/csrf";
 import { answer, refusal } from "@/test/fake-server";
-import { ASHA } from "@/test/shop-lists";
+import { APP_NUMBER } from "@/lib/version";
+import { ASHA, BOOTSTRAP } from "@/test/shop-lists";
 
 import { saveDocument } from "../outbox";
 import { shopDatabase } from "../this-shop";
+import { WrongShop } from "./bootstrap";
 import { CURSOR, LAST_DEVICE_SEQ } from "./meta";
 import { noteCutOff } from "./outages";
+import { AppTooOld } from "./pull";
 import { syncShop } from "./sync";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -23,6 +26,7 @@ vi.mock("@/api/client", async (importOriginal) =>
 const SHOP = DAWA_LAPTOP.shop.id;
 const PULL = "/api/sync/v1/pull/";
 const PUSH = "/api/sync/v1/push/";
+const BOOTSTRAP_ROUTE = "/api/sync/v1/bootstrap/";
 
 const emptyPage = {
   status: 200,
@@ -87,6 +91,35 @@ describe("a sync", () => {
     answer("GET", PULL, refusal(500, "server_error"));
 
     await expect(syncShop(SHOP)).rejects.toThrow();
+
+    expect(await openPeriods()).toHaveLength(0);
+  });
+
+  it("takes an answer this app can't use, too old for the server, for the server being there", async () => {
+    // The server now serves app number 2 and up: the pull stops (AppTooOld), but it got an answer.
+    await noteCutOff(db(), Date.now());
+    answer("POST", PUSH, { status: 200, body: { answers: [] } });
+    answer("GET", PULL, {
+      status: 200,
+      body: { ...emptyPage.body, min_app_version: APP_NUMBER + 1 },
+    });
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(AppTooOld);
+
+    expect(await openPeriods()).toHaveLength(0);
+  });
+
+  it("takes another shop's copy for the server being there", async () => {
+    // A laptop paired to another shop since it last asked: the bootstrap's copy is that shop's (WrongShop),
+    // and nothing is filled; but the server answered.
+    await db().meta.delete(CURSOR);
+    await noteCutOff(db(), Date.now());
+    answer("GET", BOOTSTRAP_ROUTE, {
+      status: 200,
+      body: { ...BOOTSTRAP, shop: "019a5e00-0000-7000-8000-0000000000b1" },
+    });
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(WrongShop);
 
     expect(await openPeriods()).toHaveLength(0);
   });
