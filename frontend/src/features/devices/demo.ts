@@ -11,7 +11,7 @@
 import Dexie from "dexie";
 
 import { api, csrfHeader } from "@/api/client";
-import { answerOf } from "@/api/refusal";
+import { answerOf, ApiRefusal } from "@/api/refusal";
 import { databaseName } from "@/offline/db";
 
 import { savePins } from "./demo-pins";
@@ -29,8 +29,8 @@ export async function askDemoOpen(): Promise<boolean> {
 
 /**
  * The tap: this browser becomes a device of the demo shop, and keeps the PINs. Gives back the device, as
- * its own check saved it. A refusal (demo.closed, too many tries, already a device) or no answer is
- * thrown, for the screen to show.
+ * its own check saved it. A refusal (demo.closed, too many tries) or no answer is thrown, for the screen
+ * to show.
  */
 export async function tryTheDemo(): Promise<ThisDevice> {
   // The tap is a change, so it needs the CSRF token, as a pairing's start does (pairing.ts): the device's
@@ -38,10 +38,24 @@ export async function tryTheDemo(): Promise<ThisDevice> {
   if (Object.keys(csrfHeader()).length === 0)
     await checkThisDevice().catch(() => null);
 
-  const made = await answerOf(api.POST("/api/devices/v1/demo/"));
-  // Kept before the device is saved: the moment it is, the home page swaps to the PIN screen, whose tiles
-  // must already find their PINs.
-  savePins(made.pins);
+  try {
+    const made = await answerOf(api.POST("/api/devices/v1/demo/"));
+    // Kept before the device is saved: the moment it is, the home page swaps to the PIN screen, whose
+    // tiles must already find their PINs.
+    savePins(made.pins);
+  } catch (error) {
+    // pairing.already_paired: this browser's key already opens a device. A tap before this one made it,
+    // and the check after that tap got no answer (the network dropped for a second), so the visitor saw
+    // an error and tapped again. Not a dead end: the device is there, so this tap goes on to the check, as
+    // Sajili kifaa hiki does after a yes in the code's last second (register-this-device.tsx). The PINs
+    // came with the first tap's answer, kept above; only an answer lost on its way leaves none, and the
+    // tiles then show no PIN.
+    if (!(
+      error instanceof ApiRefusal &&
+      error.body.code === "pairing.already_paired"
+    ))
+      throw error;
+  }
   const device = await checkThisDevice();
   if (device === null)
     // The server made the device a moment ago, yet the key opens nothing: the browser didn't keep its

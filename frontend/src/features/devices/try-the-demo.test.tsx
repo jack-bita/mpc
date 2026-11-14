@@ -129,6 +129,30 @@ describe("Jaribu demo", () => {
     expect(await Dexie.exists(databaseName(DAWA_LAPTOP.shop.id))).toBe(true);
   });
 
+  it("goes on to the PIN screen when a second tap finds the first one's device", async () => {
+    // The first tap made the device, then its check got no answer: the network dropped for a second.
+    theDemoIsOpen();
+    answer("POST", DEMO, () => {
+      answer("GET", ME, () => {
+        throw new TypeError("Failed to fetch");
+      });
+      return Response.json({ pins: PINS }, { status: 201 });
+    });
+    render(<TryTheDemo />);
+    await tap();
+    await screen.findByRole("alert");
+    expect(savedDevice()).toBeNull();
+
+    // The second tap: the server knows this browser's key now, and the network is back.
+    answer("POST", DEMO, refusal(400, "pairing.already_paired"));
+    answer("GET", ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
+    await tap();
+
+    await waitFor(() => expect(savedDevice()).toEqual(DAWA_LAPTOP));
+    // The PINs the first tap's answer brought are still kept.
+    expect(demoPin(ASHA)).toBe("2580");
+  });
+
   it("says why a tap was refused", async () => {
     // The demo closed between the look and the tap: a live shop was made in between, say.
     theDemoIsOpen();
