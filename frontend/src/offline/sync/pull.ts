@@ -11,6 +11,7 @@ import type { EntityTable, IDType } from "dexie";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { APP_NUMBER } from "@/lib/version";
 
 import type { ShopDatabase } from "../db";
 import { dropOutdatedChecks } from "../pin";
@@ -22,17 +23,21 @@ type Change = components["schemas"]["Change"];
 type Page = components["schemas"]["PullAnswer"];
 
 /** The lists a pull can change, by the code a change names in `entity`, which is its drawer's name too
- * (db.ts). A list the server adds later comes with its card, here and as a new database version. */
+ * (db.ts). A list the server adds later comes with its card, here and as a new database version, and
+ * raises APP_NUMBER (src/lib/version.ts). A backend test reads it, on one line or as Prettier splits it,
+ * and fails while it isn't the app number's lists (apps/sync/tests/test_app_number.py). */
 const LISTS = ["side", "payment_account", "staff", "setting"] as const;
 
 /**
- * A page named a list this app has no drawer for: the server is newer than the app. The pull stops
- * before that page, so its changes are never passed over: once the app updates, the same page comes
- * again (SYNC-13's note). Moving the cursor past it would lose those records on this laptop for good.
+ * The server is newer than this app: its page names a lowest app number above this app's own
+ * (`min_app_version`, APP_NUMBER), or a list this app has no drawer for. The pull stops before that page,
+ * so its changes are never passed over: once the app updates, the same page comes again. Moving the
+ * cursor past it would lose those records on this laptop for good. The sync tells it on (triggers.tsx,
+ * too-old.ts), and the app updates by itself (SYNC-13, 03 §6.8).
  */
 export class AppTooOld extends Error {
-  constructor(readonly entity: string) {
-    super(`No drawer for the list "${entity}".`);
+  constructor(why: string) {
+    super(why);
     this.name = "AppTooOld";
   }
 }
@@ -78,6 +83,14 @@ export async function pull(db: ShopDatabase): Promise<void> {
 // Every change on the page is one the app can apply, or nothing is: checked before the transaction, so
 // a page the app can't read changes nothing at all.
 function checkPage(page: Page, askedFrom: number): void {
+  // The server no longer serves this app: whatever the page holds, it may be written for a newer one. An
+  // empty page too, so an app left open learns it at its next sync, a quiet shop's too. First, before the
+  // cursor's check: a server restored from a backup (OPS-11) is behind every laptop's cursor, so each page
+  // fails that check, and an app too old for it must still learn it, as updating is its only way on.
+  if (page.min_app_version > APP_NUMBER)
+    throw new AppTooOld(
+      `The server serves app number ${page.min_app_version} and up; this app is ${APP_NUMBER}.`,
+    );
   // The cursor only ever moves on: a page that took it back would read old changes as new. And a page
   // that says more wait must have moved it, or the next ask is the same ask, and the pull would never end.
   // Neither comes from a working server; better to stop and try again at the next sync.
@@ -87,7 +100,7 @@ function checkPage(page: Page, askedFrom: number): void {
     );
   for (const change of page.changes) {
     if (!(LISTS as readonly string[]).includes(change.entity))
-      throw new AppTooOld(change.entity);
+      throw new AppTooOld(`No drawer for the list "${change.entity}".`);
     // An upsert brings the record as it is now. One with none is not a page this app understands.
     if (change.op === "upsert" && change.data === null)
       throw new Error(`Change ${change.seq} has no record.`);

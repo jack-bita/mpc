@@ -1,33 +1,91 @@
-// update-prompt.test.tsx — the Toleo jipya bar shows only when a new version is ready, and its button
-// switches to it (SPIKE-1, 03 §6.8).
+// update-prompt.test.tsx — the Toleo jipya bar shows only when a new version is ready and no counter
+// screen is busy, and its button switches to it (SPIKE-1, SYNC-13, 03 §6.8).
 //
-// The real registration is swapped for a fake (vi.mock), so these tests check only what the bar shows
-// and does. When a version counts as ready is checked in src/offline/service-worker.test.ts.
+// The real registration and the send before the switch are swapped for fakes (vi.mock), so these tests
+// check only what the bar shows and does. When a version counts as ready is checked in
+// src/offline/service-worker.test.ts, when the counter is busy in src/offline/busy.test.tsx, and how the
+// records go in src/offline/sync/before-update.test.ts.
 import { act, fireEvent, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ON_GREEN } from "@/components/design/top-bar";
 import { setLanguage } from "@/i18n/language";
+import { BUSY_LOCK, QUIET_CHECK_EVERY, useCounterBusy } from "@/offline/busy";
 import {
   type ApplyUpdate,
   registerServiceWorker,
 } from "@/offline/service-worker";
+import { sendBeforeUpdate } from "@/offline/sync/before-update";
+import { tellAppTooOld } from "@/offline/sync/too-old";
+import { installFakeLocks, removeFakeLocks } from "@/test/locks";
 import { swahiliIn } from "@/test/language";
 import { render } from "@/test/render";
 
 import { UpdatePrompt } from "./update-prompt";
 
-vi.mock("@/offline/service-worker", () => ({ registerServiceWorker: vi.fn() }));
+// Registered at once, with regular looks that a test never needs to stop.
+vi.mock("@/offline/service-worker", () => ({
+  registerServiceWorker: vi.fn(() => Promise.resolve(() => {})),
+}));
+// Sent at once, unless a test holds it.
+vi.mock("@/offline/sync/before-update", () => ({
+  sendBeforeUpdate: vi.fn(),
+}));
 
 /** Plays the browser's part: a new version is ready, and `apply` switches to it. */
 function newVersionReady(apply: ApplyUpdate) {
   const onUpdateReady = vi.mocked(registerServiceWorker).mock.calls[0]![0];
   // act: let React finish redrawing before the test looks at the page.
-  act(() => onUpdateReady(apply));
+  act(() => onUpdateReady(apply, "waiting"));
+}
+
+/** Plays the browser's part when another tab switched: this tab runs the old code, and `reload` loads
+ * the new (service-worker.ts). */
+function anotherTabSwitched(reload: ApplyUpdate) {
+  const onUpdateReady = vi.mocked(registerServiceWorker).mock.calls[0]![0];
+  act(() => onUpdateReady(reload, "taken_over"));
+}
+
+/** A counter screen that is busy while `busy` is true: a sale with items in it. */
+function Sale({ busy }: { busy: boolean }) {
+  useCounterBusy(busy);
+  return null;
+}
+
+/** The bar beside a counter screen, as layout.tsx puts it beside every page. */
+function Counter({ busy }: { busy: boolean }) {
+  return (
+    <>
+      <Sale busy={busy} />
+      <UpdatePrompt />
+    </>
+  );
+}
+
+/** Lets the bar's first look at the counter answer (busy.ts): it shows only after it. */
+async function barLooked() {
+  await act(async () => {});
+}
+
+/** The send before the switch, held until the test lets it go: the records on their way. */
+function holdTheSend(): () => void {
+  let release = () => {};
+  vi.mocked(sendBeforeUpdate).mockReturnValue(
+    new Promise<void>((resolve) => {
+      release = resolve;
+    }),
+  );
+  return () => release();
 }
 
 beforeEach(() => {
   vi.mocked(registerServiceWorker).mockClear();
+  vi.mocked(sendBeforeUpdate).mockReset().mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  removeFakeLocks();
+  vi.useRealTimers();
 });
 
 describe("UpdatePrompt", () => {
@@ -42,20 +100,22 @@ describe("UpdatePrompt", () => {
     expect(box.parentElement?.classList.contains("sr-only")).toBe(true);
   });
 
-  it("puts its words into the same status box when a version is ready", () => {
+  it("puts its words into the same status box when a version is ready", async () => {
     render(<UpdatePrompt />);
     const before = screen.getByRole("status");
 
     newVersionReady(vi.fn());
+    await barLooked();
 
     // The same element, not a new one: a box that appears with its words in it may not be said.
     expect(screen.getByRole("status")).toBe(before);
     expect(before.textContent).toBe("Toleo jipya liko tayari");
   });
 
-  it("sits on the green with the bar's button, and a white focus ring", () => {
+  it("sits on the green with the bar's button, and a white focus ring", async () => {
     render(<UpdatePrompt />);
     newVersionReady(vi.fn());
+    await barLooked();
 
     const bar = screen.getByRole("status").parentElement;
     // ON_GREEN paints the green and sets --ring to white for the button on it (top-bar.tsx).
@@ -68,29 +128,32 @@ describe("UpdatePrompt", () => {
     );
   });
 
-  it("shows the bar once a new version is ready", () => {
+  it("shows the bar once a new version is ready", async () => {
     render(<UpdatePrompt />);
     newVersionReady(vi.fn());
+    await barLooked();
 
     // The words themselves, not the message keys: a wrong translation fails here too.
     expect(screen.getByText("Toleo jipya liko tayari")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sasisha" })).toBeTruthy();
   });
 
-  it("speaks English when English is chosen", () => {
+  it("speaks English when English is chosen", async () => {
     // The bar sits outside every page, so the check on every page (language.test.tsx) doesn't see it.
     setLanguage("en");
     render(<UpdatePrompt />);
     newVersionReady(vi.fn());
+    await barLooked();
 
     expect(screen.getByText("A new version is ready")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Update" })).toBeTruthy();
     expect(swahiliIn(document.body)).toEqual([]);
   });
 
-  it("stays off the paper when a page is printed", () => {
+  it("stays off the paper when a page is printed", async () => {
     render(<UpdatePrompt />);
     newVersionReady(vi.fn());
+    await barLooked();
 
     // Checked by its class, because jsdom doesn't print. The slip's own button relies on the same class.
     expect(screen.getByRole("status").parentElement?.className).toContain(
@@ -98,13 +161,435 @@ describe("UpdatePrompt", () => {
     );
   });
 
-  it("switches to the new version when Sasisha is tapped", () => {
+  it("switches to the new version when Sasisha is tapped", async () => {
     render(<UpdatePrompt />);
     const apply = vi.fn();
     newVersionReady(apply);
+    await barLooked();
 
     fireEvent.click(screen.getByRole("button", { name: "Sasisha" }));
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+});
+
+describe("UpdatePrompt beside a busy counter", () => {
+  it("stays hidden while a sale is open, and shows once it is finished", async () => {
+    // Asha has three items in a sale, and the customer waits. A new version arrives.
+    const view = render(<Counter busy />);
+    newVersionReady(vi.fn());
+    await barLooked();
+
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("");
+
+    // The sale is finished: the bar shows, with no wait for the next look.
+    view.rerender(<Counter busy={false} />);
+    expect(await screen.findByRole("button", { name: "Sasisha" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe(
+      "Toleo jipya liko tayari",
+    );
+  });
+
+  it("hides again when a new sale starts before anyone taps", async () => {
+    const view = render(<Counter busy={false} />);
+    newVersionReady(vi.fn());
+    expect(await screen.findByRole("button", { name: "Sasisha" })).toBeTruthy();
+
+    view.rerender(<Counter busy />);
+    await vi.waitFor(() => expect(screen.queryByRole("button")).toBeNull());
+  });
+
+  it("stays hidden while another tab's sale is open, and shows at its next look after", async () => {
+    // The Dawa laptop has the counter open in two tabs, and a sale is open in the other one.
+    vi.useFakeTimers();
+    const locks = installFakeLocks();
+    const other = locks.holdInAnotherTab(BUSY_LOCK, "shared");
+    render(<UpdatePrompt />);
+    newVersionReady(vi.fn());
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(screen.queryByRole("button")).toBeNull();
+
+    other.release();
+    await act(() => vi.advanceTimersByTimeAsync(QUIET_CHECK_EVERY));
+    expect(screen.getByRole("button", { name: "Sasisha" })).toBeTruthy();
+  });
+
+  it("does nothing when tapped just after another tab's sale started", async () => {
+    // The bar showed; then, before its next look, a sale opened in the other tab, and Asha taps here.
+    const locks = installFakeLocks();
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const button = await screen.findByRole("button", { name: "Sasisha" });
+    const other = locks.holdInAnotherTab(BUSY_LOCK, "shared");
+    await other.granted;
+
+    fireEvent.click(button);
+    await barLooked();
+
+    expect(apply).not.toHaveBeenCalled();
+    other.release();
+  });
+});
+
+describe("UpdatePrompt sends the records first", () => {
+  it("sends what waits, then switches", async () => {
+    // Asha's clock-in still waits in the outbox when she taps Sasisha.
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const release = holdTheSend();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+
+    // On its way: the bar says so, the button can't be tapped twice, and nothing has switched yet.
+    expect(await screen.findByText("Inatuma kumbukumbu kwanza…")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Sasisha" }).hasAttribute("disabled"),
+    ).toBe(true);
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+    expect(apply).not.toHaveBeenCalled();
+
+    release();
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+
+  it("is ready again when its last look fails, and switches at the next tap", async () => {
+    // The browser fails to answer the look after the send: the bar must not stay on "Inatuma…", disabled,
+    // with no way on.
+    const locks = installFakeLocks();
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const release = holdTheSend();
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+    vi.spyOn(locks, "query").mockRejectedValueOnce(
+      new Error("lock manager gone"),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    release();
+
+    expect(await screen.findByText("Toleo jipya liko tayari")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Sasisha" }).hasAttribute("disabled"),
+    ).toBe(false);
+    expect(apply).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Sasisha" }));
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+
+  it("is ready again after a failure it never expected, and says so in the console", async () => {
+    // Nothing in a tap should fail: the send and the looks keep their own failures. A bug that did would
+    // otherwise leave the bar disabled on "Inatuma…", with no way on, and leave no trace.
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const bug = new TypeError("Cannot read properties of undefined");
+    vi.mocked(sendBeforeUpdate).mockRejectedValueOnce(bug);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+
+    await vi.waitFor(() =>
+      expect(log).toHaveBeenCalledWith("update failed", bug),
+    );
+    expect(screen.getByText("Toleo jipya liko tayari")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Sasisha" }).hasAttribute("disabled"),
+    ).toBe(false);
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it("sends once for two quick taps", async () => {
+    // Asha taps Sasisha twice, fast, before the bar has redrawn: one send, one switch.
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const release = holdTheSend();
+    const button = await screen.findByRole("button", { name: "Sasisha" });
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+    release();
+
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+  });
+
+  it("doesn't switch when a sale opened while the records were going", async () => {
+    const view = render(<Counter busy={false} />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    const release = holdTheSend();
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+
+    // A customer comes in during the seconds the send takes, and Asha starts the sale.
+    view.rerender(<Counter busy />);
+    release();
+    await barLooked();
+    await barLooked();
+
+    expect(apply).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button")).toBeNull();
+
+    // The sale is finished: the bar is back, ready for a tap that sends again and switches.
+    view.rerender(<Counter busy={false} />);
+    expect(await screen.findByText("Toleo jipya liko tayari")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Sasisha" }));
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    expect(sendBeforeUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it("says it in English when English is chosen", async () => {
+    setLanguage("en");
+    render(<UpdatePrompt />);
+    newVersionReady(vi.fn());
+    holdTheSend();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Update" }));
+
+    expect(await screen.findByText("Sending records first…")).toBeTruthy();
+    expect(swahiliIn(document.body)).toEqual([]);
+  });
+});
+
+describe("UpdatePrompt on an app too old for the server", () => {
+  /** A sync found the app too old (too-old.ts), as triggers.tsx tells it. */
+  function syncFoundItTooOld() {
+    act(() => tellAppTooOld());
+  }
+
+  it("sends the records, then switches by itself, with no tap", async () => {
+    // The server's minimum is above this app's number: its pulls have stopped.
+    render(<UpdatePrompt />);
+    syncFoundItTooOld();
+    const apply = vi.fn();
+
+    newVersionReady(apply);
+
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+    // The records first, then the switch (03 §6.8).
+    expect(
+      vi.mocked(sendBeforeUpdate).mock.invocationCallOrder[0],
+    ).toBeLessThan(apply.mock.invocationCallOrder[0]!);
+  });
+
+  it("switches as soon as it hears, when the bar was already up", async () => {
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    await screen.findByRole("button", { name: "Sasisha" });
+    expect(apply).not.toHaveBeenCalled();
+
+    syncFoundItTooOld();
+
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+
+  it("tries again at the next sync after another tab's sale refused its try", async () => {
+    // The other tab's sale opened just as this bar tried, and was finished before the bar's next look, 2 s
+    // later: the bar sees nothing change, so nothing redraws. Only the next sync that finds the app too
+    // old, about 30 s later, gives it another try.
+    const locks = installFakeLocks();
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    await screen.findByRole("button", { name: "Sasisha" });
+    const other = locks.holdInAnotherTab(BUSY_LOCK, "shared");
+    await other.granted;
+    syncFoundItTooOld();
+    await barLooked();
+    await barLooked();
+    expect(apply).not.toHaveBeenCalled();
+    other.release();
+    await barLooked();
+
+    syncFoundItTooOld();
+
+    // At the bar's next look, 2 s after the refused try (update-prompt.tsx: never sooner).
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce(), {
+      timeout: 3000,
+    });
+  });
+
+  it("waits for the sale to finish, even too old", async () => {
+    // Asha's sale is never cut off: the switch comes once she has finished it (Jack, 13 Nov 2026).
+    const view = render(<Counter busy />);
+    syncFoundItTooOld();
+    const apply = vi.fn();
+    newVersionReady(apply);
+    await barLooked();
+    expect(apply).not.toHaveBeenCalled();
+
+    view.rerender(<Counter busy={false} />);
+
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+
+  it("tries again once quiet, after a sale opened while the records were going", async () => {
+    const view = render(<Counter busy={false} />);
+    syncFoundItTooOld();
+    const apply = vi.fn();
+    const release = holdTheSend();
+    newVersionReady(apply);
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+
+    view.rerender(<Counter busy />);
+    release();
+    await barLooked();
+    await barLooked();
+    expect(apply).not.toHaveBeenCalled();
+
+    view.rerender(<Counter busy={false} />);
+    // At the bar's next look after the refused try, 2 s on.
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce(), {
+      timeout: 3000,
+    });
+    expect(sendBeforeUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends and switches once when a sync finds it too old just as Asha taps", async () => {
+    // Her tap has started and not yet sent; the bar's own try lands in that moment. One send, one switch:
+    // the tap's switch counts for the try, and the try never starts beside the tap.
+    render(<UpdatePrompt />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    // The send takes a moment, as on the shop's line, so the bar redraws while it goes and after.
+    const release = holdTheSend();
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+
+    syncFoundItTooOld();
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+    release();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
     expect(apply).toHaveBeenCalledOnce();
+  });
+
+  it("switches by itself once per version, and leaves the bar for a tap if the reload doesn't come", async () => {
+    render(<UpdatePrompt />);
+    syncFoundItTooOld();
+    const apply = vi.fn();
+    // The records take a moment to go, as on the shop's line, so the bar redraws while they go and again
+    // after. A send done at once would never redraw it, and a second switch would never get its chance.
+    const release = holdTheSend();
+    newVersionReady(apply);
+    await screen.findByText("Inatuma kumbukumbu kwanza…");
+    release();
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+
+    // More syncs find it too old, and the bar redraws: no second switch by itself. A tenth of a second,
+    // as a second try by itself would take a few steps (two looks at the counter, the send) to land.
+    syncFoundItTooOld();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+    expect(apply).toHaveBeenCalledOnce();
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+
+    // The bar is still there, for someone to tap.
+    fireEvent.click(screen.getByRole("button", { name: "Sasisha" }));
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("UpdatePrompt on a tab another tab has switched", () => {
+  it("waits for the next look before trying again, even when a send keeps failing", async () => {
+    // A bug that made every send throw: the bar must not send again and again, many times a second. A
+    // refused try comes again at the next look, 2 s on, never at once.
+    render(<UpdatePrompt />);
+    const reload = vi.fn();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    // Each send fails after a moment, as one on the shop's line would, so the bar redraws as it ends.
+    vi.mocked(sendBeforeUpdate).mockImplementation(
+      () =>
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new TypeError("a bug")), 5),
+        ),
+    );
+
+    anotherTabSwitched(reload);
+    // Outside act(): act holds React's redraws until it ends, and a loop needs them to turn. React lets
+    // them through as a browser would, and only notes they weren't wrapped.
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("reloads by itself, with no tap, the records first", async () => {
+    // Asha switched in the other tab: this one still runs the old code, and must not stay on it.
+    render(<UpdatePrompt />);
+    const reload = vi.fn();
+
+    anotherTabSwitched(reload);
+
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+  });
+
+  it("waits, in the tab that tapped, for a sale started before the new version took over", async () => {
+    // Asha taps Sasisha; the new version takes a few seconds to take over, and Juma starts a sale here
+    // meanwhile. The switch, when it lands, waits for his sale, as in every other tab.
+    const view = render(<Counter busy={false} />);
+    const apply = vi.fn();
+    newVersionReady(apply);
+    fireEvent.click(await screen.findByRole("button", { name: "Sasisha" }));
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    view.rerender(<Counter busy />);
+    const reload = vi.fn();
+
+    anotherTabSwitched(reload);
+    await barLooked();
+    expect(reload).not.toHaveBeenCalled();
+
+    view.rerender(<Counter busy={false} />);
+    // The switch landed while the bar still read the counter as quiet: its try met Juma's sale and
+    // waits for the next look, at most 2 s after his sale ends.
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce(), {
+      timeout: 3000,
+    });
+  });
+
+  it("tries again at the next look after a refused try", async () => {
+    // The bar's look says quiet; its try's own look, a moment later, meets the other tab's sale, which is
+    // finished before the bar's next look, 2 s on. Nothing the bar reads changes, so nothing redraws it:
+    // the try comes again at that next look all the same.
+    vi.useFakeTimers();
+    const locks = installFakeLocks();
+    vi.spyOn(locks, "query")
+      .mockResolvedValueOnce({ held: [], pending: [] })
+      .mockResolvedValueOnce({
+        held: [{ name: BUSY_LOCK, mode: "shared" }],
+        pending: [],
+      });
+    render(<UpdatePrompt />);
+    const reload = vi.fn();
+
+    anotherTabSwitched(reload);
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(reload).not.toHaveBeenCalled();
+
+    await act(() => vi.advanceTimersByTimeAsync(QUIET_CHECK_EVERY));
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("waits for the sale in this tab to finish", async () => {
+    // A sale open on the old code: it finishes there, then the tab reloads.
+    const view = render(<Counter busy />);
+    const reload = vi.fn();
+    anotherTabSwitched(reload);
+    await barLooked();
+    expect(reload).not.toHaveBeenCalled();
+
+    view.rerender(<Counter busy={false} />);
+
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
   });
 });

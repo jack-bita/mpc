@@ -356,7 +356,14 @@ DEMO_SEED = env("DEMO_SEED", "no") == "yes"
 # answering or the old one still is (OPS-2).
 APP_VERSION = env("APP_VERSION", "dev")
 
-# The oldest app a shop device may run and still sync (03 §6.8), sent on every pull (SYNC-3): an older one sends its
-# outbox, then updates. None for now: any app may. SYNC-13 gives it a form a device can compare with its own version, as
-# APP_VERSION is a git commit, and a commit can't say whether it is older or newer than another.
-MIN_APP_VERSION: str | None = None
+# The lowest app number a shop device may run and still sync (03 §6.8), sent on every pull (SYNC-3): an app whose own
+# number is lower sends its outbox, then updates (SYNC-13). The app's own is APP_NUMBER in frontend/src/lib/version.ts,
+# built into the same image, and a test keeps this one at or below it (apps/sync/tests/test_app_number.py), so the app a
+# server serves is never too old for it. A whole number, raised by hand, the app's with it, in a release that must
+# retire older apps: one that adds a list to the registry, which an older app has no drawer for, or one whose apps stop
+# writing a record shape the server is to drop. The shape leaves DOCUMENT_TYPES only in a later release: an app below
+# the minimum sends its outbox first, in the shapes it wrote, and in the same release the server would refuse them. Not
+# APP_VERSION, a git commit, which can't say whether it is older or newer than another; nor the release number, as
+# every merge deploys before its release exists. In the code, not the environment: it belongs to the code a release
+# ships.
+MIN_APP_VERSION = 1

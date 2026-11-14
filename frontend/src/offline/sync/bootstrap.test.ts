@@ -10,12 +10,14 @@ import {
   savedBlocked,
   savedDevice,
 } from "@/features/devices/this-device";
+import { APP_NUMBER } from "@/lib/version";
 import { DAWA_LAPTOP } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { ASHA, BOOTSTRAP, DAWA_SIDE } from "@/test/shop-lists";
 
 import { openShopDatabase, type ShopDatabase } from "../db";
-import { bootstrap, needsBootstrap } from "./bootstrap";
+import { bootstrap, needsBootstrap, WrongShop } from "./bootstrap";
+import { AppTooOld } from "./pull";
 import { CURSOR, LAST_DEVICE_SEQ, readCursor, readLastDeviceSeq } from "./meta";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -37,6 +39,40 @@ afterEach(async () => {
 });
 
 describe("the bootstrap", () => {
+  it("writes nothing when this app is below the lowest the server serves", async () => {
+    // An old tab's sync reaches the bootstrap before its update: filled by the old code, the database would
+    // get no drawer for a list a newer release added, and a cursor past that list's lines for good.
+    freshDatabase();
+    answer("GET", BOOTSTRAP_ROUTE, {
+      status: 200,
+      body: { ...BOOTSTRAP, min_app_version: APP_NUMBER + 1 },
+    });
+
+    await expect(bootstrap(db)).rejects.toBeInstanceOf(AppTooOld);
+
+    expect(await db.staff.count()).toBe(0);
+    expect(await readCursor(db)).toBeNull();
+  });
+
+  it("writes nothing from a copy of another shop", async () => {
+    // The Dawa laptop believes it belongs to MPC, but was paired to another shop since: the server's copy
+    // is that shop's. Filled into MPC's database, the counter would show the other shop's staff.
+    freshDatabase();
+    const otherShop = "019a5e00-0000-7000-8000-0000000000b1";
+    answer("GET", BOOTSTRAP_ROUTE, {
+      status: 200,
+      body: { ...BOOTSTRAP, shop: otherShop },
+    });
+
+    await expect(bootstrap(db)).rejects.toBeInstanceOf(WrongShop);
+
+    expect(await db.staff.count()).toBe(0);
+    expect(await db.side.count()).toBe(0);
+    expect(await readCursor(db)).toBeNull();
+    // Still unfilled: once the device check names the new shop, its own database fills.
+    expect(await needsBootstrap(db)).toBe(true);
+  });
+
   it("fills a fresh laptop with every list, and sets the cursor", async () => {
     freshDatabase();
     answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });

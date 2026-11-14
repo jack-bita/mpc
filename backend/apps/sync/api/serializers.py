@@ -127,6 +127,14 @@ class BootstrapAnswer(serializers.Serializer[Any]):
     # The bootstrap's answer, as the API schema and the app's types describe it. The answer itself is built by snapshot
     # (apps/sync/bootstrap.py) from the registry; this names the same tables with the same fields, which
     # test_answer_shape_names_every_registry_table holds, so a table added to the registry is added here too.
+    shop = serializers.UUIDField(
+        help_text="The shop this copy is of: a laptop fills only that shop's database, and writes nothing for another."
+    )
+    min_app_version = serializers.IntegerField(
+        min_value=1,
+        help_text="The lowest app number that may still sync, as on every pull page: an app whose own number is lower"
+        " fills nothing, and updates first.",
+    )
     cursor = serializers.IntegerField(
         min_value=0, help_text="The shop's last change number this copy holds: the first pull asks for what came after."
     )
@@ -239,7 +247,11 @@ class PullAnswer(serializers.Serializer[Any]):
         " 1,000 changes and still have more after it."
     )
     server_time = serializers.DateTimeField()
-    min_app_version = serializers.CharField(allow_null=True)
+    min_app_version = serializers.IntegerField(
+        min_value=1,
+        help_text="The lowest app number that may still sync: an app whose own number is lower sends what it holds,"
+        " then updates.",
+    )
 
 
 class CarriedEnvelope(serializers.Serializer[Any]):
@@ -309,8 +321,9 @@ class PushBatch(serializers.Serializer[Any]):
     sent_at = ZonedDateTimeField(help_text="The laptop's clock as it sends this push.")
     # The laptop's report on itself, sent at every sync (03 §6.6; SYNC-5), kept on its row (apps/people/services.py,
     # record_sync). Both needed, as the envelope's parts are: the laptop's sync code writes them, so one left out is a
-    # bug in the app, refused loudly. The version is kept as the app names itself, only its length checked: the
-    # office reads it, nothing compares it yet (SYNC-13).
+    # bug in the app, refused loudly. The version is kept as the app names itself, only its length checked: the git
+    # commit it was built from, which the office reads (SYNC-14's page). Nothing compares it: a commit can't say
+    # whether it is older or newer, so the app's number does that, against min_app_version on each pull (SYNC-13).
     app_version = serializers.CharField(max_length=APP_VERSION_LENGTH, help_text="The app's version on the laptop.")
     unsent_count = serializers.IntegerField(
         min_value=0,

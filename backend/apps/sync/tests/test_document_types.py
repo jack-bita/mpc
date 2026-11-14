@@ -1,4 +1,4 @@
-"""apps/sync/tests/test_document_types.py — the list of document types a push takes (SYNC-4; 03 §6.3).
+"""apps/sync/tests/test_document_types.py — the list of document types a push takes (SYNC-4, SYNC-13; 03 §6.3, §6.8).
 
 A laptop sends each document with its type and the version of its shape, and the list (apps/sync/document_types.py)
 says, for each pair, what a correct one looks like, which code saves it, and the permission its maker needs:
@@ -6,9 +6,9 @@ says, for each pair, what a correct one looks like, which code saves it, and the
     ("sale", 2)   its shape, its saving code, sale.write
     ("sale", 1)   kept while some laptops still send the old shape (03 §6.8)
 
-A pair that isn't listed is refused, with a code that says which half is unknown. The real list is empty until SALE-2
-and ATT-1 add the first types, so these tests list pretend ones, two versions of a "ticket", for as long as each test
-runs (monkeypatch puts the list back after it).
+A pair that isn't listed is refused, with a code that says which half is unknown. The real list holds one type today,
+the clock-in in one version (ATT-1), so most of these tests list pretend ones, two versions of a "ticket", for as long
+as each test runs (monkeypatch puts the list back after it). The last ones read the real list.
 """
 
 from typing import Any
@@ -81,7 +81,35 @@ def test_an_unknown_version_of_a_known_type_is_refused() -> None:
 
 def test_every_type_is_listed_under_its_own_name_and_version() -> None:
     # A typo in the list, ("sale", 2) holding the clock-in's entry, would send every sale to the wrong saving code. Each
-    # entry says its own name and version, and must be listed under them. The real list: empty today, so this guards
-    # the first types that join it (SALE-2, ATT-1).
+    # entry says its own name and version, and must be listed under them. The real list: the clock-in today, and every
+    # type that joins it (SALE-2 and on).
     for (name, schema_version), entry in DOCUMENT_TYPES.items():
         assert (entry.name, entry.schema_version) == (name, schema_version)
+
+
+def _shapes_dropped_too_soon(types: dict[tuple[str, int], DocumentType]) -> list[tuple[str, int]]:
+    # For each type, the shape just before its newest, when the list has dropped it. The server takes the current shape
+    # and the one before it (03 §6.8); older ones may go.
+    newest: dict[str, int] = {}
+    for name, schema_version in types:
+        newest[name] = max(schema_version, newest.get(name, 0))
+    return sorted(
+        (name, version - 1) for name, version in newest.items() if version > 1 and (name, version - 1) not in types
+    )
+
+
+def test_every_type_keeps_the_shape_before_its_newest() -> None:
+    # Asha clocks in at 07:58 on the old app, with no network. The laptop updates at 08:00, and the new app sends her
+    # clock-in at 08:05, in the shape the old app wrote it: 2 for a clock-in whose newest shape is 3, say. A list that
+    # dropped 2 when it added 3 would refuse it, and her clock-in would wait for a manager, set aside (03 §6.3). The
+    # update never waits for the records to go first (frontend/src/offline/sync/before-update.ts: with no network the
+    # switch goes ahead), so records in the shape before reach the server after an update. The real list, as every
+    # release has it.
+    assert _shapes_dropped_too_soon(DOCUMENT_TYPES) == []
+
+
+def test_the_guard_catches_a_shape_dropped_too_soon(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The check above, shown to fail: a ticket's version 2 listed without its version 1.
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 2), TICKET_V2)
+
+    assert _shapes_dropped_too_soon(DOCUMENT_TYPES) == [("ticket", 1)]

@@ -26,6 +26,7 @@
 import { useEffect } from "react";
 
 import { ApiRefusal, NoConnection } from "@/api/refusal";
+import { checkThisDevice } from "@/features/devices/device-check";
 import {
   useDeviceBlocked,
   useThisDevice,
@@ -34,8 +35,11 @@ import {
 import { shopDatabase } from "../this-shop";
 import { askForBackgroundSync } from "./ask-background";
 import { listenForAsks } from "./asks";
+import { WrongShop } from "./bootstrap";
 import { heardInTheBackground } from "./page-place";
+import { AppTooOld } from "./pull";
 import { syncShop, type SyncAsk } from "./sync";
+import { tellAppTooOld } from "./too-old";
 
 /** How often an open app syncs while online (03 §6.5, a default): the office's changes reach the counter
  * within half a minute, and the server hears from each open tab as often. Each tab keeps its own ticks:
@@ -50,13 +54,27 @@ export const AFTER_A_SAVE = 2_000;
 /**
  * What a failed sync leaves. Every failure waits for the next moment, which tries again from where the
  * last one stopped. The server's answers and a dropped network are part of a shop's day: a block or a
- * "not registered" is kept already (answer.ts), and the rest pass. Anything else is no answer of the
- * server's: an app older than the server (AppTooOld, which SYNC-13 turns into an update), a push the
- * server refused as broken (BrokenPush), or a bug. It would fail again at every moment with no one the
- * wiser, so it goes to the console, where a developer looking at a laptop that stopped syncing finds it.
+ * "not registered" is kept already (answer.ts), and the rest pass. An app older than the server
+ * (AppTooOld) is told on, and the app updates by itself (too-old.ts, SYNC-13). A copy of another shop
+ * (WrongShop) means the laptop was paired to another shop since it last asked: the device check asks at
+ * once, rather than within its 5 minutes, so the moments move to the new shop's own database, and the
+ * old one's syncs stop downloading the whole copy again every 30 s. Anything else is no answer
+ * of the server's: a push the server refused as broken (BrokenPush), or a bug. It would fail again at every
+ * moment with no one the wiser, so it goes to the console, where a developer looking at a laptop that
+ * stopped syncing finds it.
  */
 export function reportSyncFailure(error: unknown): void {
   if (error instanceof ApiRefusal || error instanceof NoConnection) return;
+  if (error instanceof AppTooOld) {
+    tellAppTooOld();
+    return;
+  }
+  if (error instanceof WrongShop) {
+    // It saves the new shop (this-device.ts), and the moments follow it (useSyncTriggers). A check that
+    // fails says nothing more: a block it heard is kept already, and the regular check asks again.
+    checkThisDevice().catch(nothing);
+    return;
+  }
   console.error("sync failed", error);
 }
 
@@ -132,3 +150,5 @@ export function SyncTriggers() {
   useSyncTriggers();
   return null;
 }
+
+function nothing(): void {}

@@ -9,8 +9,12 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiRefusal, NoConnection } from "@/api/refusal";
-import { saveBlocked, saveDevice } from "@/features/devices/this-device";
-import { DAWA_LAPTOP } from "@/test/devices";
+import {
+  saveBlocked,
+  saveDevice,
+  savedDevice,
+} from "@/features/devices/this-device";
+import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
 import { giveCsrfToken } from "@/test/csrf";
 import { answer, sent } from "@/test/fake-server";
 import { ASHA, BOOTSTRAP, DAWA_SIDE } from "@/test/shop-lists";
@@ -18,10 +22,12 @@ import { ASHA, BOOTSTRAP, DAWA_SIDE } from "@/test/shop-lists";
 import { NeverFilled, saveDocument } from "../outbox";
 import { shopDatabase } from "../this-shop";
 import { askToSendNow, tellRecordSaved } from "./asks";
+import { WrongShop } from "./bootstrap";
 import { CURSOR, LAST_DEVICE_SEQ, readCursor } from "./meta";
 import { AppTooOld } from "./pull";
 import { BrokenPush } from "./push";
 import type { SyncAsk } from "./sync";
+import { timesTold } from "./too-old";
 import {
   AFTER_A_SAVE,
   reportSyncFailure,
@@ -208,16 +214,28 @@ describe("the moments", () => {
 
   it("go on after a failed sync, which goes to the console when it is no answer of the server's", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const tooOld = new AppTooOld("product");
-    const sync = fakeSync().mockRejectedValueOnce(tooOld);
+    const bug = new TypeError("Cannot read properties of undefined");
+    const sync = fakeSync().mockRejectedValueOnce(bug);
     stop = startSyncTriggers(SHOP, sync);
     await vi.waitFor(() =>
-      expect(log).toHaveBeenCalledWith("sync failed", tooOld),
+      expect(log).toHaveBeenCalledWith("sync failed", bug),
     );
 
     vi.advanceTimersByTime(SYNC_EVERY);
 
     expect(sync).toHaveBeenCalledTimes(2);
+  });
+
+  it("tell an app too old for the server, so it updates, and log nothing", async () => {
+    // Not a bug: the server's minimum is above this app's number (pull.ts). The update side listens.
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sync = fakeSync().mockRejectedValueOnce(
+      new AppTooOld('No drawer for the list "product".'),
+    );
+    stop = startSyncTriggers(SHOP, sync);
+
+    await vi.waitFor(() => expect(timesTold()).toBe(1));
+    expect(log).not.toHaveBeenCalled();
   });
 });
 
@@ -249,7 +267,7 @@ describe("on the laptop", () => {
         cursor: 121,
         has_more: false,
         server_time: "2026-11-11T09:00:00Z",
-        min_app_version: null,
+        min_app_version: 1,
       },
     });
 
@@ -280,7 +298,7 @@ describe("on the laptop", () => {
         cursor: 130,
         has_more: false,
         server_time: "2026-11-12T08:00:00Z",
-        min_app_version: null,
+        min_app_version: 1,
       },
     });
     renderHook(() => useSyncTriggers());
@@ -304,7 +322,7 @@ describe("on the laptop", () => {
         cursor: 130,
         has_more: false,
         server_time: "2026-11-12T08:00:00Z",
-        min_app_version: null,
+        min_app_version: 1,
       },
     });
     renderHook(() => useSyncTriggers());
@@ -337,6 +355,51 @@ describe("a failed sync", () => {
     );
     reportSyncFailure(new NoConnection(new TypeError("Failed to fetch")));
 
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("asks the server about the device at once when its copy was of another shop", async () => {
+    // The Dawa laptop was paired to another shop since it last asked: the bootstrap's copy is that shop's
+    // (WrongShop, bootstrap.ts). Asked now, not at the 5-minute device check, the laptop syncs its new
+    // shop's own database at once, instead of downloading the whole copy again at every 30 s sync.
+    saveDevice(DAWA_LAPTOP);
+    const moved = {
+      ...DAWA_LAPTOP_ANSWER,
+      shop: {
+        ...DAWA_LAPTOP_ANSWER.shop,
+        id: "019a5e00-0000-7000-8000-0000000000b1",
+        name: "Duka la Pili",
+        code: "DP",
+      },
+    };
+    answer("GET", "/api/devices/v1/me/", { status: 200, body: moved });
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    reportSyncFailure(new WrongShop(moved.shop.id, `mpc-shop-${SHOP}`));
+
+    await vi.waitFor(() => expect(savedDevice()?.shop.id).toBe(moved.shop.id));
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("says nothing more when that device check fails too", async () => {
+    // No network by then: the regular device check asks again later, as it would have anyway.
+    saveDevice(DAWA_LAPTOP);
+    answer("GET", "/api/devices/v1/me/", () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    reportSyncFailure(
+      new WrongShop("019a5e00-0000-7000-8000-0000000000b1", `mpc-shop-${SHOP}`),
+    );
+
+    await vi.waitFor(() =>
+      expect(
+        sent.some((request) => request.url.endsWith("/api/devices/v1/me/")),
+      ).toBe(true),
+    );
+    await act(async () => {});
+    expect(savedDevice()?.shop.id).toBe(SHOP);
     expect(log).not.toHaveBeenCalled();
   });
 

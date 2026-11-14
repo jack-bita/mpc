@@ -34,9 +34,11 @@ const serwist = new Serwist({
   precacheOptions: {
     ignoreURLParametersMatching: [/.*/],
   },
-  // A new version waits until someone taps Sasisha, or until every window of the app is closed: the
-  // app must never reload in the middle of a sale (03 §6.7). With skipWaiting false, Serwist itself
-  // listens for the update bar's SKIP_WAITING message, and then stops waiting.
+  // A new version waits until the update bar sends SKIP_WAITING, or until every window of the app is
+  // closed: the app must never reload in the middle of a sale (03 §6.8). The bar sends it once the
+  // counter is quiet, at a tap of Sasisha, or by itself when the app is too old for the server
+  // (update-prompt.tsx, SYNC-13). With skipWaiting false, Serwist itself listens for that message, and
+  // then stops waiting.
   skipWaiting: false,
   // The very first time, take charge of the open page at once, so it works offline with no reload.
   // A later version still waits, because of skipWaiting above.

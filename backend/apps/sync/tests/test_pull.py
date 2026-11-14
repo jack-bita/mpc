@@ -423,8 +423,8 @@ def test_every_page_carries_the_server_time_and_the_oldest_app_allowed(
     shop_a: Shop, dawa: Side, settings: Settings
 ) -> None:
     # Done when: every page carries the server time, an empty one too: a laptop works out how far its own clock is off
-    # from it at every sync (03 §6.6). In UTC, as every time the API sends. And the oldest app version that may still
-    # sync (03 §6.8): none yet, so any app may; SYNC-13 gives it a form a device can compare with its own version.
+    # from it at every sync (03 §6.6). In UTC, as every time the API sends. And the lowest app number that may still
+    # sync (03 §6.8), a whole number a laptop compares with its own (SYNC-13), as the server's settings name it.
     before = timezone.now()
     page = pulled(shop_a, last_line(shop_a))
     after = timezone.now()
@@ -432,6 +432,6 @@ def test_every_page_carries_the_server_time_and_the_oldest_app_allowed(
     assert (page["changes"], page["has_more"]) == ([], False)
     assert page["server_time"].endswith("Z")
     assert before <= datetime.fromisoformat(page["server_time"]) <= after
-    assert page["min_app_version"] is None
-    settings.MIN_APP_VERSION = "0.2.0"
-    assert pulled(shop_a, 0)["min_app_version"] == "0.2.0"
+    assert page["min_app_version"] == 1
+    settings.MIN_APP_VERSION = 2
+    assert pulled(shop_a, 0)["min_app_version"] == 2

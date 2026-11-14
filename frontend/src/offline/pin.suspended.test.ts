@@ -39,7 +39,7 @@ function serverSays(asha: StaffRecord, cursor = 121): void {
       cursor,
       has_more: false,
       server_time: "2026-11-12T09:31:00Z",
-      min_app_version: null,
+      min_app_version: 1,
     },
   });
 }

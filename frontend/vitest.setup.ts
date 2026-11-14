@@ -14,6 +14,7 @@ import { afterEach, vi } from "vitest";
 
 import { leaveHeard, nobodyAtCounter } from "@/features/login/at-the-counter";
 import { endOfflineSession } from "@/features/login/offline-session";
+import { forgetTooOld } from "@/offline/sync/too-old";
 import { closeShopDatabases } from "@/offline/this-shop";
 import { forgetCsrfToken } from "@/test/csrf";
 import { resetFakeServer } from "@/test/fake-server";
@@ -58,4 +59,6 @@ afterEach(async () => {
   // kept in memory the same way.
   nobodyAtCounter();
   leaveHeard();
+  // A sync's finding that the app is too old (too-old.ts, SYNC-13), kept in memory the same way.
+  forgetTooOld();
 });

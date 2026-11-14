@@ -9,7 +9,8 @@
   },
   "update": {
     "ready": "A new version is ready",
-    "apply": "Update"
+    "apply": "Update",
+    "sending": "Sending records first…"
   },
   "offline": {
     "title": "Needs the internet",

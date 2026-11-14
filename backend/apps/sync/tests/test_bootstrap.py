@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from pytest_django import Settings
 from rest_framework.test import APIClient
 
 from apps.core import settings_registry
@@ -93,7 +94,17 @@ def test_bootstrap_has_reference_data(
     response = a_browser(key).get(BOOTSTRAP)
     assert response.status_code == 200
     answer = response.json()
-    assert list(answer) == ["cursor", "last_device_seq", "side", "payment_account", "staff", "setting", "setting_keys"]
+    assert list(answer) == [
+        "shop",
+        "min_app_version",
+        "cursor",
+        "last_device_seq",
+        "side",
+        "payment_account",
+        "staff",
+        "setting",
+        "setting_keys",
+    ]
     assert [side["id"] for side in answer["side"]] == [str(dawa.pk)]
     assert [account["name"] for account in answer["payment_account"]] == ["Dawa"]  # the side's drawer
     assert [person["id"] for person in answer["staff"]] == [str(manager.pk)]
@@ -123,6 +134,24 @@ def test_bootstrap_cursor_is_the_shops_last_change(
         with shop_context(shop_b), recording_changes(shop_b):
             record_change(side_b)
     assert a_browser(key).get(BOOTSTRAP).json()["cursor"] == start + 2
+
+
+def test_bootstrap_names_its_shop(shop_a: Shop, paired: tuple[Device, str]) -> None:
+    # A laptop keeps one database per shop, named by the shop it believes it belongs to. If it was paired to another
+    # shop between that belief and this call, the answer is the other shop's: the id lets it see so, and fill nothing
+    # (SYNC-13, bootstrap.ts).
+    _device, key = paired
+    assert a_browser(key).get(BOOTSTRAP).json()["shop"] == str(shop_a.id)
+
+
+def test_bootstrap_names_the_lowest_app_it_serves(paired: tuple[Device, str], settings: Settings) -> None:
+    # As every pull page does (SYNC-13): an app below it fills nothing, and updates first. An old tab's sync that
+    # reached the bootstrap before its update would otherwise fill the database with the old code, which has no drawer
+    # for a list a newer release added, and set the cursor past that list's lines for good.
+    _device, key = paired
+    assert a_browser(key).get(BOOTSTRAP).json()["min_app_version"] == 1
+    settings.MIN_APP_VERSION = 2
+    assert a_browser(key).get(BOOTSTRAP).json()["min_app_version"] == 2
 
 
 def test_bootstrap_names_the_laptops_last_number(shop_a: Shop, paired: tuple[Device, str]) -> None:
@@ -254,7 +283,7 @@ def test_answer_shape_names_every_registry_table() -> None:
     # The answer's documented shape (the API schema, and the app's types made from it) names each registry table with
     # the registry's own fields, so a table a later card adds can't reach devices undocumented, or the other way round.
     fields = BootstrapAnswer().fields
-    assert list(fields) == ["cursor", "last_device_seq", *REGISTRY, "setting_keys"]
+    assert list(fields) == ["shop", "min_app_version", "cursor", "last_device_seq", *REGISTRY, "setting_keys"]
     for code, entry in REGISTRY.items():
         assert type(fields[code].child) is entry.serializer  # type: ignore[attr-defined]
 

@@ -9,13 +9,28 @@
 // The server reads its cursor first and then the lists, so the lists may already hold a change numbered
 // after it. That change comes again in the first pull, which saves the record as it is then: nothing is
 // lost, and a record saved twice is still one record.
+//
+// The answer names its shop, and only that shop's database is filled; and the lowest app number the
+// server serves, so an app below it fills nothing and updates first (SYNC-13).
 import { api } from "@/api/client";
+import { APP_NUMBER } from "@/lib/version";
 
-import type { ShopDatabase } from "../db";
+import { databaseName, type ShopDatabase } from "../db";
 import { dropOutdatedChecks } from "../pin";
 import { syncAnswer, syncCallLimit } from "./answer";
 import { keepOnThisPage } from "./page-place";
+import { AppTooOld } from "./pull";
 import { CURSOR, LAST_DEVICE_SEQ, readCursor, readLastDeviceSeq } from "./meta";
+
+/** The server's copy is of another shop than this database's: the laptop was paired to another shop
+ * since it last learned its own. Not the server's answer to a bad ask, and nothing the shop can put right,
+ * so the console says it (triggers.tsx). */
+export class WrongShop extends Error {
+  constructor(answerShop: string, database: string) {
+    super(`A copy of shop ${answerShop} for the database ${database}.`);
+    this.name = "WrongShop";
+  }
+}
 
 /** Whether this database still needs a copy: it has no cursor yet, or no number of its own. A laptop
  * filled before the bootstrap named its last number (SYNC-7's) has a cursor but no number, and could
@@ -40,18 +55,33 @@ export async function needsBootstrap(db: ShopDatabase): Promise<boolean> {
  *
  * A refusal is thrown, after keeping a block or a "not registered" (answer.ts), and changes nothing.
  *
- * Honest limit: the answer is the shop of the device key the browser sends now, and it names no shop, so
- * nothing here can check it is the shop this database is named for (the device's saved copy, mpc.device,
+ * An app below the server's lowest app number is thrown too (AppTooOld, as a pull throws it), and
+ * changes nothing: the sync tells it, and the app updates first (too-old.ts). An old tab's sync can reach
+ * the bootstrap before its update, after a release whose new database version removed the cursor to fill
+ * again; the old code has no drawer for the list that release added, and would set the cursor past its
+ * lines for good.
+ *
+ * A copy of another shop is thrown too (WrongShop), and changes nothing. The answer is the shop of the
+ * device key the browser sends now; this database is the shop the device's saved copy names (mpc.device,
  * perhaps from an earlier visit). A laptop paired to another shop between that copy and this call would
- * write the new shop's lists into the old shop's database. Pairing a working laptop again is refused
- * (pairing.already_paired, 03 §5.9), which makes that moment rare; the fix is the shop's id in the answer,
- * checked here, a server change for a later card.
+ * otherwise write the new shop's lists into the old shop's database, and its counter would show the wrong
+ * shop's staff and rules. Pairing a working laptop again is refused (pairing.already_paired, 03 §5.9),
+ * which makes that moment rare. The device check's next answer brings the new shop, whose own database
+ * then fills.
  */
 export async function bootstrap(db: ShopDatabase): Promise<void> {
   const copy = await syncAnswer(
     api.GET("/api/sync/v1/bootstrap/", { signal: syncCallLimit() }),
     keepOnThisPage,
   );
+  // Before the transaction: a copy for another shop writes nothing at all. Each database is named by its
+  // shop's id (db.ts), so the name says whose it is.
+  if (databaseName(copy.shop) !== db.name)
+    throw new WrongShop(copy.shop, db.name);
+  if (copy.min_app_version > APP_NUMBER)
+    throw new AppTooOld(
+      `The server serves app number ${copy.min_app_version} and up; this app is ${APP_NUMBER}.`,
+    );
 
   await db.transaction(
     "rw",

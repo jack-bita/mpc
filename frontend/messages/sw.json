@@ -9,7 +9,8 @@
   },
   "update": {
     "ready": "Toleo jipya liko tayari",
-    "apply": "Sasisha"
+    "apply": "Sasisha",
+    "sending": "Inatuma kumbukumbu kwanza…"
   },
   "offline": {
     "title": "Inahitaji mtandao",

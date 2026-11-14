@@ -35,7 +35,7 @@ const PAGE = {
   cursor: 130,
   has_more: false,
   server_time: "2026-11-12T08:00:00Z",
-  min_app_version: null,
+  min_app_version: 1,
 };
 
 let locks: FakeLocks;

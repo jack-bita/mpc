@@ -14,12 +14,15 @@ import { DAWA_LAPTOP } from "@/test/devices";
 import { forgetCsrfToken, giveCsrfToken } from "@/test/csrf";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { ASHA, BOOTSTRAP } from "@/test/shop-lists";
+import { APP_NUMBER } from "@/lib/version";
 
 import { saveDocument } from "../outbox";
 import { shopDatabase } from "../this-shop";
 import { SYNC_CALL_LIMIT_MS } from "./answer";
 import { mayPush } from "./backoff";
+import { WrongShop } from "./bootstrap";
 import { readCursor } from "./meta";
+import { AppTooOld } from "./pull";
 import { syncShop } from "./sync";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -50,7 +53,7 @@ const emptyPage = (cursor: number) => ({
     cursor,
     has_more: false,
     server_time: "2026-11-11T09:00:00Z",
-    min_app_version: null,
+    min_app_version: 1,
   },
 });
 
@@ -94,6 +97,53 @@ function holdTheFirstPull(): { release: () => void; pulls: () => number } {
 function nothing(): void {}
 
 describe("a sync", () => {
+  it("of an app below min_app_version sends its outbox before a refused fill, then stops", async () => {
+    // A newer version's database upgrade removed the cursor, so this old tab must fill again, with Asha's
+    // clock-in still waiting. The fill says the app is too old and writes nothing (bootstrap.ts); the
+    // clock-in still goes first, in the shape this app wrote it (03 §6.8), and the pull, with no cursor to
+    // ask from, never runs.
+    await filledLaptop();
+    const { id } = await clockIn();
+    await shopDatabase(SHOP).meta.delete("pull_cursor");
+    answer("GET", BOOTSTRAP_ROUTE, {
+      status: 200,
+      body: { ...BOOTSTRAP, min_app_version: APP_NUMBER + 1 },
+    });
+    answer("POST", PUSH, {
+      status: 200,
+      body: { answers: [{ id, status: "accepted", posted_seq: 131 }] },
+    });
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(AppTooOld);
+
+    expect(paths()).toEqual([BOOTSTRAP_ROUTE, PUSH]);
+    expect(await shopDatabase(SHOP).outbox.count()).toBe(0);
+    expect(await readCursor(shopDatabase(SHOP))).toBeNull();
+  });
+
+  it("of an app below min_app_version sends its outbox, then stops before the page", async () => {
+    // Done when: an app below min_app_version sends its outbox, then updates (03 §6.8). Asha's clock-in goes
+    // up first; then the page says the server serves this app no longer, and the pull stops before it, the
+    // cursor where it was. The update follows from AppTooOld: triggers.tsx tells it (too-old.ts), and the
+    // bar switches by itself (update-prompt.test.tsx).
+    await filledLaptop();
+    const { id } = await clockIn();
+    answer("POST", PUSH, {
+      status: 200,
+      body: { answers: [{ id, status: "accepted", posted_seq: 131 }] },
+    });
+    answer("GET", PULL, {
+      status: 200,
+      body: { ...emptyPage(131).body, min_app_version: APP_NUMBER + 1 },
+    });
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(AppTooOld);
+
+    expect(paths()).toEqual([PUSH, PULL]);
+    expect(await shopDatabase(SHOP).outbox.count()).toBe(0);
+    expect(await readCursor(shopDatabase(SHOP))).toBe(130);
+  });
+
   it("bootstraps a fresh laptop, pushes, then pulls from its cursor", async () => {
     answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
     answer("GET", PULL, emptyPage(120));
@@ -322,16 +372,24 @@ describe("a sync", () => {
   });
 
   it("never joins another shop's sync", async () => {
-    // The laptop was moved to another shop while its old shop's sync still ran.
+    // The laptop was moved to another shop while its old shop's sync still ran. The server answers by the
+    // key, so as the new shop, to both: the old shop's sync writes nothing into its database (WrongShop,
+    // SYNC-13), and the new shop's fills its own.
     const other = "019a5e00-0000-7000-8000-0000000000a2";
-    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+    answer("GET", BOOTSTRAP_ROUTE, {
+      status: 200,
+      body: { ...BOOTSTRAP, shop: other },
+    });
     answer("GET", PULL, emptyPage(120));
 
     const first = syncShop(SHOP);
     const second = syncShop(other);
-    await Promise.all([first, second]);
+    const [old, moved] = await Promise.allSettled([first, second]);
 
     expect(second).not.toBe(first);
+    expect(old.status === "rejected" && old.reason).toBeInstanceOf(WrongShop);
+    expect(moved.status).toBe("fulfilled");
+    expect(await readCursor(shopDatabase(SHOP))).toBeNull();
     expect(await readCursor(shopDatabase(other))).toBe(120);
   });
 

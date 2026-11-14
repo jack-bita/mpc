@@ -14,7 +14,7 @@ import { bootstrap, needsBootstrap } from "./bootstrap";
 import { mayPush } from "./backoff";
 import { inTurn } from "./lock";
 import { heardInTheBackground, pagePlace } from "./page-place";
-import { pull } from "./pull";
+import { AppTooOld, pull } from "./pull";
 import { pushKeepingTheWait } from "./push";
 
 /** What a sync is asked for. */
@@ -107,7 +107,21 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   // and nothing is asked.
   if (await heardInTheBackground(db)) return;
   // The first pull asks from the bootstrap's cursor, so the copy and the changes after it meet.
-  if (await needsBootstrap(db)) await bootstrap(db);
+  //
+  // A bootstrap that finds the app too old for the server writes nothing (bootstrap.ts), but the push still
+  // goes, and the sync stops after it: what this app wrote leaves first, in the shapes it wrote, before the
+  // update (03 §6.8, SYNC-13). An old tab can meet it after a newer version's database upgrade removed the
+  // cursor to fill again, with records still waiting in the outbox the two versions share. The push needs
+  // no cursor; the pull does, so it never runs then.
+  let tooOld: AppTooOld | null = null;
+  if (await needsBootstrap(db)) {
+    try {
+      await bootstrap(db);
+    } catch (error) {
+      if (!(error instanceof AppTooOld)) throw error;
+      tooOld = error;
+    }
+  }
   // The push before the pull: what this laptop made goes up first, so the pull that follows brings the
   // server's changes from it, and drops its pending effects as the cursor passes them. A push told to
   // try later still lets the pull run: the server's trouble saving one record doesn't stop the office's
@@ -130,6 +144,9 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
       pushFailure = { error };
     }
   }
+  // Too old: the update is what the sync leaves, told on as a pull's would be (triggers.tsx), whatever the
+  // push did; a push failure is the new version's to put right, from the same outbox.
+  if (tooOld !== null) throw tooOld;
   await pull(db);
   // Thrown after the pull, so the failure is still reported (triggers.tsx). A pull that fails
   // too, as with no network, throws its own instead, which says the same.
