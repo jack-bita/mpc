@@ -456,6 +456,13 @@ class Device(Editable):
     last_synced_at = models.DateTimeField(null=True, blank=True, editable=False)
     unsent_count = models.PositiveIntegerField(null=True, blank=True, editable=False)
     app_version = models.CharField(max_length=APP_VERSION_LENGTH, blank=True, editable=False)
+    # How far the laptop's clock was from the server's at that push (SYNC-14, 03 §6.6): its clock as it sent the push
+    # (`sent_at`) minus the server's as it arrived, so a laptop 6 minutes slow says -6 minutes, as a clock-in's own
+    # does (AttendanceEvent.clock_error). The health page shows it, so a manager puts a wrong clock right before it
+    # makes the day's clock-ins wait for review. Empty until the laptop's first push after SYNC-14. Moved with the
+    # report above, by record_sync, so in the same way: its version never moves for it, and its edit history skips it
+    # (migration 0016).
+    clock_error = models.DurationField(null=True, blank=True, editable=False)
     # The number the laptop's next record should follow (SYNC-5, 02 §17): it numbers its records 1, 2, 3 and never
     # skips one, so the next is this + 1, and a jump raises a device_gap flag. Mostly the highest it sent; after a
     # reset that numbers again from 1, the new count's. Empty before its first record. Moved only by the push, record by
