@@ -473,6 +473,7 @@
       "too_easy": "This PIN is too easy to guess, like 1234 or 0000. Choose another."
     },
     "demo": {
+      "closed": "The demo isn't open here.",
       "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in."
     },
     "password_too_short": "This password is too short.",

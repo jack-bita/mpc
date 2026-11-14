@@ -473,6 +473,7 @@
       "too_easy": "PIN hii ni rahisi mno kukisia, kama 1234 au 0000. Chagua nyingine."
     },
     "demo": {
+      "closed": "Demo haipo wazi hapa.",
       "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia."
     },
     "password_too_short": "Nenosiri ni fupi mno.",

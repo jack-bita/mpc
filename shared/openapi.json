@@ -152,6 +152,75 @@
                 }
             }
         },
+        "/api/devices/v1/demo/": {
+            "post": {
+                "operationId": "devices_v1_demo_create",
+                "tags": [
+                    "devices"
+                ],
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DemoDevice"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/devices/v1/demo/open/": {
+            "get": {
+                "operationId": "devices_v1_demo_open_retrieve",
+                "tags": [
+                    "devices"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DemoOpen"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/devices/v1/me/": {
             "get": {
                 "operationId": "devices_v1_me_retrieve",
@@ -1144,6 +1213,51 @@
                 ],
                 "type": "string",
                 "description": "* `upsert` - Added or changed\n* `archive` - Archived"
+            },
+            "DemoDevice": {
+                "type": "object",
+                "properties": {
+                    "pins": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DemoPin"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "pins"
+                ]
+            },
+            "DemoOpen": {
+                "type": "object",
+                "properties": {
+                    "open": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "open"
+                ]
+            },
+            "DemoPin": {
+                "type": "object",
+                "properties": {
+                    "staff_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "pin": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "pin",
+                    "staff_id"
+                ]
             },
             "Device": {
                 "type": "object",
