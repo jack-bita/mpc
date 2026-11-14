@@ -83,9 +83,8 @@ async function filledLaptop(): Promise<void> {
   ]);
 }
 
-/** The laptop's offline periods, still open, as the moments left them (outages.ts). Read after the
- * moments' own writes: IndexedDB starts a read of the drawer only once the writes asked before it are
- * done. */
+/** The laptop's offline periods, still open, as the moments left them (outages.ts). A moment doesn't wait
+ * for its note, so a test waits for it to land (vi.waitFor). */
 async function periods() {
   return (await shopDatabase(SHOP).outages.toArray())
     .filter((row) => row.ended_at === null)

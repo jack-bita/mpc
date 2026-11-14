@@ -108,11 +108,11 @@ describe("a sync", () => {
   });
 
   it("goes on, and logs it, when the period can't be noted", async () => {
-    // A database that refuses the write must never stop the sync, nor hide how it ended.
+    // A database that refuses the write must never stop the sync, nor hide how it ended: the period
+    // open, and its closing refused.
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.spyOn(db().outages, "filter").mockImplementation(() => {
-      throw new Error("disk full");
-    });
+    await noteCutOff(db(), Date.now());
+    vi.spyOn(db().outages, "update").mockRejectedValue(new Error("disk full"));
     answer("POST", PUSH, { status: 200, body: { answers: [] } });
     answer("GET", PULL, emptyPage);
 

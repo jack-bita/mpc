@@ -13,8 +13,9 @@
 //   retry      → the server had trouble saving it: the push stops, and it and the rest wait
 //
 // Each push also carries the laptop's report on itself (SYNC-5): its clock as it sends, its version,
-// and how many records still wait. With nothing waiting, an empty push still goes, so the office sees
-// the laptop is alive (SYNC-14).
+// how many records still wait, and its offline periods (outages.ts, SYNC-14), each sent until a push
+// gets the server's answer, then forgotten. With nothing waiting, an empty push still goes, so the
+// office sees the laptop is alive.
 //
 // It runs in two places: in the page (sync.ts), and in the service worker, when the network comes back
 // with the app closed (SYNC-16). So it is handed its place (place.ts), the client to call and how to keep
@@ -27,6 +28,7 @@ import type { DocumentRow, OutboxRow, ShopDatabase } from "../db";
 import { waitingInOrder } from "../waiting";
 import { syncAnswer, syncCallLimit } from "./answer";
 import { pushFailed, pushSettled } from "./backoff";
+import { MOST_OUTAGES, periodsToSend, type SentOutage } from "./outages";
 import type { SyncPlace } from "./place";
 
 type Envelope = components["schemas"]["PushedEnvelopeRequest"];
@@ -62,7 +64,9 @@ interface Waiting {
 
 /**
  * Sends what waits in the outbox, a batch at a time, until a batch that wasn't full (nothing more
- * waited when it was read) or a retry. A record saved while a push runs goes at the next sync.
+ * waited when it was read) or a retry. A record saved while a push runs goes at the next sync. The
+ * offline periods go along, up to 100 a batch, and the batches go on while they fill one too: a laptop
+ * back after a week of short cuts sends them all now.
  *
  * A refusal or a lost network is thrown on, and the outbox is left as it is: every record still waits,
  * and the next push sends it again, which is safe, as the server knows a record by its id (SYNC-4). A
@@ -75,7 +79,7 @@ export async function push(
   place: SyncPlace,
 ): Promise<PushResult> {
   for (;;) {
-    const { batch, others } = await nextBatch(db);
+    const { batch, others, periods } = await nextBatch(db);
     // Read afresh at each try: a retry sent with the first try's time would show the laptop's clock as
     // off by the wait, and every offline clock-in in it as unverified (ATT-1).
     const sentAt = new Date().toISOString();
@@ -87,8 +91,7 @@ export async function push(
           sent_at: sentAt,
           app_version: APP_VERSION,
           unsent_count: others,
-          // The offline periods, from SYNC-14 on.
-          outages: [],
+          outages: periods,
         },
       }),
       place.hear,
@@ -97,8 +100,10 @@ export async function push(
         throw new BrokenPush(error);
       throw error;
     });
-    if (!(await applyAnswers(db, batch, answers, sentAt))) return "retry";
-    if (batch.length < MOST_DOCUMENTS) return "sent";
+    if (!(await applyAnswers(db, batch, answers, sentAt, periods)))
+      return "retry";
+    if (batch.length < MOST_DOCUMENTS && periods.length < MOST_OUTAGES)
+      return "sent";
   }
 }
 
@@ -142,25 +147,34 @@ async function waitAfterAFailure(
   }
 }
 
-// The next batch and how many others wait, read together, in one transaction, so the count matches it.
+// The next batch, how many others wait, and the offline periods to send with it, read together, in one
+// transaction, so the count matches the batch.
 async function nextBatch(
   db: ShopDatabase,
-): Promise<{ batch: Waiting[]; others: number }> {
-  return db.transaction("r", [db.outbox, db.documents], async () => {
-    const rows = await waitingInOrder(db).limit(MOST_DOCUMENTS).toArray();
-    // Only the waiting ones count as unsent: a record set aside is on the server already, as invalid,
-    // with a flag, and counted it would hold up a drawer's approval for good (M8).
-    const waiting = await waitingInOrder(db).count();
-    const documents = await db.documents.bulkGet(rows.map((row) => row.id));
-    const batch = rows.map((row, i) => {
-      const document = documents[i];
-      // Written in one transaction with its row (outbox.ts), so never missing.
-      if (document === undefined)
-        throw new Error(`Outbox row ${row.id} has no document.`);
-      return { row, document };
-    });
-    return { batch, others: waiting - batch.length };
-  });
+): Promise<{ batch: Waiting[]; others: number; periods: SentOutage[] }> {
+  return db.transaction(
+    "r",
+    [db.outbox, db.documents, db.outages],
+    async () => {
+      const rows = await waitingInOrder(db).limit(MOST_DOCUMENTS).toArray();
+      // Only the waiting ones count as unsent: a record set aside is on the server already, as invalid,
+      // with a flag, and counted it would hold up a drawer's approval for good (M8).
+      const waiting = await waitingInOrder(db).count();
+      const documents = await db.documents.bulkGet(rows.map((row) => row.id));
+      const batch = rows.map((row, i) => {
+        const document = documents[i];
+        // Written in one transaction with its row (outbox.ts), so never missing.
+        if (document === undefined)
+          throw new Error(`Outbox row ${row.id} has no document.`);
+        return { row, document };
+      });
+      return {
+        batch,
+        others: waiting - batch.length,
+        periods: await periodsToSend(db),
+      };
+    },
+  );
 }
 
 // A record as the push sends it (03 §6.3): its document, with the number its outbox row keeps.
@@ -187,12 +201,17 @@ async function applyAnswers(
   batch: readonly Waiting[],
   answers: readonly PushedAnswer[],
   sentAt: string,
+  periods: readonly SentOutage[],
 ): Promise<boolean> {
   const byId = new Map(answers.map((answer) => [answer.id, answer]));
   return db.transaction(
     "rw",
-    [db.outbox, db.sent_archive, db.pending_effects],
+    [db.outbox, db.sent_archive, db.pending_effects, db.outages],
     async () => {
+      // The server answered, so it kept the periods sent, a retry or not: it records them after the
+      // documents, whatever their answers (apps/sync/push.py). Forgotten here, with the answers, so a tab
+      // closed now sends them again next time, which the server keeps once (one row per id).
+      await db.outages.bulkDelete(periods.map((period) => period.id));
       for (const { row, document } of batch) {
         const answer = byId.get(row.id);
         // The server answers up to its first retry and none after it (SYNC-4): this one and the rest

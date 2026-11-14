@@ -16,6 +16,7 @@
 //
 // No `window` here, and every time is handed in: the service worker loads this file through push.ts
 // (tsconfig.sw.json checks it), and the tests choose the clock.
+import type { components } from "@/api/schema";
 import { newId } from "@/lib/ids";
 
 import type { OutageRow, ShopDatabase } from "../db";
@@ -101,6 +102,29 @@ async function settleOpen(
     await db.outages.update(row.id, { ended_at: row.seen_at });
   }
   return inSight;
+}
+
+/** At most this many periods a push, as the server takes (PushBatch's `outages`, 03 §6.3). */
+export const MOST_OUTAGES = 100;
+
+/** A period as the push sends it (03 §6.3): no `seen_at`, which is the laptop's own. */
+export type SentOutage = components["schemas"]["OutageEnvelopeRequest"];
+
+/**
+ * The closed periods the next push sends, oldest first, at most MOST_OUTAGES. Oldest first, as an id is
+ * a UUIDv7 that starts with when it was made, and the drawer is read in id order. An open one waits until
+ * it closes: the server keeps a period once, as first sent (DeviceOutage), so it must go whole. Read
+ * inside the push's own transaction, with its batch (push.ts).
+ */
+export async function periodsToSend(db: ShopDatabase): Promise<SentOutage[]> {
+  const closed = await db.outages
+    .filter((row) => row.ended_at !== null)
+    .limit(MOST_OUTAGES)
+    .toArray();
+  // The filter kept only the closed ones; asked again here so TypeScript knows `ended_at` is a time.
+  return closed.flatMap(({ id, started_at, ended_at }) =>
+    ended_at === null ? [] : [{ id, started_at, ended_at }],
+  );
 }
 
 /** A time of this laptop's clock, as the push sends every time: in UTC, with its `Z` (ATT-1). */
