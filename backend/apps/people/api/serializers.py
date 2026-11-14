@@ -1,20 +1,23 @@
 """apps/people/api/serializers.py — how the people tables look in the API (03 §5.10).
 
 Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a
-shop's devices on the office routes (AUTH-5): a device as the device list shows it, and what a manager sends to say
-yes to a waiting one, to rename one, and to block or unblock one; what the owner sends to set a temporary password
+shop's devices on the office routes (AUTH-5): a device as the device list shows it, and as the health page shows it,
+with its last push's report and its offline periods (SYNC-14); what a manager sends to say yes to a waiting one, to
+rename one, and to block or unblock one; what the owner sends to set a temporary password
 (AUTH-6); what a device sends for a PIN login, and what `me` answers (AUTH-4); what a person sends to change their
 own language and font (UI-9); and the answers of the routes a device
 calls with its key (apps/people/api/views.py), the PIN screen's list of people among them (UI-4). A key, a key's hash
 or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
 """
 
+from datetime import timedelta
 from typing import Any
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
-from apps.people.models import OWN_SETTINGS, Device, PairingRequest, StaffMember, User
+from apps.people.models import OWN_SETTINGS, Device, DeviceOutage, PairingRequest, StaffMember, User
 from apps.shops.api.fields import SideField
 from apps.shops.models import Shop, Side
 
@@ -28,6 +31,57 @@ class DeviceSerializer(serializers.ModelSerializer[Device]):
         model = Device
         fields = ["id", "name", "code", "home_side", "status", "last_seen_at", "created_at", "updated_at", "version"]
         read_only_fields = fields
+
+
+class DeviceOutageSerializer(serializers.ModelSerializer[DeviceOutage]):
+    # One offline period a laptop reported (SYNC-14, 02: DeviceOutage): when it lost the server and when it heard it
+    # again, by its own clock, as kept. It may end before it starts, after the laptop's clock was put back: the page
+    # shows it as the laptop said, and says so.
+    class Meta:
+        model = DeviceOutage
+        fields = ["id", "started_at", "ended_at"]
+        read_only_fields = fields
+
+
+class DeviceHealthSerializer(serializers.ModelSerializer[Device]):
+    # A device as the health page shows it (*Hali ya vifaa*, SYNC-14, 03 §5.17): who it is, whether it works, what it
+    # said about itself at its last push (when, how many records still wait on it, which app), how far its clock was
+    # from the server's, and its offline periods of the last week. Every report field is empty until its first push,
+    # so the page can say "not synced yet" rather than show a made-up 0. No key's hash, as on the device list.
+    clock_error_seconds = serializers.SerializerMethodField()
+    outages = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Device
+        fields = [
+            "id",
+            "name",
+            "code",
+            "home_side",
+            "status",
+            "last_synced_at",
+            "unsent_count",
+            "app_version",
+            "clock_error_seconds",
+            "outages",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_clock_error_seconds(self, device: Device) -> int | None:
+        # The laptop's clock minus the server's, in whole seconds (a laptop 6 minutes slow is -360): a number the app
+        # reads at once, where Django's own text for a duration ("-1 23:54:00") would need parsing. Rounded down, by a
+        # whole-number division, never through a float; a second either way changes nothing the page says.
+        if device.clock_error is None:
+            return None
+        return device.clock_error // timedelta(seconds=1)
+
+    @extend_schema_field(DeviceOutageSerializer(many=True))
+    def get_outages(self, device: Device) -> Any:
+        # Read once for every device by the route (outages_this_week), handed in through the context: one query for
+        # the page, not one per device.
+        periods = self.context["outages"].get(device.pk, [])
+        return DeviceOutageSerializer(periods, many=True).data
 
 
 class DeviceConfirmSerializer(serializers.ModelSerializer[Device]):

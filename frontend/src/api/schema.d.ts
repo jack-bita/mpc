@@ -228,6 +228,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/people/devices/health/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["people_devices_health_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/staff/{id}/temporary-password/": {
         parameters: {
             query?: never;
@@ -360,10 +376,33 @@ export interface components {
             name: string;
             version: number;
         };
+        DeviceHealth: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            readonly code: number;
+            /** Format: uuid */
+            readonly home_side: string;
+            readonly status: components["schemas"]["DeviceStatusEnum"];
+            /** Format: date-time */
+            readonly last_synced_at: string | null;
+            readonly unsent_count: number | null;
+            readonly app_version: string;
+            readonly clock_error_seconds: number | null;
+            readonly outages: components["schemas"]["DeviceOutage"][];
+        };
         DeviceMe: {
             device: components["schemas"]["MeDevice"];
             home_side: components["schemas"]["MeSide"];
             shop: components["schemas"]["MeShop"];
+        };
+        DeviceOutage: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date-time */
+            readonly started_at: string;
+            /** Format: date-time */
+            readonly ended_at: string;
         };
         DeviceReasonRequest: {
             reason: string;
@@ -1265,6 +1304,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Device"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_devices_health_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceHealth"][];
                 };
             };
             default: {

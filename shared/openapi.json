@@ -694,6 +694,44 @@
                 }
             }
         },
+        "/api/v1/people/devices/health/": {
+            "get": {
+                "operationId": "people_devices_health_list",
+                "tags": [
+                    "people"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/DeviceHealth"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/people/staff/{id}/temporary-password/": {
             "post": {
                 "operationId": "people_staff_temporary_password_create",
@@ -1217,6 +1255,76 @@
                     "version"
                 ]
             },
+            "DeviceHealth": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "code": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "home_side": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DeviceStatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "last_synced_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "unsent_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "app_version": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "clock_error_seconds": {
+                        "type": "integer",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "outages": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DeviceOutage"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "app_version",
+                    "clock_error_seconds",
+                    "code",
+                    "home_side",
+                    "id",
+                    "last_synced_at",
+                    "name",
+                    "outages",
+                    "status",
+                    "unsent_count"
+                ]
+            },
             "DeviceMe": {
                 "type": "object",
                 "properties": {
@@ -1234,6 +1342,31 @@
                     "device",
                     "home_side",
                     "shop"
+                ]
+            },
+            "DeviceOutage": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "ended_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "ended_at",
+                    "id",
+                    "started_at"
                 ]
             },
             "DeviceReasonRequest": {
