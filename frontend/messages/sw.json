@@ -43,6 +43,10 @@
       "which": "Jina lake ni {device}, upande wa {side}, duka la {shop}.",
       "continue": "Endelea"
     },
+    "demo": {
+      "try": "Jaribu demo",
+      "explain": "Kifaa hiki kitakuwa kompyuta ya Duka la Mfano, duka la kubuni. Hakuna data halisi."
+    },
     "office": {
       "title": "Vifaa",
       "register": "Sajili kifaa",

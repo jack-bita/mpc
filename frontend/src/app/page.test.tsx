@@ -106,6 +106,23 @@ describe("HomePage", () => {
     expect(link.getAttribute("href")).toMatch(/^\/register-device\/?$/);
   });
 
+  it("shows Jaribu demo first on the demo, and nothing of it elsewhere", async () => {
+    // The tests above run on a server with no demo: the fake server answers the open check with a 404,
+    // so the welcome there has its two ways on only (OPS-3).
+    answer("GET", "/api/devices/v1/demo/open/", {
+      status: 200,
+      body: { open: true },
+    });
+    render(<HomePage />);
+
+    const demo = await screen.findByRole("button", { name: "Jaribu demo" });
+    const login = screen.getByRole("link", { name: "Ingia" });
+    // Before Ingia in the page's order, so first for the eye and for Tab.
+    expect(
+      demo.compareDocumentPosition(login) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("shows a manager's own phone the way to log in", () => {
     // A phone that is only the person's own never registers: it opens on Karibu, with Ingia (UI-5).
     render(<HomePage />);

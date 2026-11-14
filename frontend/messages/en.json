@@ -43,6 +43,10 @@
       "which": "Its name is {device}, on the {side} side of {shop}.",
       "continue": "Continue"
     },
+    "demo": {
+      "try": "Try the demo",
+      "explain": "This device becomes a laptop of Duka la Mfano, a made-up shop. No real data."
+    },
     "office": {
       "title": "Devices",
       "register": "Register a device",

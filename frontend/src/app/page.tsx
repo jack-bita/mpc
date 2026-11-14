@@ -1,6 +1,7 @@
 // page.tsx — the home page at "/": on a new device, the Karibu welcome, with Ingia for a manager's own
-// phone (UI-5) and the way to Sajili kifaa hiki for a new laptop (UI-3); on a registered one, the PIN
-// login, and who is logged in (UI-4). The app's version on both.
+// phone (UI-5) and the way to Sajili kifaa hiki for a new laptop (UI-3), and on the demo, Jaribu demo
+// first (OPS-3); on a registered one, the PIN login, and who is logged in (UI-4). The app's version on
+// both.
 //
 // "use client": every page in this app is a client component (ADR-0016), because pages
 // will read the device's own data (Dexie) and must work with no server. Next.js still
@@ -11,6 +12,7 @@ import { useTranslations } from "use-intl";
 
 import { ButtonLink } from "@/components/design/button";
 import { useThisDevice } from "@/features/devices/this-device";
+import { TryTheDemo } from "@/features/devices/try-the-demo";
 import { AtTheDevice } from "@/features/login/at-the-device";
 import { APP_VERSION } from "@/lib/version";
 
@@ -35,10 +37,13 @@ export default function HomePage() {
 
   // A new device: the welcome, and its two ways on. A manager's own phone never registers, and logs in
   // often: Ingia is the main button. A laptop registers once, and then opens on the PIN login instead.
+  // On the demo only, a third, first: a visitor has no manager to register with (BP15). It shows
+  // nothing anywhere else.
   return (
     // min-h-svh: the full height of the phone's visible screen, browser bars excluded.
     <main className="flex min-h-svh flex-col items-center justify-center gap-4 p-4">
       <h1 className="text-4xl font-semibold tracking-tight">{t("title")}</h1>
+      <TryTheDemo />
       <ButtonLink href="/login/">{t("login")}</ButtonLink>
       <ButtonLink href="/register-device/" kind="second">
         {register("title")}
