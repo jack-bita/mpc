@@ -260,19 +260,24 @@ def who_is_here(staff: StaffMember, *, device_id: str | None, idle_minutes: int 
 
 
 # How far back the health page looks for offline periods (SYNC-14): a week, as the card says, counted back from now
-# rather than from a Monday, so on a Monday the page still shows the cuts of the days before.
+# rather than from a Monday, so on a Monday the page still shows the cuts of the days before; by when the server
+# heard of each, on its own clock (Jack, SYNC-14's review).
 OUTAGE_WEEK = timedelta(days=7)
 
 
 def outages_this_week(devices: Sequence[Device], *, now: datetime) -> dict[uuid.UUID, list[DeviceOutage]]:
-    """Each device's offline periods that ended in the week before `now`, newest first, by device (SYNC-14): what the
-    health page shows. One query for all of them, through the guarded manager, so only the open shop's rows.
+    """Each device's offline periods the server heard of in the week before `now`, newest first by the laptop's own
+    times, by device (SYNC-14): what the health page shows. One query for all of them, through the guarded manager, so
+    only the open shop's rows. A device with none is left out of the answer.
 
-    Read by `ended_at`, so a long cut that began 8 days ago and ended yesterday still shows; and by the laptop's own
-    times, as kept (02: DeviceOutage), so a period that ends before it starts, after its clock was put back, shows as
-    the laptop said. A device with none is left out of the answer."""
+    The week is the server's, by when each period reached it (`created_at`), never the laptop's own times (Jack,
+    SYNC-14's review): a laptop whose clock battery died, its clock in 2020, still shows today's cut, and one whose
+    clock runs months ahead doesn't show every cut it ever sent, for good. A wrong clock is what the page is there to
+    show. A period is reported at the laptop's next sync, minutes after it ends, so the week is the same for a laptop
+    whose clock is right. The times themselves are the laptop's, as kept (02: DeviceOutage), so a period that ends
+    before it starts, after its clock was put back, shows as the laptop said."""
     found: dict[uuid.UUID, list[DeviceOutage]] = {}
-    rows = DeviceOutage.objects.filter(device__in=devices, ended_at__gte=now - OUTAGE_WEEK).order_by(
+    rows = DeviceOutage.objects.filter(device__in=devices, created_at__gte=now - OUTAGE_WEEK).order_by(
         "device_id", "-started_at", "id"
     )
     for row in rows:

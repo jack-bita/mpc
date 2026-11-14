@@ -557,8 +557,9 @@ class DeviceOutage(AppendOnly):
     ended_at = models.DateTimeField()
 
     class Meta(AppendOnly.Meta):
-        # Built on AppendOnly.Meta, so the guard stays the default manager (CORE-2). The health page's question: this
-        # laptop's periods, this week, oldest first.
+        # Built on AppendOnly.Meta, so the guard stays the default manager (CORE-2). A laptop's periods in the order
+        # they began, as the health page lists them; its week is read by when each reached the server (`created_at`),
+        # which needs no index of its own while a shop's laptops report a few periods a day (SYNC-14).
         indexes = [models.Index(fields=["shop", "device", "started_at"], name="people_deviceoutage_by_device")]
 
     def __str__(self) -> str:

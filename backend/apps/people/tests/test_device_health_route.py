@@ -18,7 +18,7 @@ Fake data only: the repo is public (03 §10).
 
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -29,6 +29,7 @@ from rest_framework.test import APIClient
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
+from apps.people.selectors import outages_this_week
 from apps.people.services import Outage, add_staff, confirm_pairing, record_outages, record_sync, start_pairing
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
@@ -136,36 +137,57 @@ def test_health_shows_each_laptops_last_report(baba: StaffMember, laptops: tuple
     }
 
 
-def test_health_shows_the_last_weeks_outages_newest_first_as_the_laptop_sent_them(
+def test_health_shows_the_weeks_outages_newest_first_as_the_laptop_sent_them(
     baba: StaffMember, laptops: tuple[Device, Device]
 ) -> None:
-    # Three cuts the Dawa laptop reported: one that ended 8 days ago, too old for the week; a long one that began 8
-    # days ago and ended 6 days ago, which still counts; and one today whose end is before its start, as someone put
-    # the laptop's clock back during it. The last is shown as the laptop said: the page says so.
+    # Three cuts the Dawa laptop reported at its sync today: a long one that began 8 days ago and ended 6 days ago, by
+    # its clock; one today whose end is before its start, as someone put its clock back during it; and one its clock
+    # says was in 2020, after its clock battery died. All three reached the server this week, so all three show, by
+    # the laptop's own times, newest first: the page says the times are the laptop's (Jack, SYNC-14's review).
     dawa, _vyakula = laptops
     now = timezone.now()
-    period(dawa, now - timedelta(days=8, hours=1), now - timedelta(days=8))
     long_one = period(dawa, now - timedelta(days=8), now - timedelta(days=6))
     today = now - timedelta(hours=2)
     odd = period(dawa, today, today - timedelta(minutes=15))
+    dead_battery = datetime(2020, 1, 1, 8, 0, tzinfo=UTC)
+    in_2020 = period(dawa, dead_battery, dead_battery + timedelta(minutes=20))
 
     [row, _other] = health(baba)
 
-    assert [period["id"] for period in row["outages"]] == [str(odd), str(long_one)]
+    assert [period["id"] for period in row["outages"]] == [str(odd), str(long_one), str(in_2020)]
     newest = row["outages"][0]
     assert parse_datetime(newest["started_at"]) == today
     assert parse_datetime(newest["ended_at"]) == today - timedelta(minutes=15)
 
 
-def test_a_cut_ending_just_inside_the_week_counts(baba: StaffMember, laptops: tuple[Device, Device]) -> None:
-    # The week is counted back from now, not from Monday: a cut that ended 6 days and 23 hours ago is in it.
+def test_a_cut_shows_for_the_week_after_the_server_heard_of_it(laptops: tuple[Device, Device]) -> None:
+    # The week is the server's, counted back from now, not from Monday: a cut the server heard of 6 days and 23 hours
+    # ago is in it, one it heard of 7 days and a second ago is not, whatever the laptop's clock said of either. Read
+    # straight from the selector, a week on: the server's clock can't be moved for a route.
     dawa, _vyakula = laptops
-    ended = timezone.now() - timedelta(days=7) + timedelta(hours=1)
-    kept = period(dawa, ended - timedelta(minutes=10), ended)
+    went = timezone.now() - timedelta(hours=1)
+    kept = period(dawa, went, went + timedelta(minutes=10))
+    heard = timezone.now()
 
-    [row, _other] = health(baba)
+    with shop_context(dawa.shop_id):
+        inside = outages_this_week([dawa], now=heard + timedelta(days=7) - timedelta(hours=1))
+        past = outages_this_week([dawa], now=heard + timedelta(days=7, seconds=1))
 
-    assert [period["id"] for period in row["outages"]] == [str(kept)]
+    assert [period.id for period in inside[dawa.pk]] == [kept]
+    assert past == {}
+
+
+def test_a_cut_from_a_clock_months_ahead_leaves_the_week_too(laptops: tuple[Device, Device]) -> None:
+    # A laptop whose clock runs a year ahead reports a cut "in 2027": a week after the server heard of it, it is gone
+    # from the page, as any other; by its own times it would have stayed there for a year.
+    dawa, _vyakula = laptops
+    ahead = timezone.now() + timedelta(days=365)
+    period(dawa, ahead, ahead + timedelta(minutes=10))
+
+    with shop_context(dawa.shop_id):
+        a_week_on = outages_this_week([dawa], now=timezone.now() + timedelta(days=7, seconds=1))
+
+    assert a_week_on == {}
 
 
 @pytest.mark.parametrize(
