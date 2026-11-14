@@ -412,7 +412,10 @@ describe("UpdatePrompt on an app too old for the server", () => {
 
     syncFoundItTooOld();
 
-    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    // At the bar's next look, 2 s after the refused try (update-prompt.tsx: never sooner).
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce(), {
+      timeout: 3000,
+    });
   });
 
   it("waits for the sale to finish, even too old", async () => {
@@ -444,7 +447,10 @@ describe("UpdatePrompt on an app too old for the server", () => {
     expect(apply).not.toHaveBeenCalled();
 
     view.rerender(<Counter busy={false} />);
-    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    // At the bar's next look after the refused try, 2 s on.
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce(), {
+      timeout: 3000,
+    });
     expect(sendBeforeUpdate).toHaveBeenCalledTimes(2);
   });
 
@@ -493,6 +499,30 @@ describe("UpdatePrompt on an app too old for the server", () => {
 });
 
 describe("UpdatePrompt on a tab another tab has switched", () => {
+  it("waits for the next look before trying again, even when a send keeps failing", async () => {
+    // A bug that made every send throw: the bar must not send again and again, many times a second. A
+    // refused try comes again at the next look, 2 s on, never at once.
+    render(<UpdatePrompt />);
+    const reload = vi.fn();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    // Each send fails after a moment, as one on the shop's line would, so the bar redraws as it ends.
+    vi.mocked(sendBeforeUpdate).mockImplementation(
+      () =>
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new TypeError("a bug")), 5),
+        ),
+    );
+
+    anotherTabSwitched(reload);
+    // Outside act(): act holds React's redraws until it ends, and a loop needs them to turn. React lets
+    // them through as a browser would, and only notes they weren't wrapped.
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(sendBeforeUpdate).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it("reloads by itself, with no tap, the records first", async () => {
     // Asha switched in the other tab: this one still runs the old code, and must not stay on it.
     render(<UpdatePrompt />);
@@ -520,7 +550,11 @@ describe("UpdatePrompt on a tab another tab has switched", () => {
     expect(reload).not.toHaveBeenCalled();
 
     view.rerender(<Counter busy={false} />);
-    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+    // The switch landed while the bar still read the counter as quiet: its try met Juma's sale and
+    // waits for the next look, at most 2 s after his sale ends.
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce(), {
+      timeout: 3000,
+    });
   });
 
   it("tries again at the next look after a refused try", async () => {

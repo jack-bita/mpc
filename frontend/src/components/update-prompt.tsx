@@ -66,10 +66,10 @@ export function UpdatePrompt() {
   // only at the next redraw, after the tap's first wait, so a second press before it, a fast double tap
   // or a press during the bar's own try below, would read it unchanged and send and switch twice.
   const tapping = useRef(false);
-  // The version switched to, by a tap or by the bar itself, once: a reload that doesn't come leaves the
-  // bar for a tap, rather than telling the worker again at every redraw. A try that a new sale stopped is
-  // forgotten, so the next quiet moment tries again.
-  const triedAlone = useRef<ApplyUpdate | null>(null);
+  // The version switched to, by a tap or by the bar itself: the bar's own try below switches each version
+  // once, so a reload that doesn't come leaves the bar for a tap, rather than telling the worker again at
+  // every redraw.
+  const switchedTo = useRef<ApplyUpdate | null>(null);
 
   // Looked at once more as the tap lands: another tab's sale may have started since the bar's last look
   // (busy.ts looks every 2 s). Busy now, the tap does nothing, and the bar hides at its next look.
@@ -87,7 +87,7 @@ export function UpdatePrompt() {
       const switching = await counterIsQuiet();
       if (switching) {
         // Switched to, by this tap or by the bar itself: the bar's own try below leaves this version alone.
-        triedAlone.current = apply;
+        switchedTo.current = apply;
         apply();
       }
       return switching;
@@ -119,10 +119,15 @@ export function UpdatePrompt() {
     () => 0,
   );
   const tooOld = told > 0;
-  // A try refused by a busy counter comes again at the bar's next look. The sale that refused it may be
-  // over before then, and the bar's look then finds it quiet, as it was: nothing the bar reads changes, so
-  // nothing would redraw it. This redraws it, once per refused try; a sale still open at that look hides
-  // the bar, and the try waits for it to show again.
+  // An automatic try on its way, or refused and waiting for the next look: one at a time, never one at once
+  // after another. A try refused by a busy counter, or by a tap on its way, or one whose switch failed, comes
+  // again at the bar's next look, 2 s on, and never sooner. The redraw that ends a refused try's send would
+  // otherwise start the next try at once, and a switch that kept failing, a bug, would send again and again,
+  // many times a second. Only the timer below ends the wait.
+  const trying = useRef(false);
+  // The sale that refused a try may be over before the next look, and the bar's look then finds it quiet,
+  // as it was: nothing the bar reads changes, so nothing would redraw it. The timer redraws it, once per
+  // refused try; a sale still open at that look hides the bar, and the try waits for it to show again.
   const [, redrawToTryAgain] = useState(0);
   const tryAgainLater = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -132,18 +137,20 @@ export function UpdatePrompt() {
   // Each sync that finds the app too old redraws the bar too.
   useEffect(() => {
     if (!(tooOld || takenOver) || !shown || sending) return;
-    // Switched to already, by the bar or a tap. A try that met a tap on its way was refused as a second tap
-    // and forgotten; once that tap switches, this version is marked, so the try never sends again.
-    if (triedAlone.current === apply) return;
-    triedAlone.current = apply;
+    // Switched to already, by the bar or a tap: a try that met a tap on its way waits for the next look,
+    // and once that tap switches, the try never sends again. Or a try on its way, or waiting.
+    if (switchedTo.current === apply || trying.current) return;
+    trying.current = true;
     void tap().then((switched) => {
-      if (switched) return;
-      triedAlone.current = null;
+      if (switched) {
+        trying.current = false;
+        return;
+      }
       clearTimeout(tryAgainLater.current);
-      tryAgainLater.current = setTimeout(
-        () => redrawToTryAgain((times) => times + 1),
-        QUIET_CHECK_EVERY,
-      );
+      tryAgainLater.current = setTimeout(() => {
+        trying.current = false;
+        redrawToTryAgain((times) => times + 1);
+      }, QUIET_CHECK_EVERY);
     });
   });
 
