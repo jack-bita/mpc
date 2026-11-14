@@ -9,16 +9,18 @@
 // A new version downloads in the background, then waits (sw.ts: skipWaiting false) until the Toleo jipya
 // bar switches, at a tap of Sasisha or by itself for an app too old for the server, each once the counter
 // is quiet, or until every window of the app is closed: the app must never reload in the middle of a sale
-// (03 §6.8). A tab another tab switched is offered a reload too, as its old code can't run on the new
-// version's files.
+// (03 §6.8). Once the new version has taken over, every tab is offered a reload, the tab that switched
+// included, as its old code can't run on the new version's files; the bar reloads it once the counter is
+// quiet.
 
 import { listenForTooOld } from "./sync/too-old";
 
-/** Switches to the waiting version: the new worker takes over, then the page reloads from it. */
+/** For a waiting version: tells it to take over, and the page is offered its reload once it has. For a
+ * version that has taken over: reloads the page from it. */
 export type ApplyUpdate = () => void;
 
 /** What an offered switch is: a new version waiting to take over, or one that has taken over already,
- * as another tab switched, while this page still runs the old version's code. */
+ * at this page's ask or another tab's, while this page still runs the old version's code. */
 export type UpdateKind = "waiting" | "taken_over";
 
 /** How often an open app asks the browser to look for a new version (03 §6.8, a default): a deploy
