@@ -34,7 +34,8 @@ export function syncedToday(
 }
 
 /** What a laptop's clock error says: not known before its first push; right within the slack; else ahead
- * or behind, in whole minutes (a clock 6 min 20 s slow is "6 minutes behind"). */
+ * or behind, in whole minutes (a clock 6 min 20 s slow is "6 minutes behind"), and never fewer than 3: a
+ * clock 2 min 1 s out is past the slack, and "2 minutes" would read as within it (SYNC-14's review). */
 export type ClockState =
   | { kind: "unknown" }
   | { kind: "right" }
@@ -46,7 +47,10 @@ export function clockState(errorSeconds: number | null): ClockState {
   // The laptop's clock minus the server's (DeviceHealth.clock_error_seconds): above 0 it runs ahead.
   return {
     kind: errorSeconds > 0 ? "ahead" : "behind",
-    minutes: Math.round(Math.abs(errorSeconds) / 60),
+    minutes: Math.max(
+      CLOCK_SLACK_SECONDS / 60 + 1,
+      Math.round(Math.abs(errorSeconds) / 60),
+    ),
   };
 }
 

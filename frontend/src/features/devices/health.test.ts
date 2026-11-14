@@ -51,9 +51,14 @@ describe("a device's clock", () => {
   });
 
   it("is behind or ahead past that, in whole minutes", () => {
-    // The Vyakula laptop, 6 min 20 s slow; another, 2 min 1 s fast.
+    // The Vyakula laptop, 6 min 20 s slow.
     expect(clockState(-380)).toEqual({ kind: "behind", minutes: 6 });
-    expect(clockState(121)).toEqual({ kind: "ahead", minutes: 2 });
+  });
+
+  it("never reads as 2 minutes once past the slack, which would sound within it", () => {
+    // 2 min 1 s fast: its clock-ins wait for review, so the page must not say "2 minutes" (SYNC-14's review).
+    expect(clockState(121)).toEqual({ kind: "ahead", minutes: 3 });
+    expect(clockState(-150)).toEqual({ kind: "behind", minutes: 3 });
   });
 });
 
