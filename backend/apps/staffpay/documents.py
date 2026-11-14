@@ -28,7 +28,7 @@ from apps.staffpay.models import AttendanceEvent, ClockKind, TimeCheck
 
 class Pushed(Protocol):
     # What the saving code reads of a pushed document; the push's Document (apps/sync/document_types.py) has each
-    # part. Written here as a shape, not imported: `sync` is the layer above (ADR-0041), and hands its Document in.
+    # part. Written here as a shape, not imported: `sync` is the layer above (ADR-0043), and hands its Document in.
     # The type checker proves it fits where the list of types names post_clock. Read-only, as the Document is frozen.
     @property
     def id(self) -> uuid.UUID: ...

@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.56 · 14 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.57 · 15 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
-**Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+**Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.57** (15 Nov 2026, OPS-3): the one-tap demo (§4, §5.1, §5.10, 04 v1.73). The `demo` app holds its two routes beside the seed, as only it may read the seed's people and their PINs: ADR-0043, which supersedes ADR-0041. `GET /api/devices/v1/demo/open/` says whether *Jaribu demo* may show; `POST /api/devices/v1/demo/` makes the visitor's browser a device of the demo shop and answers with the sellers' PINs; both are shut wherever a shop that isn't a demo exists, and without the demo's sign. Marked **(v1.57)**.
 
 **Changes in v1.56** (14 Nov 2026, SYNC-14's review): the health page's week counts each period by when the server heard of it, and the page asks again every minute (§5.17); a period the laptop never saw end says so, and shows "– ?" (§6.3, §6.11); a cut that began after the pull was asked stays open (§6.11) (04 v1.72). Marked **(v1.56)**.
 
@@ -123,7 +125,7 @@
 ## 0. How to read this
 
 - **Architecture** = how the system is built: the pieces, where each one runs, how they talk, how data moves, and how we test, ship and run it. Portion 2 said *what* the system knows; this says *how* it works.
-- Every key decision (**AD1**, **AD2**…) is an ADR in `docs/adr/`: AD1 = ADR-0015 … AD18 = ADR-0032 **(v1.1)**; AD1 is now ADR-0035, which supersedes ADR-0015 **(v1.4)**; then ADR-0041, which supersedes ADR-0035 to add the demo seed's app on top **(v1.36)**. "Cost" = how hard it is to change later.
+- Every key decision (**AD1**, **AD2**…) is an ADR in `docs/adr/`: AD1 = ADR-0015 … AD18 = ADR-0032 **(v1.1)**; AD1 is now ADR-0035, which supersedes ADR-0015 **(v1.4)**; then ADR-0041, which supersedes ADR-0035 to add the demo seed's app on top **(v1.36)**; then ADR-0043, which supersedes ADR-0041 as that app holds the one-tap demo's routes too **(v1.57)**. "Cost" = how hard it is to change later.
 - Tags: **[R1] [R1b] [R2] [R3] [Later]**, as before. **✚** = added beyond the spec and the domain model; veto freely.
 - Versions mean "the latest patch of this line when the repo is created" (portion 6 checks them).
 - Names follow `02-domain-model.md` §21.
@@ -293,6 +295,7 @@ MPC/                          ← repo name follows the product name
 │   ├── apps/                 ← core, shops, people, control, catalog, contacts,
 │   │                            inventory, money, sales, services, staffpay, sync, reports;
 │   │                            demo, the demo seed `manage.py seed_demo` (ADR-0041) (v1.36)
+│   │                            and the one-tap demo's routes (ADR-0043) (v1.57)
 │   └── tests/                ← cross-app tests: tenancy sweep, E1–E10, sync
 ├── frontend/
 │   ├── package.json, next.config.ts
@@ -334,7 +337,7 @@ An app may import only from layers below it. Same-layer imports are allowed only
 | 5 | `staffpay` [R1b] | AttendanceEvent, AttendanceDay, PayRate, PayRun, Payslip |
 | 6 | `sync` ✚ | Push, pull and bootstrap endpoints, device sequence tracking, the document router |
 | 6 | `reports` ✚ | Daily report, exports; read-only queries across apps |
-| 7 | `demo` | The demo seed, `manage.py seed_demo` (DATA-1): no tables of its own. It builds the demo shop through the other apps' services, so it may import every app, and no app imports it, so no other app's code calls it. Its own refusals keep it shut on the real server: the sign `DEMO_SEED=yes`, which only the demo sets, and no shop but a demo one (ADR-0041) **(v1.36)** |
+| 7 | `demo` | The demo seed, `manage.py seed_demo` (DATA-1): no tables of its own. It builds the demo shop through the other apps' services, so it may import every app, and no app imports it, so no other app's code calls it. Its own refusals keep it shut on the real server: the sign `DEMO_SEED=yes`, which only the demo sets, and no shop but a demo one (ADR-0041) **(v1.36)**. And the one-tap demo's two routes (OPS-3), which alone may read the seed's people and PINs, shut by the same two refusals (ADR-0043) **(v1.57)** |
 
 Models may point at models in higher layers by name (Django's lazy `"app.Model"` references) — that is not an import. Generic links (a ledger row's `source`, a flag's `subject`) are stored as a short type code plus a UUID ✚: readable, and stable across databases. The codes are one list in `core` (`apps/core/links.py`), as the setting keys are: a code, once stored, never changes or names another table, and each card adds the tables its links point at. Not Django's content types, whose ids differ from one database to the next **(v1.10)**.
 
@@ -479,6 +482,7 @@ Confirming a one-screen sale:
 | `/_allauth/browser/v1/…` | Password login, logout, password reset, session (django-allauth): only these, and they answer in allauth's own shape, not the API's one error shape **(v1.17)** | — |
 | `/api/auth/…` | PIN login, logout, me (our own); and `me/settings/`, where a person changes their own language and font, with no key (UI-9) **(v1.35)** | PIN login: device key. Logout and me: the session, so logout works on a blocked device, and me serves a password login too **(v1.20)**. My settings: the office routes' login, so a suspended person is refused **(v1.35)** |
 | `/api/devices/v1/pairing/`, `/api/devices/v1/me/` | A new device asks to join; a paired device learns its shop. Versioned like sync: devices are the slowest to update **(v1.14)**. A paired device listed its shop's people for the PIN screen, names only, until sync carried them (UI-4) **(v1.33)**; since SYNC-10 they come from sync, and that route is gone; an app from before SYNC-10, still cached on a device, gets 404 for its tiles until it updates, which only the demo could meet **(v1.48)** | Device key (none yet, to ask) |
+| `/api/devices/v1/demo/open/`, `/api/devices/v1/demo/` | The one-tap demo (OPS-3, BP15): may *Jaribu demo* show here, and the tap that makes this browser a device of the demo shop, its key in a cookie, answered with the sellers' PINs. In the `demo` app (ADR-0043); shut, as `demo.closed`, wherever a shop that isn't a demo exists, without the demo's sign, or before the seed **(v1.57)** | The open check: public. The tap: no key, as a pairing's start, CSRF-checked, and counted with it against its limit **(v1.57)** |
 | `/api/health/` | Uptime check | Public |
 | `/api/schema/`, `/api/docs/` | The OpenAPI description, and its docs page | Open on the demo and on a laptop; closed in production, where the page would run a CDN's code beside the superuser's login **(v1.8)** |
 
@@ -823,7 +827,7 @@ Rules: tests run on real PostgreSQL, never SQLite. Every bug fix adds a test. Co
 
 **Two images** are built per release: `backend` (Django; also runs the worker and the scheduler) and `web` (Caddy with the built app inside).
 
-**The demo** runs as one free Render web service from the `backend` image, with Django also serving the built app (WhiteNoise), so the app and the API share one address there too *(default)*. Its database is Render's free PostgreSQL. Its start runs the migrations, then the demo seed (`backend/start-demo.sh`, ADR-0041): on a new database, or on the first start of a new day in Arusha, the seed wipes it and makes the demo shop again; a wake-up from the free plan's sleep the same day keeps it, so a visitor back from a break meets the PIN lock with their work still there. The seed runs only where `DEMO_SEED=yes` is set (the demo, the browser tests, `make seed` on a laptop), never on the real server, and refuses any database with a shop that isn't a demo **(v1.36)**.
+**The demo** runs as one free Render web service from the `backend` image, with Django also serving the built app (WhiteNoise), so the app and the API share one address there too *(default)*. Its database is Render's free PostgreSQL. Its start runs the migrations, then the demo seed (`backend/start-demo.sh`, ADR-0043): on a new database, or on the first start of a new day in Arusha, the seed wipes it and makes the demo shop again; a wake-up from the free plan's sleep the same day keeps it, so a visitor back from a break meets the PIN lock with their work still there. The seed runs only where `DEMO_SEED=yes` is set (the demo, the browser tests, `make seed` on a laptop), never on the real server, and refuses any database with a shop that isn't a demo **(v1.36)**.
 
 **Production server** — a Lineserve VPS in Dar es Salaam: **2 GB** (1 vCPU, 40 GB SSD) for R1, resized to **4 GB** (2 vCPU, 80 GB) when the Foods side joins in R2:
 

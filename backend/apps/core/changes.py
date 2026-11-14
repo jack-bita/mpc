@@ -117,7 +117,7 @@ _open_block: ContextVar[_Block | None] = ContextVar("open_change_block", default
 def recording_changes(shop: models.Model | uuid.UUID) -> Iterator[ChangeNumbers]:
     """The block a service saves in, in place of `transaction.atomic()`: one transaction, whose changes record_change
     names, numbered as its last step. `shop` is a Shop row, typed as any model because `core` may not name `Shop`
-    (ADR-0041), or a shop's id. The shop must be the one open. It hands back its last number once it has ended
+    (ADR-0043), or a shop's id. The shop must be the one open. It hands back its last number once it has ended
     (`as numbers`, then `numbers.last`): a pushed document's posted_seq (SYNC-4)."""
     shop_id = shop if isinstance(shop, uuid.UUID) else shop.pk
     # T1: a shop's changes are recorded while that shop is open, as its numbers are given (next_number). Checked here,

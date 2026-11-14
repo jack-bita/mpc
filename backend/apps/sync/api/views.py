@@ -5,7 +5,7 @@ what changed since; and the push (SYNC-4), which takes what a laptop saved offli
 (apps/people/api/base.py): the device's key logs it in, a blocked one is refused (401 device.blocked), and its shop is
 open for the whole visit, so every read goes through the guard and sees that shop alone. The tenancy sweep finds these
 routes by themselves and calls each as a device of each shop. Thin: what is read, and in which order, lives in
-apps/sync/bootstrap.py and apps/sync/pull.py, and what is saved, in apps/sync/push.py (ADR-0041).
+apps/sync/bootstrap.py and apps/sync/pull.py, and what is saved, in apps/sync/push.py (ADR-0043).
 """
 
 from typing import cast

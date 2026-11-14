@@ -9,7 +9,7 @@ the attendance book (ATT-1; 02 §12, 03 §6.3, §6.6).
 
 Through the push service, as the route runs it, so each test meets the whole path: the list of document types, the
 push's own checks, the saving code (apps/staffpay/documents.py) and the time check (apps/staffpay/calculations.py).
-Here in `sync`, not `staffpay`, as only the layer above may call the push (ADR-0041). The time check's every case is
+Here in `sync`, not `staffpay`, as only the layer above may call the push (ADR-0043). The time check's every case is
 apps/staffpay/tests/test_time_check.py's. Fake data only: the repo is public.
 """
 

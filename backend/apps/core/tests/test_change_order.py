@@ -11,7 +11,7 @@ The second save runs in a thread, on its own connection, as a second laptop woul
 Each transaction must really commit, or the other could never see it, so these tests run with
 `django_db(transaction=True)`, and the tables are emptied after each one. The single-connection promises are in
 test_changes.py. The rows come from backend/conftest.py, typed by their base, ShopScoped: `core` may not name a higher
-app's table (ADR-0041). They are made by the services, which write lines of their own (SYNC-15), so each test reads
+app's table (ADR-0043). They are made by the services, which write lines of their own (SYNC-15), so each test reads
 only the lines after the one it started at, numbered from 1 again (backend/tests/change_log.py).
 """
 

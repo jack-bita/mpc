@@ -1,12 +1,15 @@
 ---
-status: accepted
+status: superseded
 date: 2026-11-08
 source: "DATA-1, in the plan Jack approved on 8 Nov 2026; supersedes ADR-0035 (03 §2 — AD1)"
 standing: confirmed
 cost-to-change: high
+superseded-by: ADR-0043
 ---
 
 # ADR-0041 · A modular monolith, with control beside core and the demo seed on top
+
+> Superseded by [ADR-0043](0043-a-modular-monolith-with-the-demo-on-top.md) on 2026-11-14 (OPS-3): the `demo` app holds the one-tap demo's two routes beside the seed.
 
 > Supersedes [ADR-0035](0035-a-modular-monolith-with-control-beside-core.md). What changed: a 14th app, `demo`, on a layer of its own above every other.
 
