@@ -277,7 +277,9 @@ def register_demo_device(*, replacing: str | None = None) -> DemoDevice:
         with shop_context(shop.pk):
             # The second, by the demo's manager, standing in for the yes a real laptop gets on the manager's phone:
             # Meneja holds device.manage on every side (PEOPLE). Found by the login visitors read, which no route
-            # changes. So the device list shows Meneja as who confirmed it, as for any laptop.
+            # changes. So the device list shows Meneja as who confirmed it, as for any laptop. A visitor who took
+            # Meneja's role away would stop every tap until the next reset: a note on PPL-4's card asks it to keep the
+            # seed's people as made on the demo, as their logins are (demo.logins_fixed).
             manager = StaffMember.objects.get(user__email=MANAGER_EMAIL)
             home_side = Side.objects.get(code=DEMO_DEVICE_SIDE)
             # Named by its pairing code, "Demo K7P2-MXQ9", as the register screen shows a code: no two requests ever
@@ -290,10 +292,15 @@ def register_demo_device(*, replacing: str | None = None) -> DemoDevice:
 
 def _demo_pins() -> tuple[DemoPin, ...]:
     # Each person of PEOPLE who has a PIN, found in the demo shop (the caller opens it) by the nickname the seed gave
-    # them: nothing renames a nickname yet. If a card adds a rename, this must find them another way; until then a
-    # missing one is a bug, and get() says so loudly.
-    return tuple(
-        DemoPin(staff_id=StaffMember.objects.get(display_name=person.display_name).pk, pin=person.pin)
-        for person in PEOPLE
-        if person.pin is not None
-    )
+    # them. Every visitor shares Meneja's public password, so once a manager can add, rename and let staff go (PPL-4),
+    # a visitor may mark Asha as left and add a new "Asha" (a nickname is unique among current staff only), or rename
+    # her. So the seed's own row is taken, the first made: a UUIDv7 id starts with the time it was made. And someone
+    # no longer found is left out: a tile with no PIN, never a tap refused for every visitor until the next reset.
+    pins = []
+    for person in PEOPLE:
+        if person.pin is None:
+            continue
+        staff = StaffMember.objects.filter(display_name=person.display_name).order_by("pk").first()
+        if staff is not None:
+            pins.append(DemoPin(staff_id=staff.pk, pin=person.pin))
+    return tuple(pins)

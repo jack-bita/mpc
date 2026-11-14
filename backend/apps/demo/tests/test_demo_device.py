@@ -25,7 +25,9 @@ from rest_framework.test import APIClient
 from apps.core.tenancy import shop_context
 from apps.demo.services import SHOP_CODE, DemoDevice, register_demo_device, seed_demo
 from apps.people.device_keys import DEVICE_KEY_COOKIE, hash_device_key
-from apps.people.models import Device, PairingRequest, StaffMember
+from apps.people.models import Device, PairingRequest, StaffMember, User
+from apps.people.selectors import shop_today
+from apps.people.services import add_staff, mark_left
 from apps.shops.models import Shop, ShopKind
 from apps.shops.services import NewSide, create_shop
 
@@ -182,6 +184,35 @@ def test_one_tap_demo_answers_the_seeds_pins(demo_shop: Shop) -> None:
     assert answer.json() == {
         "pins": [{"staff_id": ids[name], "pin": pin} for name, pin in PINS.items()],
     }
+
+
+def test_one_tap_demo_pins_name_the_seeds_own_people(demo_shop: Shop) -> None:
+    # Visitors share Meneja's password, so one may mark Asha as left and give a new person her nickname (unique among
+    # current staff only). The PIN still names the seed's Asha, whose PIN it is: the tap neither fails for everyone
+    # (two rows by one nickname) nor puts 2580 under someone it doesn't open.
+    seeds_asha = staff_ids(demo_shop)["Asha"]
+    with shop_context(demo_shop):
+        asha = StaffMember.objects.get(pk=seeds_asha)
+        mark_left(asha, left_on=shop_today(demo_shop), by=None, reason="Ameacha kazi")
+        add_staff(shop=demo_shop, user=User.objects.create_user(full_name="Asha Mpya"), display_name="Asha", by=None)
+
+    answer = APIClient().post(DEMO)
+
+    assert answer.status_code == 201
+    assert {"staff_id": seeds_asha, "pin": PINS["Asha"]} in answer.json()["pins"]
+
+
+def test_one_tap_demo_leaves_out_someone_not_found(demo_shop: Shop) -> None:
+    # A seller the tap can't find by the seed's nickname, renamed by a visitor, say: no PIN for her, and still a
+    # device for this visitor, never a refusal for everyone until the next reset.
+    ids = staff_ids(demo_shop)
+    with shop_context(demo_shop):
+        StaffMember.objects.filter(pk=ids["Baraka"]).update(display_name="Bakari")
+
+    answer = APIClient().post(DEMO)
+
+    assert answer.status_code == 201
+    assert answer.json()["pins"] == [{"staff_id": ids["Asha"], "pin": PINS["Asha"]}]
 
 
 def test_one_tap_demo_pins_log_in(demo_shop: Shop) -> None:
