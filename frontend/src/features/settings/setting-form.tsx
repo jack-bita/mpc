@@ -17,8 +17,11 @@
 // The id is sent again with every try of the same value (ADR-0007): a send whose answer the network lost, tried
 // again, gets the stored row back, not a second row. A changed value, day or note gets a new id: the server answers a
 // repeated id with the row it stored, whatever the new send carries, so the old id would have the page say
-// Imehifadhiwa for a value it never saved. Two rows are safe: on one day the one written last is in force (T2), and
-// the history shows both (SHOP-5's review).
+// Imehifadhiwa for a value it never saved. A lost answer may then leave two rows, both shown in the history (SHOP-5's
+// review). For one day, the one written last is in force (T2). For two days, as 2,000 from 16 Nov whose answer was
+// lost and then 2,000 from 1 Dec, the first is in force from its own day until the second's: the page lists it with
+// the rule's values to come, so the owner sees it, and fixes it with one more row if he didn't mean it (SHOP-5's
+// second review).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
