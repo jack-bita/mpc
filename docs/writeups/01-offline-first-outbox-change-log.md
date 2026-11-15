@@ -99,9 +99,11 @@ When selling comes, a sale made offline must lower the stock on the laptop's scr
 
 Tests prove each rule:
 
-- `test_change_numbers_follow_commit_order` and `test_late_numbers_wait_for_the_shops_last_commit` run two real PostgreSQL transactions side by side, and check the numbers they get ([`test_change_order.py`](../../backend/apps/core/tests/test_change_order.py)).
+- `test_change_numbers_follow_commit_order` and `test_late_numbers_wait_for_the_shops_last_commit` run two real PostgreSQL transactions side by side, and check the numbers they get; `test_shops_do_not_block_each_other` checks that two shops never wait for each other ([`test_change_order.py`](../../backend/apps/core/tests/test_change_order.py)).
+- `test_bootstrap_cursor_consistent` renames a side at the very moment a new laptop asks for its copy, and checks that the copy and its number agree ([`test_bootstrap.py`](../../backend/apps/sync/tests/test_bootstrap.py)).
 - `test_same_batch_twice_posts_once`, `test_posts_in_device_seq_order` and `test_server_error_answers_retry` cover the push ([`test_push.py`](../../backend/apps/sync/tests/test_push.py)).
-- On the laptop, Vitest checks that a save is all or nothing ([`outbox.save.test.ts`](../../frontend/src/offline/outbox.save.test.ts)), and that the push stops at a `retry` and keeps the rest in order ([`push.loop.test.ts`](../../frontend/src/offline/sync/push.loop.test.ts)).
+- `test_suspended_worker_clock_in_flagged` is Juma's case above: suspended, he clocks in on a laptop that hasn't heard, and the server accepts it and flags it ([`test_clock_in.py`](../../backend/apps/sync/tests/test_clock_in.py)).
+- On the laptop, Vitest checks that a save is all or nothing ([`outbox.save.test.ts`](../../frontend/src/offline/outbox.save.test.ts)), that the push stops at a `retry` and keeps the rest in order ([`push.loop.test.ts`](../../frontend/src/offline/sync/push.loop.test.ts)), and that a pull drops the pending effects its cursor has reached ([`pull.apply.test.ts`](../../frontend/src/offline/sync/pull.apply.test.ts)).
 - On every pull request, an end-to-end test drives a real browser ([`clock-in-offline.spec.ts`](../../frontend/e2e/clock-in-offline.spec.ts)): internet off, clock in, reload, still there, internet on. The server answers `accepted` exactly once, and the same push sent again answers `duplicate`.
 
 ## Trade-offs, and what's next
