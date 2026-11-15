@@ -49,7 +49,7 @@ from apps.people.services import grant_permission, mark_left, suspend
 from apps.shops.api.views import SettingViewSet, SideViewSet
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import shop_today
-from apps.shops.services import add_side
+from apps.shops.services import add_side, set_setting
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
 from tests.test_tenancy_sweep import addresses
@@ -259,12 +259,19 @@ def test_setting_needs_settings_manage(
 def test_settings_list_keeps_to_the_persons_sides(shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember) -> None:
     # Asha holds one key, on Dawa only: she sees the whole shop's rules, and Dawa's own, never Vyakula's, as every read
     # keeps to the sides a person sees (PPL-5). Seeing them hides nothing a counter doesn't hold: every rule travels to
-    # every laptop of the shop (SYNC-2).
+    # every laptop of the shop (SYNC-2). The owner has set the late fine, a row of no side, and a tolerance on each
+    # side: the late fine's row is the whole shop's, so she sees it beside its value, and Vyakula's row stays hidden.
+    today = shop_today(shop_a)
     with shop_context(shop_a):
         grant_permission(staff_a, Permission.STOCK_COUNT, side=sides["D"], by=None)
+        fine = set_setting(shop_a, key="attendance.late_fine", value="2000", effective_from=today, by=None)
+        dawa = set_setting(shop_a, key="cash.tolerance", value="500", effective_from=today, side=sides["D"], by=None)
+        set_setting(shop_a, key="cash.tolerance", value="700", effective_from=today, side=sides["F"], by=None)
     rules = client_for(staff_a).get(SETTINGS).json()["rules"]
 
     assert {rule["side"] for rule in rules} == {None, str(sides["D"].pk)}
+    rows = {(rule["key"], row["id"], row["value"]) for rule in rules for row in rule["rows"]}
+    assert rows == {("attendance.late_fine", str(fine.pk), "2000.00"), ("cash.tolerance", str(dawa.pk), "500.00")}
 
 
 @pytest.mark.django_db

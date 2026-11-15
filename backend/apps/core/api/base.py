@@ -213,7 +213,15 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
             # A row of the whole shop, such as a product, has no side to hide it behind: whoever sees a side sees
             # it, and whoever sees none, such as a person suspended, sees none of those rows either.
             return rows if sides else rows.none()
-        return rows.filter(**{f"{self.side_field}__in": sides})
+        seen = models.Q(**{f"{self.side_field}__in": sides})
+        if sides and self.side_field != "pk":
+            # A table whose side link may be empty holds rows of the whole shop beside rows of a side, as a rule's rows
+            # do (a late fine has no side, a cash tolerance has one, SHOP-3). The same rule as above holds for them:
+            # whoever sees a side sees them. Asked for in so many words, because `side IN (…)` never matches an empty
+            # link: SQL's NULL equals nothing, so those rows would vanish for anyone whose keys cover only some sides.
+            # On a link that can't be empty, the extra test finds nothing. A route of sides themselves ("pk") has none.
+            seen |= models.Q(**{f"{self.side_field}__isnull": True})
+        return rows.filter(seen)
 
     # True while CreateOnceMixin hands back the row a create already made: nothing is made, so the row is checked as a
     # read, not for the create's key (CreateOnceMixin._replay). Every other check on the row still runs.
