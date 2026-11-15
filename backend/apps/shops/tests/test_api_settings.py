@@ -13,6 +13,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+from pytest_django import Settings
 from rest_framework.test import APIClient
 
 from apps.core.settings_registry import KEYS, Scope
@@ -174,6 +175,26 @@ def test_create_setting_refused_answers_its_codes(
     assert both.json()["fields"] == {"effective_from": ["setting.date_past"], "value": ["setting.value_invalid"]}
     assert no_side.status_code == 400
     assert no_side.json()["fields"] == {"side": ["setting.side_required"]}
+    with shop_context(shop_a):
+        assert not Setting.objects.filter(shop=shop_a).exists()
+
+
+def test_on_the_demo_a_visitors_value_from_today_and_note_are_refused_beside_their_boxes(
+    staff_client_a: APIClient, shop_a: Shop, sides: dict[str, Side], settings: Settings
+) -> None:
+    # The page shows each beside its box (SHOP-5's second review): the day, which must be tomorrow or later there, and
+    # the note, which the demo doesn't keep. Nothing is written.
+    settings.DEMO_SEED = True
+    response = staff_client_a.post(
+        SETTINGS,
+        new_value(
+            key="attendance.late_fine", value="2000", effective_from=shop_today(shop_a).isoformat(), note="Habari"
+        ),
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["fields"] == {"effective_from": ["demo.rules_from_tomorrow"], "note": ["demo.no_note"]}
     with shop_context(shop_a):
         assert not Setting.objects.filter(shop=shop_a).exists()
 

@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
+from pytest_django import Settings
 
 from apps.core.models import ChangeOp
 from apps.core.settings_registry import CASH_TOLERANCE, LATE_FINE
@@ -157,3 +158,45 @@ def test_new_value_lands_a_change_line(shop_a: Shop, side_a: Side) -> None:
             set_setting(shop_a, key=CASH_TOLERANCE.key, value="500", effective_from=today, by=None)
     assert saved == [("setting", row.pk, ChangeOp.UPSERT)]
     assert refused == []
+
+
+def test_on_the_demo_a_persons_value_starts_tomorrow(shop_a: Shop, staff_a: Any, settings: Settings) -> None:
+    # On the demo every visitor shares Meneja's login, who holds settings.manage so a visitor can try Badilisha
+    # (SHOP-5). A value from today would change the demo at once for everyone after them, until the night's seed: idle
+    # minutes of 1 would lock every demo laptop after a minute. So a person's value starts tomorrow or later there, and
+    # the seed makes the shop again before it comes (Jack, SHOP-5's second review). Tomorrow is still saved: it shows as
+    # coming.
+    settings.DEMO_SEED = True
+    today = shop_today(shop_a)
+    with shop_context(shop_a), pytest.raises(ValidationError) as refused:
+        set_setting(shop_a, key=LATE_FINE.key, value="2000", effective_from=today, by=staff_a)
+    assert refusal_codes(refused) == {"effective_from": ["demo.rules_from_tomorrow"]}
+    assert no_rows(shop_a)
+
+    with shop_context(shop_a):
+        set_setting(shop_a, key=LATE_FINE.key, value="2000", effective_from=today + timedelta(days=1), by=staff_a)
+        assert Setting.objects.filter(shop=shop_a).count() == 1
+
+
+def test_on_the_demo_a_persons_note_is_refused(shop_a: Shop, staff_a: Any, settings: Settings) -> None:
+    # A note shows to every reader of the rules, signed by the shared Meneja: on the demo a visitor's words would greet
+    # everyone after them until the night's seed (Jack, SHOP-5's second review). Spaces alone are no note.
+    settings.DEMO_SEED = True
+    tomorrow = shop_today(shop_a) + timedelta(days=1)
+    with shop_context(shop_a), pytest.raises(ValidationError) as refused:
+        set_setting(shop_a, key=LATE_FINE.key, value="2000", effective_from=tomorrow, note="Habari", by=staff_a)
+    assert refusal_codes(refused) == {"note": ["demo.no_note"]}
+    assert no_rows(shop_a)
+
+    with shop_context(shop_a):
+        set_setting(shop_a, key=LATE_FINE.key, value="2000", effective_from=tomorrow, note="  ", by=staff_a)
+        assert Setting.objects.filter(shop=shop_a).count() == 1
+
+
+def test_the_system_sets_a_value_from_today_on_the_demo(shop_a: Shop, settings: Settings) -> None:
+    # The system (`by` None), as a seed or the superuser acts, still may: the demo's rules are the seed's to set up.
+    settings.DEMO_SEED = True
+    today = shop_today(shop_a)
+    with shop_context(shop_a):
+        set_setting(shop_a, key=LATE_FINE.key, value="2000", effective_from=today, note="Mbegu", by=None)
+        assert get_setting(LATE_FINE, shop_a, on=today) == Decimal("2000.00")

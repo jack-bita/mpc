@@ -298,6 +298,37 @@ describe("Badilisha", () => {
     );
   });
 
+  it("shows the demo's two refusals beside the day and the note (SHOP-5's second review)", async () => {
+    // On the demo a visitor's value starts tomorrow or later, and keeps no note: each said beside the box to change.
+    answer(
+      "POST",
+      RULES,
+      refusal(
+        400,
+        "invalid",
+        {},
+        {
+          effective_from: ["demo.rules_from_tomorrow"],
+          note: ["demo.no_note"],
+        },
+      ),
+    );
+    openOn();
+    typeInto(screen.getByLabelText("Maelezo (si lazima)"), "Habari");
+
+    tap(save());
+
+    await waitFor(() =>
+      expect(errorOf(dayBox())).toBe(
+        "Kwenye demo, thamani mpya huanza kesho au baadaye, ili kila mgeni wa leo akute duka lilivyo.",
+      ),
+    );
+    expect(errorOf(screen.getByLabelText("Maelezo (si lazima)"))).toBe(
+      "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi.",
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("says a refusal about the rule itself, which no box shows, in its own sentence", async () => {
     // A side the page sent that the server says a shop's rule can't have: the app and the server disagree.
     answer(

@@ -4,8 +4,9 @@ Five actions so far. create_shop makes a new shop with all it needs before it ca
 add_side adds one side to a shop, with what a side always comes with: a default stock location (ADR-0002) and a cash
 drawer. create_shop uses it for each of its sides, so a side is made the same way whichever action makes it.
 rename_side gives a side a new name, unless someone else changed the side since it was read (apps/core/editing.py);
-switch_side turns a side on or off the same way (ADR-0033), though on the demo only the system may. set_setting gives a
-rule a new value from a day on, as a new row, never an edit (ADR-0013). Each action runs in one transaction and refuses
+switch_side turns a side on or off the same way (ADR-0033). On the demo only the system may add, rename or switch a
+side. set_setting gives a rule a new value from a day on, as a new row, never an edit (ADR-0013): on the demo a
+person's starts tomorrow or later, with no note. Each action runs in one transaction and refuses
 a broken rule with a ValidationError that carries a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) turns into its error shape.
 
@@ -178,8 +179,8 @@ def _check_sides_fixed_on_demo(by: Actor | None) -> None:
     # switch, rename or new side would greet everyone after them, or stop their one-tap demo, until the next morning's
     # seed (SHOP-5's review). Fixed as a person's PIN is there (set_pin, apps/people/services.py), read from the same
     # sign (DEMO_SEED, config/settings/base.py), before anything is opened or written. The system (`by` None), which is
-    # how the seed sets the demo up, still may. The rules stay open on the demo: trying them is the point, and the seed
-    # puts them back.
+    # how the seed sets the demo up, still may. The rules stay open on the demo, as trying them is the point, though a
+    # person's value there starts tomorrow, with no note (set_setting).
     if settings.DEMO_SEED and by is not None:
         raise ValidationError("On the demo, the sides stay as they are.", code="demo.sides_fixed")
 
@@ -199,7 +200,8 @@ def set_setting(
     `side` alone on a side's rule. `value` is text, as a screen sends it ("2000"); it is stored in its kind's one form
     ("2000.00"). `setting_id`: the id the client made for the row (ADR-0007), if it made one. `by`: who sets it; None
     for the system or the superuser. Refuses, all together, with their codes: a day before the shop's today, a side's
-    rule with no side, and whatever Setting.clean() refuses (an unknown key, a wrong value, a side on a shop's rule)."""
+    rule with no side, and whatever Setting.clean() refuses (an unknown key, a wrong value, a side on a shop's rule).
+    On the demo, a person's value from today, and a person's note (demo.rules_from_tomorrow, demo.no_note)."""
     _check_shop(shop, by)
     # T1: the side is of this shop. A bug in the calling code, like the shop checks: the route finds a side through the
     # visit's own shop, so a person can't send another shop's side here.
@@ -223,8 +225,21 @@ def set_setting(
     # Never before the shop's today (Jack, 15 Nov 2026): a row for a past day changes what that day answers, and the
     # clock-ins, fines and draft pay run already worked out from it. Today is still open: a mistake made this morning
     # is fixed with one more row for today, which wins (T2). The shop's today, not the server's, which runs in UTC.
-    if effective_from < shop_today(shop):
+    today = shop_today(shop)
+    if effective_from < today:
         errors["effective_from"] = [ValidationError("A new value can't start before today.", code="setting.date_past")]
+    # On the demo every visitor shares the manager's login (OPS-3), who holds settings.manage so a visitor can try the
+    # rules (SHOP-5). A value from today would change the demo at once for everyone after them, until the night's seed
+    # makes the shop again: idle minutes of 1 would lock every demo laptop after a minute. So a person's value there
+    # starts tomorrow or later, after that seed, and still shows as coming; and a person's note, which every reader sees
+    # under the rule, signed by the shared manager, isn't kept (Jack, SHOP-5's second review). The system, as the seed
+    # acts, still may: the same sign, before anything is written, as the sides' lock above (_check_sides_fixed_on_demo).
+    elif settings.DEMO_SEED and by is not None and effective_from == today:
+        errors["effective_from"] = [
+            ValidationError("On the demo, a new value starts tomorrow or later.", code="demo.rules_from_tomorrow")
+        ]
+    if settings.DEMO_SEED and by is not None and note.strip():
+        errors["note"] = [ValidationError("On the demo, a note isn't kept.", code="demo.no_note")]
     # A side's rule is set one side at a time, never for the whole shop (Jack, 15 Nov 2026). get_setting lets a side's
     # row beat even a newer shop row (CORE-4), so a shop value set next year would be hidden by a side's old one, and
     # nobody would see why. An unknown key is left to clean(), which reports it once.

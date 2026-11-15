@@ -5,8 +5,10 @@ It owns the demo shop as visitors meet it (Jack, 8 Nov 2026): Duka la Mfano, a d
 Vyakula; Meneja, its manager on both sides, who logs in with a password; Asha, a seller on Dawa, and Baraka, a seller
 on Vyakula, who log in with a PIN. Meneja also holds settings.manage on the whole shop, one of the owner's own keys,
 so a visitor can try Badilisha on Mipangilio ya duka (Jack, SHOP-5, 15 Nov 2026): a manager alone may not change the
-shop's rules, and the demo has no owner. A visitor's new value lasts until the seed makes the shop again, the next
-day; the sides' switches stay shut there all the same (demo.sides_fixed).
+shop's rules, and the demo has no owner. A visitor's new value starts tomorrow or later, with no note, so the seed
+makes the shop again before it comes (set_setting: demo.rules_from_tomorrow, demo.no_note, Jack, SHOP-5's second
+review); and the sides stay as the seed made them, as the same key also switches, renames and adds them
+(demo.sides_fixed).
 
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
@@ -109,7 +111,8 @@ PEOPLE = (
     # (confirm_pairing). A password and no PIN: the manager works from their own phone, as at a real shop.
     # And the key to the shop's rules, an owner's own (see the top of this file): the one key a visitor needs to try
     # Mipangilio ya duka. Not the Owner's whole role, whose staff.manage would let a visitor take Meneja's role away
-    # and stop every visitor's one tap (04 PPL-4, OPS-3's note).
+    # and stop every visitor's one tap (04 PPL-4, OPS-3's note). The key also changes the sides, which the shops'
+    # services keep as the seed made them on the demo (_check_sides_fixed_on_demo, apps/shops/services.py).
     DemoPerson(
         "Meneja Mfano",
         "Meneja",

@@ -87,7 +87,7 @@ test("the owner sets the late fine to 2,000 from a day to come: 1,000 today, 2,0
       // As a person types it, with the comma people write; the page sends "2000".
       await fine.getByLabel(sw.shopSettings.form.newValue.money).fill("2,000");
       await day.fill(next);
-      await fine.getByLabel(sw.shopSettings.form.note).fill("Jaribio la e2e");
+      // No note: the demo keeps none (demo.no_note), as every visitor would read it (SHOP-5's second review).
       await fine
         .getByRole("button", { name: sw.shopSettings.form.save, exact: true })
         .click();
@@ -123,9 +123,6 @@ test("the owner sets the late fine to 2,000 from a day to come: 1,000 today, 2,0
       }),
     );
     await expect(lines.nth(0)).toContainText(sw.shopSettings.past.coming);
-    await expect(lines.nth(0)).toContainText(
-      words(sw.shopSettings.past.note, { note: "Jaribio la e2e" }),
-    );
     await expect(lines.nth(1)).toContainText(
       words(sw.shopSettings.past.default, { value: "TSh 1,000" }),
     );
