@@ -371,6 +371,17 @@ def test_suspended_member_gets_nothing_from_routes(
     assert side_name(shop_a, sides["D"]) == "Dawa"
     with shop_context(shop_a):
         assert not Side.objects.filter(code="P").exists()
+    # The shop's rules too (SHOP-3): none shown, not even the whole shop's, whose values come from the registry; no side
+    # switched, and no new value written.
+    assert client.get(SETTINGS).json()["rules"] == []
+    switch = {"is_live": True, "version": 1}
+    assert client.patch(f"{SIDES}{sides['F'].pk}/", switch, format="json").status_code == 404
+    today = shop_today(shop_a).isoformat()
+    fine = {"id": str(uuid.uuid7()), "key": "attendance.late_fine", "value": "9000", "effective_from": today}
+    assert client.post(SETTINGS, fine, format="json").status_code == 403
+    with shop_context(shop_a):
+        assert Side.objects.get(pk=sides["F"].pk).is_live is False
+        assert not Setting.objects.filter(shop=shop_a).exists()
 
 
 @pytest.mark.django_db
