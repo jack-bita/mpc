@@ -8,7 +8,10 @@
 //
 // PATCH /api/v1/shops/sides/{id}/ sends the switch alone, with the side's version as this page read it: the server
 // refuses it if someone changed the side since (version_conflict), and then the page reads the side again, so the
-// next try sends the new version. A name and the switch go one at a time (SideEditSerializer). On the demo every
+// next try sends the new version. The question keeps what it asked as it opened, the side's new state and the version
+// read then, and sends exactly that: the page reads the sides again by itself when the phone comes back to it, and a
+// question that followed that read could turn "Zima?" into "Washa?" under the owner's thumb, with the new version,
+// which the server would accept (SHOP-5's review). A name and the switch go one at a time (SideEditSerializer). On the demo every
 // visitor shares one shop, so its sides stay as the seed made them, and a switch there answers demo.sides_fixed
 // (SHOP-3's review): each refusal shows beside the switch it is about.
 //
@@ -89,7 +92,11 @@ export function SideSwitch({
   const t = useTranslations("shopSettings.sides");
   const online = useOnline();
   const store = useQueryClient();
-  const [asking, setAsking] = useState(false);
+  // What the open question asks, from the moment it opened: the side's new state, and the version read then. None
+  // while no question is open.
+  const [asked, setAsked] = useState<Pick<Side, "is_live" | "version"> | null>(
+    null,
+  );
   // What the last switch did, said once in the status line (below).
   const [switched, setSwitched] = useState<Side | null>(null);
 
@@ -101,7 +108,7 @@ export function SideSwitch({
     if (closes > 0) opener.current?.focus();
   }, [closes]);
   function closeTheQuestion() {
-    setAsking(false);
+    setAsked(null);
     setCloses((count) => count + 1);
   }
 
@@ -155,7 +162,7 @@ export function SideSwitch({
             {side.is_live ? t("on") : t("off")}
           </span>
         </p>
-        {mayChange && !asking ? (
+        {mayChange && asked === null ? (
           <Button
             ref={opener}
             // Switching off is the one that stops a side at the counters: the warning colour says so.
@@ -168,31 +175,30 @@ export function SideSwitch({
             onClick={() => {
               setSwitched(null);
               flip.reset();
-              setAsking(true);
+              setAsked({ is_live: !side.is_live, version: side.version });
             }}
           >
             {side.is_live ? t("switchOff") : t("switchOn")}
           </Button>
         ) : null}
       </div>
-      {asking ? (
+      {asked !== null ? (
         <div className="grid gap-3">
+          {/* Its words from what it asks, never from the side as the page has it now (see the top of this file). */}
           <p className="text-lg">
-            {side.is_live
-              ? t("askOff", { side: side.name })
-              : t("askOn", { side: side.name })}
+            {asked.is_live
+              ? t("askOn", { side: side.name })
+              : t("askOff", { side: side.name })}
           </p>
           <div className="flex flex-wrap gap-3">
             <Button
-              kind={side.is_live ? "danger" : "main"}
+              kind={asked.is_live ? "main" : "danger"}
               size="normal"
               // Switched off while it is sent, so a second tap sends nothing.
               disabled={flip.isPending || !online}
-              onClick={() =>
-                flip.mutate({ is_live: !side.is_live, version: side.version })
-              }
+              onClick={() => flip.mutate(asked)}
             >
-              {side.is_live ? t("yesOff") : t("yesOn")}
+              {asked.is_live ? t("yesOn") : t("yesOff")}
             </Button>
             {/* The keyboard starts here, on the answer that changes nothing (see the top of this file). */}
             <Button

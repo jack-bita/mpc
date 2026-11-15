@@ -2,7 +2,14 @@
 // settings.manage on it; a question first, both ways, which Hapana answers with nothing sent (the card's fourth
 // Done when); the switch sent alone with the version read; and the demo's refusal, and someone else's change,
 // each said beside the switch.
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { focusManager } from "@tanstack/react-query";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
@@ -212,6 +219,48 @@ describe("the switch", () => {
         body: { is_live: true, version: 1 },
       },
     ]);
+  });
+
+  it("sends what its question asked, even after the page read the side again meanwhile (SHOP-5's review)", async () => {
+    // The owner taps Zima on Dawa. While the question is open, another manager switches Dawa off from her phone, and
+    // the owner's page reads the sides again as his phone comes back to it. The question still asks "Zima?", and Ndiyo
+    // sends the version he read, so the server refuses it: never "Washa", with the new version, switching Dawa back on.
+    let reads = 0;
+    answer("GET", SIDES, () => {
+      reads += 1;
+      return Response.json({
+        next: null,
+        previous: null,
+        results:
+          reads === 1
+            ? [DAWA_ON, VYAKULA_OFF]
+            : [side({ is_live: false, version: 4 }), VYAKULA_OFF],
+      });
+    });
+    answer("PATCH", `${SIDES}${DAWA.id}/`, refusal(409, "version_conflict"));
+    render(<SideSwitches me={OWNER} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Zima: Dawa" }));
+
+    // The phone goes to another app and comes back: TanStack reads the sides again (refetchOnWindowFocus).
+    act(() => focusManager.setFocused(false));
+    act(() => focusManager.setFocused(true));
+    const dawa = await boxOf("Dawa");
+    await waitFor(() =>
+      expect(within(dawa).getByText("Imezimwa")).toBeTruthy(),
+    );
+
+    expect(
+      within(dawa).getByText(
+        "Zima upande wa Dawa? Hautatumika kwenye kompyuta za duka hadi uuwashe tena.",
+      ),
+    ).toBeTruthy();
+    fireEvent.click(within(dawa).getByRole("button", { name: "Ndiyo, zima" }));
+
+    expect(await within(dawa).findByRole("alert")).toBeTruthy();
+    expect(await switches()).toEqual([
+      { path: `${SIDES}${DAWA.id}/`, body: { is_live: false, version: 3 } },
+    ]);
+    act(() => focusManager.setFocused(undefined));
   });
 
   it("says the demo's refusal beside the switch, and the side stays as it was", async () => {
