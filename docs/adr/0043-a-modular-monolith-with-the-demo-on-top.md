@@ -35,6 +35,7 @@ import-linter checks this on every pull request. Business logic lives only in se
 - **Good:** Everything that exists only for the demo sits in one app, with one pair of refusals.
 - **Cost:** The boundaries hold only because CI checks them.
 - **Cost:** `control` can't import any domain app, `shops` included. It points at rows by name (`"people.User"`) or by a type code plus a UUID (03 §5.1), and the caller passes in any value it needs, such as a setting.
+- **Cost:** The tap is the one request that opens a shop no login named (03 §5.4): the browser has no key yet, so `register_demo_device` opens the demo shop itself, found by its kind and code. It can only be the demo shop, as the tap is refused without the sign and wherever another shop exists, and inside it reads through the guard like any visit. Not a door (ADR-0042): a door in `people` would have to know the demo.
 - **Cost:** The seed and the one-tap routes ship inside the production image too, though the real server never runs them. Their sign (`DEMO_SEED=yes`, never set there) and their refusal of any shop that isn't a demo keep them shut there; the open check answers false there without a query.
 
 ## Alternatives considered
