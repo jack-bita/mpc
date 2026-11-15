@@ -1,5 +1,6 @@
 // format.ts — money, stock, times of day and dates as people read them: "TSh 41,000", "mifuko 26 + kilo 35.5",
-// "07:55" and "13/11/2026" (03 §7.4).
+// "07:55" and "13/11/2026" (03 §7.4). A rule's own values too (SHOP-5): an amount that may have cents, a day
+// with no time, "2026-12-01", and the part of the day of a clock time, "07:35".
 //
 // Every screen and slip writes numbers through here, so 41000 never shows as "41000.00" on one screen
 // and "TSh 41,000" on another. Writing never rounds: a value that would need rounding is refused, so
@@ -50,6 +51,27 @@ export function formatMoney(amount: Big): string {
       `${fitted.toString()} has cents: round it with roundMoney first.`,
     );
   return MONEY.format(asText(fitted, 0));
+}
+
+// Money with its cents, for the one place cents may be: a rule's amount (SHOP-5). The server takes two places
+// for a money rule, and its page must show what is saved, never round it away or fail on it.
+const MONEY_WITH_CENTS = new Intl.NumberFormat(LOCALE, {
+  style: "currency",
+  currency: "TZS",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/**
+ * Money exactly as it is, for a rule's amount: "TSh 1,000" when it is whole shillings, as formatMoney writes
+ * it, and "TSh 0.50" when it has cents. Never rounds. Only the settings page uses it: everywhere else an
+ * amount is rounded first, and formatMoney refuses cents so a missed rounding shows (SHOP-5).
+ */
+export function formatMoneyExact(amount: Big): string {
+  const fitted = fit(amount, MONEY_PLACES);
+  return fitted.round(0, Decimal.roundDown).eq(fitted)
+    ? MONEY.format(asText(fitted, 0))
+    : MONEY_WITH_CENTS.format(asText(fitted, MONEY_PLACES));
 }
 
 /** A quantity as people read it: "1,335.5". */
@@ -138,6 +160,16 @@ export function formatDate(at: string, timezone: string): string {
   return `${part("day")}/${part("month")}/${part("year")}`;
 }
 
+/**
+ * A day with no time, as a rule's new value starts on (`effective_from`, "2026-12-01"), written as formatDate
+ * writes one: "01/12/2026". Read from its own parts, never through a Date: a day has no zone, and a Date
+ * would put it at midnight UTC, the day before in a zone behind UTC.
+ */
+export function formatDay(day: string): string {
+  const [year, month, date] = day.split("-");
+  return `${date}/${month}/${year}`;
+}
+
 /** The part of the day a time falls in, by the shop's clock: what a Swahili screen names after the time. */
 export type DayPart = "morning" | "afternoon" | "evening" | "night";
 
@@ -158,6 +190,20 @@ export function dayPart(at: string, timezone: string): DayPart {
       .formatToParts(Date.parse(at))
       .find((each) => each.type === "hour")?.value,
   );
+  return partOfHour(hour);
+}
+
+/**
+ * The part of the day of a clock time with no date, "07:35", as a rule of the shop's holds one
+ * (attendance.on_time_until): the same parts as dayPart, so "07:35 asubuhi" reads the same on the rules
+ * page as on a clock-in (SHOP-5). It is already the shop's clock, so no zone.
+ */
+export function clockPart(clock: string): DayPart {
+  return partOfHour(Number(clock.split(":")[0]));
+}
+
+// The hours of each part, for both: asubuhi from 05:00, mchana from 12:00, jioni from 16:00, usiku the rest.
+function partOfHour(hour: number): DayPart {
   if (hour >= 5 && hour < 12) return "morning";
   if (hour >= 12 && hour < 16) return "afternoon";
   if (hour >= 16 && hour < 19) return "evening";

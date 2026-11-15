@@ -193,6 +193,75 @@
     "saved": "Saved.",
     "back": "Back"
   },
+  "shopSettings": {
+    "title": "Shop settings",
+    "intro": "The shop's rules, and each one's value today. A new value starts on the day you choose.",
+    "areas": {
+      "attendance": "Attendance",
+      "money": "Money",
+      "computers": "Computers",
+      "stock": "Stock"
+    },
+    "coming": "From {date}: {value}",
+    "yes": "Yes",
+    "no": "No",
+    "rules": {
+      "attendance": {
+        "on_time_until": {
+          "name": "On time until",
+          "help": "Anyone who clocks in after this time is late.",
+          "shown": "{value}"
+        },
+        "late_fine": {
+          "name": "Late fine",
+          "help": "Taken off the pay for each late day.",
+          "shown": "{value}"
+        }
+      },
+      "money": {
+        "rounding_step": {
+          "name": "Round totals to",
+          "help": "Each sale line's total is rounded to the nearest multiple of this amount.",
+          "shown": "{value}"
+        }
+      },
+      "session": {
+        "idle_minutes": {
+          "name": "Lock after no use",
+          "help": "A shop laptop locks itself when left untouched this long.",
+          "shown": "{value} minutes"
+        }
+      },
+      "cash": {
+        "tolerance": {
+          "name": "Drawer difference allowed",
+          "help": "A drawer short or over by this much or less needs no explaining.",
+          "shown": "{value}"
+        }
+      },
+      "count": {
+        "tolerance_pct": {
+          "name": "Stock count difference allowed",
+          "help": "A stock count off by this percent or less needs no explaining.",
+          "shown": "{value}%"
+        }
+      },
+      "expiry": {
+        "alert_days": {
+          "name": "Warn before expiry",
+          "help": "The warning starts this many days before the expiry date.",
+          "shown": "{value} days"
+        }
+      },
+      "stock": {
+        "block_negative": {
+          "name": "Block selling more than is in stock",
+          "help": "Yes: a sale of stock that isn't there is refused. No: it goes through, and the difference shows.",
+          "shown": "{value}"
+        }
+      }
+    }
+  },
   "attendance": {
     "title": "Attendance",
     "back": "Back",

@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { Decimal } from "./decimal";
-import { formatMoney, formatQuantity } from "./format";
+import { formatMoney, formatMoneyExact, formatQuantity } from "./format";
 
 const tsh = (text: string) => formatMoney(new Decimal(text));
 
@@ -34,6 +34,22 @@ describe("formatMoney", () => {
   it("refuses cents instead of rounding them away", () => {
     // Only roundMoney rounds money (ADR-0024).
     expect(() => tsh("458.50")).toThrow("roundMoney");
+  });
+});
+
+describe("formatMoneyExact, for a rule's amount (SHOP-5)", () => {
+  const exact = (text: string) => formatMoneyExact(new Decimal(text));
+
+  it("writes whole shillings as formatMoney does", () => {
+    // The late fine as the server sends it: two places, both zero.
+    expect(exact("1000.00")).toBe(formatMoney(new Decimal("1000.00")));
+    expect(exact("1000.00")).toBe("TSh 1,000");
+  });
+
+  it("writes cents when a rule has them, never rounding them away", () => {
+    // A drawer tolerance of half a shilling: the page shows what is saved.
+    expect(exact("0.50")).toBe("TSh 0.50");
+    expect(exact("1250.05")).toBe("TSh 1,250.05");
   });
 });
 
