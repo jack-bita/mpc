@@ -1,5 +1,5 @@
 // office-home.test.tsx — the office's home page greets the person, with a big button for each office
-// screen they may open (UI-5).
+// screen they may open (UI-5), Mipangilio ya duka among them (SHOP-5).
 import { QueryClientProvider } from "@tanstack/react-query";
 import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -74,7 +74,7 @@ describe("the office's home page", () => {
     expect(line.getAttribute("role")).toBe("status");
   });
 
-  it("offers no screen someone may not open, and says so", async () => {
+  it("offers no screen someone may not open", async () => {
     // A seller logged in by password sees no Vifaa: registering and blocking devices isn't theirs.
     answer("GET", ME, {
       status: 200,
@@ -83,13 +83,40 @@ describe("the office's home page", () => {
 
     render(<OfficeHome />);
 
+    await screen.findByRole("link", { name: "Mipangilio ya duka" });
+    expect(screen.queryByRole("link", { name: "Vifaa" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Hali ya vifaa" })).toBeNull();
+  });
+
+  it("opens Mipangilio ya duka for anyone who works on a side (SHOP-5)", async () => {
+    // Reading the shop's rules needs no key: every one already travels to every laptop of the shop.
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: ["sale.create"] }]),
+    });
+
+    render(<OfficeHome />);
+
+    const link = await screen.findByRole("link", {
+      name: "Mipangilio ya duka",
+    });
+    expect(link.getAttribute("href")).toMatch(/^\/settings\/?$/);
+  });
+
+  it("says when there is nothing to open, for someone who works on no side", async () => {
+    // Logged in, with no role on any side yet: no office work, not even the shop's rules.
+    answer("GET", ME, { status: 200, body: whoIsHere([]) });
+
+    render(<OfficeHome />);
+
     expect(
       await screen.findByText(
         "Bado hakuna kazi ya ofisi unayoweza kufungua hapa.",
       ),
     ).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Vifaa" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Hali ya vifaa" })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "Mipangilio ya duka" }),
+    ).toBeNull();
   });
 
   it("opens Mipangilio yangu for everyone, who needs no key for their own", async () => {

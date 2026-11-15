@@ -3,8 +3,10 @@
 //
 // Where a manager lands after logging in on their own phone (Jack, 7 Nov 2026): big buttons are easy to
 // tap, and the page grows a button as each office screen comes (products, prices, reports…). Today there
-// are two, both for whoever holds device.manage on some side: Vifaa, as its Sajili kifaa is theirs
-// (UI-3), and Hali ya vifaa, as keeping the devices working is theirs too (SYNC-14).
+// are three. Two are for whoever holds device.manage on some side: Vifaa, as its Sajili kifaa is theirs
+// (UI-3), and Hali ya vifaa, as keeping the devices working is theirs too (SYNC-14). Mipangilio ya duka is
+// for anyone who works on a side: reading the shop's rules needs no key, and changing one is the owner's,
+// which the page itself asks for (SHOP-5).
 // A button for a screen someone may not use stays off the page; the server still checks every change
 // itself (PPL-5), so this only keeps a door nobody may use out of sight. Under them, for everyone,
 // Mipangilio yangu: a person's own language and font need no key (UI-9).
@@ -28,6 +30,7 @@ export function OfficeHome() {
   const t = useTranslations("office");
   const devices = useTranslations("device.office");
   const health = useTranslations("device.health");
+  const shopSettings = useTranslations("shopSettings");
   // The PIN login's book, for its "Subiri kidogo…", which the office says the same way.
   const loginWords = useTranslations("login");
   const settings = useTranslations("mySettings");
@@ -51,6 +54,13 @@ export function OfficeHome() {
         href: "/device-health/",
         label: health("title"),
         open: sidesWhere(here, "device.manage").length > 0,
+      },
+      {
+        // Every rule already travels to every laptop of the shop (SYNC-2): whoever works on a side may read
+        // them, as the server lets them (SHOP-3).
+        href: "/settings/",
+        label: shopSettings("title"),
+        open: here.permissions.sides.length > 0,
       },
     ].filter((screen) => screen.open);
 

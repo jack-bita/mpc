@@ -193,6 +193,126 @@
     "saved": "Imehifadhiwa.",
     "back": "Rudi"
   },
+  "shopSettings": {
+    "title": "Mipangilio ya duka",
+    "intro": "Kanuni za duka, na thamani ya kila moja leo. Thamani mpya huanza siku utakayochagua.",
+    "areas": {
+      "attendance": "Mahudhurio",
+      "money": "Pesa",
+      "computers": "Kompyuta",
+      "stock": "Mzigo"
+    },
+    "coming": "Kuanzia {date}: {value}",
+    "yes": "Ndiyo",
+    "no": "Hapana",
+    "change": "Badilisha",
+    "history": "Historia",
+    "close": "Funga",
+    "changeOf": "Badilisha: {rule}",
+    "changeOfSide": "Badilisha: {rule}, {side}",
+    "historyOf": "Historia: {rule}",
+    "historyOfSide": "Historia: {rule}, {side}",
+    "saved": "Imehifadhiwa. Thamani mpya inaanza {date}.",
+    "form": {
+      "newValue": {
+        "money": "Kiasi kipya (TSh)",
+        "percent": "Asilimia mpya (%)",
+        "whole": "Namba mpya",
+        "time": "Saa mpya",
+        "yes_no": "Thamani mpya"
+      },
+      "from": "Kuanzia tarehe",
+      "fromHint": "Leo au siku ya baadaye.",
+      "note": "Maelezo (si lazima)",
+      "noteHint": "Kwa nini imebadilishwa, kwa atakayesoma historia.",
+      "save": "Hifadhi",
+      "cancel": "Ghairi"
+    },
+    "past": {
+      "title": "Historia",
+      "row": "{value}, kuanzia {date}",
+      "by": "Imewekwa na {name}, {date}",
+      "bySystem": "Imewekwa na mfumo, {date}",
+      "wholeShop": "Ya duka zima",
+      "note": "Maelezo: {note}",
+      "default": "{value}, ya awali",
+      "inUse": "Inatumika sasa",
+      "coming": "Inakuja"
+    },
+    "sides": {
+      "title": "Pande",
+      "intro": "Upande uliozimwa hautumiki kwenye kompyuta za duka.",
+      "on": "Imewashwa",
+      "off": "Imezimwa",
+      "switchOff": "Zima",
+      "switchOn": "Washa",
+      "switchOffOf": "Zima: {side}",
+      "switchOnOf": "Washa: {side}",
+      "askOff": "Zima upande wa {side}? Hautatumika kwenye kompyuta za duka hadi uuwashe tena.",
+      "askOn": "Washa upande wa {side}? Utaanza kutumika kwenye kompyuta za duka.",
+      "yesOff": "Ndiyo, zima",
+      "yesOn": "Ndiyo, washa",
+      "no": "Hapana",
+      "switchedOff": "Upande wa {side} umezimwa.",
+      "switchedOn": "Upande wa {side} umewashwa."
+    },
+    "rules": {
+      "attendance": {
+        "on_time_until": {
+          "name": "Mwisho wa kufika kwa wakati",
+          "help": "Anayeingia kazini baada ya saa hii amechelewa.",
+          "shown": "{value}"
+        },
+        "late_fine": {
+          "name": "Faini ya kuchelewa",
+          "help": "Inakatwa kwenye mshahara kwa kila siku ya kuchelewa.",
+          "shown": "{value}"
+        }
+      },
+      "money": {
+        "rounding_step": {
+          "name": "Kuzungusha hesabu hadi",
+          "help": "Jumla ya kila mstari wa mauzo huzungushwa hadi kiasi hiki kilicho karibu.",
+          "shown": "{value}"
+        }
+      },
+      "session": {
+        "idle_minutes": {
+          "name": "Funga baada ya kukaa bila kazi",
+          "help": "Kompyuta ya duka hujifunga ikikaa bila kuguswa kwa muda huu.",
+          "shown": "Dakika {value}"
+        }
+      },
+      "cash": {
+        "tolerance": {
+          "name": "Tofauti ya droo inayokubalika",
+          "help": "Droo ikipungua au kuzidi kwa kiasi hiki au chini yake, hakuna tofauti ya kueleza.",
+          "shown": "{value}"
+        }
+      },
+      "count": {
+        "tolerance_pct": {
+          "name": "Tofauti ya kuhesabu mzigo inayokubalika",
+          "help": "Hesabu ya mzigo ikitofautiana kwa asilimia hii au chini yake, hakuna tofauti ya kueleza.",
+          "shown": "{value}%"
+        }
+      },
+      "expiry": {
+        "alert_days": {
+          "name": "Onya kabla bidhaa haijaisha muda",
+          "help": "Onyo linaanza siku hizi kabla ya tarehe ya kuisha muda.",
+          "shown": "Siku {value}"
+        }
+      },
+      "stock": {
+        "block_negative": {
+          "name": "Zuia kuuza zaidi ya mzigo uliopo",
+          "help": "Ndiyo: mauzo ya mzigo usiokuwepo yanakataliwa. Hapana: yanaruhusiwa, na tofauti inaonekana.",
+          "shown": "{value}"
+        }
+      }
+    }
+  },
   "attendance": {
     "title": "Mahudhurio",
     "back": "Rudi",
@@ -480,7 +600,9 @@
     "demo": {
       "closed": "Demo haipo wazi hapa.",
       "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia.",
-      "sides_fixed": "Kwenye demo, pande zinabaki zilivyo, zimewashwa au zimezimwa, ili kila mgeni aweze kujaribu."
+      "sides_fixed": "Kwenye demo, pande hazibadilishwi, ili kila mgeni aweze kujaribu.",
+      "rules_from_tomorrow": "Kwenye demo, thamani mpya huanza kesho au baadaye, ili kila mgeni wa leo akute duka lilivyo.",
+      "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi."
     },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",

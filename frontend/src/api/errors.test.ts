@@ -83,8 +83,13 @@ const CODES_THE_API_SENDS = [
   "demo.closed",
   // The demo's logins stay as the seed made them (DATA-1): a PIN, a temporary password and a person's own.
   "demo.logins_fixed",
-  // The demo's sides stay switched as the seed made them, so every visitor's one tap works (SHOP-3).
+  // The demo's sides stay as the seed made them, switched on and named, so every visitor's one tap works (SHOP-3,
+  // and a rename or a new side since SHOP-5's review).
   "demo.sides_fixed",
+  // On the demo, a visitor's rule starts tomorrow or later, after the night's seed, and keeps no note, which every
+  // reader would see under the rule (SHOP-5's second review).
+  "demo.rules_from_tomorrow",
+  "demo.no_note",
   "staff.left",
   "staff.other_shop",
   "staff.reason_required",

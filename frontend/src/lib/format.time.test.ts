@@ -3,7 +3,13 @@
 // "13/11/2026", day, month, year, the order Tanzania writes a date in.
 import { describe, expect, it } from "vitest";
 
-import { dayPart, formatDate, formatTime } from "./format";
+import {
+  clockPart,
+  dayPart,
+  formatDate,
+  formatDay,
+  formatTime,
+} from "./format";
 
 const DAR = "Africa/Dar_es_Salaam";
 
@@ -50,5 +56,33 @@ describe("the part of the day", () => {
     ["2026-11-13T01:59:00.000Z", "night"], // 04:59
   ])("puts %s in the %s", (at, part) => {
     expect(dayPart(at, DAR)).toBe(part);
+  });
+});
+
+describe("a day with no time (SHOP-5)", () => {
+  it("reads day, month, year, as formatDate writes a date", () => {
+    // The day a rule's new value starts on, as the server sends it.
+    expect(formatDay("2026-12-01")).toBe("01/12/2026");
+  });
+
+  it("keeps its day in a zone behind UTC", () => {
+    // Through a Date, "2026-12-01" is midnight UTC, which is still 30 November in Lima. A day has no zone.
+    const lima = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Lima" });
+    expect(lima.format(Date.parse("2026-12-01"))).toBe("30/11/2026");
+    expect(formatDay("2026-12-01")).toBe("01/12/2026");
+  });
+});
+
+describe("the part of the day of a clock time (SHOP-5)", () => {
+  // A rule's time of day, attendance.on_time_until, in the same parts as dayPart's.
+  it.each([
+    ["05:00", "morning"],
+    ["07:35", "morning"],
+    ["12:00", "afternoon"],
+    ["16:00", "evening"],
+    ["19:00", "night"],
+    ["04:59", "night"],
+  ])("puts %s in the %s", (clock, part) => {
+    expect(clockPart(clock)).toBe(part);
   });
 });

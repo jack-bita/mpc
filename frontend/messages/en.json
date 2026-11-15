@@ -193,6 +193,126 @@
     "saved": "Saved.",
     "back": "Back"
   },
+  "shopSettings": {
+    "title": "Shop settings",
+    "intro": "The shop's rules, and each one's value today. A new value starts on the day you choose.",
+    "areas": {
+      "attendance": "Attendance",
+      "money": "Money",
+      "computers": "Computers",
+      "stock": "Stock"
+    },
+    "coming": "From {date}: {value}",
+    "yes": "Yes",
+    "no": "No",
+    "change": "Change",
+    "history": "History",
+    "close": "Close",
+    "changeOf": "Change: {rule}",
+    "changeOfSide": "Change: {rule}, {side}",
+    "historyOf": "History: {rule}",
+    "historyOfSide": "History: {rule}, {side}",
+    "saved": "Saved. The new value starts on {date}.",
+    "form": {
+      "newValue": {
+        "money": "New amount (TSh)",
+        "percent": "New percent (%)",
+        "whole": "New number",
+        "time": "New time",
+        "yes_no": "New value"
+      },
+      "from": "Starting on",
+      "fromHint": "Today or a later day.",
+      "note": "Note (optional)",
+      "noteHint": "Why it changed, for whoever reads the history.",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "past": {
+      "title": "History",
+      "row": "{value}, from {date}",
+      "by": "Set by {name}, {date}",
+      "bySystem": "Set by the system, {date}",
+      "wholeShop": "The whole shop's",
+      "note": "Note: {note}",
+      "default": "{value}, the default",
+      "inUse": "In use now",
+      "coming": "Coming"
+    },
+    "sides": {
+      "title": "Sides",
+      "intro": "A side switched off isn't used at the shop's laptops.",
+      "on": "On",
+      "off": "Off",
+      "switchOff": "Switch off",
+      "switchOn": "Switch on",
+      "switchOffOf": "Switch off: {side}",
+      "switchOnOf": "Switch on: {side}",
+      "askOff": "Switch off {side}? The shop's laptops won't use it until you switch it on again.",
+      "askOn": "Switch on {side}? The shop's laptops will start using it.",
+      "yesOff": "Yes, switch off",
+      "yesOn": "Yes, switch on",
+      "no": "No",
+      "switchedOff": "{side} is switched off.",
+      "switchedOn": "{side} is switched on."
+    },
+    "rules": {
+      "attendance": {
+        "on_time_until": {
+          "name": "On time until",
+          "help": "Anyone who clocks in after this time is late.",
+          "shown": "{value}"
+        },
+        "late_fine": {
+          "name": "Late fine",
+          "help": "Taken off the pay for each late day.",
+          "shown": "{value}"
+        }
+      },
+      "money": {
+        "rounding_step": {
+          "name": "Round totals to",
+          "help": "Each sale line's total is rounded to the nearest multiple of this amount.",
+          "shown": "{value}"
+        }
+      },
+      "session": {
+        "idle_minutes": {
+          "name": "Lock after no use",
+          "help": "A shop laptop locks itself when left untouched this long.",
+          "shown": "Minutes: {value}"
+        }
+      },
+      "cash": {
+        "tolerance": {
+          "name": "Drawer difference allowed",
+          "help": "A drawer short or over by this much or less needs no explaining.",
+          "shown": "{value}"
+        }
+      },
+      "count": {
+        "tolerance_pct": {
+          "name": "Stock count difference allowed",
+          "help": "A stock count off by this percent or less needs no explaining.",
+          "shown": "{value}%"
+        }
+      },
+      "expiry": {
+        "alert_days": {
+          "name": "Warn before expiry",
+          "help": "The warning starts this many days before the expiry date.",
+          "shown": "Days: {value}"
+        }
+      },
+      "stock": {
+        "block_negative": {
+          "name": "Block selling more than is in stock",
+          "help": "Yes: a sale of stock that isn't there is refused. No: it goes through, and the difference shows.",
+          "shown": "{value}"
+        }
+      }
+    }
+  },
   "attendance": {
     "title": "Attendance",
     "back": "Back",
@@ -480,7 +600,9 @@
     "demo": {
       "closed": "The demo isn't open here.",
       "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in.",
-      "sides_fixed": "On the demo, the sides stay switched on or off as they are, so every visitor can try it."
+      "sides_fixed": "On the demo, the sides stay as they are, so every visitor can try them.",
+      "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
+      "no_note": "On the demo, notes aren't kept. Leave this box empty."
     },
     "password_too_short": "This password is too short.",
     "password_too_common": "This password is too common. Choose another.",

@@ -4,8 +4,9 @@ Five actions so far. create_shop makes a new shop with all it needs before it ca
 add_side adds one side to a shop, with what a side always comes with: a default stock location (ADR-0002) and a cash
 drawer. create_shop uses it for each of its sides, so a side is made the same way whichever action makes it.
 rename_side gives a side a new name, unless someone else changed the side since it was read (apps/core/editing.py);
-switch_side turns a side on or off the same way (ADR-0033), though on the demo only the system may. set_setting gives a
-rule a new value from a day on, as a new row, never an edit (ADR-0013). Each action runs in one transaction and refuses
+switch_side turns a side on or off the same way (ADR-0033). On the demo only the system may add, rename or switch a
+side. set_setting gives a rule a new value from a day on, as a new row, never an edit (ADR-0013): on the demo a
+person's starts tomorrow or later, with no note. Each action runs in one transaction and refuses
 a broken rule with a ValidationError that carries a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) turns into its error shape.
 
@@ -108,7 +109,8 @@ def add_side(
 ) -> Side:
     """Add a side to a shop, with its default stock location and its cash drawer, all or nothing.
     `side_id`: the id the client made for the new side (ADR-0007), if it made one. `by`: who adds it; None
-    for the system or the superuser."""
+    for the system or the superuser. A person's new side is refused on the demo (demo.sides_fixed)."""
+    _check_sides_fixed_on_demo(by)
     _check_shop(shop, by)
     created_by_id = None if by is None else by.staff_id
     # One block, so a side never exists without its location and its drawer, nor without its lines. Inside
@@ -137,7 +139,9 @@ def add_side(
 def rename_side(side: Side, *, version: int, name: str, by: Actor | None) -> Side:
     """Give a side a new name, unless someone else changed the side since `version` was read (02 §1).
     `by`: who renames it; None for the system or the superuser. Only the name: the letter starts every
-    number printed on the side's receipts (D7), so it never changes."""
+    number printed on the side's receipts (D7), so it never changes. A person's rename is refused on the demo
+    (demo.sides_fixed)."""
+    _check_sides_fixed_on_demo(by)
     # The block opens the transaction; editing() checks who acts belongs to the shop (T1), locks the side,
     # refuses a stale version, then checks the new name (full_clean trims it, and refuses a name of only
     # spaces) and saves it with the next version. The block refuses a shop that isn't the one open (T1).
@@ -157,12 +161,8 @@ def switch_side(side: Side, *, version: int, is_live: bool, by: Actor | None) ->
     (demo.sides_fixed)."""
     # The demo's seed switches both its sides on (apps/demo/services.py), and every visitor shares the manager's login
     # (OPS-3): one who switched Dawa off would stop every later visitor's one-tap demo, whose laptops are on Dawa
-    # (DEMO_DEVICE_SIDE), until the next morning's seed. So a person's switch is fixed there, as their PIN is (set_pin,
-    # apps/people/services.py), read from the same sign (DEMO_SEED, config/settings/base.py), before anything is opened
-    # or written. The system (`by` None), which is how the seed sets the demo up, still may. The rules stay open on the
-    # demo: trying them is the point, and the seed puts them back.
-    if settings.DEMO_SEED and by is not None:
-        raise ValidationError("On the demo, the sides stay switched as they are.", code="demo.sides_fixed")
+    # (DEMO_DEVICE_SIDE), until the next morning's seed. So a person's switch is fixed there (see below).
+    _check_sides_fixed_on_demo(by)
     # The same steps as rename_side: the block, then editing(), which checks who acts belongs to the shop (T1), locks
     # the side and refuses a stale version. The line after editing() ends: the laptops keep `is_live` on their copy of
     # the side (SYNC-2), and learn of the switch at their next pull.
@@ -171,6 +171,18 @@ def switch_side(side: Side, *, version: int, is_live: bool, by: Actor | None) ->
             fresh.is_live = is_live
         record_change(fresh)
     return fresh
+
+
+def _check_sides_fixed_on_demo(by: Actor | None) -> None:
+    # On the demo every visitor shares the manager's login (OPS-3), and that manager holds settings.manage, for the
+    # rules (SHOP-5), the key every change to a side asks for. So the sides stay as the seed made them: a person's
+    # switch, rename or new side would greet everyone after them, or stop their one-tap demo, until the next morning's
+    # seed (SHOP-5's review). Fixed as a person's PIN is there (set_pin, apps/people/services.py), read from the same
+    # sign (DEMO_SEED, config/settings/base.py), before anything is opened or written. The system (`by` None), which is
+    # how the seed sets the demo up, still may. The rules stay open on the demo, as trying them is the point, though a
+    # person's value there starts tomorrow, with no note (set_setting).
+    if settings.DEMO_SEED and by is not None:
+        raise ValidationError("On the demo, the sides stay as they are.", code="demo.sides_fixed")
 
 
 def set_setting(
@@ -188,7 +200,8 @@ def set_setting(
     `side` alone on a side's rule. `value` is text, as a screen sends it ("2000"); it is stored in its kind's one form
     ("2000.00"). `setting_id`: the id the client made for the row (ADR-0007), if it made one. `by`: who sets it; None
     for the system or the superuser. Refuses, all together, with their codes: a day before the shop's today, a side's
-    rule with no side, and whatever Setting.clean() refuses (an unknown key, a wrong value, a side on a shop's rule)."""
+    rule with no side, and whatever Setting.clean() refuses (an unknown key, a wrong value, a side on a shop's rule).
+    On the demo, a person's value from today, and a person's note (demo.rules_from_tomorrow, demo.no_note)."""
     _check_shop(shop, by)
     # T1: the side is of this shop. A bug in the calling code, like the shop checks: the route finds a side through the
     # visit's own shop, so a person can't send another shop's side here.
@@ -212,8 +225,21 @@ def set_setting(
     # Never before the shop's today (Jack, 15 Nov 2026): a row for a past day changes what that day answers, and the
     # clock-ins, fines and draft pay run already worked out from it. Today is still open: a mistake made this morning
     # is fixed with one more row for today, which wins (T2). The shop's today, not the server's, which runs in UTC.
-    if effective_from < shop_today(shop):
+    today = shop_today(shop)
+    if effective_from < today:
         errors["effective_from"] = [ValidationError("A new value can't start before today.", code="setting.date_past")]
+    # On the demo every visitor shares the manager's login (OPS-3), who holds settings.manage so a visitor can try the
+    # rules (SHOP-5). A value from today would change the demo at once for everyone after them, until the night's seed
+    # makes the shop again: idle minutes of 1 would lock every demo laptop after a minute. So a person's value there
+    # starts tomorrow or later, after that seed, and still shows as coming; and a person's note, which every reader sees
+    # under the rule, signed by the shared manager, isn't kept (Jack, SHOP-5's second review). The system, as the seed
+    # acts, still may: the same sign, before anything is written, as the sides' lock above (_check_sides_fixed_on_demo).
+    elif settings.DEMO_SEED and by is not None and effective_from == today:
+        errors["effective_from"] = [
+            ValidationError("On the demo, a new value starts tomorrow or later.", code="demo.rules_from_tomorrow")
+        ]
+    if settings.DEMO_SEED and by is not None and note.strip():
+        errors["note"] = [ValidationError("On the demo, a note isn't kept.", code="demo.no_note")]
     # A side's rule is set one side at a time, never for the whole shop (Jack, 15 Nov 2026). get_setting lets a side's
     # row beat even a newer shop row (CORE-4), so a shop value set next year would be hidden by a side's old one, and
     # nobody would see why. An unknown key is left to clean(), which reports it once.

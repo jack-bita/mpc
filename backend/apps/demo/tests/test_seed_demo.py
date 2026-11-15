@@ -37,7 +37,8 @@ from apps.core.sequences import next_numbers
 from apps.core.tenancy import shop_context
 from apps.demo import services
 from apps.demo.services import SHOP_CODE, Seeded, seed_demo
-from apps.people.models import RoleAssignment, StaffMember, User
+from apps.people.models import PermissionGrant, RoleAssignment, StaffMember, User
+from apps.people.permissions import effective_permissions
 from apps.people.pins import pin_matches
 from apps.shops.models import Shop, ShopKind, Side
 from apps.shops.services import NewSide, create_shop
@@ -84,6 +85,11 @@ def what_the_shop_holds() -> dict[str, Any]:
                 (assignment.role.template, "every side" if assignment.side_id is None else sides[assignment.side_id])
                 for assignment in RoleAssignment.objects.filter(staff=member).select_related("role")
             )
+            # Keys given beyond a role (grant_permission), as the roles are read: code and side.
+            keys = sorted(
+                (grant.permission, "every side" if grant.side_id is None else sides[grant.side_id])
+                for grant in PermissionGrant.objects.filter(staff=member)
+            )
             pin = PINS.get(member.display_name)
             people.append(
                 {
@@ -91,6 +97,7 @@ def what_the_shop_holds() -> dict[str, Any]:
                     "email": user.email,
                     "staff": user.is_staff,
                     "roles": roles,
+                    "keys": keys,
                     "pin works": pin is not None and pin_matches(pin, member.pin_hash, staff_id=member.pk),
                     "password works": user.check_password(MANAGER_PASSWORD),
                 }
@@ -195,6 +202,7 @@ def test_seed_demo_is_repeatable() -> None:
                 "email": None,
                 "staff": False,
                 "roles": [("seller", "D")],
+                "keys": [],
                 "pin works": True,
                 "password works": False,
             },
@@ -203,6 +211,7 @@ def test_seed_demo_is_repeatable() -> None:
                 "email": None,
                 "staff": False,
                 "roles": [("seller", "F")],
+                "keys": [],
                 "pin works": True,
                 "password works": False,
             },
@@ -211,6 +220,8 @@ def test_seed_demo_is_repeatable() -> None:
                 "email": "meneja@example.com",
                 "staff": False,
                 "roles": [("manager", "every side")],
+                # The owner's key to the shop's rules, so a visitor can try Badilisha (SHOP-5).
+                "keys": [("settings.manage", "every side")],
                 "pin works": False,
                 "password works": True,
             },
@@ -384,6 +395,24 @@ def test_seed_demo_switches_its_sides_on() -> None:
 
     with shop_context(the_demo_shop()):
         assert {(side.code, side.is_live) for side in Side.objects.all()} == {("D", True), ("F", True)}
+
+
+def test_seed_demo_lets_its_manager_change_the_shops_rules() -> None:
+    # The demo has no owner, and a manager alone may not change the shop's rules (settings.manage is one of the
+    # owner's own four, spec §6). Meneja holds that one key besides the role, on the whole shop, so a visitor can try
+    # Badilisha on Mipangilio ya duka (Jack, SHOP-5). Not the Owner's whole role: no staff.manage, so no visitor can
+    # take Meneja's role away from every other visitor (04 PPL-4).
+    seed_demo(fresh=True)
+
+    with shop_context(the_demo_shop()):
+        meneja = StaffMember.objects.get(display_name="Meneja")
+        asha = StaffMember.objects.get(display_name="Asha")
+        assert "settings.manage" in effective_permissions(meneja, None)
+        for side in Side.objects.all():
+            assert "settings.manage" in effective_permissions(meneja, side)
+        assert "staff.manage" not in effective_permissions(meneja, None)
+        # The sellers change no rule.
+        assert "settings.manage" not in effective_permissions(asha, None)
 
 
 def test_seed_demo_numbers_every_record_once() -> None:
