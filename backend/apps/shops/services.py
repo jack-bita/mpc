@@ -154,13 +154,15 @@ def rename_side(side: Side, *, version: int, name: str, by: Actor | None) -> Sid
 def switch_side(side: Side, *, version: int, is_live: bool, by: Actor | None) -> Side:
     """Turn a side on (`is_live` True) or off, unless someone else changed the side since `version` was read (02 §1).
     `by`: who switches it; None for the system or the superuser. A side starts off (SHOP-2), so it reaches the counters
-    only once the owner agrees to start using it (ADR-0033). Refused on the demo (demo.sides_fixed)."""
-    # On the demo every visitor shares the manager's login (OPS-3): one who switched Dawa off would stop every later
-    # visitor's one-tap demo, whose laptops are on Dawa (DEMO_DEVICE_SIDE), until the next morning's seed. So the switch
-    # is fixed there, as passwords and PINs are (check_logins_may_change, apps/people/services.py), read from the same
-    # sign (DEMO_SEED, config/settings/base.py). Before anything is opened or written. The rules stay open on the demo:
-    # trying them is the point, and the seed puts them back.
-    if settings.DEMO_SEED:
+    only once the owner agrees to start using it (ADR-0033). A person's switch is refused on the demo
+    (demo.sides_fixed)."""
+    # The demo's seed switches both its sides on (apps/demo/services.py), and every visitor shares the manager's login
+    # (OPS-3): one who switched Dawa off would stop every later visitor's one-tap demo, whose laptops are on Dawa
+    # (DEMO_DEVICE_SIDE), until the next morning's seed. So a person's switch is fixed there, as their PIN is (set_pin,
+    # apps/people/services.py), read from the same sign (DEMO_SEED, config/settings/base.py), before anything is opened
+    # or written. The system (`by` None), which is how the seed sets the demo up, still may. The rules stay open on the
+    # demo: trying them is the point, and the seed puts them back.
+    if settings.DEMO_SEED and by is not None:
         raise ValidationError("On the demo, the sides stay switched as they are.", code="demo.sides_fixed")
     # The same steps as rename_side: the block, then editing(), which checks who acts belongs to the shop (T1), locks
     # the side and refuses a stale version. The line after editing() ends: the laptops keep `is_live` on their copy of

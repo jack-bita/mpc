@@ -2,9 +2,10 @@
 
 A new side starts off, so it never reaches the counters by surprise; the owner switches it on once he agrees to start
 using it. A switch is an edit of the side, so it keeps the rules every edit keeps (apps/core/editing.py): an old copy is
-refused, and so is someone of another shop (T1). On the demo the switch is fixed, as its logins are: visitors share the
-manager's login, and one who switched Dawa off would stop every later visitor's one-tap demo. The staff members come
-from backend/conftest.py and are typed Any: `shops` may not name `people`'s StaffMember (ADR-0043).
+refused, and so is someone of another shop (T1). On the demo a person's switch is fixed, as its logins are: visitors
+share the manager's login, and one who switched Dawa off would stop every later visitor's one-tap demo. The system,
+which sets the demo up, still switches its sides on (apps/demo/services.py). The staff members come from
+backend/conftest.py and are typed Any: `shops` may not name `people`'s StaffMember (ADR-0043).
 """
 
 from typing import Any
@@ -57,12 +58,21 @@ def test_switch_side_refuses_someone_of_another_shop(shop_a: Shop, side_a: Side,
     assert stored(shop_a, side_a).is_live is False
 
 
-def test_side_switch_fixed_on_demo(shop_a: Shop, side_a: Side, settings: Settings) -> None:
+def test_side_switch_fixed_on_demo(shop_a: Shop, side_a: Side, staff_a: Any, settings: Settings) -> None:
     # On the demo (DEMO_SEED, config/settings/base.py), a visitor who switched Dawa off would stop every later one-tap
-    # demo, whose laptops are on Dawa, until the next morning's seed. So the switch is refused there, before anything is
-    # written, as passwords and PINs are (demo.logins_fixed).
+    # demo, whose laptops are on Dawa, until the next morning's seed. So a person's switch is refused there, before
+    # anything is written, as their passwords and PINs are (demo.logins_fixed).
     settings.DEMO_SEED = True
     with shop_context(shop_a), pytest.raises(ValidationError) as refused:
-        switch_side(side_a, version=1, is_live=True, by=None)
+        switch_side(side_a, version=1, is_live=True, by=staff_a)
     assert [error.code for error in refused.value.error_list] == ["demo.sides_fixed"]
     assert stored(shop_a, side_a).is_live is False
+
+
+def test_the_system_switches_sides_on_the_demo(shop_a: Shop, side_a: Side, settings: Settings) -> None:
+    # The seed sets the demo up as the system (`by` None), as it sets the PINs: it switches the sides on, so the demo
+    # shows a shop at work.
+    settings.DEMO_SEED = True
+    with shop_context(shop_a):
+        switch_side(side_a, version=1, is_live=True, by=None)
+    assert stored(shop_a, side_a).is_live is True
