@@ -1164,8 +1164,8 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 ### FOLIO-2 · Show the offline engine
 `S` · Claude-led · after OPS-3 · branch `docs/folio-2-offline`
 **Done when:**
-- [ ] The README has a short GIF: offline clock-in → back online → synced.
-- [ ] A first write-up is drafted in `docs/writeups/`: *Offline-first with an outbox and a commit-ordered change log*.
+- [x] The README has a short GIF: offline clock-in → back online → synced.
+- [x] A first write-up is drafted in `docs/writeups/`: *Offline-first with an outbox and a commit-ordered change log*.
 **Commits:** `docs: offline demo gif` → `docs: first write-up draft`
 
 ## 8. Stage 3 — Ready for real data
