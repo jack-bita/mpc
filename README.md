@@ -22,9 +22,9 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 - A manager registers a shop laptop once. Staff then log in at it with a four-digit PIN; after their first login there, that works with no internet too.
 - Staff clock in and out. A clock-in made with no internet waits on the laptop and is sent by itself once the internet is back. The server keeps it once, even if it arrives twice.
 - Managers log in with a password. The *Device health* page shows each laptop's last sync, what it still holds, its clock and its internet cuts this week.
-- CI (automatic checks, a test in a real browser among them) runs on every pull request, and every merge updates the demo.
+- CI (automatic checks, tests in a real browser among them) runs on every pull request, and every merge updates the demo.
 
-Selling, payments, debts and stock are not built yet. The [build plan](docs/04-build-plan.md) ticks each task when it merges.
+Pay, selling, payments, debts and stock are not built yet. The [build plan](docs/04-build-plan.md) ticks each task when it merges.
 
 **Demo:** <https://mabatinipumba-demo.onrender.com>, with fake data only. It sleeps when nobody uses it, so the first visit takes about a minute. It holds one made-up shop, *Duka la Mfano*, made fresh every night; the logins are public on purpose:
 
