@@ -280,7 +280,7 @@
         "idle_minutes": {
           "name": "Lock after no use",
           "help": "A shop laptop locks itself when left untouched this long.",
-          "shown": "{value} minutes"
+          "shown": "Minutes: {value}"
         }
       },
       "cash": {
@@ -301,7 +301,7 @@
         "alert_days": {
           "name": "Warn before expiry",
           "help": "The warning starts this many days before the expiry date.",
-          "shown": "{value} days"
+          "shown": "Days: {value}"
         }
       },
       "stock": {

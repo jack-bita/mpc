@@ -211,7 +211,9 @@ describe("Mipangilio ya duka", () => {
     expect(await cardText("Late fine")).toContain("TSh 1,000");
     // English writes the time alone, as the clock-in does.
     expect(await cardText("On time until")).toContain("07:35");
-    expect(await cardText("Lock after no use")).toContain("15 minutes");
+    expect(await cardText("Lock after no use")).toContain("Minutes: 15");
+    // The noun first, as the Swahili's "Dakika 15": one minute never reads "1 minutes" (SHOP-5's review).
+    expect(await cardText("Warn before expiry")).toContain("Days: 90");
     expect(await cardText("Block selling more than is in stock")).toContain(
       "No",
     );
