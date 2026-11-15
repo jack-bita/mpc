@@ -205,6 +205,40 @@
     "coming": "From {date}: {value}",
     "yes": "Yes",
     "no": "No",
+    "change": "Change",
+    "history": "History",
+    "close": "Close",
+    "changeOf": "Change: {rule}",
+    "changeOfSide": "Change: {rule}, {side}",
+    "historyOf": "History: {rule}",
+    "historyOfSide": "History: {rule}, {side}",
+    "saved": "Saved. The new value starts on {date}.",
+    "form": {
+      "newValue": {
+        "money": "New amount (TSh)",
+        "percent": "New percent (%)",
+        "whole": "New number",
+        "time": "New time",
+        "yes_no": "New value"
+      },
+      "from": "Starting on",
+      "fromHint": "Today or a later day.",
+      "note": "Note (optional)",
+      "noteHint": "Why it changed, for whoever reads the history.",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "past": {
+      "title": "History",
+      "row": "{value}, from {date}",
+      "by": "Set by {name}, {date}",
+      "bySystem": "Set by the system, {date}",
+      "wholeShop": "The whole shop's",
+      "note": "Note: {note}",
+      "default": "{value}, the default",
+      "inUse": "In use now",
+      "coming": "Coming"
+    },
     "rules": {
       "attendance": {
         "on_time_until": {

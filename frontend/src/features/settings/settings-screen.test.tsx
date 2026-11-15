@@ -1,7 +1,8 @@
 // settings-screen.test.tsx — Mipangilio ya duka (SHOP-5): every rule of the registry on one page, under its
 // area, a side's rule with a line per side; each value written its own way; a value set to start later shown
-// beside today's; the page in English; and why, when the server refuses.
-import { screen, within } from "@testing-library/react";
+// beside today's; the page in English; and why, when the server refuses. Then each line's button: Badilisha
+// where the person holds settings.manage, Historia everywhere else, and what each opens.
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { setLanguage } from "@/i18n/language";
@@ -25,8 +26,23 @@ const SELLER = whoIsHere([
   { side: VYAKULA, permissions: ["sale.create"] },
 ]);
 
-function rulesAnswer(rules = SHOP_RULES) {
-  answer("GET", ME, { status: 200, body: SELLER });
+// The owner: settings.manage on the whole shop, which `me` counts on every side too (HeldPermissions.on).
+const OWNER = {
+  ...whoIsHere([
+    { side: DAWA, permissions: ["settings.manage"] },
+    { side: VYAKULA, permissions: ["settings.manage"] },
+  ]),
+  permissions: {
+    whole_shop: ["settings.manage"],
+    sides: [
+      { ...DAWA, permissions: ["settings.manage"] },
+      { ...VYAKULA, permissions: ["settings.manage"] },
+    ],
+  },
+};
+
+function rulesAnswer(rules = SHOP_RULES, me: typeof SELLER = SELLER) {
+  answer("GET", ME, { status: 200, body: me });
   answer("GET", RULES, { status: 200, body: rules });
 }
 
@@ -238,5 +254,249 @@ describe("Mipangilio ya duka", () => {
     await cardOf("Faini ya kuchelewa");
     expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(8);
     expect(screen.queryByText(/half_day_after/)).toBeNull();
+  });
+});
+
+describe("each line's button", () => {
+  it("is Badilisha on every line for the owner, who holds the key on the whole shop", async () => {
+    rulesAnswer(SHOP_RULES, OWNER);
+
+    render(<SettingsScreen />);
+
+    await cardOf("Faini ya kuchelewa");
+    // Four shop's rules, and four side's rules on two sides: twelve lines.
+    expect(screen.getAllByRole("button", { name: /^Badilisha/ })).toHaveLength(
+      12,
+    );
+    expect(screen.queryByRole("button", { name: /^Historia/ })).toBeNull();
+    // Each says which rule and which side, as a screen reader reads a list of buttons.
+    expect(
+      screen.getByRole("button", {
+        name: "Badilisha: Tofauti ya droo inayokubalika, Vyakula",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Badilisha: Faini ya kuchelewa" }),
+    ).toBeTruthy();
+  });
+
+  it("is Historia for a seller, who reads the rules and changes none", async () => {
+    rulesAnswer();
+
+    render(<SettingsScreen />);
+
+    await cardOf("Faini ya kuchelewa");
+    expect(screen.queryByRole("button", { name: /^Badilisha/ })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /^Historia/ })).toHaveLength(
+      12,
+    );
+  });
+
+  it("is Badilisha only where the key is held: Dawa's lines for a manager given it on Dawa", async () => {
+    // The key on one side, not on the whole shop: Dawa's tolerance is his, the late fine is not.
+    rulesAnswer(
+      SHOP_RULES,
+      whoIsHere([
+        { side: DAWA, permissions: ["settings.manage"] },
+        { side: VYAKULA, permissions: ["sale.create"] },
+      ]),
+    );
+
+    render(<SettingsScreen />);
+
+    await cardOf("Faini ya kuchelewa");
+    expect(
+      screen
+        .getAllByRole("button", { name: /^Badilisha/ })
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual([
+      "Badilisha: Tofauti ya droo inayokubalika, Dawa",
+      "Badilisha: Tofauti ya kuhesabu mzigo inayokubalika, Dawa",
+      "Badilisha: Onya kabla bidhaa haijaisha muda, Dawa",
+      "Badilisha: Zuia kuuza zaidi ya mzigo uliopo, Dawa",
+    ]);
+    expect(
+      screen.getByRole("button", { name: "Historia: Faini ya kuchelewa" }),
+    ).toBeTruthy();
+  });
+});
+
+describe("the history", () => {
+  it("shows the 2,000 coming and the 1,000 in use, newest first (the card's first Done when)", async () => {
+    rulesAnswer(
+      withRule(
+        line({
+          value: "1000.00",
+          rows: [
+            row({
+              value: "2000.00",
+              effective_from: "2026-11-16",
+              note: "Mkutano wa Novemba",
+            }),
+          ],
+        }),
+      ),
+      OWNER,
+    );
+
+    render(<SettingsScreen />);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Badilisha: Faini ya kuchelewa",
+      }),
+    );
+
+    const fine = await cardOf("Faini ya kuchelewa");
+    const lines = within(fine)
+      .getAllByRole("listitem")
+      .map((item) => item.textContent);
+    expect(lines).toEqual([
+      "TSh 2,000, kuanzia 16/11/2026InakujaImewekwa na Neema, 15/11/2026Maelezo: Mkutano wa Novemba",
+      "TSh 1,000, ya awaliInatumika sasa",
+    ]);
+  });
+
+  it("marks the row in use, says who set each and when, and the system's rows as the system's", async () => {
+    // 1,500 since 1 November, set by the seed; 1,200 before that, set by Neema.
+    rulesAnswer(
+      withRule(
+        line({
+          value: "1500.00",
+          rows: [
+            row({
+              value: "1500.00",
+              effective_from: "2026-11-01",
+              set_by: null,
+              created_at: "2026-10-31T09:00:00Z",
+            }),
+            row({
+              value: "1200.00",
+              effective_from: "2026-10-01",
+              created_at: "2026-09-30T09:00:00Z",
+            }),
+          ],
+        }),
+      ),
+    );
+
+    render(<SettingsScreen />);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Historia: Faini ya kuchelewa",
+      }),
+    );
+
+    const fine = await cardOf("Faini ya kuchelewa");
+    expect(
+      within(fine)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "TSh 1,500, kuanzia 01/11/2026Inatumika sasaImewekwa na mfumo, 31/10/2026",
+      "TSh 1,200, kuanzia 01/10/2026Imewekwa na Neema, 30/09/2026",
+      "TSh 1,000, ya awali",
+    ]);
+  });
+
+  it("says a row of the whole shop's on a side's line is the shop's", async () => {
+    // Only code that skips the form could write it; the page shows why Vyakula's value is so.
+    rulesAnswer(
+      withRule(
+        line({
+          key: "cash.tolerance",
+          scope: "side",
+          side: VYAKULA.id,
+          default: "0.00",
+          value: "300.00",
+          rows: [
+            row({
+              key: "cash.tolerance",
+              side: null,
+              value: "300.00",
+              effective_from: "2026-11-01",
+            }),
+          ],
+        }),
+      ),
+    );
+
+    render(<SettingsScreen />);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Historia: Tofauti ya droo inayokubalika, Vyakula",
+      }),
+    );
+
+    expect(await screen.findByText("Ya duka zima")).toBeTruthy();
+  });
+
+  it("opens on its own for a seller, with no form, and Funga closes it", async () => {
+    rulesAnswer();
+
+    render(<SettingsScreen />);
+    const button = await screen.findByRole("button", {
+      name: "Historia: Faini ya kuchelewa",
+    });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByRole("heading", { name: "Historia", level: 4 }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Hifadhi" })).toBeNull();
+    const close = screen.getByRole("button", { name: "Funga" });
+    expect(close.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(close);
+
+    expect(
+      screen.queryByRole("heading", { name: "Historia", level: 4 }),
+    ).toBeNull();
+  });
+});
+
+describe("a save from the page", () => {
+  it("shows the late fine's 2,000 coming once saved, says so, and gives the keyboard back to Badilisha", async () => {
+    // The card's first Done when, end to end on the page: the server's answer changes after the save.
+    const saved = row({ value: "2000.00", effective_from: "2026-11-16" });
+    let rules = SHOP_RULES;
+    answer("GET", ME, { status: 200, body: OWNER });
+    answer("GET", RULES, () => Response.json(rules));
+    answer("POST", RULES, () => {
+      rules = withRule(line({ value: "1000.00", rows: [saved] }));
+      return Response.json(saved, { status: 201 });
+    });
+
+    render(<SettingsScreen />);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Badilisha: Faini ya kuchelewa",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Kiasi kipya (TSh)"), {
+      target: { value: "2,000" },
+    });
+    fireEvent.change(screen.getByLabelText("Kuanzia tarehe"), {
+      target: { value: "2026-11-16" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
+
+    const fine = await cardOf("Faini ya kuchelewa");
+    expect(
+      await within(fine).findByText("Kuanzia 16/11/2026: TSh 2,000"),
+    ).toBeTruthy();
+    // Today's is still 1,000.
+    expect(within(fine).getByText("TSh 1,000")).toBeTruthy();
+    expect(
+      within(fine)
+        .getByText("Imehifadhiwa. Thamani mpya inaanza 16/11/2026.")
+        .getAttribute("role"),
+    ).toBe("status");
+    // The form is gone, and the keyboard is back on the button that opened it.
+    expect(screen.queryByRole("button", { name: "Hifadhi" })).toBeNull();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Badilisha: Faini ya kuchelewa" }),
+      ),
+    );
   });
 });

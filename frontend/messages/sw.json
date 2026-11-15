@@ -205,6 +205,40 @@
     "coming": "Kuanzia {date}: {value}",
     "yes": "Ndiyo",
     "no": "Hapana",
+    "change": "Badilisha",
+    "history": "Historia",
+    "close": "Funga",
+    "changeOf": "Badilisha: {rule}",
+    "changeOfSide": "Badilisha: {rule}, {side}",
+    "historyOf": "Historia: {rule}",
+    "historyOfSide": "Historia: {rule}, {side}",
+    "saved": "Imehifadhiwa. Thamani mpya inaanza {date}.",
+    "form": {
+      "newValue": {
+        "money": "Kiasi kipya (TSh)",
+        "percent": "Asilimia mpya (%)",
+        "whole": "Namba mpya",
+        "time": "Saa mpya",
+        "yes_no": "Thamani mpya"
+      },
+      "from": "Kuanzia tarehe",
+      "fromHint": "Leo au siku ya baadaye.",
+      "note": "Maelezo (si lazima)",
+      "noteHint": "Kwa nini imebadilishwa, kwa atakayesoma historia.",
+      "save": "Hifadhi",
+      "cancel": "Ghairi"
+    },
+    "past": {
+      "title": "Historia",
+      "row": "{value}, kuanzia {date}",
+      "by": "Imewekwa na {name}, {date}",
+      "bySystem": "Imewekwa na mfumo, {date}",
+      "wholeShop": "Ya duka zima",
+      "note": "Maelezo: {note}",
+      "default": "{value}, ya awali",
+      "inUse": "Inatumika sasa",
+      "coming": "Inakuja"
+    },
     "rules": {
       "attendance": {
         "on_time_until": {
