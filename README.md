@@ -14,7 +14,7 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 
 ![On the demo, Asha clocks in with no internet: the laptop saves it and says one record is waiting. When the internet is back, the screen says every record has been sent, with no tap.](docs/media/offline-clock-in.gif)
 
-*A clock-in with no internet, on the live demo: saved on the laptop, then sent by itself when the internet comes back.*
+*A clock-in with no internet, on the live demo: saved on the laptop, then sent by itself when the internet comes back. [How it works inside](docs/writeups/01-offline-first-outbox-change-log.md).*
 
 **Status:** in development. Working today:
 
@@ -40,6 +40,7 @@ Selling, payments, debts and stock are not built yet. The [build plan](docs/04-b
 | [Architecture](docs/03-architecture.md) | How it is built |
 | [Build plan](docs/04-build-plan.md) | Every task, in order |
 | [Decisions](docs/adr/README.md) | One short record for each big decision |
+| [Offline-first write-up](docs/writeups/01-offline-first-outbox-change-log.md) | How a record made with no internet reaches the server once: the outbox and the change log |
 | [Spike reports](docs/spikes/) | Experiments run before building, with their results |
 | [Runbooks](docs/runbooks/) | Step-by-step jobs, such as setting up the demo |
 | [Changelog](CHANGELOG.md) | What changed in each release |
