@@ -12,7 +12,19 @@
 
 An offline-first, Swahili-first system for the counter and the office: staff attendance and pay, selling, payments (cash, bank, Lipa Namba mobile money), credit (*madeni*) and stock. It is built first for **MPC — Mabatini Pumba Center**, a family agro-vet shop in Usa River, Arusha, Tanzania, and designed from day one for other shops too.
 
-**Status:** in development. Working today: CI (automatic checks) on every pull request, a demo that updates itself on every merge, and an app that installs on a laptop or phone and opens with no internet. The [build plan](docs/04-build-plan.md) ticks each task when it merges.
+![On the demo, Asha clocks in with no internet: the laptop saves it and says one record is waiting. When the internet is back, the screen says every record has been sent, with no tap.](docs/media/offline-clock-in.gif)
+
+*A clock-in with no internet, on the live demo: saved on the laptop, then sent by itself when the internet comes back. [How it works inside](docs/writeups/01-offline-first-outbox-change-log.md).*
+
+**Status:** in development. Working today:
+
+- The app installs on a laptop or a phone, and opens with no internet. Every screen is in Swahili, or in English for a person who chooses it.
+- A manager registers a shop laptop once. Staff then log in at it with a four-digit PIN; after their first login there, that works with no internet too.
+- Staff clock in and out. A clock-in made with no internet waits on the laptop and is sent by itself once the internet is back. The server keeps it once, even if it arrives twice.
+- Managers log in with a password. The *Device health* page shows each laptop's last sync, what it still holds, its clock and its internet cuts this week.
+- CI (automatic checks, tests in a real browser among them) runs on every pull request, and every merge updates the demo.
+
+Pay, selling, payments, debts and stock are not built yet. The [build plan](docs/04-build-plan.md) ticks each task when it merges.
 
 **Demo:** <https://mabatinipumba-demo.onrender.com>, with fake data only. It sleeps when nobody uses it, so the first visit takes about a minute. It holds one made-up shop, *Duka la Mfano*, made fresh every night; the logins are public on purpose:
 
@@ -28,6 +40,7 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 | [Architecture](docs/03-architecture.md) | How it is built |
 | [Build plan](docs/04-build-plan.md) | Every task, in order |
 | [Decisions](docs/adr/README.md) | One short record for each big decision |
+| [Offline-first write-up](docs/writeups/01-offline-first-outbox-change-log.md) | How a record made with no internet reaches the server once: the outbox and the change log |
 | [Spike reports](docs/spikes/) | Experiments run before building, with their results |
 | [Runbooks](docs/runbooks/) | Step-by-step jobs, such as setting up the demo |
 | [Changelog](CHANGELOG.md) | What changed in each release |
@@ -35,8 +48,8 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 
 ## Stack
 
-- **Backend:** Python 3.14, Django 6.1, Django REST Framework, django-allauth (coming), PostgreSQL 18
-- **Frontend:** Next.js 16 as a static PWA (plain files that install like an app), React 19, TypeScript, Tailwind CSS + shadcn/ui, Serwist (the service worker), Dexie (IndexedDB, coming)
+- **Backend:** Python 3.14, Django 6.1, Django REST Framework, django-allauth, PostgreSQL 18
+- **Frontend:** Next.js 16 as a static PWA (plain files that install like an app), React 19, TypeScript, Tailwind CSS + shadcn/ui, Serwist (the service worker), Dexie (IndexedDB, the browser's own database)
 - **Running it:** Docker Compose + Caddy; GitHub Actions for CI and the demo's deploy; the demo on Render
 
 ## Run it locally
