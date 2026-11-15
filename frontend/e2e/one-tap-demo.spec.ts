@@ -2,7 +2,9 @@
 // from the demo's address to a clock-in made with no network in under a minute. Jaribu demo, Asha's tile with her
 // PIN on it, her PIN, Mahudhurio, the network gone, Ingia kazini: no manager, no code to read out.
 //
-// The card's first Done when. Timed on the test's own clock, from the first page to the saved clock-in: the
+// The card's first Done when, on an awake demo: the container here is up before the test starts, and the free
+// demo sleeps after 15 minutes with no visitor, so its first visit spends about a minute waking up (README) before
+// this story's minute begins. Timed on the test's own clock, from the first page to the saved clock-in: the
 // laptop's clock is Playwright's (the-shop.ts), which a test may move, and this one never does. The PIN is read off
 // her tile, as a visitor reads it, never typed in from this file: if the tile showed none, or a wrong one, the
 // story would stop there. It is then checked against the seed's, so the README's PIN is the one that works.
