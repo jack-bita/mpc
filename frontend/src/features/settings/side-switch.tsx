@@ -22,7 +22,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -97,6 +97,10 @@ export function SideSwitch({
   const [asked, setAsked] = useState<Pick<Side, "is_live" | "version"> | null>(
     null,
   );
+  // The question's id, which both its answers name (aria-describedby): the keyboard lands on Hapana, and a screen
+  // reader then says the question with it, not "Hapana, button" alone, as the question is what the confirm is for
+  // (SHOP-5's review).
+  const question = useId();
   // What the last switch did, said once in the status line (below).
   const [switched, setSwitched] = useState<Side | null>(null);
 
@@ -185,7 +189,7 @@ export function SideSwitch({
       {asked !== null ? (
         <div className="grid gap-3">
           {/* Its words from what it asks, never from the side as the page has it now (see the top of this file). */}
-          <p className="text-lg">
+          <p id={question} className="text-lg">
             {asked.is_live
               ? t("askOn", { side: side.name })
               : t("askOff", { side: side.name })}
@@ -194,6 +198,7 @@ export function SideSwitch({
             <Button
               kind={asked.is_live ? "main" : "danger"}
               size="normal"
+              aria-describedby={question}
               // Switched off while it is sent, so a second tap sends nothing.
               disabled={flip.isPending || !online}
               onClick={() => flip.mutate(asked)}
@@ -204,6 +209,7 @@ export function SideSwitch({
             <Button
               kind="second"
               size="normal"
+              aria-describedby={question}
               autoFocus
               onClick={closeTheQuestion}
             >

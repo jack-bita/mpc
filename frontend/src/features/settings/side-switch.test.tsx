@@ -165,6 +165,24 @@ describe("the switch", () => {
     );
   });
 
+  it("ties its question to both answers, so a screen reader says it with each (SHOP-5's review)", async () => {
+    // The keyboard lands on Hapana: "Hapana, button" alone would skip the question the confirm is there to ask.
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    render(<SideSwitches me={OWNER} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Zima: Dawa" }));
+
+    for (const reply of ["Hapana", "Ndiyo, zima"]) {
+      const button = screen.getByRole("button", { name: reply });
+      const said = document.getElementById(
+        button.getAttribute("aria-describedby") ?? "",
+      );
+      expect(said?.textContent, reply).toBe(
+        "Zima upande wa Dawa? Hautatumika kwenye kompyuta za duka hadi uuwashe tena.",
+      );
+    }
+  });
+
   it("switches a side off after the yes, sending the switch alone with the version it read", async () => {
     sidesAnswer(DAWA_ON, VYAKULA_OFF);
     answer("PATCH", `${SIDES}${DAWA.id}/`, {
