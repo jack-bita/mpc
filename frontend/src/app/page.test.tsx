@@ -106,7 +106,7 @@ describe("HomePage", () => {
     expect(link.getAttribute("href")).toMatch(/^\/register-device\/?$/);
   });
 
-  it("shows Jaribu demo first on the demo, and nothing of it elsewhere", async () => {
+  it("shows Jaribu demo under the two ways on, on the demo only", async () => {
     // The tests above run on a server with no demo: the fake server answers the open check with a 404,
     // so the welcome there has its two ways on only (OPS-3).
     answer("GET", "/api/devices/v1/demo/open/", {
@@ -116,10 +116,11 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     const demo = await screen.findByRole("button", { name: "Jaribu demo" });
-    const login = screen.getByRole("link", { name: "Ingia" });
-    // Before Ingia in the page's order, so first for the eye and for Tab.
+    const register = screen.getByRole("link", { name: "Sajili kifaa hiki" });
+    // After Sajili kifaa hiki in the page's order: it comes a moment after the page, so above, it would
+    // push Ingia down just as a finger reaches for it.
     expect(
-      demo.compareDocumentPosition(login) & Node.DOCUMENT_POSITION_FOLLOWING,
+      demo.compareDocumentPosition(register) & Node.DOCUMENT_POSITION_PRECEDING,
     ).toBeTruthy();
   });
 
