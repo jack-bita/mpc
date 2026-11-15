@@ -2505,13 +2505,15 @@
                         "minLength": 1,
                         "maxLength": 40
                     },
+                    "is_live": {
+                        "type": "boolean"
+                    },
                     "version": {
                         "type": "integer",
                         "minimum": 1
                     }
                 },
                 "required": [
-                    "name",
                     "version"
                 ]
             },

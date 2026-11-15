@@ -2,7 +2,7 @@
 
 Thin: each one reads through the guard of the visit's shop (ShopViewSet, apps/core/api/base.py) and
 writes through a service (ADR-0015). For now a shop's sides: the list, one side, adding one, and
-renaming one.
+renaming one or switching it on or off (SHOP-3).
 """
 
 from typing import Any
@@ -13,20 +13,20 @@ from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin
 from apps.core.permissions import Permission
 from apps.shops.api.serializers import SideCreateSerializer, SideEditSerializer, SideSerializer
 from apps.shops.models import Shop, Side
-from apps.shops.services import add_side, rename_side
+from apps.shops.services import add_side, rename_side, switch_side
 
 
 class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMixin[Side], EditMixin[Side]):
     # GET sides/ lists the visit's shop's sides, in pages; GET sides/{id}/ reads one; POST sides/ adds one;
-    # PATCH sides/{id}/ renames one.
+    # PATCH sides/{id}/ renames one, or switches it on or off.
     model = Side
     # A side is its own side, found by its own id: whoever may act on Dawa may see Dawa (side_of()), and a
     # list shows the sides a person may see (visible_sides()). A new side belongs to no side yet, so adding
     # one is checked as an action on the whole shop (side_of_new()).
     side_field = "pk"
-    # Anyone who works on a side may see it. Adding a side, or renaming one, changes the shop itself: the shop's rules
-    # (`settings.manage`), one of the owner's own four (spec §6). Adding one asks on the whole shop, renaming one on
-    # that side (PPL-5).
+    # Anyone who works on a side may see it. Adding a side, renaming one or switching it on or off changes the shop
+    # itself: the shop's rules (`settings.manage`), one of the owner's own four (spec §6). Adding one asks on the whole
+    # shop, renaming or switching one on that side (PPL-5).
     action_permissions = {
         "list": SEES_THE_SIDE,
         "retrieve": SEES_THE_SIDE,
@@ -52,4 +52,7 @@ class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMi
         )
 
     def edit_row(self, row: Side, data: dict[str, Any]) -> Side:
+        # A new name or the switch, never both: SideEditSerializer has checked that exactly one came.
+        if "is_live" in data:
+            return switch_side(row, version=data["version"], is_live=data["is_live"], by=self.actor)
         return rename_side(row, version=data["version"], name=data["name"], by=self.actor)

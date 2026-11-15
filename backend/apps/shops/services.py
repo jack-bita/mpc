@@ -1,10 +1,11 @@
 """apps/shops/services.py — every write to the shops tables, one function per action (ADR-0015).
 
-Four actions so far. create_shop makes a new shop with all it needs before it can work: its sides
+Five actions so far. create_shop makes a new shop with all it needs before it can work: its sides
 (ADR-0001). add_side adds one side to a shop, with what a side always comes with: a default stock
 location (ADR-0002) and a cash drawer. create_shop uses it for each of its sides, so a side is made the
 same way whichever action makes it. rename_side gives a side a new name, unless someone else changed the
-side since it was read (apps/core/editing.py). set_setting gives a rule a new value from a day on, as a
+side since it was read (apps/core/editing.py); switch_side turns a side on or off the same way (ADR-0033), except on
+the demo. set_setting gives a rule a new value from a day on, as a
 new row, never an edit (ADR-0013). Each action runs in one transaction and refuses a broken
 rule with a ValidationError that carries a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) turns into its error shape.
@@ -19,8 +20,8 @@ something else: the demo seed (DATA-1, apps/demo) makes its shop as a demo one.
 A shop's devices keep a copy of its sides and its payment accounts (apps/sync/registry.py), and learn what changed
 from the shop's change log (03 §6.4). So each action saves inside `recording_changes(shop)` (apps/core/changes.py), in
 place of a plain transaction, and names what it changed with record_change: a new side and its cash drawer, a renamed
-side (SYNC-15), a rule's new value (SHOP-3). The lines are numbered at the block's end, once, however many services
-joined it.
+side (SYNC-15), a side switched on or off and a rule's new value (SHOP-3). The lines are numbered at the block's end,
+once, however many services joined it.
 """
 
 import uuid
@@ -28,6 +29,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -145,6 +147,27 @@ def rename_side(side: Side, *, version: int, name: str, by: Actor | None) -> Sid
             fresh.name = name
         # After editing() ends, at the block's own level, never inside it: that part could roll back alone,
         # and leave a line for a name never saved (apps/core/changes.py). A refused edit never gets here.
+        record_change(fresh)
+    return fresh
+
+
+def switch_side(side: Side, *, version: int, is_live: bool, by: Actor | None) -> Side:
+    """Turn a side on (`is_live` True) or off, unless someone else changed the side since `version` was read (02 §1).
+    `by`: who switches it; None for the system or the superuser. A side starts off (SHOP-2), so it reaches the counters
+    only once the owner agrees to start using it (ADR-0033). Refused on the demo (demo.sides_fixed)."""
+    # On the demo every visitor shares the manager's login (OPS-3): one who switched Dawa off would stop every later
+    # visitor's one-tap demo, whose laptops are on Dawa (DEMO_DEVICE_SIDE), until the next morning's seed. So the switch
+    # is fixed there, as passwords and PINs are (check_logins_may_change, apps/people/services.py), read from the same
+    # sign (DEMO_SEED, config/settings/base.py). Before anything is opened or written. The rules stay open on the demo:
+    # trying them is the point, and the seed puts them back.
+    if settings.DEMO_SEED:
+        raise ValidationError("On the demo, the sides stay switched as they are.", code="demo.sides_fixed")
+    # The same steps as rename_side: the block, then editing(), which checks who acts belongs to the shop (T1), locks
+    # the side and refuses a stale version. The line after editing() ends: the laptops keep `is_live` on their copy of
+    # the side (SYNC-2), and learn of the switch at their next pull.
+    with recording_changes(side.shop_id):
+        with editing(side, version=version, by=by) as fresh:
+            fresh.is_live = is_live
         record_change(fresh)
     return fresh
 

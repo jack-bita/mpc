@@ -212,6 +212,24 @@ def test_action_needs_its_permission(
 
 
 @pytest.mark.django_db
+def test_side_switch_needs_settings_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # Switching a side on or off changes what the shop sells from (ADR-0033): `settings.manage`, the owner's, as adding
+    # or renaming one does. A Manager on every side is refused, and Vyakula stays off; the owner may (SHOP-3).
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    switch = {"is_live": True, "version": 1}
+    refused = client_for(staff_a2).patch(f"{SIDES}{sides['F'].pk}/", switch, format="json")
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert Side.objects.get(pk=sides["F"].pk).is_live is False
+
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    assert client_for(staff_a).patch(f"{SIDES}{sides['F'].pk}/", switch, format="json").status_code == 200
+
+
+@pytest.mark.django_db
 def test_a_key_on_one_side_opens_only_that_side(shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember) -> None:
     # Rule X1 itself: a key works on the side it was given on, and nowhere else. Juma may change the shop's rules on
     # Dawa only, and counts stock on Vyakula, so he sees both. He may rename Dawa, not Vyakula; and adding a side, an

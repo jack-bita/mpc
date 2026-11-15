@@ -5,6 +5,8 @@ Thin: they describe fields and check their shape. Every write goes through apps/
 and takes what a create sends and what an edit sends with others (SideCreateSerializer, SideEditSerializer).
 """
 
+from typing import Any
+
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
@@ -37,13 +39,22 @@ class SideCreateSerializer(serializers.ModelSerializer[Side]):
 
 
 class SideEditSerializer(serializers.ModelSerializer[Side]):
-    # What the app sends to rename a side: the new name, and the version of the side it read. Only the name:
-    # the letter is printed on receipts and never changes, and the live switch waits for the settings screen
-    # (SHOP-3). Anything else sent is ignored.
+    # What the app sends to change a side: a new name, or the on/off switch (SHOP-3), and the version of the side it
+    # read. Never the letter: it is printed on receipts and never changes. Anything else sent is ignored.
     # `version` is declared here: the model keeps it out of every form and API field (editable=False), since
     # only apps/core/editing.py writes it; here it is what the client read, not a value to store.
     version = serializers.IntegerField(min_value=1)
 
     class Meta:
         model = Side
-        fields = ["name", "version"]
+        fields = ["name", "is_live", "version"]
+        # Each may be left out, as an edit sends one of them; validate() asks for exactly one.
+        extra_kwargs = {"name": {"required": False}, "is_live": {"required": False}}
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        # One change at a time: a rename and a switch are two services (rename_side, switch_side), each checking the
+        # version the app read, so the second of two in one request would always find the version moved on. A screen
+        # sends one, so anything else is a bug in the app: the plain `invalid`, with no sentence of its own.
+        if ("name" in attrs) == ("is_live" in attrs):
+            raise serializers.ValidationError("Send a new name or the switch, one at a time.", code="invalid")
+        return attrs

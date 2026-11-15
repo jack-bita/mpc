@@ -815,7 +815,8 @@ export interface components {
             sale_flow?: components["schemas"]["SaleFlowEnum"];
         };
         SideEditRequest: {
-            name: string;
+            name?: string;
+            is_live?: boolean;
             version: number;
         };
         SideKeysRecord: {

@@ -451,3 +451,27 @@ def test_edit_needs_the_version_read(staff_client_a: APIClient, sides_a: dict[st
 
     assert response.status_code == 400
     assert response.json()["fields"] == {"version": ["required"]}
+
+
+def test_edit_switches_a_side_on(staff_client_a: APIClient, sides_a: dict[str, Side]) -> None:
+    # The settings page's switch sends only `is_live`, with the version it read; the name stays as it was.
+    response = staff_client_a.patch(f"{SIDES}{sides_a['F'].pk}/", {"is_live": True, "version": 1}, format="json")
+
+    assert response.status_code == 200
+    assert (response.json()["is_live"], response.json()["name"], response.json()["version"]) == (True, "Vyakula", 2)
+
+
+@pytest.mark.parametrize("sent", [{"version": 1}, {"name": "Chakula", "is_live": True, "version": 1}])
+def test_edit_sends_one_change_at_a_time(
+    staff_client_a: APIClient, shop_a: Shop, sides_a: dict[str, Side], sent: dict[str, object]
+) -> None:
+    # An edit is a new name or the switch, never both nor neither: each is its own service, with its own version check,
+    # so two in one request couldn't both be checked against the version the app read. A screen never sends both, so
+    # this is a bug in the app, answered with the plain `invalid`.
+    response = staff_client_a.patch(f"{SIDES}{sides_a['F'].pk}/", sent, format="json")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid"
+    with shop_context(shop_a):
+        vyakula = Side.objects.get(pk=sides_a["F"].pk)
+    assert (vyakula.name, vyakula.is_live, vyakula.version) == ("Vyakula", False, 1)
