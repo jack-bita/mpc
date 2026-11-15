@@ -4,11 +4,11 @@
 
 ## The problem
 
-MPC is a family agro-vet shop in Usa River, near Arusha in Tanzania. The power goes out often, and the Wi-Fi router goes with it. In a long cut, the mobile network goes down too. The counter can't stop when that happens: a worker still arrives and clocks in, and a customer still buys a sack of feed. So the app saves work on the laptop itself, and sends it to the server when the internet comes back.
+MPC is a family agro-vet shop in Usa River, near Arusha in Tanzania. The power goes out often, and the Wi-Fi router goes with it. In a long cut, the mobile network goes down too. The counter, where staff serve customers, can't stop when that happens: a worker still arrives and clocks in, and a customer still buys a sack of feed. So the app saves work on the laptop itself, and sends it to the server when the internet comes back.
 
 That raises three questions:
 
-1. The laptop sends a record, and the line drops before the answer comes. Did it arrive? If the laptop sends it again, the server must not keep it twice. A clock-in counted twice is a wrong wage; a sale counted twice is wrong money.
+1. The laptop sends a record, and the connection drops before the answer comes. Did it arrive? If the laptop sends it again, the server must not keep it twice. A clock-in counted twice is a wrong wage; a sale counted twice is wrong money.
 2. Records from one laptop must be saved in the order they were made, even when they arrive hours late.
 3. The office changes things while the laptop is offline: a new worker, a suspended one, later a new price. The laptop must learn every change, once, and never miss one.
 
@@ -19,13 +19,13 @@ The GIF in the [README](../../README.md) shows the answer from the outside. This
 The key choice ([ADR-0020](../adr/0020-sync-push-documents-pull-changes.md)) is to split the data by who writes it:
 
 - **Facts made at the counter** (a clock-in today; sales and payments later) are made on one laptop and never edited. They go **up**: the laptop *pushes* them.
-- **Reference data** (staff, settings and the shop's *sides*, its separate counters such as Dawa for drugs and Vyakula for foods; products and prices later) is edited only in the office, online. It comes **down**: the laptop *pulls* the changes.
+- **Reference data** (staff, settings and the shop's *sides*, its sections, each with its own stock, cash drawer and staff, such as Dawa for drugs and Vyakula for foods; products and prices later) is edited only in the office, online. It comes **down**: the laptop *pulls* the changes.
 
 Each kind of data has one writer, so two copies never need merging. I don't need last-write-wins, or CRDTs (data structures that merge edits made in two places). They solve a problem this shop doesn't have, and in a money system "last write wins" means a record quietly lost.
 
 ```
  the laptop                                  the server
- ┌───────────────┐   push: documents     ┌──────────────────┐
+ ┌───────────────┐   push: records       ┌──────────────────┐
  │ outbox        │ ────────────────────▶ │ answer log       │
  │ (to send)     │ ◀──────────────────── │ + the save       │
  │               │   one answer each     │                  │
@@ -34,17 +34,19 @@ Each kind of data has one writer, so two copies never need merging. I don't need
  └───────────────┘   after number N      └──────────────────┘
 ```
 
+The two logs on the server, the answer log and the change log, are explained below.
+
 ## Up: the outbox
 
-The laptop keeps its data in IndexedDB, the browser's own database, through Dexie ([ADR-0019](../adr/0019-offline-data-lives-in-indexeddb-through-dexie.md)). A clock-in is saved in **one** transaction, so either everything is written or nothing is ([`outbox.ts`](../../frontend/src/offline/outbox.ts)):
+The laptop keeps its data in IndexedDB, the browser's own database, through Dexie ([ADR-0019](../adr/0019-offline-data-lives-in-indexeddb-through-dexie.md)). A clock-in is saved in **one** transaction: a group of writes where either all of them happen or none does ([`outbox.ts`](../../frontend/src/offline/outbox.ts)):
 
-1. the document itself, with a new id (a UUIDv7) made on the laptop;
+1. the record itself (in the code, a *document*), with a new id made on the laptop: a UUIDv7, a long random id that also sorts by time, so two laptops never make the same one;
 2. its row in the **outbox**, the list of records still to send;
 3. the laptop's next number for it, its `device_seq`: 1, 2, 3…
 
 Once that transaction commits, the record exists, even if the tab closes a moment later. The screen says *Kumbukumbu 1 inasubiri kutumwa*: one record waiting to be sent.
 
-A sync loop sends what waits. It runs when the app starts, when the network comes back, 2 seconds after a save, every 30 seconds while online, and when someone taps *Tuma sasa* (send now). A Web Lock lets only one tab send at a time. In Chrome and Edge, Background Sync lets the service worker send even after the app is closed.
+A sync loop sends what waits. It runs when the app starts, when the network comes back, 2 seconds after a save, every 30 seconds while online, and when someone taps *Tuma sasa* (send now). Only one tab sends at a time: the tabs take turns through a Web Lock, a lock the browser itself keeps. In Chrome and Edge, Background Sync lets the service worker (the app's background script, which the browser can wake on its own) send even after the app is closed.
 
 ## The push, and why sending twice is safe
 
@@ -57,7 +59,7 @@ The laptop sends up to 100 waiting records, in `device_seq` order. The server ([
 | `invalid` | broken, or a type that can't be made offline | sets it aside, so a manager sees it |
 | `retry` | the server's own trouble | stops, keeps the rest in order, tries again later |
 
-The safety comes from the **answer log**: one line per document id, written in the same transaction as the document. The id is made once, when the laptop saves the record, so every resend carries the same id. A record sent a second time finds its line, and gets `duplicate` with its first answer. So when in doubt, the laptop just sends again. The line can drop before the request, during the save, or after the save but before the answer: the worst case is one extra `duplicate`.
+The safety comes from the **answer log**: one line per record id, written in the same transaction as the record. The id is made once, when the laptop saves the record, so every resend carries the same id. A record sent a second time finds its line, and gets `duplicate` with its first answer. So when in doubt, the laptop just sends again. The connection can drop before the request, during the save, or after the save but before the answer: the worst case is one extra `duplicate`.
 
 A `retry` stops the batch there, so the records after it never jump ahead. After a failed push, the laptop waits 30 seconds, then twice as long each time, up to 5 minutes.
 
@@ -65,7 +67,7 @@ One rule surprised me: **a fact made offline is never refused for breaking a bus
 
 ## Down: the change log, and the late-commit trap
 
-The laptop learns about the office's changes with a cursor: "give me every change after number 41."
+The laptop learns about the office's changes with a cursor, the number of the last change it has: "give me every change after number 41."
 
 Every service that changes something a laptop keeps also writes a line in the shop's **change log**, in the same transaction: the shop, a number, the table and the record's id. The pull returns the lines after the cursor, each with its record as it is now ([`pull.py`](../../backend/apps/sync/pull.py)).
 
@@ -82,9 +84,9 @@ Juma's save commits (42): never pulled     a laptop pulls 42, then 43
 
 On the left, the laptop has moved past 43 by the time 42 appears. It never asks for 42 again, so that laptop misses Juma's change for good. A PostgreSQL sequence, or an auto-increment id, has exactly this problem: it hands out a number at once and never waits for the commit.
 
-So each save takes its numbers as its last step, from one counter row per shop, which stays locked until the commit ([`changes.py`](../../backend/apps/core/changes.py), [`sequences.py`](../../backend/apps/core/sequences.py)). The shop's next save waits for that last moment, then takes the numbers after. The numbers appear in commit order, so a cursor can never skip one.
+So each save takes its numbers as its last step, from one numbering row per shop, which stays locked until the commit ([`changes.py`](../../backend/apps/core/changes.py), [`sequences.py`](../../backend/apps/core/sequences.py)). The shop's next save waits for that last moment, then takes the numbers after. The numbers appear in commit order, so a cursor can never skip one.
 
-The cost: one shop's saves queue up for the last moment of each transaction. For a shop with a few laptops, the wait is small. Each shop has its own counter, so shops never wait for each other.
+The cost: one shop's saves queue up for the last moment of each transaction. For a shop with a few laptops, the wait is small. Each shop has its own numbering row, so shops never wait for each other.
 
 Two smaller choices keep the pull simple:
 
