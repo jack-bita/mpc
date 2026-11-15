@@ -338,6 +338,31 @@ describe("Badilisha", () => {
     expect(body).toMatchObject({ value: "true", side: DAWA.id });
   });
 
+  it("starts the keyboard on a yes or no's picked choice, as on any other box (SHOP-5's review)", () => {
+    // The Badilisha button that had the keyboard is gone as the form opens: without this it falls to the page's start.
+    openOn(
+      line({
+        key: "stock.block_negative",
+        kind: "yes_no",
+        scope: "side",
+        side: DAWA.id,
+        default: "false",
+        value: "false",
+      }),
+      "stock.block_negative",
+    );
+
+    expect(document.activeElement).toBe(
+      screen.getByRole("radio", { name: "Hapana" }),
+    );
+  });
+
+  it("starts the keyboard in the box of any other kind", () => {
+    openOn();
+
+    expect(document.activeElement).toBe(amountBox());
+  });
+
   it("gives a time the phone's own clock box", () => {
     openOn(
       line({

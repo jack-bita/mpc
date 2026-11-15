@@ -25,7 +25,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CircleAlert } from "lucide-react";
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -105,6 +105,21 @@ export function SettingForm({
   const online = useOnline();
   const store = useQueryClient();
 
+  // The keyboard starts on a yes or no's picked choice as the form opens, as a box's autoFocus starts it in the box:
+  // the Badilisha button that had it is gone, and without this it would fall to the page's start (SHOP-5's review).
+  // Choice, over Base UI's radios, takes no autoFocus, so the form finds the picked one itself, once.
+  const form = useRef<HTMLFormElement>(null);
+  const yesOrNo = line.kind === "yes_no";
+  useEffect(() => {
+    if (!yesOrNo) return;
+    const radios =
+      form.current?.querySelectorAll<HTMLElement>('[role="radio"]');
+    const picked = [...(radios ?? [])].find(
+      (radio) => radio.getAttribute("aria-checked") === "true",
+    );
+    (picked ?? radios?.[0])?.focus();
+  }, [yesOrNo]);
+
   // The last send: its id, and what it carried, so a try of the same keeps its id (see the top of this file).
   const lastSend = useRef<{ id: string; carried: string } | null>(null);
   const [typed, setTyped] = useState(() => startingText(line.kind, line.value));
@@ -183,7 +198,7 @@ export function SettingForm({
 
   return (
     // noValidate: the browser's own checks would speak its language, not the shop's.
-    <form noValidate onSubmit={send} className="grid gap-6">
+    <form ref={form} noValidate onSubmit={send} className="grid gap-6">
       {line.kind === "yes_no" ? (
         <Choice
           label={t("form.newValue.yes_no")}
