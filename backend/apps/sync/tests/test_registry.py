@@ -28,7 +28,6 @@ from apps.core.permissions import ROLE_TEMPLATES, Permission, RoleTemplate
 from apps.core.settings_registry import CASH_TOLERANCE, IDLE_MINUTES, LATE_FINE, SettingKey
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import StaffMember, User
-from apps.people.selectors import shop_today
 from apps.people.services import (
     FIELDS_ON_STAFF_ROWS,
     add_staff,
@@ -47,6 +46,7 @@ from apps.shops.models import (
     Shop,
     Side,
 )
+from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
 from apps.sync.api.serializers import StaffRecord
 from apps.sync.registry import REGISTRY

@@ -21,8 +21,8 @@ from apps.core import settings_registry
 from apps.core.models import Change
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.people.models import Device, StaffMember, StaffStatus
-from apps.people.selectors import shop_today
 from apps.shops.models import PaymentAccount, PaymentAccountStatus, Setting, Shop, Side
+from apps.shops.selectors import shop_today
 from apps.sync.models import PushedDocument
 
 

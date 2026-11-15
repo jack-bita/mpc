@@ -34,9 +34,9 @@ from apps.core.changes import record_change, recording_changes
 from apps.core.settings_registry import LATE_FINE
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import StaffMember, User
-from apps.people.selectors import shop_today
 from apps.people.services import add_staff, change_person, mark_left, suspend
 from apps.shops.models import Setting, Shop, Side, StockLocation
+from apps.shops.selectors import shop_today
 from apps.shops.services import add_side, rename_side
 from apps.sync import pull
 from apps.sync.registry import REGISTRY

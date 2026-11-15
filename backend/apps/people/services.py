@@ -98,8 +98,9 @@ from apps.people.pins import (
     pin_hash_is_old,
     pin_matches,
 )
-from apps.people.selectors import check_may_act, shop_today
+from apps.people.selectors import check_may_act
 from apps.shops.models import Shop, ShopKind, Side
+from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide, create_shop
 
 

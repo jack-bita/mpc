@@ -55,7 +55,6 @@ from apps.core.changes import recording_changes
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, Role, StaffMember, User
-from apps.people.selectors import shop_today
 from apps.people.services import (
     add_staff,
     assign_role,
@@ -65,6 +64,7 @@ from apps.people.services import (
     start_pairing,
 )
 from apps.shops.models import Shop, ShopKind, Side
+from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide
 
 SHOP_NAME = "Duka la Mfano"

@@ -1,14 +1,19 @@
 """apps/shops/selectors.py — reads of the shops tables that other code builds on (03 §5.2).
 
-For now one: get_setting, which answers "what is this rule on this day?" for a shop, and for one of its
-sides when one is given (D13, ADR-0013). Every later card reads its rules through it: the attendance day
-reads the on-time cut-off and the late fine, a drawer count its tolerance, and so on.
+Two so far. get_setting answers "what is this rule on this day?" for a shop, and for one of its sides
+when one is given (D13, ADR-0013). Every later card reads its rules through it: the attendance day reads
+the on-time cut-off and the late fine, a drawer count its tolerance, and so on. shop_today answers "which
+day is it at this shop?", the day a rule's new value may start from at the earliest (SHOP-3). It lives
+here, with the shop, so `shops` can ask it too: `shops` sits below `people` and may not import it (ADR-0043).
 
 The answer comes from the shop's Setting rows (apps/shops/models.py), or, when there is no row, from the
 list of rules in core (apps/core/settings_registry.py): a new shop works with every rule at its default.
 """
 
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
+from django.utils import timezone
 
 from apps.core.settings_registry import Scope, SettingKey
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
@@ -55,3 +60,8 @@ def get_setting[T](key: SettingKey[T], shop: Shop, side: Side | None = None, *, 
         return key.default
     # The row holds text in its kind's one form; the kind turns it back into a Decimal, a time, and so on.
     return key.kind.parse(row.value)
+
+
+def shop_today(shop: Shop) -> date:
+    # Today in the shop's own time zone (02 §1), not the server's UTC: at 01:00 in Arusha, UTC is still on yesterday.
+    return timezone.localdate(timezone=ZoneInfo(shop.timezone))
