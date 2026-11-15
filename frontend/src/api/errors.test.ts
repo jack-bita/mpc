@@ -109,8 +109,10 @@ const CODES_THE_API_SENDS = [
   // laptop of this shop, or loaded by someone not of this shop.
   "document.carried_from_unknown",
   "document.loaded_by_unknown",
-  // Sides (CORE-6).
-  // A rule's new value, refused (SHOP-3): Setting.clean()'s codes and set_setting's own two.
+  // A rule's new value, refused (SHOP-3): set_setting's own two (date_past, side_required), Setting.clean()'s
+  // three (key_unknown, side_not_allowed, value_invalid), and the table's own two rules (key_invalid, value_blank).
+  // Those last two never come through set_setting today, as a field's own check or clean() answers first and
+  // full_clean then skips that field's table rules; they have their words all the same, in case a route ever sends one.
   "setting.date_past",
   "setting.key_invalid",
   "setting.key_unknown",
@@ -118,6 +120,7 @@ const CODES_THE_API_SENDS = [
   "setting.side_required",
   "setting.value_blank",
   "setting.value_invalid",
+  // Sides (CORE-6).
   "side.code_invalid",
   "side.code_taken",
   "side.name_blank",
