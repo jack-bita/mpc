@@ -108,7 +108,8 @@ def add_side(
 ) -> Side:
     """Add a side to a shop, with its default stock location and its cash drawer, all or nothing.
     `side_id`: the id the client made for the new side (ADR-0007), if it made one. `by`: who adds it; None
-    for the system or the superuser."""
+    for the system or the superuser. A person's new side is refused on the demo (demo.sides_fixed)."""
+    _check_sides_fixed_on_demo(by)
     _check_shop(shop, by)
     created_by_id = None if by is None else by.staff_id
     # One block, so a side never exists without its location and its drawer, nor without its lines. Inside
@@ -137,7 +138,9 @@ def add_side(
 def rename_side(side: Side, *, version: int, name: str, by: Actor | None) -> Side:
     """Give a side a new name, unless someone else changed the side since `version` was read (02 §1).
     `by`: who renames it; None for the system or the superuser. Only the name: the letter starts every
-    number printed on the side's receipts (D7), so it never changes."""
+    number printed on the side's receipts (D7), so it never changes. A person's rename is refused on the demo
+    (demo.sides_fixed)."""
+    _check_sides_fixed_on_demo(by)
     # The block opens the transaction; editing() checks who acts belongs to the shop (T1), locks the side,
     # refuses a stale version, then checks the new name (full_clean trims it, and refuses a name of only
     # spaces) and saves it with the next version. The block refuses a shop that isn't the one open (T1).
@@ -157,12 +160,8 @@ def switch_side(side: Side, *, version: int, is_live: bool, by: Actor | None) ->
     (demo.sides_fixed)."""
     # The demo's seed switches both its sides on (apps/demo/services.py), and every visitor shares the manager's login
     # (OPS-3): one who switched Dawa off would stop every later visitor's one-tap demo, whose laptops are on Dawa
-    # (DEMO_DEVICE_SIDE), until the next morning's seed. So a person's switch is fixed there, as their PIN is (set_pin,
-    # apps/people/services.py), read from the same sign (DEMO_SEED, config/settings/base.py), before anything is opened
-    # or written. The system (`by` None), which is how the seed sets the demo up, still may. The rules stay open on the
-    # demo: trying them is the point, and the seed puts them back.
-    if settings.DEMO_SEED and by is not None:
-        raise ValidationError("On the demo, the sides stay switched as they are.", code="demo.sides_fixed")
+    # (DEMO_DEVICE_SIDE), until the next morning's seed. So a person's switch is fixed there (see below).
+    _check_sides_fixed_on_demo(by)
     # The same steps as rename_side: the block, then editing(), which checks who acts belongs to the shop (T1), locks
     # the side and refuses a stale version. The line after editing() ends: the laptops keep `is_live` on their copy of
     # the side (SYNC-2), and learn of the switch at their next pull.
@@ -171,6 +170,18 @@ def switch_side(side: Side, *, version: int, is_live: bool, by: Actor | None) ->
             fresh.is_live = is_live
         record_change(fresh)
     return fresh
+
+
+def _check_sides_fixed_on_demo(by: Actor | None) -> None:
+    # On the demo every visitor shares the manager's login (OPS-3), and that manager holds settings.manage, for the
+    # rules (SHOP-5), the key every change to a side asks for. So the sides stay as the seed made them: a person's
+    # switch, rename or new side would greet everyone after them, or stop their one-tap demo, until the next morning's
+    # seed (SHOP-5's review). Fixed as a person's PIN is there (set_pin, apps/people/services.py), read from the same
+    # sign (DEMO_SEED, config/settings/base.py), before anything is opened or written. The system (`by` None), which is
+    # how the seed sets the demo up, still may. The rules stay open on the demo: trying them is the point, and the seed
+    # puts them back.
+    if settings.DEMO_SEED and by is not None:
+        raise ValidationError("On the demo, the sides stay as they are.", code="demo.sides_fixed")
 
 
 def set_setting(

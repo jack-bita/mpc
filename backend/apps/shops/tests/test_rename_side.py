@@ -9,6 +9,8 @@ StaffMember, not even in its tests (ADR-0035).
 from typing import Any
 
 import pytest
+from django.core.exceptions import ValidationError
+from pytest_django import Settings
 
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.shops.models import Shop, Side
@@ -40,3 +42,23 @@ def test_rename_side_refuses_someone_of_another_shop(shop_a: Shop, dawa: Side, s
 
     with shop_context(shop_a):
         assert Side.objects.get(pk=dawa.pk).name == "Dawa"
+
+
+def test_side_name_fixed_on_the_demo(shop_a: Shop, dawa: Side, staff_a: Any, settings: Settings) -> None:
+    # On the demo every visitor shares Meneja's login, and Meneja holds settings.manage for the rules (SHOP-5), the key
+    # that renames a side too. A visitor's new name would greet everyone after them until the next morning's seed, so a
+    # person's rename is refused there, before anything is written, as the switch is (demo.sides_fixed).
+    settings.DEMO_SEED = True
+    with shop_context(shop_a), pytest.raises(ValidationError) as refused:
+        rename_side(dawa, version=1, name="Jina Baya", by=staff_a)
+    assert [error.code for error in refused.value.error_list] == ["demo.sides_fixed"]
+    with shop_context(shop_a):
+        assert Side.objects.get(pk=dawa.pk).name == "Dawa"
+
+
+def test_the_system_renames_sides_on_the_demo(shop_a: Shop, dawa: Side, settings: Settings) -> None:
+    # The system (`by` None), as the seed and the superuser act, still may.
+    settings.DEMO_SEED = True
+    with shop_context(shop_a):
+        rename_side(dawa, version=1, name="Dawa za Mifugo", by=None)
+        assert Side.objects.get(pk=dawa.pk).name == "Dawa za Mifugo"

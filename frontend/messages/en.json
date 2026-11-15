@@ -600,7 +600,7 @@
     "demo": {
       "closed": "The demo isn't open here.",
       "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in.",
-      "sides_fixed": "On the demo, the sides stay switched on or off as they are, so every visitor can try it."
+      "sides_fixed": "On the demo, the sides stay as they are, so every visitor can try them."
     },
     "password_too_short": "This password is too short.",
     "password_too_common": "This password is too common. Choose another.",

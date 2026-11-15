@@ -600,7 +600,7 @@
     "demo": {
       "closed": "Demo haipo wazi hapa.",
       "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia.",
-      "sides_fixed": "Kwenye demo, pande zinabaki zilivyo, zimewashwa au zimezimwa, ili kila mgeni aweze kujaribu."
+      "sides_fixed": "Kwenye demo, pande hazibadilishwi, ili kila mgeni aweze kujaribu."
     },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",

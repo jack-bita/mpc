@@ -225,7 +225,7 @@ describe("the switch", () => {
 
     const dawa = await boxOf("Dawa");
     expect((await within(dawa).findByRole("alert")).textContent).toContain(
-      "Kwenye demo, pande zinabaki zilivyo",
+      "Kwenye demo, pande hazibadilishwi",
     );
     expect(within(dawa).getByText("Imewashwa")).toBeTruthy();
   });

@@ -476,6 +476,32 @@ def test_side_switch_refused_on_the_demo(
         assert Side.objects.get(pk=sides_a["F"].pk).is_live is False
 
 
+def test_side_rename_refused_on_the_demo(
+    staff_client_a: APIClient, shop_a: Shop, sides_a: dict[str, Side], settings: Settings
+) -> None:
+    # The demo's Meneja holds settings.manage, for the rules (SHOP-5), and that key also renames a side. Every visitor
+    # shares Meneja's login, so one who renamed Dawa would show that name to everyone after them until the next
+    # morning's seed: refused, as the switch is (SHOP-5's review).
+    settings.DEMO_SEED = True
+    response = staff_client_a.patch(f"{SIDES}{sides_a['F'].pk}/", {"name": "Jina Baya", "version": 1}, format="json")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "demo.sides_fixed"
+    with shop_context(shop_a):
+        assert Side.objects.get(pk=sides_a["F"].pk).name == "Vyakula"
+
+
+def test_side_add_refused_on_the_demo(staff_client_a: APIClient, shop_a: Shop, settings: Settings) -> None:
+    # The same key adds a side: a visitor could fill the demo with sides nobody else asked for (SHOP-5's review).
+    settings.DEMO_SEED = True
+    response = staff_client_a.post(SIDES, {"id": str(uuid.uuid7()), "code": "X", "name": "Nyingine"}, format="json")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "demo.sides_fixed"
+    with shop_context(shop_a):
+        assert not Side.objects.filter(code="X").exists()
+
+
 @pytest.mark.parametrize("sent", [{"version": 1}, {"name": "Chakula", "is_live": True, "version": 1}])
 def test_edit_sends_one_change_at_a_time(
     staff_client_a: APIClient, shop_a: Shop, sides_a: dict[str, Side], sent: dict[str, object]
