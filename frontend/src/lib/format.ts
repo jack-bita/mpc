@@ -1,6 +1,6 @@
 // format.ts — money, stock, times of day and dates as people read them: "TSh 41,000", "mifuko 26 + kilo 35.5",
-// "07:55" and "13/11/2026" (03 §7.4). A rule's own values too (SHOP-5): an amount that may have cents, a day
-// with no time, "2026-12-01", and the part of the day of a clock time, "07:35".
+// "07:55" and "13/11/2026" (03 §7.4). A rule's own values too (SHOP-5): an amount written exactly as saved, a
+// day with no time, "2026-12-01", and the part of the day of a clock time, "07:35".
 //
 // Every screen and slip writes numbers through here, so 41000 never shows as "41000.00" on one screen
 // and "TSh 41,000" on another. Writing never rounds: a value that would need rounding is refused, so
@@ -41,8 +41,8 @@ const asText = (value: Big, places: number) =>
 /**
  * Money as people read it: "TSh 41,000". Only whole shillings: an amount with cents is refused, not
  * rounded. Round first with roundMoney: the shop's step (money.rounding_step) is at least 1 shilling,
- * so a rounded amount has no cents. A step with cents, like 2.50, would need cents on screen; that is
- * a decision for the day a shop asks for one, so it fails loudly here instead of hiding them.
+ * so a rounded amount has no cents. A step with cents, like 2.50, can't be set: a money rule is whole
+ * shillings (Jack, 16 Nov 2026, the server's Money kind), so cents here mean a missed rounding, said loudly.
  */
 export function formatMoney(amount: Big): string {
   const fitted = fit(amount, MONEY_PLACES);
@@ -53,8 +53,9 @@ export function formatMoney(amount: Big): string {
   return MONEY.format(asText(fitted, 0));
 }
 
-// Money with its cents, for the one place cents may be: a rule's amount (SHOP-5). The server takes two places
-// for a money rule, and its page must show what is saved, never round it away or fail on it.
+// Money with its cents, for a rule's amount (SHOP-5). A money rule is whole shillings since Jack's choice (16 Nov
+// 2026), but a row saved before it keeps what it holds, and the rules page must show what is saved, never round it
+// away or fail on it.
 const MONEY_WITH_CENTS = new Intl.NumberFormat(LOCALE, {
   style: "currency",
   currency: "TZS",
@@ -64,7 +65,7 @@ const MONEY_WITH_CENTS = new Intl.NumberFormat(LOCALE, {
 
 /**
  * Money exactly as it is, for a rule's amount: "TSh 1,000" when it is whole shillings, as formatMoney writes
- * it, and "TSh 0.50" when it has cents. Never rounds. Only the settings page uses it: everywhere else an
+ * it, and "TSh 0.50" for a row saved with cents before money rules were whole shillings. Never rounds. Only the settings page uses it: everywhere else an
  * amount is rounded first, and formatMoney refuses cents so a missed rounding shows (SHOP-5).
  */
 export function formatMoneyExact(amount: Big): string {

@@ -7,8 +7,8 @@
 // later: the date box starts at today and offers nothing earlier, and the server refuses an earlier one anyway
 // (setting.date_past, Jack, SHOP-3).
 //
-// The box fits the rule's kind (setting-words.ts): an amount or a percent with the keypad's point, a whole number
-// with digits only, the phone's own clock for a time, and Ndiyo or Hapana for a yes or no. What is typed goes as
+// The box fits the rule's kind (setting-words.ts): a percent with the keypad's point, an amount or a whole number
+// with digits only (a money rule is whole shillings, Jack, 16 Nov 2026), the phone's own clock for a time, and Ndiyo or Hapana for a yes or no. What is typed goes as
 // text, never through a JavaScript number (ADR-0024): "1,000" is sent as "1000", the commas people write taken
 // out, and the server reads it into a Decimal. A box left empty, or one that isn't a number at all, is said at
 // once, in the server's own sentences; the server checks the rest, a value too big or too small for its rule, and
@@ -54,8 +54,8 @@ import { SHOP_RULES } from "./shop-rules";
 // grouped number starts with 1 to 9: "0,500" is half a shilling written with a decimal comma, not five hundred (SHOP-5's
 // second review).
 const WHOLE = /^(\d+|[1-9]\d{0,2}([, ]\d{3})+)$/;
-// An amount or a percent: a whole number so written, and at most two places after a point, as the server keeps them
-// (numeric(14,2)).
+// A percent: a whole number so written, and at most two places after a point, as the server keeps them
+// (numeric(14,2)). An amount is a whole number: the shop's money has no cents.
 const DECIMAL = /^(\d+|[1-9]\d{0,2}([, ]\d{3})+)(\.\d{1,2})?$/;
 // The phone's clock box answers "07:35"; one typed by hand on a laptop's plain box, the same.
 const CLOCK = /^\d{2}:\d{2}$/;
@@ -67,12 +67,13 @@ const ON_A_BOX = new Set(["value", "effective_from", "note"]);
  * which the form says at once; whether it is too big or too small for its rule is the server's to say. */
 export function typedValue(kind: SettingKind, typed: string): string | null {
   switch (kind) {
-    case "money":
     case "percent": {
       // The commas and spaces between thousands, out once the pattern has placed them: "1,000" and "1 000" are 1000.
       const trimmed = typed.trim();
       return DECIMAL.test(trimmed) ? trimmed.replace(/[, ]/g, "") : null;
     }
+    // A money rule is whole shillings, as the server's Money kind says (Jack, 16 Nov 2026): no point, no cents.
+    case "money":
     case "whole": {
       const trimmed = typed.trim();
       return WHOLE.test(trimmed) ? trimmed.replace(/[, ]/g, "") : null;
@@ -282,13 +283,13 @@ export function SettingForm({
   );
 }
 
-/** The box's keypad for each kind: a point for an amount or a percent, digits only for a whole number, the
+/** The box's keypad for each kind: a point for a percent, digits only for an amount or a whole number, the
  * phone's clock for a time. */
 function boxFor(kind: Exclude<SettingKind, "yes_no">) {
   switch (kind) {
-    case "money":
     case "percent":
       return { inputMode: "decimal" as const };
+    case "money":
     case "whole":
       return { inputMode: "numeric" as const };
     case "time":

@@ -83,8 +83,10 @@ def _amount(text: str) -> Decimal:
 
 @dataclass(frozen=True)
 class Money(ValueKind[Decimal]):
-    # An amount in the shop's currency: exact, never a float (ADR-0024), with at most two places, as every
-    # amount is stored (03 §9).
+    # An amount in the shop's currency: exact, never a float (ADR-0024), in whole shillings (Jack, 16 Nov 2026). It is
+    # stored with two places, as every amount is (03 §9), but those are always zeros: the shop's money has no cents,
+    # and every screen writes money with formatMoney, which refuses cents, so a rule with them (a rounding step of
+    # 2.50, a late fine of 1,000.50) would stop each screen that shows an amount it made (04 §20, item 25).
     code: ClassVar[str] = "money"
     minimum: Decimal = Decimal("0")
 
@@ -92,6 +94,9 @@ class Money(ValueKind[Decimal]):
         value = _amount(text)
         if value < self.minimum:
             raise ValueError(f"{text!r} is below {self.minimum}.")
+        # "1500.00" is whole; "1500.50" isn't. to_integral_value() drops the places without rounding the check away.
+        if value != value.to_integral_value():
+            raise ValueError(f"{text!r} has cents: a money rule is whole shillings.")
         return value
 
     def _write(self, value: Decimal) -> str:
