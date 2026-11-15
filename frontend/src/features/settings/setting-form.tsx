@@ -55,14 +55,8 @@ const DECIMAL = /^(\d+|\d{1,3}([, ]\d{3})+)(\.\d{1,2})?$/;
 // The phone's clock box answers "07:35"; one typed by hand on a laptop's plain box, the same.
 const CLOCK = /^\d{2}:\d{2}$/;
 
-// The fields whose refusals the form shows in their own place: beside a box, or about the rule itself.
-const FIELDS_SHOWN = new Set([
-  "value",
-  "effective_from",
-  "note",
-  "side",
-  "key",
-]);
+// The fields with a box, beside which their refusals show. Every other field's refusal shows above the buttons.
+const ON_A_BOX = new Set(["value", "effective_from", "note"]);
 
 /** What was typed, as the server takes it: "1,000" → "1000". Null when it isn't a value of its kind at all,
  * which the form says at once; whether it is too big or too small for its rule is the server's to say. */
@@ -196,21 +190,20 @@ export function SettingForm({
 
   // Where each refusal shows: beside its box, the form's own first, then the server's. A refusal about the
   // rule itself, its side or its key, has no box: the page sends both, so it means the app and the server
-  // disagree (a newer server, or a bug), and it shows above the buttons in the server's sentence. Any other, a
-  // refusal about a field the form doesn't know, shows in the alert with the rest: no refusal goes unsaid
-  // (SHOP-5's review).
+  // disagree (a newer server, or a bug), and it shows above the buttons in the server's sentence. So does a
+  // refusal of a field the form has no box for at all, as a newer server's, each in its own sentence: the
+  // general "Baadhi ya sehemu si sahihi. Angalia zilizowekwa alama." would send the owner looking for a mark no
+  // box has (SHOP-5's two reviews). A refusal of the whole request, with no field, is ApiErrorAlert's.
   const byField = fieldMessages(save.error);
   const said = (code?: string) =>
     code === undefined ? undefined : codeMessage(codes, code);
   const valueError = said(own.value) ?? byField.value;
   const dayError = said(own.effective_from) ?? byField.effective_from;
   const noteError = byField.note;
-  const aboutTheRule = [byField.side, byField.key].filter(
-    (sentence): sentence is string => sentence !== undefined,
-  );
-  const onABox =
-    Object.keys(byField).length > 0 &&
-    Object.keys(byField).every((field) => FIELDS_SHOWN.has(field));
+  const noBox = Object.entries(byField)
+    .filter(([field]) => !ON_A_BOX.has(field))
+    .map(([, sentence]) => sentence);
+  const aboutAField = Object.keys(byField).length > 0;
 
   return (
     // noValidate: the browser's own checks would speak its language, not the shop's.
@@ -259,16 +252,16 @@ export function SettingForm({
         // As the server keeps it (Setting.note, 200 characters).
         maxLength={200}
       />
-      {aboutTheRule.length > 0 ? (
+      {noBox.length > 0 ? (
         <Alert kind="danger">
           {/* The icon says what the title says, so a screen reader skips it (api-error-alert.tsx). */}
           <CircleAlert aria-hidden="true" />
           <AlertTitle>{apiError("title")}</AlertTitle>
-          <AlertDescription>{aboutTheRule.join(" ")}</AlertDescription>
+          <AlertDescription>{noBox.join(" ")}</AlertDescription>
         </Alert>
       ) : (
-        // What no box can show: no network, no key here, the server's own problem.
-        <ApiErrorAlert error={onABox ? null : save.error} />
+        // What no field names: no network, no key here, the server's own problem.
+        <ApiErrorAlert error={aboutAField ? null : save.error} />
       )}
       <div className="flex flex-wrap gap-3">
         {/* Switched off while it is sent, so a second tap sends nothing, and while offline, so nothing waits

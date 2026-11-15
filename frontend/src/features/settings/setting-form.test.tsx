@@ -282,20 +282,32 @@ describe("Badilisha", () => {
     expect(errorOf(dayBox())).toBe("");
   });
 
-  it("says a refusal about a field it has no place for, never hiding it (SHOP-5's review)", async () => {
-    // A newer server refuses a field this app doesn't send or know: the alert says it, in the plain sentence.
+  it("says a refusal about a field it has no box for in that field's own sentence (SHOP-5's two reviews)", async () => {
+    // A newer server refuses a field this app doesn't know, beside a refusal about the rule itself. Each says its own
+    // sentence: the general "check the marked boxes" would send the owner looking for a mark no box has.
     answer(
       "POST",
       RULES,
-      refusal(400, "invalid", {}, { unit: ["setting.value_invalid"] }),
+      refusal(
+        400,
+        "invalid",
+        {},
+        {
+          side: ["setting.side_not_allowed"],
+          unit: ["setting.value_invalid"],
+        },
+      ),
     );
     openOn();
 
     tap(save());
 
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      "Baadhi ya sehemu si sahihi.",
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(
+      "Kanuni hii ni moja kwa duka zima, si kwa upande mmoja.",
     );
+    expect(alert.textContent).toContain("Thamani hii haifai kwa kanuni hii.");
+    expect(alert.textContent).not.toContain("Angalia zilizowekwa alama.");
   });
 
   it("shows the demo's two refusals beside the day and the note (SHOP-5's second review)", async () => {
