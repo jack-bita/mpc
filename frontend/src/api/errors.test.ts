@@ -83,6 +83,8 @@ const CODES_THE_API_SENDS = [
   "demo.closed",
   // The demo's logins stay as the seed made them (DATA-1): a PIN, a temporary password and a person's own.
   "demo.logins_fixed",
+  // The demo's sides stay switched as the seed made them, so every visitor's one tap works (SHOP-3).
+  "demo.sides_fixed",
   "staff.left",
   "staff.other_shop",
   "staff.reason_required",
@@ -107,6 +109,17 @@ const CODES_THE_API_SENDS = [
   // laptop of this shop, or loaded by someone not of this shop.
   "document.carried_from_unknown",
   "document.loaded_by_unknown",
+  // A rule's new value, refused (SHOP-3): set_setting's own two (date_past, side_required), Setting.clean()'s
+  // three (key_unknown, side_not_allowed, value_invalid), and the table's own two rules (key_invalid, value_blank).
+  // Those last two never come through set_setting today, as a field's own check or clean() answers first and
+  // full_clean then skips that field's table rules; they have their words all the same, in case a route ever sends one.
+  "setting.date_past",
+  "setting.key_invalid",
+  "setting.key_unknown",
+  "setting.side_not_allowed",
+  "setting.side_required",
+  "setting.value_blank",
+  "setting.value_invalid",
   // Sides (CORE-6).
   "side.code_invalid",
   "side.code_taken",

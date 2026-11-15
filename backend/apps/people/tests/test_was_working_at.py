@@ -17,9 +17,10 @@ import pytest
 from apps.control.models import AuditEvent
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember
-from apps.people.selectors import shop_today, was_working_at
+from apps.people.selectors import was_working_at
 from apps.people.services import mark_left, suspend
 from apps.shops.models import Shop
+from apps.shops.selectors import shop_today
 
 pytestmark = pytest.mark.django_db
 

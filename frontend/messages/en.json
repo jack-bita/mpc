@@ -479,7 +479,8 @@
     },
     "demo": {
       "closed": "The demo isn't open here.",
-      "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in."
+      "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in.",
+      "sides_fixed": "On the demo, the sides stay switched on or off as they are, so every visitor can try it."
     },
     "password_too_short": "This password is too short.",
     "password_too_common": "This password is too common. Choose another.",
@@ -491,6 +492,15 @@
       "code_used": "This code was already used.",
       "code_expired": "This code has expired. Ask the device for a new one.",
       "already_paired": "This device is already registered."
+    },
+    "setting": {
+      "date_past": "A new value can't start before today.",
+      "key_invalid": "This rule's name isn't valid.",
+      "key_unknown": "This rule isn't known.",
+      "side_not_allowed": "This rule has one value for the whole shop, not for one side.",
+      "side_required": "Choose a side: this rule is set for each side on its own.",
+      "value_blank": "Enter a value.",
+      "value_invalid": "This value doesn't fit this rule."
     },
     "side": {
       "code_invalid": "A side's letter is one capital letter, like D.",

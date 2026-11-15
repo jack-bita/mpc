@@ -185,7 +185,7 @@ class Side(Editable):
     code = models.CharField(max_length=1)
     sale_flow = models.CharField(max_length=24, choices=SaleFlow, default=SaleFlow.ONE_SCREEN)
     # Off until the owner agrees to start using the side (ADR-0033), so a new side never reaches the
-    # counters by surprise. The switch comes with the settings screen (SHOP-3).
+    # counters by surprise. Switched by switch_side (apps/shops/services.py, SHOP-3), from the settings page (SHOP-5).
     is_live = models.BooleanField(default=False)
 
     class Meta(Editable.Meta):
@@ -377,8 +377,9 @@ class Setting(AppendOnly):
     # `created_by`, so there is no `set_by` of its own (02 v1.7).
 
     # Empty: the whole shop's value. A side: that side's own value, which beats the shop's (02 §4), for
-    # keys whose scope allows it (clean() below). T1: the side belongs to the row's shop; the service
-    # that writes settings (SHOP-3) checks it, as services do for StockLocation.side. PROTECT: nothing is
+    # keys whose scope allows it (clean() below); set_setting writes a side's rule one side at a time, and
+    # never for the whole shop (SHOP-3). T1: the side belongs to the row's shop; set_setting
+    # (apps/shops/services.py) checks it, as services do for StockLocation.side. PROTECT: nothing is
     # deleted (rule 7). related_name="+": settings are read through get_setting. db_index=False: indexes
     # lead with `shop` (03 §9), and get_setting's reads use the lookup index in Meta. A side's own index
     # would serve only PROTECT's search for a side's rows before deleting the side, and nothing is deleted.

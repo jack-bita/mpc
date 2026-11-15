@@ -1,7 +1,7 @@
 """apps/shops/tests/test_shop_history.py — the shops' office tables keep the history of their edits (03 §5.16,
 ADR-0036): sides, payment accounts and stock locations.
 
-The owner renames the side Dawa through the office route, as the settings screen will (SHOP-3). PostgreSQL's own
+The owner renames the side Dawa through the office route (PATCH sides/{id}/), as a screen will. PostgreSQL's own
 trigger writes one control.EditEvent: who (the staff member the visit names), when, and the name before and after:
 
     who       row                  before              after
@@ -41,9 +41,9 @@ def test_office_edit_recorded_with_person(staff_client_a: APIClient, staff_a: An
 
 def test_payment_account_number_change_recorded(shop_a: Shop, staff_a: Any) -> None:
     # Jack's story at CTRL-2's review: someone changes the Dawa M-Pesa till's number to their own phone, and customers
-    # pay the wrong number for a week. The history says who changed it, and when. No account screen exists yet
-    # (SHOP-3), so the change is a plain update() inside a visit, opened here as the base view opens it. Fake numbers
-    # only: the repo is public (03 §10).
+    # pay the wrong number for a week. The history says who changed it, and when. No account screen or service exists
+    # yet, so the change is a plain update() inside a visit, opened here as the base view opens it. Fake numbers only:
+    # the repo is public (03 §10).
     with shop_context(shop_a):
         account = PaymentAccount.objects.create(
             shop=shop_a,

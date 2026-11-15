@@ -479,7 +479,8 @@
     },
     "demo": {
       "closed": "Demo haipo wazi hapa.",
-      "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia."
+      "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia.",
+      "sides_fixed": "Kwenye demo, pande zinabaki zilivyo, zimewashwa au zimezimwa, ili kila mgeni aweze kujaribu."
     },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",
@@ -491,6 +492,15 @@
       "code_used": "Namba hii imeshatumika.",
       "code_expired": "Muda wa namba hii umekwisha. Omba kifaa kionyeshe namba mpya.",
       "already_paired": "Kifaa hiki tayari kimesajiliwa."
+    },
+    "setting": {
+      "date_past": "Thamani mpya haiwezi kuanza kabla ya leo.",
+      "key_invalid": "Jina hili la kanuni haliko sawa.",
+      "key_unknown": "Kanuni hii haijulikani.",
+      "side_not_allowed": "Kanuni hii ni moja kwa duka zima, si kwa upande mmoja.",
+      "side_required": "Chagua upande: kanuni hii huwekwa kwa kila upande peke yake.",
+      "value_blank": "Andika thamani.",
+      "value_invalid": "Thamani hii haifai kwa kanuni hii."
     },
     "side": {
       "code_invalid": "Herufi ya upande iwe herufi kubwa moja, kama D.",

@@ -55,7 +55,6 @@ from apps.core.changes import recording_changes
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, Role, StaffMember, User
-from apps.people.selectors import shop_today
 from apps.people.services import (
     add_staff,
     assign_role,
@@ -65,7 +64,8 @@ from apps.people.services import (
     start_pairing,
 )
 from apps.shops.models import Shop, ShopKind, Side
-from apps.shops.services import NewSide
+from apps.shops.selectors import shop_today
+from apps.shops.services import NewSide, switch_side
 
 SHOP_NAME = "Duka la Mfano"
 SHOP_CODE = "DEMO"
@@ -205,7 +205,12 @@ def _make_the_shop() -> Shop:
         # The shop, its sides with their stock places and cash drawers, and its own copy of the six roles
         # (set_up_shop), as a demo shop: the refusal above knows it as the seed's own at the next run.
         shop = set_up_shop(name=SHOP_NAME, code=SHOP_CODE, sides=SIDES, kind=ShopKind.DEMO, shop_id=shop_id)
-        sides = {side.code: side for side in Side.objects.all()}
+        # Both sides switched on, as an owner switches a real shop's on once he starts using it (ADR-0033): a new side
+        # starts off (SHOP-2), and the demo shows a shop at work. As the system, which the demo's lock on the switch
+        # lets through (demo.sides_fixed). Each side already has its line in this block, so the switch adds none.
+        sides = {
+            side.code: switch_side(side, version=side.version, is_live=True, by=None) for side in Side.objects.all()
+        }
         for person in PEOPLE:
             # A person's account has no shop (rule 1); their job at the shop does. create_user with no password
             # stores one that nothing can match, so a seller can log in only with her PIN.

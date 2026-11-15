@@ -377,6 +377,15 @@ def test_seed_demo_stops_at_once_on_another_database_error(monkeypatch: pytest.M
     assert calls == ["flush"]
 
 
+def test_seed_demo_switches_its_sides_on() -> None:
+    # A demo shows a shop at work, so both its sides are switched on, as an owner would switch a real shop's on once he
+    # starts using it (ADR-0033). A new side starts off (SHOP-2), so the seed does it, as the system (switch_side).
+    seed_demo(fresh=True)
+
+    with shop_context(the_demo_shop()):
+        assert {(side.code, side.is_live) for side in Side.objects.all()} == {("D", True), ("F", True)}
+
+
 def test_seed_demo_numbers_every_record_once() -> None:
     # A visitor's new laptop starts from the demo shop's change log (SYNC-3): every record it gets names a line, made
     # through the services, and the seed numbers them all once, at the end of its one block (SYNC-15). The demo shop's

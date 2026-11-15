@@ -66,7 +66,8 @@ def sweep_sides(shop_a: Shop, shop_b: Shop, staff_a: StaffMember, staff_b: Staff
 def sweep_settings(sweep_sides: tuple[Shop, Shop]) -> tuple[Shop, Shop]:
     # Each shop's own late fine, and a tolerance for its own first side: rows the bootstrap sends a device (SYNC-2),
     # with amounts only that shop holds. From a day long past, so both stay in force whatever day the tests run.
-    # Checked, then saved, as the settings screen will write them (SHOP-3).
+    # Checked, then saved, as set_setting saves one (SHOP-3), but with no line and on a past day, which the service
+    # refuses: the sweep reads the rows, not the log.
     for shop, side_code, fine, tolerance in (
         (sweep_sides[0], "D", "1250.00", "350.00"),
         (sweep_sides[1], "P", "1750.00", "450.00"),

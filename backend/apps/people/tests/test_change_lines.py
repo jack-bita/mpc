@@ -18,7 +18,6 @@ from apps.core.models import ChangeOp
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, User
-from apps.people.selectors import shop_today
 from apps.people.services import (
     _record_each_job,
     add_staff,
@@ -32,6 +31,7 @@ from apps.people.services import (
     unsuspend,
 )
 from apps.shops.models import Shop, Side
+from apps.shops.selectors import shop_today
 from tests.change_log import lines_written
 
 pytestmark = pytest.mark.django_db

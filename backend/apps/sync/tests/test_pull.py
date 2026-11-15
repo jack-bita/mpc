@@ -22,6 +22,7 @@ only: the repo is public (03 §10).
 import json
 from datetime import date, datetime, timedelta
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from django.db import connection
@@ -34,10 +35,10 @@ from apps.core.changes import record_change, recording_changes
 from apps.core.settings_registry import LATE_FINE
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import StaffMember, User
-from apps.people.selectors import shop_today
 from apps.people.services import add_staff, change_person, mark_left, suspend
 from apps.shops.models import Setting, Shop, Side, StockLocation
-from apps.shops.services import add_side, rename_side
+from apps.shops.selectors import shop_today
+from apps.shops.services import add_side, rename_side, set_setting
 from apps.sync import pull
 from apps.sync.registry import REGISTRY
 from tests.change_log import last_line
@@ -78,14 +79,11 @@ def hire(shop: Shop, full_name: str, nickname: str) -> StaffMember:
 
 
 def add_rule_row(shop: Shop, value: str, effective_from: date) -> Setting:
-    # A late fine's row, checked and saved, with its line in the log. No service writes a rule's line yet (SHOP-3 will),
-    # so the save names its row here, as that service will.
-    with shop_context(shop), recording_changes(shop):
-        row = Setting(shop=shop, key=LATE_FINE.key, value=value, effective_from=effective_from)
-        row.full_clean()
-        row.save()
-        record_change(row)
-    return row
+    # A late fine's row, written as the owner writes one, through set_setting (SHOP-3), which saves it with its line in
+    # the log. The service refuses a day before the shop's today, and these tests need rows for past days too, as a shop
+    # holds once those days have gone by: so the service is told that the row's own day is today.
+    with shop_context(shop), patch("apps.shops.services.shop_today", return_value=effective_from):
+        return set_setting(shop, key=LATE_FINE.key, value=value, effective_from=effective_from, by=None)
 
 
 @pytest.fixture

@@ -178,8 +178,9 @@ KINDS: tuple[type[ValueKind[Any]], ...] = (Money, Percent, Whole, TimeOfDay, Yes
 
 
 class Scope(StrEnum):
-    # Where a rule's value may be set. SHOP: one value for the whole shop. SIDE: a shop value that each
-    # side may override with a row of its own; a side's row beats the shop's (02 §4).
+    # Where a rule's value may be set. SHOP: one value for the whole shop. SIDE: one value for each side,
+    # set one side at a time (Jack, SHOP-3): set_setting writes no whole-shop row for it. get_setting still
+    # reads one, behind the side's own row (02 §4), which only code that skips set_setting could write.
     SHOP = "shop"
     SIDE = "side"
 

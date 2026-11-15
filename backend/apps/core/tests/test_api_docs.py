@@ -80,7 +80,10 @@ def test_schema_says_what_each_route_takes(tmp_path: Path) -> None:
     assert sent(sides["post"]) == "SideCreateRequest"
     assert set(shapes["SideCreateRequest"]["required"]) == {"id", "code", "name"}
     assert sent(side["patch"]) == "SideEditRequest"
-    assert set(shapes["SideEditRequest"]["required"]) == {"name", "version"}
+    # An edit sends a new name or the on/off switch (SHOP-3), one at a time, so only the version is required in the
+    # schema; the serializer itself asks for exactly one of the two.
+    assert set(shapes["SideEditRequest"]["required"]) == {"version"}
+    assert set(shapes["SideEditRequest"]["properties"]) == {"name", "is_live", "version"}
     # The id in the address is a UUID, as every id is.
     assert side["get"]["parameters"][0]["schema"] == {"type": "string", "format": "uuid"}
     # And a side can be read and changed, never replaced whole (PUT) or deleted: nothing is deleted (T3).

@@ -29,9 +29,9 @@ from apps.demo import services
 from apps.demo.services import SHOP_CODE, DemoDevice, register_demo_device, seed_demo
 from apps.people.device_keys import DEVICE_KEY_COOKIE, hash_device_key
 from apps.people.models import Device, PairingRequest, StaffMember, User
-from apps.people.selectors import shop_today
 from apps.people.services import add_staff, mark_left
 from apps.shops.models import Shop, ShopKind
+from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide, create_shop
 
 pytestmark = pytest.mark.django_db

@@ -30,9 +30,9 @@ from apps.core.changes import record_change, recording_changes
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
-from apps.people.selectors import shop_today
 from apps.people.services import add_staff, block, confirm_pairing, start_pairing
 from apps.shops.models import Setting, Shop, Side
+from apps.shops.selectors import shop_today
 from apps.shops.services import add_side, rename_side
 from apps.sync import bootstrap
 from apps.sync.api.serializers import BootstrapAnswer

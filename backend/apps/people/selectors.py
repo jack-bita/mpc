@@ -43,7 +43,6 @@ from datetime import date, datetime, time, timedelta
 from typing import cast
 from zoneinfo import ZoneInfo
 
-from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
 from apps.control.models import AuditAction, AuditEvent
@@ -55,7 +54,7 @@ from apps.people.login_doors import shop_of_device_key, shops_of_person
 from apps.people.models import Device, DeviceOutage, DeviceStatus, StaffMember, StaffStatus, User
 from apps.people.permissions import held_permissions
 from apps.shops.models import Shop, ShopStatus, Side
-from apps.shops.selectors import get_setting
+from apps.shops.selectors import get_setting, shop_today
 
 
 class LoginRefused(Exception):
@@ -64,11 +63,6 @@ class LoginRefused(Exception):
     def __init__(self, message: str, *, code: str) -> None:
         super().__init__(message)
         self.code = code
-
-
-def shop_today(shop: Shop) -> date:
-    # Today in the shop's own time zone (02 §1), not the server's UTC: at 01:00 in Arusha, UTC is still on yesterday.
-    return timezone.localdate(timezone=ZoneInfo(shop.timezone))
 
 
 # The audit trail's lines that move a person between active and suspended (02 §5). Leaving, final, is read apart.

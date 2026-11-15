@@ -35,9 +35,9 @@ from apps.core.links import LINK_TYPES
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
-from apps.people.selectors import shop_today
 from apps.people.services import add_staff, mark_left, suspend, unsuspend
 from apps.shops.models import Shop, Side
+from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
 from apps.sync.document_types import DOCUMENT_TYPES
 from apps.sync.models import PushedDocument
