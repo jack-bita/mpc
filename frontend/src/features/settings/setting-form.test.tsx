@@ -79,10 +79,8 @@ describe("what is typed, as the server takes it", () => {
     ["money", "1,000", "1000"],
     ["money", "1 000", "1000"],
     ["money", "1,000,000", "1000000"],
-    ["money", "1,000.50", "1000.50"],
     ["money", " 1,000 ", "1000"],
     ["money", "2500", "2500"],
-    ["money", "0.50", "0.50"],
     ["percent", "2.5", "2.5"],
     ["whole", "1,440", "1440"],
     ["time", "08:00", "08:00"],
@@ -93,6 +91,10 @@ describe("what is typed, as the server takes it", () => {
 
   it.each([
     ["money", "elfu moja"],
+    // Cents: a money rule is whole shillings (Jack, 16 Nov 2026), as the server says too.
+    ["money", "1,000.50"],
+    ["money", "0.50"],
+    ["money", "2500.5"],
     ["money", "1000.505"],
     ["money", "-500"],
     ["percent", "2,5.0.1"],
@@ -114,7 +116,6 @@ describe("what is typed, as the server takes it", () => {
 
   it("starts the box at today's value, the zeros at the end of an amount left off", () => {
     expect(startingText("money", "1000.00")).toBe("1000");
-    expect(startingText("money", "0.50")).toBe("0.5");
     expect(startingText("percent", "2.50")).toBe("2.5");
     expect(startingText("whole", "15")).toBe("15");
     expect(startingText("time", "07:35")).toBe("07:35");
@@ -155,8 +156,8 @@ describe("Badilisha", () => {
     expect((amountBox() as HTMLInputElement).value).toBe("1000");
     expect((dayBox() as HTMLInputElement).value).toBe(TODAY);
     expect(dayBox().getAttribute("min")).toBe(TODAY);
-    // The keypad with a point, on a phone.
-    expect(amountBox().getAttribute("inputmode")).toBe("decimal");
+    // The keypad with digits only, on a phone: a money rule is whole shillings.
+    expect(amountBox().getAttribute("inputmode")).toBe("numeric");
   });
 
   it("names the side of a side's rule", async () => {

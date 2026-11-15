@@ -58,7 +58,7 @@ export function useRuleWords() {
   /** A value of `kind`, as the server writes it ("1000.00", "07:35", "true"), as people read it. */
   function written(kind: SettingKind, value: string): string {
     switch (kind) {
-      // Exactly, cents and all if a rule has them: the page shows what is saved (format.ts).
+      // Exactly as saved: a money rule is whole shillings now, but a row saved before may hold cents (format.ts).
       case "money":
         return formatMoneyExact(new Decimal(value));
       // "5.00" as "5", "1440" as "1,440": the zeros at the end left off, a comma between thousands.
