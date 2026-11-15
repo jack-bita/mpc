@@ -3,8 +3,13 @@ the one-tap demo, which makes a visitor's browser a device of that shop (OPS-3).
 
 It owns the demo shop as visitors meet it (Jack, 8 Nov 2026): Duka la Mfano, a demo shop with the sides Dawa and
 Vyakula; Meneja, its manager on both sides, who logs in with a password; Asha, a seller on Dawa, and Baraka, a seller
-on Vyakula, who log in with a PIN. `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start
-of the demo (backend/start-demo.sh) and of the browser tests' container, which starts the same way (compose.e2e.yml):
+on Vyakula, who log in with a PIN. Meneja also holds settings.manage on the whole shop, one of the owner's own keys,
+so a visitor can try Badilisha on Mipangilio ya duka (Jack, SHOP-5, 15 Nov 2026): a manager alone may not change the
+shop's rules, and the demo has no owner. A visitor's new value lasts until the seed makes the shop again, the next
+day; the sides' switches stay shut there all the same (demo.sides_fixed).
+
+`manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
+and of the browser tests' container, which starts the same way (compose.e2e.yml):
 the tests log in as these people, with the logins written again in frontend/e2e/pair-and-pin-login.spec.ts. Change
 both together.
 
@@ -52,13 +57,14 @@ from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
 from apps.core.changes import recording_changes
-from apps.core.permissions import RoleTemplate
+from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, Role, StaffMember, User
 from apps.people.services import (
     add_staff,
     assign_role,
     confirm_pairing,
+    grant_permission,
     set_pin,
     set_up_shop,
     start_pairing,
@@ -86,7 +92,8 @@ DEADLOCK = "40P01"
 class DemoPerson:
     # One person of the demo shop, as the seed makes them. `side`: the letter of the side their role is on, None for
     # every side, as a shop's manager is. `pin`: four digits the PIN rules allow (apps/people/pins.py), or None for
-    # a person who logs in only with their password.
+    # a person who logs in only with their password. `keys`: extra keys beyond the role's, each on the whole shop,
+    # given as an owner gives one (grant_permission).
     full_name: str
     display_name: str
     role: RoleTemplate
@@ -94,11 +101,15 @@ class DemoPerson:
     pin: str | None = None
     email: str | None = None
     password: str | None = None
+    keys: tuple[Permission, ...] = ()
 
 
 PEOPLE = (
     # The manager on every side: device.manage among the role's keys lets them confirm a new laptop on either side
     # (confirm_pairing). A password and no PIN: the manager works from their own phone, as at a real shop.
+    # And the key to the shop's rules, an owner's own (see the top of this file): the one key a visitor needs to try
+    # Mipangilio ya duka. Not the Owner's whole role, whose staff.manage would let a visitor take Meneja's role away
+    # and stop every visitor's one tap (04 PPL-4, OPS-3's note).
     DemoPerson(
         "Meneja Mfano",
         "Meneja",
@@ -106,6 +117,7 @@ PEOPLE = (
         side=None,
         email=MANAGER_EMAIL,
         password=MANAGER_PASSWORD,
+        keys=(Permission.SETTINGS_MANAGE,),
     ),
     # A seller on each side, with a PIN only: they log in at the shop's laptop, as a seller does.
     DemoPerson("Asha Mfano", "Asha", RoleTemplate.SELLER, side="D", pin="2580"),
@@ -220,6 +232,8 @@ def _make_the_shop() -> Shop:
             role = Role.objects.get(template=person.role)
             side = None if person.side is None else sides[person.side]
             assign_role(staff, role, side=side, by=None)
+            for key in person.keys:
+                grant_permission(staff, key, side=None, by=None)
             if person.pin is not None:
                 set_pin(staff, person.pin, by=None)
     return shop
