@@ -2,10 +2,12 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.1 · 18 Oct 2026 · Portion 1 of the planning pack
+**Version:** 1.2 · 15 Nov 2026 · Portion 1 of the planning pack
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Open questions are collected in §14. Key decisions are recorded as ADRs in `docs/adr/`.
 
 **Changes in v1.1** (18 Oct 2026): applies the build plan's Appendix A (`04-build-plan.md`). Attendance (R1b) is built and switched on first, then the Drugs side (R1), then the Foods side (R2); every part lives in the one website and is switched on in settings (§7.8, §10, §11, §14 — 04 BP7, ADR-0033). §6 now states the side decision (02 D1, ADR-0001).
+
+**Changes in v1.2** (15 Nov 2026, from Jack): the shop's cook makes the workers' meals, and each worker pays for their own out of their pay. The day's meal money is typed each day and split among the workers who came that day, so a worker who leaves mid-month is paid at once, with nothing to count by hand (§6, §7.8, §8.1; 02 v1.29, 04 v1.78). Marked **(v1.2)**.
 
 ---
 
@@ -105,7 +107,7 @@ All the usual failures also happen: wrong change, forgotten debts, stock-outs, e
 | Customer | Release 3 | Browses, orders, sees own debt |
 | Partner | A contact, not a login *(default)* | Has a balance like a credit customer |
 
-**Example permissions:** bargain down to the floor price · approve below the floor · change prices · give credit · approve credit · cancel a sale · refund · record an expense or advance · close a drawer · approve the day · manage workers · see buying prices and profit *(default: owner and managers only)*.
+**Example permissions:** bargain down to the floor price · approve below the floor · change prices · give credit · approve credit · cancel a sale · refund · record an expense or advance · record the day's meal money **(v1.2)** · close a drawer · approve the day · manage workers · see buying prices and profit *(default: owner and managers only)*.
 
 **Worker lifecycle:** active → suspended. Suspension stops the login instantly; history and pay records stay. Workers are never deleted.
 
@@ -181,7 +183,8 @@ Release tags: **R1** Drugs side live · **R1b** attendance and pay · **R2** Foo
 ### 7.8 Attendance and pay — R1b (built first, §10)
 - Clock in and out on a shop device with a PIN, plus a photo *(default)*
 - The rules in §8.1; absence types: office duty, with permission, no-show
-- Monthly pay calculated per worker, with advances deducted
+- Monthly pay calculated per worker, with advances and meals deducted **(v1.2)**
+- The day's meal money, typed each day, by whoever the owner gives the key to **(v1.2)**
 - Each worker can see their own payslip
 - Rates, the fine and the cut-off times are settings with start dates
 - Offline clock-in is protected against changes to the device clock
@@ -212,7 +215,9 @@ In this order: a price list with in-stock status (browse by animal and problem) 
 - **Late:** arrives after 07:35 → full day minus a fixed fine of TZS 1,000 *(setting)*.
 - **Half day:** morning-only or afternoon-only work. Half-day pay = daily rate ÷ 2.
 - **Absent:** office duty → paid; with permission → unpaid; no-show → unpaid.
-- **Pay** = (full days × daily rate) + (half days × daily rate ÷ 2) − (late days × fine) − advances. Paid monthly. The daily rate is set per worker. Sundays are not paid.
+- **Meals** **(v1.2)**: the cook makes the workers' meals at the shop, and each worker pays for their own. Each day, the day's meal money is typed in and split equally among the workers who came that day, half days included; the cook pays no share. So a worker who came 10 days pays 10 days of meals, not a share of the whole month.
+- **Pay** = (full days × daily rate) + (half days × daily rate ÷ 2) − (late days × fine) − meal shares − advances. Paid monthly. The daily rate is set per worker. Sundays are not paid.
+- **Leaving mid-month** **(v1.2)**: a worker who leaves is paid up to their last day. The system already holds that pay, worked out day by day, so the owner reads it and pays.
 
 Examples (these become automated tests):
 
