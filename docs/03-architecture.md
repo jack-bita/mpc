@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.58 · 15 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.59 · 15 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.59** (15 Nov 2026, SHOP-3): §5.8 says how a rule gets a new value and a side is switched on or off: one service each, `set_setting` and `switch_side`, each saving its line in the change log, and the routes the settings page reads and writes through. Marked **(v1.59)**.
 
 **Changes in v1.58** (15 Nov 2026): the build order in §16: attendance is built before the production server is rented, which still comes before any real data (04 v1.74, BP14). Marked **(v1.58)**.
 
@@ -426,6 +428,7 @@ Confirming a one-screen sale:
 ### 5.8 Settings, prices, permissions, approvals
 
 - **Setting keys** are a registry in code: key, type, default, scope, description. `get_setting(key, shop, side, on=date)` returns the row in force (D13).
+- **A new value** comes only through `set_setting` (`apps/shops/services.py`): one new row, from the shop's today on (`shop_today`, `apps/shops/selectors.py`), a side's rule one side at a time (02 §4), checked with `full_clean` and saved with its line in the change log. `GET /api/v1/shops/settings/` answers the shop's today and every rule, once per side for a side's rule, with its default, its value today (through `get_setting`) and its rows; `POST` takes a new value with the client's id. Seeing them needs only to see a side, as every rule is already on every laptop of the shop; a new value needs `settings.manage`. A side is switched on or off by `switch_side`, through `PATCH /api/v1/shops/sides/{id}/` with `is_live`, which the demo refuses (`demo.sides_fixed`) **(v1.59)**.
 - **Devices get future-dated rows too** ✚: prices and settings that start in the next few days, so an offline device switches to the new price or rule on the right day.
 - **Permissions** are codes in code (02 §5). **Role templates** (Owner, Manager, Seller, Order writer, Cashier, Worker) live in code next to them; each new shop gets them as that shop's own `Role` rows, which the owner can then edit — roles belong to a shop, so they are not seeded by a data migration **(v1.1)**. `set_up_shop`, a `people` service, makes the shop with `create_shop` and copies them in, in one transaction: `shops` may not import `people` (ADR-0035), so `create_shop` can't. A shop made by `create_shop` alone has no roles, so nobody may act there **(v1.12)**. A card that adds a permission code also adds it, in a data migration, to the Owner role of every shop that already has its roles, and to the Manager's unless it is one of the owner's own four: otherwise nobody there holds it, and under the giver rule (02 §5) nobody there could ever give it **(v1.12)**. Devices receive each staff member's effective permissions per side for offline checks; the server checks again and flags offline breaks.
 - **Approvals (`pin_here`)**: the approver types their PIN on the same device; it works offline and travels inside the document it approves.

@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.27 · 14 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.28 · 15 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -55,6 +55,8 @@
 **Changes in v1.26** (14 Nov 2026, SYNC-14): a device keeps its clock error from its last push, for the sync health page; and an offline period the device's app lost sight of ends where the app last saw it. Marked **(v1.26)**.
 
 **Changes in v1.27** (14 Nov 2026, SYNC-14's review): Jack's choice: an offline period the device's app lost sight of says its end is unknown (`end_unknown`), as the device may have gone off in a power cut. Marked **(v1.27)**.
+
+**Changes in v1.28** (15 Nov 2026, SHOP-3): two choices by Jack, made while planning SHOP-3 (§4, Setting). A rule's new value starts on the shop's today or later, never on a past day, so what a past day answers, and the pay worked out from it, never changes. A side's rule is set one side at a time, never for the whole shop, so a side's old row can never hide a newer shop value. Marked **(v1.28)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
@@ -214,8 +216,9 @@ A full diagram for GitHub is in Appendix A.
 - `status`: `active` | `archived` (§14) **(v1.5)**
 
 **Setting** [R1] ✚ → Shop (optional Side) — one dated rule value (D13).
-- `key` (from a fixed list in code, each with a type, a default and a scope: one value for the whole shop, or one a side may override **(v1.7)**), `value`, `effective_from`, `note`. Who set it is the row's `created_by` (§1) **(v1.7)**.
+- `key` (from a fixed list in code, each with a type, a default and a scope: one value for the whole shop, or one a side may override **(v1.7)**; since SHOP-3, a side's rule is set one side at a time **(v1.28)**), `value`, `effective_from`, `note`. Who set it is the row's `created_by` (§1) **(v1.7)**.
 - In force on a date = the latest row with `effective_from` ≤ that date. On one date, the row written last wins (`created_at`, then `id`), so a mistake is fixed with a new row **(v1.7)**. A side row beats a shop row, even an older one, and only for a key a side may override **(v1.7)**. Devices need each row's `created_at` to pick the same row offline **(v1.7)**.
+- A new value is a new row, written only through `set_setting` (SHOP-3), from the shop's today on: a row for a past day would change what that day answers, and the fines and the draft pay run worked out from it (Jack, 15 Nov 2026). A side's rule (`cash.tolerance`, `count.tolerance_pct`, `expiry.alert_days`, `stock.block_negative`) gets a row per side, never one for the whole shop: since a side row beats even a newer shop row, a shop value written later would be hidden behind a side's old one, and nobody would see why (Jack, 15 Nov 2026) **(v1.28)**.
 - Examples: `attendance.on_time_until` 07:35 · `attendance.late_fine` 1,000 · `cash.tolerance` · `count.tolerance_pct` · `expiry.alert_days` 90 · `stock.block_negative` false · `money.rounding_step` 1
 
 ## 5. People & access — module `people`
