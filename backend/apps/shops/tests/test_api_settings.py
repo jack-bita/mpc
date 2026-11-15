@@ -99,6 +99,34 @@ def test_settings_list_shows_a_sides_rule_per_side(
     assert dawa["rows"][0]["set_by"] is None
 
 
+def test_a_shop_row_of_a_sides_rule_shows_on_each_side(
+    staff_client_a: APIClient, shop_a: Shop, sides: dict[str, Side]
+) -> None:
+    # set_setting never writes a whole-shop row for a side's rule (SHOP-3), but code that skips it could, as a seed
+    # might: checked, then saved. get_setting still reads such a row behind a side's own (02 §4), so the page shows it
+    # in each side's rows, marked as the shop's by its empty side, and never a value that no row explains. Dawa has its
+    # own row too, which beats it; Vyakula has none, so the shop's row is Vyakula's value.
+    today = shop_today(shop_a)
+    with shop_context(shop_a):
+        shop_row = Setting(shop=shop_a, key="cash.tolerance", value="300", effective_from=today)
+        shop_row.full_clean()
+        shop_row.save()
+        own = set_setting(shop_a, key="cash.tolerance", value="500", effective_from=today, side=sides["D"], by=None)
+
+    answer = staff_client_a.get(SETTINGS).json()
+
+    dawa = rule_of(answer, "cash.tolerance", sides["D"])
+    vyakula = rule_of(answer, "cash.tolerance", sides["F"])
+    assert (dawa["value"], [(row["id"], row["side"]) for row in dawa["rows"]]) == (
+        "500.00",
+        [(str(own.pk), str(sides["D"].pk)), (str(shop_row.pk), None)],
+    )
+    assert (vyakula["value"], [(row["id"], row["side"]) for row in vyakula["rows"]]) == (
+        "300.00",
+        [(str(shop_row.pk), None)],
+    )
+
+
 def test_settings_list_is_one_answer_not_pages(staff_client_a: APIClient, sides: dict[str, Side]) -> None:
     # The registry is a short list, so the answer is whole: no cursor to follow, as the side list has (CORE-6).
     answer = staff_client_a.get(SETTINGS).json()
