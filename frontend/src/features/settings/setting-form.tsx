@@ -47,11 +47,13 @@ import { SHOP_RULES } from "./shop-rules";
 
 // A whole number as people write it: plain digits ("1000"), or groups of three after the first, each after a comma or
 // a space ("1,000", "1 000", "1,440"). A comma anywhere else is refused, not taken out: "2,5" is someone writing two
-// and a half the way much of the world does, and as 25 it would be ten times what they meant (SHOP-5's review).
-const WHOLE = /^(\d+|\d{1,3}([, ]\d{3})+)$/;
+// and a half the way much of the world does, and as 25 it would be ten times what they meant (SHOP-5's review). A
+// grouped number starts with 1 to 9: "0,500" is half a shilling written with a decimal comma, not five hundred (SHOP-5's
+// second review).
+const WHOLE = /^(\d+|[1-9]\d{0,2}([, ]\d{3})+)$/;
 // An amount or a percent: a whole number so written, and at most two places after a point, as the server keeps them
 // (numeric(14,2)).
-const DECIMAL = /^(\d+|\d{1,3}([, ]\d{3})+)(\.\d{1,2})?$/;
+const DECIMAL = /^(\d+|[1-9]\d{0,2}([, ]\d{3})+)(\.\d{1,2})?$/;
 // The phone's clock box answers "07:35"; one typed by hand on a laptop's plain box, the same.
 const CLOCK = /^\d{2}:\d{2}$/;
 

@@ -101,6 +101,10 @@ describe("what is typed, as the server takes it", () => {
     ["money", "12,34"],
     ["money", "1,0000"],
     ["whole", "1,44"],
+    // A grouped number that starts with 0: half a shilling written with a decimal comma, never five hundred.
+    ["money", "0,500"],
+    ["money", "0 750"],
+    ["whole", "012,345"],
     ["whole", "1.5"],
     ["time", "8"],
     ["yes_no", "ndiyo"],
