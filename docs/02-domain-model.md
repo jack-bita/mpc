@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.28 · 15 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.29 · 15 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -57,6 +57,8 @@
 **Changes in v1.27** (14 Nov 2026, SYNC-14's review): Jack's choice: an offline period the device's app lost sight of says its end is unknown (`end_unknown`), as the device may have gone off in a power cut. Marked **(v1.27)**.
 
 **Changes in v1.28** (15 Nov 2026, SHOP-3): two choices by Jack, made while planning SHOP-3 (§4, Setting). A rule's new value starts on the shop's today or later, never on a past day, so what a past day answers, and the pay worked out from it, never changes. A side's rule is set one side at a time, never for the whole shop, so a side's old row can never hide a newer shop value. Marked **(v1.28)**.
+
+**Changes in v1.29** (15 Nov 2026, from Jack): the workers pay for their own meals (spec §8.1). A new append-only record, `MealMoney`, the day's money for the meals, typed each day by whoever holds `meals.record`, a key the owner gives to whoever he chooses. It is split equally among the workers who came that day, half days included, and the cook pays no share (`PayRate.shares_meals`). Each `AttendanceDay` carries its `meal_share`, so a worker who leaves mid-month has their pay up to their last day at once, and gets their payslip then, on its own (§12, §15, §16, §18 E11, §20, §21). Marked **(v1.29)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
@@ -480,13 +482,20 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - `first_in`, `last_out`, `status`: `on_time` | `late` | `half` | `absent` | `off` (Sunday, holiday) | `needs_review`
 - `absence_type`: `office_duty` (paid as a full day) | `permission` (unpaid) | `no_show` (unpaid)
 - `fine`, `rules_used` (copied), `override` (status, by, reason — the worked-out value stays visible)
+- `meal_share` **(v1.29)**: the worker's part of the day's meal money (§15, 14), worked out with the day, so the pay up to any day is a sum of days already worked out. It follows the day's status: a day that needs review has none until a manager decides it.
 - Locked once its pay run is approved.
 
-**PayRate** → StaffMember — `daily_rate`, `effective_from`.
+**PayRate** → StaffMember — `daily_rate`, `shares_meals` (yes; the cook's no) **(v1.29)**, `effective_from`. Dated, so a worker who becomes the cook mid-month pays a share up to that day and none after.
 
-**PayRun** → Shop — one month. `status`: `draft` → `approved` → `paid`. Recalculated freely while draft; approval freezes payslips, attendance days and advances.
+**MealMoney** **(v1.29)** → Shop — the money spent on the workers' meals on one day: the cook makes them at the shop, and the workers pay for their own (spec §8.1).
+- `date`, `amount` (positive), `note`; who typed it is the row's `created_by` (§1). The whole shop's, not a side's: the workers of both sides eat together.
+- Typed each day by whoever holds `meals.record`, a key the owner gives to whoever he chooses (Jack, 15 Nov 2026). A day may have several: the day's meal money is the sum of its rows not voided.
+- Append-only, as money is (T2): a wrong amount is voided (who, when, why) and typed again; nothing else on it ever changes. Locked, like its days, once their pay run is approved.
 
-**Payslip** → PayRun, StaffMember — day counts, the rate(s) used (a mid-month rate change splits the days), lines (days × rate, fines, advances, other additions or deductions with a reason), `net`, and how it was paid. The worker sees their own.
+**PayRun** → Shop — one month. `status`: `draft` → `approved` → `paid`. Recalculated freely while draft; approval freezes payslips, attendance days, advances and meal money **(v1.29)**.
+
+**Payslip** → PayRun, StaffMember — day counts, the rate(s) used (a mid-month rate change splits the days), lines (days × rate, fines, meal shares **(v1.29)**, advances, other additions or deductions with a reason), `net`, and how it was paid. The worker sees their own.
+- **Leaving mid-month** **(v1.29)**: a worker who leaves gets their payslip up to `left_on`, approved and paid on its own, before the month's run: the owner reads it and pays, with nothing to count by hand (Jack, 15 Nov 2026). The month's run then holds it as paid.
 
 Advances come from `MoneyMovement` `staff_advance` and are deducted in the next pay run *(default: in full)*.
 
@@ -557,12 +566,13 @@ stateDiagram-v2
 5. **Balance** = the sum of entries. **Open debt** = amount − allocations. **Age** = days since `occurred_at`.
 6. **Expected cash** = opening + cash payments − cash change given + money in − money out.
 7. **Mobile money expected** (account, day) = the sum of payments into it.
-8. **Pay** (spec §8.1) = (on-time + late + office-duty days) × rate + half days × rate ÷ 2 − late days × fine − advances ± adjustments.
+8. **Pay** (spec §8.1) = (on-time + late + office-duty days) × rate + half days × rate ÷ 2 − late days × fine − meal shares **(v1.29)** − advances ± adjustments.
 9. **Line profit** = line total − base qty × unit cost (unknown if the cost is unknown). A period's profit also shows "unknown on N lines worth TZS X".
 10. **Open-bag difference** = loose kg sold between two openings − bag kg.
 11. **Loss %** (production, jobs) = (input kg − output kg) ÷ input kg.
 12. **Expiry:** days left = expiry − today; alert when ≤ `expiry.alert_days`.
 13. **Shopping list:** on hand ≤ reorder level, or an open restock request.
+14. **Meal share** **(v1.29)** (worker, day) = the day's meal money ÷ the workers who came that day (on time, late or half; not office duty, as they eat away *(default)*) and share meals, rounded with the shared function (ADR-0024). Nobody else pays for that day, so a worker who came 10 days pays 10 days' shares. The rounded shares may add up to a few shillings off the day's money.
 
 ## 16. Rules (invariants)
 
@@ -570,7 +580,7 @@ These become database constraints and automated tests.
 
 **Tenancy and history**
 - **T1** Every record (except `User`, `Unit`, the `Shop` itself **(v1.3)** and a `PairingRequest` **(v1.11)**) has a shop, and only points at records of the same shop.
-- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** the answers the push keeps **(v1.21)** and the offline periods devices report **(v1.22)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
+- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** the answers the push keeps **(v1.21)**, the offline periods devices report **(v1.22)** and meal money **(v1.29)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements, meal money **(v1.29)** and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
 - **T3** Nothing is deleted: cancel, void, suspend, archive — always with who, when and why.
 - **T4** Copied values (price, floor, factor, cost, rate, rules, formula version) never change once the record is confirmed.
 
@@ -646,6 +656,8 @@ Opening count 20 bags +1,000 · sell 3 bags −150 · sell 12.5 kg −12.5 · de
 
 **E10 — Payslip** [R1b]. Spec §8.1: 193,000.
 
+**E11 — Meal shares** [R1b] **(v1.29)**. Monday's meal money is 8,000. 8 workers came, one of them only half a day, and so did the cook: 1,000 each, and none for the cook. In a month where every day's share is 2,000, Asha came 10 days and pays 20,000; Juma came 20 and pays 40,000. Juma leaves on the 15th: his payslip up to the 15th is ready that day.
+
 ## 19. By release
 
 | Module | R1 | R1b | R2 | R3 / Later |
@@ -658,7 +670,7 @@ Opening count 20 bags +1,000 · sell 3 bags −150 · sell 12.5 kg −12.5 · de
 | sales | Sale, SaleLine, PaymentAllocation, Return, PrintLog | | Bill, phone orders, handover per line | online orders, proforma |
 | money | Payment, DrawerSession, MoneyMovement | salary payments | side transfers, supplier credit payments | statement matching |
 | services | | | Formula, FormulaVersion, Job, Exchange | machines |
-| staffpay | | AttendanceEvent, AttendanceDay, PayRate, PayRun, Payslip | | |
+| staffpay | | AttendanceEvent, AttendanceDay, PayRate, MealMoney **(v1.29)**, PayRun, Payslip | | |
 | control | Flag, AuditEvent, EditEvent **(v1.9)**, Attachment, ImportJob | | Notification | message log |
 
 ## 20. Parking lot
@@ -678,6 +690,7 @@ Small items, each with a default or a setting. Settled while building; most need
 11. Expiry alert: 90 days *(default)*.
 12. Tax category on products (spec §14: VAT).
 13. Rules for merging duplicate customers.
+14. Meal money from the drawer **(v1.29)**: once the drawer exists (CASH-2), the cash given to the cook could be an expense of the drawer's that fills the day's meal money, so it is typed once, as WAGE-6 does for advances *(default: typed on its own until then)*.
 
 ## 21. Language
 
@@ -700,6 +713,7 @@ One word per idea, the same in code, docs and UI. The Swahili is a draft — Jac
 | DrawerSession | Hesabu ya droo | One drawer's day |
 | Expense | Matumizi | Money paid out for the shop |
 | Advance | Advansi | Money a worker takes before payday |
+| MealMoney | Hela ya chakula | The day's money for the workers' meals, which they pay for out of their pay **(v1.29)** |
 | Attendance | Mahudhurio | Clocking in and out |
 | `clock` `in` · `out` | Ingia kazini · Toka kazini | One tap at a shop laptop as a worker arrives or leaves; *Toka* alone is logging out, *Ingia* logging in **(v1.24)** |
 | PayRun | Mishahara | One month's pay for everyone |

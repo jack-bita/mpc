@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.60 · 15 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.61 · 15 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.61** (15 Nov 2026): `staffpay` keeps `MealMoney`, the day's money for the workers' meals, which they pay for out of their pay (§5.1; 02 v1.29). Marked **(v1.61)**.
 
 **Changes in v1.60** (15 Nov 2026, SHOP-3's review): §5.8: on the demo only a person's side switch is refused; the seed, as the system, switches the demo's sides on. Marked **(v1.60)**.
 
@@ -340,7 +342,7 @@ An app may import only from layers below it. Same-layer imports are allowed only
 | 4 | `money` | Payment, DrawerSession, MoneyMovement |
 | 5 | `sales` | Sale, SaleLine, **PaymentAllocation** (moved here: it links a payment to a sale), Return, PrintLog; Bill [R2] |
 | 5 | `services` [R2] | Formula, FormulaVersion, Job, Exchange. May import `sales` (a job's bill is a sale) |
-| 5 | `staffpay` [R1b] | AttendanceEvent, AttendanceDay, PayRate, PayRun, Payslip |
+| 5 | `staffpay` [R1b] | AttendanceEvent, AttendanceDay, PayRate, MealMoney **(v1.61)**, PayRun, Payslip |
 | 6 | `sync` ✚ | Push, pull and bootstrap endpoints, device sequence tracking, the document router |
 | 6 | `reports` ✚ | Daily report, exports; read-only queries across apps |
 | 7 | `demo` | The demo seed, `manage.py seed_demo` (DATA-1): no tables of its own. It builds the demo shop through the other apps' services, so it may import every app, and no app imports it, so no other app's code calls it. Its own refusals keep it shut on the real server: the sign `DEMO_SEED=yes`, which only the demo sets, and no shop but a demo one (ADR-0041) **(v1.36)**. And the one-tap demo's two routes (OPS-3), which alone may read the seed's people and PINs, shut by the same two refusals (ADR-0043) **(v1.57)** |
