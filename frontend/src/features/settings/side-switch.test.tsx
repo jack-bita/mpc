@@ -2,7 +2,7 @@
 // settings.manage on it; a question first, both ways, which Hapana answers with nothing sent (the card's fourth
 // Done when); the switch sent alone with the version read; and the demo's refusal, and someone else's change,
 // each said beside the switch.
-import { focusManager } from "@tanstack/react-query";
+import { focusManager, onlineManager } from "@tanstack/react-query";
 import {
   act,
   fireEvent,
@@ -10,7 +10,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
@@ -26,6 +26,13 @@ vi.mock("@/api/client", async (importOriginal) =>
 type Side = components["schemas"]["Side"];
 
 const SIDES = "/api/v1/shops/sides/";
+
+// A test that takes the network away puts it back after: navigator.onLine's spy, and TanStack's own note of the
+// network, which an "offline" event also changes and which every later test's reads would wait on.
+afterEach(() => {
+  vi.restoreAllMocks();
+  onlineManager.setOnline(true);
+});
 
 /** A side as the server sends it: Dawa on, at version 3, unless told otherwise. */
 function side(fields: Partial<Side> = {}): Side {
@@ -229,6 +236,33 @@ describe("the switch", () => {
         true,
       ),
     );
+    expect(screen.getByRole("button", { name: "Ndiyo, zima" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+  });
+
+  it("switches the switch off while there is no network (SHOP-5's review)", async () => {
+    // A switch can't be sent offline: the button waits for the network, as the office's every change does.
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+
+    render(<SideSwitches me={OWNER} />);
+
+    expect(
+      await screen.findByRole("button", { name: "Zima: Dawa" }),
+    ).toHaveProperty("disabled", true);
+  });
+
+  it("switches the question's yes off when the network goes while it is open", async () => {
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    render(<SideSwitches me={OWNER} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Zima: Dawa" }));
+
+    online.mockReturnValue(false);
+    act(() => window.dispatchEvent(new Event("offline")));
+
     expect(screen.getByRole("button", { name: "Ndiyo, zima" })).toHaveProperty(
       "disabled",
       true,

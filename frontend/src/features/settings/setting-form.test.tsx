@@ -3,7 +3,7 @@
 // a day already past is said at once, beside its box, and nothing is sent; a value the server refuses has its
 // Swahili sentence beside its box (the card's third Done when); and a try sent again keeps its id (ADR-0007).
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DAWA } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
@@ -18,6 +18,11 @@ vi.mock("@/api/client", async (importOriginal) =>
 );
 
 const RULES = "/api/v1/shops/settings/";
+
+// A test that takes the network away puts it back after (navigator.onLine's spy).
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 const TOMORROW = "2026-11-16";
 
 /** The late fine's line at 1,000, the form opened on it. */
@@ -416,6 +421,21 @@ describe("Badilisha", () => {
     const box = screen.getByLabelText("Saa mpya");
     expect(box.getAttribute("type")).toBe("time");
     expect((box as HTMLInputElement).value).toBe("07:35");
+  });
+
+  it("switches Hifadhi off while there is no network, so nothing waits unsent while it looks saved", () => {
+    // Office screens need the internet: the office frame says Inahitaji mtandao meanwhile (my-settings.tsx does the
+    // same). The card's Built paragraph says so; this holds it (SHOP-5's review).
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+
+    openOn();
+
+    expect(save()).toHaveProperty("disabled", true);
+    // Ghairi still closes it.
+    expect(screen.getByRole("button", { name: "Ghairi" })).toHaveProperty(
+      "disabled",
+      false,
+    );
   });
 
   it("closes on Ghairi, with nothing sent", async () => {
