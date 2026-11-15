@@ -1,13 +1,12 @@
 """apps/shops/services.py — every write to the shops tables, one function per action (ADR-0015).
 
-Five actions so far. create_shop makes a new shop with all it needs before it can work: its sides
-(ADR-0001). add_side adds one side to a shop, with what a side always comes with: a default stock
-location (ADR-0002) and a cash drawer. create_shop uses it for each of its sides, so a side is made the
-same way whichever action makes it. rename_side gives a side a new name, unless someone else changed the
-side since it was read (apps/core/editing.py); switch_side turns a side on or off the same way (ADR-0033), except on
-the demo. set_setting gives a rule a new value from a day on, as a
-new row, never an edit (ADR-0013). Each action runs in one transaction and refuses a broken
-rule with a ValidationError that carries a code (ADR-0032), which the API's error handler
+Five actions so far. create_shop makes a new shop with all it needs before it can work: its sides (ADR-0001).
+add_side adds one side to a shop, with what a side always comes with: a default stock location (ADR-0002) and a cash
+drawer. create_shop uses it for each of its sides, so a side is made the same way whichever action makes it.
+rename_side gives a side a new name, unless someone else changed the side since it was read (apps/core/editing.py);
+switch_side turns a side on or off the same way (ADR-0033), though on the demo only the system may. set_setting gives a
+rule a new value from a day on, as a new row, never an edit (ADR-0013). Each action runs in one transaction and refuses
+a broken rule with a ValidationError that carries a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) turns into its error shape.
 
 `shops` is layer 1 and may not import `people`, not even as a type (ADR-0035). Who acts is an Actor
