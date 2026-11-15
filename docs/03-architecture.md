@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.57 · 15 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.58 · 15 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.58** (15 Nov 2026): the build order in §16: attendance is built before the production server is rented, which still comes before any real data (04 v1.74, BP14). Marked **(v1.58)**.
 
 **Changes in v1.57** (15 Nov 2026, OPS-3): the one-tap demo (§4, §5.1, §5.10, 04 v1.73). The `demo` app holds its two routes beside the seed, as only it may read the seed's people and their PINs: ADR-0043, which supersedes ADR-0041. `GET /api/devices/v1/demo/open/` says whether *Jaribu demo* may show; `POST /api/devices/v1/demo/` makes the visitor's browser a device of the demo shop and answers with the sellers' PINs; both are shut wherever a shop that isn't a demo exists, and without the demo's sign. The tap is the one request that opens a shop no login named (§5.4). Marked **(v1.57)**.
 
@@ -895,7 +897,7 @@ Planned in detail in `04-build-plan.md`, where stages 0–2 have full task cards
 4. **Spikes:** the static PWA opens offline on a real shop laptop and phone, a Dexie write survives a restart, and the update flow works (SPIKE-1); a slip prints from Chrome on the shop's printer (SPIKE-2).
 5. The foundation: `Shop` and sides, the tenancy guard and sweep test, the append-only trigger helper, dated settings, exact numbers, staff and permissions, devices and logins (stage 1).
 6. **The walking skeleton, first with the clock-in:** device → outbox → push → posting → ledger → pull, proven end to end on the smallest real document — one table, no money, no stock (04 BP6, SYNC-11).
-7. Production server, tested backups and alerts before any real data (stage 3); then attendance goes live (R1b, stage 4).
+7. Attendance is built on the laptop and the demo (stage 4); then the production server, tested backups and alerts, before any real data (stage 3); then attendance goes live (R1b) **(v1.58)**.
 8. Catalog and prices with bootstrap and pull, then **the walking skeleton again, with the sale** (04 stage 5, SALE-4).
 
 Then payments, the drawer and cash-up, and the rest of R1.

@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.73 · 15 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
+**Version:** 1.74 · 15 Nov 2026 · Portion 4 of the planning pack, updated in portion 5
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.1, `03-architecture.md` v1.0 — now v1.1, v1.2 and v1.1, with Appendix A applied
 **Status:** living document. Everything here is decided unless marked *(default)* — our best guess, safe to change at a stage review. Small open items are in the parking lot (§20). The changes this plan made to the other docs are listed in Appendix A (applied). BP7 and BP16 are ADRs in `docs/adr/`; the working rules for Claude Code are in `CLAUDE.md`.
+
+**Changes in v1.74** (15 Nov 2026, the review at the end of stage 2): Jack's choice: attendance is built before the production server is rented. Stage 4's build cards come first, on the laptop and the free demo; stage 3 follows, right before the attendance go-live; then ATT-7, which needs OPS-7's scheduler, and LIVE-1. Why: BP14 already says no rent for an idle server, and the old order paid rent through the whole attendance build; and the owner sees attendance working on the demo before saying yes to the budget (OWN-4). No real data before stage 3 is done, as before. Stage numbers and card IDs stay as they are (03 v1.58). Marked **(v1.74)**.
 
 **Changes in v1.73** (15 Nov 2026, OPS-3): the OPS-3 card says what it built and settled. Two fixes to the card, in the plan Jack approved: the server's half lives in `demo`, not `people`, as only `demo` may read the seed's PINs (Jack: A), so ADR-0043 supersedes ADR-0041 (03 v1.57), and the tap is written down as the one request that opens a shop no login named (03 §5.4, Jack: A); and yesterday's copy on a laptop is never opened again, as each day's demo shop has a new id, so deleting it is tidying, not a safety fix. Five commits, not two. A note for PPL-4: on the demo, keep the seed's people as made. Marked **(v1.73)**.
 
@@ -169,9 +171,9 @@
 
 ```mermaid
 flowchart LR
-    S0["0 · Groundwork"] --> S1["1 · Foundation"] --> S2["2 · Offline engine"] --> S3["3 · Ready for real data"]
-    S3 --> S4["4 · Attendance live<br/>R1b"]
-    S4 --> S5["5 · Catalog +<br/>sale skeleton"] --> S6["6 · Drugs side live<br/>R1"] --> S7["7 · R1 follow-ups<br/>R1+"]
+    S0["0 · Groundwork"] --> S1["1 · Foundation"] --> S2["2 · Offline engine"] --> S4["4 · Attendance<br/>built"]
+    S4 --> S3["3 · Ready for real data"] --> L1["Attendance live<br/>R1b"]
+    L1 --> S5["5 · Catalog +<br/>sale skeleton"] --> S6["6 · Drugs side live<br/>R1"] --> S7["7 · R1 follow-ups<br/>R1+"]
     S7 --> R2["R2 · Foods side"] --> R3["R3 · Customers"]
 ```
 
@@ -185,6 +187,8 @@ flowchart LR
 | 5 Catalog + sale skeleton | Products searchable offline; one sale from the device to the ledgers and back | R1 · Drugs | 40–55 |
 | 6 Drugs side live (R1) | The Drugs side runs on it; SmartMauzo and the paper books stop | R1 · Drugs | 100–140 |
 | 7 R1 follow-ups (R1+) | Returns, daily counts, shopping list, exports — the weeks after go-live | R1+ | 25–35 |
+
+Stage 4's build cards run before stage 3: the server is rented only once attendance works on the demo, right before its go-live (BP14) **(v1.74)**.
 
 Hours = task sizes plus up to 40% for learning, debugging and review: about **350–490 hours** to the Drugs go-live. They are replaced by real numbers after the first ten tasks (§19).
 
@@ -258,8 +262,8 @@ The product, customer, debt and staff sheets (Appendix B) are fixed today, so th
 *Why:* entering hundreds of products with selling units often takes longer than building the import, and the "before" numbers vanish at go-live.
 
 **BP14 — The production server is rented just before the first go-live.** ✚
-Stage 3 always sits right before it.
-*Why:* no rent for an idle server; the demo covers everything before that.
+Stage 3 always sits right before it: after stage 4's build cards, before ATT-7 and LIVE-1 **(v1.74)**.
+*Why:* no rent for an idle server; the demo covers everything before that, and the owner sees attendance working on it before paying **(v1.74)**.
 
 **BP15 — The demo opens without pairing.** ✚
 On the demo only, *Jaribu demo* registers the visitor's browser as a device and shows the demo staff with their PINs (OPS-3).
@@ -1174,7 +1178,7 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 **Done when:** a release deploys to production after approval; the weekly restore test passes; an alert reaches Jack's phone.
 **You'll learn:** a Linux server and its security; Docker in production; HTTPS with Caddy; backups you can trust; monitoring.
 **Needs:** OWN-3 (name and web address), OWN-4 (budget sign-off).
-**Order:** top to bottom.
+**Order:** top to bottom. The stage starts after stage 4's build cards, once the owner has seen attendance on the demo, and ends before ATT-7 and LIVE-1 (BP14) **(v1.74)**.
 
 | ID | Task | Size | After | Done when |
 |---|---|---|---|---|
@@ -1194,7 +1198,7 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 **Done when:** the first full month runs in production, and the system's payslips match the hand-calculated ones — or every difference is explained.
 **You'll learn:** business rules written test-first; time and clocks; dated rules; photos taken offline; office screens and forms.
 **Needs:** OWN-5 (PDPC), OWN-6 (emails), OWN-7 (attendance rules), OWN-8 (workers and daily rates).
-**Order:** top to bottom.
+**Order:** top to bottom, before stage 3. ATT-7 and LIVE-1 wait for stage 3: ATT-7 needs OPS-7's scheduler, and no real data exists before the server, its backups and a tested restore **(v1.74)**.
 
 | ID | Task | Size | After | Done when |
 |---|---|---|---|---|
@@ -1215,7 +1219,7 @@ Fonts: Source Sans 3 by default and Atkinson Hyperlegible Next as the second, bo
 | WAGE-4 | My attendance and payslips | M | WAGE-3, UI-4 | After a PIN login, online, a worker sees only their own days and payslips (A4); payslips are never stored on shared devices |
 | WAGE-5 | Pay run export | S | WAGE-3 | An Excel file of the pay run and printable payslips in Swahili |
 | DATA-2 | Demo seed, second version | S | WAGE-3 | A month of fake clock-ins and a pay run on the demo. From DATA-1 **(v1.51)**: add to `apps/demo/services.py`; its first random choice takes a fixed seed, so `test_seed_demo_is_repeatable` still holds |
-| LIVE-1 | Attendance go-live | — | all of the above | §16 |
+| LIVE-1 | Attendance go-live | — | all of the above, and stage 3 **(v1.74)** | §16 |
 | FOLIO-3 | Pay baseline and write-up | S | LIVE-1 | "Month-end pay took X hours by hand; now Y minutes" with real numbers, if the owner agrees (OWN-14) |
 
 ## 10. Stage 5 — Catalog and the sale skeleton
