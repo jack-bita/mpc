@@ -185,7 +185,7 @@ class Side(Editable):
     code = models.CharField(max_length=1)
     sale_flow = models.CharField(max_length=24, choices=SaleFlow, default=SaleFlow.ONE_SCREEN)
     # Off until the owner agrees to start using the side (ADR-0033), so a new side never reaches the
-    # counters by surprise. The switch comes with the settings screen (SHOP-3).
+    # counters by surprise. Switched by switch_side (apps/shops/services.py, SHOP-3), from the settings page (SHOP-5).
     is_live = models.BooleanField(default=False)
 
     class Meta(Editable.Meta):
