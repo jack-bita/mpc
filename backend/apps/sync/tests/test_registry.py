@@ -281,7 +281,8 @@ def test_a_suspended_person_is_sent_holding_no_keys(shop_a: Shop, dawa: Side, gi
 
 
 def add_row(shop: Shop, key: SettingKey[Any], value: str, effective_from: date, side: Side | None = None) -> Setting:
-    # A row written the way the settings screen will write one (SHOP-3): checked, then saved.
+    # A row checked, then saved, as set_setting saves one (SHOP-3), but with no line and on any day: these tests read
+    # the rows, not the log, and need rows for days already gone by, which the service refuses.
     with shop_context(shop):
         row = Setting(shop=shop, side=side, key=key.key, value=value, effective_from=effective_from)
         row.full_clean()

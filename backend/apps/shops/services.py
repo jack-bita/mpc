@@ -1,10 +1,11 @@
 """apps/shops/services.py — every write to the shops tables, one function per action (ADR-0015).
 
-Three actions so far. create_shop makes a new shop with all it needs before it can work: its sides
+Four actions so far. create_shop makes a new shop with all it needs before it can work: its sides
 (ADR-0001). add_side adds one side to a shop, with what a side always comes with: a default stock
 location (ADR-0002) and a cash drawer. create_shop uses it for each of its sides, so a side is made the
 same way whichever action makes it. rename_side gives a side a new name, unless someone else changed the
-side since it was read (apps/core/editing.py). Each action runs in one transaction and refuses a broken
+side since it was read (apps/core/editing.py). set_setting gives a rule a new value from a day on, as a
+new row, never an edit (ADR-0013). Each action runs in one transaction and refuses a broken
 rule with a ValidationError that carries a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) turns into its error shape.
 
@@ -18,29 +19,34 @@ something else: the demo seed (DATA-1, apps/demo) makes its shop as a demo one.
 A shop's devices keep a copy of its sides and its payment accounts (apps/sync/registry.py), and learn what changed
 from the shop's change log (03 §6.4). So each action saves inside `recording_changes(shop)` (apps/core/changes.py), in
 place of a plain transaction, and names what it changed with record_change: a new side and its cash drawer, a renamed
-side (SYNC-15). The lines are numbered at the block's end, once, however many services joined it.
+side (SYNC-15), a rule's new value (SHOP-3). The lines are numbered at the block's end, once, however many services
+joined it.
 """
 
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date
 
 from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.changes import record_change, recording_changes
 from apps.core.editing import editing
+from apps.core.settings_registry import REGISTRY, Scope
 from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop, shop_context
 from apps.shops.models import (
     PaymentAccount,
     PaymentAccountKind,
     PaymentAccountSide,
     SaleFlow,
+    Setting,
     Shop,
     ShopKind,
     Side,
     StockLocation,
 )
+from apps.shops.selectors import shop_today
 
 
 @dataclass(frozen=True)
@@ -141,6 +147,69 @@ def rename_side(side: Side, *, version: int, name: str, by: Actor | None) -> Sid
         # and leave a line for a name never saved (apps/core/changes.py). A refused edit never gets here.
         record_change(fresh)
     return fresh
+
+
+def set_setting(
+    shop: Shop,
+    *,
+    key: str,
+    value: str,
+    effective_from: date,
+    side: Side | None = None,
+    note: str = "",
+    setting_id: uuid.UUID | None = None,
+    by: Actor | None,
+) -> Setting:
+    """Give the rule `key` a new value from the day `effective_from` on: one new Setting row, for the whole shop, or for
+    `side` alone on a side's rule. `value` is text, as a screen sends it ("2000"); it is stored in its kind's one form
+    ("2000.00"). `setting_id`: the id the client made for the row (ADR-0007), if it made one. `by`: who sets it; None
+    for the system or the superuser. Refuses, all together, with their codes: a day before the shop's today, a side's
+    rule with no side, and whatever Setting.clean() refuses (an unknown key, a wrong value, a side on a shop's rule)."""
+    _check_shop(shop, by)
+    # T1: the side is of this shop. A bug in the calling code, like the shop checks: the route finds a side through the
+    # visit's own shop, so a person can't send another shop's side here.
+    if side is not None and side.shop_id != shop.pk:
+        raise ShopMismatch("The side is of another shop.")
+    row = Setting(
+        shop=shop,
+        side=side,
+        key=key,
+        value=value,
+        effective_from=effective_from,
+        note=note,
+        created_by_id=None if by is None else by.staff_id,
+    )
+    if setting_id is not None:
+        # The client's id, not a new one: a retry of the same request then finds the row it made.
+        row.id = setting_id
+    # The service's own two rules, then the row's, so a person who made several mistakes sees them all at once, each
+    # beside its box. Each one a code the screens translate (ADR-0040).
+    errors: dict[str, list[ValidationError]] = {}
+    # Never before the shop's today (Jack, 15 Nov 2026): a row for a past day changes what that day answers, and the
+    # clock-ins, fines and draft pay run already worked out from it. Today is still open: a mistake made this morning
+    # is fixed with one more row for today, which wins (T2). The shop's today, not the server's, which runs in UTC.
+    if effective_from < shop_today(shop):
+        errors["effective_from"] = [ValidationError("A new value can't start before today.", code="setting.date_past")]
+    # A side's rule is set one side at a time, never for the whole shop (Jack, 15 Nov 2026). get_setting lets a side's
+    # row beat even a newer shop row (CORE-4), so a shop value set next year would be hidden by a side's old one, and
+    # nobody would see why. An unknown key is left to clean(), which reports it once.
+    setting_key = REGISTRY.get(key)
+    if side is None and setting_key is not None and setting_key.scope is Scope.SIDE:
+        errors["side"] = [ValidationError("This setting is set for one side at a time.", code="setting.side_required")]
+    try:
+        # Setting.clean() holds the row's own checks, which objects.create skips: only full_clean asks them.
+        row.full_clean()
+    except ValidationError as refused:
+        for field, field_errors in refused.error_dict.items():
+            errors.setdefault(field, []).extend(field_errors)
+    if errors:
+        raise ValidationError(errors)
+    # One block: the row and its line, or neither. The line tells the laptops at their next pull, and they switch to the
+    # value on its day, even offline (03 §5.8). Named after the save, at the block's own level (apps/core/changes.py).
+    with recording_changes(shop):
+        row.save()
+        record_change(row)
+    return row
 
 
 def _check_shop(shop: Shop, by: Actor | None) -> None:

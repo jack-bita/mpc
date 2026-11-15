@@ -377,8 +377,9 @@ class Setting(AppendOnly):
     # `created_by`, so there is no `set_by` of its own (02 v1.7).
 
     # Empty: the whole shop's value. A side: that side's own value, which beats the shop's (02 §4), for
-    # keys whose scope allows it (clean() below). T1: the side belongs to the row's shop; the service
-    # that writes settings (SHOP-3) checks it, as services do for StockLocation.side. PROTECT: nothing is
+    # keys whose scope allows it (clean() below); set_setting writes a side's rule one side at a time, and
+    # never for the whole shop (SHOP-3). T1: the side belongs to the row's shop; set_setting
+    # (apps/shops/services.py) checks it, as services do for StockLocation.side. PROTECT: nothing is
     # deleted (rule 7). related_name="+": settings are read through get_setting. db_index=False: indexes
     # lead with `shop` (03 §9), and get_setting's reads use the lookup index in Meta. A side's own index
     # would serve only PROTECT's search for a side's rows before deleting the side, and nothing is deleted.
