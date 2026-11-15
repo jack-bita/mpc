@@ -45,9 +45,13 @@ import type { RuleLine, RuleRow } from "./rules";
 import type { SettingKey, SettingKind } from "./setting-words";
 import { SHOP_RULES } from "./shop-rules";
 
-// An amount or a percent: digits, and at most two places after a point, as the server keeps them (numeric(14,2)).
-const DECIMAL = /^\d+(\.\d{1,2})?$/;
-const WHOLE = /^\d+$/;
+// A whole number as people write it: plain digits ("1000"), or groups of three after the first, each after a comma or
+// a space ("1,000", "1 000", "1,440"). A comma anywhere else is refused, not taken out: "2,5" is someone writing two
+// and a half the way much of the world does, and as 25 it would be ten times what they meant (SHOP-5's review).
+const WHOLE = /^(\d+|\d{1,3}([, ]\d{3})+)$/;
+// An amount or a percent: a whole number so written, and at most two places after a point, as the server keeps them
+// (numeric(14,2)).
+const DECIMAL = /^(\d+|\d{1,3}([, ]\d{3})+)(\.\d{1,2})?$/;
 // The phone's clock box answers "07:35"; one typed by hand on a laptop's plain box, the same.
 const CLOCK = /^\d{2}:\d{2}$/;
 
@@ -57,13 +61,13 @@ export function typedValue(kind: SettingKind, typed: string): string | null {
   switch (kind) {
     case "money":
     case "percent": {
-      // The commas and spaces people put between thousands, out: "1,000" and "1 000" are both 1000.
-      const plain = typed.replace(/[,\s]/g, "");
-      return DECIMAL.test(plain) ? plain : null;
+      // The commas and spaces between thousands, out once the pattern has placed them: "1,000" and "1 000" are 1000.
+      const trimmed = typed.trim();
+      return DECIMAL.test(trimmed) ? trimmed.replace(/[, ]/g, "") : null;
     }
     case "whole": {
-      const plain = typed.replace(/[,\s]/g, "");
-      return WHOLE.test(plain) ? plain : null;
+      const trimmed = typed.trim();
+      return WHOLE.test(trimmed) ? trimmed.replace(/[, ]/g, "") : null;
     }
     case "time":
       return CLOCK.test(typed) ? typed : null;

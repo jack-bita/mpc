@@ -73,6 +73,9 @@ describe("what is typed, as the server takes it", () => {
   it.each([
     ["money", "1,000", "1000"],
     ["money", "1 000", "1000"],
+    ["money", "1,000,000", "1000000"],
+    ["money", "1,000.50", "1000.50"],
+    ["money", " 1,000 ", "1000"],
     ["money", "2500", "2500"],
     ["money", "0.50", "0.50"],
     ["percent", "2.5", "2.5"],
@@ -88,6 +91,11 @@ describe("what is typed, as the server takes it", () => {
     ["money", "1000.505"],
     ["money", "-500"],
     ["percent", "2,5.0.1"],
+    // A decimal comma, as much of the world writes two and a half: as 25 it would be ten times what was meant.
+    ["percent", "2,5"],
+    ["money", "12,34"],
+    ["money", "1,0000"],
+    ["whole", "1,44"],
     ["whole", "1.5"],
     ["time", "8"],
     ["yes_no", "ndiyo"],
