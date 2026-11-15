@@ -70,9 +70,11 @@ export async function tryTheDemo(): Promise<ThisDevice> {
  * Tidying only: each shop's copy is a database of its own, named by the shop's id (db.ts), and the reset
  * makes the shop with a new id, so yesterday's copy is never opened again, nor its outbox sent (the
  * background push checks its shop first, SYNC-16). Without this, each day's visit would leave one more.
- * Called only once the demo is open here, which the server says only where the demo shop is the only shop,
- * so no other copy on this address can be a real shop's. A copy that can't be deleted stays: nothing reads
- * it.
+ * The only place the app deletes a shop's copy, its outbox included, so why no real shop's copy is ever
+ * among them: a browser keeps each web address's storage apart, and the demo has an address of its own,
+ * never the real server's (ADR-0029), so the copies here were all made by this demo. As a second guard,
+ * it runs only after a tap the server took, which it takes only where the demo shop is the only shop. A
+ * copy that can't be deleted stays: nothing reads it.
  */
 export async function forgetOtherShops(keep: string): Promise<void> {
   try {
@@ -82,7 +84,10 @@ export async function forgetOtherShops(keep: string): Promise<void> {
       (name) =>
         name.startsWith(databaseName("")) && name !== databaseName(keep),
     );
-    // A tab still holding one open closes it by itself: Dexie closes a database another tab deletes.
+    // A tab still holding one open closes it by itself: Dexie closes a database another tab deletes. Dexie
+    // would open it again, empty, if that tab read it once more, but no screen does: every screen and the
+    // sync read the shop the device now names (this-shop.ts), and the background push checks a copy exists
+    // before it opens one (background.ts).
     await Promise.all(others.map((name) => Dexie.delete(name)));
   } catch {
     // A browser that can't list its databases: the copies stay, as before this card.

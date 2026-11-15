@@ -1,4 +1,5 @@
-"""apps/demo/services.py — the demo seed: wipes a demo-only database, then makes the demo shop again (DATA-1).
+"""apps/demo/services.py — the demo seed: wipes a demo-only database, then makes the demo shop again (DATA-1); and
+the one-tap demo, which makes a visitor's browser a device of that shop (OPS-3).
 
 It owns the demo shop as visitors meet it (Jack, 8 Nov 2026): Duka la Mfano, a demo shop with the sides Dawa and
 Vyakula; Meneja, its manager on both sides, who logs in with a password; Asha, a seller on Dawa, and Baraka, a seller
@@ -286,6 +287,9 @@ def register_demo_device(*, replacing: str | None = None) -> DemoDevice:
             # share one (people_pairingrequest_code_once), so two visitors' devices never clash on a name
             # (device.name_taken), and a manager can still rename one.
             device = confirm_pairing(code, name=f"Demo {code[:4]}-{code[4:]}", home_side=home_side, by=manager)
+            # Made and committed before the answer leaves: if the answer is lost on its way, the device stays, with
+            # a key no browser holds, and the browser taps again for a new one. Harmless: nothing can use it, and
+            # the next daily reset takes it with the rest.
             pins = _demo_pins()
     return DemoDevice(device=device, pins=pins, key=pairing.key)
 
