@@ -292,6 +292,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shops/settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        get: operations["shops_settings_list"];
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["shops_settings_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/shops/sides/": {
         parameters: {
             query?: never;
@@ -733,12 +767,40 @@ export interface components {
          * @enum {string}
          */
         PushedStatusEnum: "accepted" | "invalid";
+        RuleAnswer: {
+            key: components["schemas"]["SettingKeyEnum"];
+            kind: components["schemas"]["SettingKindEnum"];
+            scope: components["schemas"]["SettingScopeEnum"];
+            /**
+             * Format: uuid
+             * @description Empty for a rule of the whole shop.
+             */
+            side: string | null;
+            default: string;
+            /** @description The value in force today, as its kind writes it. */
+            value: string;
+            rows: components["schemas"]["Setting"][];
+        };
         /**
          * @description * `one_screen` - One screen
          *     * `writer_cashier_loader` - Writer, cashier, loader
          * @enum {string}
          */
         SaleFlowEnum: "one_screen" | "writer_cashier_loader";
+        Setting: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly key: string;
+            /** Format: uuid */
+            readonly side: string | null;
+            readonly value: string;
+            /** Format: date */
+            readonly effective_from: string;
+            readonly note: string;
+            readonly set_by: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
         SettingChange: {
             seq: number;
             /**
@@ -751,6 +813,29 @@ export interface components {
             op: components["schemas"]["ChangeOpEnum"];
             data: components["schemas"]["SettingRecord"] | null;
         };
+        SettingCreateRequest: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            /** Format: uuid */
+            side?: string | null;
+            value: string;
+            /** Format: date */
+            effective_from: string;
+            note?: string;
+        };
+        /**
+         * @description * `attendance.on_time_until` - attendance.on_time_until
+         *     * `attendance.late_fine` - attendance.late_fine
+         *     * `money.rounding_step` - money.rounding_step
+         *     * `session.idle_minutes` - session.idle_minutes
+         *     * `cash.tolerance` - cash.tolerance
+         *     * `count.tolerance_pct` - count.tolerance_pct
+         *     * `expiry.alert_days` - expiry.alert_days
+         *     * `stock.block_negative` - stock.block_negative
+         * @enum {string}
+         */
+        SettingKeyEnum: "attendance.on_time_until" | "attendance.late_fine" | "money.rounding_step" | "session.idle_minutes" | "cash.tolerance" | "count.tolerance_pct" | "expiry.alert_days" | "stock.block_negative";
         SettingKeyRecord: {
             key: string;
             kind: components["schemas"]["SettingKindEnum"];
@@ -782,6 +867,11 @@ export interface components {
          * @enum {string}
          */
         SettingScopeEnum: "shop" | "side";
+        ShopRulesAnswer: {
+            /** Format: date */
+            today: string;
+            rules: components["schemas"]["RuleAnswer"][];
+        };
         Side: {
             /** Format: uuid */
             readonly id: string;
@@ -1469,6 +1559,64 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    shops_settings_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShopRulesAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    shops_settings_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Setting"];
+                };
             };
             default: {
                 headers: {

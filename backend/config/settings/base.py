@@ -281,6 +281,8 @@ SPECTACULAR_SETTINGS = {
         "PaymentAccountKindEnum": "apps.shops.models.PaymentAccountKind",
         "SettingScopeEnum": "apps.sync.api.serializers.SETTING_SCOPES",
         "SettingKindEnum": "apps.sync.api.serializers.SETTING_KINDS",
+        # A rule's key on the settings page (SHOP-3): named after the registry, not after the field `key`.
+        "SettingKeyEnum": "apps.shops.api.serializers.SETTING_KEYS",
         # A pull's change says `upsert` or `archive` (SYNC-3): named after the log's own choices, not after `op`.
         "ChangeOpEnum": "apps.core.models.ChangeOp",
         # The push's answers (SYNC-4): a flag's kind, the four answers, and a duplicate's first answer, each named after

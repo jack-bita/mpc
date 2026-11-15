@@ -110,6 +110,14 @@ const CODES_THE_API_SENDS = [
   "document.carried_from_unknown",
   "document.loaded_by_unknown",
   // Sides (CORE-6).
+  // A rule's new value, refused (SHOP-3): Setting.clean()'s codes and set_setting's own two.
+  "setting.date_past",
+  "setting.key_invalid",
+  "setting.key_unknown",
+  "setting.side_not_allowed",
+  "setting.side_required",
+  "setting.value_blank",
+  "setting.value_invalid",
   "side.code_invalid",
   "side.code_taken",
   "side.name_blank",

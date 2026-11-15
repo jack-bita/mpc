@@ -46,14 +46,16 @@ from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember
 from apps.people.services import grant_permission, mark_left, suspend
-from apps.shops.api.views import SideViewSet
-from apps.shops.models import Shop, Side
+from apps.shops.api.views import SettingViewSet, SideViewSet
+from apps.shops.models import Setting, Shop, Side
+from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
 from tests.test_tenancy_sweep import addresses
 
 SIDES = "/api/v1/shops/sides/"
+SETTINGS = "/api/v1/shops/settings/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -230,6 +232,51 @@ def test_side_switch_needs_settings_manage(
 
 
 @pytest.mark.django_db
+def test_setting_needs_settings_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # A rule's new value changes the shop's rules: `settings.manage`, the owner's (spec §6). A Manager on every side
+    # sees the rules and may not change one: refused, and nothing written. The owner may (SHOP-3).
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    today = shop_today(shop_a).isoformat()
+
+    def sent() -> dict[str, str]:
+        return {"id": str(uuid.uuid7()), "key": "attendance.late_fine", "value": "2000", "effective_from": today}
+
+    manager = client_for(staff_a2)
+    assert manager.get(SETTINGS).status_code == 200
+    refused = manager.post(SETTINGS, sent(), format="json")
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert not Setting.objects.filter(shop=shop_a).exists()
+
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    assert client_for(staff_a).post(SETTINGS, sent(), format="json").status_code == 201
+
+
+@pytest.mark.django_db
+def test_settings_list_keeps_to_the_persons_sides(shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember) -> None:
+    # Asha holds one key, on Dawa only: she sees the whole shop's rules, and Dawa's own, never Vyakula's, as every read
+    # keeps to the sides a person sees (PPL-5). Seeing them hides nothing a counter doesn't hold: every rule travels to
+    # every laptop of the shop (SYNC-2).
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.STOCK_COUNT, side=sides["D"], by=None)
+    rules = client_for(staff_a).get(SETTINGS).json()["rules"]
+
+    assert {rule["side"] for rule in rules} == {None, str(sides["D"].pk)}
+
+
+@pytest.mark.django_db
+def test_who_sees_no_side_sees_no_rule(sides: dict[str, Side], staff_a: StaffMember) -> None:
+    # A person who holds no key sees no side, and so no row of the whole shop either (PPL-5): not even the shop's rules'
+    # values, which come from the registry and the rows. The answer still says the shop's today.
+    answer = client_for(staff_a).get(SETTINGS).json()
+
+    assert answer["rules"] == []
+
+
+@pytest.mark.django_db
 def test_a_key_on_one_side_opens_only_that_side(shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember) -> None:
     # Rule X1 itself: a key works on the side it was given on, and nowhere else. Juma may change the shop's rules on
     # Dawa only, and counts stock on Vyakula, so he sees both. He may rename Dawa, not Vyakula; and adding a side, an
@@ -275,6 +322,15 @@ def test_side_routes_name_their_permissions() -> None:
         "retrieve": base.SEES_THE_SIDE,
         "create": Permission.SETTINGS_MANAGE,
         "partial_update": Permission.SETTINGS_MANAGE,
+    }
+
+
+def test_settings_routes_name_their_permissions() -> None:
+    # Seeing the rules needs only to see a side; a new value needs `settings.manage` (SHOP-3), on the row's side, or on
+    # the whole shop for a shop's rule. Written out in full, as above.
+    assert SettingViewSet.action_permissions == {
+        "list": base.SEES_THE_SIDE,
+        "create": Permission.SETTINGS_MANAGE,
     }
 
 
