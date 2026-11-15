@@ -12,6 +12,10 @@
 
 An offline-first, Swahili-first system for the counter and the office: staff attendance and pay, selling, payments (cash, bank, Lipa Namba mobile money), credit (*madeni*) and stock. It is built first for **MPC — Mabatini Pumba Center**, a family agro-vet shop in Usa River, Arusha, Tanzania, and designed from day one for other shops too.
 
+![On the demo, Asha clocks in with no internet: the laptop saves it and says one record is waiting. When the internet is back, the screen says every record has been sent, with no tap.](docs/media/offline-clock-in.gif)
+
+*A clock-in with no internet, on the live demo: saved on the laptop, then sent by itself when the internet comes back.*
+
 **Status:** in development. Working today:
 
 - The app installs on a laptop or a phone, and opens with no internet. Every screen is in Swahili, or in English for a person who chooses it.
