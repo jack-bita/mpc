@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 from django.db import IntegrityError
 from django.test import Client
+from pytest_django import Settings
 from rest_framework import exceptions
 from rest_framework.request import Request
 from rest_framework.test import APIClient
@@ -459,6 +460,20 @@ def test_edit_switches_a_side_on(staff_client_a: APIClient, sides_a: dict[str, S
 
     assert response.status_code == 200
     assert (response.json()["is_live"], response.json()["name"], response.json()["version"]) == (True, "Vyakula", 2)
+
+
+def test_side_switch_refused_on_the_demo(
+    staff_client_a: APIClient, shop_a: Shop, sides_a: dict[str, Side], settings: Settings
+) -> None:
+    # On the demo a visitor's switch is refused with its code, which the page shows as a sentence (demo.sides_fixed),
+    # and Vyakula stays as it was (switch_side, apps/shops/services.py).
+    settings.DEMO_SEED = True
+    response = staff_client_a.patch(f"{SIDES}{sides_a['F'].pk}/", {"is_live": True, "version": 1}, format="json")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "demo.sides_fixed"
+    with shop_context(shop_a):
+        assert Side.objects.get(pk=sides_a["F"].pk).is_live is False
 
 
 @pytest.mark.parametrize("sent", [{"version": 1}, {"name": "Chakula", "is_live": True, "version": 1}])
