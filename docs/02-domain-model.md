@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.29 · 15 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.30 · 16 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -59,6 +59,8 @@
 **Changes in v1.28** (15 Nov 2026, SHOP-3): two choices by Jack, made while planning SHOP-3 (§4, Setting). A rule's new value starts on the shop's today or later, never on a past day, so what a past day answers, and the pay worked out from it, never changes. A side's rule is set one side at a time, never for the whole shop, so a side's old row can never hide a newer shop value. Marked **(v1.28)**.
 
 **Changes in v1.29** (15 Nov 2026, from Jack): the workers pay for their own meals (spec §8.1). A new append-only record, `MealMoney`, the day's money for the meals, typed each day by whoever holds `meals.record`, a key the owner gives to whoever he chooses. It is split equally among the workers who came that day, half days included, and the cook pays no share (`PayRate.shares_meals`). Each `AttendanceDay` carries its `meal_share`, so a worker who leaves mid-month has their pay up to their last day at once, and gets their payslip then, on its own (§12, §15, §16, §18 E11, §20, §21). Marked **(v1.29)**.
+
+**Changes in v1.30** (16 Nov 2026, from Jack): a money rule is whole shillings (§4, Setting): the shop's money has no cents, and every screen refuses them (04 §20, item 25). Marked **(v1.30)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
@@ -221,6 +223,7 @@ A full diagram for GitHub is in Appendix A.
 - `key` (from a fixed list in code, each with a type, a default and a scope: one value for the whole shop, or one a side may override **(v1.7)**; since SHOP-3, a side's rule is set one side at a time **(v1.28)**), `value`, `effective_from`, `note`. Who set it is the row's `created_by` (§1) **(v1.7)**.
 - In force on a date = the latest row with `effective_from` ≤ that date. On one date, the row written last wins (`created_at`, then `id`), so a mistake is fixed with a new row **(v1.7)**. A side row beats a shop row, even an older one, and only for a key a side may override **(v1.7)**. Devices need each row's `created_at` to pick the same row offline **(v1.7)**.
 - A new value is a new row, written only through `set_setting` (SHOP-3), from the shop's today on: a row for a past day would change what that day answers, and the fines and the draft pay run worked out from it (Jack, 15 Nov 2026). A side's rule (`cash.tolerance`, `count.tolerance_pct`, `expiry.alert_days`, `stock.block_negative`) gets a row per side, never one for the whole shop: since a side row beats even a newer shop row, a shop value written later would be hidden behind a side's old one, and nobody would see why (Jack, 15 Nov 2026) **(v1.28)**.
+- A money rule (the late fine, the rounding step, the drawer's tolerance) is whole shillings: stored with two places, as every amount is, but always zeros, as the shop's money has no cents and every screen writes money without them; a value with cents is refused (`setting.value_invalid`) (Jack, 16 Nov 2026) **(v1.30)**.
 - Examples: `attendance.on_time_until` 07:35 · `attendance.late_fine` 1,000 · `cash.tolerance` · `count.tolerance_pct` · `expiry.alert_days` 90 · `stock.block_negative` false · `money.rounding_step` 1
 
 ## 5. People & access — module `people`
