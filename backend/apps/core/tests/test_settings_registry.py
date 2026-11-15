@@ -5,7 +5,7 @@ default, and a scope (one value for the whole shop, or one a side may override).
 stored as text, in one form per kind, so these tests check both ways: text in, a value out, and back.
 
     kind        typed      value               stored
-    Money       "1000"     Decimal("1000")     "1000.00"
+    Money       "1000"     Decimal("1000")     "1000.00"    (whole shillings only)
     TimeOfDay   "07:35"    time(7, 35)         "07:35"
     YesNo       "false"    False               "false"
 
@@ -62,10 +62,11 @@ def test_each_key_listed_once() -> None:
     ("kind", "text", "value", "stored"),
     [
         pytest.param(Money(), "1000", Decimal("1000"), "1000.00", id="money_whole_shillings"),
-        pytest.param(Money(), "1500.5", Decimal("1500.5"), "1500.50", id="money_one_place"),
+        # Whole shillings with places that are zeros are still whole: "1500.00" is 1,500.
+        pytest.param(Money(), "1500.00", Decimal("1500.00"), "1500.00", id="money_zero_cents"),
         pytest.param(Money(), "0", Decimal("0"), "0.00", id="money_zero"),
-        # The largest amount a numeric(14,2) column holds (03 §9).
-        pytest.param(Money(), "999999999999.99", Decimal("999999999999.99"), "999999999999.99", id="money_largest"),
+        # The largest whole amount a numeric(14,2) column holds (03 §9).
+        pytest.param(Money(), "999999999999", Decimal("999999999999"), "999999999999.00", id="money_largest"),
         pytest.param(Percent(), "2.5", Decimal("2.5"), "2.50", id="percent"),
         pytest.param(Percent(), "100", Decimal("100"), "100.00", id="percent_all"),
         pytest.param(Whole(maximum=1000), "90", 90, "90", id="whole"),
@@ -88,8 +89,12 @@ def test_value_kinds_read_and_write_text(kind: ValueKind[Any], text: str, value:
 @pytest.mark.parametrize(
     ("kind", "text"),
     [
-        # Money: an exact amount in plain digits, with at most two places (ADR-0024).
+        # Money: an exact amount in plain digits, in whole shillings (ADR-0024; Jack, 16 Nov 2026).
         pytest.param(Money(), "abc", id="money_not_a_number"),
+        # Cents: the shop's money has none, and a rule with them would stop every screen that writes money
+        # (formatMoney refuses cents): a rounding step of 2.50, a late fine of 1,000.50.
+        pytest.param(Money(), "1500.5", id="money_with_cents"),
+        pytest.param(Money(), "0.50", id="money_half_a_shilling"),
         pytest.param(Money(), "1,000", id="money_with_a_comma"),
         pytest.param(Money(), "10.005", id="money_three_places"),
         pytest.param(Money(), "-500", id="money_below_zero"),
@@ -139,6 +144,7 @@ def test_value_kinds_refuse_bad_text(kind: ValueKind[Any], text: str) -> None:
         # A value parse() refuses can't be written either, or it would be stored all the same.
         pytest.param(Money(), Decimal("-500"), id="money_below_zero"),
         pytest.param(Money(), Decimal("Infinity"), id="money_infinite"),
+        pytest.param(Money(), Decimal("1500.50"), id="money_with_cents"),
         pytest.param(TimeOfDay(), time(7, 35, 30), id="time_with_seconds"),
     ],
 )
