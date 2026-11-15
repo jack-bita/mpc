@@ -55,6 +55,15 @@ const DECIMAL = /^(\d+|\d{1,3}([, ]\d{3})+)(\.\d{1,2})?$/;
 // The phone's clock box answers "07:35"; one typed by hand on a laptop's plain box, the same.
 const CLOCK = /^\d{2}:\d{2}$/;
 
+// The fields whose refusals the form shows in their own place: beside a box, or about the rule itself.
+const FIELDS_SHOWN = new Set([
+  "value",
+  "effective_from",
+  "note",
+  "side",
+  "key",
+]);
+
 /** What was typed, as the server takes it: "1,000" → "1000". Null when it isn't a value of its kind at all,
  * which the form says at once; whether it is too big or too small for its rule is the server's to say. */
 export function typedValue(kind: SettingKind, typed: string): string | null {
@@ -160,6 +169,9 @@ export function SettingForm({
   function send(event: FormEvent) {
     // The browser would send the form itself and load a new page; the app sends it instead.
     event.preventDefault();
+    // The last send's refusal is about what was sent then: each tap shows only what it finds, its own checks or the
+    // server's new answer, never an old sentence left beside a box (SHOP-5's review).
+    save.reset();
     const value = typed.trim() === "" ? null : typedValue(line.kind, typed);
     const checks = {
       value:
@@ -184,7 +196,9 @@ export function SettingForm({
 
   // Where each refusal shows: beside its box, the form's own first, then the server's. A refusal about the
   // rule itself, its side or its key, has no box: the page sends both, so it means the app and the server
-  // disagree (a newer server, or a bug), and it shows above the buttons in the server's sentence.
+  // disagree (a newer server, or a bug), and it shows above the buttons in the server's sentence. Any other, a
+  // refusal about a field the form doesn't know, shows in the alert with the rest: no refusal goes unsaid
+  // (SHOP-5's review).
   const byField = fieldMessages(save.error);
   const said = (code?: string) =>
     code === undefined ? undefined : codeMessage(codes, code);
@@ -194,7 +208,9 @@ export function SettingForm({
   const aboutTheRule = [byField.side, byField.key].filter(
     (sentence): sentence is string => sentence !== undefined,
   );
-  const onABox = Object.keys(byField).length > 0;
+  const onABox =
+    Object.keys(byField).length > 0 &&
+    Object.keys(byField).every((field) => FIELDS_SHOWN.has(field));
 
   return (
     // noValidate: the browser's own checks would speak its language, not the shop's.

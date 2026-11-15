@@ -254,6 +254,45 @@ describe("Badilisha", () => {
     );
   });
 
+  it("clears the last send's refusal at the next tap, so no old sentence stays beside a box (SHOP-5's review)", async () => {
+    // The server refused the day; the owner then empties the amount and taps again. Only the empty box is said now:
+    // the day's old refusal was about the last send.
+    answer(
+      "POST",
+      RULES,
+      refusal(400, "invalid", {}, { effective_from: ["setting.date_past"] }),
+    );
+    openOn();
+    tap(save());
+    await waitFor(() =>
+      expect(errorOf(dayBox())).toBe(
+        "Thamani mpya haiwezi kuanza kabla ya leo.",
+      ),
+    );
+
+    typeInto(amountBox(), "");
+    tap(save());
+
+    expect(errorOf(amountBox())).toBe("Andika thamani.");
+    expect(errorOf(dayBox())).toBe("");
+  });
+
+  it("says a refusal about a field it has no place for, never hiding it (SHOP-5's review)", async () => {
+    // A newer server refuses a field this app doesn't send or know: the alert says it, in the plain sentence.
+    answer(
+      "POST",
+      RULES,
+      refusal(400, "invalid", {}, { unit: ["setting.value_invalid"] }),
+    );
+    openOn();
+
+    tap(save());
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Baadhi ya sehemu si sahihi.",
+    );
+  });
+
   it("says a refusal about the rule itself, which no box shows, in its own sentence", async () => {
     // A side the page sent that the server says a shop's rule can't have: the app and the server disagree.
     answer(
