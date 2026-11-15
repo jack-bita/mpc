@@ -12,6 +12,8 @@
 // history under it. Everyone else gets Historia, which opens the history alone: they read the rules, and
 // change none. The button only keeps a door out of sight: the server checks the key itself on every save.
 //
+// At the bottom, Pande: each side with its on/off switch (side-switch.tsx).
+//
 // One line per side, under the rule, not a column per side as the card first said: on the owner's phone two
 // columns of values and buttons don't fit (Jack, 15 Nov 2026).
 //
@@ -49,6 +51,7 @@ import {
 import { SettingForm } from "./setting-form";
 import { useRuleWords } from "./setting-words";
 import { SHOP_RULES, useShopRules } from "./shop-rules";
+import { SideSwitches } from "./side-switch";
 
 /** The key that lets a person give a rule a new value: one of the owner's own four (spec §6). */
 const CHANGES_RULES = "settings.manage";
@@ -77,7 +80,12 @@ export function SettingsScreen() {
       </p>
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
-      {who.data ? <RulesByArea me={who.data} /> : null}
+      {who.data ? (
+        <>
+          <RulesByArea me={who.data} />
+          <SideSwitches me={who.data} />
+        </>
+      ) : null}
     </div>
   );
 }

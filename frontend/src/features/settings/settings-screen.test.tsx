@@ -19,6 +19,7 @@ vi.mock("@/api/client", async (importOriginal) =>
 
 const ME = "/api/auth/me/";
 const RULES = "/api/v1/shops/settings/";
+const SIDES = "/api/v1/shops/sides/";
 
 // A seller on each side: reading the rules needs no key.
 const SELLER = whoIsHere([
@@ -44,6 +45,11 @@ const OWNER = {
 function rulesAnswer(rules = SHOP_RULES, me: typeof SELLER = SELLER) {
   answer("GET", ME, { status: 200, body: me });
   answer("GET", RULES, { status: 200, body: rules });
+  // Pande, at the bottom of the page, reads the sides: none here, as side-switch.test.tsx tests them.
+  answer("GET", SIDES, {
+    status: 200,
+    body: { next: null, previous: null, results: [] },
+  });
 }
 
 /** One rule's card, found by its name. Given 5 s, not Testing Library's 1, as the first test of a file pays
@@ -68,7 +74,7 @@ async function cardText(name: string): Promise<string> {
 }
 
 describe("Mipangilio ya duka", () => {
-  it("shows every rule of the registry once, under its area", async () => {
+  it("shows every rule of the registry once, under its area, and the sides at the bottom", async () => {
     rulesAnswer();
 
     render(<SettingsScreen />);
@@ -78,7 +84,8 @@ describe("Mipangilio ya duka", () => {
       screen
         .getAllByRole("heading", { level: 2 })
         .map((each) => each.textContent),
-    ).toEqual(["Mahudhurio", "Pesa", "Kompyuta", "Mzigo"]);
+      // The sides and their switches last (side-switch.tsx).
+    ).toEqual(["Mahudhurio", "Pesa", "Kompyuta", "Mzigo", "Pande"]);
     expect(
       screen
         .getAllByRole("heading", { level: 3 })
@@ -461,6 +468,10 @@ describe("a save from the page", () => {
     let rules = SHOP_RULES;
     answer("GET", ME, { status: 200, body: OWNER });
     answer("GET", RULES, () => Response.json(rules));
+    answer("GET", SIDES, {
+      status: 200,
+      body: { next: null, previous: null, results: [] },
+    });
     answer("POST", RULES, () => {
       rules = withRule(line({ value: "1000.00", rows: [saved] }));
       return Response.json(saved, { status: 201 });

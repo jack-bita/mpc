@@ -239,6 +239,23 @@
       "inUse": "In use now",
       "coming": "Coming"
     },
+    "sides": {
+      "title": "Sides",
+      "intro": "A side switched off isn't used at the shop's laptops.",
+      "on": "On",
+      "off": "Off",
+      "switchOff": "Switch off",
+      "switchOn": "Switch on",
+      "switchOffOf": "Switch off: {side}",
+      "switchOnOf": "Switch on: {side}",
+      "askOff": "Switch off {side}? The shop's laptops won't use it until you switch it on again.",
+      "askOn": "Switch on {side}? The shop's laptops will start using it.",
+      "yesOff": "Yes, switch off",
+      "yesOn": "Yes, switch on",
+      "no": "No",
+      "switchedOff": "{side} is switched off.",
+      "switchedOn": "{side} is switched on."
+    },
     "rules": {
       "attendance": {
         "on_time_until": {

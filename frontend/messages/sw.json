@@ -239,6 +239,23 @@
       "inUse": "Inatumika sasa",
       "coming": "Inakuja"
     },
+    "sides": {
+      "title": "Pande",
+      "intro": "Upande uliozimwa hautumiki kwenye kompyuta za duka.",
+      "on": "Imewashwa",
+      "off": "Imezimwa",
+      "switchOff": "Zima",
+      "switchOn": "Washa",
+      "switchOffOf": "Zima: {side}",
+      "switchOnOf": "Washa: {side}",
+      "askOff": "Zima upande wa {side}? Hautatumika kwenye kompyuta za duka hadi uuwashe tena.",
+      "askOn": "Washa upande wa {side}? Utaanza kutumika kwenye kompyuta za duka.",
+      "yesOff": "Ndiyo, zima",
+      "yesOn": "Ndiyo, washa",
+      "no": "Hapana",
+      "switchedOff": "Upande wa {side} umezimwa.",
+      "switchedOn": "Upande wa {side} umewashwa."
+    },
     "rules": {
       "attendance": {
         "on_time_until": {
