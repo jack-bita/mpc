@@ -63,7 +63,7 @@ The safety comes from the **answer log**: one line per record id, written in the
 
 A `retry` stops the batch there, so the records after it never jump ahead. After a failed push, the laptop waits 30 seconds, then twice as long each time, up to 5 minutes.
 
-One rule surprised me: **a fact made offline is never refused for breaking a business rule.** Say the manager suspends Juma, and a laptop that hasn't synced yet lets him clock in. That clock-in still happened. The server accepts it and raises a **flag** for the manager to look at. Refusing it would only hide it.
+One rule matters most: **a fact made offline is never refused for breaking a business rule.** Say the manager suspends Juma, and a laptop that hasn't synced yet lets him clock in. That clock-in still happened. The server accepts it and raises a **flag** for the manager to look at. Refusing it would only hide it.
 
 ## Down: the change log, and the late-commit trap
 
