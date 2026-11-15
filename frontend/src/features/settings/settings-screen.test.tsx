@@ -9,7 +9,7 @@ import { setLanguage } from "@/i18n/language";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal } from "@/test/fake-server";
 import { render } from "@/test/render";
-import { line, row, SHOP_RULES, withRule } from "@/test/settings";
+import { line, OWNER, row, SHOP_RULES, withRule } from "@/test/settings";
 
 import { SettingsScreen } from "./settings-screen";
 
@@ -26,21 +26,6 @@ const SELLER = whoIsHere([
   { side: DAWA, permissions: ["sale.create"] },
   { side: VYAKULA, permissions: ["sale.create"] },
 ]);
-
-// The owner: settings.manage on the whole shop, which `me` counts on every side too (HeldPermissions.on).
-const OWNER = {
-  ...whoIsHere([
-    { side: DAWA, permissions: ["settings.manage"] },
-    { side: VYAKULA, permissions: ["settings.manage"] },
-  ]),
-  permissions: {
-    whole_shop: ["settings.manage"],
-    sides: [
-      { ...DAWA, permissions: ["settings.manage"] },
-      { ...VYAKULA, permissions: ["settings.manage"] },
-    ],
-  },
-};
 
 function rulesAnswer(rules = SHOP_RULES, me: typeof SELLER = SELLER) {
   answer("GET", ME, { status: 200, body: me });

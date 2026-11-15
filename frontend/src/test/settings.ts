@@ -3,7 +3,7 @@
 // Fake data: the made-up MPC of devices.ts, its Dawa and Vyakula sides, and made-up nicknames.
 import type { components } from "@/api/schema";
 
-import { DAWA, VYAKULA } from "./devices";
+import { DAWA, VYAKULA, whoIsHere } from "./devices";
 
 type RuleLine = components["schemas"]["RuleAnswer"];
 type RuleRow = components["schemas"]["Setting"];
@@ -78,7 +78,8 @@ export const SHOP_RULES: components["schemas"]["ShopRulesAnswer"] = {
   ],
 };
 
-/** The same answer with one shop's rule's line replaced, found by its key. */
+/** The same answer with one line replaced, found by its key and its side: a shop's rule's line, or one side's line of
+ * a side's rule. */
 export function withRule(
   changed: RuleLine,
 ): components["schemas"]["ShopRulesAnswer"] {
@@ -89,3 +90,16 @@ export function withRule(
     ),
   };
 }
+
+/** The owner, as `me` answers for him: settings.manage on the whole shop, which the server also counts on every side
+ * (HeldPermissions.on), so both lists hold it. */
+export const OWNER: components["schemas"]["WhoIsHere"] = {
+  ...whoIsHere([]),
+  permissions: {
+    whole_shop: ["settings.manage"],
+    sides: [
+      { ...DAWA, permissions: ["settings.manage"] },
+      { ...VYAKULA, permissions: ["settings.manage"] },
+    ],
+  },
+};

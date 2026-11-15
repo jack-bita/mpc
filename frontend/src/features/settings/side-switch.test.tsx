@@ -16,6 +16,7 @@ import type { components } from "@/api/schema";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
+import { OWNER } from "@/test/settings";
 
 import { SideSwitches } from "./side-switch";
 
@@ -55,12 +56,6 @@ const VYAKULA_OFF = side({
   is_live: false,
   version: 1,
 });
-
-// The owner: the key on the whole shop, which `me` counts on every side.
-const OWNER = whoIsHere([
-  { side: DAWA, permissions: ["settings.manage"] },
-  { side: VYAKULA, permissions: ["settings.manage"] },
-]);
 
 /** The sides as the server lists them, in the order it made them: Vyakula first, so the page's own order shows. */
 function sidesAnswer(...sides: Side[]) {
