@@ -153,6 +153,20 @@ describe("Jaribu demo", () => {
     expect(demoPin(ASHA)).toBe("2580");
   });
 
+  it("says so when the browser didn't keep the new device's key", async () => {
+    // A browser set to block every site's cookies: the server made the device, yet `me` knows no key. Said
+    // with an alert, never a welcome screen that does nothing, and no device saved.
+    theDemoIsOpen();
+    answer("POST", DEMO, { status: 201, body: { pins: PINS } });
+    render(<TryTheDemo />);
+
+    await tap();
+
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(savedDevice()).toBeNull();
+    expect(screen.getByRole("button", { name: "Jaribu demo" })).toBeTruthy();
+  });
+
   it("says why a tap was refused", async () => {
     // The demo closed between the look and the tap: a live shop was made in between, say.
     theDemoIsOpen();
