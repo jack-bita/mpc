@@ -14,15 +14,18 @@
 // once, in the server's own sentences; the server checks the rest, a value too big or too small for its rule, and
 // its sentence then shows beside the same box (useApiErrorWords().fieldMessages).
 //
-// The id is made once, as the form opens, and sent again with every try of it (ADR-0007): a send whose answer the
-// network lost, tried again, gets the stored row back, not a second row.
+// The id is sent again with every try of the same value (ADR-0007): a send whose answer the network lost, tried
+// again, gets the stored row back, not a second row. A changed value, day or note gets a new id: the server answers a
+// repeated id with the row it stored, whatever the new send carries, so the old id would have the page say
+// Imehifadhiwa for a value it never saved. Two rows are safe: on one day the one written last is in force (T2), and
+// the history shows both (SHOP-5's review).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CircleAlert } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -98,8 +101,8 @@ export function SettingForm({
   const online = useOnline();
   const store = useQueryClient();
 
-  // Made once, as the form opens, and kept through every send of it (see the top of this file).
-  const [id] = useState(newId);
+  // The last send: its id, and what it carried, so a try of the same keeps its id (see the top of this file).
+  const lastSend = useRef<{ id: string; carried: string } | null>(null);
   const [typed, setTyped] = useState(() => startingText(line.kind, line.value));
   const [day, setDay] = useState(today);
   const [note, setNote] = useState("");
@@ -109,15 +112,20 @@ export function SettingForm({
   );
 
   const save = useMutation({
-    mutationFn: (value: string) =>
+    mutationFn: (sent: {
+      id: string;
+      value: string;
+      day: string;
+      note: string;
+    }) =>
       answerOf(
         api.POST("/api/v1/shops/settings/", {
           body: {
-            id,
+            id: sent.id,
             key: ruleKey,
-            value,
-            effective_from: day,
-            note,
+            value: sent.value,
+            effective_from: sent.day,
+            note: sent.note,
             // A side's rule names its side; a shop's names none (the server refuses one, side_not_allowed).
             ...(line.side === null ? {} : { side: line.side }),
           },
@@ -148,7 +156,11 @@ export function SettingForm({
     };
     setOwn(checks);
     if (value === null || checks.effective_from) return;
-    save.mutate(value);
+    // The same id for a try of the same value, day and note; a new one once any of them changed.
+    const carried = JSON.stringify([value, day, note]);
+    if (lastSend.current?.carried !== carried)
+      lastSend.current = { id: newId(), carried };
+    save.mutate({ id: lastSend.current.id, value, day, note });
   }
 
   // Where each refusal shows: beside its box, the form's own first, then the server's. A refusal about the

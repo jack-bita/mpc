@@ -282,6 +282,29 @@ describe("Badilisha", () => {
     expect(second?.id).toBe(first?.id);
   });
 
+  it("sends a changed value under a new id, so the server never answers with the old one (SHOP-5's review)", async () => {
+    // 2,000 is saved, but the answer is lost on the way back. The owner makes it 2,500 and taps Hifadhi again. Under the
+    // old id, the server would answer with the stored 2,000, and the page would say Imehifadhiwa for 2,500.
+    let tries = 0;
+    answer("POST", RULES, () => {
+      tries += 1;
+      if (tries === 1) throw new TypeError("Failed to fetch");
+      return Response.json(row({ value: "2500.00" }), { status: 201 });
+    });
+    const { onSaved } = openOn();
+
+    typeInto(amountBox(), "2000");
+    tap(save());
+    await screen.findByRole("alert");
+    typeInto(amountBox(), "2500");
+    tap(save());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const [first, second] = await sentBodies();
+    expect([first?.value, second?.value]).toEqual(["2000", "2500"]);
+    expect(second?.id).not.toBe(first?.id);
+  });
+
   it("offers Ndiyo and Hapana for a yes or no, and sends the one picked", async () => {
     answer("POST", RULES, {
       status: 201,
