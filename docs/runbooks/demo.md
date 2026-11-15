@@ -40,11 +40,11 @@ The demo seed (`manage.py seed_demo`, DATA-1) makes one made-up shop, *Duka la M
 
 | Who | Logs in with | Where |
 |---|---|---|
-| Meneja, the manager, on every side | `meneja@example.com` and the password `jaribu-demo` | `/login/`, on a phone or a second browser |
+| Meneja, the manager, on every side, who may also change the shop's rules (SHOP-5) | `meneja@example.com` and the password `jaribu-demo` | `/login/`, on a phone or a second browser |
 | Asha, a seller on Dawa | PIN `2580` | a laptop's PIN screen: one tapped in with *Jaribu demo* shows it on her tile (OPS-3), or one the manager registered |
 | Baraka, a seller on Vyakula | PIN `1470` | the same, on his tile |
 
-None of them can open the admin: nobody the seed makes is `is_staff`. And nobody can change a password or a PIN on the demo (`demo.logins_fixed`), as every visitor shares them: a visitor who changed Meneja's password would otherwise lock out everyone after them until the next day.
+None of them can open the admin: nobody the seed makes is `is_staff`. And nobody can change a password or a PIN on the demo (`demo.logins_fixed`), as every visitor shares them: a visitor who changed Meneja's password would otherwise lock out everyone after them until the next day. Meneja holds `settings.manage`, the owner's key to the shop's rules, so a visitor can try *Badilisha* on *Mipangilio ya duka*: a new value lasts until the nightly reset. The sides' switches stay as the seed made them (`demo.sides_fixed`).
 
 **Jaribu demo** (OPS-3). One tap on the Karibu screen makes the visitor's browser a laptop of the shop, with no code and no manager: named by its code ("Demo K7P2-MXQ9"), confirmed by Meneja, on Dawa. The PIN screen then shows each seller's PIN on their tile. The button shows only while the database holds the demo shop alone, and the server refuses the tap otherwise (`demo.closed`). After the daily reset, yesterday's browser finds itself unregistered and taps again; its old copy of the shop is deleted then. Taps count with the pairing start's limit: 10 an hour per network. A browser whose demo device Meneja blocked (any visitor can, with Meneja's password) is refused at its next request, tap included (`device.blocked`), and the app can't clear the key's cookie, which page scripts can't read: it works again after the next reset, or at once once its owner clears the site's data in the browser's settings.
 
