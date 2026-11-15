@@ -209,6 +209,32 @@ describe("the switch", () => {
     expect(screen.getByRole("button", { name: "Washa: Dawa" })).toBeTruthy();
   });
 
+  it("switches both answers off while the switch is on its way (SHOP-5's review)", async () => {
+    // Sent, a switch can't be called back: a Hapana tapped then would close the question and hide a switch that still
+    // goes through.
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    answer(
+      "PATCH",
+      `${SIDES}${DAWA.id}/`,
+      () => new Promise<Response>(() => undefined),
+    );
+    render(<SideSwitches me={OWNER} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Zima: Dawa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ndiyo, zima" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Hapana" })).toHaveProperty(
+        "disabled",
+        true,
+      ),
+    );
+    expect(screen.getByRole("button", { name: "Ndiyo, zima" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+  });
+
   it("asks before switching a side on too", async () => {
     // Vyakula reaches the shop's laptops once switched on: as big a change as switching one off.
     sidesAnswer(DAWA_ON, VYAKULA_OFF);

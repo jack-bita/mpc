@@ -211,6 +211,9 @@ export function SideSwitch({
               size="normal"
               aria-describedby={question}
               autoFocus
+              // Off too while the switch is on its way: it can't be called back, and a Hapana that closed the
+              // question then would only hide a switch that still goes through (SHOP-5's review).
+              disabled={flip.isPending}
               onClick={closeTheQuestion}
             >
               {t("no")}
