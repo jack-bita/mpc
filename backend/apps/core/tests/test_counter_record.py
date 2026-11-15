@@ -10,7 +10,7 @@ in a push. It keeps four facts the server can't work out for itself:
 
 These tests pin what the base gives: the four facts kept as saved, none of them left out, a device that made records
 never deleted, and the shop guard every shop's table has. The table is `probe.Ticket`, a test-only table built on
-CounterRecord (backend/tests/probe/), standing for a sale: core may not name a higher app's table (ADR-0041). The
+CounterRecord (backend/tests/probe/), standing for a sale: core may not name a higher app's table (ADR-0043). The
 device comes from backend/conftest.py, typed by its base, as core's tests may not name `people`'s tables either.
 """
 

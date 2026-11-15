@@ -43,6 +43,10 @@
       "which": "Its name is {device}, on the {side} side of {shop}.",
       "continue": "Continue"
     },
+    "demo": {
+      "try": "Try the demo",
+      "explain": "This device becomes a laptop of Duka la Mfano, a made-up shop. No real data."
+    },
     "office": {
       "title": "Devices",
       "register": "Register a device",
@@ -113,7 +117,8 @@
     "picker": {
       "title": "Who are you?",
       "empty": "No one works here yet. Ask the shop's owner to add the staff.",
-      "firstSync": "Wait a moment: this laptop is getting the staff list for the first time."
+      "firstSync": "Wait a moment: this laptop is getting the staff list for the first time.",
+      "demoPin": "PIN {pin}"
     },
     "pin": {
       "typePin": "Type your PIN",
@@ -473,6 +478,7 @@
       "too_easy": "This PIN is too easy to guess, like 1234 or 0000. Choose another."
     },
     "demo": {
+      "closed": "The demo isn't open here.",
       "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in."
     },
     "password_too_short": "This password is too short.",

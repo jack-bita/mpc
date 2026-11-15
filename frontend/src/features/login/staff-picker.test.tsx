@@ -2,8 +2,9 @@
 // at the shop, and a tap on your own (UI-4, 03 §5.9). The list is the laptop's own copy of the staff
 // (SYNC-10), so it shows with no network, and the server is never asked.
 import { act, fireEvent, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DEMO_PINS_KEY, savePins } from "@/features/devices/demo-pins";
 import { saveDevice } from "@/features/devices/this-device";
 import { setLanguage } from "@/i18n/language";
 import { shopDatabase } from "@/offline/this-shop";
@@ -39,6 +40,7 @@ async function tiles() {
 
 // The Dawa laptop, registered. Each test fills its database as it needs.
 beforeEach(() => saveDevice(DAWA_LAPTOP));
+afterEach(() => window.localStorage.removeItem(DEMO_PINS_KEY));
 
 describe("the staff picker", () => {
   it("asks who you are, with a tile for each person, A to Z", async () => {
@@ -154,6 +156,33 @@ describe("the staff picker", () => {
         "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze.",
       ),
     ).toBeNull();
+  });
+
+  it("shows a demo seller's PIN under their names, and none for the others", async () => {
+    // One tap on Jaribu demo kept Asha's PIN (OPS-3). Juma, who has none kept, gets a plain tile.
+    savePins([{ staff_id: ASHA.id, pin: "2580" }]);
+    await theLaptopKnows(ASHA, JUMA);
+    render(<StaffPicker onPick={vi.fn()} />);
+
+    expect((await tiles()).map((tile) => tile.textContent)).toEqual([
+      "Asha Mfano Asha PIN 2580",
+      "Juma Mfano Juma",
+    ]);
+  });
+
+  it("shows no PIN on a laptop that never tried the demo, nor one kept for other people", async () => {
+    // A real shop's laptop keeps none; yesterday's demo kept PINs of people the reset made again with new
+    // ids, which match no tile of today's.
+    savePins([
+      { staff_id: "019a5e00-0000-7000-8000-0000000000ff", pin: "2580" },
+    ]);
+    await theLaptopKnows(ASHA, JUMA);
+    render(<StaffPicker onPick={vi.fn()} />);
+
+    expect((await tiles()).map((tile) => tile.textContent)).toEqual([
+      "Asha Mfano Asha",
+      "Juma Mfano Juma",
+    ]);
   });
 
   it("speaks English after the switch, with no Swahili left", async () => {

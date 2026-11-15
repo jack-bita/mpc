@@ -57,7 +57,7 @@ check: check-backend check-frontend check-image check-e2e ## run everything CI r
 # - First, `uv sync --locked`: it fails when uv.lock no longer matches pyproject.toml, instead of
 #   quietly writing a new lock that nobody committed (ADR-0025). It also installs the packages,
 #   which is all CI needs before the checks.
-# - lint-imports checks the layer contracts in pyproject.toml (ADR-0041): an import that climbs a
+# - lint-imports checks the layer contracts in pyproject.toml (ADR-0043): an import that climbs a
 #   layer fails here. Like ruff and mypy it needs no database, so it runs with them, before the
 #   slower checks. --no-logo: no banner, so the last lines printed are the result.
 # - makemigrations --check fails when a model changed without a migration. It runs with the test

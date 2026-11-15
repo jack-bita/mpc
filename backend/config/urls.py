@@ -25,6 +25,10 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("api/v1/people/", include("apps.people.api.urls")),
     # The routes a device calls with its key: the start of a pairing, and what a paired device learns (AUTH-2).
     path("api/devices/v1/", include("apps.people.api.device_urls")),
+    # The one-tap demo, under the same prefix: may Jaribu demo show here, and the tap that makes this browser a demo
+    # device (OPS-3). In the demo app, which alone may read the seed's people and PINs (ADR-0043); shut wherever a shop
+    # that isn't a demo exists, and on the real server, which never has the demo's sign.
+    path("api/devices/v1/", include("apps.demo.api.urls")),
     # Sync, also with a device's key: a new device's copy of its shop (SYNC-2), and later the pull and the push.
     path("api/sync/v1/", include("apps.sync.api.urls")),
     # Who stands at a shop's device, or is logged in on their own phone: PIN login, "who is here?", logout (AUTH-4).

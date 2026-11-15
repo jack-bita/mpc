@@ -164,7 +164,7 @@ class CounterRecord(ShopScoped):
     # repayment, a clock-in. ShopScoped plus four facts only the push can give it, and it fills all four (SYNC-4):
     # editable=False keeps them out of every form and every API field, as created_by is.
 
-    # The device that made it, the one whose key sent the push. Named, not imported: `core` is layer 0 (ADR-0041).
+    # The device that made it, the one whose key sent the push. Named, not imported: `core` is layer 0 (ADR-0043).
     # PROTECT: nothing is deleted (rule 7), so every record keeps naming the laptop it came from. No index of its own:
     # indexes lead with `shop`, and nothing is deleted, so PROTECT never has to search this column.
     device = models.ForeignKey(

@@ -8,6 +8,9 @@
 // suspended person's row says so, so neither gets a tile, as the server's old route sent neither.
 //
 // A tile shows the full name in large letters with the nickname under it, until photos come (PPL-4; 02 §5).
+// On the demo, a seller's tile shows their PIN too, as Jaribu demo handed it over (OPS-3, demo-pins.ts):
+// a visitor can't guess it, and this is where they need it. Never on a real shop's laptop, which keeps no
+// demo PINs, and never one kept from yesterday's demo, whose people had other ids.
 //
 // "use client": it reads the laptop's database and its words, both in the browser only.
 "use client";
@@ -18,6 +21,7 @@ import { useTranslations } from "use-intl";
 
 import type { components } from "@/api/schema";
 import { Button } from "@/components/design/button";
+import { demoPin } from "@/features/devices/demo-pins";
 import { readCursor } from "@/offline/sync/meta";
 import { useShopDatabase } from "@/offline/this-shop";
 
@@ -102,11 +106,26 @@ export function StaffPicker({
                 <span className="text-lg font-normal">
                   {person.display_name}
                 </span>
+                <DemoPin staffId={person.id} />
               </Button>
             </li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+/** A demo seller's PIN, under their names (OPS-3), or nothing for anyone else. */
+function DemoPin({ staffId }: { staffId: string }) {
+  const t = useTranslations("login.picker");
+  const pin = demoPin(staffId);
+  if (pin === undefined) return null;
+  // A space first, as between the two names: a screen reader says "Asha Mfano Asha PIN 2580".
+  return (
+    <>
+      {" "}
+      <span className="text-base font-normal">{t("demoPin", { pin })}</span>
+    </>
   );
 }

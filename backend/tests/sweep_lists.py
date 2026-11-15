@@ -11,6 +11,7 @@ the sync routes with a device's key, is a new check instead, added in a reviewed
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.core.api.views import HealthView
+from apps.demo.api.views import DemoOpenView
 from apps.people.api.views import LogoutView, OwnSettingsView
 
 # T1's exceptions (02 §16, 03 §5.4): tables that belong to no one shop, so they have no `shop`.
@@ -64,6 +65,11 @@ NOT_SHOP_ROUTES: set[type] = {
     # person's staff line in every shop where they work, so their laptops show the new choice (SYNC-15): it reads only
     # the person's own job in each, inside the shop the person's door names, and answers nothing of it.
     OwnSettingsView,
+    # May Jaribu demo show here? (OPS-3, its card's decision): asked with no login by a browser that is no device yet,
+    # it answers one true or false, as test_demo_open_answer_holds_nothing_of_a_shop proves
+    # (apps/demo/tests/test_demo_device.py). It reads the demo's sign and the shops' kinds alone, from the shops
+    # themselves (rule 1's own exception, NO_SHOP), never a table of a shop's.
+    DemoOpenView,
 }
 
 # Office routes whose answers the sweep can't read, such as a PDF or an Excel download, which squeeze their
@@ -85,6 +91,10 @@ DEVICE_ROUTES_WITHOUT_A_LOOK: dict[str, str] = {
     # The push (SYNC-4): its answers name only the documents sent, by the ids the laptop sent, with codes; shop B's
     # laptop sending shop A's ids is refused without a word of A.
     "sync-push": "test_push_answers_hold_nothing_of_another_shop",
+    # One tap on Jaribu demo (OPS-3): its answer is the demo shop's sellers' PINs, public on purpose, and only where the
+    # demo shop is the only shop; beside any other shop it is refused with its code alone (demo.closed), nothing of
+    # either shop's.
+    "device-demo": "test_one_tap_demo_refused_with_live_shop",
 }
 
 # App files that may build a query by hand, `models.QuerySet(Table)`, which starts from no manager and so from

@@ -29,7 +29,7 @@ type Line = tuple[str, uuid.UUID, str]
 
 def _shop_id(shop: Model | uuid.UUID) -> uuid.UUID:
     # A Shop row or a shop's id, as recording_changes takes either. Typed as any model: tests of `core` may not name
-    # Shop (ADR-0041).
+    # Shop (ADR-0043).
     return shop if isinstance(shop, uuid.UUID) else shop.pk
 
 

@@ -12,7 +12,7 @@ order holds when two saves meet, is in test_change_order.py.
 
 The rows come from backend/conftest.py: a side, a staff member's job and a paired device, each a table with a link
 type code (apps/core/links.py). They are typed by their base, ShopScoped: `core` may not name a higher app's table,
-not even for types (ADR-0041). They are made by the services, which write lines of their own (SYNC-15), so each test
+not even for types (ADR-0043). They are made by the services, which write lines of their own (SYNC-15), so each test
 reads only the lines after the one it started at, numbered from 1 again (last_line, lines_after:
 backend/tests/change_log.py).
 """

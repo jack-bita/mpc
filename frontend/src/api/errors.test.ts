@@ -79,6 +79,8 @@ const CODES_THE_API_SENDS = [
   "password_too_common",
   "password_entirely_numeric",
   "password_too_similar",
+  // Jaribu demo, tapped where the demo shop isn't the only shop, or with no demo shop yet (OPS-3).
+  "demo.closed",
   // The demo's logins stay as the seed made them (DATA-1): a PIN, a temporary password and a person's own.
   "demo.logins_fixed",
   "staff.left",

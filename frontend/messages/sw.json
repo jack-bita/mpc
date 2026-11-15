@@ -43,6 +43,10 @@
       "which": "Jina lake ni {device}, upande wa {side}, duka la {shop}.",
       "continue": "Endelea"
     },
+    "demo": {
+      "try": "Jaribu demo",
+      "explain": "Kifaa hiki kitakuwa kompyuta ya Duka la Mfano, duka la kubuni. Hakuna data halisi."
+    },
     "office": {
       "title": "Vifaa",
       "register": "Sajili kifaa",
@@ -113,7 +117,8 @@
     "picker": {
       "title": "Wewe ni nani?",
       "empty": "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze.",
-      "firstSync": "Subiri kidogo: kompyuta hii inaleta orodha ya wafanyakazi kwa mara ya kwanza."
+      "firstSync": "Subiri kidogo: kompyuta hii inaleta orodha ya wafanyakazi kwa mara ya kwanza.",
+      "demoPin": "PIN {pin}"
     },
     "pin": {
       "typePin": "Andika PIN yako",
@@ -473,6 +478,7 @@
       "too_easy": "PIN hii ni rahisi mno kukisia, kama 1234 au 0000. Chagua nyingine."
     },
     "demo": {
+      "closed": "Demo haipo wazi hapa.",
       "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia."
     },
     "password_too_short": "Nenosiri ni fupi mno.",

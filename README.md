@@ -17,7 +17,7 @@ An offline-first, Swahili-first system for the counter and the office: staff att
 **Demo:** <https://mabatinipumba-demo.onrender.com>, with fake data only. It sleeps when nobody uses it, so the first visit takes about a minute. It holds one made-up shop, *Duka la Mfano*, made fresh every night; the logins are public on purpose:
 
 - **The manager:** on a phone or a second browser, `/login/` with `meneja@example.com` and `jaribu-demo`.
-- **A seller at a laptop:** *Sajili kifaa hiki* on the laptop, the manager confirms its code, then tap Asha (PIN `2580`, Dawa) or Baraka (PIN `1470`, Vyakula). A one-tap way in comes later.
+- **A seller at a laptop:** tap *Jaribu demo* on the Karibu screen, then a seller's tile, which shows the PIN: Asha (PIN `2580`, Dawa) or Baraka (PIN `1470`, Vyakula). Turn the network off and clock in: it works offline. Or the long way, as a real shop: *Sajili kifaa hiki*, and the manager confirms its code.
 
 ## Start here
 
