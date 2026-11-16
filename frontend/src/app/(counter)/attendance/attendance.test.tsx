@@ -15,6 +15,7 @@ import {
   arriveAtCounter,
   useLeaveAsked,
 } from "@/features/login/at-the-counter";
+import { useAttendanceOn } from "@/offline/attendance-on";
 import { saveDocument } from "@/offline/outbox";
 import { LAST_DEVICE_SEQ, LAST_SERVER_TIME } from "@/offline/sync/meta";
 import { shopDatabase } from "@/offline/this-shop";
@@ -68,6 +69,17 @@ async function tappedEarlier(
     schema_version: 1,
     created_by: who.id,
     payload: { kind, last_server_time: SERVER_TIME },
+  });
+}
+
+/** The owner switches attendance off again from `day`: a second row, after the start-of-month one. */
+async function switchedOffFrom(day: string): Promise<void> {
+  await db().setting.put({
+    id: "019a5e00-0000-7000-8000-00000000a7e3",
+    key: "attendance.enabled",
+    side: null,
+    value: "false",
+    effective_from: day,
   });
 }
 
@@ -341,21 +353,65 @@ describe("a laptop not ready to save", () => {
   });
 });
 
-describe("before the shop starts attendance (ATT-2)", () => {
-  it("says attendance hasn't started, offers no button, and the way back", async () => {
-    // The owner switched it on from tomorrow: today is still before the start.
+describe("while attendance is switched off (ATT-2)", () => {
+  const switchedOff =
+    "Mahudhurio hayajawashwa kwenye duka hili. Mwenye duka huyawasha kwenye Mipangilio ya duka.";
+
+  it("says it isn't switched on, offers no button, and the way back", async () => {
+    // The owner switched it on from tomorrow: today it is still off.
     await attendanceSwitchedOn("2026-11-14");
 
     await theScreen();
 
-    expect(
-      await screen.findByText(
-        "Mahudhurio bado hayajaanza kwenye duka hili. Mwenye duka atayawasha siku ya kuanza.",
-      ),
-    ).toBeDefined();
+    expect(await screen.findByText(switchedOff)).toBeDefined();
     expect(clockIn()).toBeNull();
     expect(clockOut()).toBeNull();
     expect(screen.getByRole("link", { name: "Rudi" })).toBeDefined();
+  });
+
+  it("still shows the taps the server refused, and what waits to be sent", async () => {
+    // Switched off again after a day of taps: one was refused, one waits. A manager must still hear of the first,
+    // and Tuma sasa still sends the second.
+    await tappedEarlier(ASHA, "in", MORNING);
+    await tappedEarlier(JUMA, "in", MORNING);
+    const [first] = await db().outbox.toArray();
+    await db().outbox.update(first?.id ?? "", {
+      status: "needs_attention",
+      last_error: "document.maker_unknown",
+    });
+    await switchedOffFrom("2026-11-13");
+
+    await theScreen();
+
+    expect(await screen.findByText(switchedOff)).toBeDefined();
+    expect(
+      await screen.findByRole("alert", {
+        name: "Kumbukumbu zilizokataliwa na seva",
+      }),
+    ).toBeDefined();
+    expect(
+      await screen.findByRole("button", { name: "Tuma sasa" }),
+    ).toBeDefined();
+  });
+
+  it("keeps saying her tap was saved when a pull switches it off a moment after", async () => {
+    await theScreen();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
+
+    await switchedOffFrom("2026-11-13");
+
+    // Once the laptop reads the switch as off, as the screen's own reader does from the same rows, the screen still
+    // stays on her saved tap.
+    const reader = renderHook(() => useAttendanceOn());
+    await waitFor(() => expect(reader.result.current).toBe(false));
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(
+      screen.getByText("Umeingia kazini saa 07:55 asubuhi."),
+    ).toBeDefined();
+    expect(screen.queryByText(switchedOff)).toBeNull();
   });
 
   it("offers Ingia kazini from the day it is switched on", async () => {

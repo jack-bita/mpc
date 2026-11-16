@@ -368,7 +368,7 @@
     "back": "Back",
     "clockIn": "Clock in",
     "clockOut": "Clock out",
-    "notStarted": "Attendance hasn't started at this shop yet. The owner switches it on the day it starts.",
+    "switchedOff": "Attendance isn't switched on at this shop. The owner switches it on in Shop settings.",
     "notInYet": "You haven't clocked in today.",
     "inSince": "You clocked in at {time}.",
     "outSince": "You clocked out at {time}.",

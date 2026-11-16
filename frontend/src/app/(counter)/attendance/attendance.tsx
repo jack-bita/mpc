@@ -26,9 +26,11 @@
 // Times as "07:55", 24 hours, in the shop's zone, and in Swahili with the part of the day, "saa 07:55
 // asubuhi", so nobody reads them as Swahili time (formatTime, dayPart; Jack, SYNC-11).
 //
-// Only once the shop has started attendance (ATT-2, ADR-0033): the welcome shows no way here before that
-// day, and the screen, opened by its address, says attendance hasn't started and offers no button. Nor
-// while the laptop is still reading the switch: a button shown, then taken away, could take a tap.
+// Only while the shop has attendance switched on (ATT-2, ADR-0033): the welcome shows no way here while it
+// is off, and the screen, opened by its address, says it isn't switched on and offers no button. Nor while
+// the laptop is still reading the switch: a button shown, then taken away, could take a tap. Off, it still
+// shows the records the server refused and what waits to be sent: a shop that switches attendance off
+// again still has taps on the laptop, and a manager to tell.
 //
 // "use client": it asks use-intl for words, and reads and writes the laptop's database, in the browser only.
 "use client";
@@ -166,8 +168,10 @@ export function AttendanceScreen() {
         ? "out"
         : "in";
 
-  // Attendance not started at this shop yet: the way back, and why there is nothing to tap.
-  if (attendanceOn === false)
+  // Attendance switched off at this shop: the way back, why there is nothing to tap, and the taps already on
+  // the laptop. Not once this visit saved one: the switch turned off by a pull a moment after her tap, she
+  // still reads that her time was kept.
+  if (attendanceOn === false && !saved)
     return (
       <div className="grid max-w-md gap-6">
         <div>
@@ -176,7 +180,9 @@ export function AttendanceScreen() {
           </ButtonLink>
         </div>
         <h1 className="text-3xl font-semibold">{t("title")}</h1>
-        <p className="text-lg">{t("notStarted")}</p>
+        <p className="text-lg">{t("switchedOff")}</p>
+        <NeedsAttention />
+        <SendNow />
       </div>
     );
 
