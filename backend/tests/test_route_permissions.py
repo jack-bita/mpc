@@ -433,6 +433,9 @@ def test_suspended_member_gets_nothing_from_routes(
     # "active": the check must read the status from the database on each visit, never trust that copy (X2).
     give_role(staff_a, RoleTemplate.OWNER, None)
     client = client_for(staff_a)
+    in_a_week = shop_today(shop_a) + timedelta(days=7)
+    with shop_context(shop_a):
+        krismasi = add_closure(shop_a, first_day=in_a_week, last_day=in_a_week, name="Krismasi", by=None)
     stop(how, staff_a)
 
     assert client.get(SIDES).json()["results"] == []
@@ -453,10 +456,20 @@ def test_suspended_member_gets_nothing_from_routes(
     today = shop_today(shop_a).isoformat()
     fine = {"id": str(uuid.uuid7()), "key": "attendance.late_fine", "value": "9000", "effective_from": today}
     assert client.post(SETTINGS, fine, format="json").status_code == 403
+    # Nor the days the shop is closed (ATT-8): none shown; none added, cancelled or moved.
+    assert client.get(CLOSURES).json()["closures"] == []
+    new_one = {"id": str(uuid.uuid7()), "first_day": today, "last_day": today, "name": "Siku yangu"}
+    assert client.post(CLOSURES, new_one, format="json").status_code == 403
+    assert client.post(f"{CLOSURES}{krismasi.pk}/cancel/", {"reason": "Hapana"}, format="json").status_code == 404
+    later = {"last_day": (in_a_week + timedelta(days=3)).isoformat(), "reason": "Hapana"}
+    assert client.post(f"{CLOSURES}{krismasi.pk}/last-day/", later, format="json").status_code == 404
     with shop_context(shop_a):
         assert Side.objects.get(pk=sides["F"].pk).is_live is False
         assert Side.objects.get(pk=sides["F"].pk).band == "blue"
         assert not Setting.objects.filter(shop=shop_a).exists()
+        assert list(Closure.objects.values_list("name", "last_day", "status")) == [
+            ("Krismasi", in_a_week, ClosureStatus.ACTIVE)
+        ]
 
 
 @pytest.mark.django_db
