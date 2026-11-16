@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.3 · 16 Nov 2026 · Portion 1 of the planning pack
+**Version:** 1.4 · 16 Nov 2026 · Portion 1 of the planning pack
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Open questions are collected in §14. Key decisions are recorded as ADRs in `docs/adr/`.
 
 **Changes in v1.1** (18 Oct 2026): applies the build plan's Appendix A (`04-build-plan.md`). Attendance (R1b) is built and switched on first, then the Drugs side (R1), then the Foods side (R2); every part lives in the one website and is switched on in settings (§7.8, §10, §11, §14 — 04 BP7, ADR-0033). §6 now states the side decision (02 D1, ADR-0001).
@@ -10,6 +10,8 @@
 **Changes in v1.2** (15 Nov 2026, from Jack): the shop's cook makes the workers' meals, and each worker pays for their own out of their pay. The day's meal money is typed each day and split among the workers who came that day, so a worker who leaves mid-month is paid at once, with nothing to count by hand (§6, §7.8, §8.1; 02 v1.29, 04 v1.78). Marked **(v1.2)**.
 
 **Changes in v1.3** (16 Nov 2026, from the owner, through Jack, OWN-7): the attendance rules in §8.1 are the owner's: two fines, the half days' windows, and *dharura*, a day a manager decides. The fines' amounts are the owner's to type on the real server, so this public spec names none, and the payslip example takes a made-up fine of 500 (02 v1.32, 04 v1.86). Marked **(v1.3)**.
+
+**Changes in v1.4** (16 Nov 2026, from Jack, ATT-8): besides Sundays and public holidays, the owner may close the shop for days of his own, such as a family funeral: each closure runs from a first day to a last, which he may move, and nobody is paid on its days (§8.1; 02 v1.33, 04 v1.89). Marked **(v1.4)**.
 
 ---
 
@@ -218,6 +220,7 @@ In this order: a price list with in-stock status (browse by animal and problem) 
 - **Half day** **(v1.3)**: the morning (arrives on time or late, leaves from 13:00 to 13:30) or the afternoon (arrives from 12:00 to 13:00, leaves at closing, 18:40). Half-day pay = daily rate ÷ 2.
 - **Dharura** **(v1.3)**: any other arrival or leaving time, and a missing clock-out. The day needs review: a manager or the owner decides it.
 - **Sundays and public holidays** **(v1.3)**: the shop is closed and nobody is paid. Sunday work is a deal between the owner and the worker, outside the system.
+- **Other closed days** **(v1.4)**: the owner may close the shop for days of his own, such as a family funeral, from a first day to a last. Nobody is paid on them, as on a public holiday. If the shop opens again sooner, or stays closed longer, he moves the last day, with a reason.
 - **Absent:** office duty → paid; with permission → unpaid; no-show → unpaid.
 - **Meals** **(v1.2)**: the cook makes the workers' meals at the shop, and each worker pays for their own. Each day, the day's meal money is typed in and split equally among the workers who came that day, half days included; the cook pays no share. So a worker who came 10 days pays 10 days of meals, not a share of the whole month.
 - **Pay** = (full days × daily rate) + (half days × daily rate ÷ 2) − the late days' fines − meal shares − advances. Paid monthly. The daily rate is set per worker. Sundays are not paid.

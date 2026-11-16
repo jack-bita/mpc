@@ -1,13 +1,16 @@
 """apps/shops/services.py — every write to the shops tables, one function per action (ADR-0015).
 
-Six actions so far. create_shop makes a new shop with all it needs before it can work: its sides (ADR-0001).
+Nine actions so far. create_shop makes a new shop with all it needs before it can work: its sides (ADR-0001).
 add_side adds one side to a shop, with what a side always comes with: a default stock location (ADR-0002) and a cash
 drawer. create_shop uses it for each of its sides, so a side is made the same way whichever action makes it.
 rename_side gives a side a new name, unless someone else changed the side since it was read (apps/core/editing.py);
 switch_side turns a side on or off the same way (ADR-0033), and set_side_band gives it the band under its top bar
 (SHOP-4). On the demo only the system may add, rename, switch a side or change its band. set_setting gives a rule a new
 value from a day on, as a new row, never an edit (ADR-0013): on the demo a person's starts tomorrow or later, with no
-note; and a time of the attendance day keeps the day's order (ATT-2). Each action runs in one transaction and refuses
+note; and a time of the attendance day keeps the day's order (ATT-2). add_closure closes the whole shop for some days, a
+public holiday or a family funeral, from today on, never on a day another closure has (ATT-8); cancel_closure cancels
+one up to its first day, and change_last_day moves its last day earlier or later, each with a reason in the audit trail,
+never changing a day before today. Each action runs in one transaction and refuses
 a broken rule with a ValidationError that carries a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) turns into its error shape.
 
@@ -22,23 +25,30 @@ A shop's devices keep a copy of its sides and its payment accounts (apps/sync/re
 from the shop's change log (03 §6.4). So each action saves inside `recording_changes(shop)` (apps/core/changes.py), in
 place of a plain transaction, and names what it changed with record_change: a new side and its cash drawer, a renamed
 side (SYNC-15), a side switched on or off and a rule's new value (SHOP-3), a side's new band (SHOP-4). The lines are
-numbered at the block's end, once, however many services joined it.
+numbered at the block's end, once, however many services joined it. Closures are the exception: the laptops never get
+them, as the attendance day is worked out on the server (ATT-4), so their actions save in a plain transaction.
 """
 
 import uuid
 from collections.abc import Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass
-from datetime import date, time
+from datetime import date, time, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 
+from apps.control.models import AuditAction
+from apps.control.services import audit
+from apps.core.acting import acting_as
 from apps.core.changes import record_change, recording_changes
 from apps.core.editing import editing
 from apps.core.settings_registry import DAY_IN_ORDER, REGISTRY, Scope, SettingKey
 from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop, shop_context
 from apps.shops.models import (
+    Closure,
+    ClosureStatus,
     PaymentAccount,
     PaymentAccountKind,
     PaymentAccountSide,
@@ -340,6 +350,191 @@ def _check_day_in_order(shop: Shop, changed: SettingKey[time], value: time, effe
                     ]
                 }
             )
+
+
+def add_closure(
+    shop: Shop,
+    *,
+    first_day: date,
+    last_day: date,
+    name: str,
+    closure_id: uuid.UUID | None = None,
+    by: Actor | None,
+) -> Closure:
+    """Close the whole shop from `first_day` to `last_day`, both closed, under `name`: Siku ya Uhuru for one day,
+    Msiba wa bibi for five (ATT-8). Each of its days is then off, and not paid (02 §12). `closure_id`: the id the client
+    made for the row (ADR-0007), if it made one. `by`: who adds it; None for the system or the superuser. Refuses, all
+    together, each with its code beside its box: a first day before the shop's today, a last day before the first, a
+    blank name, and on the demo a person's closure from today; then a day another active closure of the shop already
+    has."""
+    _check_shop(shop, by)
+    row = Closure(
+        shop=shop,
+        first_day=first_day,
+        last_day=last_day,
+        name=name,
+        created_by_id=None if by is None else by.staff_id,
+    )
+    if closure_id is not None:
+        # The client's id, not a new one: a retry of the same request then finds the row it made.
+        row.id = closure_id
+    errors: dict[str, list[ValidationError]] = {}
+    # Never before the shop's today, as for a rule's new value (set_setting): a past day may already be worked out and
+    # paid (ATT-4), and closing it now would change that. Today is still open, so a funeral closes the shop the same
+    # morning. The shop's today, not the server's, which runs in UTC.
+    today = shop_today(shop)
+    if first_day < today:
+        errors["first_day"] = [ValidationError("A closure can't start before today.", code="closure.date_past")]
+    # On the demo every visitor shares the manager's login (OPS-3), who holds settings.manage: a visitor's closure from
+    # today would close today's demo for everyone after them, until the night's seed makes the shop again. So a person's
+    # starts tomorrow or later, as a rule's value does (demo.rules_from_tomorrow). The system, as the seed acts, still
+    # may. The same sign as set_setting's, before anything is written.
+    elif settings.DEMO_SEED and by is not None and first_day == today:
+        errors["first_day"] = [
+            ValidationError("On the demo, a closure starts tomorrow or later.", code="demo.closures_from_tomorrow")
+        ]
+    with transaction.atomic():
+        # The shop's row, with the light lock _check_day_in_order takes, before the overlap is checked: two managers
+        # adding at once each pass the check alone, so the second waits here until the first commits, then meets its
+        # closure in the check below and gets its code (closure.overlaps), not a database error. The lock lets a save
+        # of any row that only links to the shop through, a sale or a change line, as those take only a key-share lock
+        # on the shop's row; another lock of this kind waits, as does a change to the shop's own row.
+        Shop.objects.select_for_update(no_key=True).get(pk=shop.pk)
+        try:
+            # Every field, Closure.clean() (the name and the order of the two days) and the rules in its Meta, the
+            # database's exclusion rule among them, which reads the shop's other active closures.
+            row.full_clean()
+        except ValidationError as refused:
+            for field, field_errors in refused.error_dict.items():
+                errors.setdefault(field, []).extend(field_errors)
+        if errors:
+            raise ValidationError(errors)
+        # No change line: the laptops never get closures (the module's header). The edit history's trigger watches
+        # edits only, so a new row needs no one named to PostgreSQL (apps/core/acting.py): `created_by` names who.
+        row.save()
+    return row
+
+
+def cancel_closure(closure: Closure, *, reason: str, by: Actor | None) -> Closure:
+    """Cancel `closure`, the page's Ondoa: its days are open again (ATT-8). Only up to its first day: once a day of it
+    has passed, that day stays closed, and the owner moves the last day instead (change_last_day). `reason`: why, in the
+    person's own words, kept in the audit trail with who and when (rule 7). `by`: who cancels it; None for the system or
+    the superuser. Refuses: no reason (closure.reason_required), a closure already cancelled (closure.not_active), one
+    already started (closure.started), and on the demo a person's cancel of one that starts today."""
+    shop = Shop.objects.get(pk=closure.shop_id)
+    _check_shop(shop, by)
+    _check_closure_reason(reason)
+    with transaction.atomic():
+        # Read again, and locked until the transaction ends: two managers pressing Ondoa at once take turns, and the
+        # second reads the first one's cancel (closure.not_active), not the old copy on their screen.
+        closure = _locked_closure(closure)
+        today = shop_today(shop)
+        # A cancel changes every one of its days: the first is the earliest, so it alone is checked.
+        _check_closure_changes_from(closure.first_day, today, by, started_code="closure.started")
+        closure.status = ClosureStatus.CANCELLED
+        _save_closure(closure, by=by, fields=["status"])
+        # In the same transaction: if the line can't be written, the cancel is undone with it.
+        audit(
+            action=AuditAction.CLOSURE_CANCEL,
+            subject=closure,
+            reason=reason,
+            by=by,
+            before={"status": ClosureStatus.ACTIVE},
+            after={"status": ClosureStatus.CANCELLED},
+        )
+    return closure
+
+
+def change_last_day(closure: Closure, *, last_day: date, reason: str, by: Actor | None) -> Closure:
+    """Move `closure`'s last day to `last_day`, earlier or later (Jack, ATT-8): the family finishes the funeral on the
+    22nd, so the shop opens on the 23rd; or it runs longer. `reason` and `by` as for cancel_closure. Refuses: no reason
+    (closure.reason_required), a closure already cancelled (closure.not_active), a last day before its first
+    (closure.ends_before_it_starts), a change to a day before today (closure.date_past), a day another closure has
+    (closure.overlaps), and on the demo a person's change of today. The same day it already has changes nothing."""
+    shop = Shop.objects.get(pk=closure.shop_id)
+    _check_shop(shop, by)
+    _check_closure_reason(reason)
+    with transaction.atomic():
+        # The shop's row first, as add_closure takes it, then the closure's: a later last day is checked against the
+        # shop's other closures, and a closure added at the same moment must wait, or both would pass the check. The
+        # same order in both services, so two of them never wait for each other in a circle.
+        Shop.objects.select_for_update(no_key=True).get(pk=shop.pk)
+        closure = _locked_closure(closure)
+        was = closure.last_day
+        if last_day == was:
+            # Nothing changes, so nothing is written: an audit line would say a day moved when none did.
+            return closure
+        # The days that change are those between the old and the new last day: moved earlier, the days after the new one
+        # open; moved later, the days after the old one close. The earliest of them is the day after the earlier of the
+        # two. A last day before the first is left to clean(), which says so beside the box; its own day would be
+        # meaningless here.
+        errors: dict[str, list[ValidationError]] = {}
+        if last_day >= closure.first_day:
+            try:
+                _check_closure_changes_from(min(was, last_day) + timedelta(days=1), shop_today(shop), by)
+            except ValidationError as refused:
+                errors["last_day"] = refused.error_list
+        closure.last_day = last_day
+        try:
+            # Closure.clean() (the two days' order) and the rules in its Meta: a later last day must share no day with
+            # another active closure of the shop (closure.overlaps).
+            closure.full_clean()
+        except ValidationError as refused:
+            for field, field_errors in refused.error_dict.items():
+                errors.setdefault(field, []).extend(field_errors)
+        if errors:
+            raise ValidationError(errors)
+        _save_closure(closure, by=by, fields=["last_day"])
+        audit(
+            action=AuditAction.CLOSURE_LAST_DAY,
+            subject=closure,
+            reason=reason,
+            by=by,
+            before={"last_day": was},
+            after={"last_day": last_day},
+        )
+    return closure
+
+
+def _check_closure_reason(reason: str) -> None:
+    # Rule 7: a cancel and a moved last day are always recorded with who, when and why, as both change who is paid.
+    # Spaces alone are no reason. Beside the reason's box, before anything is locked; audit() keeps the reason, trimmed.
+    if not reason.strip():
+        raise ValidationError({"reason": ValidationError("A reason is required.", code="closure.reason_required")})
+
+
+def _locked_closure(closure: Closure) -> Closure:
+    # The row read again, and locked until the transaction ends (SELECT ... FOR NO KEY UPDATE), as people's _locked
+    # does: a line that only links to it, such as its audit line, doesn't wait. A cancelled one is refused here, for
+    # both changes: a cancelled closure closes nothing, so it has no days to cancel or move.
+    locked = Closure.objects.select_for_update(no_key=True).get(pk=closure.pk)
+    if locked.status != ClosureStatus.ACTIVE:
+        raise ValidationError("This closure was already cancelled.", code="closure.not_active")
+    return locked
+
+
+def _check_closure_changes_from(
+    first_changed: date, today: date, by: Actor | None, *, started_code: str = "closure.date_past"
+) -> None:
+    # A change to a closure opens or closes days from `first_changed` on. Never a day before today: the attendance may
+    # already have worked that day out and paid it (ATT-4). `started_code` names the refusal in the action's own words:
+    # a cancel of a closure that has begun says it has started.
+    if first_changed < today:
+        raise ValidationError("This change touches a day before today.", code=started_code)
+    # On the demo a person's change leaves today as the seed made it, for every visitor after them, as add_closure's
+    # does; the system, as the seed acts, still may.
+    if settings.DEMO_SEED and by is not None and first_changed == today:
+        raise ValidationError(
+            "On the demo, only days from tomorrow on can be closed or opened.", code="demo.closures_from_tomorrow"
+        )
+
+
+def _save_closure(closure: Closure, *, by: Actor | None, fields: list[str]) -> None:
+    # Saves the changed fields with `by` told to PostgreSQL, as people's _save does: the edit history's line, which its
+    # trigger writes after the update, then names the same person as the audit line (02 v1.7: one fact, one answer;
+    # apps/core/acting.py). With `by` None, the system acts, and nobody is told.
+    with acting_as(by) if by is not None else nullcontext():
+        closure.save(update_fields=fields)
 
 
 def _check_shop(shop: Shop, by: Actor | None) -> None:

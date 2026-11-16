@@ -242,6 +242,10 @@ class AuditAction(models.TextChoices):
     # A device stopped, perhaps stolen, and let work again (AUTH-1): each with who and why (rule 7).
     DEVICE_BLOCK = "device.block", "Device blocked"
     DEVICE_UNBLOCK = "device.unblock", "Device unblocked"
+    # Days the shop is closed (ATT-8): a closure cancelled before its first day, and its last day moved, each with who
+    # and why, as both change who is paid (rule 7).
+    CLOSURE_CANCEL = "closure.cancel", "Closure cancelled"
+    CLOSURE_LAST_DAY = "closure.last_day", "Closure's last day moved"
 
 
 class AuditEvent(AppendOnly):
