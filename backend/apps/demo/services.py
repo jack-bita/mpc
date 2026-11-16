@@ -8,7 +8,7 @@ so a visitor can try Badilisha on Mipangilio ya duka (Jack, SHOP-5, 15 Nov 2026)
 shop's rules, and the demo has no owner. A visitor's new value starts tomorrow or later, with no note, so the seed
 makes the shop again before it comes (set_setting: demo.rules_from_tomorrow, demo.no_note, Jack, SHOP-5's second
 review); and the sides stay as the seed made them, as the same key also switches, renames and adds them
-(demo.sides_fixed).
+(demo.sides_fixed). The shop starts with attendance switched on and two made-up fines (DEMO_RULES, ATT-2).
 
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
@@ -48,6 +48,7 @@ login page has no rate limit yet (04 DATA-1, v1.8).
 import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -60,6 +61,7 @@ from django.views.decorators.debug import sensitive_variables
 
 from apps.core.changes import recording_changes
 from apps.core.permissions import Permission, RoleTemplate
+from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SECOND_FINE, SettingKey
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, Role, StaffMember, User
 from apps.people.services import (
@@ -73,7 +75,7 @@ from apps.people.services import (
 )
 from apps.shops.models import Shop, ShopKind, Side, SideBand
 from apps.shops.selectors import shop_today
-from apps.shops.services import NewSide, switch_side
+from apps.shops.services import NewSide, set_setting, switch_side
 
 SHOP_NAME = "Duka la Mfano"
 SHOP_CODE = "DEMO"
@@ -130,6 +132,16 @@ PEOPLE = (
 
 # The side a one-tap demo device serves (OPS-3): Dawa, where Asha sells. Any seller can still log in on it.
 DEMO_DEVICE_SIDE = "D"
+
+# The demo's own rules (ATT-2), set by the system from the day it is made. Attendance switched on, as an owner switches
+# a real shop's on at its go-live (ADR-0033): the demo shows a shop at work, so its laptops keep Mahudhurio. And two
+# made-up fines: a shop's fines start at nothing, as this public repo names no real amount (rule 10, Jack, 16 Nov
+# 2026), and a visitor should still see a late day's fine. Not the owner's amounts: those he types on the real server.
+DEMO_RULES: tuple[tuple[SettingKey[Any], str], ...] = (
+    (ATTENDANCE_ON, "true"),
+    (LATE_FINE, "500"),
+    (SECOND_FINE, "1500"),
+)
 
 
 class Seeded(StrEnum):
@@ -227,6 +239,12 @@ def _make_the_shop() -> Shop:
         sides = {
             side.code: switch_side(side, version=side.version, is_live=True, by=None) for side in Side.objects.all()
         }
+        # The demo's rules, from the shop's own today, as the system: on the demo a visitor's new value starts
+        # tomorrow at the earliest (demo.rules_from_tomorrow), and the system's today, so the demo starts with them.
+        # Each row gets its line in this block, as a laptop needs every rule's rows (SYNC-2).
+        today = shop_today(shop)
+        for rule, value in DEMO_RULES:
+            set_setting(shop, key=rule.key, value=value, effective_from=today, by=None)
         for person in PEOPLE:
             # A person's account has no shop (rule 1); their job at the shop does. create_user with no password
             # stores one that nothing can match, so a seller can log in only with her PIN.

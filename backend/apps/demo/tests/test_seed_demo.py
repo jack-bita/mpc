@@ -18,6 +18,7 @@ with new ids, and the test's rollback takes those back, so the next test must no
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from io import StringIO
 from typing import Any
 from unittest import mock
@@ -34,13 +35,15 @@ from pytest_django import Settings
 
 from apps.core.models import ChangeOp, SequenceName
 from apps.core.sequences import next_numbers
+from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SECOND_FINE
 from apps.core.tenancy import shop_context
 from apps.demo import services
 from apps.demo.services import SHOP_CODE, Seeded, seed_demo
 from apps.people.models import PermissionGrant, RoleAssignment, StaffMember, User
 from apps.people.permissions import effective_permissions
 from apps.people.pins import pin_matches
-from apps.shops.models import Shop, ShopKind, Side
+from apps.shops.models import Setting, Shop, ShopKind, Side
+from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
 from apps.sync.registry import REGISTRY
 from tests.change_log import lines_after
@@ -424,17 +427,38 @@ def test_seed_demo_lets_its_manager_change_the_shops_rules() -> None:
         assert "settings.manage" not in effective_permissions(asha, None)
 
 
+def test_seed_demo_sets_its_fines_and_switches_attendance_on() -> None:
+    # A shop's fines start at nothing, as this public repo names no real amount (rule 10), so the demo types made-up
+    # ones, and a visitor sees a late day's fine. Attendance is on from the day the demo is made (ADR-0033), so its
+    # laptops keep Mahudhurio (ATT-2).
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        today = shop_today(shop)
+        assert get_setting(ATTENDANCE_ON, shop, on=today) is True
+        assert get_setting(LATE_FINE, shop, on=today) == Decimal("500.00")
+        assert get_setting(SECOND_FINE, shop, on=today) == Decimal("1500.00")
+        # Set by the system from the shop's own today, with no note, as no person of the demo set them.
+        rows = Setting.objects.order_by("key")
+        assert [(row.key, row.effective_from, row.note, row.created_by) for row in rows] == [
+            ("attendance.enabled", today, "", None),
+            ("attendance.late_fine", today, "", None),
+            ("attendance.second_fine", today, "", None),
+        ]
+
+
 def test_seed_demo_numbers_every_record_once() -> None:
     # A visitor's new laptop starts from the demo shop's change log (SYNC-3): every record it gets names a line, made
     # through the services, and the seed numbers them all once, at the end of its one block (SYNC-15). The demo shop's
-    # two sides, their two drawers and its three people: seven lines, from 1.
+    # two sides, their two drawers, its three rules (ATT-2) and its three people: ten lines, from 1.
     with mock.patch("apps.core.changes.next_numbers", wraps=next_numbers) as numbering:
         seed_demo(fresh=True)
 
     shop = the_demo_shop()
-    numbering.assert_called_once_with(shop.pk, SequenceName.CHANGE, 7)
+    numbering.assert_called_once_with(shop.pk, SequenceName.CHANGE, 10)
     lines = lines_after(shop, 0)
-    assert [number for number, *_ in lines] == list(range(1, 8))
+    assert [number for number, *_ in lines] == list(range(1, 11))
     assert all(op == ChangeOp.UPSERT for *_, op in lines)
     # One line for each record a laptop is sent, and none for anything else: the registry's rows
     # (apps/sync/registry.py).
