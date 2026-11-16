@@ -8,7 +8,8 @@ so a visitor can try Badilisha on Mipangilio ya duka (Jack, SHOP-5, 15 Nov 2026)
 shop's rules, and the demo has no owner. A visitor's new value starts tomorrow or later, with no note, so the seed
 makes the shop again before it comes (set_setting: demo.rules_from_tomorrow, demo.no_note, Jack, SHOP-5's second
 review); and the sides stay as the seed made them, as the same key also switches, renames and adds them
-(demo.sides_fixed). The shop starts with attendance switched on and two made-up fines (DEMO_RULES, ATT-2).
+(demo.sides_fixed). The shop starts with attendance switched on and two made-up fines (DEMO_RULES, ATT-2), and closed
+on the next three public holidays (PUBLIC_HOLIDAYS, ATT-8).
 
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
@@ -48,6 +49,7 @@ login page has no rate limit yet (04 DATA-1, v1.8).
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from enum import StrEnum
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -74,9 +76,9 @@ from apps.people.services import (
     set_up_shop,
     start_pairing,
 )
-from apps.shops.models import Setting, Shop, ShopKind, Side, SideBand
+from apps.shops.models import Closure, Setting, Shop, ShopKind, Side, SideBand
 from apps.shops.selectors import shop_today
-from apps.shops.services import NewSide, set_setting, switch_side
+from apps.shops.services import NewSide, add_closure, set_setting, switch_side
 
 SHOP_NAME = "Duka la Mfano"
 SHOP_CODE = "DEMO"
@@ -145,6 +147,51 @@ DEMO_RULES: tuple[tuple[SettingKey[Any], str], ...] = (
 )
 
 
+@dataclass(frozen=True)
+class PublicHoliday:
+    # One of Tanzania's public holidays that falls on the same date every year (ATT-8): Siku ya Uhuru, 9 December.
+    # `days`: how many days it closes the shop, from that date on.
+    name: str
+    month: int
+    day: int
+    days: int = 1
+
+
+# The demo's closures come from these (ATT-8): public facts, not a shop's own data. Only those with a fixed date: Eid
+# and Easter move each year, and a real owner types their dates himself. Krismasi and the day after it as one closure of
+# two days, as a shop closes for both. Each name in Swahili, as an owner would type it: a closure's name is the shop's
+# own words, which the screens show as they are.
+PUBLIC_HOLIDAYS = (
+    PublicHoliday("Mwaka Mpya", 1, 1),
+    PublicHoliday("Mapinduzi ya Zanzibar", 1, 12),
+    PublicHoliday("Siku ya Karume", 4, 7),
+    PublicHoliday("Siku ya Muungano", 4, 26),
+    PublicHoliday("Siku ya Wafanyakazi", 5, 1),
+    PublicHoliday("Saba Saba", 7, 7),
+    PublicHoliday("Nane Nane", 8, 8),
+    PublicHoliday("Siku ya Nyerere", 10, 14),
+    PublicHoliday("Siku ya Uhuru", 12, 9),
+    PublicHoliday("Krismasi", 12, 25, days=2),
+)
+
+# How many of them the demo closes on: enough for the page to show a list, few enough for a visitor to read it at once.
+DEMO_CLOSURES = 3
+
+
+def coming_public_holidays(today: date) -> list[tuple[date, date, str]]:
+    """The next DEMO_CLOSURES public holidays from `today` on, today's own among them, each as (first day, last day,
+    name), soonest first. One that began before today is left out, as a closure can't start in the past
+    (closure.date_past): on 26 December, Krismasi has begun."""
+    spans = []
+    # This year's and next year's: on 26 December none of this year's is left, and next year has more than three.
+    for year in (today.year, today.year + 1):
+        for holiday in PUBLIC_HOLIDAYS:
+            first = date(year, holiday.month, holiday.day)
+            if first >= today:
+                spans.append((first, first + timedelta(days=holiday.days - 1), holiday.name))
+    return sorted(spans)[:DEMO_CLOSURES]
+
+
 class Seeded(StrEnum):
     # What a run did, for the command's output line.
     MADE = "made"
@@ -160,7 +207,7 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
     # the real server never has the sign, so the look already rules it out; closing it would take a table lock written
     # in SQL by hand, for a case that can't occur.
     _check_may_seed()
-    if not fresh and (shop := _made_today()) is not None and _holds_its_rules(shop):
+    if not fresh and (shop := _made_today()) is not None and _holds_its_rules(shop) and _holds_its_closures(shop):
         return Seeded.KEPT
     try:
         _wipe_and_make()
@@ -236,6 +283,16 @@ def _holds_its_rules(shop: Shop) -> bool:
     return {rule.key for rule, _value in DEMO_RULES} <= set_by_the_system
 
 
+def _holds_its_closures(shop: Shop) -> bool:
+    # Whether today's demo holds every closure this seed adds, as the system added them: as for its rules, a deploy
+    # whose seed adds a closure must not keep a demo made that morning without it (ATT-8). Known by its first day and
+    # its name, which nothing changes: a visitor may move its last day, or cancel it, and the demo still holds it.
+    expected = {(first, name) for first, _last, name in coming_public_holidays(shop_today(shop))}
+    with shop_context(shop):
+        added = set(Closure.objects.filter(shop=shop, created_by__isnull=True).values_list("first_day", "name"))
+    return expected <= added
+
+
 def _make_the_shop() -> Shop:
     # The new shop's id first, so the shop can be opened before it exists: the services' checks read through the
     # tenancy guard (ADR-0042). One block for the whole shop, which every service below joins, so all its lines (the
@@ -258,6 +315,11 @@ def _make_the_shop() -> Shop:
         today = shop_today(shop)
         for rule, value in DEMO_RULES:
             set_setting(shop, key=rule.key, value=value, effective_from=today, by=None)
+        # The coming public holidays, closed, as the system, from the shop's own today (ATT-8): Mipangilio ya duka then
+        # lists them (ATT-9), and a visitor can try Ondoa and a new last day on them, from tomorrow on
+        # (demo.closures_from_tomorrow). The laptops never get closures, so they add no line to this block.
+        for first, last, name in coming_public_holidays(today):
+            add_closure(shop, first_day=first, last_day=last, name=name, by=None)
         for person in PEOPLE:
             # A person's account has no shop (rule 1); their job at the shop does. create_user with no password
             # stores one that nothing can match, so a seller can log in only with her PIN.
