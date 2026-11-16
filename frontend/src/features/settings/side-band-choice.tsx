@@ -28,6 +28,8 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button } from "@/components/design/button";
 import { Choice } from "@/components/design/choice";
 import { SIDE_BAND_LOOKS, SideBand } from "@/components/design/side-band";
+import { DEVICE_CHECK } from "@/features/devices/device-check";
+import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { useOnline } from "@/offline/network";
 
 import { keepTheSide, SIDES } from "./sides";
@@ -91,6 +93,12 @@ export function SideBandChoice({
       ),
     onSuccess: (answer) => {
       keepTheSide(store, answer);
+      // The bar above the page draws the band from elsewhere: in the office, from `me` (sideAt); before a login, from
+      // the device's saved copy (device-check.tsx). Both are asked again, so the bar shows the new band at once, not
+      // at the next page or the next 5-minute check (SHOP-4's review). A phone that is no device gets "not
+      // registered" again, which it already was.
+      void store.invalidateQueries({ queryKey: WHO_IS_HERE });
+      void store.invalidateQueries({ queryKey: DEVICE_CHECK });
       setSaved(answer);
     },
     onError: (error) => {

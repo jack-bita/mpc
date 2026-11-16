@@ -3,7 +3,11 @@
 // Done when); the switch sent alone with the version read; and the demo's refusal, and someone else's change,
 // each said beside the switch. And Rangi (SHOP-4): each side's band, and Badilisha, which opens both bands, and Hifadhi
 // sends the one picked, alone, with the version read as the form opened.
-import { focusManager, onlineManager } from "@tanstack/react-query";
+import {
+  focusManager,
+  onlineManager,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import {
   act,
   fireEvent,
@@ -13,8 +17,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { makeQueryClient } from "@/api/query-client";
 import type { components } from "@/api/schema";
-import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
+import { DEVICE_CHECK } from "@/features/devices/device-check";
+import { WHO_IS_HERE } from "@/features/people/who-is-here";
+import { DAWA, DAWA_LAPTOP, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
 import { OWNER } from "@/test/settings";
@@ -256,6 +263,35 @@ describe("Rangi", () => {
       { path: `${SIDES}${DAWA.id}/`, body: { band: "striped", version: 3 } },
     ]);
     act(() => focusManager.setFocused(undefined));
+  });
+
+  it("asks who is here and this device again after a save, so the bar above shows the new band at once (SHOP-4's review)", async () => {
+    // The owner, logged in at the Dawa laptop, makes Dawa striped. The office's bar reads its band from `me`, and the
+    // bar before a login from the device's saved copy: both are asked again, or the bar above the box saying "saved"
+    // would stay blue until he left the page.
+    const store = makeQueryClient();
+    store.setQueryData(WHO_IS_HERE, OWNER);
+    store.setQueryData(DEVICE_CHECK, DAWA_LAPTOP);
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    answer("PATCH", `${SIDES}${DAWA.id}/`, {
+      status: 200,
+      body: side({ band: "striped", version: 4 }),
+    });
+    render(
+      <QueryClientProvider client={store}>
+        <SideSwitches me={OWNER} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Badilisha rangi: Dawa" }),
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Mistari" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
+
+    expect(await screen.findByText("Rangi ya Dawa imehifadhiwa.")).toBeTruthy();
+    expect(store.getQueryState(WHO_IS_HERE)?.isInvalidated).toBe(true);
+    expect(store.getQueryState(DEVICE_CHECK)?.isInvalidated).toBe(true);
   });
 
   it("sends nothing when the band picked is the one the side has", async () => {
