@@ -97,6 +97,18 @@ def test_database_refuses_closures_sharing_a_day(shop_a: Shop) -> None:
             saved_unchecked(shop_a, first, last)
 
 
+def test_database_refuses_to_delete_a_closure(shop_a: Shop) -> None:
+    # Rule 7: a closure is cancelled, never deleted. Nothing links to one, so PROTECT can't stop a delete: the table's
+    # own trigger does, whoever sends it, a row's delete() or a bulk one, and the funeral's days stay closed.
+    row = checked(shop_a, nov(20), nov(24))
+    with shop_context(shop_a):
+        with pytest.raises(IntegrityError, match="never deleted"), transaction.atomic():
+            row.delete()
+        with pytest.raises(IntegrityError, match="never deleted"), transaction.atomic():
+            Closure.objects.filter(pk=row.pk).delete()
+        assert closed_days(shop_a, nov(20), nov(24)) == {nov(20), nov(21), nov(22), nov(23), nov(24)}
+
+
 def test_closures_side_by_side_saved(shop_a: Shop) -> None:
     # 20–22, then 23–24: next to each other, no day shared.
     checked(shop_a, nov(20), nov(22))

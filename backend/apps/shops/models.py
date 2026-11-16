@@ -501,7 +501,9 @@ class Closure(ShopScoped):
     # `created_at` and `created_by`: who added it, and when. Not Editable: nobody types over a closure; its two
     # changes, a cancel and a new last day, each lock the row and keep their reason in the audit trail
     # (apps/shops/services.py), and the edit history trigger in this table's migration copies the row before each
-    # (ADR-0036). Not on the laptops: the attendance day is worked out on the server (ATT-4).
+    # (ADR-0036). Never deleted (rule 7): nothing links to a closure, so PROTECT can't keep it, and a trigger in the
+    # same migration refuses a DELETE instead. Not on the laptops: the attendance day is worked out on the server
+    # (ATT-4).
 
     # Both closed: a closure of one day has the same first and last day. Days of the shop's own calendar (02 §1).
     first_day = models.DateField()
