@@ -27,6 +27,7 @@ from apps.core.settings_registry import (
     REGISTRY,
     Money,
     Percent,
+    Scope,
     SettingKey,
     TimeOfDay,
     ValueKind,
@@ -152,3 +153,27 @@ def test_to_text_refuses_a_value_it_would_change(kind: ValueKind[Any], value: ob
     # A service or a seed may write a value with to_text() directly, without parse() first.
     with pytest.raises(ValueError):
         kind.to_text(value)
+
+
+def test_attendance_rules_have_the_owners_times() -> None:
+    # The owner's rules (OWN-7, 02 §12), as a new shop starts with them: the day's seven times in the day's
+    # order, a second fine of nothing until the owner types one (this public repo names no real amount), and
+    # attendance off until the shop switches it on (ADR-0033).
+    times = {key.key: key.default for key in KEYS if isinstance(key.kind, TimeOfDay)}
+    assert times == {
+        "attendance.on_time_until": time(7, 35),
+        "attendance.second_fine_from": time(8, 0),
+        "attendance.review_from": time(8, 30),
+        "attendance.afternoon_from": time(12, 0),
+        "attendance.midday": time(13, 0),
+        "attendance.morning_leave_until": time(13, 30),
+        "attendance.closing": time(18, 40),
+    }
+    # Listed in the day's order too, as the settings page shows them in the registry's order (SHOP-5).
+    assert list(times.values()) == sorted(times.values())
+    assert REGISTRY["attendance.second_fine"].default == Decimal("0.00")
+    assert REGISTRY["attendance.enabled"].default is False
+    # Staff work for the shop, not a side (02 §5): every attendance rule has one value for the whole shop.
+    attendance = [key for key in KEYS if key.key.startswith("attendance.")]
+    assert len(attendance) == 10
+    assert {key.scope for key in attendance} == {Scope.SHOP}

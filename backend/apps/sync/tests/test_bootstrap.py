@@ -292,4 +292,6 @@ def test_setting_keys_hold_every_rule_in_core() -> None:
     # A rule added to the list in core reaches the bootstrap by itself, with its default as its kind writes it.
     keys = bootstrap.setting_keys()
     assert [key["key"] for key in keys] == [key.key for key in settings_registry.KEYS]
-    assert keys[0] == {"key": "attendance.on_time_until", "kind": "time", "scope": "shop", "default": "07:35"}
+    # Found by its key, not its place: the list keeps the settings page's order, which a new rule can change (ATT-2).
+    on_time = next(key for key in keys if key["key"] == "attendance.on_time_until")
+    assert on_time == {"key": "attendance.on_time_until", "kind": "time", "scope": "shop", "default": "07:35"}

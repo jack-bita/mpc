@@ -64,7 +64,7 @@ describe("Mipangilio ya duka", () => {
 
     render(<SettingsScreen />);
 
-    await cardOf("Faini ya kuchelewa");
+    await cardOf("Faini ya kwanza ya kuchelewa");
     expect(
       screen
         .getAllByRole("heading", { level: 2 })
@@ -76,8 +76,17 @@ describe("Mipangilio ya duka", () => {
         .getAllByRole("heading", { level: 3 })
         .map((each) => each.textContent),
     ).toEqual([
+      // The attendance day in its order, its switch first (ATT-2).
+      "Mahudhurio yamewashwa",
       "Mwisho wa kufika kwa wakati",
-      "Faini ya kuchelewa",
+      "Faini ya kwanza ya kuchelewa",
+      "Faini ya pili kuanzia",
+      "Faini ya pili ya kuchelewa",
+      "Dharura kuanzia",
+      "Nusu siku ya mchana: kufika kuanzia",
+      "Saa ya mchana",
+      "Nusu siku ya asubuhi: kuondoka hadi",
+      "Saa ya kufunga",
       "Kuzungusha hesabu hadi",
       "Tofauti ya droo inayokubalika",
       "Funga baada ya kukaa bila kazi",
@@ -96,7 +105,7 @@ describe("Mipangilio ya duka", () => {
     const drawer = await cardOf("Tofauti ya droo inayokubalika");
     expect(within(drawer).getByText("Dawa")).toBeTruthy();
     expect(within(drawer).getByText("Vyakula")).toBeTruthy();
-    const fine = await cardOf("Faini ya kuchelewa");
+    const fine = await cardOf("Faini ya kwanza ya kuchelewa");
     expect(within(fine).queryByText("Dawa")).toBeNull();
     expect(within(fine).queryByText("Vyakula")).toBeNull();
   });
@@ -110,7 +119,9 @@ describe("Mipangilio ya duka", () => {
     expect(await cardText("Mwisho wa kufika kwa wakati")).toContain(
       "07:35 asubuhi",
     );
-    expect(await cardText("Faini ya kuchelewa")).toContain("TSh 1,000");
+    expect(await cardText("Faini ya kwanza ya kuchelewa")).toContain(
+      "TSh 1,000",
+    );
     expect(await cardText("Kuzungusha hesabu hadi")).toContain("TSh 1");
     expect(await cardText("Funga baada ya kukaa bila kazi")).toContain(
       "Dakika 15",
@@ -131,8 +142,8 @@ describe("Mipangilio ya duka", () => {
 
     render(<SettingsScreen />);
 
-    expect(await cardText("Faini ya kuchelewa")).toContain(
-      "Inakatwa kwenye mshahara kwa kila siku ya kuchelewa.",
+    expect(await cardText("Faini ya kwanza ya kuchelewa")).toContain(
+      "Inakatwa kwenye mshahara kwa kila siku aliyochelewa, kabla ya saa ya faini ya pili.",
     );
   });
 
@@ -149,7 +160,7 @@ describe("Mipangilio ya duka", () => {
 
     render(<SettingsScreen />);
 
-    const fine = await cardOf("Faini ya kuchelewa");
+    const fine = await cardOf("Faini ya kwanza ya kuchelewa");
     expect(within(fine).getByText("TSh 1,000")).toBeTruthy();
     expect(
       within(fine).getByText("Kuanzia 16/11/2026: TSh 2,000"),
@@ -193,7 +204,7 @@ describe("Mipangilio ya duka", () => {
 
     render(<SettingsScreen />);
 
-    expect(await cardText("Late fine")).toContain("TSh 1,000");
+    expect(await cardText("First late fine")).toContain("TSh 1,000");
     // English writes the time alone, as the clock-in does.
     expect(await cardText("On time until")).toContain("07:35");
     expect(await cardText("Lock after no use")).toContain("Minutes: 15");
@@ -245,8 +256,8 @@ describe("Mipangilio ya duka", () => {
 
     render(<SettingsScreen />);
 
-    await cardOf("Faini ya kuchelewa");
-    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(8);
+    await cardOf("Faini ya kwanza ya kuchelewa");
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(16);
     expect(screen.queryByText(/half_day_after/)).toBeNull();
   });
 });
@@ -257,10 +268,10 @@ describe("each line's button", () => {
 
     render(<SettingsScreen />);
 
-    await cardOf("Faini ya kuchelewa");
-    // Four shop's rules, and four side's rules on two sides: twelve lines.
+    await cardOf("Faini ya kwanza ya kuchelewa");
+    // Twelve shop's rules, and four side's rules on two sides: twenty lines.
     expect(screen.getAllByRole("button", { name: /^Badilisha/ })).toHaveLength(
-      12,
+      20,
     );
     expect(screen.queryByRole("button", { name: /^Historia/ })).toBeNull();
     // Each says which rule and which side, as a screen reader reads a list of buttons.
@@ -270,7 +281,9 @@ describe("each line's button", () => {
       }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Badilisha: Faini ya kuchelewa" }),
+      screen.getByRole("button", {
+        name: "Badilisha: Faini ya kwanza ya kuchelewa",
+      }),
     ).toBeTruthy();
   });
 
@@ -279,10 +292,10 @@ describe("each line's button", () => {
 
     render(<SettingsScreen />);
 
-    await cardOf("Faini ya kuchelewa");
+    await cardOf("Faini ya kwanza ya kuchelewa");
     expect(screen.queryByRole("button", { name: /^Badilisha/ })).toBeNull();
     expect(screen.getAllByRole("button", { name: /^Historia/ })).toHaveLength(
-      12,
+      20,
     );
   });
 
@@ -298,7 +311,7 @@ describe("each line's button", () => {
 
     render(<SettingsScreen />);
 
-    await cardOf("Faini ya kuchelewa");
+    await cardOf("Faini ya kwanza ya kuchelewa");
     expect(
       screen
         .getAllByRole("button", { name: /^Badilisha/ })
@@ -310,7 +323,9 @@ describe("each line's button", () => {
       "Badilisha: Zuia kuuza zaidi ya mzigo uliopo, Dawa",
     ]);
     expect(
-      screen.getByRole("button", { name: "Historia: Faini ya kuchelewa" }),
+      screen.getByRole("button", {
+        name: "Historia: Faini ya kwanza ya kuchelewa",
+      }),
     ).toBeTruthy();
   });
 });
@@ -336,11 +351,11 @@ describe("the history", () => {
     render(<SettingsScreen />);
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Badilisha: Faini ya kuchelewa",
+        name: "Badilisha: Faini ya kwanza ya kuchelewa",
       }),
     );
 
-    const fine = await cardOf("Faini ya kuchelewa");
+    const fine = await cardOf("Faini ya kwanza ya kuchelewa");
     const lines = within(fine)
       .getAllByRole("listitem")
       .map((item) => item.textContent);
@@ -376,11 +391,11 @@ describe("the history", () => {
     render(<SettingsScreen />);
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Historia: Faini ya kuchelewa",
+        name: "Historia: Faini ya kwanza ya kuchelewa",
       }),
     );
 
-    const fine = await cardOf("Faini ya kuchelewa");
+    const fine = await cardOf("Faini ya kwanza ya kuchelewa");
     expect(
       within(fine)
         .getAllByRole("listitem")
@@ -429,7 +444,7 @@ describe("the history", () => {
 
     render(<SettingsScreen />);
     const button = await screen.findByRole("button", {
-      name: "Historia: Faini ya kuchelewa",
+      name: "Historia: Faini ya kwanza ya kuchelewa",
     });
     fireEvent.click(button);
 
@@ -467,7 +482,7 @@ describe("a save from the page", () => {
     render(<SettingsScreen />);
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Badilisha: Faini ya kuchelewa",
+        name: "Badilisha: Faini ya kwanza ya kuchelewa",
       }),
     );
     fireEvent.change(screen.getByLabelText("Kiasi kipya (TSh)"), {
@@ -478,7 +493,7 @@ describe("a save from the page", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
 
-    const fine = await cardOf("Faini ya kuchelewa");
+    const fine = await cardOf("Faini ya kwanza ya kuchelewa");
     expect(
       await within(fine).findByText("Kuanzia 16/11/2026: TSh 2,000"),
     ).toBeTruthy();
@@ -493,7 +508,9 @@ describe("a save from the page", () => {
     expect(screen.queryByRole("button", { name: "Hifadhi" })).toBeNull();
     await waitFor(() =>
       expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "Badilisha: Faini ya kuchelewa" }),
+        screen.getByRole("button", {
+          name: "Badilisha: Faini ya kwanza ya kuchelewa",
+        }),
       ),
     );
   });
