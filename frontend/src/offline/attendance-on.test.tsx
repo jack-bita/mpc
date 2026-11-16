@@ -1,7 +1,8 @@
 // attendance-on.test.tsx — whether attendance is on today, as the laptop reads its switch (ATT-2, ADR-0033): off
-// until a row switches it on, from that row's day; a laptop filled before the switch existed still reads the
-// rows its pulls brought, with the app's own default; and only "true" is on.
-import { renderHook, waitFor } from "@testing-library/react";
+// until a row switches it on, from that row's day, which comes at midnight with nothing pulled; a laptop filled
+// before the switch existed still reads the rows its pulls brought, with the app's own default; and only "true"
+// is on.
+import { act, renderHook, waitFor } from "@testing-library/react";
 import Dexie from "dexie";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +11,7 @@ import { DAWA_LAPTOP } from "@/test/devices";
 import { attendanceSwitchedOn } from "@/test/laptop";
 
 import { ATTENDANCE_SWITCH, useAttendanceOn } from "./attendance-on";
+import { DAY_CHECK_EVERY } from "./clock-today";
 import { databaseName } from "./db";
 import { closeShopDatabases, shopDatabase } from "./this-shop";
 
@@ -20,7 +22,12 @@ const MORNING = new Date("2026-11-13T04:55:00Z");
 
 // The Dawa laptop, registered, filled before ATT-2: it holds no copy of the switch's kind and default.
 beforeEach(() => {
-  vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["Date"] });
+  // The pretend clock: the time and the minute's beat. The test database (fake-indexeddb) runs on setImmediate,
+  // which must stay real, or its transactions never end (SYNC-10).
+  vi.useFakeTimers({
+    shouldAdvanceTime: true,
+    toFake: ["Date", "setInterval", "clearInterval"],
+  });
   vi.setSystemTime(MORNING);
   saveDevice(DAWA_LAPTOP);
 });
@@ -52,6 +59,20 @@ describe("the attendance switch on the laptop", () => {
     const { result } = renderHook(() => useAttendanceOn());
 
     await waitFor(() => expect(result.current).toBe(false));
+  });
+
+  it("comes on at midnight with nothing pulled, on a laptop left open offline", async () => {
+    // Switched on from the 14th; it is 23:59:30 on the 13th in Dar. No pull wakes the laptop: the minute's
+    // beat does, and the 14th has come.
+    await attendanceSwitchedOn("2026-11-14");
+    vi.setSystemTime(new Date("2026-11-13T20:59:30Z"));
+
+    const { result } = renderHook(() => useAttendanceOn());
+    await waitFor(() => expect(result.current).toBe(false));
+
+    await act(() => vi.advanceTimersByTimeAsync(DAY_CHECK_EVERY));
+
+    await waitFor(() => expect(result.current).toBe(true));
   });
 
   it("takes the laptop's own copy of the rule over the app's", async () => {
