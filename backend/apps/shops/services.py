@@ -396,8 +396,9 @@ def add_closure(
     with transaction.atomic():
         # The shop's row, with the light lock _check_day_in_order takes, before the overlap is checked: two managers
         # adding at once each pass the check alone, so the second waits here until the first commits, then meets its
-        # closure in the check below and gets its code (closure.overlaps), not a database error. The lock lets every
-        # other save of the shop through, as theirs take only a key-share lock on its row.
+        # closure in the check below and gets its code (closure.overlaps), not a database error. The lock lets a save
+        # of any row that only links to the shop through, a sale or a change line, as those take only a key-share lock
+        # on the shop's row; another lock of this kind waits, as does a change to the shop's own row.
         Shop.objects.select_for_update(no_key=True).get(pk=shop.pk)
         try:
             # Every field, Closure.clean() (the name and the order of the two days) and the rules in its Meta, the
