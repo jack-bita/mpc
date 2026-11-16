@@ -104,6 +104,9 @@ export function SideSwitch({
   const question = useId();
   // What the last switch did, said once in the status line (below).
   const [switched, setSwitched] = useState<Side | null>(null);
+  // Whether the band's form is open below: the switch waits for it, one change at a time in a side's box
+  // (side-band-choice.tsx, SHOP-4's review).
+  const [bandOpen, setBandOpen] = useState(false);
 
   // Where the keyboard goes when the question closes: back to the switch, as the question's buttons are gone.
   // Counted, so each close moves it (devices-screen.tsx).
@@ -158,7 +161,7 @@ export function SideSwitch({
             {side.is_live ? t("on") : t("off")}
           </span>
         </p>
-        {mayChange && asked === null ? (
+        {mayChange && asked === null && !bandOpen ? (
           <Button
             ref={opener}
             // Switching off is the one that stops a side at the counters: the warning colour says so.
@@ -225,7 +228,12 @@ export function SideSwitch({
           : null}
       </p>
       {/* Rangi: the band under the side's top bar, and for whoever may, Badilisha (SHOP-4). */}
-      <SideBandChoice side={side} mayChange={mayChange} />
+      <SideBandChoice
+        side={side}
+        mayChange={mayChange}
+        locked={asked !== null}
+        onOpenChange={setBandOpen}
+      />
     </div>
   );
 }

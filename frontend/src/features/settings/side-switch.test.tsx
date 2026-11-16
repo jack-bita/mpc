@@ -294,6 +294,31 @@ describe("Rangi", () => {
     expect(store.getQueryState(DEVICE_CHECK)?.isInvalidated).toBe(true);
   });
 
+  it("hides the switch while the band's form is open, and the band's Badilisha while the switch asks (SHOP-4's review)", async () => {
+    // One change at a time in a side's box: each sends the version read as it opened, so a switch confirmed while the
+    // band's form was open would leave Hifadhi an old version, and the owner a "someone else changed it" about his own
+    // change.
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    render(<SideSwitches me={OWNER} />);
+    const dawa = await boxOf("Dawa");
+    const button = (name: string) =>
+      within(dawa).queryByRole("button", { name });
+
+    fireEvent.click(
+      await within(dawa).findByRole("button", {
+        name: "Badilisha rangi: Dawa",
+      }),
+    );
+    expect(button("Zima: Dawa")).toBeNull();
+    fireEvent.click(within(dawa).getByRole("button", { name: "Ghairi" }));
+    expect(button("Zima: Dawa")).not.toBeNull();
+
+    fireEvent.click(within(dawa).getByRole("button", { name: "Zima: Dawa" }));
+    expect(button("Badilisha rangi: Dawa")).toBeNull();
+    fireEvent.click(within(dawa).getByRole("button", { name: "Hapana" }));
+    expect(button("Badilisha rangi: Dawa")).not.toBeNull();
+  });
+
   it("sends nothing when the band picked is the one the side has", async () => {
     // Nothing changed: Hifadhi closes the form, as Ghairi does, with no new version and no change for the laptops.
     sidesAnswer(DAWA_ON, VYAKULA_OFF);

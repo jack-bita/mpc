@@ -43,9 +43,15 @@ const SWATCH = "h-3 w-16 rounded-sm";
 export function SideBandChoice({
   side,
   mayChange,
+  locked,
+  onOpenChange,
 }: {
   side: Side;
   mayChange: boolean;
+  /** True while another change of this side is open, the switch's question: Badilisha waits for it. */
+  locked: boolean;
+  /** Told when the form opens and closes, so the switch can wait for it in turn. */
+  onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("shopSettings.sides");
   const form = useTranslations("shopSettings.form");
@@ -81,6 +87,12 @@ export function SideBandChoice({
       ?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')
       ?.focus();
   }, [isOpen]);
+  // One change at a time in a side's box (SHOP-4's review): each sends the version read as it opened, so a switch
+  // confirmed while this form is open would leave Hifadhi an old version, and the owner a "someone else changed it"
+  // about his own change. The switch hides while the form is open, and Badilisha while the switch asks.
+  useEffect(() => {
+    onOpenChange(isOpen);
+  }, [isOpen, onOpenChange]);
 
   const change = useMutation({
     // The band alone, with the version read as the form opened (see the top of this file).
@@ -129,7 +141,7 @@ export function SideBandChoice({
           <SideBand look={side.band} className={SWATCH} />
           <span>{t(`looks.${side.band}`)}</span>
         </p>
-        {mayChange && open === null ? (
+        {mayChange && open === null && !locked ? (
           <Button
             ref={opener}
             kind="second"
