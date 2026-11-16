@@ -20,6 +20,7 @@ from datetime import time, timedelta
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import transaction
 
 from apps.core.settings_registry import (
     ATTENDANCE_ON,
@@ -34,6 +35,7 @@ from apps.core.tenancy import shop_context
 from apps.shops.models import Setting, Shop
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import set_setting
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -108,6 +110,32 @@ def test_a_later_row_of_the_same_rule_ends_the_check(shop_a: Shop) -> None:
         set_setting(shop_a, key=REVIEW_FROM.key, value="08:15", effective_from=today, by=None)
         assert get_setting(REVIEW_FROM, shop_a, on=today) == time(8, 15)
         assert get_setting(REVIEW_FROM, shop_a, on=next_week) == time(8, 45)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_time_changes_at_once_keep_the_days_order(shop_a: Shop) -> None:
+    # Two managers at the same moment: the first moves the second fine to 08:20, the second moves dharura to 08:15,
+    # both from today. Each is in order alone, beside the times saved before; together they are not. So the second
+    # waits for the shop's row, which the first holds until it commits, then reads the 08:20 and is refused. Without
+    # that lock it would read the times as they were before the first, pass, and both would be saved.
+    today = shop_today(shop_a)
+
+    def second_manager_moves_dharura() -> object:
+        with shop_context(shop_a.pk):
+            return set_setting(shop_a, key=REVIEW_FROM.key, value="08:15", effective_from=today, by=None)
+
+    with shop_context(shop_a), transaction.atomic():
+        set_setting(shop_a, key=SECOND_FINE_FROM.key, value="08:20", effective_from=today, by=None)
+        second, ended = in_another_transaction(second_manager_moves_dharura)
+        # The second waits for this transaction, which hasn't committed yet.
+        wait_until_someone_waits_for_me()
+    # The first commits here; the second goes on, and checks against its 08:20.
+    second.join(timeout=5)
+    assert not second.is_alive(), "The second change still waits after the first committed."
+    (refused,) = ended
+    assert isinstance(refused, ValidationError)
+    assert {field: [error.code for error in errors] for field, errors in refused.error_dict.items()} == OUT_OF_ORDER
+    assert rows_of(shop_a) == [(SECOND_FINE_FROM.key, "08:20")]
 
 
 def test_other_rules_skip_the_order_check(shop_a: Shop) -> None:
