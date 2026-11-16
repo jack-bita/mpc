@@ -507,8 +507,10 @@ class Closure(ShopScoped):
     first_day = models.DateField()
     last_day = models.DateField()
     # The owner's own words for it: "Krismasi", "Msiba wa bibi". Short, as the page shows it on one line beside its
-    # days.
-    name = models.CharField(max_length=60)
+    # days. blank=True: an empty name is still refused, by clean() with our own code beside the box
+    # (closure.name_blank), and by the database's rule below; without it, Django's own `blank` check would answer
+    # first, and the page would show two sentences for one mistake.
+    name = models.CharField(max_length=60, blank=True)
     status = models.CharField(max_length=10, choices=ClosureStatus, default=ClosureStatus.ACTIVE)
 
     class Meta(ShopScoped.Meta):

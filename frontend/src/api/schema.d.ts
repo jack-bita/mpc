@@ -292,6 +292,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shops/closures/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        get: operations["shops_closures_list"];
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["shops_closures_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shops/closures/{id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["shops_closures_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shops/closures/{id}/last-day/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["shops_closures_last_day_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/shops/settings/": {
         parameters: {
             query?: never;
@@ -414,6 +498,42 @@ export interface components {
          * @enum {string}
          */
         ChangeOpEnum: "upsert" | "archive";
+        Closure: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date */
+            readonly first_day: string;
+            /** Format: date */
+            readonly last_day: string;
+            readonly name: string;
+            readonly status: components["schemas"]["ClosureStatusEnum"];
+            readonly added_by: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        ClosureCreateRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            first_day: string;
+            /** Format: date */
+            last_day: string;
+            name?: string;
+        };
+        ClosureLastDayRequest: {
+            reason: string;
+            /** Format: date */
+            last_day: string;
+        };
+        ClosureReasonRequest: {
+            reason: string;
+        };
+        /**
+         * @description * `active` - Active
+         *     * `cancelled` - Cancelled
+         * @enum {string}
+         */
+        ClosureStatusEnum: "active" | "cancelled";
         DemoDevice: {
             readonly pins: components["schemas"]["DemoPin"][];
         };
@@ -877,6 +997,11 @@ export interface components {
          * @enum {string}
          */
         SettingScopeEnum: "shop" | "side";
+        ShopClosuresAnswer: {
+            /** Format: date */
+            today: string;
+            closures: components["schemas"]["Closure"][];
+        };
         ShopRulesAnswer: {
             /** Format: date */
             today: string;
@@ -1579,6 +1704,132 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    shops_closures_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShopClosuresAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    shops_closures_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosureCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Closure"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    shops_closures_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this closure. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosureReasonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Closure"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    shops_closures_last_day_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this closure. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosureLastDayRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Closure"];
+                };
             };
             default: {
                 headers: {

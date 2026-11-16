@@ -4,7 +4,9 @@ Thin: they describe fields and check their shape. Every write goes through apps/
 (ADR-0015), which checks the rules. A route answers with one serializer, how a row looks (SideSerializer),
 and takes what a create sends and what an edit sends with others (SideCreateSerializer, SideEditSerializer).
 The settings routes (SHOP-3) answer a rule's row (SettingSerializer), take a new one (SettingCreateSerializer), and
-list every rule as the settings page shows it (ShopRulesAnswer).
+list every rule as the settings page shows it (ShopRulesAnswer). The closures routes (ATT-8) answer a closure
+(ClosureSerializer), take a new one (ClosureCreateSerializer), a cancel's reason (ClosureReasonSerializer) and a new
+last day (ClosureLastDaySerializer), and list those to come (ShopClosuresAnswer).
 """
 
 from typing import Any
@@ -15,7 +17,7 @@ from rest_framework import serializers
 from apps.core.api.ids import uuid7_only
 from apps.core.settings_registry import KEYS, KINDS, Scope
 from apps.shops.api.fields import SideField
-from apps.shops.models import Setting, Side
+from apps.shops.models import Closure, Setting, Side
 
 
 class SideSerializer(serializers.ModelSerializer[Side]):
@@ -127,3 +129,50 @@ class ShopRulesAnswer(serializers.Serializer[Any]):
     # can't start before it (setting.date_past).
     today = serializers.DateField()
     rules = RuleAnswer(many=True)
+
+
+class ClosureSerializer(serializers.ModelSerializer[Closure]):
+    # A closure as the office reads it (ATT-8). `added_by` is the nickname the screens show, read through the row's
+    # `created_by`, as a rule's `set_by` is: `shops` may not name `people` (ADR-0043). None for one the system added, as
+    # the demo's seed does.
+    added_by = serializers.CharField(source="created_by.display_name", allow_null=True, read_only=True)
+
+    class Meta:
+        model = Closure
+        fields = ["id", "first_day", "last_day", "name", "status", "added_by", "created_at"]
+        read_only_fields = fields
+
+
+class ClosureCreateSerializer(serializers.ModelSerializer[Closure]):
+    # What the page sends for a new closure, with the id it made itself (ADR-0007). The rest is add_closure's to check,
+    # each mistake beside its box in its own code: a name of spaces is let through here, so the service refuses it with
+    # its own sentence (closure.name_blank) instead of the form's plain `blank`; one left out is the form's `required`.
+    class Meta:
+        model = Closure
+        fields = ["id", "first_day", "last_day", "name"]
+        extra_kwargs = {
+            # Required, and a UUIDv7, as for a new side (SideCreateSerializer): the route looks the id up itself.
+            "id": {"required": True, "validators": [uuid7_only]},
+            "name": {"allow_blank": True},
+        }
+
+
+class ClosureReasonSerializer(serializers.Serializer[Any]):
+    # What Ondoa sends: why, kept in its audit line with who and when (rule 7). A blank reason is let through, so the
+    # service refuses it with its own code, closure.reason_required, beside the box; one left out is the form's own
+    # `required`. 500 characters at most, as the audit line keeps (control.AuditEvent), as a device's block does.
+    reason = serializers.CharField(max_length=500, allow_blank=True)
+
+
+class ClosureLastDaySerializer(ClosureReasonSerializer):
+    # What a moved last day sends: the new last day, and why, as for a cancel.
+    last_day = serializers.DateField()
+
+
+# many=False, as for ShopRulesAnswer: the answer is one object, though the route's action is `list`.
+@extend_schema_serializer(many=False)
+class ShopClosuresAnswer(serializers.Serializer[Any]):
+    # The closures to come, as the settings page lists them, and the shop's today: the page's date boxes start there, as
+    # a closure can't start before it (closure.date_past), and it tells which closures have begun (no Ondoa).
+    today = serializers.DateField()
+    closures = ClosureSerializer(many=True)

@@ -36,7 +36,7 @@ class Migration(migrations.Migration):
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("first_day", models.DateField()),
                 ("last_day", models.DateField()),
-                ("name", models.CharField(max_length=60)),
+                ("name", models.CharField(blank=True, max_length=60)),
                 (
                     "status",
                     models.CharField(

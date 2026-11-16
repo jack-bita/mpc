@@ -25,6 +25,7 @@ tests may not import a higher layer (ADR-0035). Fake data only: the repo is publ
 
 import uuid
 from collections.abc import Callable, Iterable, Mapping
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -46,16 +47,17 @@ from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember
 from apps.people.services import grant_permission, mark_left, suspend
-from apps.shops.api.views import SettingViewSet, SideViewSet
-from apps.shops.models import Setting, Shop, Side
+from apps.shops.api.views import ClosureViewSet, SettingViewSet, SideViewSet
+from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
 from apps.shops.selectors import shop_today
-from apps.shops.services import add_side, set_setting
+from apps.shops.services import add_closure, add_side, set_setting
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
 from tests.test_tenancy_sweep import addresses
 
 SIDES = "/api/v1/shops/sides/"
 SETTINGS = "/api/v1/shops/settings/"
+CLOSURES = "/api/v1/shops/closures/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -347,6 +349,57 @@ def test_side_routes_name_their_permissions() -> None:
         "retrieve": base.SEES_THE_SIDE,
         "create": Permission.SETTINGS_MANAGE,
         "partial_update": Permission.SETTINGS_MANAGE,
+    }
+
+
+@pytest.mark.django_db
+def test_closures_need_settings_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # A closed day changes everyone's pay: `settings.manage`, the owner's (spec §6), on the whole shop, as a closure
+    # closes both sides (ATT-8). A Manager on every side sees the closures and may change none: each change refused, and
+    # nothing written. The owner may make all three.
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    today = shop_today(shop_a)
+    with shop_context(shop_a):
+        krismasi = add_closure(
+            shop_a, first_day=today + timedelta(days=5), last_day=today + timedelta(days=6), name="Krismasi", by=None
+        )
+
+    def new() -> dict[str, str]:
+        first = (today + timedelta(days=1)).isoformat()
+        return {"id": str(uuid.uuid7()), "first_day": first, "last_day": first, "name": "Msiba wa bibi"}
+
+    later = {"last_day": (today + timedelta(days=7)).isoformat(), "reason": "Zaidi"}
+    changes: list[tuple[str, Callable[[], dict[str, str]]]] = [
+        (CLOSURES, new),
+        (f"{CLOSURES}{krismasi.pk}/last-day/", lambda: later),
+        (f"{CLOSURES}{krismasi.pk}/cancel/", lambda: {"reason": "Imeahirishwa"}),
+    ]
+    manager = client_for(staff_a2)
+    assert manager.get(CLOSURES).status_code == 200
+    for url, sent in changes:
+        refused = manager.post(url, sent(), format="json")
+        assert refused.status_code == 403, url
+        assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert list(Closure.objects.values_list("name", "last_day", "status")) == [
+            ("Krismasi", today + timedelta(days=6), ClosureStatus.ACTIVE)
+        ]
+
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    owner = client_for(staff_a)
+    assert [owner.post(url, sent(), format="json").status_code for url, sent in changes] == [201, 200, 200]
+
+
+def test_closures_routes_name_their_permissions() -> None:
+    # Seeing the closures needs only to see a side; adding one, moving its last day and cancelling it each need
+    # `settings.manage` (ATT-8). Written out in full, as above.
+    assert ClosureViewSet.action_permissions == {
+        "list": base.SEES_THE_SIDE,
+        "create": Permission.SETTINGS_MANAGE,
+        "cancel": Permission.SETTINGS_MANAGE,
+        "last_day": Permission.SETTINGS_MANAGE,
     }
 
 

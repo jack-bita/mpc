@@ -1,12 +1,13 @@
 """apps/shops/selectors.py — reads of the shops tables that other code builds on (03 §5.2).
 
-Four so far. get_setting answers "what is this rule on this day?" for a shop, and for one of its sides
+Five so far. get_setting answers "what is this rule on this day?" for a shop, and for one of its sides
 when one is given (D13, ADR-0013). Every later card reads its rules through it: the attendance day reads
 the on-time cut-off and the late fine, a drawer count its tolerance, and so on. shop_today answers "which
 day is it at this shop?", the day a rule's new value may start from at the earliest (SHOP-3). It lives
 here, with the shop, so `shops` can ask it too: `shops` sits below `people` and may not import it (ADR-0043).
 shop_rules lists every rule as the settings page shows it (SHOP-3): its value today, and its rows. closed_days answers
-"which days in this span was the shop closed?" (ATT-8), for the attendance day (ATT-4).
+"which days in this span was the shop closed?" (ATT-8), for the attendance day (ATT-4), and coming_closures lists the
+closures the settings page shows (ATT-9).
 
 The answer comes from the shop's Setting rows (apps/shops/models.py), or, when there is no row, from the
 list of rules in core (apps/core/settings_registry.py): a new shop works with every rule at its default.
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from apps.core.settings_registry import KEYS, Scope, SettingKey
@@ -140,3 +142,11 @@ def closed_days(shop: Shop, first: date, last: date) -> set[date]:
             days.add(day)
             day += timedelta(days=1)
     return days
+
+
+def coming_closures(rows: QuerySet[Closure], *, today: date) -> QuerySet[Closure]:
+    """The closures the settings page lists (ATT-9): each active one whose last day is `today` or later, a funeral that
+    began two days ago among them, soonest first. Not one already over, nor a cancelled one: their days can't change
+    any more, and the edit history and the audit trail keep them. `rows`: those the person may see (the route keeps to
+    them, PPL-5)."""
+    return rows.filter(status=ClosureStatus.ACTIVE, last_day__gte=today).order_by("first_day", "id")
