@@ -301,8 +301,9 @@ CLOSING = SettingKey(
 
 # The day's seven times in the day's order. Each is after the one before it, strictly, on every day, so no minute lands
 # in two windows: an on-time cut-off of 08:00 beside a second fine from 08:00 would make a clock-in at 08:00 both on
-# time and late, and ATT-4 would pay that day two ways. set_setting refuses a time that breaks the order, on its
-# start day and on each later day another of the seven changes (setting.out_of_order, apps/shops/services.py).
+# time and late, and ATT-4 would pay that day two ways. set_setting refuses a time that isn't after the one before it
+# and before the one after it, on its start day and on each later day one of those two changes (setting.out_of_order,
+# apps/shops/services.py).
 DAY_IN_ORDER: tuple[SettingKey[time], ...] = (
     ON_TIME_UNTIL,
     SECOND_FINE_FROM,

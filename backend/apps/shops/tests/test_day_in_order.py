@@ -112,6 +112,22 @@ def test_a_later_row_of_the_same_rule_ends_the_check(shop_a: Shop) -> None:
         assert get_setting(REVIEW_FROM, shop_a, on=next_week) == time(8, 45)
 
 
+def test_a_broken_pair_elsewhere_refuses_no_other_time(shop_a: Shop) -> None:
+    # Closing at 07:00 breaks the order at the end of the day, a row only code that skips set_setting could write. The
+    # second fine moved to 08:10, between 07:35 and 08:30, keeps its own place: saved, not blamed for the closing.
+    # Closing itself, moved again, still has to come after the morning's leaving time.
+    today = shop_today(shop_a)
+    with shop_context(shop_a):
+        Setting.objects.create(shop=shop_a, key=CLOSING.key, value="07:00", effective_from=today)
+        set_setting(shop_a, key=SECOND_FINE_FROM.key, value="08:10", effective_from=today, by=None)
+        with pytest.raises(ValidationError) as closing_still_too_early:
+            set_setting(shop_a, key=CLOSING.key, value="13:00", effective_from=today, by=None)
+        set_setting(shop_a, key=CLOSING.key, value="18:40", effective_from=today, by=None)
+        assert get_setting(SECOND_FINE_FROM, shop_a, on=today) == time(8, 10)
+        assert get_setting(CLOSING, shop_a, on=today) == time(18, 40)
+    assert refusal_codes(closing_still_too_early) == OUT_OF_ORDER
+
+
 def test_another_shops_rows_never_cut_the_check_short(shop_a: Shop, shop_b: Shop) -> None:
     # A system job has every shop open, so the check names its own shop when it looks for later rows. Shop B moves its
     # own dharura in three days. Were that row read as shop A's, the check would stop there, before next week, and

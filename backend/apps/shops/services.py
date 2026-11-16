@@ -304,21 +304,31 @@ def _check_day_in_order(shop: Shop, changed: SettingKey[time], value: time, effe
     # until the first is saved, then checks against it. Its light lock (no_key=True): the change lines and every other
     # row that links to the shop take only a share lock on it, which this one lets through, so no other save waits.
     Shop.objects.select_for_update(no_key=True).get(pk=shop.pk)
-    # The days the new value is in force on which another of the seven may change: its own day, and each later day a row
-    # of the seven starts, up to the rule's own next row, from which the new value no longer counts. The order can break
-    # on any of them: dharura moved to 08:15 from today clashes next week with a second fine from 08:20 set already.
+    # Only the changed time and its two neighbours, the time before it and the time after it: each change keeps its own
+    # place, so the seven stay in order, one change after another. Not every pair: a pair broken elsewhere, which only
+    # code that skips set_setting could write, would then refuse every change of an unrelated time, and the sentence
+    # would blame "this time" for it.
+    place = DAY_IN_ORDER.index(changed)
+    before = DAY_IN_ORDER[place - 1] if place > 0 else None
+    after = DAY_IN_ORDER[place + 1] if place + 1 < len(DAY_IN_ORDER) else None
+    neighbours = [key for key in (before, after) if key is not None]
+    # The days the new value is in force on which a neighbour may change: its own day, and each later day a row of a
+    # neighbour starts, up to the rule's own next row, from which the new value no longer counts. The order can break on
+    # any of them: dharura moved to 08:15 from today clashes next week with a second fine from 08:20 set already.
     # The shop named, not only the one open: a system job has every shop open.
     later = list(
         Setting.objects.filter(
-            shop=shop, key__in=[key.key for key in DAY_IN_ORDER], effective_from__gt=effective_from
+            shop=shop, key__in=[key.key for key in (changed, *neighbours)], effective_from__gt=effective_from
         ).values_list("key", "effective_from")
     )
     own_next = min((day for key, day in later if key == changed.key), default=None)
     days = {effective_from} | {day for _key, day in later if own_next is None or day < own_next}
     for day in sorted(days):
-        # On its own day the new row wins, even over one set earlier for that day: the row written last wins (T2).
-        times = [value if key == changed else get_setting(key, shop, on=day) for key in DAY_IN_ORDER]
-        if any(earlier >= next_one for earlier, next_one in zip(times, times[1:], strict=False)):
+        # The new value stands in for the changed rule: on its own day it wins, even over a row set earlier for that
+        # day, as the row written last wins (T2).
+        too_early = before is not None and value <= get_setting(before, shop, on=day)
+        too_late = after is not None and value >= get_setting(after, shop, on=day)
+        if too_early or too_late:
             # No values in the code: a sentence beside a box takes none (frontend/src/api/errors.ts). The page shows
             # each time and the values to come, so the owner sees which one it meets.
             raise ValidationError(
