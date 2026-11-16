@@ -219,6 +219,45 @@ describe("Rangi", () => {
     ]);
   });
 
+  it("sends the version read as it opened, even after the page read the side again meanwhile (SHOP-4's review)", async () => {
+    // The owner opens Rangi on Dawa. While the form is open, another manager renames Dawa from her phone, and the
+    // owner's page reads the sides again as his phone comes back to it. Hifadhi still sends the version he decided on,
+    // 3, so the server refuses it and tells him: never the new version, which would put his band over a side he hasn't
+    // seen.
+    let reads = 0;
+    answer("GET", SIDES, () => {
+      reads += 1;
+      return Response.json({
+        next: null,
+        previous: null,
+        results:
+          reads === 1
+            ? [DAWA_ON, VYAKULA_OFF]
+            : [side({ version: 4 }), VYAKULA_OFF],
+      });
+    });
+    answer("PATCH", `${SIDES}${DAWA.id}/`, refusal(409, "version_conflict"));
+    render(<SideSwitches me={OWNER} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Badilisha rangi: Dawa" }),
+    );
+
+    // The phone goes to another app and comes back: TanStack reads the sides again (refetchOnWindowFocus).
+    act(() => focusManager.setFocused(false));
+    act(() => focusManager.setFocused(true));
+    await waitFor(() => expect(reads).toBe(2));
+
+    fireEvent.click(screen.getByRole("radio", { name: "Mistari" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
+
+    const dawa = await boxOf("Dawa");
+    expect(await within(dawa).findByRole("alert")).toBeTruthy();
+    expect(await switches()).toEqual([
+      { path: `${SIDES}${DAWA.id}/`, body: { band: "striped", version: 3 } },
+    ]);
+    act(() => focusManager.setFocused(undefined));
+  });
+
   it("sends nothing when the band picked is the one the side has", async () => {
     // Nothing changed: Hifadhi closes the form, as Ghairi does, with no new version and no change for the laptops.
     sidesAnswer(DAWA_ON, VYAKULA_OFF);
