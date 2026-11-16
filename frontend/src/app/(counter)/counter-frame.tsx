@@ -57,7 +57,8 @@ export function CounterFrame({ children }: { children: ReactNode }) {
   // from the press of Toka, so the tiles come back in the laptop's own.
   useFollowThePerson(row);
   // The side she works on, from her row's keys and the laptop's sides, as for a local session: the bar
-  // says where her records go (UI-4).
+  // says where her records go (UI-4), in words and by the side's band (SHOP-4). A side the laptop copied
+  // before the band was kept has none until the side changes again: the bar then shows its name only.
   const side =
     row && device
       ? sideOfStaffRow(row, device.homeSide.id, sides ?? [])
@@ -83,7 +84,7 @@ export function CounterFrame({ children }: { children: ReactNode }) {
     <AppFrame
       area="counter"
       person={row?.display_name}
-      side={side ? { name: side.name } : undefined}
+      side={side ? { name: side.name, band: side.band } : undefined}
       actions={buttons}
     >
       {/* The screen only to someone here: nobody, or a row still on its way, sees the bar alone. */}

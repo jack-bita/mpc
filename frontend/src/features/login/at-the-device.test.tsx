@@ -18,6 +18,7 @@ import { saveDevice } from "@/features/devices/this-device";
 import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { setLanguage } from "@/i18n/language";
 import {
+  bandUnderTheBar,
   DAWA,
   DAWA_LAPTOP,
   DAWA_LAPTOP_ANSWER,
@@ -648,9 +649,10 @@ describe("with no network (SYNC-10)", () => {
 
     await jumaLogsInHere();
 
-    // In the bar, with the side he works on, from his staff row and the laptop's sides.
+    // In the bar, with the side he works on and its band, from his staff row and the laptop's sides.
     expect(bar().getByText("Juma")).toBeDefined();
     expect(bar().getByText("MPC · Dawa")).toBeDefined();
+    expect(bandUnderTheBar()).toBe("blue");
     // Never sent: the laptop checked it.
     expect(pinLogins()).toEqual([]);
   });

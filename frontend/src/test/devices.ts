@@ -45,8 +45,17 @@ export const DAWA_LAPTOP: ThisDevice = {
     id: "019a5e00-0000-7000-8000-0000000000d1",
     code: "D",
     name: "Dawa",
+    band: "blue",
   },
 };
+
+/** The look of the band under the top bar, or null when it shows none (SideBand's `data-look`). */
+export function bandUnderTheBar(): string | null {
+  return (
+    document.querySelector("header [data-look]")?.getAttribute("data-look") ??
+    null
+  );
+}
 
 /** The Dawa and Vyakula sides, as `me` names them, each with its band: Vyakula striped, like the Foods bags
  * (SHOP-4). */

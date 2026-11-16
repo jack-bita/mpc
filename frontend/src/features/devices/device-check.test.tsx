@@ -7,7 +7,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryProvider } from "@/api/provider";
 import { ApiRefusal, NoConnection } from "@/api/refusal";
 import OfficeLayout from "@/app/(office)/layout";
-import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
+import {
+  bandUnderTheBar,
+  DAWA_LAPTOP,
+  DAWA_LAPTOP_ANSWER,
+} from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
 
@@ -93,7 +97,7 @@ describe("checkThisDevice", () => {
 });
 
 describe("DeviceCheck", () => {
-  it("asks when the app opens, and the top bar names the shop and the home side", async () => {
+  it("asks when the app opens, and the top bar names the shop and the home side, with its band", async () => {
     answer("GET", ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
 
     render(
@@ -106,8 +110,8 @@ describe("DeviceCheck", () => {
     );
 
     expect(await screen.findByText("MPC · Dawa")).toBeDefined();
-    // Words only: no side says which band it gets yet (04 §20, item 19).
-    expect(document.querySelector("[data-look]")).toBeNull();
+    // And the home side's band, from the answer, kept for the bar offline too (SHOP-4).
+    expect(bandUnderTheBar()).toBe("blue");
   });
 
   it("asks again every 5 minutes, so a rename on the manager's phone shows", async () => {

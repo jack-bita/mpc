@@ -18,6 +18,11 @@
 // device there too: the lock is for a laptop's screen, not against its owner's tools.
 import { useSyncExternalStore } from "react";
 
+import {
+  SIDE_BAND_LOOKS,
+  type SideBandLook,
+} from "@/components/design/side-band";
+
 /** This device, as the top bar and the screens need it. Our own shape, not the API's: a later change to
  * the API's answer changes device-check.tsx only, and a copy saved by an older app is checked on read. */
 export interface ThisDevice {
@@ -38,8 +43,9 @@ export interface ThisDevice {
     currency: string;
     language: Language;
   };
-  /** The side it mostly serves, which the counter screens open on. */
-  homeSide: { id: string; code: string; name: string };
+  /** The side it mostly serves, which the counter screens open on, with the band its top bar draws before
+   * anyone logs in (SHOP-4). No band in a copy saved by an app from before the band: the next check fills it. */
+  homeSide: { id: string; code: string; name: string; band?: SideBandLook };
 }
 
 /** The languages the app speaks (02 §21). */
@@ -130,7 +136,13 @@ function isThisDevice(value: unknown): value is ThisDevice {
     isMap(homeSide) &&
     typeof homeSide.id === "string" &&
     typeof homeSide.code === "string" &&
-    typeof homeSide.name === "string"
+    typeof homeSide.name === "string" &&
+    // No band at all is a copy from before the band was kept (SHOP-4): still this device, as its shop and
+    // side are known, and the bar shows the side in words only until the next check. Reading it as no
+    // device would show a registered laptop as a new one, maybe for hours offline, for want of a colour.
+    // A band the bar can't draw is a copy we can't read, as a wrong language is.
+    (homeSide.band === undefined ||
+      SIDE_BAND_LOOKS.some((look) => look === homeSide.band))
   );
 }
 

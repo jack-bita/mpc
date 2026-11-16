@@ -5,7 +5,7 @@
 // bags with their faded-red stripes. So the band comes in two looks:
 //   blue     the blue at the godown's back
 //   striped  white and faded red, like the Foods bags
-// Which side gets which look is still open (04 §20, item 19), so a screen must always say.
+// Each side says which look it shows (`band`, SHOP-4), and the bar draws the band of the side it names.
 //
 // Colour only, with no words (Jack, 6 Nov 2026). The side's name stays in words in the top bar (UI-1),
 // so nobody has to tell colours apart to know where they are, and no word ever sits on red and white

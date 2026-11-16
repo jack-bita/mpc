@@ -30,9 +30,9 @@ export const ON_GREEN =
 /** A side, as the bar shows it: its name in words, and its band's look, when known. */
 export interface BarSide {
   name: string;
-  // Which side gets which look is still open (04 §20, item 19): no side says yet. Until one does, the
-  // app gives no look, and the bar shows the side's name in words and no band (Jack, 7 Nov 2026), so
-  // a look is never guessed. /design gives both looks by hand.
+  // Each side says which look it shows, and the owner picks it on the settings page (SHOP-4). Unknown
+  // only on a laptop holding a copy of the side from before the band: the bar then shows the side's
+  // name in words and no band, so a look is never guessed. /design gives both looks by hand.
   band?: SideBandLook;
 }
 

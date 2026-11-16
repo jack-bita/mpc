@@ -6,9 +6,10 @@
 // The bar names the device's shop and home side, "MPC · Dawa", once the device is registered (UI-3):
 // a laptop shows where it belongs before anyone logs in at it. A phone that is only a manager's own
 // knows no device, and its bar names nothing until the manager logs in: then the office's frame hands in
-// the shop of whoever is logged in (office-frame.tsx, UI-5). No band yet: no side
-// says which look it gets (04 §20, item 19). Once someone logs in at the device, the bar names them, and
-// the side they work on in place of the device's (UI-4): a screen that knows who is here hands both in.
+// the shop of whoever is logged in (office-frame.tsx, UI-5). Under the bar, the band of the side it names
+// (SHOP-4): the home side's, from the device's saved copy, so it shows offline too. Once someone logs in at
+// the device, the bar names them, and the side they work on in place of the device's, with that side's
+// band (UI-4): a screen that knows who is here hands both in.
 // The language button goes then: it is the laptop's own language, and the person reads theirs (UI-9).
 //
 // "use client": it reads the device's saved copy, which only the browser holds (this-device.ts).
@@ -44,15 +45,17 @@ export function AppFrame({
   /** Who is logged in at this device, by the name the shop calls them: "Asha". Left out while nobody
    * is (UI-4). */
   person?: string;
-  /** The side the person works on (sideAt, who-is-here.ts). Left out, the device's home side, as before
-   * anyone logs in. */
+  /** The side the person works on, with its band (sideAt, who-is-here.ts, or sideOfStaffRow,
+   * side-of-row.ts). Left out, the device's home side, as before anyone logs in. */
   side?: BarSide;
   /** A screen's own buttons for the bar, before the language button: Badilisha mtu and Toka (UI-4). */
   actions?: ReactNode;
   children: ReactNode;
 }) {
   const device = useThisDevice();
-  const homeSide = device ? { name: device.homeSide.name } : undefined;
+  const homeSide = device
+    ? { name: device.homeSide.name, band: device.homeSide.band }
+    : undefined;
 
   return (
     // data-area: which area a screen is in, for tests and for the eye in the browser's tools.
