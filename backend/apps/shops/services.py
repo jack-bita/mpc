@@ -1,14 +1,14 @@
 """apps/shops/services.py — every write to the shops tables, one function per action (ADR-0015).
 
-Five actions so far. create_shop makes a new shop with all it needs before it can work: its sides (ADR-0001).
+Six actions so far. create_shop makes a new shop with all it needs before it can work: its sides (ADR-0001).
 add_side adds one side to a shop, with what a side always comes with: a default stock location (ADR-0002) and a cash
 drawer. create_shop uses it for each of its sides, so a side is made the same way whichever action makes it.
 rename_side gives a side a new name, unless someone else changed the side since it was read (apps/core/editing.py);
-switch_side turns a side on or off the same way (ADR-0033). On the demo only the system may add, rename or switch a
-side. set_setting gives a rule a new value from a day on, as a new row, never an edit (ADR-0013): on the demo a
-person's starts tomorrow or later, with no note. Each action runs in one transaction and refuses
-a broken rule with a ValidationError that carries a code (ADR-0032), which the API's error handler
-(apps/core/api/errors.py) turns into its error shape.
+switch_side turns a side on or off the same way (ADR-0033), and set_side_band gives it the band under its top bar
+(SHOP-4). On the demo only the system may add, rename, switch a side or change its band. set_setting gives a rule a new
+value from a day on, as a new row, never an edit (ADR-0013): on the demo a person's starts tomorrow or later, with no
+note. Each action runs in one transaction and refuses a broken rule with a ValidationError that carries a code
+(ADR-0032), which the API's error handler (apps/core/api/errors.py) turns into its error shape.
 
 `shops` is layer 1 and may not import `people`, not even as a type (ADR-0035). Who acts is an Actor
 (apps/core/tenancy.py): anything with a `shop_id` and a `staff_id`, as a staff member has. create_shop needs
@@ -20,8 +20,8 @@ something else: the demo seed (DATA-1, apps/demo) makes its shop as a demo one.
 A shop's devices keep a copy of its sides and its payment accounts (apps/sync/registry.py), and learn what changed
 from the shop's change log (03 §6.4). So each action saves inside `recording_changes(shop)` (apps/core/changes.py), in
 place of a plain transaction, and names what it changed with record_change: a new side and its cash drawer, a renamed
-side (SYNC-15), a side switched on or off and a rule's new value (SHOP-3). The lines are numbered at the block's end,
-once, however many services joined it.
+side (SYNC-15), a side switched on or off and a rule's new value (SHOP-3), a side's new band (SHOP-4). The lines are
+numbered at the block's end, once, however many services joined it.
 """
 
 import uuid
@@ -183,14 +183,32 @@ def switch_side(side: Side, *, version: int, is_live: bool, by: Actor | None) ->
     return fresh
 
 
+def set_side_band(side: Side, *, version: int, band: SideBand, by: Actor | None) -> Side:
+    """Give a side the band it shows under the top bar (`band`, blue or striped), unless someone else changed the side
+    since `version` was read (02 §1). `by`: who changes it; None for the system or the superuser. A person's change is
+    refused on the demo (demo.sides_fixed)."""
+    # On the demo every visitor shares the manager's login (OPS-3): one visitor's colour would greet every visitor after
+    # them until the next morning's seed, so a person's change is fixed there, as a rename is (Jack, 16 Nov 2026).
+    _check_sides_fixed_on_demo(by)
+    # The same steps as rename_side: the block, then editing(), which checks who acts belongs to the shop (T1), locks
+    # the side, refuses a stale version, and checks the side before it saves (full_clean), so a band no screen draws is
+    # refused on its field. The line after editing() ends: the laptops keep the band on their copy of the side (SYNC-2),
+    # learn of the change at their next pull, and their top bar draws it (SHOP-4).
+    with recording_changes(side.shop_id):
+        with editing(side, version=version, by=by) as fresh:
+            fresh.band = band
+        record_change(fresh)
+    return fresh
+
+
 def _check_sides_fixed_on_demo(by: Actor | None) -> None:
     # On the demo every visitor shares the manager's login (OPS-3), and that manager holds settings.manage, for the
     # rules (SHOP-5), the key every change to a side asks for. So the sides stay as the seed made them: a person's
-    # switch, rename or new side would greet everyone after them, or stop their one-tap demo, until the next morning's
-    # seed (SHOP-5's review). Fixed as a person's PIN is there (set_pin, apps/people/services.py), read from the same
-    # sign (DEMO_SEED, config/settings/base.py), before anything is opened or written. The system (`by` None), which is
-    # how the seed sets the demo up, still may. The rules stay open on the demo, as trying them is the point, though a
-    # person's value there starts tomorrow, with no note (set_setting).
+    # switch, rename, band or new side would greet everyone after them, or stop their one-tap demo, until the next
+    # morning's seed (SHOP-5's review, SHOP-4). Fixed as a person's PIN is there (set_pin, apps/people/services.py),
+    # read from the same sign (DEMO_SEED, config/settings/base.py), before anything is opened or written. The system
+    # (`by` None), which is how the seed sets the demo up, still may. The rules stay open on the demo, as trying them is
+    # the point, though a person's value there starts tomorrow, with no note (set_setting).
     if settings.DEMO_SEED and by is not None:
         raise ValidationError("On the demo, the sides stay as they are.", code="demo.sides_fixed")
 

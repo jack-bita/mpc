@@ -2787,6 +2787,9 @@
                     "is_live": {
                         "type": "boolean"
                     },
+                    "band": {
+                        "$ref": "#/components/schemas/SideBandEnum"
+                    },
                     "version": {
                         "type": "integer",
                         "minimum": 1

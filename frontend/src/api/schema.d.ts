@@ -917,6 +917,7 @@ export interface components {
         SideEditRequest: {
             name?: string;
             is_live?: boolean;
+            band?: components["schemas"]["SideBandEnum"];
             version: number;
         };
         SideKeysRecord: {

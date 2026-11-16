@@ -518,17 +518,58 @@ def test_side_add_refused_on_the_demo(staff_client_a: APIClient, shop_a: Shop, s
         assert not Side.objects.filter(code="X").exists()
 
 
-@pytest.mark.parametrize("sent", [{"version": 1}, {"name": "Chakula", "is_live": True, "version": 1}])
+def test_edit_changes_a_sides_band(staff_client_a: APIClient, sides_a: dict[str, Side]) -> None:
+    # The settings page's Hifadhi sends only `band`, with the version it read as the form opened (SHOP-4); the name and
+    # the switch stay as they were.
+    response = staff_client_a.patch(f"{SIDES}{sides_a['F'].pk}/", {"band": "striped", "version": 1}, format="json")
+
+    assert response.status_code == 200
+    answer = response.json()
+    assert (answer["band"], answer["name"], answer["is_live"], answer["version"]) == ("striped", "Vyakula", False, 2)
+
+
+def test_edit_refuses_a_band_no_screen_draws(staff_client_a: APIClient, sides_a: dict[str, Side]) -> None:
+    # A third word is refused beside its field, before any service runs.
+    response = staff_client_a.patch(f"{SIDES}{sides_a['F'].pk}/", {"band": "green", "version": 1}, format="json")
+
+    assert response.status_code == 400
+    assert response.json()["fields"] == {"band": ["invalid_choice"]}
+
+
+def test_side_band_refused_on_the_demo(
+    staff_client_a: APIClient, shop_a: Shop, sides_a: dict[str, Side], settings: Settings
+) -> None:
+    # Every visitor shares Meneja's login: one who made Dawa striped would show everyone after them two striped sides
+    # until the next morning's seed. Refused, as a rename is (Jack, 16 Nov 2026), with the code the page shows beside
+    # the form.
+    settings.DEMO_SEED = True
+    response = staff_client_a.patch(f"{SIDES}{sides_a['D'].pk}/", {"band": "striped", "version": 1}, format="json")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "demo.sides_fixed"
+    with shop_context(shop_a):
+        assert Side.objects.get(pk=sides_a["D"].pk).band == "blue"
+
+
+@pytest.mark.parametrize(
+    "sent",
+    [
+        {"version": 1},
+        {"name": "Chakula", "is_live": True, "version": 1},
+        {"name": "Chakula", "band": "striped", "version": 1},
+        {"is_live": True, "band": "striped", "version": 1},
+    ],
+)
 def test_edit_sends_one_change_at_a_time(
     staff_client_a: APIClient, shop_a: Shop, sides_a: dict[str, Side], sent: dict[str, object]
 ) -> None:
-    # An edit is a new name or the switch, never both nor neither: each is its own service, with its own version check,
-    # so two in one request couldn't both be checked against the version the app read. A screen never sends both, so
-    # this is a bug in the app, answered with the plain `invalid`.
+    # An edit is a new name, the switch or a band, one at a time, never two nor none: each is its own service, with its
+    # own version check, so two in one request couldn't both be checked against the version the app read. A screen
+    # never sends two, so this is a bug in the app, answered with the plain `invalid`.
     response = staff_client_a.patch(f"{SIDES}{sides_a['F'].pk}/", sent, format="json")
 
     assert response.status_code == 400
     assert response.json()["code"] == "invalid"
     with shop_context(shop_a):
         vyakula = Side.objects.get(pk=sides_a["F"].pk)
-    assert (vyakula.name, vyakula.is_live, vyakula.version) == ("Vyakula", False, 1)
+    assert (vyakula.name, vyakula.is_live, vyakula.band, vyakula.version) == ("Vyakula", False, "blue", 1)

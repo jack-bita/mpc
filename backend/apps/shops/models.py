@@ -196,8 +196,9 @@ class Side(Editable):
     # Off until the owner agrees to start using the side (ADR-0033), so a new side never reaches the
     # counters by surprise. Switched by switch_side (apps/shops/services.py, SHOP-3), from the settings page (SHOP-5).
     is_live = models.BooleanField(default=False)
-    # The band under the top bar (SHOP-4). Blue unless told otherwise, so every side shows one. It travels with the
-    # side, to every laptop and in `me`, so a bar can draw it offline too.
+    # The band under the top bar (SHOP-4). Blue unless told otherwise, so every side shows one; set_side_band
+    # (apps/shops/services.py) changes it. It travels with the side, to every laptop and in `me`, so a bar can draw it
+    # offline too.
     band = models.CharField(max_length=16, choices=SideBand, default=SideBand.BLUE)
 
     class Meta(Editable.Meta):
