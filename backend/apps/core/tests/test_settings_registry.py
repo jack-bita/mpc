@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 
 from apps.core.settings_registry import (
+    DAY_IN_ORDER,
     KEY_SHAPE,
     KEYS,
     KINDS,
@@ -171,6 +172,10 @@ def test_attendance_rules_have_the_owners_times() -> None:
     }
     # Listed in the day's order too, as the settings page shows them in the registry's order (SHOP-5).
     assert list(times.values()) == sorted(times.values())
+    # The order set_setting keeps holds all seven, and a new shop starts in it, each strictly after the one before.
+    assert [key.key for key in DAY_IN_ORDER] == list(times)
+    defaults = [key.default for key in DAY_IN_ORDER]
+    assert all(earlier < later for earlier, later in zip(defaults, defaults[1:], strict=False))
     assert REGISTRY["attendance.enabled"].default is False
     # Staff work for the shop, not a side (02 §5): every attendance rule has one value for the whole shop.
     attendance = [key for key in KEYS if key.key.startswith("attendance.")]

@@ -179,6 +179,21 @@ def test_create_setting_refused_answers_its_codes(
         assert not Setting.objects.filter(shop=shop_a).exists()
 
 
+def test_create_setting_out_of_order_answers_beside_the_value(staff_client_a: APIClient, shop_a: Shop) -> None:
+    # A second fine from 07:30, before the on-time cut-off of 07:35, breaks the attendance day's order (ATT-2): the page
+    # shows the code beside the value's box, and nothing is written.
+    answer = staff_client_a.post(
+        SETTINGS,
+        new_value(key="attendance.second_fine_from", value="07:30", effective_from=shop_today(shop_a).isoformat()),
+        format="json",
+    )
+
+    assert answer.status_code == 400
+    assert answer.json()["fields"] == {"value": ["setting.out_of_order"]}
+    with shop_context(shop_a):
+        assert not Setting.objects.filter(shop=shop_a).exists()
+
+
 def test_on_the_demo_a_visitors_value_from_today_and_note_are_refused_beside_their_boxes(
     staff_client_a: APIClient, shop_a: Shop, sides: dict[str, Side], settings: Settings
 ) -> None:

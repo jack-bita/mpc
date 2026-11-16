@@ -669,6 +669,7 @@
       "date_past": "A new value can't start before today.",
       "key_invalid": "This rule's name isn't valid.",
       "key_unknown": "This rule isn't known.",
+      "out_of_order": "This time breaks the day's order: each attendance time must be after the one above it and before the one below it, from this day on, including changes already set for later days.",
       "side_not_allowed": "This rule has one value for the whole shop, not for one side.",
       "side_required": "Choose a side: this rule is set for each side on its own.",
       "value_blank": "Enter a value.",

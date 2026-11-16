@@ -669,6 +669,7 @@
       "date_past": "Thamani mpya haiwezi kuanza kabla ya leo.",
       "key_invalid": "Jina hili la kanuni haliko sawa.",
       "key_unknown": "Kanuni hii haijulikani.",
+      "out_of_order": "Saa hii haifuati mpangilio wa siku: kila saa ya mahudhurio iwe baada ya ile iliyo juu yake na kabla ya ile iliyo chini yake, leo na kwenye mabadiliko yaliyokwisha pangwa.",
       "side_not_allowed": "Kanuni hii ni moja kwa duka zima, si kwa upande mmoja.",
       "side_required": "Chagua upande: kanuni hii huwekwa kwa kila upande peke yake.",
       "value_blank": "Andika thamani.",
