@@ -119,9 +119,8 @@ describe("Mipangilio ya duka", () => {
     expect(await cardText("Mwisho wa kufika kwa wakati")).toContain(
       "07:35 asubuhi",
     );
-    expect(await cardText("Faini ya kwanza ya kuchelewa")).toContain(
-      "TSh 1,000",
-    );
+    // No fine until the owner types one (ATT-2).
+    expect(await cardText("Faini ya kwanza ya kuchelewa")).toContain("TSh 0");
     expect(await cardText("Kuzungusha hesabu hadi")).toContain("TSh 1");
     expect(await cardText("Funga baada ya kukaa bila kazi")).toContain(
       "Dakika 15",
@@ -204,7 +203,7 @@ describe("Mipangilio ya duka", () => {
 
     render(<SettingsScreen />);
 
-    expect(await cardText("First late fine")).toContain("TSh 1,000");
+    expect(await cardText("First late fine")).toContain("TSh 0");
     // English writes the time alone, as the clock-in does.
     expect(await cardText("On time until")).toContain("07:35");
     expect(await cardText("Lock after no use")).toContain("Minutes: 15");

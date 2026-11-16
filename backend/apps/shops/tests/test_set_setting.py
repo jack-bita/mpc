@@ -43,8 +43,8 @@ def no_rows(shop: Shop) -> bool:
 
 def test_set_setting_saves_a_new_row(shop_a: Shop, staff_a: Any) -> None:
     # The owner sets the late fine to 2,000 from tomorrow, then to 2,500 from next week. Each is a row of its own: today
-    # still answers the default 1,000, tomorrow 2,000, next week 2,500. The value is stored in its kind's one form
-    # ("2000" as "2000.00"), and who set it is the row's created_by (02 v1.7).
+    # still answers the default, no fine (ATT-2), tomorrow 2,000, next week 2,500. The value is stored in its kind's
+    # one form ("2000" as "2000.00"), and who set it is the row's created_by (02 v1.7).
     today = shop_today(shop_a)
     with shop_context(shop_a):
         tomorrow = today + timedelta(days=1)
@@ -53,7 +53,7 @@ def test_set_setting_saves_a_new_row(shop_a: Shop, staff_a: Any) -> None:
         )
         set_setting(shop_a, key=LATE_FINE.key, value="2500", effective_from=today + timedelta(days=7), by=staff_a)
 
-        assert get_setting(LATE_FINE, shop_a, on=today) == Decimal("1000.00")
+        assert get_setting(LATE_FINE, shop_a, on=today) == Decimal("0.00")
         assert get_setting(LATE_FINE, shop_a, on=today + timedelta(days=1)) == Decimal("2000.00")
         assert get_setting(LATE_FINE, shop_a, on=today + timedelta(days=7)) == Decimal("2500.00")
         saved = Setting.objects.get(pk=first.pk)

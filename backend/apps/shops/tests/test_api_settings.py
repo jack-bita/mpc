@@ -53,8 +53,8 @@ def test_settings_list_shows_every_rule(
     staff_client_a: APIClient, staff_a: Any, shop_a: Shop, sides: dict[str, Side]
 ) -> None:
     # Every rule in the registry, in its order: a shop's rule once, a side's rule once for Dawa and once for Vyakula.
-    # The owner set the late fine to 2,000 from tomorrow, so today it is still 1,000, and its rows show the 2,000
-    # coming, with who set it, by the nickname the screens show.
+    # The owner set the late fine to 2,000 from tomorrow, so today it is still the default, no fine (ATT-2), and its
+    # rows show the 2,000 coming, with who set it, by the nickname the screens show.
     today = shop_today(shop_a)
     with shop_context(shop_a):
         tomorrow = today + timedelta(days=1)
@@ -70,7 +70,7 @@ def test_settings_list_shows_every_rule(
     ]
     assert [(rule["key"], rule["side"]) for rule in answer["rules"]] == expected
     fine = rule_of(answer, "attendance.late_fine")
-    assert (fine["kind"], fine["scope"], fine["default"], fine["value"]) == ("money", "shop", "1000.00", "1000.00")
+    assert (fine["kind"], fine["scope"], fine["default"], fine["value"]) == ("money", "shop", "0.00", "0.00")
     ((row,),) = [fine["rows"]]
     assert (row["value"], row["effective_from"], row["set_by"], row["side"]) == (
         "2000.00",

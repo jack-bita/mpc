@@ -111,7 +111,7 @@ def test_bootstrap_has_reference_data(
     assert [rule["id"] for rule in answer["setting"]] == [str(fine.pk)]
     # Every rule in the list in core, with its kind, its scope and its default as the kind writes it.
     assert len(answer["setting_keys"]) == len(settings_registry.KEYS)
-    assert {"key": "attendance.late_fine", "kind": "money", "scope": "shop", "default": "1000.00"} in answer[
+    assert {"key": "attendance.late_fine", "kind": "money", "scope": "shop", "default": "0.00"} in answer[
         "setting_keys"
     ]
     assert {"key": "cash.tolerance", "kind": "money", "scope": "side", "default": "0.00"} in answer["setting_keys"]
