@@ -31,7 +31,7 @@ from apps.core.settings_registry import (
     REVIEW_FROM,
     SECOND_FINE_FROM,
 )
-from apps.core.tenancy import shop_context
+from apps.core.tenancy import shop_context, system_context
 from apps.shops.models import Setting, Shop
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import set_setting
@@ -110,6 +110,23 @@ def test_a_later_row_of_the_same_rule_ends_the_check(shop_a: Shop) -> None:
         set_setting(shop_a, key=REVIEW_FROM.key, value="08:15", effective_from=today, by=None)
         assert get_setting(REVIEW_FROM, shop_a, on=today) == time(8, 15)
         assert get_setting(REVIEW_FROM, shop_a, on=next_week) == time(8, 45)
+
+
+def test_another_shops_rows_never_cut_the_check_short(shop_a: Shop, shop_b: Shop) -> None:
+    # A system job has every shop open, so the check names its own shop when it looks for later rows. Shop B moves its
+    # own dharura in three days. Were that row read as shop A's, the check would stop there, before next week, and
+    # miss shop A's clash: dharura from 08:15 beside its second fine from 08:20 next week.
+    today = shop_today(shop_a)
+    with shop_context(shop_b):
+        set_setting(shop_b, key=REVIEW_FROM.key, value="08:45", effective_from=today + timedelta(days=3), by=None)
+    with shop_context(shop_a):
+        set_setting(shop_a, key=SECOND_FINE_FROM.key, value="08:20", effective_from=today + timedelta(days=7), by=None)
+
+    with system_context(), pytest.raises(ValidationError) as clashes_next_week:
+        set_setting(shop_a, key=REVIEW_FROM.key, value="08:15", effective_from=today, by=None)
+
+    assert refusal_codes(clashes_next_week) == OUT_OF_ORDER
+    assert rows_of(shop_a) == [(SECOND_FINE_FROM.key, "08:20")]
 
 
 @pytest.mark.django_db(transaction=True)
