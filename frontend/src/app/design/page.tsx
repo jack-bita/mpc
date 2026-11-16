@@ -302,8 +302,9 @@ export default function DesignPage() {
 
       <Section title={t("topBar.title")}>
         {/* The top bar as every counter and office screen shows it, with each look of the side band
-            under it. The shop and side names are samples: which side gets which look is still open
-            (04 §20, item 19). The language button is the real one: pressing it switches the app. */}
+            under it. The shop and side names are samples: each side says which look it shows, and the
+            owner picks it on the settings page (SHOP-4). The language button is the real one: pressing
+            it switches the app. */}
         {SIDE_BAND_LOOKS.map((look) => (
           <div key={look} className="grid gap-2">
             <p className="text-sm text-muted-foreground">

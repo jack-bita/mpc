@@ -2,7 +2,8 @@
 # Each side says which band it shows under the top bar (SHOP-4): blue or striped. Sides already stored become blue, the
 # field's default, as a new side does until told otherwise. The database's own rule refuses a third word, as no screen
 # could draw it. The edit history needs nothing: its trigger copies the whole row, so the new
-# column is recorded with the rest (ADR-0036).
+# column is recorded with the rest (ADR-0036). Django names people's latest migration by itself: a side links to a
+# StaffMember (`created_by`, `updated_by`), so the people tables must stand first; nothing here needs more of them.
 
 from django.db import migrations, models
 

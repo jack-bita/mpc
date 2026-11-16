@@ -12,8 +12,8 @@
 // next try sends the new version. The question keeps what it asked as it opened, the side's new state and the version
 // read then, and sends exactly that: the page reads the sides again by itself when the phone comes back to it, and a
 // question that followed that read could turn "Zima?" into "Washa?" under the owner's thumb, with the new version,
-// which the server would accept (SHOP-5's review). A name and the switch go one at a time (SideEditSerializer). On the demo every
-// visitor shares one shop, so its sides stay as the seed made them, and a switch there answers demo.sides_fixed
+// which the server would accept (SHOP-5's review). A name, the switch and a band go one at a time (SideEditSerializer,
+// SHOP-4). On the demo every visitor shares one shop, so its sides stay as the seed made them, and a switch there answers demo.sides_fixed
 // (SHOP-3's review): each refusal shows beside the switch it is about.
 //
 // GET /api/v1/shops/sides/ comes in pages of 50 (CursorPage): far more sides than a shop has, so the first page
