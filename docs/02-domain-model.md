@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.32 · 16 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.33 · 16 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -65,6 +65,8 @@
 **Changes in v1.31** (16 Nov 2026, SHOP-4): a side says which band it shows under the top bar (§4, Side): a field of the side, not a dated setting (04 §20, item 19). Marked **(v1.31)**.
 
 **Changes in v1.32** (16 Nov 2026, ATT-2): the owner's attendance rules (OWN-7), through Jack: the day's times and its two fines as dated settings (§12, the day's rules), and `Holiday`, a closed day (ATT-8); §20 item 6 is settled. The fines start at nothing, as this public repo names no real amount; E10 takes a made-up fine (spec v1.3, 04 v1.86). Marked **(v1.32)**.
+
+**Changes in v1.33** (16 Nov 2026, ATT-8, from Jack): `Holiday`, one date, becomes `Closure`, a span of days from a first day to a last, as the shop also closes for a family funeral; its last day can move, earlier or later, with a reason; every closed day is off and not paid (§12; spec v1.4, 04 v1.89). Marked **(v1.33)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
@@ -487,7 +489,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - Clocking in needs no key: anyone working at the shop may clock in on any of its laptops, so a Vyakula worker can on the Dawa laptop when Vyakula's is off (Jack, ATT-1). One suspended, or gone, is still flagged (X2) **(v1.23)**.
 
 **AttendanceDay** → StaffMember, date — worked out from the events and the rules in force that day.
-- `first_in`, `last_out`, `status`: `on_time` | `late` | `half` | `absent` | `off` (Sunday, holiday) | `needs_review`
+- `first_in`, `last_out`, `status`: `on_time` | `late` | `half` | `absent` | `off` (Sunday, a closed day **(v1.33)**) | `needs_review`
 - `absence_type`: `office_duty` (paid as a full day) | `permission` (unpaid) | `no_show` (unpaid)
 - `fine`, `rules_used` (copied), `override` (status, by, reason — the worked-out value stays visible)
 - `meal_share` **(v1.29)**: the worker's part of the day's meal money (§15, 14), worked out with the day, so the pay up to any day is a sum of days already worked out. It follows the day's status: a day that needs review has none until a manager decides it.
@@ -502,7 +504,11 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - `attendance.enabled`: days count only from the day it is on (ADR-0033). Until then the counter shows no *Mahudhurio*.
 - Sunday is always `off`, and not paid: Sunday work is a deal between the owner and the worker, outside the system.
 
-**Holiday** **(v1.32)** → Shop — a day the shop is closed: `date`, `name`. Its days are `off`, and not paid, like Sunday. Added from the shop's today on, and cancelled with who, when and why, never deleted (rule 7). Eid and Easter move, so the owner types each year's dates (ATT-8).
+**Closure** **(v1.33)** → Shop — days the whole shop is closed: a public holiday, or days the owner closes it, such as for a family funeral (Jack, ATT-8). Replaces v1.32's `Holiday`, which held one date.
+- `first_day`, `last_day` (the same for one day), `name`, `status`: `active` | `cancelled`. Who added it is the row's `created_by` (§1).
+- Each day of an active closure is `off`, and not paid, like Sunday, whatever the reason. Two active closures never share a day.
+- Added from the shop's today on. Cancelled up to its first day, or its last day moved earlier or later, each with who, when and why, never deleted (rule 7). No change touches a day before today, so a day already worked out never changes.
+- Eid and Easter move, so the owner types each year's dates.
 
 **PayRate** → StaffMember — `daily_rate`, `shares_meals` (yes; the cook's no) **(v1.29)**, `effective_from`. Dated, so a worker who becomes the cook mid-month pays a share up to that day and none after.
 
