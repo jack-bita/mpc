@@ -32,11 +32,13 @@ export function SideBand({
   className?: string;
 }) {
   return (
-    <div
+    // A <span> drawn as a block, not a <div>: the settings page shows a band beside its word, in a line of text and
+    // in a Choice's <label>, where HTML allows no <div> (SHOP-4's review). It looks the same under the bar.
+    <span
       aria-hidden="true"
       data-look={look}
       // 6 px: enough to see at a glance, thin enough to leave the screen to the sale.
-      className={cn("h-1.5 w-full", LOOK[look], className)}
+      className={cn("block h-1.5 w-full", LOOK[look], className)}
     />
   );
 }
