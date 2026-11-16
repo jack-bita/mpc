@@ -237,9 +237,9 @@ ON_TIME_UNTIL = SettingKey(
     description="Arriving by this minute is on time; after it, and before second_fine_from, late with the first fine.",
 )
 # Both fines start at 0, so a shop has no fine until its owner types one: this public repo names no real amount
-# (rule 10, Jack, 16 Nov 2026), and another shop may fine nobody. The first fine's default was 1,000 until ATT-2:
-# a default is not a limit, so lowering it leaves every old row readable (see the top of this file), and no real
-# shop had rows yet.
+# (rule 10, Jack, 16 Nov 2026), and another shop may fine nobody. The first fine had an amount as its default until
+# ATT-2: a default is not a limit, so lowering it leaves every old row readable (see the top of this file), and no
+# real shop had rows yet.
 LATE_FINE = SettingKey(
     key="attendance.late_fine",
     kind=Money(),

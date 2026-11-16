@@ -29,8 +29,8 @@ export function row(fields: Partial<RuleRow> = {}): RuleRow {
   };
 }
 
-/** One line of the answer: the late fine's, unless told otherwise, with a made-up default of 1,000: a value with
- * thousands to write, where the registry's own is 0 (ATT-2). */
+/** One line of the answer: the late fine's, unless told otherwise, with a default of 1,000 for these tests only, a
+ * value with thousands to write: the registry's own is 0 (ATT-2). */
 export function line(fields: Partial<RuleLine> = {}): RuleLine {
   return {
     key: "attendance.late_fine",
