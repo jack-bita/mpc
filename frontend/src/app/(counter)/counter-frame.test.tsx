@@ -91,6 +91,20 @@ describe("the counter's frame", () => {
     expect(bandUnderTheBar()).toBe("striped");
   });
 
+  it("names the side in words only, from a copy of it saved before the band (SHOP-4's review)", async () => {
+    // A laptop that copied Dawa before the band was kept holds no band for it until Dawa changes again: the bar
+    // names the side, draws nothing, and the screen works on.
+    const { id, code, name, sale_flow, is_live } = DAWA_SIDE;
+    const oldCopy = { id, code, name, sale_flow, is_live };
+    await db().side.put(oldCopy as typeof DAWA_SIDE);
+
+    await ashaAtTheCounter();
+
+    expect(bar().getByText("MPC · Dawa")).toBeDefined();
+    expect(bandUnderTheBar()).toBeNull();
+    expect(screen.getByRole("main").textContent).toBe("screen");
+  });
+
   it("sends nobody back to the name tiles, and shows them no screen", async () => {
     // A reload ends the note, as it ends a local session (Jack, SYNC-10): the PIN again, at the home page.
     render(

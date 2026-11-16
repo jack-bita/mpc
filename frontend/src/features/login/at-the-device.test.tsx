@@ -22,6 +22,7 @@ import {
   DAWA,
   DAWA_LAPTOP,
   DAWA_LAPTOP_ANSWER,
+  VYAKULA,
   whoIsHere,
 } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
@@ -1012,6 +1013,21 @@ describe("what the counter knows (SYNC-11)", () => {
   // note for it (at-the-counter.ts), and hears a counter screen say "this person is leaving".
   const leaveAsked = () =>
     renderHook(() => useLeaveAsked()).result.current?.staffId ?? null;
+
+  it("draws the band of the side she works on, from `me`, not the laptop's (SHOP-4's review)", async () => {
+    // Neema sells on Vyakula at the Dawa laptop: online, the bar names her side from `me`, with its stripes, in place
+    // of the laptop's blue.
+    theLaptop({
+      ...NEEMA,
+      permissions: whoIsHere([{ side: VYAKULA, permissions: ["sale.make"] }])
+        .permissions,
+    });
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    expect(bar().getByText("MPC · Vyakula")).toBeDefined();
+    expect(bandUnderTheBar()).toBe("striped");
+  });
 
   it("names whoever is logged in, with the minutes her screen may sit untouched", async () => {
     theLaptop(NEEMA);
