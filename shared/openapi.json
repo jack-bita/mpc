@@ -2531,8 +2531,16 @@
             },
             "SettingKeyEnum": {
                 "enum": [
+                    "attendance.enabled",
                     "attendance.on_time_until",
                     "attendance.late_fine",
+                    "attendance.second_fine_from",
+                    "attendance.second_fine",
+                    "attendance.review_from",
+                    "attendance.afternoon_from",
+                    "attendance.midday",
+                    "attendance.morning_leave_until",
+                    "attendance.closing",
                     "money.rounding_step",
                     "session.idle_minutes",
                     "cash.tolerance",
@@ -2541,7 +2549,7 @@
                     "stock.block_negative"
                 ],
                 "type": "string",
-                "description": "* `attendance.on_time_until` - attendance.on_time_until\n* `attendance.late_fine` - attendance.late_fine\n* `money.rounding_step` - money.rounding_step\n* `session.idle_minutes` - session.idle_minutes\n* `cash.tolerance` - cash.tolerance\n* `count.tolerance_pct` - count.tolerance_pct\n* `expiry.alert_days` - expiry.alert_days\n* `stock.block_negative` - stock.block_negative"
+                "description": "* `attendance.enabled` - attendance.enabled\n* `attendance.on_time_until` - attendance.on_time_until\n* `attendance.late_fine` - attendance.late_fine\n* `attendance.second_fine_from` - attendance.second_fine_from\n* `attendance.second_fine` - attendance.second_fine\n* `attendance.review_from` - attendance.review_from\n* `attendance.afternoon_from` - attendance.afternoon_from\n* `attendance.midday` - attendance.midday\n* `attendance.morning_leave_until` - attendance.morning_leave_until\n* `attendance.closing` - attendance.closing\n* `money.rounding_step` - money.rounding_step\n* `session.idle_minutes` - session.idle_minutes\n* `cash.tolerance` - cash.tolerance\n* `count.tolerance_pct` - count.tolerance_pct\n* `expiry.alert_days` - expiry.alert_days\n* `stock.block_negative` - stock.block_negative"
             },
             "SettingKeyRecord": {
                 "type": "object",

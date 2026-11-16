@@ -111,7 +111,7 @@ def test_bootstrap_has_reference_data(
     assert [rule["id"] for rule in answer["setting"]] == [str(fine.pk)]
     # Every rule in the list in core, with its kind, its scope and its default as the kind writes it.
     assert len(answer["setting_keys"]) == len(settings_registry.KEYS)
-    assert {"key": "attendance.late_fine", "kind": "money", "scope": "shop", "default": "1000.00"} in answer[
+    assert {"key": "attendance.late_fine", "kind": "money", "scope": "shop", "default": "0.00"} in answer[
         "setting_keys"
     ]
     assert {"key": "cash.tolerance", "kind": "money", "scope": "side", "default": "0.00"} in answer["setting_keys"]
@@ -292,4 +292,6 @@ def test_setting_keys_hold_every_rule_in_core() -> None:
     # A rule added to the list in core reaches the bootstrap by itself, with its default as its kind writes it.
     keys = bootstrap.setting_keys()
     assert [key["key"] for key in keys] == [key.key for key in settings_registry.KEYS]
-    assert keys[0] == {"key": "attendance.on_time_until", "kind": "time", "scope": "shop", "default": "07:35"}
+    # Found by its key, not its place: the list keeps the settings page's order, which a new rule can change (ATT-2).
+    on_time = next(key for key in keys if key["key"] == "attendance.on_time_until")
+    assert on_time == {"key": "attendance.on_time_until", "kind": "time", "scope": "shop", "default": "07:35"}

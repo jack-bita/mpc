@@ -268,14 +268,54 @@
     },
     "rules": {
       "attendance": {
+        "enabled": {
+          "name": "Mahudhurio yamewashwa",
+          "help": "Yakiwashwa, kitufe cha Mahudhurio kinaonekana kwenye kompyuta za duka, na siku zinahesabiwa kuanzia siku hiyo.",
+          "shown": "{value}"
+        },
         "on_time_until": {
           "name": "Mwisho wa kufika kwa wakati",
-          "help": "Anayeingia kazini baada ya saa hii amechelewa.",
+          "help": "Anayeingia kazini baada ya saa hii amechelewa, na anakatwa faini ya kwanza.",
           "shown": "{value}"
         },
         "late_fine": {
-          "name": "Faini ya kuchelewa",
-          "help": "Inakatwa kwenye mshahara kwa kila siku ya kuchelewa.",
+          "name": "Faini ya kwanza ya kuchelewa",
+          "help": "Inakatwa kwenye mshahara kwa kila siku aliyochelewa, kabla ya saa ya faini ya pili.",
+          "shown": "{value}"
+        },
+        "second_fine_from": {
+          "name": "Faini ya pili kuanzia",
+          "help": "Anayeingia kazini kuanzia saa hii anakatwa faini ya pili badala ya ya kwanza.",
+          "shown": "{value}"
+        },
+        "second_fine": {
+          "name": "Faini ya pili ya kuchelewa",
+          "help": "Inakatwa kwenye mshahara kwa kila siku aliyoingia kuanzia saa ya faini ya pili, kabla ya saa ya dharura.",
+          "shown": "{value}"
+        },
+        "review_from": {
+          "name": "Dharura kuanzia",
+          "help": "Anayeingia kazini kuanzia saa hii ni dharura: meneja au mwenye duka ataamua siku hiyo.",
+          "shown": "{value}"
+        },
+        "afternoon_from": {
+          "name": "Nusu siku ya mchana: kufika kuanzia",
+          "help": "Anayeingia kati ya saa hii na saa ya mchana, na kukaa hadi kufunga, anapata nusu siku.",
+          "shown": "{value}"
+        },
+        "midday": {
+          "name": "Saa ya mchana",
+          "help": "Nusu ya asubuhi inaishia hapa na nusu ya mchana inaanza. Anayeingia baada ya saa hii, au anayeondoka kabla yake, ni dharura.",
+          "shown": "{value}"
+        },
+        "morning_leave_until": {
+          "name": "Nusu siku ya asubuhi: kuondoka hadi",
+          "help": "Aliyeingia asubuhi na kuondoka kati ya saa ya mchana na saa hii anapata nusu siku.",
+          "shown": "{value}"
+        },
+        "closing": {
+          "name": "Saa ya kufunga",
+          "help": "Anayeondoka kuanzia saa hii anapata siku nzima. Anayeondoka kabla yake, baada ya nusu siku ya asubuhi, ni dharura.",
           "shown": "{value}"
         }
       },
@@ -328,6 +368,7 @@
     "back": "Rudi",
     "clockIn": "Ingia kazini",
     "clockOut": "Toka kazini",
+    "switchedOff": "Mahudhurio hayajawashwa kwenye duka hili. Mwenye duka huyawasha kwenye Mipangilio ya duka.",
     "notInYet": "Hujaingia kazini leo.",
     "inSince": "Uliingia kazini saa {time}.",
     "outSince": "Ulitoka kazini saa {time}.",
@@ -629,6 +670,7 @@
       "date_past": "Thamani mpya haiwezi kuanza kabla ya leo.",
       "key_invalid": "Jina hili la kanuni haliko sawa.",
       "key_unknown": "Kanuni hii haijulikani.",
+      "out_of_order": "Saa hii haifuati mpangilio wa siku: kila saa ya mahudhurio iwe baada ya ile iliyo juu yake na kabla ya ile iliyo chini yake, kuanzia siku uliyochagua, pamoja na mabadiliko yaliyokwisha pangwa kwa siku zijazo.",
       "side_not_allowed": "Kanuni hii ni moja kwa duka zima, si kwa upande mmoja.",
       "side_required": "Chagua upande: kanuni hii huwekwa kwa kila upande peke yake.",
       "value_blank": "Andika thamani.",

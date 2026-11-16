@@ -9,10 +9,12 @@
 // Each hook gives undefined while its first read runs, or while the device isn't registered; then the
 // list, empty if the laptop holds none.
 import { useLiveQuery } from "dexie-react-hooks";
+import { useEffect, useState } from "react";
 
 import type { components } from "@/api/schema";
 import { useThisDevice } from "@/features/devices/this-device";
 
+import { DAY_CHECK_EVERY } from "./clock-today";
 import { ruleInForce, shopToday } from "./rules";
 import { CLOCK_OFFSET } from "./sync/meta";
 import { useShopDatabase } from "./this-shop";
@@ -47,12 +49,26 @@ export function useStaff(): Schemas["StaffRecord"][] | undefined {
  * Today is the shop's day, on the server's clock as far as the laptop knows it (the offset the last
  * pull kept): a laptop whose clock is wrong still turns to a new rule on the right day.
  *
- * Honest limit: the query runs again when the rows change, not when midnight passes; a screen left open
- * across midnight shows yesterday's value until it draws again or a pull changes a rule.
+ * The query runs again when the rows change, and once a minute besides, as the clock-in's day turns
+ * (clock-today.ts): a laptop left open across midnight with no internet, so with no pull to wake it,
+ * still turns to a rule that starts today, within a minute (ATT-2: attendance switched on from the 1st).
+ * Each minute, not once at the laptop's own midnight: its clock may run a few minutes ahead of the
+ * server's, and the day read on the server's clock would still be yesterday's then.
+ *
+ * `carried`: the rule as this app knows it, for a laptop that doesn't. A rule's kind and default reach a
+ * laptop only with a bootstrap, so a laptop filled before the release that added the rule never learns
+ * them, though its pulls still bring the rule's rows (SYNC-13's note): with `carried`, those rows still
+ * count, and the default is the app's own (ATT-2). A constant of its module, never an object made at
+ * each draw: the query runs again whenever it changes.
  */
-export function useRule(key: string, side: string | null): string | undefined {
+export function useRule(
+  key: string,
+  side: string | null,
+  carried?: Schemas["SettingKeyRecord"],
+): string | undefined {
   const db = useShopDatabase();
   const timezone = useThisDevice()?.shop.timezone;
+  const minute = useMinutes();
   return useLiveQuery(async () => {
     if (db === null || timezone === undefined) return undefined;
     // One read transaction, so the rows, the rule and the offset are seen as they stood together.
@@ -60,7 +76,8 @@ export function useRule(key: string, side: string | null): string | undefined {
       "r",
       [db.setting, db.setting_keys, db.meta],
       async () => {
-        const rule = await db.setting_keys.get(key);
+        // The laptop's own copy first: the server's word for the kind and the default.
+        const rule = (await db.setting_keys.get(key)) ?? carried;
         if (rule === undefined) return undefined;
         const rows = await db.setting.where("key").equals(key).toArray();
         const offset = (await db.meta.get(CLOCK_OFFSET))?.value;
@@ -71,5 +88,19 @@ export function useRule(key: string, side: string | null): string | undefined {
         return ruleInForce(rows, rule, side, shopToday(timezone, now));
       },
     );
-  }, [db, key, side, timezone]);
+    // `minute` isn't read inside: it is here so the query runs again as it changes.
+  }, [db, key, side, timezone, carried, minute]);
+}
+
+/** A count that goes up once a minute, from the first draw: the beat a rule's day turns on. */
+function useMinutes(): number {
+  const [minute, setMinute] = useState(0);
+  useEffect(() => {
+    const every = setInterval(
+      () => setMinute((count) => count + 1),
+      DAY_CHECK_EVERY,
+    );
+    return () => clearInterval(every);
+  }, []);
+  return minute;
 }

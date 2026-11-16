@@ -1,5 +1,6 @@
 // laptop.ts — the Dawa laptop's database holding the shop's people, as its sync leaves it: what the PIN
-// screen's tiles read (SYNC-10). Tests only. Fake data: every name and id here is made up.
+// screen's tiles read (SYNC-10); and the attendance switch's row, which the welcome and Mahudhurio read
+// (ATT-2). Tests only. Fake data: every name and id here is made up.
 import type { components } from "@/api/schema";
 import { CURSOR } from "@/offline/sync/meta";
 import { shopDatabase } from "@/offline/this-shop";
@@ -34,4 +35,17 @@ export async function theLaptopKnows(...people: StaffRecord[]): Promise<void> {
   const db = shopDatabase(DAWA_LAPTOP.shop.id);
   await db.staff.bulkPut(people);
   await db.meta.put({ key: CURSOR, value: 120 });
+}
+
+/** The shop switched attendance on from `from` on (ATT-2), as a pull leaves the switch's row on the Dawa
+ * laptop: its row only, as the app carries the switch's kind and default (attendance-on.ts). Each call
+ * writes the same row, so a later call moves the day. */
+export async function attendanceSwitchedOn(from = "2026-11-01"): Promise<void> {
+  await shopDatabase(DAWA_LAPTOP.shop.id).setting.put({
+    id: "019a5e00-0000-7000-8000-00000000a7e1",
+    key: "attendance.enabled",
+    side: null,
+    value: "true",
+    effective_from: from,
+  });
 }

@@ -15,12 +15,21 @@ import { AREAS, isKnownKey, RULE_AREA, RULE_KEYS } from "./setting-words";
 const PARTS = ["name", "help", "shown"] as const;
 
 describe("the rules' words", () => {
-  it("know the eight rules of the registry", () => {
-    // The registry as SHOP-3 left it (backend/apps/core/settings_registry.py). A new key reaches this list
-    // through RULE_AREA, which typecheck makes it join once the schema names it.
+  it("know the sixteen rules of the registry", () => {
+    // The registry as ATT-2 left it (backend/apps/core/settings_registry.py): SHOP-3's eight and the attendance
+    // day's eight more. A new key reaches this list through RULE_AREA, which typecheck makes it join once the
+    // schema names it.
     expect(RULE_KEYS).toEqual([
+      "attendance.enabled",
       "attendance.on_time_until",
       "attendance.late_fine",
+      "attendance.second_fine_from",
+      "attendance.second_fine",
+      "attendance.review_from",
+      "attendance.afternoon_from",
+      "attendance.midday",
+      "attendance.morning_leave_until",
+      "attendance.closing",
       "money.rounding_step",
       "cash.tolerance",
       "session.idle_minutes",

@@ -7,8 +7,9 @@ rename_side gives a side a new name, unless someone else changed the side since 
 switch_side turns a side on or off the same way (ADR-0033), and set_side_band gives it the band under its top bar
 (SHOP-4). On the demo only the system may add, rename, switch a side or change its band. set_setting gives a rule a new
 value from a day on, as a new row, never an edit (ADR-0013): on the demo a person's starts tomorrow or later, with no
-note. Each action runs in one transaction and refuses a broken rule with a ValidationError that carries a code
-(ADR-0032), which the API's error handler (apps/core/api/errors.py) turns into its error shape.
+note; and a time of the attendance day keeps the day's order (ATT-2). Each action runs in one transaction and refuses
+a broken rule with a ValidationError that carries a code (ADR-0032), which the API's error handler
+(apps/core/api/errors.py) turns into its error shape.
 
 `shops` is layer 1 and may not import `people`, not even as a type (ADR-0035). Who acts is an Actor
 (apps/core/tenancy.py): anything with a `shop_id` and a `staff_id`, as a staff member has. create_shop needs
@@ -27,7 +28,7 @@ numbered at the block's end, once, however many services joined it.
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, time
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -35,7 +36,7 @@ from django.db import models
 
 from apps.core.changes import record_change, recording_changes
 from apps.core.editing import editing
-from apps.core.settings_registry import REGISTRY, Scope
+from apps.core.settings_registry import DAY_IN_ORDER, REGISTRY, Scope, SettingKey
 from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop, shop_context
 from apps.shops.models import (
     PaymentAccount,
@@ -49,7 +50,7 @@ from apps.shops.models import (
     SideBand,
     StockLocation,
 )
-from apps.shops.selectors import shop_today
+from apps.shops.selectors import get_setting, shop_today
 
 
 @dataclass(frozen=True)
@@ -229,7 +230,8 @@ def set_setting(
     ("2000.00"). `setting_id`: the id the client made for the row (ADR-0007), if it made one. `by`: who sets it; None
     for the system or the superuser. Refuses, all together, with their codes: a day before the shop's today, a side's
     rule with no side, and whatever Setting.clean() refuses (an unknown key, a wrong value, a side on a shop's rule).
-    On the demo, a person's value from today, and a person's note (demo.rules_from_tomorrow, demo.no_note)."""
+    On the demo, a person's value from today, and a person's note (demo.rules_from_tomorrow, demo.no_note). Then, once
+    all of those pass, a time of the attendance day that breaks the day's order (setting.out_of_order, ATT-2)."""
     _check_shop(shop, by)
     # T1: the side is of this shop. A bug in the calling code, like the shop checks: the route finds a side through the
     # visit's own shop, so a person can't send another shop's side here.
@@ -285,9 +287,59 @@ def set_setting(
     # One block: the row and its line, or neither. The line tells the laptops at their next pull, and they switch to the
     # value on its day, even offline (03 §5.8). Named after the save, at the block's own level (apps/core/changes.py).
     with recording_changes(shop):
+        # Inside the block, so its lock is held until the transaction commits, the new row with it: a second change
+        # waiting on it then reads this one. Last, as it needs a value clean() has read.
+        if setting_key in DAY_IN_ORDER:
+            _check_day_in_order(shop, setting_key, setting_key.kind.parse(row.value), effective_from)
         row.save()
         record_change(row)
     return row
+
+
+def _check_day_in_order(shop: Shop, changed: SettingKey[time], value: time, effective_from: date) -> None:
+    # The day's seven times stay in order, each strictly after the one before (DAY_IN_ORDER, apps/core/
+    # settings_registry.py), or a minute would land in two windows and ATT-4 would pay that day two ways (ATT-2).
+    #
+    # Two changes at once could each pass alone and break the order together: one manager moves the second fine to
+    # 08:20 while another moves dharura to 08:15. So the first to come takes the shop's row, and the second waits here
+    # until the first commits, then checks against it. Its light lock (no_key=True, FOR NO KEY UPDATE): the change lines
+    # and every other row that links to the shop take only a key-share lock on it (FOR KEY SHARE), which this one lets
+    # through, so no other save waits. A full share lock (FOR SHARE) would wait, and no code takes one on the shop.
+    Shop.objects.select_for_update(no_key=True).get(pk=shop.pk)
+    # Only the changed time and its two neighbours, the time before it and the time after it: each change keeps its own
+    # place, so the seven stay in order, one change after another. Not every pair: a pair broken elsewhere, which only
+    # code that skips set_setting could write, would then refuse every change of an unrelated time, and the sentence
+    # would blame "this time" for it.
+    place = DAY_IN_ORDER.index(changed)
+    before = DAY_IN_ORDER[place - 1] if place > 0 else None
+    after = DAY_IN_ORDER[place + 1] if place + 1 < len(DAY_IN_ORDER) else None
+    neighbours = [key for key in (before, after) if key is not None]
+    # The days the new value is in force on which a neighbour may change: its own day, and each later day a row of a
+    # neighbour starts, up to the rule's own next row, from which the new value no longer counts. The order can break on
+    # any of them: dharura moved to 08:15 from today clashes next week with a second fine from 08:20 set already.
+    # The shop named, not only the one open: a system job has every shop open.
+    later = list(
+        Setting.objects.filter(
+            shop=shop, key__in=[key.key for key in (changed, *neighbours)], effective_from__gt=effective_from
+        ).values_list("key", "effective_from")
+    )
+    own_next = min((day for key, day in later if key == changed.key), default=None)
+    days = {effective_from} | {day for _key, day in later if own_next is None or day < own_next}
+    for day in sorted(days):
+        # The new value stands in for the changed rule: on its own day it wins, even over a row set earlier for that
+        # day, as the row written last wins (T2).
+        too_early = before is not None and value <= get_setting(before, shop, on=day)
+        too_late = after is not None and value >= get_setting(after, shop, on=day)
+        if too_early or too_late:
+            # No values in the code: a sentence beside a box takes none (frontend/src/api/errors.ts). The page shows
+            # each time and the values to come, so the owner sees which one it meets.
+            raise ValidationError(
+                {
+                    "value": [
+                        ValidationError("This time breaks the attendance day's order.", code="setting.out_of_order")
+                    ]
+                }
+            )
 
 
 def _check_shop(shop: Shop, by: Actor | None) -> None:

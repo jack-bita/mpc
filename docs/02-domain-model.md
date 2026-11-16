@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.31 · 16 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.32 · 16 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -63,6 +63,8 @@
 **Changes in v1.30** (16 Nov 2026, from Jack): a money rule is whole shillings (§4, Setting): the shop's money has no cents, and every screen refuses them (04 §20, item 25). Marked **(v1.30)**.
 
 **Changes in v1.31** (16 Nov 2026, SHOP-4): a side says which band it shows under the top bar (§4, Side): a field of the side, not a dated setting (04 §20, item 19). Marked **(v1.31)**.
+
+**Changes in v1.32** (16 Nov 2026, ATT-2): the owner's attendance rules (OWN-7), through Jack: the day's times and its two fines as dated settings (§12, the day's rules), and `Holiday`, a closed day (ATT-8); §20 item 6 is settled. The fines start at nothing, as this public repo names no real amount; E10 takes a made-up fine (spec v1.3, 04 v1.86). Marked **(v1.32)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
@@ -227,7 +229,7 @@ A full diagram for GitHub is in Appendix A.
 - In force on a date = the latest row with `effective_from` ≤ that date. On one date, the row written last wins (`created_at`, then `id`), so a mistake is fixed with a new row **(v1.7)**. A side row beats a shop row, even an older one, and only for a key a side may override **(v1.7)**. Devices need each row's `created_at` to pick the same row offline **(v1.7)**.
 - A new value is a new row, written only through `set_setting` (SHOP-3), from the shop's today on: a row for a past day would change what that day answers, and the fines and the draft pay run worked out from it (Jack, 15 Nov 2026). A side's rule (`cash.tolerance`, `count.tolerance_pct`, `expiry.alert_days`, `stock.block_negative`) gets a row per side, never one for the whole shop: since a side row beats even a newer shop row, a shop value written later would be hidden behind a side's old one, and nobody would see why (Jack, 15 Nov 2026) **(v1.28)**.
 - A money rule (the late fine, the rounding step, the drawer's tolerance) is whole shillings: stored with two places, as every amount is, but always zeros, as the shop's money has no cents and every screen writes money without them; a value with cents is refused (`setting.value_invalid`) (Jack, 16 Nov 2026) **(v1.30)**.
-- Examples: `attendance.on_time_until` 07:35 · `attendance.late_fine` 1,000 · `cash.tolerance` · `count.tolerance_pct` · `expiry.alert_days` 90 · `stock.block_negative` false · `money.rounding_step` 1
+- Examples: `attendance.on_time_until` 07:35 · `attendance.late_fine`, 0 until the owner types one **(v1.32)** · the other rules of the attendance day (§12) **(v1.32)** · `cash.tolerance` · `count.tolerance_pct` · `expiry.alert_days` 90 · `stock.block_negative` false · `money.rounding_step` 1
 
 ## 5. People & access — module `people`
 
@@ -491,6 +493,17 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - `meal_share` **(v1.29)**: the worker's part of the day's meal money (§15, 14), worked out with the day, so the pay up to any day is a sum of days already worked out. It follows the day's status: a day that needs review has none until a manager decides it.
 - Locked once its pay run is approved.
 
+**The day's rules** **(v1.32)** — the owner's (OWN-7, 16 Nov 2026), each a dated setting of the whole shop (§4). Each time is a minute on the shop's clock, as the counter shows it: a clock-in at 07:35:40 shows 07:35. "By" and "from" take their own minute; "before" and "after" don't.
+- **Arriving:** by `on_time_until` (07:35), on time. After it and before `second_fine_from` (08:00), late, with `late_fine`, the first fine. From `second_fine_from` and before `review_from` (08:30), late, with `second_fine`. From `review_from` and before `afternoon_from` (12:00), needs review. From `afternoon_from` to `midday` (13:00), the afternoon's half day, staying until `closing` (18:40). After `midday`, needs review.
+- **Leaving,** after a morning arrival: before `midday`, needs review. From `midday` to `morning_leave_until` (13:30), the morning's half day. After it and before `closing`, needs review. From `closing`, the full day, or the late one. No clock-out: needs review (§20, item 6).
+- The seven times keep this order, each after the one before it, on every day (`setting.out_of_order`, ATT-2), so no minute lands in two windows.
+- A day that needs review is the owner's *dharura*: a manager or the owner decides it (`override`).
+- The fines start at 0: a shop has no fine until its owner types one. This public repo names no real amount (rule 10).
+- `attendance.enabled`: days count only from the day it is on (ADR-0033). Until then the counter shows no *Mahudhurio*.
+- Sunday is always `off`, and not paid: Sunday work is a deal between the owner and the worker, outside the system.
+
+**Holiday** **(v1.32)** → Shop — a day the shop is closed: `date`, `name`. Its days are `off`, and not paid, like Sunday. Added from the shop's today on, and cancelled with who, when and why, never deleted (rule 7). Eid and Easter move, so the owner types each year's dates (ATT-8).
+
 **PayRate** → StaffMember — `daily_rate`, `shares_meals` (yes; the cook's no) **(v1.29)**, `effective_from`. Dated, so a worker who becomes the cook mid-month pays a share up to that day and none after.
 
 **MealMoney** **(v1.29)** → Shop — the money spent on the workers' meals on one day: the cook makes them at the shop, and the workers pay for their own (spec §8.1).
@@ -660,7 +673,7 @@ Opening count 20 bags +1,000 · sell 3 bags −150 · sell 12.5 kg −12.5 · de
 
 **E9 — Open bag** [R2]. A 50 kg bag opened at 08:00, the next at 16:30; loose kg sold in between: 48.5 → −1.5 kg → a Flag if the tolerance is 1 kg *(e.g.)*, naming who sold loose kg in that window.
 
-**E10 — Payslip** [R1b]. Spec §8.1: 193,000.
+**E10 — Payslip** [R1b]. Spec §8.1: 194,500, with a first fine of 500 for the example **(v1.32)**.
 
 **E11 — Meal shares** [R1b] **(v1.29)**. Monday's meal money is 8,000. 8 workers came, one of them only half a day, and so did the cook: 1,000 each, and none for the cook. In a month where every day's share is 2,000, Asha came 10 days and pays 20,000; Juma came 20 and pays 40,000. Juma leaves on the 15th: his payslip up to the 15th is ready that day.
 
@@ -688,7 +701,7 @@ Small items, each with a default or a setting. Settled while building; most need
 3. Credit rules: a default limit for new customers, who approves, what happens on non-payment (spec §14).
 4. Machine charge per kg: kg brought in *(default)*, or kg out.
 5. Exchange rate (kg out per kg in): one rate, or one per product.
-6. Attendance: when late becomes a half day, leaving early, a missing clock-out *(default: needs review)*, Sundays and holidays (spec §14).
+6. Attendance: when late becomes a half day, leaving early, a missing clock-out *(default: needs review)*, Sundays and holidays (spec §14). Settled by the owner, 16 Nov 2026: §12, the day's rules; a missing clock-out needs review **(v1.32)**.
 7. Advances: deducted in full next month *(default)*, or in parts.
 8. Inter-side money: cash handed over at day close, or only shown in the report.
 9. Loaders confirming handover on a device (R2), or not.

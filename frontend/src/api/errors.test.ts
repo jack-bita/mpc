@@ -118,9 +118,11 @@ const CODES_THE_API_SENDS = [
   // three (key_unknown, side_not_allowed, value_invalid), and the table's own two rules (key_invalid, value_blank).
   // Those last two never come through set_setting today, as a field's own check or clean() answers first and
   // full_clean then skips that field's table rules; they have their words all the same, in case a route ever sends one.
+  // And set_setting's third (ATT-2): a time of the attendance day out of the day's order, beside the value's box.
   "setting.date_past",
   "setting.key_invalid",
   "setting.key_unknown",
+  "setting.out_of_order",
   "setting.side_not_allowed",
   "setting.side_required",
   "setting.value_blank",

@@ -827,8 +827,16 @@ export interface components {
             note?: string;
         };
         /**
-         * @description * `attendance.on_time_until` - attendance.on_time_until
+         * @description * `attendance.enabled` - attendance.enabled
+         *     * `attendance.on_time_until` - attendance.on_time_until
          *     * `attendance.late_fine` - attendance.late_fine
+         *     * `attendance.second_fine_from` - attendance.second_fine_from
+         *     * `attendance.second_fine` - attendance.second_fine
+         *     * `attendance.review_from` - attendance.review_from
+         *     * `attendance.afternoon_from` - attendance.afternoon_from
+         *     * `attendance.midday` - attendance.midday
+         *     * `attendance.morning_leave_until` - attendance.morning_leave_until
+         *     * `attendance.closing` - attendance.closing
          *     * `money.rounding_step` - money.rounding_step
          *     * `session.idle_minutes` - session.idle_minutes
          *     * `cash.tolerance` - cash.tolerance
@@ -837,7 +845,7 @@ export interface components {
          *     * `stock.block_negative` - stock.block_negative
          * @enum {string}
          */
-        SettingKeyEnum: "attendance.on_time_until" | "attendance.late_fine" | "money.rounding_step" | "session.idle_minutes" | "cash.tolerance" | "count.tolerance_pct" | "expiry.alert_days" | "stock.block_negative";
+        SettingKeyEnum: "attendance.enabled" | "attendance.on_time_until" | "attendance.late_fine" | "attendance.second_fine_from" | "attendance.second_fine" | "attendance.review_from" | "attendance.afternoon_from" | "attendance.midday" | "attendance.morning_leave_until" | "attendance.closing" | "money.rounding_step" | "session.idle_minutes" | "cash.tolerance" | "count.tolerance_pct" | "expiry.alert_days" | "stock.block_negative";
         SettingKeyRecord: {
             key: string;
             kind: components["schemas"]["SettingKindEnum"];

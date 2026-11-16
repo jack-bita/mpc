@@ -268,14 +268,54 @@
     },
     "rules": {
       "attendance": {
+        "enabled": {
+          "name": "Attendance switched on",
+          "help": "When on, the shop laptops show Mahudhurio, and days count from that day.",
+          "shown": "{value}"
+        },
         "on_time_until": {
           "name": "On time until",
-          "help": "Anyone who clocks in after this time is late.",
+          "help": "Anyone who clocks in after this time is late, with the first fine.",
           "shown": "{value}"
         },
         "late_fine": {
-          "name": "Late fine",
-          "help": "Taken off the pay for each late day.",
+          "name": "First late fine",
+          "help": "Taken off the pay for each late day, before the second fine's time.",
+          "shown": "{value}"
+        },
+        "second_fine_from": {
+          "name": "Second fine from",
+          "help": "Anyone who clocks in from this time gets the second fine instead of the first.",
+          "shown": "{value}"
+        },
+        "second_fine": {
+          "name": "Second late fine",
+          "help": "Taken off the pay for each day someone clocks in from the second fine's time, before the dharura time.",
+          "shown": "{value}"
+        },
+        "review_from": {
+          "name": "Dharura from",
+          "help": "Anyone who clocks in from this time is dharura: a manager or the owner decides the day.",
+          "shown": "{value}"
+        },
+        "afternoon_from": {
+          "name": "Afternoon half day: arrive from",
+          "help": "Anyone who clocks in between this time and midday, and stays until closing, gets a half day.",
+          "shown": "{value}"
+        },
+        "midday": {
+          "name": "Midday",
+          "help": "The morning half ends here and the afternoon half starts. Clocking in after it, or leaving before it, is dharura.",
+          "shown": "{value}"
+        },
+        "morning_leave_until": {
+          "name": "Morning half day: leave by",
+          "help": "Someone who came in the morning and leaves between midday and this time gets a half day.",
+          "shown": "{value}"
+        },
+        "closing": {
+          "name": "Closing time",
+          "help": "Leaving from this time is a full day. Leaving earlier, after the morning half day, is dharura.",
           "shown": "{value}"
         }
       },
@@ -328,6 +368,7 @@
     "back": "Back",
     "clockIn": "Clock in",
     "clockOut": "Clock out",
+    "switchedOff": "Attendance isn't switched on at this shop. The owner switches it on in Shop settings.",
     "notInYet": "You haven't clocked in today.",
     "inSince": "You clocked in at {time}.",
     "outSince": "You clocked out at {time}.",
@@ -629,6 +670,7 @@
       "date_past": "A new value can't start before today.",
       "key_invalid": "This rule's name isn't valid.",
       "key_unknown": "This rule isn't known.",
+      "out_of_order": "This time breaks the day's order: each attendance time must be after the one above it and before the one below it, from the day you chose, including changes already set for later days.",
       "side_not_allowed": "This rule has one value for the whole shop, not for one side.",
       "side_required": "Choose a side: this rule is set for each side on its own.",
       "value_blank": "Enter a value.",
