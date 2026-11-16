@@ -1,12 +1,13 @@
 """apps/shops/tests/test_set_setting.py — set_setting, the one way a rule's new value is written (SHOP-3, ADR-0013).
 
-A new value is a new row, never an edit: the late fine is 1,000 today, and the owner sets 2,000 from 1 December. The
-service checks what Setting.clean() holds (a known key, a value of its kind, no side for a shop's rule), which
-`objects.create` would skip, and two rules of its own, both Jack's (15 Nov 2026):
+A new value is a new row, never an edit: today the late fine is its default, no fine (ATT-2), and the owner sets 2,000
+from 1 December. The service checks what Setting.clean() holds (a known key, a value of its kind, no side for a shop's
+rule), which `objects.create` would skip, and two rules of its own, both Jack's (15 Nov 2026):
 - a value starts on the shop's today or later, never before: an earlier day would change what past days answer, and a
   draft pay run with them;
 - a side's rule (the two tolerances, the expiry alert, blocking stock below zero) is set one side at a time, with no
   row for the whole shop, so a side's old row can never hide a newer shop value (CORE-4: a side's row beats it).
+A third, the attendance day's times kept in order, has its own file (test_day_in_order.py, ATT-2).
 Each saved row lands its line in the shop's change log, so the laptops get it at their next pull (SYNC-2). The staff
 members come from backend/conftest.py and are typed Any: `shops` may not name `people`'s StaffMember (ADR-0043).
 """

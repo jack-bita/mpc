@@ -287,7 +287,8 @@ def set_setting(
     # One block: the row and its line, or neither. The line tells the laptops at their next pull, and they switch to the
     # value on its day, even offline (03 §5.8). Named after the save, at the block's own level (apps/core/changes.py).
     with recording_changes(shop):
-        # Inside the block, so its lock holds until the row is saved. Last, as it needs a value clean() has read.
+        # Inside the block, so its lock is held until the transaction commits, the new row with it: a second change
+        # waiting on it then reads this one. Last, as it needs a value clean() has read.
         if setting_key in DAY_IN_ORDER:
             _check_day_in_order(shop, setting_key, setting_key.kind.parse(row.value), effective_from)
         row.save()
@@ -301,8 +302,9 @@ def _check_day_in_order(shop: Shop, changed: SettingKey[time], value: time, effe
     #
     # Two changes at once could each pass alone and break the order together: one manager moves the second fine to
     # 08:20 while another moves dharura to 08:15. So the first to come takes the shop's row, and the second waits here
-    # until the first is saved, then checks against it. Its light lock (no_key=True): the change lines and every other
-    # row that links to the shop take only a share lock on it, which this one lets through, so no other save waits.
+    # until the first commits, then checks against it. Its light lock (no_key=True, FOR NO KEY UPDATE): the change lines
+    # and every other row that links to the shop take only a key-share lock on it (FOR KEY SHARE), which this one lets
+    # through, so no other save waits. A full share lock (FOR SHARE) would wait, and no code takes one on the shop.
     Shop.objects.select_for_update(no_key=True).get(pk=shop.pk)
     # Only the changed time and its two neighbours, the time before it and the time after it: each change keeps its own
     # place, so the seven stay in order, one change after another. Not every pair: a pair broken elsewhere, which only

@@ -1,5 +1,6 @@
 // laptop.ts — the Dawa laptop's database holding the shop's people, as its sync leaves it: what the PIN
-// screen's tiles read (SYNC-10). Tests only. Fake data: every name and id here is made up.
+// screen's tiles read (SYNC-10); and the attendance switch's row, which the welcome and Mahudhurio read
+// (ATT-2). Tests only. Fake data: every name and id here is made up.
 import type { components } from "@/api/schema";
 import { CURSOR } from "@/offline/sync/meta";
 import { shopDatabase } from "@/offline/this-shop";
