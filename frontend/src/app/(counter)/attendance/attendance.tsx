@@ -26,6 +26,10 @@
 // Times as "07:55", 24 hours, in the shop's zone, and in Swahili with the part of the day, "saa 07:55
 // asubuhi", so nobody reads them as Swahili time (formatTime, dayPart; Jack, SYNC-11).
 //
+// Only once the shop has started attendance (ATT-2, ADR-0033): the welcome shows no way here before that
+// day, and the screen, opened by its address, says attendance hasn't started and offers no button. Nor
+// while the laptop is still reading the switch: a button shown, then taken away, could take a tap.
+//
 // "use client": it asks use-intl for words, and reads and writes the laptop's database, in the browser only.
 "use client";
 
@@ -40,6 +44,7 @@ import {
   usePersonAtCounter,
 } from "@/features/login/at-the-counter";
 import { dayPart, formatTime } from "@/lib/format";
+import { useAttendanceOn } from "@/offline/attendance-on";
 import {
   CLOCK,
   CLOCK_VERSION,
@@ -74,6 +79,7 @@ export function AttendanceScreen() {
   const db = useShopDatabase();
   const timezone = useThisDevice()?.shop.timezone;
   const today = useTodaysTaps();
+  const attendanceOn = useAttendanceOn();
   const [saved, setSaved] = useState<Saved | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   // A tap on its way. A ref, not state: two taps in one moment both run before the screen draws again, and
@@ -139,21 +145,40 @@ export function AttendanceScreen() {
     }
   }
 
-  // What the screen says: what this visit saved, else where she stands today.
+  // What the screen says: what this visit saved, else where she stands today. Nothing before the switch is
+  // read, with the button: a line that came first could turn into "not started" a moment later.
   const status = saved
     ? t(saved.kind === "in" ? "savedIn" : "savedOut", { time: time(saved.at) })
-    : last
-      ? t(last.kind === "in" ? "inSince" : "outSince", { time: time(last.at) })
-      : today
-        ? t("notInYet")
-        : null;
-  // The one button that fits: none before her taps are read, and none once this visit saved one.
+    : attendanceOn === undefined
+      ? null
+      : last
+        ? t(last.kind === "in" ? "inSince" : "outSince", {
+            time: time(last.at),
+          })
+        : today
+          ? t("notInYet")
+          : null;
+  // The one button that fits: none before her taps and the switch are read, and none once this visit saved one.
   const next: ClockKind | null =
-    row === undefined || today === undefined || saved
+    row === undefined || today === undefined || attendanceOn !== true || saved
       ? null
       : last?.kind === "in"
         ? "out"
         : "in";
+
+  // Attendance not started at this shop yet: the way back, and why there is nothing to tap.
+  if (attendanceOn === false)
+    return (
+      <div className="grid max-w-md gap-6">
+        <div>
+          <ButtonLink href="/" kind="second" size="normal">
+            {t("back")}
+          </ButtonLink>
+        </div>
+        <h1 className="text-3xl font-semibold">{t("title")}</h1>
+        <p className="text-lg">{t("notStarted")}</p>
+      </div>
+    );
 
   return (
     <div className="grid max-w-md gap-6">

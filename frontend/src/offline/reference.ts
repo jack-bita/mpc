@@ -49,8 +49,17 @@ export function useStaff(): Schemas["StaffRecord"][] | undefined {
  *
  * Honest limit: the query runs again when the rows change, not when midnight passes; a screen left open
  * across midnight shows yesterday's value until it draws again or a pull changes a rule.
+ *
+ * `carried`: the rule as this app knows it, for a laptop that doesn't. A rule's kind and default reach a
+ * laptop only with a bootstrap, so a laptop filled before the release that added the rule never learns
+ * them, though its pulls still bring the rule's rows (SYNC-13's note): with `carried`, those rows still
+ * count, and the default is the app's own (ATT-2).
  */
-export function useRule(key: string, side: string | null): string | undefined {
+export function useRule(
+  key: string,
+  side: string | null,
+  carried?: Schemas["SettingKeyRecord"],
+): string | undefined {
   const db = useShopDatabase();
   const timezone = useThisDevice()?.shop.timezone;
   return useLiveQuery(async () => {
@@ -60,7 +69,8 @@ export function useRule(key: string, side: string | null): string | undefined {
       "r",
       [db.setting, db.setting_keys, db.meta],
       async () => {
-        const rule = await db.setting_keys.get(key);
+        // The laptop's own copy first: the server's word for the kind and the default.
+        const rule = (await db.setting_keys.get(key)) ?? carried;
         if (rule === undefined) return undefined;
         const rows = await db.setting.where("key").equals(key).toArray();
         const offset = (await db.meta.get(CLOCK_OFFSET))?.value;
@@ -71,5 +81,5 @@ export function useRule(key: string, side: string | null): string | undefined {
         return ruleInForce(rows, rule, side, shopToday(timezone, now));
       },
     );
-  }, [db, key, side, timezone]);
+  }, [db, key, side, timezone, carried]);
 }

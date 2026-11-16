@@ -27,7 +27,7 @@ import {
 } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { swahiliIn } from "@/test/language";
-import { staffRow, theLaptopKnows } from "@/test/laptop";
+import { attendanceSwitchedOn, staffRow, theLaptopKnows } from "@/test/laptop";
 import { FEW_TURNS } from "@/test/pins";
 import { render } from "@/test/render";
 import { DAWA_SIDE, IDLE_15, IDLE_RULE } from "@/test/shop-lists";
@@ -845,6 +845,7 @@ describe("with no network (SYNC-10)", () => {
 
   it("offers Mahudhurio in a local session too: the counter needs no server (SYNC-11)", async () => {
     await aLaptopWithNoNetwork(null);
+    await attendanceSwitchedOn();
     render(<AtTheDevice device={DAWA_LAPTOP} />);
     await jumaLogsInHere();
 
@@ -909,6 +910,8 @@ describe("the way to Mahudhurio (SYNC-11)", () => {
   const mahudhurio = () => screen.queryByRole("link", { name: "Mahudhurio" });
 
   it("is on her welcome, and opens the counter's screen", async () => {
+    // At a shop that switched attendance on at the start of the month (ATT-2).
+    await attendanceSwitchedOn("2026-11-01");
     theLaptop(NEEMA);
     render(<AtTheDevice device={DAWA_LAPTOP} />);
     await screen.findByRole("heading", { name: "Karibu, Neema" });
@@ -916,6 +919,27 @@ describe("the way to Mahudhurio (SYNC-11)", () => {
     await waitFor(() => expect(mahudhurio()).not.toBeNull());
     // The slash at the end is the build's (trailingSlash, next.config.ts), which a test's Next leaves off.
     expect(mahudhurio()?.getAttribute("href")).toMatch(/^\/attendance\/?$/);
+  });
+
+  it("isn't there before the shop switches attendance on (ATT-2)", async () => {
+    // No row at all: the switch's default, off. Kompyuta hii, beside it, shows: the welcome has drawn.
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    await screen.findByRole("link", { name: "Kompyuta hii" });
+    expect(mahudhurio()).toBeNull();
+  });
+
+  it("isn't there before the day it is switched on from (ATT-2)", async () => {
+    // Switched on from a day still to come: off until it comes.
+    await attendanceSwitchedOn("2099-12-31");
+    theLaptop(NEEMA);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    await screen.findByRole("link", { name: "Kompyuta hii" });
+    expect(mahudhurio()).toBeNull();
   });
 
   it("isn't there while nobody is logged in", async () => {

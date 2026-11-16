@@ -48,6 +48,7 @@ import type { ThisDevice } from "@/features/devices/this-device";
 import { useFollowThePerson } from "@/features/people/follow-the-person";
 import { sideOfStaffRow } from "@/features/people/side-of-row";
 import { sideAt, useWhoIsHere } from "@/features/people/who-is-here";
+import { useAttendanceOn } from "@/offline/attendance-on";
 import { useRule, useSides, useStaff } from "@/offline/reference";
 import { wholeNumber } from "@/offline/rules";
 
@@ -252,6 +253,8 @@ export function AtTheDevice({
     (here ? staff?.find((row) => row.id === here.staff.id) : undefined);
   // How they came in, so a counter's Toka ends the right session: the local one, or the server's.
   const cameInBy = offlinePerson ? "laptop" : "server";
+  // Whether the shop has started attendance (ATT-2, ADR-0033): Mahudhurio shows only from that day.
+  const attendanceOn = useAttendanceOn();
   useEffect(() => {
     if (rowHere !== undefined && idleMinutes !== undefined)
       arriveAtCounter(rowHere, idleMinutes, cameInBy);
@@ -347,9 +350,10 @@ export function AtTheDevice({
           <div className="flex flex-wrap gap-3">
             {/* The counter's first screen (SYNC-11): clocking in and out. Online or offline alike, as the
                 counter needs no server; only for someone the counter's note names (rowHere), as a person
-                the laptop has no row of would be sent straight back. Next's own link: the page moves with no
-                reload, and the note, kept in this tab's memory, goes with her. */}
-            {rowHere && (
+                the laptop has no row of would be sent straight back; and only once the shop has switched
+                attendance on, from its day (ATT-2), not while the laptop is still reading it. Next's own
+                link: the page moves with no reload, and the note, kept in this tab's memory, goes with her. */}
+            {rowHere && attendanceOn === true && (
               <ButtonLink href="/attendance/" size="normal">
                 {attendance("title")}
               </ButtonLink>

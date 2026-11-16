@@ -20,7 +20,7 @@ import { LAST_DEVICE_SEQ, LAST_SERVER_TIME } from "@/offline/sync/meta";
 import { shopDatabase } from "@/offline/this-shop";
 import { DAWA, DAWA_LAPTOP } from "@/test/devices";
 import { swahiliIn } from "@/test/language";
-import { staffRow, theLaptopKnows } from "@/test/laptop";
+import { attendanceSwitchedOn, staffRow, theLaptopKnows } from "@/test/laptop";
 import { render } from "@/test/render";
 import { router } from "@/test/router";
 import { DAWA_SIDE } from "@/test/shop-lists";
@@ -96,9 +96,11 @@ beforeEach(async () => {
     ],
   });
   vi.setSystemTime(MORNING);
-  // The Dawa laptop, registered, filled by a bootstrap (its last record #57) and a pull since.
+  // The Dawa laptop, registered, filled by a bootstrap (its last record #57) and a pull since, at a shop that
+  // switched attendance on at the start of the month (ATT-2).
   saveDevice(DAWA_LAPTOP);
   await theLaptopKnows(ASHA, JUMA);
+  await attendanceSwitchedOn("2026-11-01");
   await db().side.put(DAWA_SIDE);
   await db().meta.bulkPut([
     { key: LAST_DEVICE_SEQ, value: 57 },
@@ -336,6 +338,34 @@ describe("a laptop not ready to save", () => {
       await screen.findByText(/^Subiri kidogo: kompyuta hii bado inaleta/),
     ).toBeDefined();
     expect(await db().documents.count()).toBe(0);
+  });
+});
+
+describe("before the shop starts attendance (ATT-2)", () => {
+  it("says attendance hasn't started, offers no button, and the way back", async () => {
+    // The owner switched it on from tomorrow: today is still before the start.
+    await attendanceSwitchedOn("2026-11-14");
+
+    await theScreen();
+
+    expect(
+      await screen.findByText(
+        "Mahudhurio bado hayajaanza kwenye duka hili. Mwenye duka atayawasha siku ya kuanza.",
+      ),
+    ).toBeDefined();
+    expect(clockIn()).toBeNull();
+    expect(clockOut()).toBeNull();
+    expect(screen.getByRole("link", { name: "Rudi" })).toBeDefined();
+  });
+
+  it("offers Ingia kazini from the day it is switched on", async () => {
+    await attendanceSwitchedOn("2026-11-13");
+
+    await theScreen();
+
+    expect(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    ).toBeDefined();
   });
 });
 

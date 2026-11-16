@@ -368,6 +368,7 @@
     "back": "Rudi",
     "clockIn": "Ingia kazini",
     "clockOut": "Toka kazini",
+    "notStarted": "Mahudhurio bado hayajaanza kwenye duka hili. Mwenye duka atayawasha siku ya kuanza.",
     "notInYet": "Hujaingia kazini leo.",
     "inSince": "Uliingia kazini saa {time}.",
     "outSince": "Ulitoka kazini saa {time}.",

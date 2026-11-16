@@ -35,3 +35,16 @@ export async function theLaptopKnows(...people: StaffRecord[]): Promise<void> {
   await db.staff.bulkPut(people);
   await db.meta.put({ key: CURSOR, value: 120 });
 }
+
+/** The shop switched attendance on from `from` on (ATT-2), as a pull leaves the switch's row on the Dawa
+ * laptop: its row only, as the app carries the switch's kind and default (attendance-on.ts). Each call
+ * writes the same row, so a later call moves the day. */
+export async function attendanceSwitchedOn(from = "2026-11-01"): Promise<void> {
+  await shopDatabase(DAWA_LAPTOP.shop.id).setting.put({
+    id: "019a5e00-0000-7000-8000-00000000a7e1",
+    key: "attendance.enabled",
+    side: null,
+    value: "true",
+    effective_from: from,
+  });
+}
