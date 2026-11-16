@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.30 · 16 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.31 · 16 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -61,6 +61,8 @@
 **Changes in v1.29** (15 Nov 2026, from Jack): the workers pay for their own meals (spec §8.1). A new append-only record, `MealMoney`, the day's money for the meals, typed each day by whoever holds `meals.record`, a key the owner gives to whoever he chooses. It is split equally among the workers who came that day, half days included, and the cook pays no share (`PayRate.shares_meals`). Each `AttendanceDay` carries its `meal_share`, so a worker who leaves mid-month has their pay up to their last day at once, and gets their payslip then, on its own (§12, §15, §16, §18 E11, §20, §21). Marked **(v1.29)**.
 
 **Changes in v1.30** (16 Nov 2026, from Jack): a money rule is whole shillings (§4, Setting): the shop's money has no cents, and every screen refuses them (04 §20, item 25). Marked **(v1.30)**.
+
+**Changes in v1.31** (16 Nov 2026, SHOP-4): a side says which band it shows under the top bar (§4, Side): a field of the side, not a dated setting (04 §20, item 19). Marked **(v1.31)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
@@ -205,6 +207,7 @@ A full diagram for GitHub is in Appendix A.
 - `code`: one capital letter, unique within the shop — two sides with one letter would print the same numbers **(v1.5)**
 - `sale_flow`: `one_screen` | `writer_cashier_loader`
 - `is_live` — each side is switched on in settings (spec §11); a new side starts switched off **(v1.5)**
+- `band`: `blue` | `striped`, the band under the top bar that tells a worker at a glance which side a screen is for; blue unless told otherwise, and the owner picks it in settings. A field of the side, not a dated Setting: a colour has no "from 1 December" and changes nobody's pay **(v1.31)**
 - [Later] `branch` → Branch, for a second site
 
 **StockLocation** [R1] ✚ → Side (D2)
