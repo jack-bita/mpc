@@ -32,10 +32,10 @@ from apps.sync.push import ACCEPTED, DUPLICATE, HIGHEST_DEVICE_SEQ, INVALID, RET
 
 class SideRecord(serializers.ModelSerializer[Side]):
     # A side as a counter needs it: its letter starts every number printed there (D7), its name heads the screens, its
-    # flow says how it sells (02 §4), and whether it is live yet (ADR-0033).
+    # flow says how it sells (02 §4), whether it is live yet (ADR-0033), and the band its top bar draws (SHOP-4).
     class Meta:
         model = Side
-        fields = ["id", "code", "name", "sale_flow", "is_live"]
+        fields = ["id", "code", "name", "sale_flow", "is_live", "band"]
         read_only_fields = fields
 
 

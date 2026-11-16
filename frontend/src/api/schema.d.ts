@@ -559,12 +559,14 @@ export interface components {
             readonly id: string;
             readonly code: string;
             readonly name: string;
+            readonly band: components["schemas"]["SideBandEnum"];
         };
         MeSideKeys: {
             /** Format: uuid */
             id: string;
             code: string;
             name: string;
+            band: components["schemas"]["SideBandEnum"];
             permissions: string[];
         };
         MeStaff: {
@@ -879,12 +881,19 @@ export interface components {
             readonly name: string;
             readonly sale_flow: components["schemas"]["SaleFlowEnum"];
             readonly is_live: boolean;
+            readonly band: components["schemas"]["SideBandEnum"];
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string | null;
             readonly version: number;
         };
+        /**
+         * @description * `blue` - Blue
+         *     * `striped` - Striped
+         * @enum {string}
+         */
+        SideBandEnum: "blue" | "striped";
         SideChange: {
             seq: number;
             /**
@@ -903,6 +912,7 @@ export interface components {
             code: string;
             name: string;
             sale_flow?: components["schemas"]["SaleFlowEnum"];
+            band?: components["schemas"]["SideBandEnum"];
         };
         SideEditRequest: {
             name?: string;
@@ -921,6 +931,7 @@ export interface components {
             readonly name: string;
             readonly sale_flow: components["schemas"]["SaleFlowEnum"];
             readonly is_live: boolean;
+            readonly band: components["schemas"]["SideBandEnum"];
         };
         StaffChange: {
             seq: number;

@@ -397,6 +397,15 @@ def test_seed_demo_switches_its_sides_on() -> None:
         assert {(side.code, side.is_live) for side in Side.objects.all()} == {("D", True), ("F", True)}
 
 
+def test_seed_demo_gives_each_side_its_band() -> None:
+    # The demo shows each side's band under the top bar (SHOP-4): Dawa blue, Vyakula striped, like the Foods bags
+    # (UI-8). A visitor can't change either (demo.sides_fixed), so every visitor sees the same two.
+    seed_demo(fresh=True)
+
+    with shop_context(the_demo_shop()):
+        assert {(side.code, side.band) for side in Side.objects.all()} == {("D", "blue"), ("F", "striped")}
+
+
 def test_seed_demo_lets_its_manager_change_the_shops_rules() -> None:
     # The demo has no owner, and a manager alone may not change the shop's rules (settings.manage is one of the
     # owner's own four, spec §6). Meneja holds that one key besides the role, on the whole shop, so a visitor can try

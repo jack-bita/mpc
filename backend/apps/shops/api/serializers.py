@@ -23,16 +23,17 @@ class SideSerializer(serializers.ModelSerializer[Side]):
     # keeps `version` and sends it back with an edit (apps/core/editing.py).
     class Meta:
         model = Side
-        fields = ["id", "code", "name", "sale_flow", "is_live", "created_at", "updated_at", "version"]
+        fields = ["id", "code", "name", "sale_flow", "is_live", "band", "created_at", "updated_at", "version"]
         read_only_fields = fields
 
 
 class SideCreateSerializer(serializers.ModelSerializer[Side]):
     # What the app sends to add a side, with the id it made itself (ADR-0007). The letter and the name are
-    # checked again by the service (full_clean): "d" is stored as "D", and a second D is refused.
+    # checked again by the service (full_clean): "d" is stored as "D", and a second D is refused. The sale flow and the
+    # band may be left out, for add_side's own defaults.
     class Meta:
         model = Side
-        fields = ["id", "code", "name", "sale_flow"]
+        fields = ["id", "code", "name", "sale_flow", "band"]
         extra_kwargs = {
             # Required, and a UUIDv7: without an id of its own, a phone's retry would look like a new side
             # (apps/core/api/ids.py). No unique check of the id here: the route looks the id up itself, first

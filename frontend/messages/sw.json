@@ -625,6 +625,7 @@
       "value_invalid": "Thamani hii haifai kwa kanuni hii."
     },
     "side": {
+      "band_unknown": "Rangi hii ya upande haijulikani.",
       "code_invalid": "Herufi ya upande iwe herufi kubwa moja, kama D.",
       "code_taken": "Upande mwingine wa duka hili tayari una herufi hii.",
       "name_blank": "Upe upande jina.",

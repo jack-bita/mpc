@@ -146,10 +146,18 @@ def test_a_shop_with_no_change_is_at_zero(shop_a: Shop) -> None:
 
 
 def test_every_side_is_sent(shop_a: Shop, dawa: Side, vyakula: Side) -> None:
-    # Both sides, by their letter: a Dawa laptop may sell on Vyakula too, if the person's keys say so (02 §5).
+    # Both sides, by their letter: a Dawa laptop may sell on Vyakula too, if the person's keys say so (02 §5). Each with
+    # its band, which the counter's top bar draws for the side the person works on (SHOP-4).
     assert sent("side", shop_a) == [
-        {"id": str(dawa.pk), "code": "D", "name": "Dawa", "sale_flow": "one_screen", "is_live": False},
-        {"id": str(vyakula.pk), "code": "F", "name": "Vyakula", "sale_flow": "one_screen", "is_live": False},
+        {"id": str(dawa.pk), "code": "D", "name": "Dawa", "sale_flow": "one_screen", "is_live": False, "band": "blue"},
+        {
+            "id": str(vyakula.pk),
+            "code": "F",
+            "name": "Vyakula",
+            "sale_flow": "one_screen",
+            "is_live": False,
+            "band": "blue",
+        },
     ]
 
 

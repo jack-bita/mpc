@@ -46,6 +46,7 @@ from apps.shops.models import (
     Shop,
     ShopKind,
     Side,
+    SideBand,
     StockLocation,
 )
 from apps.shops.selectors import shop_today
@@ -54,10 +55,11 @@ from apps.shops.selectors import shop_today
 @dataclass(frozen=True)
 class NewSide:
     # One side as create_shop is asked for it: NewSide("D", "Dawa"). Frozen: a value handed in, which
-    # nothing changes on the way.
+    # nothing changes on the way. `band`: the look under its top bar (SHOP-4), blue unless told otherwise.
     code: str
     name: str
     sale_flow: SaleFlow = SaleFlow.ONE_SCREEN
+    band: SideBand = SideBand.BLUE
 
 
 def create_shop(
@@ -94,7 +96,14 @@ def create_shop(
         # rule on `code` then refuses the second. The shop's own row has no line: no device keeps it.
         _saved(shop)
         for new_side in sides:
-            add_side(shop=shop, code=new_side.code, name=new_side.name, sale_flow=new_side.sale_flow, by=None)
+            add_side(
+                shop=shop,
+                code=new_side.code,
+                name=new_side.name,
+                sale_flow=new_side.sale_flow,
+                band=new_side.band,
+                by=None,
+            )
     return shop
 
 
@@ -104,6 +113,7 @@ def add_side(
     code: str,
     name: str,
     sale_flow: SaleFlow = SaleFlow.ONE_SCREEN,
+    band: SideBand = SideBand.BLUE,
     side_id: uuid.UUID | None = None,
     by: Actor | None,
 ) -> Side:
@@ -116,7 +126,7 @@ def add_side(
     # One block, so a side never exists without its location and its drawer, nor without its lines. Inside
     # create_shop's block, it joins that one: a part that is taken back with the rest, numbered at its end.
     with recording_changes(shop):
-        side = Side(shop=shop, code=code, name=name, sale_flow=sale_flow, created_by_id=created_by_id)
+        side = Side(shop=shop, code=code, name=name, sale_flow=sale_flow, band=band, created_by_id=created_by_id)
         if side_id is not None:
             # The client's id, not a new one: a retry of the same request then finds the side it made.
             side.id = side_id

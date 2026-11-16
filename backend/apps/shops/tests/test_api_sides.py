@@ -331,6 +331,22 @@ def test_create_keeps_the_sale_flow_sent(staff_client_a: APIClient, sent: dict[s
     assert response.json()["sale_flow"] == kept
 
 
+@pytest.mark.parametrize(
+    ("sent", "kept"),
+    [
+        # Not sent: the side shows the blue band, add_side's own default (SHOP-4).
+        pytest.param({}, "blue", id="not sent"),
+        # MPC's Foods side: striped, like its bags (UI-8).
+        pytest.param({"band": "striped"}, "striped", id="sent"),
+    ],
+)
+def test_create_keeps_the_band_sent(staff_client_a: APIClient, sent: dict[str, str], kept: str) -> None:
+    response = staff_client_a.post(SIDES, {**new_side(), **sent})
+
+    assert response.status_code == 201
+    assert response.json()["band"] == kept
+
+
 def test_create_needs_the_client_uuid(staff_client_a: APIClient) -> None:
     # Without an id of its own, a phone's retry would look like a new side, and a lost answer would leave
     # the shop with two.

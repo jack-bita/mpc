@@ -625,6 +625,7 @@
       "value_invalid": "This value doesn't fit this rule."
     },
     "side": {
+      "band_unknown": "This side colour isn't known.",
       "code_invalid": "A side's letter is one capital letter, like D.",
       "code_taken": "Another side of this shop already has this letter.",
       "name_blank": "Give the side a name.",

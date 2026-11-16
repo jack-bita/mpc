@@ -52,16 +52,16 @@ class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMi
 
     def create_row(self, data: dict[str, Any]) -> Side:
         # Adding a side also makes its stock location and its cash drawer (add_side). The shop is always the
-        # visit's own. A sale flow is passed on only when the app sent one: otherwise add_side's own default
-        # applies, so the default is written in one place.
-        sale_flow = {"sale_flow": data["sale_flow"]} if "sale_flow" in data else {}
+        # visit's own. A sale flow and a band are passed on only when the app sent them: otherwise add_side's own
+        # defaults apply, so each default is written in one place.
+        chosen = {name: data[name] for name in ("sale_flow", "band") if name in data}
         return add_side(
             shop=Shop.objects.get(pk=self.actor.shop_id),
             side_id=data["id"],
             code=data["code"],
             name=data["name"],
             by=self.actor,
-            **sale_flow,
+            **chosen,
         )
 
     def edit_row(self, row: Side, data: dict[str, Any]) -> Side:

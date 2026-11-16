@@ -20,7 +20,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 
 from apps.core.tenancy import shop_context
-from apps.shops.models import PaymentAccount, PaymentAccountSide, SaleFlow, Shop, Side, StockLocation
+from apps.shops.models import PaymentAccount, PaymentAccountSide, SaleFlow, Shop, Side, SideBand, StockLocation
 
 pytestmark = pytest.mark.django_db
 
@@ -60,6 +60,30 @@ def test_side_starts_switched_off(shop_a: Shop) -> None:
 
     assert side.is_live is False
     assert side.sale_flow == SaleFlow.ONE_SCREEN
+
+
+def test_side_band_defaults_to_blue(shop_a: Shop) -> None:
+    # Every side says which band it shows under the top bar (SHOP-4): one made without a choice shows blue, so a side
+    # never draws nothing, and the owner changes it on the settings page. MPC's Foods side is made striped, like its
+    # bags (the demo's seed, apps/demo/services.py).
+    with shop_context(shop_a):
+        side = Side.objects.create(shop=shop_a, **DAWA)
+        side.refresh_from_db()
+
+    assert side.band == SideBand.BLUE
+
+
+def test_side_band_unknown_refused(shop_a: Shop) -> None:
+    # The app draws two looks only (SideBand, frontend/src/components/design/side-band.tsx): a third word would reach
+    # every laptop as a band no screen can draw. full_clean refuses it on the field, as a form or a service checks a
+    # side; code that skips full_clean meets the database's own rule, the last guard (03 §5.6).
+    with shop_context(shop_a):
+        side = Side(shop=shop_a, band="green", **DAWA)
+        with pytest.raises(ValidationError) as refused:
+            side.full_clean()
+        assert [error.code for error in refused.value.error_dict["band"]] == ["invalid_choice"]
+        with pytest.raises(IntegrityError, match="shops_side_band_known"):
+            side.save()
 
 
 def test_side_code_stored_as_a_capital(shop_a: Shop) -> None:

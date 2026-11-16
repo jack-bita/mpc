@@ -125,7 +125,8 @@ const CODES_THE_API_SENDS = [
   "setting.side_required",
   "setting.value_blank",
   "setting.value_invalid",
-  // Sides (CORE-6).
+  // Sides (CORE-6), and a side's band (SHOP-4).
+  "side.band_unknown",
   "side.code_invalid",
   "side.code_taken",
   "side.name_blank",
