@@ -31,7 +31,7 @@ from apps.control.models import AuditAction, AuditEvent, EditEvent
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.shops.models import Closure, ClosureStatus, Shop
 from apps.shops.selectors import closed_days, shop_today
-from apps.shops.services import cancel_closure, change_last_day
+from apps.shops.services import add_closure, cancel_closure, change_last_day
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
@@ -245,6 +245,32 @@ def test_same_last_day_changes_nothing(shop_a: Shop) -> None:
         change_last_day(row, last_day=day(shop_a, 4), reason="Hakuna kipya", by=None)
     assert audit_lines(shop_a, row) == []
     assert history(shop_a, row) == []
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_move_and_an_add_at_once_take_turns(shop_a: Shop) -> None:
+    # One manager moves a closure's last day from day 2 to day 4 while another adds a closure of days 4–5. Each alone is
+    # fine; together they share day 4. The move holds the shop's row until it commits, so the add waits, then sees the
+    # moved last day and is refused with its code. Without the move's lock on the shop, the add would check the old last
+    # day, pass, and meet the database's own rule at the insert: an error no screen can explain. transaction=True, as in
+    # test_two_cancels_at_once_take_turns.
+    row = closure(shop_a, 1, 2)
+
+    def second_manager_adds() -> object:
+        with shop_context(shop_a.pk):
+            return add_closure(shop_a, first_day=day(shop_a, 4), last_day=day(shop_a, 5), name="Mapumziko", by=None)
+
+    with shop_context(shop_a), transaction.atomic():
+        change_last_day(row, last_day=day(shop_a, 4), reason="Msiba umeongezeka", by=None)
+        second, ended = in_another_transaction(second_manager_adds)
+        wait_until_someone_waits_for_me()
+    second.join(timeout=5)
+    assert not second.is_alive(), "The add still waits after the move committed."
+    (refused,) = ended
+    assert isinstance(refused, ValidationError)
+    assert refusal_codes(refused) == {"__all__": ["closure.overlaps"]}
+    with shop_context(shop_a):
+        assert list(Closure.objects.values_list("name", "last_day")) == [("Msiba wa bibi", day(shop_a, 4))]
 
 
 # The demo, and the shop.
