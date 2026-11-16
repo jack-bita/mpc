@@ -29,7 +29,8 @@ safe only on a database that holds nothing but demo data, so the seed refuses, b
 Once a day, not on every start (DATA-1's plan, 8 Nov 2026): the free demo sleeps after 15 minutes with no visitor,
 and every wake-up runs its start again. A visitor back from a break should find the PIN screen with their work still
 there (the idle lock, UI-4), so a start keeps a demo shop made today, in the shop's own time, and makes it again only
-when it was made on an earlier day. `fresh=True` makes it again whatever its day.
+when it was made on an earlier day, or lacks a rule this seed sets, as a demo an older seed made that morning does on
+a deploy's day (ATT-2). `fresh=True` makes it again whatever its day.
 
 Made through the services, as a real shop is set up (set_up_shop, add_staff, assign_role, set_pin), never by writing
 rows: the demo can't hold anything a real shop couldn't, and a service that changes its rules changes the demo too.
@@ -73,7 +74,7 @@ from apps.people.services import (
     set_up_shop,
     start_pairing,
 )
-from apps.shops.models import Shop, ShopKind, Side, SideBand
+from apps.shops.models import Setting, Shop, ShopKind, Side, SideBand
 from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide, set_setting, switch_side
 
@@ -159,7 +160,7 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
     # the real server never has the sign, so the look already rules it out; closing it would take a table lock written
     # in SQL by hand, for a case that can't occur.
     _check_may_seed()
-    if not fresh and _made_today():
+    if not fresh and (shop := _made_today()) is not None and _holds_its_rules(shop):
         return Seeded.KEPT
     try:
         _wipe_and_make()
@@ -213,14 +214,26 @@ def _check_may_seed() -> None:
         )
 
 
-def _made_today() -> bool:
-    # True when the demo shop exists and was made today, in the shop's own time zone: the night in Arusha, not in UTC,
-    # decides when a new day starts (02 §1).
+def _made_today() -> Shop | None:
+    # The demo shop, when it exists and was made today, in the shop's own time zone: the night in Arusha, not in UTC,
+    # decides when a new day starts (02 §1). None otherwise.
     shop = Shop.objects.filter(kind=ShopKind.DEMO, code=SHOP_CODE).first()
     if shop is None:
-        return False
+        return None
     made_on = timezone.localtime(shop.created_at, ZoneInfo(shop.timezone)).date()
-    return made_on == shop_today(shop)
+    return shop if made_on == shop_today(shop) else None
+
+
+def _holds_its_rules(shop: Shop) -> bool:
+    # Whether today's demo holds every rule this seed sets (DEMO_RULES), as the system set them. A deploy starts the
+    # new code on a demo the old code made that morning: without this, a seed that sets a new rule would keep that
+    # demo all day, as ATT-2's first deploy would have, with attendance off and no fine until the next morning. A
+    # visitor's own rows don't count, but never hide the seed's either: rows are only ever added (ADR-0013).
+    with shop_context(shop):
+        set_by_the_system = set(
+            Setting.objects.filter(shop=shop, created_by__isnull=True).values_list("key", flat=True)
+        )
+    return {rule.key for rule, _value in DEMO_RULES} <= set_by_the_system
 
 
 def _make_the_shop() -> Shop:

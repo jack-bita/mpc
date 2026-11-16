@@ -17,7 +17,7 @@ with new ids, and the test's rollback takes those back, so the next test must no
 """
 
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from io import StringIO
 from typing import Any
@@ -35,7 +35,7 @@ from pytest_django import Settings
 
 from apps.core.models import ChangeOp, SequenceName
 from apps.core.sequences import next_numbers
-from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SECOND_FINE
+from apps.core.settings_registry import ATTENDANCE_ON, CLOSING, LATE_FINE, SECOND_FINE
 from apps.core.tenancy import shop_context
 from apps.demo import services
 from apps.demo.services import SHOP_CODE, Seeded, seed_demo
@@ -257,6 +257,22 @@ def test_seed_demo_keeps_todays_shop() -> None:
 
     assert seed_demo() == Seeded.KEPT
     assert the_demo_shop() == made
+
+
+def test_seed_demo_makes_todays_shop_again_without_its_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A deploy starts the new code on the demo the old code made that morning. A seed that sets one more rule than the
+    # one that made it, as ATT-2's did, makes the shop again at once, so the deploy shows the new rule the same day.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    monkeypatch.setattr(services, "DEMO_RULES", (*services.DEMO_RULES, (CLOSING, "19:00")))
+
+    assert seed_demo() == Seeded.MADE
+    shop = the_demo_shop()
+    assert shop != made
+    with shop_context(shop):
+        assert get_setting(CLOSING, shop, on=shop_today(shop)) == time(19, 0)
+    # Then kept, as it holds them all now.
+    assert seed_demo() == Seeded.KEPT
 
 
 def test_seed_demo_makes_yesterdays_shop_again() -> None:
