@@ -1,5 +1,6 @@
 // side-switch.tsx — Pande, at the bottom of Mipangilio ya duka: each side the person sees, switched on or off,
-// and for someone holding settings.manage on it, the switch (SHOP-5, ADR-0033).
+// and for someone holding settings.manage on it, the switch (SHOP-5, ADR-0033); under it, the side's band
+// (side-band-choice.tsx, SHOP-4).
 //
 // A side switched off isn't used at the shop's laptops: a new side starts off, and reaches the counters only once
 // the owner agrees to start using it (SHOP-2, ADR-0033). So a wrong tap matters: the switch asks first, both ways
@@ -34,10 +35,10 @@ import { sidesWhere, type WhoIsHere } from "@/features/people/who-is-here";
 import { cn } from "@/lib/utils";
 import { useOnline } from "@/offline/network";
 
-type Side = components["schemas"]["Side"];
+import { SideBandChoice } from "./side-band-choice";
+import { keepTheSide, SIDES } from "./sides";
 
-/** The sides' place in the store of server answers. */
-export const SIDES = ["shops", "sides"] as const;
+type Side = components["schemas"]["Side"];
 
 /** The key that switches a side: changing the shop itself is one of the owner's own four (spec §6). */
 const SWITCHES_SIDES = "settings.manage";
@@ -81,7 +82,7 @@ export function SideSwitches({ me }: { me: WhoIsHere }) {
   );
 }
 
-/** One side: its name, whether it is on, and for whoever may, the switch with its question. */
+/** One side: its name, whether it is on, and for whoever may, the switch with its question; then its band. */
 export function SideSwitch({
   side,
   mayChange,
@@ -127,16 +128,7 @@ export function SideSwitch({
       ),
     onSuccess: (saved) => {
       // The list holds the answer at once, with its new version, so a second switch sends that one.
-      store.setQueryData<components["schemas"]["PaginatedSideList"]>(
-        SIDES,
-        (page) =>
-          page && {
-            ...page,
-            results: page.results.map((each) =>
-              each.id === saved.id ? saved : each,
-            ),
-          },
-      );
+      keepTheSide(store, saved);
       setSwitched(saved);
     },
     onError: (error) => {
@@ -232,6 +224,8 @@ export function SideSwitch({
             : t("switchedOff", { side: switched.name })
           : null}
       </p>
+      {/* Rangi: the band under the side's top bar, and for whoever may, Badilisha (SHOP-4). */}
+      <SideBandChoice side={side} mayChange={mayChange} />
     </div>
   );
 }

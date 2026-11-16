@@ -254,7 +254,17 @@
       "yesOn": "Ndiyo, washa",
       "no": "Hapana",
       "switchedOff": "Upande wa {side} umezimwa.",
-      "switchedOn": "Upande wa {side} umewashwa."
+      "switchedOn": "Upande wa {side} umewashwa.",
+      "band": "Rangi",
+      "bandOf": "Rangi ya {side}",
+      "bandHint": "Ukanda chini ya upau wa kijani, ili kila mtu ajue upande kwa kuutazama tu.",
+      "looks": {
+        "blue": "Bluu",
+        "striped": "Mistari"
+      },
+      "changeBand": "Badilisha",
+      "changeBandOf": "Badilisha rangi: {side}",
+      "bandSaved": "Rangi ya {side} imehifadhiwa."
     },
     "rules": {
       "attendance": {

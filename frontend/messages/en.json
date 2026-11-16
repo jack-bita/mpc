@@ -254,7 +254,17 @@
       "yesOn": "Yes, switch on",
       "no": "No",
       "switchedOff": "{side} is switched off.",
-      "switchedOn": "{side} is switched on."
+      "switchedOn": "{side} is switched on.",
+      "band": "Colour",
+      "bandOf": "{side}'s colour",
+      "bandHint": "The strip under the green bar, so everyone knows the side at a glance.",
+      "looks": {
+        "blue": "Blue",
+        "striped": "Stripes"
+      },
+      "changeBand": "Change",
+      "changeBandOf": "Change colour: {side}",
+      "bandSaved": "{side}'s colour is saved."
     },
     "rules": {
       "attendance": {

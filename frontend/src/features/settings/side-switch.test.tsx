@@ -1,7 +1,8 @@
 // side-switch.test.tsx — Pande (SHOP-5): each side, on or off; the switch only for someone holding
 // settings.manage on it; a question first, both ways, which Hapana answers with nothing sent (the card's fourth
 // Done when); the switch sent alone with the version read; and the demo's refusal, and someone else's change,
-// each said beside the switch.
+// each said beside the switch. And Rangi (SHOP-4): each side's band, and Badilisha, which opens both bands, and Hifadhi
+// sends the one picked, alone, with the version read as the form opened.
 import { focusManager, onlineManager } from "@tanstack/react-query";
 import {
   act,
@@ -114,6 +115,8 @@ describe("Pande", () => {
 
     await boxOf("Dawa");
     expect(screen.getByText("Imewashwa")).toBeTruthy();
+    // Each side's band too, in words beside its colour (SHOP-4), with no Badilisha.
+    expect(screen.getByText("Bluu")).toBeTruthy();
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -134,7 +137,172 @@ describe("Pande", () => {
       screen
         .getAllByRole("button")
         .map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["Zima: Dawa"]);
+    ).toEqual(["Zima: Dawa", "Badilisha rangi: Dawa"]);
+  });
+});
+
+describe("Rangi", () => {
+  /** One side's band, as its box shows it: the word beside the colour. */
+  function bandOf(box: HTMLElement): string | null {
+    return box.querySelector("[data-look]")?.closest("p")?.textContent ?? null;
+  }
+
+  it("shows each side's band, the colour beside its word (SHOP-4)", async () => {
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    render(<SideSwitches me={OWNER} />);
+
+    const dawa = await boxOf("Dawa");
+    const vyakula = await boxOf("Vyakula");
+    expect(bandOf(dawa)).toBe("RangiBluu");
+    expect(dawa.querySelector("[data-look]")?.getAttribute("data-look")).toBe(
+      "blue",
+    );
+    expect(bandOf(vyakula)).toBe("RangiMistari");
+  });
+
+  it("opens both bands with the side's own picked, and Ghairi sends nothing", async () => {
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    render(<SideSwitches me={OWNER} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Badilisha rangi: Dawa" }),
+    );
+
+    const dawa = await boxOf("Dawa");
+    const choice = within(dawa).getByRole("radiogroup", {
+      name: "Rangi ya Dawa",
+    });
+    // Each row shows the band itself beside its word, so the owner sees what he picks.
+    expect(
+      [...choice.querySelectorAll("[data-look]")].map((band) =>
+        band.getAttribute("data-look"),
+      ),
+    ).toEqual(["blue", "striped"]);
+    const blue = within(choice).getByRole("radio", { name: "Bluu" });
+    expect(blue.getAttribute("aria-checked")).toBe("true");
+    // The keyboard starts on the side's own band, where the Badilisha button that had it was.
+    expect(document.activeElement).toBe(blue);
+
+    fireEvent.click(within(dawa).getByRole("button", { name: "Ghairi" }));
+
+    expect(within(dawa).queryByRole("radiogroup")).toBeNull();
+    expect(await switches()).toEqual([]);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Badilisha rangi: Dawa" }),
+      ),
+    );
+  });
+
+  it("saves the band picked, sending it alone with the version read as the form opened", async () => {
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    answer("PATCH", `${SIDES}${DAWA.id}/`, {
+      status: 200,
+      body: side({ band: "striped", version: 4 }),
+    });
+    render(<SideSwitches me={OWNER} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Badilisha rangi: Dawa" }),
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Mistari" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
+
+    const dawa = await boxOf("Dawa");
+    expect(
+      await within(dawa).findByText("Rangi ya Dawa imehifadhiwa."),
+    ).toBeTruthy();
+    expect(bandOf(dawa)).toBe("RangiMistari");
+    expect(within(dawa).queryByRole("radiogroup")).toBeNull();
+    expect(await switches()).toEqual([
+      { path: `${SIDES}${DAWA.id}/`, body: { band: "striped", version: 3 } },
+    ]);
+  });
+
+  it("sends nothing when the band picked is the one the side has", async () => {
+    // Nothing changed: Hifadhi closes the form, as Ghairi does, with no new version and no change for the laptops.
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    render(<SideSwitches me={OWNER} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Badilisha rangi: Dawa" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
+
+    expect(screen.queryByRole("radiogroup")).toBeNull();
+    expect(await switches()).toEqual([]);
+  });
+
+  it("switches Badilisha and Hifadhi off while there is no network", async () => {
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    render(<SideSwitches me={OWNER} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Badilisha rangi: Dawa" }),
+    );
+
+    online.mockReturnValue(false);
+    act(() => window.dispatchEvent(new Event("offline")));
+
+    expect(screen.getByRole("button", { name: "Hifadhi" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Ghairi" }));
+    expect(
+      screen.getByRole("button", { name: "Badilisha rangi: Dawa" }),
+    ).toHaveProperty("disabled", true);
+  });
+
+  it("says the demo's refusal beside the band, and the band stays as it was", async () => {
+    // On the demo, a visitor's colour would greet every visitor after them (Jack, SHOP-4).
+    sidesAnswer(DAWA_ON, VYAKULA_OFF);
+    answer("PATCH", `${SIDES}${DAWA.id}/`, refusal(400, "demo.sides_fixed"));
+    render(<SideSwitches me={OWNER} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Badilisha rangi: Dawa" }),
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Mistari" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
+
+    const dawa = await boxOf("Dawa");
+    expect((await within(dawa).findByRole("alert")).textContent).toContain(
+      "Kwenye demo, pande hazibadilishwi",
+    );
+    expect(bandOf(dawa)).toBe("RangiBluu");
+  });
+
+  it("says someone else changed the side meanwhile, and reads it again", async () => {
+    // Another manager made Dawa striped from her phone while this page was open: the form sends the version read as
+    // it opened, which the server refuses, and the page reads the side again.
+    let reads = 0;
+    answer("GET", SIDES, () => {
+      reads += 1;
+      return Response.json({
+        next: null,
+        previous: null,
+        results:
+          reads === 1
+            ? [DAWA_ON, VYAKULA_OFF]
+            : [side({ band: "striped", version: 4 }), VYAKULA_OFF],
+      });
+    });
+    answer("PATCH", `${SIDES}${DAWA.id}/`, refusal(409, "version_conflict"));
+    render(<SideSwitches me={OWNER} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Badilisha rangi: Dawa" }),
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Mistari" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
+
+    const dawa = await boxOf("Dawa");
+    expect((await within(dawa).findByRole("alert")).textContent).toContain(
+      "Mtu mwingine amebadilisha hiki wakati huo huo.",
+    );
+    await waitFor(() => expect(bandOf(dawa)).toBe("RangiMistari"));
+    expect(reads).toBe(2);
   });
 });
 
