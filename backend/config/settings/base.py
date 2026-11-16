@@ -291,6 +291,8 @@ SPECTACULAR_SETTINGS = {
         "FlagKindEnum": "apps.control.models.FlagKind",
         "PushAnswerStatusEnum": "apps.sync.api.serializers.PUSH_ANSWER_STATUSES",
         "PushedStatusEnum": "apps.sync.models.PushedStatus",
+        # A side's band (SHOP-4): one name for the office's side, the laptop's copy and `me`, which all carry it.
+        "SideBandEnum": "apps.shops.models.SideBand",
     },
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.

@@ -172,6 +172,15 @@ class SaleFlow(models.TextChoices):
     WRITER_CASHIER_LOADER = "writer_cashier_loader", "Writer, cashier, loader"
 
 
+class SideBand(models.TextChoices):
+    # 02 §4: the band a side shows under the top bar, so a worker sees at a glance which side a screen is for (SHOP-4).
+    # The two looks the app draws (SideBand, frontend/src/components/design/side-band.tsx): blue, like the back of
+    # MPC's godown, and striped white and faded red, like the Foods bags. A field of the side, not a dated rule
+    # (Setting): a colour has no "from 1 December" and changes nobody's pay.
+    BLUE = "blue", "Blue"
+    STRIPED = "striped", "Striped"
+
+
 class Side(Editable):
     # A section of one shop (ADR-0001, 02 §4): its own stock, drawer, staff roles and debts, sharing the
     # shop's products, prices and customers. Editable (CORE-6), built on ShopScoped (CORE-2), gives `id`,
@@ -187,6 +196,10 @@ class Side(Editable):
     # Off until the owner agrees to start using the side (ADR-0033), so a new side never reaches the
     # counters by surprise. Switched by switch_side (apps/shops/services.py, SHOP-3), from the settings page (SHOP-5).
     is_live = models.BooleanField(default=False)
+    # The band under the top bar (SHOP-4). Blue unless told otherwise, so every side shows one; set_side_band
+    # (apps/shops/services.py) changes it. It travels with the side, to every laptop and in `me`, so a bar can draw it
+    # offline too.
+    band = models.CharField(max_length=16, choices=SideBand, default=SideBand.BLUE)
 
     class Meta(Editable.Meta):
         # Builds on Editable.Meta, so `objects`, with the guard, stays the default manager (CORE-2).
@@ -204,6 +217,12 @@ class Side(Editable):
                 condition=models.Q(sale_flow__in=SaleFlow.values),
                 name="shops_side_sale_flow_known",
                 violation_error_code="side.sale_flow_unknown",
+            ),
+            # Only a look the app can draw: a third word would reach every laptop as a band no screen knows.
+            models.CheckConstraint(
+                condition=models.Q(band__in=SideBand.values),
+                name="shops_side_band_known",
+                violation_error_code="side.band_unknown",
             ),
             models.CheckConstraint(
                 condition=~models.Q(name=""),

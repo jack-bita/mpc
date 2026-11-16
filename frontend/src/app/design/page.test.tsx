@@ -101,6 +101,23 @@ describe("the design page", () => {
     expect(groups[2]?.hasAttribute("data-disabled")).toBe(true);
   });
 
+  it("shows each choice sample's sides with their bands before their words (SHOP-4)", () => {
+    const { container } = render(<DesignPage />);
+    // Three samples (hint, error, switched off), each row a sample side with its band, as the settings page shows one.
+    const rows = [...container.querySelectorAll("label:has([data-picture])")];
+    expect(
+      rows.map((row) => [
+        row.querySelector("[data-look]")?.getAttribute("data-look"),
+        row.textContent,
+      ]),
+    ).toEqual(
+      Array.from({ length: 3 }, () => [
+        ["blue", t.topBar.sampleSides.blue],
+        ["striped", t.topBar.sampleSides.striped],
+      ]).flat(),
+    );
+  });
+
   it("shows both messages, a card and the top bar with both side bands", () => {
     const { container } = render(<DesignPage />);
     // Two status boxes: the info sample, and the live banner, empty while online.
@@ -111,12 +128,12 @@ describe("the design page", () => {
       t.alerts.dangerTitle,
     );
     expect(screen.getByText(t.cards.cardTitle)).toBeDefined();
-    const looks = [...container.querySelectorAll("[data-look]")].map((band) =>
-      band.getAttribute("data-look"),
+    const looks = [...container.querySelectorAll("header [data-look]")].map(
+      (band) => band.getAttribute("data-look"),
     );
     expect(looks).toEqual(["blue", "striped"]);
     // Each band under a real top bar that names its sample side in words.
-    const bars = [...container.querySelectorAll("[data-look]")].map(
+    const bars = [...container.querySelectorAll("header [data-look]")].map(
       (band) => band.closest("header")?.textContent,
     );
     expect(bars).toEqual([

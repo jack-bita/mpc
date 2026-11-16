@@ -34,7 +34,7 @@ import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
 import { PasswordField } from "@/components/design/password-field";
 import { Input } from "@/components/design/input";
-import { SIDE_BAND_LOOKS } from "@/components/design/side-band";
+import { SIDE_BAND_LOOKS, SideBand } from "@/components/design/side-band";
 import { ON_GREEN, TopBar } from "@/components/design/top-bar";
 import { LanguageButton } from "@/components/language-button";
 import { OfflineBanner } from "@/components/offline-banner";
@@ -76,11 +76,13 @@ function ChoiceSample(props: {
   return (
     <Choice
       label={t("choices.label")}
-      // The sample sides the top bars name below.
-      options={[
-        { value: "blue", label: t("topBar.sampleSides.blue") },
-        { value: "striped", label: t("topBar.sampleSides.striped") },
-      ]}
+      // The sample sides the top bars name below, each with its band before its words, as the settings page
+      // shows a side's band (SHOP-4).
+      options={SIDE_BAND_LOOKS.map((look) => ({
+        value: look,
+        label: t(`topBar.sampleSides.${look}`),
+        picture: <SideBand look={look} className="h-3 w-16 rounded-sm" />,
+      }))}
       value={side}
       onValueChange={setSide}
       {...props}
@@ -302,8 +304,9 @@ export default function DesignPage() {
 
       <Section title={t("topBar.title")}>
         {/* The top bar as every counter and office screen shows it, with each look of the side band
-            under it. The shop and side names are samples: which side gets which look is still open
-            (04 §20, item 19). The language button is the real one: pressing it switches the app. */}
+            under it. The shop and side names are samples: each side says which look it shows, and the
+            owner picks it on the settings page (SHOP-4). The language button is the real one: pressing
+            it switches the app. */}
         {SIDE_BAND_LOOKS.map((look) => (
           <div key={look} className="grid gap-2">
             <p className="text-sm text-muted-foreground">

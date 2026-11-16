@@ -100,8 +100,8 @@ export function OfficeFrame({ children }: { children: ReactNode }) {
   // Their own language and font, as on the PIN screen (at-the-device.tsx): a password's login lands here
   // (UI-9).
   useFollowThePerson(here?.user);
-  // At a registered laptop, the side the person works on, as the PIN login names it (UI-4); a phone knows
-  // no side, and the bar names only the shop.
+  // At a registered laptop, the side the person works on, as the PIN login names it (UI-4), with its band
+  // from `me` (SHOP-4); a phone knows no side, and the bar names only the shop.
   const side = here && device ? sideAt(here, device.homeSide.id) : undefined;
 
   function leave() {
@@ -137,7 +137,7 @@ export function OfficeFrame({ children }: { children: ReactNode }) {
       notice={<OfflineBanner />}
       shop={here?.shop.name}
       person={here?.staff.display_name}
-      side={side ? { name: side.name } : undefined}
+      side={side ? { name: side.name, band: side.band } : undefined}
       actions={
         here ? (
           // The bar kind: the only kind that can sit on the green; normal height, as the language button's.

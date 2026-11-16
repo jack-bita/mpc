@@ -19,7 +19,7 @@ from rest_framework import serializers
 from apps.core.api.ids import uuid7_only
 from apps.people.models import OWN_SETTINGS, Device, DeviceOutage, PairingRequest, StaffMember, User
 from apps.shops.api.fields import SideField
-from apps.shops.models import Shop, Side
+from apps.shops.models import Shop, Side, SideBand
 
 
 class DeviceSerializer(serializers.ModelSerializer[Device]):
@@ -173,10 +173,11 @@ class MeDeviceSerializer(serializers.ModelSerializer[Device]):
 
 
 class MeSideSerializer(serializers.ModelSerializer[Side]):
-    # The side it mostly serves, which the counter screens open on.
+    # The side it mostly serves, which the counter screens open on, with the band its top bar draws before anyone logs
+    # in (SHOP-4). The device keeps it in its saved copy, so the bar draws it offline too.
     class Meta:
         model = Side
-        fields = ["id", "code", "name"]
+        fields = ["id", "code", "name", "band"]
         read_only_fields = fields
 
 
@@ -244,10 +245,11 @@ class MeStaffSerializer(serializers.ModelSerializer[StaffMember]):
 
 class MeSideKeysSerializer(serializers.Serializer[Any]):
     # One side, with what the person may do there. The side's own fields beside its keys, so a screen needs no second
-    # call to name its tabs.
+    # call to name its tabs, nor to draw the band of the side the office's top bar names (SHOP-4).
     id = serializers.UUIDField(source="side.pk")
     code = serializers.CharField(source="side.code")
     name = serializers.CharField(source="side.name")
+    band = serializers.ChoiceField(source="side.band", choices=SideBand.choices)
     permissions = serializers.ListField(child=serializers.CharField())
 
 

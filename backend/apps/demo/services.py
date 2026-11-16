@@ -71,14 +71,15 @@ from apps.people.services import (
     set_up_shop,
     start_pairing,
 )
-from apps.shops.models import Shop, ShopKind, Side
+from apps.shops.models import Shop, ShopKind, Side, SideBand
 from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide, switch_side
 
 SHOP_NAME = "Duka la Mfano"
 SHOP_CODE = "DEMO"
-# The two sides MPC has, in the words the app already uses for them (Jack, 8 Nov 2026).
-SIDES = (NewSide("D", "Dawa"), NewSide("F", "Vyakula"))
+# The two sides MPC has, in the words the app already uses for them (Jack, 8 Nov 2026). Vyakula's band is striped, like
+# the Foods bags, and Dawa keeps the blue one (SHOP-4, UI-8).
+SIDES = (NewSide("D", "Dawa"), NewSide("F", "Vyakula", band=SideBand.STRIPED))
 
 # The manager's login. example.com is a domain kept for examples, so no real mailbox is ever sent a reset. The
 # password is public: it opens only the demo's fake shop, which is made again every day.

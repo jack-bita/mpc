@@ -421,7 +421,7 @@ export function AtTheDevice({
       area="login"
       notice={<OfflineBanner />}
       person={person?.name}
-      side={side ? { name: side.name } : undefined}
+      side={side ? { name: side.name, band: side.band } : undefined}
       actions={buttons}
     >
       {/* role="status": a screen reader says its words as they change. Always on the page, empty and hidden

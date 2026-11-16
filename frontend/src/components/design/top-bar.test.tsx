@@ -43,14 +43,14 @@ describe("the top bar", () => {
   });
 
   it("shows no band for a side whose look isn't known", () => {
-    // No side says which look it gets yet (04 §20, item 19): words only (Jack, 7 Nov 2026).
+    // A laptop's copy of a side from before the band (SHOP-4): words only, so a look is never guessed.
     const { container } = render(<TopBar shop="MPC" side={{ name: "Dawa" }} />);
     expect(screen.getByRole("banner").textContent).toBe("MPC · Dawa");
     expect(container.querySelector("[data-look]")).toBeNull();
   });
 
   it("shows no band while no side is known", () => {
-    // A band with no side would have to guess a look (04 §20, item 19).
+    // The band is a side's own (SHOP-4): with no side, there is no look to show.
     const { container } = render(<TopBar shop="MPC" />);
     expect(container.querySelector("[data-look]")).toBeNull();
   });

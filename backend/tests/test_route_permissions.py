@@ -232,6 +232,24 @@ def test_side_switch_needs_settings_manage(
 
 
 @pytest.mark.django_db
+def test_side_band_needs_settings_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # A side's band is how every laptop of the shop tells its sides apart (SHOP-4): `settings.manage`, the owner's, as
+    # renaming or switching one is. A Manager on every side is refused, and Vyakula stays blue; the owner may.
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    band = {"band": "striped", "version": 1}
+    refused = client_for(staff_a2).patch(f"{SIDES}{sides['F'].pk}/", band, format="json")
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert Side.objects.get(pk=sides["F"].pk).band == "blue"
+
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    assert client_for(staff_a).patch(f"{SIDES}{sides['F'].pk}/", band, format="json").status_code == 200
+
+
+@pytest.mark.django_db
 def test_setting_needs_settings_manage(
     shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
 ) -> None:
@@ -376,11 +394,15 @@ def test_suspended_member_gets_nothing_from_routes(
     assert client.get(SETTINGS).json()["rules"] == []
     switch = {"is_live": True, "version": 1}
     assert client.patch(f"{SIDES}{sides['F'].pk}/", switch, format="json").status_code == 404
+    # Nor a side's band (SHOP-4).
+    band = {"band": "striped", "version": 1}
+    assert client.patch(f"{SIDES}{sides['F'].pk}/", band, format="json").status_code == 404
     today = shop_today(shop_a).isoformat()
     fine = {"id": str(uuid.uuid7()), "key": "attendance.late_fine", "value": "9000", "effective_from": today}
     assert client.post(SETTINGS, fine, format="json").status_code == 403
     with shop_context(shop_a):
         assert Side.objects.get(pk=sides["F"].pk).is_live is False
+        assert Side.objects.get(pk=sides["F"].pk).band == "blue"
         assert not Setting.objects.filter(shop=shop_a).exists()
 
 

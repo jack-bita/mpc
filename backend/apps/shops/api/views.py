@@ -2,8 +2,8 @@
 
 Thin: each one reads through the guard of the visit's shop (ShopViewSet, apps/core/api/base.py) and
 writes through a service (ADR-0015). For now a shop's sides: the list, one side, adding one, and
-renaming one or switching it on or off (SHOP-3); and the shop's rules: every one with its value today and its rows,
-and a new value from a day on (SHOP-3).
+renaming one, switching it on or off (SHOP-3) or giving it its band (SHOP-4); and the shop's rules: every one with its
+value today and its rows, and a new value from a day on (SHOP-3).
 """
 
 from typing import Any
@@ -26,20 +26,20 @@ from apps.shops.api.serializers import (
 )
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import shop_rules, shop_today
-from apps.shops.services import add_side, rename_side, set_setting, switch_side
+from apps.shops.services import add_side, rename_side, set_setting, set_side_band, switch_side
 
 
 class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMixin[Side], EditMixin[Side]):
     # GET sides/ lists the visit's shop's sides, in pages; GET sides/{id}/ reads one; POST sides/ adds one;
-    # PATCH sides/{id}/ renames one, or switches it on or off.
+    # PATCH sides/{id}/ renames one, switches it on or off, or gives it its band.
     model = Side
     # A side is its own side, found by its own id: whoever may act on Dawa may see Dawa (side_of()), and a
     # list shows the sides a person may see (visible_sides()). A new side belongs to no side yet, so adding
     # one is checked as an action on the whole shop (side_of_new()).
     side_field = "pk"
-    # Anyone who works on a side may see it. Adding a side, renaming one or switching it on or off changes the shop
-    # itself: the shop's rules (`settings.manage`), one of the owner's own four (spec §6). Adding one asks on the whole
-    # shop, renaming or switching one on that side (PPL-5).
+    # Anyone who works on a side may see it. Adding a side, renaming one, switching it on or off or changing its band
+    # changes the shop itself: the shop's rules (`settings.manage`), one of the owner's own four (spec §6). Adding one
+    # asks on the whole shop; renaming, switching one or changing its band, on that side (PPL-5).
     action_permissions = {
         "list": SEES_THE_SIDE,
         "retrieve": SEES_THE_SIDE,
@@ -52,22 +52,24 @@ class SideViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMi
 
     def create_row(self, data: dict[str, Any]) -> Side:
         # Adding a side also makes its stock location and its cash drawer (add_side). The shop is always the
-        # visit's own. A sale flow is passed on only when the app sent one: otherwise add_side's own default
-        # applies, so the default is written in one place.
-        sale_flow = {"sale_flow": data["sale_flow"]} if "sale_flow" in data else {}
+        # visit's own. A sale flow and a band are passed on only when the app sent them: otherwise add_side's own
+        # defaults apply, so each default is written in one place.
+        chosen = {name: data[name] for name in ("sale_flow", "band") if name in data}
         return add_side(
             shop=Shop.objects.get(pk=self.actor.shop_id),
             side_id=data["id"],
             code=data["code"],
             name=data["name"],
             by=self.actor,
-            **sale_flow,
+            **chosen,
         )
 
     def edit_row(self, row: Side, data: dict[str, Any]) -> Side:
-        # A new name or the switch, never both: SideEditSerializer has checked that exactly one came.
+        # A new name, the switch or a band, never two: SideEditSerializer has checked that exactly one came.
         if "is_live" in data:
             return switch_side(row, version=data["version"], is_live=data["is_live"], by=self.actor)
+        if "band" in data:
+            return set_side_band(row, version=data["version"], band=data["band"], by=self.actor)
         return rename_side(row, version=data["version"], name=data["name"], by=self.actor)
 
 

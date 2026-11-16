@@ -18,6 +18,11 @@
 // device there too: the lock is for a laptop's screen, not against its owner's tools.
 import { useSyncExternalStore } from "react";
 
+import {
+  SIDE_BAND_LOOKS,
+  type SideBandLook,
+} from "@/components/design/side-band";
+
 /** This device, as the top bar and the screens need it. Our own shape, not the API's: a later change to
  * the API's answer changes device-check.tsx only, and a copy saved by an older app is checked on read. */
 export interface ThisDevice {
@@ -38,8 +43,10 @@ export interface ThisDevice {
     currency: string;
     language: Language;
   };
-  /** The side it mostly serves, which the counter screens open on. */
-  homeSide: { id: string; code: string; name: string };
+  /** The side it mostly serves, which the counter screens open on, with the band its top bar draws before
+   * anyone logs in (SHOP-4). None in a copy from before the band, or whose band the bar can't draw
+   * (withABandItCanDraw): the bar then names the side in words only. */
+  homeSide: { id: string; code: string; name: string; band?: SideBandLook };
 }
 
 /** The languages the app speaks (02 §21). */
@@ -104,7 +111,9 @@ function parsed(text: string | null): Standing {
     const value: unknown = JSON.parse(text);
     if (!isMap(value) || typeof value.blocked !== "boolean")
       return NOT_REGISTERED;
-    const device = isThisDevice(value.device) ? value.device : null;
+    const device = isThisDevice(value.device)
+      ? withABandItCanDraw(value.device)
+      : null;
     return { device, blocked: value.blocked };
   } catch {
     return NOT_REGISTERED;
@@ -131,7 +140,21 @@ function isThisDevice(value: unknown): value is ThisDevice {
     typeof homeSide.id === "string" &&
     typeof homeSide.code === "string" &&
     typeof homeSide.name === "string"
+    // The band decides nothing here: withABandItCanDraw (below) reads it.
   );
+}
+
+// The home side's band, kept only when it is a look the bar draws (SHOP-4). No band is a copy from before
+// the band was kept; a word the bar doesn't know, a later app's new look saved by this one (SHOP-4's
+// review). Either way the device is still this one, as its shop and side are known: reading it as no
+// device would show a registered laptop as a new one, maybe for hours offline, for want of a colour. So
+// the band goes, the device stays, and the bar shows the side in words only until a check it understands.
+function withABandItCanDraw(device: ThisDevice): ThisDevice {
+  const band: unknown = device.homeSide.band;
+  if (band === undefined || SIDE_BAND_LOOKS.some((look) => look === band))
+    return device;
+  const { id, code, name } = device.homeSide;
+  return { ...device, homeSide: { id, code, name } };
 }
 
 // A zone the browser knows: a name it doesn't would make every rule's day fail to work out (rules.ts), on

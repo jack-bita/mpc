@@ -254,7 +254,17 @@
       "yesOn": "Yes, switch on",
       "no": "No",
       "switchedOff": "{side} is switched off.",
-      "switchedOn": "{side} is switched on."
+      "switchedOn": "{side} is switched on.",
+      "band": "Colour",
+      "bandOf": "{side}'s colour",
+      "bandHint": "The strip under the green bar, so everyone knows the side at a glance.",
+      "looks": {
+        "blue": "Blue",
+        "striped": "Stripes"
+      },
+      "changeBand": "Change",
+      "changeBandOf": "Change colour: {side}",
+      "bandSaved": "{side}'s colour is saved."
     },
     "rules": {
       "attendance": {
@@ -625,6 +635,7 @@
       "value_invalid": "This value doesn't fit this rule."
     },
     "side": {
+      "band_unknown": "This side colour isn't known.",
       "code_invalid": "A side's letter is one capital letter, like D.",
       "code_taken": "Another side of this shop already has this letter.",
       "name_blank": "Give the side a name.",

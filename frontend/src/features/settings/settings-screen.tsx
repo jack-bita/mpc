@@ -12,7 +12,8 @@
 // history under it. Everyone else gets Historia, which opens the history alone: they read the rules, and
 // change none. The button only keeps a door out of sight: the server checks the key itself on every save.
 //
-// At the bottom, Pande: each side with its on/off switch (side-switch.tsx).
+// At the bottom, Pande: each side with its on/off switch (side-switch.tsx), and its band (side-band-choice.tsx,
+// SHOP-4).
 //
 // One line per side, under the rule, not a column per side as the card first said: on the owner's phone two
 // columns of values and buttons don't fit (Jack, 15 Nov 2026).

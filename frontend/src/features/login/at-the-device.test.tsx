@@ -18,9 +18,11 @@ import { saveDevice } from "@/features/devices/this-device";
 import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { setLanguage } from "@/i18n/language";
 import {
+  bandUnderTheBar,
   DAWA,
   DAWA_LAPTOP,
   DAWA_LAPTOP_ANSWER,
+  VYAKULA,
   whoIsHere,
 } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
@@ -648,9 +650,10 @@ describe("with no network (SYNC-10)", () => {
 
     await jumaLogsInHere();
 
-    // In the bar, with the side he works on, from his staff row and the laptop's sides.
+    // In the bar, with the side he works on and its band, from his staff row and the laptop's sides.
     expect(bar().getByText("Juma")).toBeDefined();
     expect(bar().getByText("MPC · Dawa")).toBeDefined();
+    expect(bandUnderTheBar()).toBe("blue");
     // Never sent: the laptop checked it.
     expect(pinLogins()).toEqual([]);
   });
@@ -1010,6 +1013,21 @@ describe("what the counter knows (SYNC-11)", () => {
   // note for it (at-the-counter.ts), and hears a counter screen say "this person is leaving".
   const leaveAsked = () =>
     renderHook(() => useLeaveAsked()).result.current?.staffId ?? null;
+
+  it("draws the band of the side she works on, from `me`, not the laptop's (SHOP-4's review)", async () => {
+    // Neema sells on Vyakula at the Dawa laptop: online, the bar names her side from `me`, with its stripes, in place
+    // of the laptop's blue.
+    theLaptop({
+      ...NEEMA,
+      permissions: whoIsHere([{ side: VYAKULA, permissions: ["sale.make"] }])
+        .permissions,
+    });
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    await screen.findByRole("heading", { name: "Karibu, Neema" });
+
+    expect(bar().getByText("MPC · Vyakula")).toBeDefined();
+    expect(bandUnderTheBar()).toBe("striped");
+  });
 
   it("names whoever is logged in, with the minutes her screen may sit untouched", async () => {
     theLaptop(NEEMA);

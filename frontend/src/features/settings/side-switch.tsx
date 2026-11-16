@@ -1,5 +1,6 @@
 // side-switch.tsx — Pande, at the bottom of Mipangilio ya duka: each side the person sees, switched on or off,
-// and for someone holding settings.manage on it, the switch (SHOP-5, ADR-0033).
+// and for someone holding settings.manage on it, the switch (SHOP-5, ADR-0033); under it, the side's band
+// (side-band-choice.tsx, SHOP-4).
 //
 // A side switched off isn't used at the shop's laptops: a new side starts off, and reaches the counters only once
 // the owner agrees to start using it (SHOP-2, ADR-0033). So a wrong tap matters: the switch asks first, both ways
@@ -11,8 +12,8 @@
 // next try sends the new version. The question keeps what it asked as it opened, the side's new state and the version
 // read then, and sends exactly that: the page reads the sides again by itself when the phone comes back to it, and a
 // question that followed that read could turn "Zima?" into "Washa?" under the owner's thumb, with the new version,
-// which the server would accept (SHOP-5's review). A name and the switch go one at a time (SideEditSerializer). On the demo every
-// visitor shares one shop, so its sides stay as the seed made them, and a switch there answers demo.sides_fixed
+// which the server would accept (SHOP-5's review). A name, the switch and a band go one at a time (SideEditSerializer,
+// SHOP-4). On the demo every visitor shares one shop, so its sides stay as the seed made them, and a switch there answers demo.sides_fixed
 // (SHOP-3's review): each refusal shows beside the switch it is about.
 //
 // GET /api/v1/shops/sides/ comes in pages of 50 (CursorPage): far more sides than a shop has, so the first page
@@ -34,10 +35,10 @@ import { sidesWhere, type WhoIsHere } from "@/features/people/who-is-here";
 import { cn } from "@/lib/utils";
 import { useOnline } from "@/offline/network";
 
-type Side = components["schemas"]["Side"];
+import { SideBandChoice } from "./side-band-choice";
+import { keepTheSide, SIDES } from "./sides";
 
-/** The sides' place in the store of server answers. */
-export const SIDES = ["shops", "sides"] as const;
+type Side = components["schemas"]["Side"];
 
 /** The key that switches a side: changing the shop itself is one of the owner's own four (spec §6). */
 const SWITCHES_SIDES = "settings.manage";
@@ -81,7 +82,7 @@ export function SideSwitches({ me }: { me: WhoIsHere }) {
   );
 }
 
-/** One side: its name, whether it is on, and for whoever may, the switch with its question. */
+/** One side: its name, whether it is on, and for whoever may, the switch with its question; then its band. */
 export function SideSwitch({
   side,
   mayChange,
@@ -103,6 +104,9 @@ export function SideSwitch({
   const question = useId();
   // What the last switch did, said once in the status line (below).
   const [switched, setSwitched] = useState<Side | null>(null);
+  // Whether the band's form is open below: the switch waits for it, one change at a time in a side's box
+  // (side-band-choice.tsx, SHOP-4's review).
+  const [bandOpen, setBandOpen] = useState(false);
 
   // Where the keyboard goes when the question closes: back to the switch, as the question's buttons are gone.
   // Counted, so each close moves it (devices-screen.tsx).
@@ -127,16 +131,7 @@ export function SideSwitch({
       ),
     onSuccess: (saved) => {
       // The list holds the answer at once, with its new version, so a second switch sends that one.
-      store.setQueryData<components["schemas"]["PaginatedSideList"]>(
-        SIDES,
-        (page) =>
-          page && {
-            ...page,
-            results: page.results.map((each) =>
-              each.id === saved.id ? saved : each,
-            ),
-          },
-      );
+      keepTheSide(store, saved);
       setSwitched(saved);
     },
     onError: (error) => {
@@ -166,7 +161,7 @@ export function SideSwitch({
             {side.is_live ? t("on") : t("off")}
           </span>
         </p>
-        {mayChange && asked === null ? (
+        {mayChange && asked === null && !bandOpen ? (
           <Button
             ref={opener}
             // Switching off is the one that stops a side at the counters: the warning colour says so.
@@ -232,6 +227,13 @@ export function SideSwitch({
             : t("switchedOff", { side: switched.name })
           : null}
       </p>
+      {/* Rangi: the band under the side's top bar, and for whoever may, Badilisha (SHOP-4). */}
+      <SideBandChoice
+        side={side}
+        mayChange={mayChange}
+        locked={asked !== null}
+        onOpenChange={setBandOpen}
+      />
     </div>
   );
 }

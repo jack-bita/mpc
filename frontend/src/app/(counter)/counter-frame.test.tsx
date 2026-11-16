@@ -18,7 +18,7 @@ import {
   useLeaveAsked,
 } from "@/features/login/at-the-counter";
 import { shopDatabase } from "@/offline/this-shop";
-import { DAWA, DAWA_LAPTOP } from "@/test/devices";
+import { bandUnderTheBar, DAWA, DAWA_LAPTOP, VYAKULA } from "@/test/devices";
 import { swahiliIn } from "@/test/language";
 import { staffRow, theLaptopKnows } from "@/test/laptop";
 import { render } from "@/test/render";
@@ -71,6 +71,38 @@ describe("the counter's frame", () => {
     expect(screen.getByRole("main").textContent).toBe("screen");
     // Hers is in Mipangilio yangu: the bar's language button is the laptop's own (UI-9).
     expect(bar().queryByRole("button", { name: "English" })).toBeNull();
+  });
+
+  it("draws the band of the side she works on, from the laptop's copy of the sides", async () => {
+    // Asha sells on Vyakula at the Dawa laptop: the bar says where her sales go, in words and by its band,
+    // read from the laptop's own copy, so it shows offline too (SHOP-4).
+    await theLaptopKnows({
+      ...ASHA,
+      permissions: {
+        every_side: [],
+        sides: [{ side: VYAKULA.id, permissions: ["sale.make"] }],
+      },
+    });
+    await db().side.put({ ...VYAKULA, sale_flow: "one_screen", is_live: true });
+
+    await ashaAtTheCounter();
+
+    expect(bar().getByText("MPC · Vyakula")).toBeDefined();
+    expect(bandUnderTheBar()).toBe("striped");
+  });
+
+  it("names the side in words only, from a copy of it saved before the band (SHOP-4's review)", async () => {
+    // A laptop that copied Dawa before the band was kept holds no band for it until Dawa changes again: the bar
+    // names the side, draws nothing, and the screen works on.
+    const { id, code, name, sale_flow, is_live } = DAWA_SIDE;
+    const oldCopy = { id, code, name, sale_flow, is_live };
+    await db().side.put(oldCopy as typeof DAWA_SIDE);
+
+    await ashaAtTheCounter();
+
+    expect(bar().getByText("MPC · Dawa")).toBeDefined();
+    expect(bandUnderTheBar()).toBeNull();
+    expect(screen.getByRole("main").textContent).toBe("screen");
   });
 
   it("sends nobody back to the name tiles, and shows them no screen", async () => {

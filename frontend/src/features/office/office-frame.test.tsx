@@ -13,7 +13,13 @@ import { describe, expect, it, vi } from "vitest";
 import { makeQueryClient } from "@/api/query-client";
 import { saveDevice } from "@/features/devices/this-device";
 import { WHO_IS_HERE } from "@/features/people/who-is-here";
-import { DAWA, DAWA_LAPTOP, VYAKULA, whoIsHere } from "@/test/devices";
+import {
+  bandUnderTheBar,
+  DAWA,
+  DAWA_LAPTOP,
+  VYAKULA,
+  whoIsHere,
+} from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import {
   leaveTheLastPersonsAnswers,
@@ -95,6 +101,8 @@ describe("the office's frame", () => {
     expect(
       await within(screen.getByRole("banner")).findByText("MPC · Vyakula"),
     ).toBeTruthy();
+    // And Vyakula's band, from `me`, not the laptop's blue (SHOP-4).
+    expect(bandUnderTheBar()).toBe("striped");
   });
 
   it("sends someone not logged in on a phone to the password login", async () => {
