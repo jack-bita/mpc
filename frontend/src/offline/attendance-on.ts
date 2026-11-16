@@ -14,14 +14,20 @@ import type { components } from "@/api/schema";
 
 import { useRule } from "./reference";
 
+type Schemas = components["schemas"];
+
 /** The switch as this app carries it, for a laptop filled before the release that added it: such a laptop
  * never got the rule's kind and default, only its rows (SYNC-13's note). The server's own copy, from the
- * bootstrap, wins wherever the laptop has one. */
-export const ATTENDANCE_SWITCH: components["schemas"]["SettingKeyRecord"] = {
+ * bootstrap, wins wherever the laptop has one. Its key is one the API's schema lists, so a key renamed on
+ * the server fails `pnpm typecheck` here; its kind, scope and default are checked against the server's
+ * registry by apps/sync/tests/test_carried_rules.py, which reads this block: one field a line. */
+export const ATTENDANCE_SWITCH = {
   key: "attendance.enabled",
   kind: "yes_no",
   scope: "shop",
   default: "false",
+} as const satisfies Schemas["SettingKeyRecord"] & {
+  key: Schemas["SettingKeyEnum"];
 };
 
 /** True while attendance is on today, false while it is off, undefined while the laptop is still reading.
