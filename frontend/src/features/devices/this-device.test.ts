@@ -59,11 +59,6 @@ describe("the device's saved copy", () => {
         ...DAWA_LAPTOP,
         shop: { ...DAWA_LAPTOP.shop, timezone: "Africa/Mabatini" },
       }),
-      // A band the bar can't draw (SHOP-4).
-      stored({
-        ...DAWA_LAPTOP,
-        homeSide: { ...DAWA_LAPTOP.homeSide, band: "green" },
-      }),
       stored([DAWA_LAPTOP]),
       JSON.stringify({ device: DAWA_LAPTOP, blocked: "yes" }),
     ]) {
@@ -84,6 +79,24 @@ describe("the device's saved copy", () => {
     );
 
     expect(savedDevice()).toBeNull();
+  });
+
+  it("keeps the device, with no band, when its band is one the bar can't draw (SHOP-4's review)", () => {
+    // A later app adds a third look; this laptop still runs today's, and its next check saves the new
+    // word. The bar can't draw it, but the device is still this one: forgetting it for a colour would
+    // show a registered laptop as a new one. The band goes; the device stays.
+    for (const band of ["green", 7]) {
+      window.localStorage.setItem(
+        DEVICE_STORAGE_KEY,
+        stored({ ...DAWA_LAPTOP, homeSide: { ...DAWA_LAPTOP.homeSide, band } }),
+      );
+
+      const { id, code, name } = DAWA_LAPTOP.homeSide;
+      expect(savedDevice()).toEqual({
+        ...DAWA_LAPTOP,
+        homeSide: { id, code, name },
+      });
+    }
   });
 
   it("still knows a copy saved before the side's band was kept", () => {
