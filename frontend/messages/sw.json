@@ -663,8 +663,8 @@
       "name_blank": "Andika jina, kwa mfano Krismasi.",
       "status_unknown": "Hali hii ya siku za kufunga duka haijulikani.",
       "reason_required": "Andika sababu.",
-      "started": "Siku hizi zimekwisha anza. Badilisha siku ya mwisho badala yake.",
-      "not_active": "Siku hizi za kufunga duka zilikwisha ondolewa."
+      "started": "Siku hizi zimeshaanza. Badilisha siku ya mwisho badala yake.",
+      "not_active": "Siku hizi za kufunga duka zimeshaondolewa."
     },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",
