@@ -653,7 +653,15 @@
       "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia.",
       "sides_fixed": "Kwenye demo, pande hazibadilishwi, ili kila mgeni aweze kujaribu.",
       "rules_from_tomorrow": "Kwenye demo, thamani mpya huanza kesho au baadaye, ili kila mgeni wa leo akute duka lilivyo.",
-      "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi."
+      "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi.",
+      "closures_from_tomorrow": "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo."
+    },
+    "closure": {
+      "date_past": "Siku za kufunga duka haziwezi kuanza kabla ya leo.",
+      "ends_before_it_starts": "Siku ya mwisho iko kabla ya siku ya kwanza.",
+      "overlaps": "Duka tayari limefungwa katika moja ya siku hizi.",
+      "name_blank": "Andika jina, kwa mfano Krismasi.",
+      "status_unknown": "Hali hii ya siku za kufunga duka haijulikani."
     },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",

@@ -653,7 +653,15 @@
       "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in.",
       "sides_fixed": "On the demo, the sides stay as they are, so every visitor can try them.",
       "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
-      "no_note": "On the demo, notes aren't kept. Leave this box empty."
+      "no_note": "On the demo, notes aren't kept. Leave this box empty.",
+      "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is."
+    },
+    "closure": {
+      "date_past": "A closure can't start before today.",
+      "ends_before_it_starts": "The last day is before the first day.",
+      "overlaps": "The shop is already closed on one of these days.",
+      "name_blank": "Write a name, such as Krismasi.",
+      "status_unknown": "This closure's state isn't known."
     },
     "password_too_short": "This password is too short.",
     "password_too_common": "This password is too common. Choose another.",

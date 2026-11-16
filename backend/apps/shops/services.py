@@ -1,13 +1,15 @@
 """apps/shops/services.py — every write to the shops tables, one function per action (ADR-0015).
 
-Six actions so far. create_shop makes a new shop with all it needs before it can work: its sides (ADR-0001).
+Seven actions so far. create_shop makes a new shop with all it needs before it can work: its sides (ADR-0001).
 add_side adds one side to a shop, with what a side always comes with: a default stock location (ADR-0002) and a cash
 drawer. create_shop uses it for each of its sides, so a side is made the same way whichever action makes it.
 rename_side gives a side a new name, unless someone else changed the side since it was read (apps/core/editing.py);
 switch_side turns a side on or off the same way (ADR-0033), and set_side_band gives it the band under its top bar
 (SHOP-4). On the demo only the system may add, rename, switch a side or change its band. set_setting gives a rule a new
 value from a day on, as a new row, never an edit (ADR-0013): on the demo a person's starts tomorrow or later, with no
-note; and a time of the attendance day keeps the day's order (ATT-2). Each action runs in one transaction and refuses
+note; and a time of the attendance day keeps the day's order (ATT-2). add_closure closes the whole shop for some days, a
+public holiday or a family funeral, from today on, never on a day another closure has (ATT-8). Each action runs in one
+transaction and refuses
 a broken rule with a ValidationError that carries a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) turns into its error shape.
 
@@ -22,7 +24,8 @@ A shop's devices keep a copy of its sides and its payment accounts (apps/sync/re
 from the shop's change log (03 §6.4). So each action saves inside `recording_changes(shop)` (apps/core/changes.py), in
 place of a plain transaction, and names what it changed with record_change: a new side and its cash drawer, a renamed
 side (SYNC-15), a side switched on or off and a rule's new value (SHOP-3), a side's new band (SHOP-4). The lines are
-numbered at the block's end, once, however many services joined it.
+numbered at the block's end, once, however many services joined it. Closures are the exception: the laptops never get
+them, as the attendance day is worked out on the server (ATT-4), so their actions save in a plain transaction.
 """
 
 import uuid
@@ -32,13 +35,14 @@ from datetime import date, time
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 
 from apps.core.changes import record_change, recording_changes
 from apps.core.editing import editing
 from apps.core.settings_registry import DAY_IN_ORDER, REGISTRY, Scope, SettingKey
 from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop, shop_context
 from apps.shops.models import (
+    Closure,
     PaymentAccount,
     PaymentAccountKind,
     PaymentAccountSide,
@@ -340,6 +344,68 @@ def _check_day_in_order(shop: Shop, changed: SettingKey[time], value: time, effe
                     ]
                 }
             )
+
+
+def add_closure(
+    shop: Shop,
+    *,
+    first_day: date,
+    last_day: date,
+    name: str,
+    closure_id: uuid.UUID | None = None,
+    by: Actor | None,
+) -> Closure:
+    """Close the whole shop from `first_day` to `last_day`, both closed, under `name`: Siku ya Uhuru for one day,
+    Msiba wa bibi for five (ATT-8). Each of its days is then off, and not paid (02 §12). `closure_id`: the id the client
+    made for the row (ADR-0007), if it made one. `by`: who adds it; None for the system or the superuser. Refuses, all
+    together, each with its code beside its box: a first day before the shop's today, a last day before the first, a
+    blank name, and on the demo a person's closure from today; then a day another active closure of the shop already
+    has."""
+    _check_shop(shop, by)
+    row = Closure(
+        shop=shop,
+        first_day=first_day,
+        last_day=last_day,
+        name=name,
+        created_by_id=None if by is None else by.staff_id,
+    )
+    if closure_id is not None:
+        # The client's id, not a new one: a retry of the same request then finds the row it made.
+        row.id = closure_id
+    errors: dict[str, list[ValidationError]] = {}
+    # Never before the shop's today, as for a rule's new value (set_setting): a past day may already be worked out and
+    # paid (ATT-4), and closing it now would change that. Today is still open, so a funeral closes the shop the same
+    # morning. The shop's today, not the server's, which runs in UTC.
+    today = shop_today(shop)
+    if first_day < today:
+        errors["first_day"] = [ValidationError("A closure can't start before today.", code="closure.date_past")]
+    # On the demo every visitor shares the manager's login (OPS-3), who holds settings.manage: a visitor's closure from
+    # today would close today's demo for everyone after them, until the night's seed makes the shop again. So a person's
+    # starts tomorrow or later, as a rule's value does (demo.rules_from_tomorrow). The system, as the seed acts, still
+    # may. The same sign as set_setting's, before anything is written.
+    elif settings.DEMO_SEED and by is not None and first_day == today:
+        errors["first_day"] = [
+            ValidationError("On the demo, a closure starts tomorrow or later.", code="demo.closures_from_tomorrow")
+        ]
+    with transaction.atomic():
+        # The shop's row, with the light lock _check_day_in_order takes, before the overlap is checked: two managers
+        # adding at once each pass the check alone, so the second waits here until the first commits, then meets its
+        # closure in the check below and gets its code (closure.overlaps), not a database error. The lock lets every
+        # other save of the shop through, as theirs take only a key-share lock on its row.
+        Shop.objects.select_for_update(no_key=True).get(pk=shop.pk)
+        try:
+            # Every field, Closure.clean() (the name and the order of the two days) and the rules in its Meta, the
+            # database's exclusion rule among them, which reads the shop's other active closures.
+            row.full_clean()
+        except ValidationError as refused:
+            for field, field_errors in refused.error_dict.items():
+                errors.setdefault(field, []).extend(field_errors)
+        if errors:
+            raise ValidationError(errors)
+        # No change line: the laptops never get closures (the module's header). The edit history's trigger watches
+        # edits only, so a new row needs no one named to PostgreSQL (apps/core/acting.py): `created_by` names who.
+        row.save()
+    return row
 
 
 def _check_shop(shop: Shop, by: Actor | None) -> None:
