@@ -49,7 +49,7 @@ services:
 
   caddy:
     # Pinned like postgres (ops rule).
-    image: caddy:2.11.7-alpine
+    image: caddy:2.11.8-alpine
     # Not root (ops rule). `nobody` can't write to the image's /data and /config folders,
     # so Caddy's small working files go to /tmp; nothing in them needs to last.
     user: nobody
