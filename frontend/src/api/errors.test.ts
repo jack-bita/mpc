@@ -100,6 +100,12 @@ const CODES_THE_API_SENDS = [
   "closure.name_blank",
   "closure.overlaps",
   "closure.status_unknown",
+  // And its two changes' (cancel_closure, change_last_day): a reason always, a closure already cancelled, and a
+  // cancel of one already started, whose last day is moved instead; a moved last day refused for a day before
+  // today is date_past above.
+  "closure.reason_required",
+  "closure.not_active",
+  "closure.started",
   "staff.left",
   "staff.other_shop",
   "staff.reason_required",

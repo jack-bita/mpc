@@ -661,7 +661,10 @@
       "ends_before_it_starts": "The last day is before the first day.",
       "overlaps": "The shop is already closed on one of these days.",
       "name_blank": "Write a name, such as Krismasi.",
-      "status_unknown": "This closure's state isn't known."
+      "status_unknown": "This closure's state isn't known.",
+      "reason_required": "Write the reason.",
+      "started": "These days have already started. Change the last day instead.",
+      "not_active": "This closure was already cancelled."
     },
     "password_too_short": "This password is too short.",
     "password_too_common": "This password is too common. Choose another.",
