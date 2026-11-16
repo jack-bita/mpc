@@ -392,6 +392,36 @@ def test_closures_need_settings_manage(
     assert [owner.post(url, sent(), format="json").status_code for url, sent in changes] == [201, 200, 200]
 
 
+@pytest.mark.django_db
+def test_a_key_on_one_side_changes_no_closure(shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember) -> None:
+    # Juma may change the shop's rules on Dawa only (X1). A closure closes both sides, so changing one is an action on
+    # the whole shop, which needs the key on every side: he sees the closures, as he sees a side, and may add, move or
+    # cancel none of them. Nothing changes.
+    today = shop_today(shop_a)
+    in_a_week = today + timedelta(days=7)
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.SETTINGS_MANAGE, side=sides["D"], by=None)
+        krismasi = add_closure(shop_a, first_day=in_a_week, last_day=in_a_week, name="Krismasi", by=None)
+    juma = client_for(staff_a)
+
+    assert [row["name"] for row in juma.get(CLOSURES).json()["closures"]] == ["Krismasi"]
+    first = (today + timedelta(days=1)).isoformat()
+    new_one = {"id": str(uuid.uuid7()), "first_day": first, "last_day": first, "name": "Msiba wa bibi"}
+    later = {"last_day": (in_a_week + timedelta(days=1)).isoformat(), "reason": "Zaidi"}
+    for url, sent in (
+        (CLOSURES, new_one),
+        (f"{CLOSURES}{krismasi.pk}/last-day/", later),
+        (f"{CLOSURES}{krismasi.pk}/cancel/", {"reason": "Imeahirishwa"}),
+    ):
+        refused = juma.post(url, sent, format="json")
+        assert refused.status_code == 403, url
+        assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert list(Closure.objects.values_list("name", "last_day", "status")) == [
+            ("Krismasi", in_a_week, ClosureStatus.ACTIVE)
+        ]
+
+
 def test_closures_routes_name_their_permissions() -> None:
     # Seeing the closures needs only to see a side; adding one, moving its last day and cancelling it each need
     # `settings.manage` (ATT-8). Written out in full, as above.
