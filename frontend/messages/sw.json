@@ -657,7 +657,7 @@
       "closures_from_tomorrow": "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo."
     },
     "closure": {
-      "date_past": "Siku za kufunga duka haziwezi kuanza kabla ya leo.",
+      "date_past": "Siku iliyoshapita haiwezi kubadilishwa.",
       "ends_before_it_starts": "Siku ya mwisho iko kabla ya siku ya kwanza.",
       "overlaps": "Duka tayari limefungwa katika moja ya siku hizi.",
       "name_blank": "Andika jina, kwa mfano Krismasi.",

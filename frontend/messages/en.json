@@ -657,7 +657,7 @@
       "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is."
     },
     "closure": {
-      "date_past": "A closure can't start before today.",
+      "date_past": "A day that has already passed can't be changed.",
       "ends_before_it_starts": "The last day is before the first day.",
       "overlaps": "The shop is already closed on one of these days.",
       "name_blank": "Write a name, such as Krismasi.",
