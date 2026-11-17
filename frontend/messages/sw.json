@@ -252,6 +252,11 @@
       "reason": "Sababu",
       "reasonHint": "Inahifadhiwa pamoja na jina lako na saa.",
       "removed": "Imeondolewa: {name}, {days}.",
+      "changeLastDay": "Badilisha siku ya mwisho",
+      "changeLastDayOf": "Badilisha siku ya mwisho: {name}",
+      "newLastDay": "Siku mpya ya mwisho",
+      "newLastDayHint": "Sasa ni {last}. Inaweza kuwa mapema au baadaye.",
+      "moved": "Siku ya mwisho imebadilishwa: {name}, {days}.",
       "form": {
         "from": "Kuanzia",
         "fromHint": "Leo au siku ya baadaye.",

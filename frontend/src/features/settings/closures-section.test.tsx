@@ -1,8 +1,9 @@
 // closures-section.test.tsx — Siku duka limefungwa (ATT-9): the closures from today on, in the server's order,
 // soonest first; a span written as its first and last day, one day as one date; a line when none is coming; the
-// section in English; and why, when the server refuses the read. Then Ongeza and Ondoa: for the owner, who holds
-// settings.manage on the whole shop, and nobody else, Ondoa only beside a closure not yet begun; a closure saved shows
-// in its place, one removed leaves the list, and the page says each.
+// section in English; and why, when the server refuses the read. Then the buttons: Ongeza, Ondoa and Badilisha siku ya
+// mwisho, for the owner, who holds settings.manage on the whole shop, and nobody else, Ondoa only beside a closure not
+// yet begun; a closure saved shows in its place, one removed leaves the list, a moved one shows its new days, and the
+// page says each.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -38,6 +39,14 @@ const KRISMASI = closure({
   first_day: "2026-12-25",
   last_day: "2026-12-26",
   name: "Krismasi",
+});
+// On the shop's today of the tests, Sunday 15 Nov 2026: a funeral that began on the 13th, and a closure that starts
+// today.
+const BEGUN = closure({ first_day: "2026-11-13", last_day: "2026-11-17" });
+const STARTS_TODAY = closure({
+  first_day: "2026-11-15",
+  last_day: "2026-11-15",
+  name: "Ukarabati wa duka",
 });
 
 /** Each closure's name and days, run together as the screen shows them, without its buttons' words. Given 5 s, not
@@ -220,15 +229,6 @@ describe("Ongeza", () => {
 });
 
 describe("Ondoa", () => {
-  // On the shop's today of the tests, Sunday 15 Nov 2026: a funeral that began on the 13th, a closure that starts
-  // today, and Siku ya Uhuru to come.
-  const BEGUN = closure({ first_day: "2026-11-13", last_day: "2026-11-17" });
-  const STARTS_TODAY = closure({
-    first_day: "2026-11-15",
-    last_day: "2026-11-15",
-    name: "Ukarabati wa duka",
-  });
-
   it("is beside each closure not yet begun, today's included, and not beside one begun (the card's third Done when)", async () => {
     answer("GET", CLOSURES, {
       status: 200,
@@ -337,5 +337,154 @@ describe("Ondoa", () => {
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Ondoa: Siku ya Uhuru" }),
     );
+  });
+});
+
+describe("Badilisha siku ya mwisho", () => {
+  /** Opens the form of a closure, found by its button's name. */
+  async function openLastDayOf(name: string) {
+    tap(
+      await screen.findByRole(
+        "button",
+        { name: `Badilisha siku ya mwisho: ${name}` },
+        { timeout: 5_000 },
+      ),
+    );
+  }
+
+  it("is beside every closure for the owner, begun or not", async () => {
+    answer("GET", CLOSURES, {
+      status: 200,
+      body: closuresAnswer([BEGUN, STARTS_TODAY, UHURU]),
+    });
+
+    render(<ClosuresSection me={OWNER} />);
+
+    await linesShown();
+    expect(
+      screen
+        .getAllByRole("button", { name: /^Badilisha siku ya mwisho: / })
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual([
+      "Badilisha siku ya mwisho: Msiba wa bibi",
+      "Badilisha siku ya mwisho: Ukarabati wa duka",
+      "Badilisha siku ya mwisho: Siku ya Uhuru",
+    ]);
+  });
+
+  it("shows the funeral's new days once moved, says so, and gives the keyboard back to its button (the card's fourth Done when)", async () => {
+    const moved = { ...FUNERAL, last_day: "2026-11-22" };
+    let saved = false;
+    answer("GET", CLOSURES, () =>
+      Response.json(closuresAnswer([saved ? moved : FUNERAL])),
+    );
+    answer("POST", `${CLOSURES}${FUNERAL.id}/last-day/`, () => {
+      saved = true;
+      return Response.json(moved);
+    });
+
+    render(<ClosuresSection me={OWNER} />);
+
+    await openLastDayOf("Msiba wa bibi");
+    // One form at a time: the line's buttons step aside while it is open.
+    expect(screen.queryByRole("button", { name: /^Ondoa: / })).toBeNull();
+    typeInto(screen.getByLabelText("Siku mpya ya mwisho"), "2026-11-22");
+    typeInto(screen.getByLabelText("Sababu"), "Familia imemaliza mapema");
+    tap(screen.getByRole("button", { name: "Hifadhi" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe(
+        "Siku ya mwisho imebadilishwa: Msiba wa bibi, 20/11/2026 – 22/11/2026.",
+      ),
+    );
+    await waitFor(async () =>
+      expect(await linesShown()).toEqual([
+        "Msiba wa bibi20/11/2026 – 22/11/2026",
+      ]),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", {
+        name: "Badilisha siku ya mwisho: Msiba wa bibi",
+      }),
+    );
+  });
+
+  it("takes a closure off the list once its last day moves to yesterday, and gives the keyboard to the heading", async () => {
+    // The funeral that began on the 13th ended yesterday: the shop opens today, and the closure is over.
+    const ended = { ...BEGUN, last_day: "2026-11-14" };
+    let saved = false;
+    answer("GET", CLOSURES, () =>
+      Response.json(closuresAnswer(saved ? [UHURU] : [BEGUN, UHURU])),
+    );
+    answer("POST", `${CLOSURES}${BEGUN.id}/last-day/`, () => {
+      saved = true;
+      return Response.json(ended);
+    });
+
+    render(<ClosuresSection me={OWNER} />);
+
+    await openLastDayOf("Msiba wa bibi");
+    typeInto(screen.getByLabelText("Siku mpya ya mwisho"), "2026-11-14");
+    typeInto(screen.getByLabelText("Sababu"), "Familia imemaliza jana");
+    tap(screen.getByRole("button", { name: "Hifadhi" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe(
+        "Siku ya mwisho imebadilishwa: Msiba wa bibi, 13/11/2026 – 14/11/2026.",
+      ),
+    );
+    await waitFor(async () =>
+      expect(await linesShown()).toEqual(["Siku ya Uhuru09/12/2026"]),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { level: 2, name: "Siku duka limefungwa" }),
+    );
+  });
+
+  it("says a closure someone else cancelled meanwhile is gone, and reads the list again", async () => {
+    let reads = 0;
+    answer("GET", CLOSURES, () => {
+      reads += 1;
+      return Response.json(closuresAnswer(reads === 1 ? [FUNERAL] : []));
+    });
+    answer(
+      "POST",
+      `${CLOSURES}${FUNERAL.id}/last-day/`,
+      refusal(400, "closure.not_active"),
+    );
+
+    render(<ClosuresSection me={OWNER} />);
+
+    await openLastDayOf("Msiba wa bibi");
+    typeInto(screen.getByLabelText("Siku mpya ya mwisho"), "2026-11-22");
+    typeInto(screen.getByLabelText("Sababu"), "Familia imemaliza mapema");
+    tap(screen.getByRole("button", { name: "Hifadhi" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe(
+        "Siku hizi za kufunga duka zimeshaondolewa.",
+      ),
+    );
+    expect(
+      await screen.findByText("Hakuna siku zijazo ambazo duka limefungwa."),
+    ).toBeTruthy();
+  });
+
+  it("closes on Ghairi, gives the keyboard back to its button, and asks for the list again", async () => {
+    answer("GET", CLOSURES, { status: 200, body: closuresAnswer([UHURU]) });
+
+    render(<ClosuresSection me={OWNER} />);
+
+    await openLastDayOf("Siku ya Uhuru");
+    const before = reads();
+    tap(screen.getByRole("button", { name: "Ghairi" }));
+
+    expect(screen.queryByLabelText("Siku mpya ya mwisho")).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", {
+        name: "Badilisha siku ya mwisho: Siku ya Uhuru",
+      }),
+    );
+    await waitFor(() => expect(reads()).toBe(before + 1));
   });
 });

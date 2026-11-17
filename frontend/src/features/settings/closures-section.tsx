@@ -14,12 +14,15 @@
 // The buttons are only for someone holding settings.manage on the whole shop, the owner's key (spec §6): a closure
 // closes both sides, and changes everyone's pay, so ATT-8's routes ask the key there, and a manager given it on one
 // side alone gets none. Everyone else sees the list without them. Ongeza opens the form that adds a closure
-// (closure-form.tsx); beside each closure, Ondoa takes it off with a reason (closure-cancel.tsx), only while its first
-// day is today or later, as the server refuses one already begun (closure.started). The buttons only keep a door out
-// of sight: the server checks the key itself on every change.
+// (closure-form.tsx). Beside each closure, Ondoa takes it off with a reason (closure-cancel.tsx), only while its first
+// day is today or later, as the server refuses one already begun (closure.started); and Badilisha siku ya mwisho moves
+// its last day, earlier or later, with a reason (closure-last-day.tsx), begun or not. One form at a time on a line: its
+// buttons step aside while one is open. The buttons only keep a door out of sight: the server checks the key itself on
+// every change.
 //
-// Each change is said once in the section's status line, as a cancelled closure leaves the list, and its line with
-// it. The keyboard then goes to the section's heading, the nearest place still on the page.
+// Each change is said once in the section's status line, as a closure can leave the list, and its line with it: one
+// removed, one whose last day moved to yesterday, one someone else cancelled meanwhile. The keyboard then goes to the
+// section's heading, the nearest place still on the page; otherwise, back to the button that opened the form.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
@@ -31,9 +34,11 @@ import { useTranslations } from "use-intl";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button } from "@/components/design/button";
 import type { WhoIsHere } from "@/features/people/who-is-here";
+import { codeMessage, useCodeWords } from "@/i18n/codes";
 
 import { ClosureCancel } from "./closure-cancel";
 import { ClosureForm } from "./closure-form";
+import { ClosureLastDay } from "./closure-last-day";
 import { type Closure, CLOSURES, useClosures, useDaysOf } from "./closures";
 
 /** The key that lets a person close the shop, on the whole shop: one of the owner's own four (spec §6). */
@@ -107,14 +112,9 @@ export function ClosuresSection({ me }: { me: WhoIsHere }) {
                   today={closures.data.today}
                   mayChange={mayChange}
                   onOpen={() => setSaid(null)}
-                  onRemoved={() => {
-                    setSaid(
-                      t("removed", {
-                        name: closure.name,
-                        days: daysOf(closure),
-                      }),
-                    );
-                    focusHeading();
+                  onChanged={(sentence, gone) => {
+                    setSaid(sentence);
+                    if (gone) focusHeading();
                   }}
                 />
               </li>
@@ -182,13 +182,14 @@ function AddClosure({
   );
 }
 
-/** One closure: its name and its days, and for whoever may, Ondoa while it hasn't begun, with its form under it. */
+/** One closure: its name and its days, and for whoever may, Ondoa while it hasn't begun and Badilisha siku ya mwisho,
+ * each with its form under it. */
 function ClosureLine({
   closure,
   today,
   mayChange,
   onOpen,
-  onRemoved,
+  onChanged,
 }: {
   closure: Closure;
   /** The shop's today, from the server's answer: a closure whose first day is before it has begun. */
@@ -196,15 +197,28 @@ function ClosureLine({
   /** Whether the person holds settings.manage on the whole shop. */
   mayChange: boolean;
   onOpen: () => void;
-  onRemoved: () => void;
+  /** Called after a change, with its sentence, and whether the closure has left the list (see the top of this file). */
+  onChanged: (sentence: string, gone: boolean) => void;
 }) {
   const t = useTranslations("shopSettings.closures");
+  const codes = useCodeWords();
   const daysOf = useDaysOf();
-  const [removing, setRemoving] = useState(false);
+  const store = useQueryClient();
+  // The form open under the line, if any: one at a time.
+  const [open, setOpen] = useState<"remove" | "lastDay" | null>(null);
   const [ondoaRef, focusOndoa] = useFocusBack<HTMLButtonElement>();
+  const [lastDayRef, focusLastDay] = useFocusBack<HTMLButtonElement>();
   // Up to and on its first day: days as text sort as days do ("2026-11-20"). Once one of its days has passed, that
   // day stays closed, and only its last day can move (closure.started).
   const mayRemove = mayChange && closure.first_day >= today;
+
+  function giveUp(focusTheButton: () => void) {
+    setOpen(null);
+    focusTheButton();
+    // Asked again: a send whose answer was lost may have changed the closure, and the owner who gives up should still
+    // see it as it is (settings-screen.tsx).
+    void store.invalidateQueries({ queryKey: CLOSURES });
+  }
 
   return (
     <div className="grid gap-3 rounded-lg border border-input p-4">
@@ -213,37 +227,75 @@ function ClosureLine({
           <span className="font-semibold">{closure.name}</span>
           <span>{daysOf(closure)}</span>
         </p>
-        {/* While the form is open its own Ghairi closes it, so the button steps aside. */}
-        {mayRemove && !removing ? (
-          <Button
-            ref={ondoaRef}
-            kind="second"
-            size="normal"
-            // Starts with the word on the button, and names the closure, as a list of Ondoa buttons reads to a screen
-            // reader as nothing.
-            aria-label={t("removeOf", { name: closure.name })}
-            onClick={() => {
-              onOpen();
-              setRemoving(true);
-            }}
-          >
-            {t("remove")}
-          </Button>
+        {/* While a form is open its own Ghairi closes it, so the buttons step aside. */}
+        {mayChange && open === null ? (
+          <div className="flex flex-wrap gap-3">
+            {mayRemove ? (
+              <Button
+                ref={ondoaRef}
+                kind="second"
+                size="normal"
+                // Each starts with the word on it, and names the closure, as a list of the same words reads to a screen
+                // reader as nothing.
+                aria-label={t("removeOf", { name: closure.name })}
+                onClick={() => {
+                  onOpen();
+                  setOpen("remove");
+                }}
+              >
+                {t("remove")}
+              </Button>
+            ) : null}
+            <Button
+              ref={lastDayRef}
+              kind="second"
+              size="normal"
+              aria-label={t("changeLastDayOf", { name: closure.name })}
+              onClick={() => {
+                onOpen();
+                setOpen("lastDay");
+              }}
+            >
+              {t("changeLastDay")}
+            </Button>
+          </div>
         ) : null}
       </div>
-      {removing ? (
+      {open === "remove" ? (
         <ClosureCancel
           closure={closure}
           // The line leaves the list once it is read again: the section says so, and takes the keyboard. The form closes
           // now, so a list that is slow to come back never shows an open Ondoa for a closure already cancelled.
           onCancelled={() => {
-            setRemoving(false);
-            onRemoved();
+            setOpen(null);
+            onChanged(
+              t("removed", { name: closure.name, days: daysOf(closure) }),
+              true,
+            );
           }}
-          onCancel={() => {
-            setRemoving(false);
-            focusOndoa();
+          onCancel={() => giveUp(focusOndoa)}
+        />
+      ) : null}
+      {open === "lastDay" ? (
+        <ClosureLastDay
+          closure={closure}
+          today={today}
+          onMoved={(saved) => {
+            setOpen(null);
+            // A last day now before today ends the closure: it leaves the list (coming_closures).
+            const gone = saved.last_day < today;
+            onChanged(
+              t("moved", { name: saved.name, days: daysOf(saved) }),
+              gone,
+            );
+            if (!gone) focusLastDay();
           }}
+          // Someone else cancelled it meanwhile: the section says so in the server's sentence, as the line leaves.
+          onGone={() => {
+            setOpen(null);
+            onChanged(codeMessage(codes, "closure.not_active"), true);
+          }}
+          onCancel={() => giveUp(focusLastDay)}
         />
       ) : null}
     </div>

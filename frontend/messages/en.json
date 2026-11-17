@@ -252,6 +252,11 @@
       "reason": "Reason",
       "reasonHint": "Kept with your name and the time.",
       "removed": "Removed: {name}, {days}.",
+      "changeLastDay": "Change the last day",
+      "changeLastDayOf": "Change the last day: {name}",
+      "newLastDay": "New last day",
+      "newLastDayHint": "Now {last}. It can be earlier or later.",
+      "moved": "Last day changed: {name}, {days}.",
       "form": {
         "from": "From",
         "fromHint": "Today or a later day.",

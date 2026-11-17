@@ -1,7 +1,8 @@
 // closures.ts — the days the shop is closed, as the server answers, in the store of server answers (ATT-9): one place,
 // read by Siku duka limefungwa (closures-section.tsx) and asked again by each of its forms after a change; and a
-// closure's days as the page writes them, which the list, the saved lines and Ondoa's question share. Its own file, so
-// the section and its forms both import it without importing each other, as shop-rules.ts.
+// closure's days as the page writes them, which the list, the saved lines and Ondoa's question share; and the day before
+// a day, which a moved last day may reach back to. Its own file, so the section and its forms both import it without
+// importing each other, as shop-rules.ts.
 //
 // "use client": its useDaysOf asks use-intl for words (use-client.test.ts).
 "use client";
@@ -40,4 +41,12 @@ export function useDaysOf(): (closure: Closure) => string {
           first: formatDay(closure.first_day),
           last: formatDay(closure.last_day),
         });
+}
+
+/** The day before `day`, both as a date box writes them: "2027-01-01" → "2026-12-31". Days only, read and written in
+ * UTC, so no zone, nor a clock change, moves it. */
+export function dayBefore(day: string): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
 }
