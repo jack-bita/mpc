@@ -24,6 +24,7 @@ import {
   sendAttachments,
 } from "./attachments";
 import { CURSOR, LAST_DEVICE_SEQ } from "./meta";
+import { noteCutOff } from "./outages";
 import { pagePlace } from "./page-place";
 import { push } from "./push";
 import { syncShop } from "./sync";
@@ -412,5 +413,64 @@ describe("a sync", () => {
 
     expect(paths().at(-1)).toBe(PULL);
     expect(await db.attachment_files.count()).toBe(1);
+  });
+
+  it("ends the office's report of a cut at the pull's answer, not after the photos", async () => {
+    // The line was cut at 09:59 and is back at 10:00; the photo then takes 4 minutes on the slow line. The cut
+    // ended when the pull got its answer (SYNC-14): the photos' time is no part of it.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-17T09:59:00Z"));
+    await noteCutOff(db, Date.now());
+    const { record, photo } = await clockInWith();
+    vi.setSystemTime(new Date("2026-11-17T10:00:00Z"));
+    answer("POST", PUSH, {
+      status: 200,
+      body: {
+        answers: [{ id: record.id, status: "accepted", posted_seq: 131 }],
+      },
+    });
+    answer("PUT", photoRoute(photo.label.id), () => {
+      vi.setSystemTime(new Date("2026-11-17T10:04:00Z"));
+      return new Response(null, { status: 204 });
+    });
+
+    await syncShop(SHOP);
+
+    expect(await db.attachment_files.count()).toBe(0);
+    expect(await db.outages.toArray()).toMatchObject([
+      {
+        started_at: "2026-11-17T09:59:00.000Z",
+        ended_at: "2026-11-17T10:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("works whole when the photos meet a trouble of their own, and logs it", async () => {
+    // A full disk as a photo is marked: the record went up and the office's changes came down, so the sync
+    // worked. Failed, it would say so at every moment for as long as the photo waited.
+    const { record, photo } = await clockInWith();
+    answer("POST", PUSH, {
+      status: 200,
+      body: {
+        answers: [{ id: record.id, status: "accepted", posted_seq: 131 }],
+      },
+    });
+    answer(
+      "PUT",
+      photoRoute(photo.label.id),
+      refusal(404, "attachment.not_found"),
+    );
+    vi.spyOn(db.attachment_files, "update").mockRejectedValue(
+      new Error("disk full"),
+    );
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await syncShop(SHOP);
+
+    expect(paths()).toEqual([PUSH, PULL, photoRoute(photo.label.id)]);
+    expect(logged).toHaveBeenCalledWith(
+      "the photos were not sent",
+      new Error("disk full"),
+    );
   });
 });

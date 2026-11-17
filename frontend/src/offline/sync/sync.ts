@@ -14,6 +14,7 @@ import { savedBlocked } from "@/features/devices/this-device";
 import type { ShopDatabase } from "../db";
 import { shopDatabase } from "../this-shop";
 import { isAboutTheDevice } from "./answer";
+import { sendAttachments } from "./attachments";
 import { bootstrap, needsBootstrap, WrongShop } from "./bootstrap";
 import { mayPush } from "./backoff";
 import { inTurn } from "./lock";
@@ -21,7 +22,6 @@ import { noteBack, noteCutOff } from "./outages";
 import { heardInTheBackground, pagePlace } from "./page-place";
 import { AppTooOld, pull } from "./pull";
 import { pushKeepingTheWait } from "./push";
-import { sendAttachments } from "./attachments";
 
 /** What a sync is asked for. */
 export interface SyncAsk {
@@ -125,21 +125,42 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   // line while the pull after it worked is no cut. A cut that began after the pull was asked is the line
   // going again as the answer came, and stays open (outages.ts).
   await noteSafely(noteBack(db, Date.now(), talked.pullAskedAt));
+  // The photos last (CTRL-6), once the laptop is noted back: ten photos on a slow line may take minutes,
+  // and the office's report of the cut must end when the pull got its answer, not when the photos are
+  // done (SYNC-14). Only after a push the server answered (attachments.ts says why).
+  if (talked.pushed) await sendPhotosSafely(db);
   // Thrown after the pull, so the failure is still reported (triggers.tsx). A pull that fails
   // too, as with no network, throws its own instead, which says the same.
   if (talked.pushFailure !== null) throw talked.pushFailure.error;
 }
 
-/** How one sync's calls went: a failed push, which still let the pull run, and when the pull was asked. */
+/** How one sync's calls went: whether the push went and got the server's answer, a failed push, which
+ * still let the pull run, and when the pull was asked. */
 interface Talked {
+  pushed: boolean;
   pushFailure: { error: unknown } | null;
   pullAskedAt: number;
 }
 
 /**
- * The calls of one sync: the bootstrap if the database was never filled, the push, the pulls, then the
- * photos. Gives back a failed push, for the caller to throw once the pull is done, and when the pull was
- * asked.
+ * Sends the photos whose records are in (attachments.ts). A block or a "not registered" is thrown on, as
+ * from the push: the sync must ask nothing more. Any other trouble, a database that refused a write, say,
+ * is the photos' own: the records went up and the office's changes came down, so the sync worked, and
+ * failed it would say so at every moment while the photos waited. Logged, and the next sync tries again.
+ */
+async function sendPhotosSafely(db: ShopDatabase): Promise<void> {
+  try {
+    await sendAttachments(db, pagePlace);
+  } catch (error) {
+    if (isAboutTheDevice(error)) throw error;
+    console.error("the photos were not sent", error);
+  }
+}
+
+/**
+ * The calls of one sync: the bootstrap if the database was never filled, the push, then the pulls. Gives
+ * back whether the push got its answer, so the photos may go, a failed push, for the caller to throw once
+ * the pull is done, and when the pull was asked.
  */
 async function talkToTheServer(
   db: ShopDatabase,
@@ -172,7 +193,10 @@ async function talkToTheServer(
   // (DeviceMeView), a moment after the app opens, and the next moment pushes. A laptop has it already,
   // from its last visit, unless the browser lost it; the pull, a read, needs none.
   let pushFailure: { error: unknown } | null = null;
-  // Whether the push went and the server answered it, a "try later" included: the photos go only then.
+  // Whether the push went and the server answered it: the photos go only then. A "try later" counts:
+  // the server had trouble saving one record, but the records it accepted before it are in sent_archive,
+  // and their photos may go. A push that failed, with no answer or a server error, says the line or the
+  // server is in trouble, and a photo is far bigger than a record.
   let pushed = false;
   if (hasCsrfToken() && (sendNow || (await mayPush(db)))) {
     try {
@@ -191,12 +215,9 @@ async function talkToTheServer(
   if (tooOld !== null) throw tooOld;
   const pullAskedAt = Date.now();
   await pull(db);
-  // The photos last (CTRL-6): a week of them on a slow line must not keep the office's changes from coming
-  // down, a suspension among them (X2). Only after a push the server answered: it had the CSRF token, its
-  // wait after a failure was over, and the records accepted just now are in sent_archive. A push that
-  // failed says the line or the server is in trouble, and a photo is far bigger than a record.
-  if (pushed) await sendAttachments(db, pagePlace);
-  return { pushFailure, pullAskedAt };
+  // The photos go after this, in syncOnce: a week of them on a slow line must not keep the office's
+  // changes from coming down, a suspension among them (X2).
+  return { pushed, pushFailure, pullAskedAt };
 }
 
 /**
