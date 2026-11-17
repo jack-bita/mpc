@@ -699,7 +699,9 @@
       "not_found": "The server has no such photo.",
       "too_big": "This photo is too big: a photo can be at most 1 MB.",
       "not_an_image": "This file isn't a photo. Only JPEG and WebP photos are kept.",
-      "file_differs": "This photo isn't the one its record names. It may have been damaged on the way."
+      "file_differs": "This photo isn't the one its record names. It may have been damaged on the way.",
+      "file_waiting": "This photo hasn't reached the server yet. It comes once the laptop is online.",
+      "file_removed": "This photo has been removed."
     },
     "password_too_short": "This password is too short.",
     "password_too_common": "This password is too common. Choose another.",

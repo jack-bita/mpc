@@ -8,8 +8,8 @@ a card that adds a route over a new table gives both shops a row of it here, and
 so, while shop A has none; and a card that adds a route needing query parameters gives them here too
 (sweep_queries). Each shop has a paired device: a row of the office device list (AUTH-5), and the visitor the sweep
 sends to every device route (sweep_device_clients, AUTH-2); dated rules, which the bootstrap sends (SYNC-2); the
-days each shop is closed, which the closures route lists (ATT-8); and a worker's photo waiting for its file, whose id
-the sweep sends the photo route as shop B's laptop (CTRL-3). The demo seed (DATA-1) could fill the shops later.
+days each shop is closed, which the closures route lists (ATT-8); and a worker's photo with its file, whose id the sweep
+sends the photo routes as shop B (CTRL-3). The demo seed (DATA-1) could fill the shops later.
 
 The sweep knows shop A's rows by their ids, and by the texts and amounts only shop A holds, so that a leak
 with no ids, like a report of names and totals, is found too. So give shop A values of its own: names and
@@ -30,7 +30,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.control.models import AttachmentKind, AttachmentType
-from apps.control.services import expect_attachment
+from apps.control.services import expect_attachment, receive_attachment_file
 from apps.core.permissions import RoleTemplate
 from apps.core.settings_registry import CASH_TOLERANCE, LATE_FINE
 from apps.core.tenancy import shop_context
@@ -55,7 +55,7 @@ def sweep_shops(
     # Shop A, whose rows must never show, and shop B, the visitor's own, each filled with every table below: their
     # sides, a paired device each, which the office device list shows (AUTH-5), with an offline period the health page
     # shows (SYNC-14), dated rules, which the bootstrap sends (SYNC-2), days closed, which the closures route lists
-    # (ATT-8), and a photo waiting for its file, which the photo route is asked about (CTRL-3).
+    # (ATT-8), and a photo with its file, which the photo routes are asked about (CTRL-3).
     return sweep_sides
 
 
@@ -108,14 +108,16 @@ def sweep_closures(sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staff_b
 
 @pytest.fixture
 def sweep_attachments(sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember) -> tuple[Shop, Shop]:
-    # Each shop's worker has a photo on the way, its row written as its record would bring it (expect_attachment), its
-    # file not yet sent: the photo route's sweep sends shop A's id as shop B's laptop, and must get what an id no shop
-    # has gets (CTRL-3). Each label's fingerprint is of bytes only that shop's photo has, so it is shop A's mark too.
+    # Each shop's worker has a photo, its row written as its record would bring it (expect_attachment) and its file
+    # sent after it (receive_attachment_file), as the laptop does (CTRL-3). The sweep asks the photo routes about shop
+    # A's as shop B: the laptop's upload and the office's file, which A's own staff opens first. Each photo is bytes
+    # only that shop's has, starting as a JPEG does, so its fingerprint is shop A's mark too.
     for shop, staff in ((sweep_sides[0], staff_a), (sweep_sides[1], staff_b)):
-        photo = f"made-up photo of {staff.display_name}".encode()
+        photo = b"\xff\xd8\xff" + f"made-up photo of {staff.display_name}".encode()
+        photo_id = uuid.uuid7()
         with shop_context(shop):
             expect_attachment(
-                id=uuid.uuid7(),
+                id=photo_id,
                 kind=AttachmentKind.STAFF_PHOTO,
                 subject=staff,
                 content_type=AttachmentType.JPEG,
@@ -123,6 +125,7 @@ def sweep_attachments(sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staf
                 sha256=hashlib.sha256(photo).hexdigest(),
                 by=staff,
             )
+            receive_attachment_file(photo_id, content=photo)
     return sweep_sides
 
 

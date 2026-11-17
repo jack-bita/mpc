@@ -514,6 +514,60 @@
                 }
             }
         },
+        "/api/v1/control/attachments/{id}/file/": {
+            "get": {
+                "operationId": "control_attachments_file_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this attachment.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "control"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "image/jpeg": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            },
+                            "image/webp": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/people/devices/": {
             "get": {
                 "operationId": "people_devices_list",

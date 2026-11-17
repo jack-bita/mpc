@@ -112,6 +112,10 @@ const CODES_THE_API_SENDS = [
   "attachment.too_big",
   "attachment.not_an_image",
   "attachment.file_differs",
+  // And on an office screen (CTRL-3's GET): a photo whose record came but whose file the laptop hasn't sent yet, and a
+  // photo whose file was removed, 90 days after its pay run (ATT-7).
+  "attachment.file_waiting",
+  "attachment.file_removed",
   "staff.left",
   "staff.other_shop",
   "staff.reason_required",
