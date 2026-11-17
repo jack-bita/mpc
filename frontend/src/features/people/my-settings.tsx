@@ -10,6 +10,9 @@
 // `me`, which every screen reads to know who is here, so the app follows the new choice with no second
 // call (the app's frames apply it, UI-9). While a change is on its way, its dot shows it already.
 //
+// At its top, the page header (page-header.tsx): the back arrow to where the person was, beside the title.
+// The Rudi button at the bottom stays, to the person's home page.
+//
 // An office screen, so it needs the internet: offline, the office frame says Inahitaji mtandao, and both
 // choices are switched off, so no tap waits unsaved while it looks done.
 //
@@ -30,6 +33,7 @@ import type { components } from "@/api/schema";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { ButtonLink } from "@/components/design/button";
 import { Choice } from "@/components/design/choice";
+import { PageHeader } from "@/components/design/page-header";
 import {
   useWhoIsHere,
   WHO_IS_HERE,
@@ -39,6 +43,12 @@ import { useOnline } from "@/offline/network";
 
 type Change = components["schemas"]["OwnSettingsRequest"];
 type Saved = components["schemas"]["OwnSettingsAnswer"];
+
+/** The home page the person came from: the PIN screen's welcome at a shared device, where a PIN's session
+ * names its device; the office's home page for a password's. */
+function home(here: WhoIsHere): string {
+  return here.device ? "/" : "/office/";
+}
 
 /** One tap: the choice it changes, and whose it is, by the person's id when it was tapped. */
 interface Tap {
@@ -131,14 +141,13 @@ export function MySettings() {
 
     return (
       <>
-        <h1
-          ref={heading}
-          tabIndex={-1}
-          className="text-2xl font-semibold outline-none"
-        >
-          {t("title")}
-        </h1>
-        <p>{t("intro")}</p>
+        {/* The arrow goes back to where the person was; from a fresh tab, to the same home as Rudi below. */}
+        <PageHeader
+          title={t("title")}
+          intro={t("intro")}
+          fallback={home(here)}
+          headingRef={heading}
+        />
         {/* Each language named in that language, as the bar's button names it: someone who can't read
             the open one still finds their own (language-button.tsx). */}
         <Choice
@@ -170,11 +179,7 @@ export function MySettings() {
         <div>
           {/* Back to the home page the person came from: the PIN screen's welcome at a shared device,
               where a PIN's session names its device; the office's home page for a password's. */}
-          <ButtonLink
-            href={here.device ? "/" : "/office/"}
-            kind="second"
-            size="normal"
-          >
+          <ButtonLink href={home(here)} kind="second" size="normal">
             {t("back")}
           </ButtonLink>
         </div>

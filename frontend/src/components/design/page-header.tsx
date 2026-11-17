@@ -17,6 +17,7 @@
 
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import type { Ref } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "./button";
@@ -28,6 +29,7 @@ export function PageHeader({
   title,
   intro,
   fallback = BACK_FALLBACK,
+  headingRef,
 }: {
   /** The page's title, its one <h1>. */
   title: string;
@@ -35,6 +37,9 @@ export function PageHeader({
   intro?: string;
   /** Where the arrow goes when there is no page to go back to. */
   fallback?: string;
+  /** For a page that moves focus to its title as it opens, so a screen reader says where the person is
+   * (my-settings.tsx). Given, the title takes focus from code only (tabIndex -1), never from Tab. */
+  headingRef?: Ref<HTMLHeadingElement>;
 }) {
   const t = useTranslations("pageHeader");
   const router = useRouter();
@@ -61,7 +66,15 @@ export function PageHeader({
         >
           <ArrowLeft aria-hidden className="size-6" />
         </Button>
-        <h1 className="text-2xl font-semibold">{title}</h1>
+        {/* No ring on the title when code focuses it: it isn't something to press, and the ring would
+            look like a button that does nothing. */}
+        <h1
+          ref={headingRef}
+          tabIndex={headingRef ? -1 : undefined}
+          className="text-2xl font-semibold outline-none"
+        >
+          {title}
+        </h1>
       </div>
       {intro ? <p className="text-muted-foreground">{intro}</p> : null}
     </div>

@@ -1,6 +1,7 @@
 // page-header.test.tsx — the top of a page: the title as its one heading, the words under it, and an arrow
 // that goes back to where the person was, or to the office's home from a fresh tab (Jack, 17 Nov 2026).
 import { fireEvent, screen } from "@testing-library/react";
+import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { render } from "@/test/render";
@@ -54,5 +55,20 @@ describe("the page header", () => {
     render(<PageHeader title="Hali ya vifaa" fallback="/devices/" />);
     fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
     expect(router.push).toHaveBeenCalledWith("/devices/");
+  });
+
+  it("lets a page focus its title, from code only", () => {
+    const heading = createRef<HTMLHeadingElement>();
+    render(<PageHeader title="Mipangilio yangu" headingRef={heading} />);
+    expect(heading.current?.tagName).toBe("H1");
+    // -1: focus by code, as a page arriving does; Tab passes it by.
+    expect(heading.current?.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("leaves the title out of focus when no page asks", () => {
+    render(<PageHeader title="Vifaa" />);
+    expect(
+      screen.getByRole("heading", { level: 1 }).hasAttribute("tabindex"),
+    ).toBe(false);
   });
 });

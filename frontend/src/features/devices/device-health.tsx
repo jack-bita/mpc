@@ -13,6 +13,9 @@
 // is shown as the laptop said, with no length. One whose end the laptop never saw, as it went off, ends
 // in "?" (Jack, SYNC-14's review). The rules live in health.ts.
 //
+// At its top, the page header: the back arrow to where the person was, the title, and that sentence about
+// the clocks under it (page-header.tsx).
+//
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
@@ -30,6 +33,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/design/card";
+import { PageHeader } from "@/components/design/page-header";
 import { useWhoIsHere, type WhoIsHere } from "@/features/people/who-is-here";
 import { dayPart, formatDate, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -60,10 +64,7 @@ export function DeviceHealthScreen() {
   const who = useWhoIsHere();
   return (
     <div className="grid max-w-3xl gap-6">
-      <div className="grid gap-2">
-        <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <p className="text-muted-foreground">{t("intro")}</p>
-      </div>
+      <PageHeader title={t("title")} intro={t("intro")} />
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
       {who.data ? <HealthList me={who.data} /> : null}

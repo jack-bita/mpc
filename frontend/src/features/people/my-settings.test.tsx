@@ -11,6 +11,7 @@ import { DAWA, DAWA_LAPTOP_ANSWER, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { swahiliIn } from "@/test/language";
 import { render } from "@/test/render";
+import { router } from "@/test/router";
 
 import { MySettings } from "./my-settings";
 
@@ -326,6 +327,29 @@ describe("Mipangilio yangu", () => {
 
     const back = await screen.findByRole("link", { name: "Rudi" });
     expect(back.getAttribute("href")).toBe("/");
+  });
+
+  it("has the back arrow beside its title, to the PIN screen's welcome from a fresh tab", async () => {
+    vi.spyOn(window.history, "length", "get").mockReturnValue(1);
+    answer("GET", ME, {
+      status: 200,
+      body: {
+        ...NEEMA,
+        device: DAWA_LAPTOP_ANSWER.device,
+        home_side: DAWA_LAPTOP_ANSWER.home_side,
+      },
+    });
+
+    render(<MySettings />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Rudi ulipotoka" }),
+    );
+    expect(router.push).toHaveBeenCalledWith("/");
+    // The title still takes focus as the page opens, as before the header (UI-9).
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { level: 1 }),
+    );
   });
 
   it("speaks English to someone who reads it, with no Swahili left", async () => {
