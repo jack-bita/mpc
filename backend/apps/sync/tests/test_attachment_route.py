@@ -5,6 +5,7 @@ Asha clocked in at 07:55 with no internet. Her clock-in reached the server with 
 
     PUT /api/sync/v1/attachments/<photo id>/   the body is the photo's bytes
     the file as its label says                 204: kept, and the same again answers 204, changing nothing
+    a file already removed                     204: nothing kept, and the laptop drops its copy
     another file, or one cut short             400 attachment.file_differs; nothing kept
     over 1 MB                                  400 attachment.too_big, refused before a byte of it is read
     not a JPEG or a WebP                       400 attachment.not_an_image
@@ -28,7 +29,7 @@ from django.test.client import MULTIPART_CONTENT
 from rest_framework.test import APIClient
 
 from apps.control.models import LARGEST_FILE, Attachment, AttachmentKind, AttachmentType, EditEvent
-from apps.control.services import expect_attachment, receive_attachment_file
+from apps.control.services import expect_attachment, receive_attachment_file, remove_attachment_file
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember
@@ -154,6 +155,19 @@ def test_same_file_twice_answers_done(staff_a: StaffMember, laptop: tuple[Device
     assert again.status_code == 204
     assert stored(photo).received_at == came
     assert kept_bytes(photo) == JPEG
+
+
+def test_removed_file_sent_again_answers_done(staff_a: StaffMember, laptop: tuple[Device, str]) -> None:
+    # The photo was removed before the laptop got to send it, its laptop off for months, say (ATT-7): the laptop is told
+    # it's done, so it drops its copy, and nothing is kept again.
+    photo = waiting(staff_a)
+    with shop_context(staff_a.shop_id):
+        remove_attachment_file(photo, reason="Siku 90 baada ya mshahara")
+
+    answer = put(a_browser(laptop[1]), photo.pk, JPEG)
+
+    assert answer.status_code == 204
+    assert (stored(photo).file_state, stored(photo).file.name) == ("removed", "")
 
 
 @pytest.mark.parametrize(

@@ -4,6 +4,7 @@
     someone holding the kind's key, the file kept   200: the photo, its type as its label, never kept by the browser
     someone without it                              403 permission_denied, before anything about the photo is told
     the file not sent yet                           404 attachment.file_waiting
+    the file removed (90 days after its pay run)    404 attachment.file_removed
     another shop's photo, or an id no shop has      404 not_found, alike
 
 A worker's photo is opened by anyone working at the shop; a clock-in photo needs `attendance.manage` on the whole shop
@@ -23,7 +24,7 @@ from pytest_django import Settings
 from rest_framework.test import APIClient
 
 from apps.control.models import ATTACHMENT_KINDS, Attachment, AttachmentKind, AttachmentType, KindRule
-from apps.control.services import expect_attachment, receive_attachment_file
+from apps.control.services import expect_attachment, receive_attachment_file, remove_attachment_file
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 
@@ -138,6 +139,15 @@ def test_waiting_file_says_so(staff_a: Any, staff_client_a: APIClient) -> None:
     row = photo(staff_a, sent=False)
 
     assert code_of(staff_client_a.get(address(row.pk))) == (404, "attachment.file_waiting")
+
+
+def test_removed_file_says_so(staff_a: Any, staff_client_a: APIClient) -> None:
+    # Ninety days after its pay run, the photo was removed (ATT-7): the row says so, and the screen with it.
+    row = photo(staff_a)
+    with shop_context(staff_a.shop_id):
+        remove_attachment_file(row, reason="Siku 90 baada ya mshahara")
+
+    assert code_of(staff_client_a.get(address(row.pk))) == (404, "attachment.file_removed")
 
 
 def test_another_shops_attachment_not_found(staff_b: Any, staff_client_a: APIClient) -> None:

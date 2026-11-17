@@ -24,6 +24,8 @@ her photo's label (what it is, how many bytes, its fingerprint), and the row say
 saving code calls it, in the record's transaction, so the row arrives with the record that names it (ATT-3).
 receive_attachment_file then takes the file itself, when the laptop can send it, checks it against the label, and keeps
 it; the same file sent again, or a file already removed, changes nothing, so a laptop may always send again.
+remove_attachment_file is the hook for retention rules: it takes the file away and keeps the row, with who, when and
+why (rule 7). ATT-7's nightly job calls it for clock-in photos 90 days after their pay run is approved (03 §5.13).
 
 A broken rule is a ValidationError with a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) will turn into its error shape when the review screen comes (CTRL-4); a bug in the
@@ -41,6 +43,7 @@ checks read through the guarded `objects` (CORE-2).
 import hashlib
 import uuid
 from collections.abc import Mapping, Sequence
+from contextlib import nullcontext
 from decimal import Decimal
 from typing import Any
 
@@ -66,10 +69,10 @@ from apps.control.models import (
     FlagStep,
     attachment_file_name,
 )
-from apps.core.acting import current_device_id
+from apps.core.acting import acting_as, current_device_id
 from apps.core.links import link_type_of
 from apps.core.models import ShopScoped
-from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop
+from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop, shop_context
 
 # A flag in one of these takes no more notes: it is closed for good.
 _CLOSED = {FlagStatus.RESOLVED, FlagStatus.DISMISSED}
@@ -327,6 +330,59 @@ def receive_attachment_file(attachment_id: uuid.UUID, *, content: bytes) -> Atta
         )
         attachment.save(update_fields=list(_FILE_FIELDS))
     return attachment
+
+
+# The fields a file's removal changes: the file, and who removed it, when and why.
+_REMOVAL_FIELDS = ("file", "file_removed_at", "file_removed_by", "file_removed_reason")
+
+
+def remove_attachment_file(attachment: Attachment, *, reason: str, by: Actor | None = None) -> Attachment:
+    """Take the file of `attachment`, of the open shop, away for good, and keep its row, with who (`by`, a person, or
+    None for the system, as ATT-7's nightly job), when and why: the retention rule wants the photo gone, not hidden,
+    and the row still says there was one (rule 7). A photo that never arrived can be removed too, so a late upload is
+    dropped. Removing one already removed changes nothing, so a nightly job may run twice."""
+    _check_shop(attachment.shop_id, by)
+    # A device alone is no person: the row would keep a remover with no name for good.
+    if by is not None and by.staff_id is None:
+        raise ValueError("A file is removed by a person, or by the system: a device alone is no person.")
+    # Rule 7: always why. Trimmed first: spaces alone say no more than nothing. Filed under the reason's field, as the
+    # database's own rule would be.
+    reason = reason.strip()
+    if not reason:
+        required = ValidationError("A reason is required.", code="attachment.reason_required")
+        raise ValidationError({"file_removed_reason": required})
+    with transaction.atomic():
+        # Locked, as a file's arrival is (receive_attachment_file): an upload and a removal at once take turns.
+        fresh = Attachment.objects.select_for_update().get(pk=attachment.pk)
+        if fresh.file_removed_at is not None:
+            return fresh
+        # The file's name and its storage, kept for after the commit. Empty for a photo that never arrived.
+        name, storage, shop_id = fresh.file.name, fresh.file.storage, fresh.shop_id
+        # No file: the empty name, as a waiting row has.
+        fresh.file = ""
+        fresh.file_removed_at = timezone.now()
+        fresh.file_removed_by_id = None if by is None else by.staff_id
+        fresh.file_removed_reason = reason
+        fresh.full_clean(exclude=[field.name for field in Attachment._meta.fields if field.name not in _REMOVAL_FIELDS])
+        # Saved with `by` told to PostgreSQL, as the closures' and the staff services' saves are: the edit history's
+        # line then names the person the row names, even outside an office visit (02 v1.7: one fact, one answer;
+        # apps/core/acting.py). With `by` None, the system acts, and nobody is told.
+        with acting_as(by) if by is not None else nullcontext():
+            fresh.save(update_fields=list(_REMOVAL_FIELDS))
+        if name:
+            # The row first, the file only once the row's change is kept for good (CTRL-3's card): Django runs this
+            # after the transaction commits, and never if it rolls back. Deleted inside the transaction instead, a
+            # rollback would bring the row back as "kept", naming a file that is gone. The other way, the worst left
+            # is a file no row names, if the delete fails after the commit: nothing serves it, and a later clean-up
+            # job can find such leftovers. Opened in the file's own shop: by then, the caller's may have closed.
+            transaction.on_commit(lambda: _delete_stored(storage, name, shop_id))
+    return fresh
+
+
+def _delete_stored(storage: Any, name: str, shop_id: uuid.UUID) -> None:
+    # The storage checks a name's shop against the one open (apps/core/storage.py).
+    with shop_context(shop_id):
+        storage.delete(name)
 
 
 def _check_file(attachment: Attachment, content: bytes) -> None:
