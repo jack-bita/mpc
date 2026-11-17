@@ -142,6 +142,16 @@ describe("the design page", () => {
     ]);
   });
 
+  it("wears the page header at its top, and shows the tabs with the settings page's six", () => {
+    render(<DesignPage />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(t.title);
+    expect(
+      screen.getByRole("button", { name: sw.pageHeader.back }),
+    ).toBeDefined();
+    const row = screen.getByRole("tablist", { name: t.tabs.title });
+    expect(row.querySelectorAll("[role=tab]")).toHaveLength(6);
+  });
+
   it.each(["default", "second"])(
     "shows the %s font where it can really change",
     (font) => {
@@ -156,6 +166,7 @@ describe("the design page", () => {
   it("takes all its words from the message files", () => {
     // ADR-0040. A token's name, like --primary, is code and is shown as it is. Besides the page's own
     // words, the top bars show the language button's word and their sample places, "MPC · Dawa".
+    // The page header's arrow has no visible words: its name is an aria-label.
     const { container } = render(<DesignPage />);
     const places = Object.values(t.topBar.sampleSides).map((side) =>
       sw.topBar.place
