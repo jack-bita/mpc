@@ -17,6 +17,8 @@
 import sw from "../messages/sw.json";
 
 import {
+  asShown,
+  daysAfter,
   expect,
   MANAGER_EMAIL,
   MANAGER_PASSWORD,
@@ -25,20 +27,6 @@ import {
 } from "./the-shop";
 
 const FINE = sw.shopSettings.rules.attendance.late_fine.name;
-
-/** The day after `day`, both as the date box writes them: "2026-11-15" → "2026-11-16". Days only, in UTC, so no
- * zone moves it. */
-function dayAfter(day: string): string {
-  const next = new Date(`${day}T00:00:00Z`);
-  next.setUTCDate(next.getUTCDate() + 1);
-  return next.toISOString().slice(0, 10);
-}
-
-/** "2026-11-16" as the page writes a day: "16/11/2026" (formatDay, src/lib/format.ts). */
-function asShown(day: string): string {
-  const [year, month, date] = day.split("-");
-  return `${date}/${month}/${year}`;
-}
 
 test("the owner sets the late fine to 2,000 from a day to come: 500 today, 2,000 coming", async ({
   managersPhone,
@@ -85,7 +73,7 @@ test("the owner sets the late fine to 2,000 from a day to come: 500 today, 2,000
       const day = fine.getByLabel(sw.shopSettings.form.from);
       // The shop's today, as the server sent it, and two days on (see the top of this file).
       const shopToday = await day.inputValue();
-      const next = dayAfter(dayAfter(shopToday));
+      const next = daysAfter(shopToday, 2);
       // As a person types it, with the comma people write; the page sends "2000".
       await fine.getByLabel(sw.shopSettings.form.newValue.money).fill("2,000");
       await day.fill(next);

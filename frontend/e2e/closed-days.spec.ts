@@ -18,6 +18,8 @@ import type { Locator, Page } from "@playwright/test";
 import sw from "../messages/sw.json";
 
 import {
+  asShown,
+  daysAfter,
   expect,
   MANAGER_EMAIL,
   MANAGER_PASSWORD,
@@ -27,20 +29,6 @@ import {
 
 const CLOSURES = sw.shopSettings.closures;
 const FUNERAL = "Msiba wa bibi";
-
-/** `count` days after `day`, both as the date box writes them: "2026-11-15", 5 → "2026-11-20". Days only, in UTC, so
- * no zone moves it. */
-function daysAfter(day: string, count: number): string {
-  const next = new Date(`${day}T00:00:00Z`);
-  next.setUTCDate(next.getUTCDate() + count);
-  return next.toISOString().slice(0, 10);
-}
-
-/** "2026-11-16" as the page writes a day: "16/11/2026" (formatDay, src/lib/format.ts). */
-function asShown(day: string): string {
-  const [year, month, date] = day.split("-");
-  return `${date}/${month}/${year}`;
-}
 
 /** A span of days as the page writes it: "20/11/2026 – 24/11/2026". */
 function span(first: string, last: string): string {
