@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { saveDevice, savedBlocked } from "@/features/devices/this-device";
-import { giveCsrfToken } from "@/test/csrf";
+import { forgetCsrfToken, giveCsrfToken } from "@/test/csrf";
 import { DAWA_LAPTOP } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { madeUpJpeg } from "@/test/photos";
@@ -23,6 +23,7 @@ import {
   MOST_PHOTOS,
   sendAttachments,
 } from "./attachments";
+import { pushFailed } from "./backoff";
 import { CURSOR, LAST_DEVICE_SEQ } from "./meta";
 import { noteCutOff } from "./outages";
 import { pagePlace } from "./page-place";
@@ -412,6 +413,36 @@ describe("a sync", () => {
     await expect(syncShop(SHOP)).rejects.toBeInstanceOf(ApiRefusal);
 
     expect(paths().at(-1)).toBe(PULL);
+    expect(await db.attachment_files.count()).toBe(1);
+  });
+
+  it("sends no photo when the browser has no CSRF token yet", async () => {
+    // The push is skipped until the device check brings the token back (sync.ts): a photo sent now would only
+    // be refused (403), and wait longer for nothing.
+    const { photo } = await clockInWith();
+    await recordsAccepted();
+    keeps(photo);
+    forgetCsrfToken();
+    sent.length = 0;
+
+    await syncShop(SHOP);
+
+    expect(paths()).toEqual([PULL]);
+    expect(await db.attachment_files.count()).toBe(1);
+  });
+
+  it("sends no photo while the push waits after a failure", async () => {
+    // The server or the line was in trouble a moment ago (backoff.ts): a photo is far bigger than a push, so it
+    // waits with it.
+    const { photo } = await clockInWith();
+    await recordsAccepted();
+    keeps(photo);
+    await pushFailed(db, Date.now());
+    sent.length = 0;
+
+    await syncShop(SHOP);
+
+    expect(paths()).toEqual([PULL]);
     expect(await db.attachment_files.count()).toBe(1);
   });
 
