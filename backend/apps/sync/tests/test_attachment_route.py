@@ -8,6 +8,7 @@ Asha clocked in at 07:55 with no internet. Her clock-in reached the server with 
     a file already removed                     204: nothing kept, and the laptop drops its copy
     another file, or one cut short             400 attachment.file_differs; nothing kept
     over 1 MB                                  400 attachment.too_big, refused before a byte of it is read
+    no length (sent in pieces)                 411 attachment.length_required: the laptop sends it again
     not a JPEG or a WebP                       400 attachment.not_an_image
     an id this shop doesn't hold               404 attachment.not_found, as for an id no shop has
 
@@ -221,12 +222,25 @@ def test_file_too_big_refused_unread(
 
 
 def test_file_too_big_refused_by_the_service_too(staff_a: StaffMember) -> None:
-    # A request that gives no length reaches the service, which checks the size again.
+    # A caller that hands the service the file itself, as PPL-4's office upload will, gets the size checked again.
     photo = waiting(staff_a)
     with shop_context(staff_a.shop_id), pytest.raises(ValidationError) as refused:
         receive_attachment_file(photo.pk, content=JPEG + b"x" * LARGEST_FILE)
 
     assert refused.value.code == "attachment.too_big"
+
+
+@pytest.mark.parametrize("length", ["", "a few bytes", "-1"], ids=["none", "not-a-number", "negative"])
+def test_upload_with_no_length_is_asked_again(staff_a: StaffMember, laptop: tuple[Device, str], length: str) -> None:
+    # A request sent in pieces with no length, as a proxy on the way may send it, or a broken one: Django would read an
+    # empty body, and the photo would be refused as no image, which the laptop takes for a bad photo. Instead the
+    # laptop is told to send it again (411), the body is never read, and nothing is kept.
+    photo = waiting(staff_a)
+
+    answer = put(a_browser(laptop[1]), photo.pk, JPEG, CONTENT_LENGTH=length)
+
+    assert code_of(answer) == (411, "attachment.length_required")
+    assert stored(photo).file_state == "waiting"
 
 
 def test_file_before_its_record_not_found(laptop: tuple[Device, str]) -> None:

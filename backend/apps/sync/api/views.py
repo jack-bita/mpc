@@ -20,6 +20,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.gzip import gzip_page
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
+from rest_framework import exceptions
 from rest_framework.exceptions import NotFound
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -110,9 +111,15 @@ class AttachmentFileView(DeviceView):
     )
     def put(self, request: Request, pk: uuid.UUID) -> Response:
         # The file's length first, from the request's head, before a byte of the file is read: a 50 MB upload is
-        # refused unread, and the server's memory never holds it. A request with no length is read as empty, by Django,
-        # and is then refused as another file than its label's.
-        if _length_of(request) > LARGEST_FILE:
+        # refused unread, and the server's memory never holds it.
+        length = _length_of(request)
+        if length is None:
+            # No length, or one that is no number: Django would read the body as empty, and the photo would be refused
+            # as no image, which the laptop takes as a bad photo and sets aside for good. A request sent in pieces with
+            # no length (chunked, as a proxy on the way may send it) says nothing about the photo, so the laptop is told
+            # to send it again instead (CTRL-6), and nothing is read.
+            raise LengthRequired()
+        if length > LARGEST_FILE:
             raise ValidationError("A file is kept up to 1 MB.", code="attachment.too_big")
         try:
             # request.body, never request.data: the body is the file's own bytes, which no parser of DRF's should read.
@@ -125,9 +132,19 @@ class AttachmentFileView(DeviceView):
         return Response(status=204)
 
 
-def _length_of(request: Request) -> int:
-    # The body's length as the request's head gives it (Content-Length); 0 when it gives none, or nonsense.
+def _length_of(request: Request) -> int | None:
+    # The body's length as the request's head gives it (Content-Length); None when it gives none, or one that is no
+    # whole number of bytes.
     try:
-        return int(request.META.get("CONTENT_LENGTH") or 0)
+        length = int(request.META.get("CONTENT_LENGTH") or "")
     except ValueError:
-        return 0
+        return None
+    return length if length >= 0 else None
+
+
+class LengthRequired(exceptions.APIException):
+    # 411 Length Required: HTTP's own answer for a request that must say its length. The one error shape gives it this
+    # code (apps/core/api/errors.py), which the laptop reads as "send it again", not as a refused photo (CTRL-6).
+    status_code = 411
+    default_detail = "Send the photo with its length (Content-Length)."
+    default_code = "attachment.length_required"

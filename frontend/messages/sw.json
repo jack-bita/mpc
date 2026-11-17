@@ -701,7 +701,8 @@
       "not_an_image": "Faili hili si picha. Zinapokelewa picha za JPEG na WebP pekee.",
       "file_differs": "Picha hii si ile iliyotajwa kwenye kumbukumbu yake. Huenda iliharibika njiani.",
       "file_waiting": "Picha hii bado haijafika kwenye seva. Itafika kompyuta ikipata mtandao.",
-      "file_removed": "Picha hii imeshaondolewa."
+      "file_removed": "Picha hii imeshaondolewa.",
+      "length_required": "Picha ilitumwa bila kuonyesha ukubwa wake. Itatumwa tena."
     },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",

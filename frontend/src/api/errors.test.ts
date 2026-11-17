@@ -112,6 +112,8 @@ const CODES_THE_API_SENDS = [
   "attachment.too_big",
   "attachment.not_an_image",
   "attachment.file_differs",
+  // A photo sent with no length (in pieces, as a proxy may send it): never read, and sent again (411).
+  "attachment.length_required",
   // And on an office screen (CTRL-3's GET): a photo whose record came but whose file the laptop hasn't sent yet, and a
   // photo whose file was removed, 90 days after its pay run (ATT-7).
   "attachment.file_waiting",
