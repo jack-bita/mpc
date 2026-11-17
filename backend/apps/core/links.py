@@ -57,6 +57,9 @@ LINK_TYPES: dict[str, str] = {
     # Days the shop is closed, such as a funeral: the history of its edits, and the audit trail's lines about cancelling
     # it and moving its last day (ATT-8).
     "closure": "shops.Closure",
+    # A photo or file on a record, such as a clock-in photo: the history of its edits, its file arriving and being
+    # removed (CTRL-3).
+    "attachment": "control.Attachment",
 }
 
 

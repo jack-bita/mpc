@@ -60,6 +60,9 @@ services:
       # `manage.py seed_demo` may wipe it and make the demo's shop, whose logins are public. The real server
       # never has the sign, so the seed refuses there.
       DEMO_SEED: "yes"
+      # Files in the database, as on the demo (render.yaml, config/settings/prod.py): the tests meet the demo's storage,
+      # and the container needs no folder it may write to.
+      FILES_IN_DATABASE: "yes"
     ports:
       # 127.0.0.1 only: no other computer reaches it. 8090 is free beside `make dev`.
       - "127.0.0.1:8090:8000"

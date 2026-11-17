@@ -1,5 +1,5 @@
 """apps/control/services.py — every write to the control tables, one function per action (ADR-0015): the flags,
-and the audit trail.
+the audit trail, and the attachments.
 
 raise_flag writes a flag with the people it names, all or nothing. The other three move it forward, each
 with a note in a person's own words, who and when kept with it (Jack, 29 Oct 2026; 02 v1.8):
@@ -19,6 +19,14 @@ or not at all. The line also names the device the visit came from (X3). No servi
 the edit history's trigger reads (apps/core/acting.py), so no service can forget it, and the two books can't name
 different devices for one action (Jack, AUTH-8; 02 v1.7: one fact, one answer).
 
+expect_attachment writes an attachment's row, waiting for its file (CTRL-3): Asha's clock-in reaches the server with
+her photo's label (what it is, how many bytes, its fingerprint), and the row says a photo is coming. The record's own
+saving code calls it, in the record's transaction, so the row arrives with the record that names it (ATT-3).
+receive_attachment_file then takes the file itself, when the laptop can send it, checks it against the label, and keeps
+it; the same file sent again, or a file already removed, changes nothing, so a laptop may always send again.
+remove_attachment_file is the hook for retention rules: it takes the file away and keeps the row, with who, when and
+why (rule 7). ATT-7's nightly job calls it for clock-in photos 90 days after their pay run is approved (03 §5.13).
+
 A broken rule is a ValidationError with a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) will turn into its error shape when the review screen comes (CTRL-4); a bug in the
 calling code, such as a row of another shop, is ShopMismatch, a server error.
@@ -32,20 +40,39 @@ Callers open shop_context(shop) first, or system_context() in a nightly job: ful
 checks read through the guarded `objects` (CORE-2).
 """
 
+import hashlib
 import uuid
 from collections.abc import Mapping, Sequence
+from contextlib import nullcontext
 from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.db import connection, models, transaction
 from django.db.transaction import TransactionManagementError
+from django.utils import timezone
 
-from apps.control.models import AuditAction, AuditEvent, Flag, FlagKind, FlagNote, FlagPerson, FlagStatus, FlagStep
-from apps.core.acting import current_device_id
+from apps.control.models import (
+    ATTACHMENT_KINDS,
+    LARGEST_FILE,
+    Attachment,
+    AttachmentKind,
+    AttachmentType,
+    AuditAction,
+    AuditEvent,
+    Flag,
+    FlagKind,
+    FlagNote,
+    FlagPerson,
+    FlagStatus,
+    FlagStep,
+    attachment_file_name,
+)
+from apps.core.acting import acting_as, current_device_id
 from apps.core.links import link_type_of
 from apps.core.models import ShopScoped
-from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop
+from apps.core.tenancy import ALL_SHOPS, Actor, ShopMismatch, current_shop, shop_context
 
 # A flag in one of these takes no more notes: it is closed for good.
 _CLOSED = {FlagStatus.RESOLVED, FlagStatus.DISMISSED}
@@ -204,6 +231,193 @@ def resolve_flag_by_system(flag: Flag) -> Flag:
         fresh.full_clean(exclude=[field.name for field in Flag._meta.fields if field.name != "status"])
         fresh.save(update_fields=["status"])
     return fresh
+
+
+def expect_attachment(
+    *,
+    id: uuid.UUID,
+    kind: str,
+    subject: ShopScoped,
+    content_type: str,
+    size: int,
+    sha256: str,
+    by: Actor,
+    device: ShopScoped | None = None,
+) -> Attachment:
+    """Write the row of a photo that is coming: its `id`, made where it was taken (ADR-0007); its `kind`; the record
+    it is pinned to (`subject`, a saved row of the open shop); its label, as the record declared it (`content_type`,
+    `size` in bytes, `sha256` in lower-case hex); who took it (`by`, a person); and the laptop it was taken on
+    (`device`), or None on an office screen. The file comes later, through the upload route (CTRL-3), and must match
+    the label. Call it inside the record's own transaction, so the row is kept with the record or not at all."""
+    # The row belongs to its record's shop: shop A's clock-in gets a photo of shop A.
+    shop_id = subject.shop_id
+    _check_shop(shop_id, by)
+    # A photo is always taken by someone: a device alone has nobody to name, and the row's `created_by` is kept for
+    # good, as a flag's note is.
+    if by.staff_id is None:
+        raise ValueError("An attachment is added by a person: a device alone is no person.")
+    # A generic link has no foreign key, so the database can't check that it points at a row (as in raise_flag).
+    if subject._state.adding:
+        raise ValueError(f"An attachment's record must be a saved row; this {type(subject).__name__} was never saved.")
+    # T1: the laptop is the record's shop's too.
+    if device is not None and device.shop_id != shop_id:
+        raise ShopMismatch("The device belongs to another shop than the attachment.")
+    # A kind the list doesn't know. Filed under `kind`, as the database's rule would file it, and asked first: the
+    # kind says which record it may be pinned to, below.
+    if kind not in AttachmentKind.values:
+        unknown = ValidationError("This kind of attachment is not known.", code="attachment.kind_unknown")
+        raise ValidationError({"kind": unknown})
+    # A file that isn't one of the photos a laptop makes. Asked here, not left to full_clean, whose choice check would
+    # answer first with Django's general `invalid_choice`: the upload route refuses the same with this code (CTRL-3),
+    # and the laptop sets the photo aside by it, so both say it one way.
+    if content_type not in AttachmentType.values:
+        not_an_image = ValidationError("Only a JPEG or a WebP photo is kept.", code="attachment.not_an_image")
+        raise ValidationError({"content_type": not_an_image})
+    # Each kind is pinned to one table's records (ATTACHMENT_KINDS): a clock-in photo on a staff member, not on a
+    # clock-in, would be opened with the wrong key. The calling code picks both, so a mismatch is its bug, not a
+    # person's mistake. UnknownLinkType when the subject's table has no code at all (apps/core/links.py).
+    expected_table = ATTACHMENT_KINDS[AttachmentKind(kind)].subject_type
+    subject_type = link_type_of(subject)
+    if subject_type != expected_table:
+        raise ValueError(f"A {kind} is pinned to a {expected_table!r} record, not to a {subject_type!r} one.")
+    return _saved(
+        Attachment(
+            id=id,
+            shop_id=shop_id,
+            kind=kind,
+            subject_type=subject_type,
+            subject_id=subject.pk,
+            content_type=content_type,
+            size=size,
+            sha256=sha256,
+            device_id=None if device is None else device.pk,
+            created_by_id=by.staff_id,
+        )
+    )
+
+
+# The fields a file's arrival changes.
+_FILE_FIELDS = ("file", "received_at")
+
+
+def receive_attachment_file(attachment_id: uuid.UUID, *, content: bytes) -> Attachment:
+    """Keep the file of the attachment `attachment_id`, of the open shop, once it matches the label its record brought:
+    a JPEG or a WebP by its first bytes, of that type, that many bytes, that SHA-256. The same file sent again, after
+    a first answer that was lost, changes nothing; so does any file sent for an attachment whose file was removed, so
+    the laptop can drop its copy either way. Attachment.DoesNotExist for an id the open shop doesn't hold, another
+    shop's included, or one whose record hasn't arrived yet: the route answers "not found", and the laptop tries again
+    after its next push."""
+    with transaction.atomic():
+        # Locked until the transaction ends (SELECT ... FOR UPDATE), and read through the guard, so only the open shop's
+        # rows are found (T1). Two copies of one upload at once (two tabs, or a tab and the service worker) take turns:
+        # the second finds the file the first kept, and changes nothing.
+        attachment = Attachment.objects.select_for_update().get(pk=attachment_id)
+        if attachment.file_removed_at is not None:
+            # Removed already (90 days after its pay run, or never arrived and given up on): nothing is kept again.
+            return attachment
+        _check_file(attachment, content)
+        if attachment.file:
+            # Kept already, and this copy matched the label, so it is the same file: the first send's answer was lost.
+            return attachment
+        # The file first, then the row (CTRL-3's card): if the row's save failed after the file was written, a retry
+        # writes over that file under the same name, and no row ever names a file that isn't there. On the demo the file
+        # is a row of the same transaction, and goes back with it.
+        attachment.file.save(attachment_file_name(attachment, ""), ContentFile(content), save=False)
+        attachment.received_at = timezone.now()
+        # Only the file and its time changed: only the rules about them are checked again, not every rule of the label.
+        attachment.full_clean(
+            exclude=[field.name for field in Attachment._meta.fields if field.name not in _FILE_FIELDS]
+        )
+        attachment.save(update_fields=list(_FILE_FIELDS))
+    return attachment
+
+
+# The fields a file's removal changes: the file, and who removed it, when and why.
+_REMOVAL_FIELDS = ("file", "file_removed_at", "file_removed_by", "file_removed_reason")
+
+
+def remove_attachment_file(attachment: Attachment, *, reason: str, by: Actor | None = None) -> Attachment:
+    """Take the file of `attachment`, of the open shop, away for good, and keep its row, with who (`by`, a person, or
+    None for the system, as ATT-7's nightly job), when and why: the retention rule wants the photo gone, not hidden,
+    and the row still says there was one (rule 7). A photo that never arrived can be removed too, so a late upload is
+    dropped. Removing one already removed keeps its first who, when and why, and deletes its file again, so a nightly
+    job may run twice, and the second run clears what a failed delete left."""
+    _check_shop(attachment.shop_id, by)
+    # A device alone is no person: the row would keep a remover with no name for good.
+    if by is not None and by.staff_id is None:
+        raise ValueError("A file is removed by a person, or by the system: a device alone is no person.")
+    # Rule 7: always why. Trimmed first: spaces alone say no more than nothing. Filed under the reason's field, as the
+    # database's own rule would be.
+    reason = reason.strip()
+    if not reason:
+        required = ValidationError("A reason is required.", code="attachment.reason_required")
+        raise ValidationError({"file_removed_reason": required})
+    with transaction.atomic():
+        # Locked, as a file's arrival is (receive_attachment_file): an upload and a removal at once take turns.
+        fresh = Attachment.objects.select_for_update().get(pk=attachment.pk)
+        if fresh.file_removed_at is None:
+            fresh.file = ""
+            fresh.file_removed_at = timezone.now()
+            fresh.file_removed_by_id = None if by is None else by.staff_id
+            fresh.file_removed_reason = reason
+            fresh.full_clean(
+                exclude=[field.name for field in Attachment._meta.fields if field.name not in _REMOVAL_FIELDS]
+            )
+            # Saved with `by` told to PostgreSQL, as the closures' and the staff services' saves are: the edit history's
+            # line then names the person the row names, even outside an office visit (02 v1.7: one fact, one answer;
+            # apps/core/acting.py). With `by` None, the system acts, and nobody is told.
+            with acting_as(by) if by is not None else nullcontext():
+                fresh.save(update_fields=list(_REMOVAL_FIELDS))
+        # The file is deleted by its own fixed name, `<shop id>/<attachment id>`, not by the name the row held: a photo
+        # that never arrived, or one removed before, may still have left a file there (an upload whose row change was
+        # undone after the file was written, or a delete that failed), and every removal clears it. Deleting a name with
+        # no file is nothing, in both storages.
+        # The row first, the file only once the row's change is kept for good (CTRL-3's card): Django runs this after
+        # the transaction commits, and never if it rolls back. Deleted inside the transaction instead, a rollback would
+        # bring the row back as "kept", naming a file that is gone. Opened in the file's own shop: by then, the caller's
+        # may have closed. robust=True: a delete that fails is logged, and the deletes after it in the same transaction
+        # still run; without it, one failed delete in a nightly job removing 200 photos would skip the other 199, and
+        # their rows would already say "removed". A file a failed delete left goes at the next removal of the same
+        # photo, which a nightly job asks for again.
+        name, storage, shop_id = attachment_file_name(fresh, ""), fresh.file.storage, fresh.shop_id
+        transaction.on_commit(lambda: _delete_stored(storage, name, shop_id), robust=True)
+    return fresh
+
+
+def _delete_stored(storage: Any, name: str, shop_id: uuid.UUID) -> None:
+    # The storage checks a name's shop against the one open (apps/core/storage.py).
+    with shop_context(shop_id):
+        storage.delete(name)
+
+
+def _check_file(attachment: Attachment, content: bytes) -> None:
+    # The file against its label (CTRL-3). Each refusal names no field: it is about the whole file. The laptop's route
+    # reads a file's length before the file itself, so a file over the limit never gets here from it; checked again for
+    # any other caller that hands the file itself, as PPL-4's office upload will.
+    if len(content) > LARGEST_FILE:
+        raise ValidationError("A file is kept up to 1 MB.", code="attachment.too_big")
+    sniffed = _image_type_of(content)
+    if sniffed is None:
+        raise ValidationError("Only a JPEG or a WebP photo is kept.", code="attachment.not_an_image")
+    # Another file than the one the record named: a photo damaged on the way, cut short, or another photo sent under
+    # this id. Its fingerprint tells, whatever its size. A file of the right bytes but of another type than its label
+    # says can only be a label the laptop wrote wrong; it is refused too, as kept it would be served as the wrong type.
+    if (
+        len(content) != attachment.size
+        or hashlib.sha256(content).hexdigest() != attachment.sha256
+        or sniffed != attachment.content_type
+    ):
+        raise ValidationError("This file is not the one its record names.", code="attachment.file_differs")
+
+
+def _image_type_of(content: bytes) -> AttachmentType | None:
+    # What a file is, by its first bytes, never by its name or what the request says it is: every JPEG starts with the
+    # bytes FF D8 FF, and every WebP with "RIFF", its length in four bytes, then "WEBP".
+    if content.startswith(b"\xff\xd8\xff"):
+        return AttachmentType.JPEG
+    if content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return AttachmentType.WEBP
+    return None
 
 
 def _waits_for_records(gap: Flag) -> bool:

@@ -22,6 +22,9 @@
   "topBar": {
     "place": "{shop} · {side}"
   },
+  "pageHeader": {
+    "back": "Back to where you were"
+  },
   "device": {
     "lock": {
       "title": "This device is blocked",
@@ -190,8 +193,7 @@
       "second": "The second font, easy to read"
     },
     "saving": "Saving…",
-    "saved": "Saved.",
-    "back": "Back"
+    "saved": "Saved."
   },
   "shopSettings": {
     "title": "Shop settings",
@@ -567,6 +569,19 @@
       "blue": "Blue",
       "striped": "White and red stripes"
     },
+    "tabs": {
+      "title": "Tabs",
+      "hint": "Press a tab, or use Tab and the arrow keys. On a phone the row scrolls sideways, and stays at the top as you scroll down.",
+      "samples": {
+        "attendance": "Attendance",
+        "money": "Money",
+        "computers": "Computers",
+        "stock": "Stock",
+        "closures": "Days the shop is closed",
+        "sides": "Sides"
+      },
+      "content": "The open section shows here. The others are hidden, not lost."
+    },
     "topBar": {
       "title": "Top bar",
       "sampleShop": "MPC",
@@ -694,6 +709,15 @@
       "reason_required": "Write the reason.",
       "started": "These days have already started. Change the last day instead.",
       "not_active": "This closure was already cancelled."
+    },
+    "attachment": {
+      "not_found": "The server has no such photo.",
+      "too_big": "This photo is too big: a photo can be at most 1 MB.",
+      "not_an_image": "This file isn't a photo. Only JPEG and WebP photos are kept.",
+      "file_differs": "This photo isn't the one its record names. It may have been damaged on the way.",
+      "file_waiting": "This photo hasn't reached the server yet. It comes once the laptop is online.",
+      "file_removed": "This photo has been removed.",
+      "length_required": "The photo was sent without its size. It will be sent again."
     },
     "password_too_short": "This password is too short.",
     "password_too_common": "This password is too common. Choose another.",

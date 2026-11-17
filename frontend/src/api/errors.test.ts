@@ -106,6 +106,18 @@ const CODES_THE_API_SENDS = [
   "closure.reason_required",
   "closure.not_active",
   "closure.started",
+  // A photo's file, sent by a laptop after the record that named it (CTRL-3): an id this shop doesn't hold, or whose
+  // record hasn't arrived yet; over 1 MB; not a JPEG or a WebP by its first bytes; or not the file its record named.
+  "attachment.not_found",
+  "attachment.too_big",
+  "attachment.not_an_image",
+  "attachment.file_differs",
+  // A photo sent with no length (in pieces, as a proxy may send it): never read, and sent again (411).
+  "attachment.length_required",
+  // And on an office screen (CTRL-3's GET): a photo whose record came but whose file the laptop hasn't sent yet, and a
+  // photo whose file was removed, 90 days after its pay run (ATT-7).
+  "attachment.file_waiting",
+  "attachment.file_removed",
   "staff.left",
   "staff.other_shop",
   "staff.reason_required",

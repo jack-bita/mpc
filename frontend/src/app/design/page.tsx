@@ -34,7 +34,9 @@ import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
 import { PasswordField } from "@/components/design/password-field";
 import { Input } from "@/components/design/input";
+import { PageHeader } from "@/components/design/page-header";
 import { SIDE_BAND_LOOKS, SideBand } from "@/components/design/side-band";
+import { Tabs } from "@/components/design/tabs";
 import { ON_GREEN, TopBar } from "@/components/design/top-bar";
 import { LanguageButton } from "@/components/language-button";
 import { OfflineBanner } from "@/components/offline-banner";
@@ -131,16 +133,43 @@ function Swatch({ token, use }: { token: string; use: string }) {
   );
 }
 
+/** The settings page's six tabs, as samples: enough to make the row scroll on a phone, and stick at the top
+ * while the page scrolls under it. */
+const TAB_SAMPLES = [
+  "attendance",
+  "money",
+  "computers",
+  "stock",
+  "closures",
+  "sides",
+] as const;
+
+function TabsSample() {
+  const t = useTranslations("design");
+  const [open, setOpen] = useState<string>(TAB_SAMPLES[0]);
+  return (
+    <Tabs
+      label={t("tabs.title")}
+      sections={TAB_SAMPLES.map((sample) => ({
+        value: sample,
+        label: t(`tabs.samples.${sample}`),
+        content: <p>{t("tabs.content")}</p>,
+      }))}
+      value={open}
+      onChange={setOpen}
+    />
+  );
+}
+
 export default function DesignPage() {
   // The words come from the open book, Swahili or English (ADR-0040).
   const t = useTranslations("design");
 
   return (
     <main className="mx-auto grid max-w-4xl gap-12 p-6">
-      <header className="grid gap-2">
-        <h1 className="text-4xl font-semibold tracking-tight">{t("title")}</h1>
-        <p className="text-muted-foreground">{t("intro")}</p>
-      </header>
+      {/* The page header, live: this page's own top is the sample, so its arrow really goes back. From a
+          fresh tab, to the home page, as /design belongs to no area. */}
+      <PageHeader title={t("title")} intro={t("intro")} fallback="/" />
 
       <Section title={t("colours.title")}>
         <ul className="grid gap-4 sm:grid-cols-2">
@@ -300,6 +329,11 @@ export default function DesignPage() {
           <p className="text-sm text-muted-foreground">{t("alerts.live")}</p>
           <OfflineBanner />
         </div>
+      </Section>
+
+      <Section title={t("tabs.title")}>
+        <p className="text-sm text-muted-foreground">{t("tabs.hint")}</p>
+        <TabsSample />
       </Section>
 
       <Section title={t("topBar.title")}>

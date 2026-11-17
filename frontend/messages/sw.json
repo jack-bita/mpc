@@ -22,6 +22,9 @@
   "topBar": {
     "place": "{shop} · {side}"
   },
+  "pageHeader": {
+    "back": "Rudi ulipotoka"
+  },
   "device": {
     "lock": {
       "title": "Kifaa hiki kimezuiwa",
@@ -190,8 +193,7 @@
       "second": "Herufi ya pili, rahisi kusoma"
     },
     "saving": "Inahifadhi…",
-    "saved": "Imehifadhiwa.",
-    "back": "Rudi"
+    "saved": "Imehifadhiwa."
   },
   "shopSettings": {
     "title": "Mipangilio ya duka",
@@ -567,6 +569,19 @@
       "blue": "Bluu",
       "striped": "Mistari nyeupe na nyekundu"
     },
+    "tabs": {
+      "title": "Vichupo",
+      "hint": "Bonyeza kichupo, au tumia Tab na mishale. Kwenye simu, safu inasogea pembeni, na hukaa juu ukishuka chini.",
+      "samples": {
+        "attendance": "Mahudhurio",
+        "money": "Pesa",
+        "computers": "Kompyuta",
+        "stock": "Mzigo",
+        "closures": "Siku duka limefungwa",
+        "sides": "Pande"
+      },
+      "content": "Sehemu iliyo wazi inaonekana hapa. Nyingine zimefichwa, hazijapotea."
+    },
     "topBar": {
       "title": "Upau wa juu",
       "sampleShop": "MPC",
@@ -694,6 +709,15 @@
       "reason_required": "Andika sababu.",
       "started": "Siku hizi zimeshaanza. Badilisha siku ya mwisho badala yake.",
       "not_active": "Siku hizi za kufunga duka zimeshaondolewa."
+    },
+    "attachment": {
+      "not_found": "Seva haina picha hii.",
+      "too_big": "Picha hii ni kubwa mno: picha isizidi MB 1.",
+      "not_an_image": "Faili hili si picha. Zinapokelewa picha za JPEG na WebP pekee.",
+      "file_differs": "Picha hii si ile iliyotajwa kwenye kumbukumbu yake. Huenda iliharibika njiani.",
+      "file_waiting": "Picha hii bado haijafika kwenye seva. Itafika kompyuta ikipata mtandao.",
+      "file_removed": "Picha hii imeshaondolewa.",
+      "length_required": "Picha ilitumwa bila kuonyesha ukubwa wake. Itatumwa tena."
     },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",

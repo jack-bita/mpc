@@ -1,9 +1,9 @@
-// settings-screen.test.tsx — Mipangilio ya duka (SHOP-5): every rule of the registry on one page, under its area, then
-// the closed days (ATT-9) and the sides; a side's rule with a line per side; each value written its own way; a value
+// settings-screen.test.tsx — Mipangilio ya duka (SHOP-5): every rule of the registry, under its area's tab, then
+// the closed days' tab (ATT-9) and the sides'; the open tab kept in the address; a side's rule with a line per side; each value written its own way; a value
 // set to start later shown beside today's; the page in English; and why, when the server refuses. Then each line's
 // button: Badilisha where the person holds settings.manage, Historia everywhere else, and what each opens.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { setLanguage } from "@/i18n/language";
 import { closuresAnswer } from "@/test/closures";
@@ -17,6 +17,11 @@ import { SettingsScreen } from "./settings-screen";
 vi.mock("@/api/client", async (importOriginal) =>
   (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
 );
+
+// The open tab lives in the address: each test starts from a plain one, so no tab carries over.
+afterEach(() => {
+  window.history.replaceState(null, "", "/");
+});
 
 const ME = "/api/auth/me/";
 const RULES = "/api/v1/shops/settings/";
@@ -41,17 +46,41 @@ function rulesAnswer(rules = SHOP_RULES, me: typeof SELLER = SELLER) {
   });
 }
 
-/** One rule's card, found by its name. Given 5 s, not Testing Library's 1, as the first test of a file pays
- * for the page's first load (device-health.test.tsx). */
+/** One rule's card, found by its name, with its area's tab opened first, as a person opens Pesa to read the
+ * drawer's tolerance. Given 5 s, not Testing Library's 1, as the first test of a file pays for the page's first
+ * load (device-health.test.tsx). */
 async function cardOf(name: string): Promise<HTMLElement> {
+  // hidden: true finds it in a closed tab too; the tab is then opened, so what the test reads next is what the
+  // person would see.
   const heading = await screen.findByRole(
     "heading",
-    { name, level: 3 },
+    { name, level: 3, hidden: true },
     { timeout: 5_000 },
   );
+  const panel = heading.closest("[role=tabpanel]");
+  const tab = panel?.getAttribute("aria-labelledby");
+  if (panel?.hasAttribute("hidden") && tab) {
+    const opener = document.getElementById(tab);
+    if (opener) fireEvent.click(opener);
+  }
   const card = heading.closest("[data-slot=card]");
   if (!(card instanceof HTMLElement)) throw new Error(`No card for ${name}`);
   return card;
+}
+
+/** The tabs' names, in their order on the row. */
+function tabNames(): string[] {
+  return screen.getAllByRole("tab").map((tab) => tab.textContent ?? "");
+}
+
+/** The open tab's name. */
+function openTab(): string | null {
+  return (
+    screen
+      .getAllByRole("tab")
+      .find((tab) => tab.getAttribute("aria-selected") === "true")
+      ?.textContent ?? null
+  );
 }
 
 // "TSh 1,000" is written with a space that never breaks (format.ts). textContent keeps it, so cardText's checks
@@ -63,19 +92,15 @@ async function cardText(name: string): Promise<string> {
 }
 
 describe("Mipangilio ya duka", () => {
-  it("shows every rule of the registry once, under its area, then the closed days, and the sides at the bottom", async () => {
+  it("gives each area a tab, then the closed days and the sides, Mahudhurio open first", async () => {
     rulesAnswer();
 
     render(<SettingsScreen />);
 
     await cardOf("Faini ya kwanza ya kuchelewa");
-    expect(
-      screen
-        .getAllByRole("heading", { level: 2 })
-        .map((each) => each.textContent),
-      // The closed days under the rules and above the sides, as Jack pictured it (ATT-9); the sides and their
-      // switches last (side-switch.tsx).
-    ).toEqual([
+    // The closed days after the rules and before the sides, as Jack pictured it (ATT-9); the sides and their
+    // switches last (side-switch.tsx). Each a tab now, in the page's old order (Jack, 17 Nov 2026).
+    expect(tabNames()).toEqual([
       "Mahudhurio",
       "Pesa",
       "Kompyuta",
@@ -83,9 +108,28 @@ describe("Mipangilio ya duka", () => {
       "Siku duka limefungwa",
       "Pande",
     ]);
+    expect(openTab()).toBe("Mahudhurio");
+    // Only the open section is seen: the attendance rules, not the drawer's.
     expect(
       screen
-        .getAllByRole("heading", { level: 3 })
+        .getAllByRole("heading", { level: 2 })
+        .map((each) => each.textContent),
+    ).toEqual(["Mahudhurio"]);
+    expect(
+      screen.queryByRole("heading", { name: "Tofauti ya droo inayokubalika" }),
+    ).toBeNull();
+  });
+
+  it("shows every rule of the registry once, under its area's tab", async () => {
+    rulesAnswer();
+
+    render(<SettingsScreen />);
+
+    await cardOf("Faini ya kwanza ya kuchelewa");
+    // Every tab's rules, the closed ones too: each tab keeps its section on the page, hidden (tabs.tsx).
+    expect(
+      screen
+        .getAllByRole("heading", { level: 3, hidden: true })
         .map((each) => each.textContent),
     ).toEqual([
       // The attendance day in its order, its switch first (ATT-2).
@@ -268,8 +312,112 @@ describe("Mipangilio ya duka", () => {
     render(<SettingsScreen />);
 
     await cardOf("Faini ya kwanza ya kuchelewa");
-    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(16);
+    expect(
+      screen.getAllByRole("heading", { level: 3, hidden: true }),
+    ).toHaveLength(16);
     expect(screen.queryByText(/half_day_after/)).toBeNull();
+  });
+});
+
+describe("the tabs and the page's top", () => {
+  it("has the back arrow beside the title, and the page's words under it", async () => {
+    rulesAnswer();
+
+    render(<SettingsScreen />);
+
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Mipangilio ya duka",
+    );
+    expect(screen.getByRole("button", { name: "Rudi ulipotoka" })).toBeTruthy();
+    // The tabs are named by the page, so a screen reader says whose they are.
+    expect(
+      await screen.findByRole(
+        "tablist",
+        { name: "Mipangilio ya duka" },
+        { timeout: 5_000 },
+      ),
+    ).toBeTruthy();
+  });
+
+  it("opens Pesa when its tab is pressed, and writes it in the address", async () => {
+    rulesAnswer();
+
+    render(<SettingsScreen />);
+
+    fireEvent.click(
+      await screen.findByRole("tab", { name: "Pesa" }, { timeout: 5_000 }),
+    );
+    expect(openTab()).toBe("Pesa");
+    expect(
+      screen.getByRole("heading", { name: "Tofauti ya droo inayokubalika" }),
+    ).toBeTruthy();
+    expect(window.location.search).toBe("?tab=money");
+  });
+
+  it("replaces the address rather than adding a page to the history", async () => {
+    rulesAnswer();
+
+    render(<SettingsScreen />);
+
+    const before = window.history.length;
+    fireEvent.click(
+      await screen.findByRole("tab", { name: "Pesa" }, { timeout: 5_000 }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Mzigo" }));
+    // Replaced, not added: the back arrow leaves the page rather than stepping back through the tabs.
+    expect(window.history.length).toBe(before);
+    expect(window.location.search).toBe("?tab=stock");
+  });
+
+  it("stays on the closed days when the rules come late, after a first answer that failed", async () => {
+    answer("GET", ME, { status: 200, body: SELLER });
+    // The first ask fails, so the page shows the closed days and the sides with the reason; the retry then
+    // brings the rules, and their tabs come in front.
+    let asks = 0;
+    answer("GET", RULES, () => {
+      asks += 1;
+      const reply =
+        asks === 1
+          ? refusal(503, "server.unavailable")
+          : { status: 200, body: SHOP_RULES };
+      return Response.json(reply.body, { status: reply.status });
+    });
+    answer("GET", CLOSURES, { status: 200, body: closuresAnswer() });
+    answer("GET", SIDES, {
+      status: 200,
+      body: { next: null, previous: null, results: [] },
+    });
+
+    render(<SettingsScreen />);
+
+    await screen.findByRole(
+      "tab",
+      { name: "Siku duka limefungwa" },
+      { timeout: 5_000 },
+    );
+    expect(openTab()).toBe("Siku duka limefungwa");
+    await screen.findByRole("tab", { name: "Mahudhurio" }, { timeout: 10_000 });
+    expect(openTab()).toBe("Siku duka limefungwa");
+  });
+
+  it("opens the tab the address names", async () => {
+    window.history.replaceState(null, "", "/settings/?tab=sides");
+    rulesAnswer();
+
+    render(<SettingsScreen />);
+
+    await screen.findByRole("tab", { name: "Pande" }, { timeout: 5_000 });
+    expect(openTab()).toBe("Pande");
+  });
+
+  it("opens Mahudhurio when the address names a tab the page doesn't have", async () => {
+    window.history.replaceState(null, "", "/settings/?tab=gone");
+    rulesAnswer();
+
+    render(<SettingsScreen />);
+
+    await screen.findByRole("tab", { name: "Pande" }, { timeout: 5_000 });
+    expect(openTab()).toBe("Mahudhurio");
   });
 });
 
@@ -281,14 +429,17 @@ describe("each line's button", () => {
 
     await cardOf("Faini ya kwanza ya kuchelewa");
     // Twelve shop's rules, and four side's rules on two sides: twenty lines.
-    expect(screen.getAllByRole("button", { name: /^Badilisha/ })).toHaveLength(
-      20,
-    );
-    expect(screen.queryByRole("button", { name: /^Historia/ })).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: /^Badilisha/, hidden: true }),
+    ).toHaveLength(20);
+    expect(
+      screen.queryByRole("button", { name: /^Historia/, hidden: true }),
+    ).toBeNull();
     // Each says which rule and which side, as a screen reader reads a list of buttons.
     expect(
       screen.getByRole("button", {
         name: "Badilisha: Tofauti ya droo inayokubalika, Vyakula",
+        hidden: true,
       }),
     ).toBeTruthy();
     expect(
@@ -304,10 +455,12 @@ describe("each line's button", () => {
     render(<SettingsScreen />);
 
     await cardOf("Faini ya kwanza ya kuchelewa");
-    expect(screen.queryByRole("button", { name: /^Badilisha/ })).toBeNull();
-    expect(screen.getAllByRole("button", { name: /^Historia/ })).toHaveLength(
-      20,
-    );
+    expect(
+      screen.queryByRole("button", { name: /^Badilisha/, hidden: true }),
+    ).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: /^Historia/, hidden: true }),
+    ).toHaveLength(20);
   });
 
   it("is Badilisha only where the key is held: Dawa's lines for a manager given it on Dawa", async () => {
@@ -325,7 +478,7 @@ describe("each line's button", () => {
     await cardOf("Faini ya kwanza ya kuchelewa");
     expect(
       screen
-        .getAllByRole("button", { name: /^Badilisha/ })
+        .getAllByRole("button", { name: /^Badilisha/, hidden: true })
         .map((button) => button.getAttribute("aria-label")),
     ).toEqual([
       "Badilisha: Tofauti ya droo inayokubalika, Dawa",
@@ -441,8 +594,10 @@ describe("the history", () => {
     );
 
     render(<SettingsScreen />);
+    // The drawer's tolerance is under Pesa: cardOf opens its tab, as the person would.
+    const drawer = await cardOf("Tofauti ya droo inayokubalika");
     fireEvent.click(
-      await screen.findByRole("button", {
+      within(drawer).getByRole("button", {
         name: "Historia: Tofauti ya droo inayokubalika, Vyakula",
       }),
     );
