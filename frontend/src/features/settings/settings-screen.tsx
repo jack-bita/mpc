@@ -85,7 +85,7 @@ export function SettingsScreen() {
       {who.data ? (
         <>
           <RulesByArea me={who.data} />
-          <ClosuresSection />
+          <ClosuresSection me={who.data} />
           <SideSwitches me={who.data} />
         </>
       ) : null}

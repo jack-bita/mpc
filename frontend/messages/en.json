@@ -243,7 +243,17 @@
       "title": "Days the shop is closed",
       "intro": "Days the whole shop is closed, such as a public holiday or a funeral. They are days off, and not paid.",
       "none": "No closed days coming.",
-      "days": "{first} – {last}"
+      "days": "{first} – {last}",
+      "add": "Add",
+      "added": "Saved: {name}, {days}.",
+      "form": {
+        "from": "From",
+        "fromHint": "Today or a later day.",
+        "to": "To",
+        "toHint": "Leave it empty for one day only.",
+        "name": "Name",
+        "nameHint": "Such as Krismasi, or Msiba wa bibi."
+      }
     },
     "sides": {
       "title": "Sides",

@@ -243,7 +243,17 @@
       "title": "Siku duka limefungwa",
       "intro": "Siku ambazo duka zima limefungwa, kama sikukuu au msiba. Ni siku za mapumziko, na hazilipwi.",
       "none": "Hakuna siku zijazo ambazo duka limefungwa.",
-      "days": "{first} – {last}"
+      "days": "{first} – {last}",
+      "add": "Ongeza",
+      "added": "Imehifadhiwa: {name}, {days}.",
+      "form": {
+        "from": "Kuanzia",
+        "fromHint": "Leo au siku ya baadaye.",
+        "to": "Hadi",
+        "toHint": "Acha wazi kama ni siku moja tu.",
+        "name": "Jina",
+        "nameHint": "Kwa mfano Krismasi, au Msiba wa bibi."
+      }
     },
     "sides": {
       "title": "Pande",

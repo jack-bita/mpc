@@ -11,19 +11,34 @@
 // The page keeps that order. A cancelled closure, or one already over, isn't sent: their days can't change any more,
 // and the audit trail keeps them.
 //
+// Ongeza, which opens the form (closure-form.tsx), is only for someone holding settings.manage on the whole shop, the
+// owner's key (spec §6): a closure closes both sides, and changes everyone's pay, so ATT-8's routes ask the key there,
+// and a manager given it on one side alone gets no button. Everyone else sees the list without it. The button only
+// keeps a door out of sight: the server checks the key itself on every change.
+//
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
+import { Button } from "@/components/design/button";
+import type { WhoIsHere } from "@/features/people/who-is-here";
 import { formatDay } from "@/lib/format";
 
-import { type Closure, useClosures } from "./closures";
+import { ClosureForm } from "./closure-form";
+import { type Closure, CLOSURES, useClosures } from "./closures";
 
-export function ClosuresSection() {
+/** The key that lets a person close the shop, on the whole shop: one of the owner's own four (spec §6). */
+const CLOSES_THE_SHOP = "settings.manage";
+
+export function ClosuresSection({ me }: { me: WhoIsHere }) {
   const t = useTranslations("shopSettings.closures");
   const closures = useClosures();
+  // On the whole shop only: a key on a side is not enough (see the top of this file).
+  const mayChange = me.permissions.whole_shop.includes(CLOSES_THE_SHOP);
 
   return (
     <section aria-labelledby="area-closures" className="grid gap-4">
@@ -35,6 +50,10 @@ export function ClosuresSection() {
       </div>
       {/* A failed read shows above the list, and keeps the last answer under it, as on the rules and Pande. */}
       <ApiErrorAlert error={closures.error} />
+      {/* Once the list has come, as the form's date boxes start from the shop's today, which comes with it. */}
+      {mayChange && closures.data ? (
+        <AddClosure today={closures.data.today} />
+      ) : null}
       {closures.data ? (
         closures.data.closures.length === 0 ? (
           // Said, not left blank: an empty space would read as a page still waiting.
@@ -54,22 +73,90 @@ export function ClosuresSection() {
   );
 }
 
-/** One closure: its name, and its days. */
-function ClosureLine({ closure }: { closure: Closure }) {
+/** A closure's days as the page writes them: one day as one date, "09/12/2026"; a span as its first and last day,
+ * "20/11/2026 – 24/11/2026", both closed. */
+function useDaysOf(): (closure: Closure) => string {
   const t = useTranslations("shopSettings.closures");
-  // One day is one date, "09/12/2026"; a span is its first and last day, "20/11/2026 – 24/11/2026", both closed.
-  const days =
+  return (closure) =>
     closure.first_day === closure.last_day
       ? formatDay(closure.first_day)
       : t("days", {
           first: formatDay(closure.first_day),
           last: formatDay(closure.last_day),
         });
+}
+
+/** Ongeza, the form it opens under it, and the line that says a closure was saved. */
+function AddClosure({ today }: { today: string }) {
+  const t = useTranslations("shopSettings.closures");
+  const daysOf = useDaysOf();
+  const store = useQueryClient();
+  const [open, setOpen] = useState(false);
+  // The last closure saved, said once in the status line (below).
+  const [saved, setSaved] = useState<Closure | null>(null);
+  // Where the keyboard goes when the form closes: back to Ongeza, as the form and the box that had focus are gone.
+  // Counted, so each close moves it (settings-screen.tsx).
+  const opener = useRef<HTMLButtonElement>(null);
+  const [closes, setCloses] = useState(0);
+  useEffect(() => {
+    if (closes > 0) opener.current?.focus();
+  }, [closes]);
+  function close() {
+    setOpen(false);
+    setCloses((count) => count + 1);
+  }
+
+  return (
+    <div className="grid gap-3">
+      {/* While the form is open its own Ghairi closes it, so Ongeza steps aside. */}
+      {open ? null : (
+        <div className="flex flex-wrap gap-3">
+          <Button
+            ref={opener}
+            size="normal"
+            onClick={() => {
+              setSaved(null);
+              setOpen(true);
+            }}
+          >
+            {t("add")}
+          </Button>
+        </div>
+      )}
+      {/* Always on the page, empty until a save: a role="status" line is read when its words change, and one that
+          appears with its words already in it may not be read at all (offline-banner.tsx). */}
+      <p role="status" className={saved ? "font-medium" : "sr-only"}>
+        {saved ? t("added", { name: saved.name, days: daysOf(saved) }) : null}
+      </p>
+      {open ? (
+        <div className="rounded-lg border border-input p-4">
+          <ClosureForm
+            today={today}
+            onSaved={(closure) => {
+              setSaved(closure);
+              close();
+            }}
+            onCancel={() => {
+              close();
+              // Asked again here too: a send whose answer was lost may have saved the closure, and the owner who
+              // gives up should still see it in the list (settings-screen.tsx).
+              void store.invalidateQueries({ queryKey: CLOSURES });
+            }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** One closure: its name, and its days. */
+function ClosureLine({ closure }: { closure: Closure }) {
+  const daysOf = useDaysOf();
   return (
     <div className="grid gap-3 rounded-lg border border-input p-4">
       <p className="grid gap-1 text-lg">
         <span className="font-semibold">{closure.name}</span>
-        <span>{days}</span>
+        <span>{daysOf(closure)}</span>
       </p>
     </div>
   );
