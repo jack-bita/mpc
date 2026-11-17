@@ -18,7 +18,9 @@
 // as the closure has left it.
 //
 // It carries no id: a move sent again finds the same last day, which the server writes nothing for, and answers the
-// closure as it is.
+// closure as it is. So the form sends nothing when the box still holds the last day the closure has: the server would
+// change nothing and keep no reason, and the page would say the last day changed (ATT-9's review). It says so beside
+// the box instead, in the page's own sentence, as no server code says it.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
@@ -44,8 +46,11 @@ import { type Closure, CLOSURES, dayBefore } from "./closures";
 // The fields with a box, beside which their refusals show. A refusal of any other field shows above the buttons.
 const ON_A_BOX = new Set(["last_day", "reason"]);
 
-/** The form's own checks, by box, as the codes the server would send. */
+/** The form's own checks, by box, as the codes the server would send, or SAME_DAY, which no server code says. */
 type Checks = { last_day?: string; reason?: string };
+
+/** The form's own mark for a box still holding the last day the closure has (see the top of this file). */
+const SAME_DAY = "same_day";
 
 export function ClosureLastDay({
   closure,
@@ -117,6 +122,7 @@ export function ClosureLastDay({
     else if (day < closure.first_day)
       checks.last_day = "closure.ends_before_it_starts";
     else if (day < yesterday) checks.last_day = "closure.date_past";
+    else if (day === closure.last_day) checks.last_day = SAME_DAY;
     // Spaces alone are no reason, as the server says too (rule 7: who, when and why).
     if (reason.trim() === "") checks.reason = "closure.reason_required";
     setOwn(checks);
@@ -129,7 +135,11 @@ export function ClosureLastDay({
   // (closure-form.tsx).
   const byField = fieldMessages(move.error);
   const said = (code?: string) =>
-    code === undefined ? undefined : codeMessage(codes, code);
+    code === undefined
+      ? undefined
+      : code === SAME_DAY
+        ? t("closures.sameLastDay")
+        : codeMessage(codes, code);
   const noBox = Object.entries(byField)
     .filter(([field]) => !ON_A_BOX.has(field))
     .map(([, sentence]) => sentence);

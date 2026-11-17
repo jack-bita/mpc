@@ -256,6 +256,7 @@
       "changeLastDayOf": "Badilisha siku ya mwisho: {name}",
       "newLastDay": "Siku mpya ya mwisho",
       "newLastDayHint": "Sasa ni {last}. Inaweza kuwa mapema au baadaye.",
+      "sameLastDay": "Hii tayari ndiyo siku ya mwisho. Chagua siku nyingine.",
       "moved": "Siku ya mwisho imebadilishwa: {name}, {days}.",
       "form": {
         "from": "Kuanzia",

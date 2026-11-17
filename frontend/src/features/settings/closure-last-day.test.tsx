@@ -170,6 +170,21 @@ describe("Badilisha siku ya mwisho", () => {
     expect(await sentBodies()).toEqual([]);
   });
 
+  it("says the last day it already has beside its box, and sends nothing, as the server would change nothing (ATT-9's review)", async () => {
+    // The owner types a reason and taps Hifadhi without picking a new day: the server would keep no reason, and the
+    // page would have said the last day changed.
+    const { onMoved } = openOn();
+
+    typeInto(reasonBox(), "Familia imemaliza mapema");
+    tap(save());
+
+    expect(errorOf(dayBox())).toBe(
+      "Hii tayari ndiyo siku ya mwisho. Chagua siku nyingine.",
+    );
+    expect(await sentBodies()).toEqual([]);
+    expect(onMoved).not.toHaveBeenCalled();
+  });
+
   it("shows the server's refusal of the day beside its box, as the demo's of a change of today", async () => {
     answer(
       "POST",

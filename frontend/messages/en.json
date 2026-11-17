@@ -256,6 +256,7 @@
       "changeLastDayOf": "Change the last day: {name}",
       "newLastDay": "New last day",
       "newLastDayHint": "Now {last}. It can be earlier or later.",
+      "sameLastDay": "This is already the last day. Pick another day.",
       "moved": "Last day changed: {name}, {days}.",
       "form": {
         "from": "From",
