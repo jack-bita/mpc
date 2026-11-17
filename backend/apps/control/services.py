@@ -1,5 +1,5 @@
 """apps/control/services.py — every write to the control tables, one function per action (ADR-0015): the flags,
-and the audit trail.
+the audit trail, and the attachments.
 
 raise_flag writes a flag with the people it names, all or nothing. The other three move it forward, each
 with a note in a person's own words, who and when kept with it (Jack, 29 Oct 2026; 02 v1.8):
@@ -18,6 +18,10 @@ service that does the action calls it inside its own transaction, so the action 
 or not at all. The line also names the device the visit came from (X3). No service passes it: audit() reads the note
 the edit history's trigger reads (apps/core/acting.py), so no service can forget it, and the two books can't name
 different devices for one action (Jack, AUTH-8; 02 v1.7: one fact, one answer).
+
+expect_attachment writes an attachment's row, waiting for its file (CTRL-3): Asha's clock-in reaches the server with
+her photo's label (what it is, how many bytes, its fingerprint), and the row says a photo is coming. The record's own
+saving code calls it, in the record's transaction, so the row arrives with the record that names it (ATT-3).
 
 A broken rule is a ValidationError with a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) will turn into its error shape when the review screen comes (CTRL-4); a bug in the
@@ -41,7 +45,20 @@ from django.core.exceptions import ValidationError
 from django.db import connection, models, transaction
 from django.db.transaction import TransactionManagementError
 
-from apps.control.models import AuditAction, AuditEvent, Flag, FlagKind, FlagNote, FlagPerson, FlagStatus, FlagStep
+from apps.control.models import (
+    ATTACHMENT_KINDS,
+    Attachment,
+    AttachmentKind,
+    AttachmentType,
+    AuditAction,
+    AuditEvent,
+    Flag,
+    FlagKind,
+    FlagNote,
+    FlagPerson,
+    FlagStatus,
+    FlagStep,
+)
 from apps.core.acting import current_device_id
 from apps.core.links import link_type_of
 from apps.core.models import ShopScoped
@@ -204,6 +221,69 @@ def resolve_flag_by_system(flag: Flag) -> Flag:
         fresh.full_clean(exclude=[field.name for field in Flag._meta.fields if field.name != "status"])
         fresh.save(update_fields=["status"])
     return fresh
+
+
+def expect_attachment(
+    *,
+    id: uuid.UUID,
+    kind: str,
+    subject: ShopScoped,
+    content_type: str,
+    size: int,
+    sha256: str,
+    by: Actor,
+    device: ShopScoped | None = None,
+) -> Attachment:
+    """Write the row of a photo that is coming: its `id`, made where it was taken (ADR-0007); its `kind`; the record
+    it is pinned to (`subject`, a saved row of the open shop); its label, as the record declared it (`content_type`,
+    `size` in bytes, `sha256` in lower-case hex); who took it (`by`, a person); and the laptop it was taken on
+    (`device`), or None on an office screen. The file comes later, through the upload route (CTRL-3), and must match
+    the label. Call it inside the record's own transaction, so the row is kept with the record or not at all."""
+    # The row belongs to its record's shop: shop A's clock-in gets a photo of shop A.
+    shop_id = subject.shop_id
+    _check_shop(shop_id, by)
+    # A photo is always taken by someone: a device alone has nobody to name, and the row's `created_by` is kept for
+    # good, as a flag's note is.
+    if by.staff_id is None:
+        raise ValueError("An attachment is added by a person: a device alone is no person.")
+    # A generic link has no foreign key, so the database can't check that it points at a row (as in raise_flag).
+    if subject._state.adding:
+        raise ValueError(f"An attachment's record must be a saved row; this {type(subject).__name__} was never saved.")
+    # T1: the laptop is the record's shop's too.
+    if device is not None and device.shop_id != shop_id:
+        raise ShopMismatch("The device belongs to another shop than the attachment.")
+    # A kind the list doesn't know. Filed under `kind`, as the database's rule would file it, and asked first: the
+    # kind says which record it may be pinned to, below.
+    if kind not in AttachmentKind.values:
+        unknown = ValidationError("This kind of attachment is not known.", code="attachment.kind_unknown")
+        raise ValidationError({"kind": unknown})
+    # A file that isn't one of the photos a laptop makes. Asked here, not left to full_clean, whose choice check would
+    # answer first with Django's general `invalid_choice`: the upload route refuses the same with this code (CTRL-3),
+    # and the laptop sets the photo aside by it, so both say it one way.
+    if content_type not in AttachmentType.values:
+        not_an_image = ValidationError("Only a JPEG or a WebP photo is kept.", code="attachment.not_an_image")
+        raise ValidationError({"content_type": not_an_image})
+    # Each kind is pinned to one table's records (ATTACHMENT_KINDS): a clock-in photo on a staff member, not on a
+    # clock-in, would be opened with the wrong key. The calling code picks both, so a mismatch is its bug, not a
+    # person's mistake. UnknownLinkType when the subject's table has no code at all (apps/core/links.py).
+    expected_table = ATTACHMENT_KINDS[AttachmentKind(kind)].subject_type
+    subject_type = link_type_of(subject)
+    if subject_type != expected_table:
+        raise ValueError(f"A {kind} is pinned to a {expected_table!r} record, not to a {subject_type!r} one.")
+    return _saved(
+        Attachment(
+            id=id,
+            shop_id=shop_id,
+            kind=kind,
+            subject_type=subject_type,
+            subject_id=subject.pk,
+            content_type=content_type,
+            size=size,
+            sha256=sha256,
+            device_id=None if device is None else device.pk,
+            created_by_id=by.staff_id,
+        )
+    )
 
 
 def _waits_for_records(gap: Flag) -> bool:
