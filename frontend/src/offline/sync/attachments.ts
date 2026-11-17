@@ -17,6 +17,10 @@
 // The sync runs every 30 s, and a photo is some 150 KB: one the server keeps refusing would otherwise go 2,880 times
 // a day, a whole bundle for nothing.
 //
+// Wi-Fi first, where the browser can tell (onCostlyLine): on mobile data, or when the person asked to save data,
+// the photos wait. Where it can't tell, as Chrome on a Windows laptop can't, they go (Jack, 17 Nov 2026): about
+// twenty clock-in photos a day come to some 3 MB, too little to need a setting.
+//
 // It runs in the page's sync alone, at its end (sync.ts): never in the service worker's push (SYNC-16), as a few
 // minutes' wait for a photo costs nothing (the card's default).
 import Dexie from "dexie";
@@ -49,13 +53,34 @@ export const FIRST_WAIT_MS = 60_000;
 /** The longest wait: however long the trouble, a photo goes again at least once an hour. */
 export const LONGEST_WAIT_MS = 60 * 60_000;
 
+/** What Chrome, Edge and Android's browsers say of the line the device is on (the Network Information API). Not in
+ * TypeScript's own list of the browser's parts, as Firefox and Safari have none: so each field may be missing. */
+interface NetworkInformation {
+  /** "wifi", "cellular" (mobile data), "ethernet"…; missing where the browser can't tell, as on a Windows laptop. */
+  type?: string;
+  /** True when the person turned on their browser's or phone's data saver. */
+  saveData?: boolean;
+}
+
+/**
+ * Whether the browser says the device is on a line that costs: mobile data, or a data saver turned on. A laptop on
+ * a phone's hotspot sees only the Wi-Fi to the phone, and a browser that says nothing is taken at its word: the
+ * photos then go (Jack, 17 Nov 2026).
+ */
+export function onCostlyLine(): boolean {
+  const { connection } = navigator as Navigator & {
+    connection?: NetworkInformation;
+  };
+  return connection?.saveData === true || connection?.type === "cellular";
+}
+
 /** What came back for one photo: kept, a refusal's code, or no answer at all. */
 type Heard = { kept: true } | { kept: false; code: string | null };
 
 /**
- * Sends the waiting photos whose records are in, oldest record first, one at a time, up to MOST_PHOTOS. A block or
- * a "not registered" is kept (answer.ts) and thrown on, as the sync must then ask nothing more; any other failure
- * only ends the round, as the next sync tries again.
+ * Sends the waiting photos whose records are in, oldest record first, one at a time, up to MOST_PHOTOS, unless the
+ * device is on a costly line. A block or a "not registered" is kept (answer.ts) and thrown on, as the sync must then
+ * ask nothing more; any other failure only ends the round, as the next sync tries again.
  */
 export async function sendAttachments(
   db: ShopDatabase,
@@ -66,6 +91,9 @@ export async function sendAttachments(
   let sent = 0;
   for (const id of ids) {
     if (sent === MOST_PHOTOS) return;
+    // Asked before each photo: a device that leaves the shop's Wi-Fi for mobile data mid-round stops sending at once.
+    // Waiting for Wi-Fi is no failed send: the photo's wait and tries stay as they were.
+    if (onCostlyLine()) return;
     const photo = await readyToGo(db, id);
     if (photo === null) continue;
     sent += 1;
