@@ -136,11 +136,15 @@ def test_a_key_on_one_side_opens_no_whole_shop_photo(
 def test_without_the_key_nothing_is_told_about_the_photo(
     staff_a: Any, staff_a2: Any, side_a: Model, give_role: GiveRole
 ) -> None:
-    # The key is asked before the file's state: someone without it can't learn whether the photo has come.
+    # The key is asked before the file's state: someone without it can't learn whether the photo has come, nor, from
+    # the answer's words, what kind of photo it is.
     give_role(staff_a2, RoleTemplate.WORKER, side_a)
     row = photo(staff_a, sent=False)
 
-    assert code_of(client_for(staff_a2).get(address(row.pk))) == (403, "permission_denied")
+    answer = client_for(staff_a2).get(address(row.pk))
+
+    assert code_of(answer) == (403, "permission_denied")
+    assert AttachmentKind.STAFF_PHOTO.value not in answer.content.decode()
 
 
 def test_waiting_file_says_so(staff_a: Any, staff_client_a: APIClient) -> None:

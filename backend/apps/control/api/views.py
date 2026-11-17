@@ -48,8 +48,10 @@ class AttachmentViewSet(ShopViewSet[Attachment]):
         # photo came.
         needed = ATTACHMENT_KINDS[AttachmentKind(attachment.kind)].opened_with
         if needed is not None and needed not in self.held.on(None):
-            # English for the logs; the screens translate the code (ADR-0032).
-            raise PermissionDenied(f"This person may not open a {attachment.kind} here.")
+            # English for the logs; the screens translate the code (ADR-0032). The message travels in the answer too,
+            # so it names nothing of the photo, not even its kind: someone without the key learns only that they may
+            # not open it.
+            raise PermissionDenied("This person may not open this photo.")
         if attachment.file_removed_at is not None:
             raise NotFound("This photo was removed.", code="attachment.file_removed")
         if not attachment.file:
