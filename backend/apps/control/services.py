@@ -22,6 +22,8 @@ different devices for one action (Jack, AUTH-8; 02 v1.7: one fact, one answer).
 expect_attachment writes an attachment's row, waiting for its file (CTRL-3): Asha's clock-in reaches the server with
 her photo's label (what it is, how many bytes, its fingerprint), and the row says a photo is coming. The record's own
 saving code calls it, in the record's transaction, so the row arrives with the record that names it (ATT-3).
+receive_attachment_file then takes the file itself, when the laptop can send it, checks it against the label, and keeps
+it; the same file sent again, or a file already removed, changes nothing, so a laptop may always send again.
 
 A broken rule is a ValidationError with a code (ADR-0032), which the API's error handler
 (apps/core/api/errors.py) will turn into its error shape when the review screen comes (CTRL-4); a bug in the
@@ -36,17 +38,21 @@ Callers open shop_context(shop) first, or system_context() in a nightly job: ful
 checks read through the guarded `objects` (CORE-2).
 """
 
+import hashlib
 import uuid
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.db import connection, models, transaction
 from django.db.transaction import TransactionManagementError
+from django.utils import timezone
 
 from apps.control.models import (
     ATTACHMENT_KINDS,
+    LARGEST_FILE,
     Attachment,
     AttachmentKind,
     AttachmentType,
@@ -58,6 +64,7 @@ from apps.control.models import (
     FlagPerson,
     FlagStatus,
     FlagStep,
+    attachment_file_name,
 )
 from apps.core.acting import current_device_id
 from apps.core.links import link_type_of
@@ -284,6 +291,72 @@ def expect_attachment(
             created_by_id=by.staff_id,
         )
     )
+
+
+# The fields a file's arrival changes.
+_FILE_FIELDS = ("file", "received_at")
+
+
+def receive_attachment_file(attachment_id: uuid.UUID, *, content: bytes) -> Attachment:
+    """Keep the file of the attachment `attachment_id`, of the open shop, once it matches the label its record brought:
+    a JPEG or a WebP by its first bytes, of that type, that many bytes, that SHA-256. The same file sent again, after
+    a first answer that was lost, changes nothing; so does any file sent for an attachment whose file was removed, so
+    the laptop can drop its copy either way. Attachment.DoesNotExist for an id the open shop doesn't hold, another
+    shop's included, or one whose record hasn't arrived yet: the route answers "not found", and the laptop tries again
+    after its next push."""
+    with transaction.atomic():
+        # Locked until the transaction ends (SELECT ... FOR UPDATE), and read through the guard, so only the open shop's
+        # rows are found (T1). Two copies of one upload at once (two tabs, or a tab and the service worker) take turns:
+        # the second finds the file the first kept, and changes nothing.
+        attachment = Attachment.objects.select_for_update().get(pk=attachment_id)
+        if attachment.file_removed_at is not None:
+            # Removed already (90 days after its pay run, or never arrived and given up on): nothing is kept again.
+            return attachment
+        _check_file(attachment, content)
+        if attachment.file:
+            # Kept already, and this copy matched the label, so it is the same file: the first send's answer was lost.
+            return attachment
+        # The file first, then the row (CTRL-3's card): if the row's save failed after the file was written, a retry
+        # writes over that file under the same name, and no row ever names a file that isn't there. On the demo the file
+        # is a row of the same transaction, and goes back with it.
+        attachment.file.save(attachment_file_name(attachment, ""), ContentFile(content), save=False)
+        attachment.received_at = timezone.now()
+        # Only the file and its time changed: only the rules about them are checked again, not every rule of the label.
+        attachment.full_clean(
+            exclude=[field.name for field in Attachment._meta.fields if field.name not in _FILE_FIELDS]
+        )
+        attachment.save(update_fields=list(_FILE_FIELDS))
+    return attachment
+
+
+def _check_file(attachment: Attachment, content: bytes) -> None:
+    # The file against its label (CTRL-3). Each refusal names no field: it is about the whole file. The route reads a
+    # file's length before the file itself, so a file over the limit rarely gets here; checked again, as a request with
+    # no length still reaches here.
+    if len(content) > LARGEST_FILE:
+        raise ValidationError("A file is kept up to 1 MB.", code="attachment.too_big")
+    sniffed = _image_type_of(content)
+    if sniffed is None:
+        raise ValidationError("Only a JPEG or a WebP photo is kept.", code="attachment.not_an_image")
+    # Another file than the one the record named: a photo damaged on the way, cut short, or another photo sent under
+    # this id. Its fingerprint tells, whatever its size. A file of the right bytes but of another type than its label
+    # says can only be a label the laptop wrote wrong; it is refused too, as kept it would be served as the wrong type.
+    if (
+        len(content) != attachment.size
+        or hashlib.sha256(content).hexdigest() != attachment.sha256
+        or sniffed != attachment.content_type
+    ):
+        raise ValidationError("This file is not the one its record names.", code="attachment.file_differs")
+
+
+def _image_type_of(content: bytes) -> AttachmentType | None:
+    # What a file is, by its first bytes, never by its name or what the request says it is: every JPEG starts with the
+    # bytes FF D8 FF, and every WebP with "RIFF", its length in four bytes, then "WEBP".
+    if content.startswith(b"\xff\xd8\xff"):
+        return AttachmentType.JPEG
+    if content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return AttachmentType.WEBP
+    return None
 
 
 def _waits_for_records(gap: Flag) -> bool:

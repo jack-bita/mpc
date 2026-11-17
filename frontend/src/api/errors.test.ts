@@ -106,6 +106,12 @@ const CODES_THE_API_SENDS = [
   "closure.reason_required",
   "closure.not_active",
   "closure.started",
+  // A photo's file, sent by a laptop after the record that named it (CTRL-3): an id this shop doesn't hold, or whose
+  // record hasn't arrived yet; over 1 MB; not a JPEG or a WebP by its first bytes; or not the file its record named.
+  "attachment.not_found",
+  "attachment.too_big",
+  "attachment.not_an_image",
+  "attachment.file_differs",
   "staff.left",
   "staff.other_shop",
   "staff.reason_required",
