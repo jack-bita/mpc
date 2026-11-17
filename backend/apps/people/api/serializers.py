@@ -3,21 +3,23 @@
 Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a
 shop's devices on the office routes (AUTH-5): a device as the device list shows it, and as the health page shows it,
 with its last push's report and its offline periods (SYNC-14); what a manager sends to say yes to a waiting one, to
-rename one, and to block or unblock one; what the owner sends to set a temporary password
-(AUTH-6); what a device sends for a PIN login, and what `me` answers (AUTH-4); what a person sends to change their
-own language and font (UI-9); and the answers of the routes a device
-calls with its key (apps/people/api/views.py), the PIN screen's list of people among them (UI-4). A key, a key's hash
-or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
+rename one, and to block or unblock one; a shop's workers, each with what they were given, as the workers' page
+shows them (PPL-4); what the owner sends to set a temporary password (AUTH-6); what a device sends for a PIN login,
+and what `me` answers (AUTH-4); what a person sends to change their own language and font (UI-9); and the answers of
+the routes a device calls with its key (apps/people/api/views.py), the PIN screen's list of people among them (UI-4).
+A key, a key's hash or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
 """
 
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
+from django.db import models
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
 from apps.people.models import OWN_SETTINGS, Device, DeviceOutage, PairingRequest, StaffMember, User
+from apps.people.selectors import Given, given_to
 from apps.shops.api.fields import SideField
 from apps.shops.models import Shop, Side, SideBand
 
@@ -131,6 +133,66 @@ class DeviceReasonSerializer(serializers.Serializer[Any]):
     # through, so the service refuses it with its own code, device.reason_required, which the screen translates; one
     # left out is the form's own `required`. 500 characters at most, as the audit line keeps (control.AuditEvent).
     reason = serializers.CharField(max_length=500, allow_blank=True)
+
+
+class GivenRoleSerializer(serializers.Serializer[Any]):
+    # One role a worker was given, with its side (None: every side). `template` names a copied role, whose `name` is
+    # empty: the page shows the template's name in its own words (sw.json, en.json; 02 §5).
+    id = serializers.UUIDField(read_only=True)
+    role = serializers.UUIDField(read_only=True)
+    template = serializers.CharField(read_only=True)
+    name = serializers.CharField(read_only=True)
+    side = serializers.UUIDField(read_only=True, allow_null=True)
+
+
+class GivenKeySerializer(serializers.Serializer[Any]):
+    # One extra key a worker was given beyond their roles, with its side (None: every side).
+    id = serializers.UUIDField(read_only=True)
+    permission = serializers.CharField(read_only=True)
+    side = serializers.UUIDField(read_only=True, allow_null=True)
+
+
+class StaffListSerializer(serializers.ListSerializer[StaffMember]):
+    # A page of workers: what each was given is read for the whole page at once, in two queries, before each worker is
+    # written out (given_to), not twice per worker. Kept in the context the workers' serializers share, which DRF makes
+    # new for each answer.
+    # `data`: the page, a list, or the rows' query, as DRF hands either. Any: DRF's types know only one row here.
+    def to_representation(self, data: Any) -> Any:
+        rows = list(data.all() if isinstance(data, models.Manager | models.QuerySet) else data)
+        # cast: DRF types the context as read-only, but it is the plain dict each answer starts with.
+        cast(dict[str, Any], self.context)["given"] = given_to([row.pk for row in rows])
+        return super().to_representation(rows)
+
+
+class StaffSerializer(serializers.ModelSerializer[StaffMember]):
+    # A worker as the workers' page shows them (PPL-4, PPL-6): their full name, which is the person's (User), their
+    # nickname, job title, first day, status and leaving day, and every role and extra key they were given. No `shop`:
+    # it is always the visit's own. Never their PIN's hash, nor when it was set, nor their phone or email (03 §5.9):
+    # the phone is PPL-10's.
+    full_name = serializers.CharField(source="user.full_name", read_only=True)
+    roles = serializers.SerializerMethodField()
+    keys = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StaffMember
+        fields = ["id", "full_name", "display_name", "job_title", "started_on", "status", "left_on", "roles", "keys"]
+        read_only_fields = fields
+        list_serializer_class = StaffListSerializer
+
+    def _given(self, staff: StaffMember) -> Given:
+        # From the page's read, for a list; read here for one worker shown alone, once for both fields.
+        given: dict[Any, Given] = cast(dict[str, Any], self.context).setdefault("given", {})
+        if staff.pk not in given:
+            given.update(given_to([staff.pk]))
+        return given[staff.pk]
+
+    @extend_schema_field(GivenRoleSerializer(many=True))
+    def get_roles(self, staff: StaffMember) -> Any:
+        return GivenRoleSerializer(self._given(staff).roles, many=True).data
+
+    @extend_schema_field(GivenKeySerializer(many=True))
+    def get_keys(self, staff: StaffMember) -> Any:
+        return GivenKeySerializer(self._given(staff).keys, many=True).data
 
 
 class TemporaryPasswordSerializer(serializers.Serializer[Any]):

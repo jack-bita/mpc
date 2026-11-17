@@ -33,11 +33,13 @@ every visit (AUTH-4):
                   ──▶ the staff member, and the device the visit names in both books (X3)
 
 And the device health page's read (SYNC-14, 03 §5.17): each laptop's offline periods of the last week, as it reported
-them (outages_this_week).
+them (outages_this_week). And the workers' page's (PPL-4): every role and extra key each worker was given, for a whole
+page of workers at once (given_to).
 """
 
 import uuid
-from collections.abc import Mapping, Sequence
+from collections import defaultdict
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import cast
@@ -51,7 +53,16 @@ from apps.core.settings_registry import IDLE_MINUTES
 from apps.core.tenancy import shop_context
 from apps.people.device_keys import hash_device_key
 from apps.people.login_doors import shop_of_device_key, shops_of_person
-from apps.people.models import Device, DeviceOutage, DeviceStatus, StaffMember, StaffStatus, User
+from apps.people.models import (
+    Device,
+    DeviceOutage,
+    DeviceStatus,
+    PermissionGrant,
+    RoleAssignment,
+    StaffMember,
+    StaffStatus,
+    User,
+)
 from apps.people.permissions import held_permissions
 from apps.shops.models import Shop, ShopStatus, Side
 from apps.shops.selectors import get_setting, shop_today
@@ -251,6 +262,51 @@ def who_is_here(staff: StaffMember, *, device_id: str | None, idle_minutes: int 
         whole_shop=sorted(held.on(None)),
         sides=[SideKeys(side=side, permissions=sorted(held.on(side.pk))) for side in sides],
     )
+
+
+@dataclass(frozen=True)
+class GivenRole:
+    # One role a worker was given (RoleAssignment), as the workers' page shows it: the role's id, and its template and
+    # name, as a copied role's name is empty and the page shows its template's, translated (02 §5); and its side, None
+    # for every side.
+    id: uuid.UUID
+    role: uuid.UUID
+    template: str
+    name: str
+    side: uuid.UUID | None
+
+
+@dataclass(frozen=True)
+class GivenKey:
+    # One extra key a worker was given beyond their roles (PermissionGrant), with its side, None for every side.
+    id: uuid.UUID
+    permission: str
+    side: uuid.UUID | None
+
+
+@dataclass(frozen=True)
+class Given:
+    # Everything one worker was given, whatever their status: a suspended worker holds none of it now, but holds it all
+    # again once brought back, so the page shows it (02 §5).
+    roles: list[GivenRole]
+    keys: list[GivenKey]
+
+
+def given_to(staff_ids: Collection[uuid.UUID]) -> dict[uuid.UUID, Given]:
+    """Every role and extra key each of these workers was given, by their job's id, in the order given (ids are
+    UUIDv7): two queries however many workers, as the workers' page lists them all at once (PPL-4). A worker given
+    nothing is there too, with nothing. Through the guarded managers, so only the open shop's rows are read."""
+    roles: defaultdict[uuid.UUID, list[GivenRole]] = defaultdict(list)
+    keys: defaultdict[uuid.UUID, list[GivenKey]] = defaultdict(list)
+    assignments = RoleAssignment.objects.filter(staff_id__in=staff_ids).order_by("id")
+    for row_id, staff_id, role_id, template, name, side_id in assignments.values_list(
+        "id", "staff_id", "role_id", "role__template", "role__name", "side_id"
+    ):
+        roles[staff_id].append(GivenRole(id=row_id, role=role_id, template=template, name=name, side=side_id))
+    grants = PermissionGrant.objects.filter(staff_id__in=staff_ids).order_by("id")
+    for row_id, staff_id, permission, side_id in grants.values_list("id", "staff_id", "permission", "side_id"):
+        keys[staff_id].append(GivenKey(id=row_id, permission=permission, side=side_id))
+    return {staff_id: Given(roles=roles[staff_id], keys=keys[staff_id]) for staff_id in staff_ids}
 
 
 # How far back the health page looks for offline periods (SYNC-14): a week, as the card says, counted back from now

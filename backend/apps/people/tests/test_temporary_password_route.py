@@ -174,7 +174,8 @@ def test_a_reason_is_needed(baba: StaffMember, asha: StaffMember) -> None:
 
 def test_staff_routes_name_their_permissions() -> None:
     # The test clients hold every key, so they can't catch a route that asks for the wrong one (backend rules).
-    assert StaffViewSet.action_permissions == {"temporary_password": Permission.STAFF_MANAGE}
+    # This route's own key; the workers' list and one worker ask the same (test_staff_routes.py, PPL-4).
+    assert StaffViewSet.action_permissions["temporary_password"] == Permission.STAFF_MANAGE
     # A person's password opens them on every side: the row is the whole shop's, so the key is asked on the whole shop.
     assert StaffViewSet.side_field is None
     assert issubclass(StaffViewSet, ShopViewSet)

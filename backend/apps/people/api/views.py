@@ -11,8 +11,11 @@ under /api/v1/people/ (apps/people/api/urls.py). Today a shop's devices (AUTH-5)
     POST  /api/v1/people/devices/{id}/block/     a manager stops it at once, with a reason
     POST  /api/v1/people/devices/{id}/unblock/   a manager lets it work again, with a reason
 
-And a staff member's temporary password (AUTH-6):
+And a shop's workers, for whoever holds staff.manage on the whole shop (PPL-4), and a worker's temporary password
+(AUTH-6):
 
+    GET   /api/v1/people/staff/                             every worker the shop has had, with what each was given
+    GET   /api/v1/people/staff/{id}/                        one worker
     POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
 
 And the routes a device calls with its key, built on DeviceView (apps/people/api/base.py), under /api/devices/v1/
@@ -36,6 +39,7 @@ from collections.abc import Callable
 from typing import Any, cast
 
 from django.contrib.auth import logout
+from django.db.models import QuerySet
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -66,6 +70,7 @@ from apps.people.api.serializers import (
     OwnSettingsSerializer,
     PairingStartSerializer,
     PinLoginSerializer,
+    StaffSerializer,
     TemporaryPasswordSerializer,
     WhoIsHereSerializer,
 )
@@ -179,17 +184,28 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
         return Response(self.get_serializer(change(device, by=self.staff, reason=sent.validated_data["reason"])).data)
 
 
-class StaffViewSet(ShopViewSet[StaffMember]):
-    # A shop's people. One action so far: a first or forgotten password, set face to face (ADR-0038). PPL-4 adds the
-    # list, the adding and the rest, and its screen calls this.
+class StaffViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, ShopViewSet[StaffMember]):
+    # A shop's people, as the workers' page shows them (PPL-4, PPL-6): every worker the shop has had, those who left
+    # included, each with every role and extra key they were given; and a first or forgotten password, set face to face
+    # (ADR-0038). PPL-7, PPL-8 and PPL-10 add the roles, the PIN and the details.
     model = StaffMember
-    # A person's password opens them on every side, whichever side they work on: the row belongs to the whole shop, so
-    # the key is asked on the whole shop, where a key for Dawa alone opens nothing (PPL-5).
+    # A person's job belongs to the whole shop, whichever side they work on: a password opens them on every side, and a
+    # suspension stops them on every side. So each key is asked on the whole shop, where a key for Dawa alone opens
+    # nothing (PPL-5).
     side_field = None
-    # The owner's own key, which he may hand to a manager (Jack, 4 Nov 2026). The service asks it again, with the rest
-    # of who may (_check_may_set_password, apps/people/services.py).
-    action_permissions = {"temporary_password": Permission.STAFF_MANAGE}
-    serializer_class = TemporaryPasswordSerializer
+    # staff.manage, the owner's own key, which he may hand to a manager (Jack, 4 Nov 2026). The workers too are for
+    # whoever manages them, not for everyone who works there (PPL-4's card, default): the page shows each one's roles,
+    # and later their pay (WAGE-2). Each service asks the key again, with the rest of who may (apps/people/services.py).
+    action_permissions = {
+        "list": Permission.STAFF_MANAGE,
+        "retrieve": Permission.STAFF_MANAGE,
+        "temporary_password": Permission.STAFF_MANAGE,
+    }
+    serializer_class = StaffSerializer
+
+    def base_rows(self) -> QuerySet[StaffMember]:
+        # Each worker's person read in the same query: the full name is the person's (User), not the job's.
+        return super().base_rows().select_related("user")
 
     # `sent` holds the password while the service runs, and so do the serializer's frames while they read it: every
     # variable here, and in everything this calls, shows as stars in Django's error reports, as in the service itself.
@@ -200,7 +216,7 @@ class StaffViewSet(ShopViewSet[StaffMember]):
         # The person, found in the visit's shop and checked for the action's key (get_object; initial() already ran it
         # once, before the action began): another shop's person is "not found", before anything sent is read.
         staff = self.get_object()
-        sent = self.get_serializer(data=request.data)
+        sent = TemporaryPasswordSerializer(data=request.data)
         sent.is_valid(raise_exception=True)
         # cast: the login leaves the staff member acting in `request.auth`, which mypy reads as an Actor.
         set_temporary_password(
