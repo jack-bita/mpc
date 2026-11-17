@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
 
-**Changes in v1.73** (17 Nov 2026, the settings page's layout): §7.1's folder map names two pieces in `components/design/`: `page-header.tsx`, the back arrow beside each page's title, and `tabs.tsx`, a long page in sections behind a row of tabs; *Mipangilio ya duka* is in tabs, its open tab in the address (Jack). Marked **(v1.73)**.
+**Changes in v1.73** (17 Nov 2026, the settings page's layout): §7.1's folder map names two pieces in `components/design/`: `page-header.tsx`, the back arrow beside each office page's title, and `tabs.tsx`, a long page in sections behind a row of tabs; and `components/in-app-moves.tsx`, the tab's note that lets the arrow go back only to the app's own pages. *Mipangilio ya duka* is in tabs, its open tab in the address (Jack). Marked **(v1.73)**.
 
 **Changes in v1.72** (17 Nov 2026, CTRL-6's review): §5.13: a photo's bytes in a drawer of their own; the photos go once the laptop is noted back, 1.5 MB a sync; only a 204 takes one off the laptop; one the server still can't find after some two days is set aside. §6.1 lists the bytes' drawer; §6.5 says the photos go after the laptop is noted back. Marked **(v1.72)**.
 
@@ -748,6 +748,7 @@ frontend/src/
 ├── lib/                      decimal.ts, rounding.ts, units.ts, time.ts, ids.ts, format.ts, permissions.ts
 ├── components/               the app's own parts, built from our pieces: app-frame.tsx (the top bar and the page's <main>),
 │                             language-button.tsx, offline-banner.tsx, update-prompt.tsx (v1.30), api-error-alert.tsx (v1.31)
+│                             in-app-moves.tsx (the tab's note of the app's own moves, for the back arrow) (v1.73)
 ├── components/ui/            shadcn components
 ├── components/design/        our own pieces in the shop's look; screens use only these (v1.27); password-field.tsx,
 │                             a password box with its eye (v1.34); page-header.tsx, the back arrow beside a page's
