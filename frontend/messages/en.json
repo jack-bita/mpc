@@ -22,6 +22,9 @@
   "topBar": {
     "place": "{shop} · {side}"
   },
+  "pageHeader": {
+    "back": "Back to where you were"
+  },
   "device": {
     "lock": {
       "title": "This device is blocked",
@@ -190,8 +193,7 @@
       "second": "The second font, easy to read"
     },
     "saving": "Saving…",
-    "saved": "Saved.",
-    "back": "Back"
+    "saved": "Saved."
   },
   "shopSettings": {
     "title": "Shop settings",
@@ -566,6 +568,19 @@
     "sideBands": {
       "blue": "Blue",
       "striped": "White and red stripes"
+    },
+    "tabs": {
+      "title": "Tabs",
+      "hint": "Press a tab, or use Tab and the arrow keys. On a phone the row scrolls sideways, and stays at the top as you scroll down.",
+      "samples": {
+        "attendance": "Attendance",
+        "money": "Money",
+        "computers": "Computers",
+        "stock": "Stock",
+        "closures": "Days the shop is closed",
+        "sides": "Sides"
+      },
+      "content": "The open section shows here. The others are hidden, not lost."
     },
     "topBar": {
       "title": "Top bar",
