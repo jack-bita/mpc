@@ -112,7 +112,14 @@ export async function saveDocument(
   };
   const saved = await db.transaction(
     "rw",
-    [db.meta, db.documents, db.outbox, db.pending_effects, db.attachment_files],
+    [
+      db.meta,
+      db.documents,
+      db.outbox,
+      db.pending_effects,
+      db.attachment_files,
+      db.attachment_bytes,
+    ],
     async () => {
       const last = await readLastDeviceSeq(db);
       if (last === null) throw new NeverFilled();
@@ -141,19 +148,22 @@ export async function saveDocument(
           })),
         );
       }
-      // Waiting to go up once the server has accepted their record (sync/attachments.ts), in its order.
+      // Waiting to go up once the server has accepted their record (sync/attachments.ts), in its order; their bytes
+      // beside them, in a drawer of their own, so a sync reads only the bytes of the photo it sends.
       if (photos.length > 0) {
         await db.attachment_files.bulkAdd(
-          photos.map(({ label, bytes }) => ({
+          photos.map(({ label }) => ({
             ...label,
             document_id: made.id,
             device_seq,
-            bytes,
             state: "waiting" as const,
             tries: 0,
             last_error: null,
             wait_until: null,
           })),
+        );
+        await db.attachment_bytes.bulkAdd(
+          photos.map(({ label, bytes }) => ({ id: label.id, bytes })),
         );
       }
       return { ...made, device_seq };

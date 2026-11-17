@@ -140,19 +140,19 @@ describe("saving a record with its photo", () => {
     expect(await db.documents.get(saved.id)).toMatchObject({
       payload: { kind: "in", photo: photo.label },
     });
-    const row = await db.attachment_files.get(photo.label.id);
-    expect(row).toEqual({
+    expect(await db.attachment_files.get(photo.label.id)).toEqual({
       ...photo.label,
       document_id: saved.id,
       device_seq: 58,
-      bytes: expect.anything(),
       state: "waiting",
       tries: 0,
       last_error: null,
       wait_until: null,
     });
-    // The bytes as the camera made them: the same file the label's fingerprint was worked out from.
-    expect(bytesOf(row?.bytes)).toEqual(bytesOf(photo.bytes));
+    // Its bytes beside it, by the same id, as the camera made them: the same file the label's fingerprint was worked
+    // out from.
+    const kept = await db.attachment_bytes.get(photo.label.id);
+    expect(bytesOf(kept?.bytes)).toEqual(bytesOf(photo.bytes));
   });
 
   it("writes two photos of one record, each with its own row", async () => {
@@ -172,11 +172,12 @@ describe("saving a record with its photo", () => {
   });
 
   it("saves nothing at all when the photo's write fails", async () => {
-    // A full disk as the photo is written: the record, its number and its outbox row go back with it. Kept,
-    // the record would name a photo the laptop never had, and the server would wait for it for good.
+    // A full disk as the photo is written: the record, its number, its outbox row and the photo's row go back with
+    // it. Kept, the record would name a photo the laptop never had, and the server would wait for it for good.
     const db = await filledLaptop();
     const photo = await labelPhoto(madeUpJpeg(), "clock_photo");
-    vi.spyOn(db.attachment_files, "bulkAdd").mockRejectedValueOnce(
+    // The last write of the save, the photo's bytes, after its row.
+    vi.spyOn(db.attachment_bytes, "bulkAdd").mockRejectedValueOnce(
       new Error("disk full"),
     );
 
@@ -187,6 +188,7 @@ describe("saving a record with its photo", () => {
     expect(await db.documents.count()).toBe(0);
     expect(await db.outbox.count()).toBe(0);
     expect(await db.attachment_files.count()).toBe(0);
+    expect(await db.attachment_bytes.count()).toBe(0);
     expect(await readLastDeviceSeq(db)).toBe(57);
   });
 

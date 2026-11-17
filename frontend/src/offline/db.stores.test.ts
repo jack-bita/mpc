@@ -105,6 +105,7 @@ describe("the device database", () => {
         "sent_archive",
         "outages",
         "attachment_files",
+        "attachment_bytes",
       ].sort(),
     );
   });

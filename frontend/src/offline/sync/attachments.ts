@@ -1,6 +1,6 @@
 // attachments.ts — sends the photos waiting on this laptop, each once its record is in (CTRL-6, 03 §5.13).
 //
-// A photo is saved with its record (outbox.ts) and waits in attachment_files. Its record goes first, with the push,
+// A photo is saved with its record (outbox.ts) and waits in attachment_files, its bytes beside it in attachment_bytes. Its record goes first, with the push,
 // and the server writes the photo's row from the record's label, in the record's own transaction (expect_attachment,
 // ATT-3). Only then can the file be kept, so a photo goes only once its record is accepted: in sent_archive. A record
 // still in the outbox, or set aside there (needs_attention), has no row on the server, and its photo waits with it.
@@ -95,7 +95,7 @@ export async function sendAttachments(
   db: ShopDatabase,
   place: SyncPlace,
 ): Promise<void> {
-  // Only their ids first: a week offline may hold a hundred photos, and each is read whole only as it goes.
+  // Only their ids first, then each one's small row as it comes: the bytes are read only for the photo that goes.
   const ids = await waitingInOrder(db).primaryKeys();
   let sent = 0;
   for (const id of ids) {
@@ -103,16 +103,24 @@ export async function sendAttachments(
     // Asked before each photo: a device that leaves the shop's Wi-Fi for mobile data mid-round stops sending at once.
     // Waiting for Wi-Fi is no failed send: the photo's wait and tries stay as they were.
     if (onCostlyLine()) return;
-    const photo = await readyToGo(db, id);
-    if (photo === null) continue;
+    const ready = await readyToGo(db, id);
+    if (ready === null) continue;
+    const { photo, bytes } = ready;
     sent += 1;
     // The wait counts from when it went, not from when its answer came, as the push's does (backoff.ts).
     const sentAt = Date.now();
-    const heard = await send(photo, place);
+    const heard = await send(photo, bytes, place);
     const tries = photo.tries + 1;
     if (heard.kept) {
-      // Kept on the server: this laptop's copy is no longer needed.
-      await db.attachment_files.delete(photo.id);
+      // Kept on the server: this laptop's copy is no longer needed, its row and its bytes together.
+      await db.transaction(
+        "rw",
+        [db.attachment_files, db.attachment_bytes],
+        async () => {
+          await db.attachment_files.delete(photo.id);
+          await db.attachment_bytes.delete(photo.id);
+        },
+      );
     } else if (
       heard.code !== null &&
       (SET_ASIDE.has(heard.code) ||
@@ -143,15 +151,16 @@ function waitingInOrder(db: ShopDatabase) {
     .between(["waiting", Dexie.minKey], ["waiting", Dexie.maxKey]);
 }
 
-// The photo, if it is still waiting, its wait is over, and its record is in; otherwise null. Read in one transaction,
-// so the photo and its record are seen as they stood together.
+// The photo and its bytes, if it is still waiting, its wait is over, and its record is in; otherwise null. Read in
+// one transaction, so the photo and its record are seen as they stood together; the bytes are read last, only for
+// the photo that goes.
 async function readyToGo(
   db: ShopDatabase,
   id: string,
-): Promise<AttachmentFileRow | null> {
+): Promise<{ photo: AttachmentFileRow; bytes: ArrayBuffer } | null> {
   return db.transaction(
     "r",
-    [db.attachment_files, db.sent_archive],
+    [db.attachment_files, db.sent_archive, db.attachment_bytes],
     async () => {
       const photo = await db.attachment_files.get(id);
       if (photo === undefined || photo.state !== "waiting") return null;
@@ -161,7 +170,11 @@ async function readyToGo(
         .where("id")
         .equals(photo.document_id)
         .count();
-      return accepted > 0 ? photo : null;
+      if (accepted === 0) return null;
+      const kept = await db.attachment_bytes.get(id);
+      // Written in one transaction with its row (outbox.ts), and deleted with it, so never missing.
+      if (kept === undefined) throw new Error(`Photo ${id} has no bytes.`);
+      return { photo, bytes: kept.bytes };
     },
   );
 }
@@ -182,6 +195,7 @@ function waitIsOver(until: number | null): boolean {
 // One photo to the server, and what came back.
 async function send(
   photo: AttachmentFileRow,
+  bytes: ArrayBuffer,
   place: SyncPlace,
 ): Promise<Heard> {
   try {
@@ -191,8 +205,8 @@ async function send(
         // The file's bytes alone, no JSON and no form (CTRL-3). The server's description names the body a string, as
         // OpenAPI writes any file, so the bytes are handed over as they are, past the client's JSON. fetch gives an
         // ArrayBuffer its length, so the route never has to answer 411 for want of one.
-        body: photo.bytes as unknown as string,
-        bodySerializer: (bytes) => bytes,
+        body: bytes as unknown as string,
+        bodySerializer: (body) => body,
         // Its type as the label says: the server checks it against the file's first bytes.
         headers: { "Content-Type": photo.content_type },
         signal: syncCallLimit(),

@@ -135,7 +135,37 @@ describe("sending the photos", () => {
     expect(request?.headers.get("Content-Type")).toBe("image/jpeg");
     expect(request?.headers.get("X-CSRFToken")).toBe("token-from-django");
     expect(bytesOf(await request!.arrayBuffer())).toEqual(bytesOf(photo.bytes));
+    // Its row and its bytes, both.
     expect(await db.attachment_files.count()).toBe(0);
+    expect(await db.attachment_bytes.count()).toBe(0);
+  });
+
+  it("reads the bytes of only the photo that goes", async () => {
+    // A clock-in set aside keeps its photo waiting for good: each sync skips it by its small row, and never reads its
+    // 150 KB.
+    const skipped = await clockInWith();
+    const going = await clockInWith();
+    answer("POST", PUSH, {
+      status: 200,
+      body: {
+        answers: [
+          {
+            id: skipped.record.id,
+            status: "invalid",
+            code: "document.type_unknown",
+          },
+          { id: going.record.id, status: "accepted", posted_seq: 131 },
+        ],
+      },
+    });
+    await push(db, pagePlace);
+    keeps(going.photo);
+    const read = vi.spyOn(db.attachment_bytes, "get");
+
+    await sendAttachments(db, pagePlace);
+
+    expect(read.mock.calls).toEqual([[going.photo.label.id]]);
+    expect(await db.attachment_bytes.get(skipped.photo.label.id)).toBeDefined();
   });
 
   it("keeps a photo whose record hasn't gone yet, and asks nothing", async () => {

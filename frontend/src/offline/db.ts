@@ -150,7 +150,7 @@ export type PhotoType = "image/jpeg" | "image/webp";
 /** A photo taken on this laptop, waiting to go up once its record is in (CTRL-6, 03 §5.13). Written with its
  * record, in one transaction (saveDocument), and taken off the laptop once the server has kept it. Its rules live
  * in attachments.ts. The label's fields (id to sha256) are the ones its record names, as the server checks the file
- * against them. */
+ * against them. Its bytes wait beside it, in attachment_bytes, by the same id. */
 export interface AttachmentFileRow {
   /** A UUIDv7 made here: the id its record's label names, and the address it goes up to. */
   id: string;
@@ -165,10 +165,6 @@ export interface AttachmentFileRow {
   document_id: string;
   /** Its record's place in the line: photos go in their records' order, oldest first. */
   device_seq: number;
-  /** The photo itself. Kept as its bytes, not as the camera's Blob: the bytes are read anyway, to work out the
-   * label's SHA-256, and the tests' pretend database (fake-indexeddb) hands a Blob back empty, so a test of a
-   * Blob would prove nothing. A browser keeps either alike. */
-  bytes: ArrayBuffer;
   /** Waiting to go, or set aside after a refusal, which no resend would change. */
   state: "waiting" | "set_aside";
   /** How many times it was sent and not kept: each makes its next wait longer (sync/attachments.ts). */
@@ -179,6 +175,19 @@ export interface AttachmentFileRow {
   /** Until when, on this laptop's clock in ms, it waits after a send that failed; null when it doesn't. Not a search
    * key: the few photos waiting are read in their order, and the ones still waiting skipped. */
   wait_until: number | null;
+}
+
+/** A photo's bytes, beside its row in attachment_files, by the same id (CTRL-6). A drawer of their own, so a sync
+ * reads the small rows of every waiting photo to find the ones ready to go, and the bytes of only the one it sends:
+ * kept in the row, each sync would read every waiting photo whole, some 150 KB each, just to skip it, as a photo of
+ * a record set aside is skipped for good. Written with its row, in one transaction, and deleted with it once the
+ * server has kept the photo; a photo set aside keeps its bytes. */
+export interface AttachmentBytesRow {
+  id: string;
+  /** The photo itself. Kept as its bytes, not as the camera's Blob: the bytes are read anyway, to work out the
+   * label's SHA-256, and the tests' pretend database (fake-indexeddb) hands a Blob back empty, so a test of a
+   * Blob would prove nothing. A browser keeps either alike. */
+  bytes: ArrayBuffer;
 }
 
 /** One step in the database's life: its number, its drawers, and an upgrade if old rows must change.
@@ -235,13 +244,14 @@ export const VERSIONS: readonly Version[] = [
     },
   },
   {
-    // CTRL-6: the photos that wait for their records (03 §5.13). A new drawer, empty on every laptop, so no upgrade,
-    // and no new bootstrap: it holds nothing the server sends. By record, so a screen finds a record's photos (ATT-3
-    // shows today's clock-ins); by state and number together, so the send reads what is waiting already in its
-    // records' order, as the push reads the outbox.
+    // CTRL-6: the photos that wait for their records (03 §5.13). Two new drawers, empty on every laptop, so no
+    // upgrade, and no new bootstrap: they hold nothing the server sends. A photo's row by record, so a screen finds a
+    // record's photos (ATT-3 shows today's clock-ins); by state and number together, so the send reads what is
+    // waiting already in its records' order, as the push reads the outbox. Its bytes by its id alone.
     version: 3,
     stores: {
       attachment_files: "id, document_id, [state+device_seq]",
+      attachment_bytes: "id",
     },
   },
 ];
@@ -261,6 +271,7 @@ export type ShopDatabase = Dexie & {
   sent_archive: EntityTable<SentDocumentRow, "id">;
   outages: EntityTable<OutageRow, "id">;
   attachment_files: EntityTable<AttachmentFileRow, "id">;
+  attachment_bytes: EntityTable<AttachmentBytesRow, "id">;
 };
 
 /** The database's name in the browser: one per shop, by the shop's id, which never changes. */

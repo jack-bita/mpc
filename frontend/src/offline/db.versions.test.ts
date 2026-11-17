@@ -93,7 +93,10 @@ describe("the device database's versions", () => {
     // The same rule again, once laptops have moved up to it (CTRL-6).
     expect(VERSIONS[2]).toEqual({
       version: 3,
-      stores: { attachment_files: "id, document_id, [state+device_seq]" },
+      stores: {
+        attachment_files: "id, document_id, [state+device_seq]",
+        attachment_bytes: "id",
+      },
     });
   });
 
@@ -151,6 +154,7 @@ describe("the device database's versions", () => {
     expect(await after.outbox.count()).toBe(1);
     expect(await after.outages.count()).toBe(1);
     expect(await after.attachment_files.count()).toBe(0);
+    expect(await after.attachment_bytes.count()).toBe(0);
   });
 
   it("runs a later version's upgrade on a laptop at the version before, and keeps its rows", async () => {
