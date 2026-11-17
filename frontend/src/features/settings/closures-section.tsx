@@ -264,8 +264,8 @@ function ClosureLine({
       {open === "remove" ? (
         <ClosureCancel
           closure={closure}
-          // The line leaves the list once it is read again: the section says so, and takes the keyboard. The form closes
-          // now, so a list that is slow to come back never shows an open Ondoa for a closure already cancelled.
+          // The line has left the list already (dropClosure, closures.ts): the section says so, and takes the
+          // keyboard.
           onCancelled={() => {
             setOpen(null);
             onChanged(

@@ -34,7 +34,7 @@ import { Field } from "@/components/design/field";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { useOnline } from "@/offline/network";
 
-import { type Closure, CLOSURES, useDaysOf } from "./closures";
+import { type Closure, CLOSURES, dropClosure, useDaysOf } from "./closures";
 
 export function ClosureCancel({
   closure,
@@ -80,7 +80,8 @@ export function ClosureCancel({
       }
     },
     onSuccess: () => {
-      // The list asks again: the cancelled closure isn't in it any more.
+      // Out of the list at once, then the list asks again: a cancelled closure never stays on the page (closures.ts).
+      dropClosure(store, closure.id);
       void store.invalidateQueries({ queryKey: CLOSURES });
       onCancelled();
     },

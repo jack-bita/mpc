@@ -351,6 +351,46 @@ describe("Ondoa", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("takes the closure off the page at once, even when the list can't be read again after (ATT-9's review)", async () => {
+    // The network drops right after the cancel: the list's second read fails. The cancelled closure must not stay on
+    // the page with its buttons.
+    let reads = 0;
+    answer("GET", CLOSURES, () => {
+      reads += 1;
+      return reads === 1
+        ? Response.json(closuresAnswer([UHURU, KRISMASI]))
+        : Response.json(refusal(403, "permission_denied").body, {
+            status: 403,
+          });
+    });
+    answer("POST", `${CLOSURES}${UHURU.id}/cancel/`, {
+      status: 200,
+      body: { ...UHURU, status: "cancelled" },
+    });
+
+    render(<ClosuresSection me={OWNER} />);
+
+    tap(
+      await screen.findByRole(
+        "button",
+        { name: "Ondoa: Siku ya Uhuru" },
+        { timeout: 5_000 },
+      ),
+    );
+    typeInto(screen.getByLabelText("Sababu"), "Tutafanya kazi siku hiyo");
+    tap(screen.getByRole("button", { name: "Ondoa" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe(
+        "Imeondolewa: Siku ya Uhuru, 09/12/2026.",
+      ),
+    );
+    expect(await linesShown()).toEqual(["Krismasi25/12/2026 – 26/12/2026"]);
+    expect(
+      screen.queryByRole("button", { name: "Ondoa: Siku ya Uhuru" }),
+    ).toBeNull();
+  });
+
   it("closes on Ghairi, and gives the keyboard back to the closure's Ondoa", async () => {
     answer("GET", CLOSURES, { status: 200, body: closuresAnswer([UHURU]) });
 
@@ -420,6 +460,39 @@ describe("Badilisha siku ya mwisho", () => {
         "Ukarabati wa duka26/11/2026",
       ]),
     );
+  });
+
+  it("shows the moved days at once, even when the list can't be read again after (ATT-9's review)", async () => {
+    const moved = { ...FUNERAL, last_day: "2026-11-22" };
+    let reads = 0;
+    answer("GET", CLOSURES, () => {
+      reads += 1;
+      return reads === 1
+        ? Response.json(closuresAnswer([FUNERAL]))
+        : Response.json(refusal(403, "permission_denied").body, {
+            status: 403,
+          });
+    });
+    answer("POST", `${CLOSURES}${FUNERAL.id}/last-day/`, {
+      status: 200,
+      body: moved,
+    });
+
+    render(<ClosuresSection me={OWNER} />);
+
+    await openLastDayOf("Msiba wa bibi");
+    typeInto(screen.getByLabelText("Siku mpya ya mwisho"), "2026-11-22");
+    typeInto(screen.getByLabelText("Sababu"), "Familia imemaliza mapema");
+    tap(screen.getByRole("button", { name: "Hifadhi" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe(
+        "Siku ya mwisho imebadilishwa: Msiba wa bibi, 20/11/2026 – 22/11/2026.",
+      ),
+    );
+    expect(await linesShown()).toEqual([
+      "Msiba wa bibi20/11/2026 – 22/11/2026",
+    ]);
   });
 
   it("is beside every closure for the owner, begun or not", async () => {

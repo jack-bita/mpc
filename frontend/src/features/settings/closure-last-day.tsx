@@ -42,7 +42,13 @@ import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { formatDay } from "@/lib/format";
 import { useOnline } from "@/offline/network";
 
-import { type Closure, CLOSURES, dayBefore } from "./closures";
+import {
+  type Closure,
+  CLOSURES,
+  dayBefore,
+  dropClosure,
+  keepClosure,
+} from "./closures";
 
 // The fields with a box, beside which their refusals show. A refusal of any other field shows above the buttons.
 const ON_A_BOX = new Set(["last_day", "reason"]);
@@ -94,7 +100,8 @@ export function ClosureLastDay({
         }),
       ),
     onSuccess: (saved) => {
-      // The list asks again: the closure shows its new days, or leaves the list if it now ends before today.
+      // Its new days at once, or out of the list if it now ends before today; then the list asks again (closures.ts).
+      keepClosure(store, saved);
       void store.invalidateQueries({ queryKey: CLOSURES });
       onMoved(saved);
     },
@@ -105,6 +112,7 @@ export function ClosureLastDay({
         error instanceof ApiRefusal &&
         error.body.code === "closure.not_active"
       ) {
+        dropClosure(store, closure.id);
         void store.invalidateQueries({ queryKey: CLOSURES });
         onGone();
       }

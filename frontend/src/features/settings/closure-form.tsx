@@ -39,7 +39,7 @@ import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { newId } from "@/lib/ids";
 import { useOnline } from "@/offline/network";
 
-import { type Closure, CLOSURES } from "./closures";
+import { type Closure, CLOSURES, keepClosure } from "./closures";
 
 // The fields with a box, beside which their refusals show. A refusal of any other field shows above the buttons.
 const ON_A_BOX = new Set(["first_day", "last_day", "name"]);
@@ -93,7 +93,8 @@ export function ClosureForm({
       name: string;
     }) => answerOf(api.POST("/api/v1/shops/closures/", { body })),
     onSuccess: (closure) => {
-      // The list asks again, so the new closure shows in its place among the others, soonest first.
+      // In its place at once, soonest first, then the list asks again (closures.ts).
+      keepClosure(store, closure);
       void store.invalidateQueries({ queryKey: CLOSURES });
       onSaved(closure);
     },
