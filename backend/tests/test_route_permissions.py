@@ -13,7 +13,8 @@ checks that the office routes ask for them, through the two hooks of their base 
 - every route names a permission for each of its actions, and an action it forgets is refused: no route is ever
   open by forgetting (Jack, PPL-5);
 - a show action needs only its side to be seen; one that names a key of its own (debts, reports) is refused until
-  the card that first needs one builds it (Jack, PPL-5);
+  the card that first needs one builds it (Jack, PPL-5); but a route of the whole shop's rows, which have no side to
+  keep to, may show them behind a key, asked on the whole shop, as the shop's workers are (PPL-4);
 - a visit reads the person's permissions once, however many sides the shop has (Jack, PPL-5).
 
 It lives outside `apps` because it needs both the side routes (`shops`) and the roles (`people`), and an app's own
@@ -127,7 +128,17 @@ class GuardedNoteViewSet(CreateOnceMixin[Note]):
             raise exceptions.PermissionDenied("A secret note is never handed back.")
 
 
+class ManagedNoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, ShopViewSet[Note]):
+    # The whole shop's rows, shown only behind a key of their own, as the shop's workers are: for whoever manages
+    # them (`staff.manage`), not for everyone who works there (PPL-4).
+    model = Note
+    side_field = None
+    serializer_class = NoteSerializer
+    action_permissions = {"list": Permission.STAFF_MANAGE, "retrieve": Permission.STAFF_MANAGE}
+
+
 router = SimpleRouter()
+router.register("managed-notes", ManagedNoteViewSet, basename="managed-note")
 router.register("plain-note-makers", PlainNoteMakerViewSet, basename="plain-note-maker")
 router.register("guarded-notes", GuardedNoteViewSet, basename="guarded-note")
 router.register("retext-notes", RetextNoteViewSet, basename="retext-note")
@@ -135,6 +146,7 @@ router.register("k-notes", KNoteViewSet, basename="k-note")
 urlpatterns = [path("api/v1/test/", include(router.urls))]
 
 PLAIN_MAKERS = "/api/v1/test/plain-note-makers/"
+MANAGED_NOTES = "/api/v1/test/managed-notes/"
 
 
 def client_for(staff: StaffMember) -> APIClient:
@@ -671,15 +683,18 @@ def permission_problems(routes: Iterable[tuple[type[ShopViewSet[Any]], Mapping[s
     # answers with ({"get": "list", "post": "create"}, as DRF's router notes them):
     # - every action is named, so none is open by forgetting;
     # - a show action (GET) needs only to see its side, for now: one behind a key of its own waits for the card that
-    #   first needs one (cost.view, debt.view, report.view), which decides how a list keeps to that key's sides;
+    #   first needs one (cost.view, debt.view, report.view), which decides how a list keeps to that key's sides. A
+    #   route of the whole shop's rows (side_field None) has no sides to keep to: it may, asking its key on the whole
+    #   shop, as the shop's workers do (PPL-4);
     # - a change (any other method) always names a key of its own: seeing a side is not leave to change it.
     problems = []
     for view, actions in routes:
         named = getattr(view, "action_permissions", {})
+        whole_shop = getattr(view, "side_field", "side") is None
         for method, name in sorted(actions.items()):
             if name not in named:
                 problems.append(f"{view.__name__}: {name} names no permission")
-            elif method in ("get", "head") and named[name] is not base.SEES_THE_SIDE:
+            elif method in ("get", "head") and named[name] is not base.SEES_THE_SIDE and not whole_shop:
                 problems.append(f"{view.__name__}: {name} shows rows behind {named[name]}, not built yet")
             elif method not in ("get", "head") and named[name] is base.SEES_THE_SIDE:
                 problems.append(f"{view.__name__}: {name} changes rows with no key of its own")
@@ -747,6 +762,12 @@ def test_permission_check_finds_what_breaks_its_rules() -> None:
         model = Side
         action_permissions = {"list": Permission.DEBT_VIEW}
 
+    class ShowsWorkers(ShopViewSet[StaffMember]):
+        # Rows of the whole shop behind a key: allowed, asked on the whole shop (PPL-4).
+        model = StaffMember
+        side_field = None
+        action_permissions = {"list": Permission.STAFF_MANAGE}
+
     class Forgets(ShopViewSet[Side]):
         model = Side
 
@@ -758,6 +779,7 @@ def test_permission_check_finds_what_breaks_its_rules() -> None:
         [
             (Named, {"get": "list", "post": "create"}),
             (ShowsDebts, {"get": "list"}),
+            (ShowsWorkers, {"get": "list"}),
             (Forgets, {"post": "void"}),
             (ChangesBySight, {"patch": "partial_update"}),
         ]
@@ -795,6 +817,40 @@ def test_show_action_with_a_key_stopped_for_now(
 
     with pytest.raises(ImproperlyConfigured, match="debt.view"):
         client_for(staff_a).get(SIDES)
+
+
+@pytest.mark.django_db
+@pytest.mark.urls(__name__)
+def test_a_whole_shop_list_behind_a_key_needs_it_on_the_whole_shop(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # The shop's workers are for whoever manages them, not for everyone who works there (PPL-4). Their rows belong to
+    # no side, so there is no side to keep the list to: the key is asked on the whole shop, as for adding a side.
+    with shop_context(shop_a):
+        note = Note.objects.create(shop=shop_a, text="Juma")
+    one = f"{MANAGED_NOTES}{note.pk}/"
+    juma = client_for(staff_a)
+
+    # Juma sells on Dawa: he sees the side, but holds no key to these rows. Refused, the list and the one row alike.
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    for address in (MANAGED_NOTES, one):
+        refused = juma.get(address)
+        assert refused.status_code == 403, address
+        assert refused.json()["code"] == "permission_denied"
+
+    # The key on Dawa alone is not the whole shop's: still refused.
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.STAFF_MANAGE, side=sides["D"], by=None)
+    assert juma.get(MANAGED_NOTES).status_code == 403
+    assert juma.get(one).status_code == 403
+
+    # The key on every side: shown.
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.STAFF_MANAGE, side=None, by=None)
+    shown = juma.get(MANAGED_NOTES)
+    assert shown.status_code == 200
+    assert [row["text"] for row in shown.json()["results"]] == ["Juma"]
+    assert juma.get(one).json()["text"] == "Juma"
 
 
 @pytest.mark.django_db
