@@ -53,7 +53,10 @@ export const TAB_LOOK = [
   "h-auto min-h-(--control-normal) flex-none rounded-none px-4 text-base font-semibold",
   // At rest the pale text (--muted-foreground reads at 6.0:1 on white); shadcn's 60% black reads at only
   // about 3.9:1, under the 4.5:1 words need.
-  "text-muted-foreground hover:text-foreground",
+  // Hover darkens a closed tab; the open one stays green under the mouse. shadcn's hover:text-foreground
+  // stays in its classes, so the open tab's own hover rule says green again: [data-active]:hover is more
+  // specific than :hover, so it wins whatever the order in the CSS.
+  "text-muted-foreground hover:text-foreground data-active:hover:text-primary",
   // Open: green words (5.02:1 on white) and a 3 px green line under them, at the row's foot.
   "data-active:text-primary",
   "after:bg-primary group-data-horizontal/tabs:after:bottom-0 group-data-horizontal/tabs:after:h-[3px]",
@@ -88,7 +91,10 @@ export function Tabs({
     <ShadcnTabs
       value={value}
       onValueChange={(next) => onChange(String(next))}
-      className="gap-4"
+      // min-w-0: inside a page's grid or flex column, a box is never narrower than its content by default,
+      // so the row of tabs, as wide as all its tabs together, would widen the whole page and the phone
+      // would scroll the page sideways. With it, the row is as wide as the page, and scrolls itself.
+      className="min-w-0 gap-4"
     >
       <TabsList
         ref={list}

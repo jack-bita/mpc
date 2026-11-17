@@ -99,6 +99,21 @@ describe("the tabs", () => {
     );
   });
 
+  it("never widens the page: the row scrolls inside it", () => {
+    render(<Page />);
+    // The root is a grid or flex child of the page; without min-w-0 it takes the row's full width.
+    const root = screen.getByRole("tablist").closest("[data-slot=tabs]");
+    expect(root?.className.split(/\s+/)).toContain("min-w-0");
+  });
+
+  it("keeps the open tab green under the mouse", () => {
+    render(<Page />);
+    const tab = screen
+      .getByRole("tab", { name: "Pesa" })
+      .className.split(/\s+/);
+    expect(tab).toContain("data-active:hover:text-primary");
+  });
+
   it("has a full-strength focus ring, never shadcn's faded one", () => {
     render(<Page />);
     const tab = screen
