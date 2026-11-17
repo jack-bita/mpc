@@ -61,6 +61,9 @@ test("the owner closes the shop for a funeral, moves its last day, and takes it 
     await phone
       .getByRole("link", { name: sw.shopSettings.title, exact: true })
       .click();
+    // The page opens on Mahudhurio: the closed days are behind their own tab (tabs.tsx), as a person finds
+    // them.
+    await phone.getByRole("tab", { name: CLOSURES.title, exact: true }).click();
     await expect(
       phone.getByRole("heading", { name: CLOSURES.title, level: 2 }),
     ).toBeVisible();
