@@ -8,7 +8,9 @@
 //     and the open tab is scrolled into sight, as one opened from the address may start off the edge;
 //   - the row stays at the top of the screen while a long section scrolls under it (sticky), so another
 //     section is always one tap away;
-//   - the open tab is green, with a green line under it, so it shows by more than its colour alone.
+//   - every tab is a button with an edge, and the open one is filled green with white words, like the
+//     main button (Jack, 17 Nov 2026: plain words didn't look like something to press). The fill shows
+//     it by more than its colour alone.
 //
 // A screen gives the sections as a list, not as parts it puts together: a new section is one more item,
 // and every page with tabs looks and behaves the same (Jack, 17 Nov 2026).
@@ -37,10 +39,12 @@ export interface TabSection {
 
 /** The row: as wide as the page, scrolling sideways, sticky at the top, with a pale line along its foot.
  * shadcn's row is a grey pill as wide as its tabs and 32 px tall; cn() lets each class here replace its
- * twin there (h-auto for h-8, w-full for w-fit, justify-start for justify-center). */
+ * twin there (h-auto for h-8, w-full for w-fit, justify-start for justify-center, bg-background for
+ * bg-muted). A gap between the buttons, and room above and below them, so no edge touches the row's
+ * line; none at the sides, so the first button lines up with the page under it. */
 export const LIST_LOOK = [
-  "sticky top-0 z-10 w-full justify-start gap-1 overflow-x-auto overflow-y-hidden",
-  "rounded-none border-b border-border bg-background p-0",
+  "sticky top-0 z-10 w-full justify-start gap-2 overflow-x-auto overflow-y-hidden",
+  "rounded-none border-b border-border bg-background px-0 py-2",
   "group-data-horizontal/tabs:h-auto",
   // A thin bar, where the browser can: a phone's own disappears when idle, and a laptop's thick one
   // would sit on the tabs' line.
@@ -50,19 +54,28 @@ export const LIST_LOOK = [
 /** One tab: as tall as a normal button (44 px), so a finger finds it, and never squeezed (flex-none), so a
  * long name, "Siku duka limefungwa", stays on one line and the row scrolls instead. */
 export const TAB_LOOK = [
-  "h-auto min-h-(--control-normal) flex-none rounded-none px-4 text-base font-semibold",
+  "h-auto min-h-(--control-normal) flex-none px-4 text-base font-semibold",
+  // A button's look (button.tsx): its corners, and the dark edge of the boxes (--input, 3:1 on white,
+  // as WCAG asks of a control's edge), where shadcn's edge is see-through (border-transparent).
+  "rounded-lg border-input bg-background",
   // At rest the pale text (--muted-foreground reads at 6.0:1 on white); shadcn's 60% black reads at only
   // about 3.9:1, under the 4.5:1 words need.
-  // Hover darkens a closed tab; the open one stays green under the mouse. shadcn's hover:text-foreground
-  // stays in its classes, so the open tab's own hover rule says green again: [data-active]:hover is more
+  // Hover darkens a closed tab's words; the open one's stay white. shadcn's hover:text-foreground stays
+  // in its classes, so the open tab's own hover rule says white again: [data-active]:hover is more
   // specific than :hover, so it wins whatever the order in the CSS.
-  "text-muted-foreground hover:text-foreground data-active:hover:text-primary",
-  // Open: green words (5.02:1 on white) and a 3 px green line under them, at the row's foot.
-  "data-active:text-primary",
-  "after:bg-primary group-data-horizontal/tabs:after:bottom-0 group-data-horizontal/tabs:after:h-[3px]",
+  "text-muted-foreground hover:text-foreground data-active:hover:text-primary-foreground",
+  // Open: filled green with white words (5.02:1), as the main button. Each replaces shadcn's open look,
+  // white with dark words, through cn(); its small shadow goes too, as our buttons have none.
+  "data-active:border-primary data-active:bg-primary data-active:text-primary-foreground",
+  "group-data-[variant=default]/tabs-list:data-active:shadow-none",
   // Full strength, drawn inside the tab: shadcn fades the ring to half (2.57:1 on white, under the 3:1 a
-  // keyboard user needs, UI-7), and a ring drawn outside would be cut off by the scrolling row.
-  "focus-visible:border-transparent focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none",
+  // keyboard user needs, UI-7), and a ring drawn outside would be cut off by the scrolling row. The edge
+  // stays as it is: shadcn's focus-visible:border-ring would turn a closed tab's edge blue.
+  "focus-visible:border-input focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none",
+  "data-active:focus-visible:border-primary",
+  // On the open, green tab the ring is white, as ON_GREEN makes it on the top bar (top-bar.tsx): the
+  // usual blue reads at only 1.74:1 on the green, white at 5.02:1. Set as --ring, which ring-ring reads.
+  "data-active:[--ring:var(--primary-foreground)]",
 ].join(" ");
 
 export function Tabs({
@@ -102,9 +115,11 @@ export function Tabs({
       // would scroll the page sideways. With it, the row is as wide as the page, and scrolls itself.
       className="min-w-0 gap-4"
     >
+      {/* shadcn's "default" row, not its "line" one: "line" draws a line under the open tab, which would
+          sit under the green button as a second sign of the same thing. */}
       <TabsList
         ref={list}
-        variant="line"
+        variant="default"
         aria-label={label}
         className={LIST_LOOK}
       >

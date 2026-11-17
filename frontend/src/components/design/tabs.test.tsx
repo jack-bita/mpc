@@ -106,12 +106,51 @@ describe("the tabs", () => {
     expect(root?.className.split(/\s+/)).toContain("min-w-0");
   });
 
-  it("keeps the open tab green under the mouse", () => {
+  it("draws every tab as a button with an edge", () => {
     render(<Page />);
     const tab = screen
       .getByRole("tab", { name: "Pesa" })
       .className.split(/\s+/);
-    expect(tab).toContain("data-active:hover:text-primary");
+    // The dark edge of the boxes (--input) and the buttons' corners: cn() must have swapped shadcn's
+    // see-through edge and smaller corners for ours.
+    expect(tab).toEqual(expect.arrayContaining(["border-input", "rounded-lg"]));
+    expect(tab).not.toContain("border-transparent");
+    expect(tab).not.toContain("rounded-md");
+    // Not shadcn's "line" row: that one draws a line under the open tab, which would sit under the
+    // green button as a second sign of the same thing.
+    expect(screen.getByRole("tablist").getAttribute("data-variant")).toBe(
+      "default",
+    );
+  });
+
+  it("fills the open tab green with white words, kept under the mouse", () => {
+    render(<Page />);
+    const tab = screen
+      .getByRole("tab", { name: "Pesa" })
+      .className.split(/\s+/);
+    expect(tab).toEqual(
+      expect.arrayContaining([
+        "data-active:border-primary",
+        "data-active:bg-primary",
+        "data-active:text-primary-foreground",
+        "data-active:hover:text-primary-foreground",
+      ]),
+    );
+    // shadcn's open tab is white with dark words: cn() must have swapped both for ours.
+    expect(tab).not.toContain("data-active:bg-background");
+    expect(tab).not.toContain("data-active:text-foreground");
+  });
+
+  it("turns the focus ring white on the open, green tab", () => {
+    render(<Page />);
+    const tab = screen
+      .getByRole("tab", { name: "Pesa" })
+      .className.split(/\s+/);
+    // As ON_GREEN does for the top bar: the usual blue ring reads at only 1.74:1 on the green.
+    expect(tab).toContain("data-active:[--ring:var(--primary-foreground)]");
+    expect(
+      contrast(colour("--primary-foreground"), colour("--primary")),
+    ).toBeGreaterThanOrEqual(3);
   });
 
   it("has a full-strength focus ring, never shadcn's faded one", () => {
@@ -153,13 +192,18 @@ describe("the tabs", () => {
     expect(page).not.toHaveBeenCalled();
   });
 
-  it("has words that read on white, at rest and open", () => {
-    // At rest --muted-foreground, open --primary: both at least 4.5:1 on the screen's white.
+  it("has words and edges that can be read, at rest and open", () => {
+    // At rest: --muted-foreground words on the screen's white, at least 4.5:1.
     expect(
       contrast(colour("--muted-foreground"), colour("--background")),
     ).toBeGreaterThanOrEqual(4.5);
+    // Open: white words on the green, at least 4.5:1.
     expect(
-      contrast(colour("--primary"), colour("--background")),
+      contrast(colour("--primary-foreground"), colour("--primary")),
     ).toBeGreaterThanOrEqual(4.5);
+    // A closed tab's edge is what shows it is a button: at least the 3:1 WCAG asks of a control's edge.
+    expect(
+      contrast(colour("--input"), colour("--background")),
+    ).toBeGreaterThanOrEqual(3);
   });
 });
