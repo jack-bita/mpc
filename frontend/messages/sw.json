@@ -569,6 +569,19 @@
       "blue": "Bluu",
       "striped": "Mistari nyeupe na nyekundu"
     },
+    "tabs": {
+      "title": "Vichupo",
+      "hint": "Bonyeza kichupo, au tumia Tab na mishale. Kwenye simu, safu inasogea pembeni, na hukaa juu ukishuka chini.",
+      "samples": {
+        "attendance": "Mahudhurio",
+        "money": "Pesa",
+        "computers": "Kompyuta",
+        "stock": "Mzigo",
+        "closures": "Siku duka limefungwa",
+        "sides": "Pande"
+      },
+      "content": "Sehemu iliyo wazi inaonekana hapa. Nyingine zimefichwa, hazijapotea."
+    },
     "topBar": {
       "title": "Upau wa juu",
       "sampleShop": "MPC",
