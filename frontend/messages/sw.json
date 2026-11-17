@@ -239,6 +239,12 @@
       "inUse": "Inatumika sasa",
       "coming": "Inakuja"
     },
+    "closures": {
+      "title": "Siku duka limefungwa",
+      "intro": "Siku ambazo duka zima limefungwa, kama sikukuu au msiba. Ni siku za mapumziko, na hazilipwi.",
+      "none": "Hakuna siku zijazo ambazo duka limefungwa.",
+      "days": "{first} – {last}"
+    },
     "sides": {
       "title": "Pande",
       "intro": "Upande uliozimwa hautumiki kwenye kompyuta za duka.",

@@ -239,6 +239,12 @@
       "inUse": "In use now",
       "coming": "Coming"
     },
+    "closures": {
+      "title": "Days the shop is closed",
+      "intro": "Days the whole shop is closed, such as a public holiday or a funeral. They are days off, and not paid.",
+      "none": "No closed days coming.",
+      "days": "{first} – {last}"
+    },
     "sides": {
       "title": "Sides",
       "intro": "A side switched off isn't used at the shop's laptops.",

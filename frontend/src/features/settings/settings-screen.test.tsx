@@ -1,11 +1,12 @@
 // settings-screen.test.tsx — Mipangilio ya duka (SHOP-5): every rule of the registry on one page, under its
-// area, a side's rule with a line per side; each value written its own way; a value set to start later shown
+// area, then the closed days (ATT-9) and the sides; a side's rule with a line per side; each value written its own way; a value set to start later shown
 // beside today's; the page in English; and why, when the server refuses. Then each line's button: Badilisha
 // where the person holds settings.manage, Historia everywhere else, and what each opens.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { setLanguage } from "@/i18n/language";
+import { closuresAnswer } from "@/test/closures";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal } from "@/test/fake-server";
 import { render } from "@/test/render";
@@ -20,6 +21,7 @@ vi.mock("@/api/client", async (importOriginal) =>
 const ME = "/api/auth/me/";
 const RULES = "/api/v1/shops/settings/";
 const SIDES = "/api/v1/shops/sides/";
+const CLOSURES = "/api/v1/shops/closures/";
 
 // A seller on each side: reading the rules needs no key.
 const SELLER = whoIsHere([
@@ -30,6 +32,8 @@ const SELLER = whoIsHere([
 function rulesAnswer(rules = SHOP_RULES, me: typeof SELLER = SELLER) {
   answer("GET", ME, { status: 200, body: me });
   answer("GET", RULES, { status: 200, body: rules });
+  // Siku duka limefungwa, under the rules, reads the closures: none here, as closures-section.test.tsx tests them.
+  answer("GET", CLOSURES, { status: 200, body: closuresAnswer() });
   // Pande, at the bottom of the page, reads the sides: none here, as side-switch.test.tsx tests them.
   answer("GET", SIDES, {
     status: 200,
@@ -59,7 +63,7 @@ async function cardText(name: string): Promise<string> {
 }
 
 describe("Mipangilio ya duka", () => {
-  it("shows every rule of the registry once, under its area, and the sides at the bottom", async () => {
+  it("shows every rule of the registry once, under its area, then the closed days, and the sides at the bottom", async () => {
     rulesAnswer();
 
     render(<SettingsScreen />);
@@ -69,8 +73,16 @@ describe("Mipangilio ya duka", () => {
       screen
         .getAllByRole("heading", { level: 2 })
         .map((each) => each.textContent),
-      // The sides and their switches last (side-switch.tsx).
-    ).toEqual(["Mahudhurio", "Pesa", "Kompyuta", "Mzigo", "Pande"]);
+      // The closed days under the rules and above the sides, as Jack pictured it (ATT-9); the sides and their
+      // switches last (side-switch.tsx).
+    ).toEqual([
+      "Mahudhurio",
+      "Pesa",
+      "Kompyuta",
+      "Mzigo",
+      "Siku duka limefungwa",
+      "Pande",
+    ]);
     expect(
       screen
         .getAllByRole("heading", { level: 3 })
