@@ -24,9 +24,11 @@ from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
+from pytest_django import Settings
 
 from apps.control.models import Attachment, AttachmentKind, AttachmentType, EditEvent, attachment_file_name
 from apps.control.services import expect_attachment, receive_attachment_file, remove_attachment_file
+from apps.core.models import StoredFile
 from apps.core.storage import FolderStorage
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 
@@ -244,6 +246,22 @@ def test_a_device_alone_cannot_remove(staff_a: Any) -> None:
     row = photo(staff_a)
     with shop_context(staff_a.shop_id), pytest.raises(ValueError, match="no person"):
         remove_attachment_file(row, reason=REASON, by=DeviceAlone(shop_id=staff_a.shop_id))
+
+
+def test_removal_on_the_demo_deletes_its_stored_file(
+    settings: Settings, staff_a: Any, django_capture_on_commit_callbacks: CommitSteps
+) -> None:
+    # On the demo the photo is a row of its own table (apps/core/storage.py): the removal takes that row away after the
+    # commit, in the photo's own shop, as it deletes a file from the folder on the real server.
+    settings.STORAGES = {**settings.STORAGES, "default": {"BACKEND": "apps.core.storage.DatabaseStorage"}}
+    row = photo(staff_a)
+    with shop_context(staff_a.shop_id):
+        assert StoredFile.objects.filter(name=row.file.name).exists()
+    with shop_context(staff_a.shop_id), django_capture_on_commit_callbacks(execute=True):
+        remove_attachment_file(row, reason=REASON)
+
+    with shop_context(staff_a.shop_id):
+        assert not StoredFile.objects.exists()
 
 
 def test_another_shops_person_cannot_remove(staff_a: Any, staff_b: Any) -> None:

@@ -23,8 +23,16 @@ from django.db.models import Model
 from pytest_django import Settings
 from rest_framework.test import APIClient
 
-from apps.control.models import ATTACHMENT_KINDS, Attachment, AttachmentKind, AttachmentType, KindRule
+from apps.control.models import (
+    ATTACHMENT_KINDS,
+    Attachment,
+    AttachmentKind,
+    AttachmentType,
+    KindRule,
+    attachment_file_name,
+)
 from apps.control.services import expect_attachment, receive_attachment_file, remove_attachment_file
+from apps.core.models import StoredFile
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 
@@ -189,3 +197,7 @@ def test_file_served_from_the_demo_storage(settings: Settings, staff_a: Any, sta
 
     assert answer.status_code == 200
     assert answer.getvalue() == JPEG
+    # From the database itself, not a folder: had the switch failed, the photo would have gone to the folder, and this
+    # test would pass without the demo's storage ever being used.
+    with shop_context(staff_a.shop_id):
+        assert bytes(StoredFile.objects.get(name=attachment_file_name(row, "")).content) == JPEG
