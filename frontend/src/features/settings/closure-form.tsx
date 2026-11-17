@@ -39,7 +39,12 @@ import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { newId } from "@/lib/ids";
 import { useOnline } from "@/offline/network";
 
-import { type Closure, CLOSURES, keepClosure } from "./closures";
+import {
+  aboutTheWholeRequest,
+  type Closure,
+  CLOSURES,
+  keepClosure,
+} from "./closures";
 
 // The fields with a box, beside which their refusals show. A refusal of any other field shows above the buttons.
 const ON_A_BOX = new Set(["first_day", "last_day", "name"]);
@@ -131,14 +136,14 @@ export function ClosureForm({
 
   // Where each refusal shows: beside its box, the form's own first, then the server's. A refusal of a field the form
   // has no box for, a newer server's, shows above the buttons in its own sentence (setting-form.tsx). One about the
-  // days together, with no field, as closure.overlaps, is ApiErrorAlert's, above the buttons too.
+  // days together, with no field, as closure.overlaps, is ApiErrorAlert's, above the buttons too, even when a box has
+  // one of its own (closures.ts).
   const byField = fieldMessages(save.error);
   const said = (code?: string) =>
     code === undefined ? undefined : codeMessage(codes, code);
   const noBox = Object.entries(byField)
     .filter(([field]) => !ON_A_BOX.has(field))
     .map(([, sentence]) => sentence);
-  const aboutAField = Object.keys(byField).length > 0;
 
   return (
     // noValidate: the browser's own checks would speak its language, not the shop's.
@@ -182,10 +187,10 @@ export function ClosureForm({
           <AlertTitle>{apiError("title")}</AlertTitle>
           <AlertDescription>{noBox.join(" ")}</AlertDescription>
         </Alert>
-      ) : (
-        // What no field names: days another closure has, no network, no key, the server's own problem.
-        <ApiErrorAlert error={aboutAField ? null : save.error} />
-      )}
+      ) : null}
+      {/* What no field names: days another closure has, no network, no key, the server's own problem.
+          Shown beside a box's refusal too, when the server sends both (aboutTheWholeRequest, closures.ts). */}
+      <ApiErrorAlert error={aboutTheWholeRequest(save.error)} />
       <div className="flex flex-wrap gap-3">
         {/* Switched off while it is sent, so a second tap sends nothing, and while offline, so nothing waits unsent
             while it looks done (setting-form.tsx); the id would save it once anyway. */}

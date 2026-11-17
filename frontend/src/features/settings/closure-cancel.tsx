@@ -34,7 +34,13 @@ import { Field } from "@/components/design/field";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { useOnline } from "@/offline/network";
 
-import { type Closure, CLOSURES, dropClosure, useDaysOf } from "./closures";
+import {
+  aboutTheWholeRequest,
+  type Closure,
+  CLOSURES,
+  dropClosure,
+  useDaysOf,
+} from "./closures";
 
 export function ClosureCancel({
   closure,
@@ -104,7 +110,6 @@ export function ClosureCancel({
   const noBox = Object.entries(byField)
     .filter(([field]) => field !== "reason")
     .map(([, sentence]) => sentence);
-  const aboutAField = Object.keys(byField).length > 0;
 
   return (
     // noValidate: the browser's own checks would speak its language, not the shop's.
@@ -137,10 +142,10 @@ export function ClosureCancel({
           <AlertTitle>{apiError("title")}</AlertTitle>
           <AlertDescription>{noBox.join(" ")}</AlertDescription>
         </Alert>
-      ) : (
-        // What no field names: a closure already begun, the demo's today, no network, the server's own problem.
-        <ApiErrorAlert error={aboutAField ? null : cancel.error} />
-      )}
+      ) : null}
+      {/* What no field names: a closure already begun, the demo's today, no network, the server's own
+          problem. Shown beside a box's refusal too, when the server sends both (aboutTheWholeRequest, closures.ts). */}
+      <ApiErrorAlert error={aboutTheWholeRequest(cancel.error)} />
       <div className="flex flex-wrap gap-3">
         {/* The colour of a change that can't be called back: the days open at once. Off while it is sent, so a second
             tap sends nothing, and while offline, so nothing waits unsent while it looks done. */}

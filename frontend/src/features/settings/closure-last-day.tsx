@@ -43,6 +43,7 @@ import { formatDay } from "@/lib/format";
 import { useOnline } from "@/offline/network";
 
 import {
+  aboutTheWholeRequest,
   type Closure,
   CLOSURES,
   dayBefore,
@@ -155,7 +156,6 @@ export function ClosureLastDay({
   const noBox = Object.entries(byField)
     .filter(([field]) => !ON_A_BOX.has(field))
     .map(([, sentence]) => sentence);
-  const aboutAField = Object.keys(byField).length > 0;
 
   return (
     // noValidate: the browser's own checks would speak its language, not the shop's.
@@ -192,10 +192,10 @@ export function ClosureLastDay({
           <AlertTitle>{apiError("title")}</AlertTitle>
           <AlertDescription>{noBox.join(" ")}</AlertDescription>
         </Alert>
-      ) : (
-        // What no field names: days another closure has, no network, the server's own problem.
-        <ApiErrorAlert error={aboutAField ? null : move.error} />
-      )}
+      ) : null}
+      {/* What no field names: days another closure has, no network, the server's own problem. Shown
+          beside a box's refusal too, when the server sends both (aboutTheWholeRequest, closures.ts). */}
+      <ApiErrorAlert error={aboutTheWholeRequest(move.error)} />
       <div className="flex flex-wrap gap-3">
         {/* Off while it is sent, so a second tap sends nothing, and while offline, so nothing waits unsent while it
             looks done. */}

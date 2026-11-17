@@ -225,6 +225,31 @@ describe("Badilisha siku ya mwisho", () => {
     expect(onMoved).not.toHaveBeenCalled();
   });
 
+  it("says a clash above the buttons and a box's refusal beside it, both at once (ATT-9's review)", async () => {
+    answer(
+      "POST",
+      routeOf(BEGUN),
+      refusal(
+        400,
+        "closure.overlaps",
+        {},
+        { last_day: ["demo.closures_from_tomorrow"] },
+      ),
+    );
+    openOn(BEGUN);
+
+    typeInto(dayBox(), "2026-11-20");
+    typeInto(reasonBox(), "Msiba umeongezeka");
+    tap(save());
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Duka tayari limefungwa katika moja ya siku hizi.",
+    );
+    expect(errorOf(dayBox())).toBe(
+      "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo.",
+    );
+  });
+
   it("hands a closure someone else cancelled meanwhile to the section, which says so", async () => {
     answer("POST", routeOf(FUNERAL), refusal(400, "closure.not_active"));
     const { onGone, onMoved } = openOn();

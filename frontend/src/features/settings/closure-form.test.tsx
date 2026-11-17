@@ -196,6 +196,34 @@ describe("Ongeza", () => {
     );
   });
 
+  it("says a clash above the buttons and a box's refusal beside it, both at once (ATT-9's review)", async () => {
+    // On the demo, a closure from today that also shares a day with Krismasi: the server names the clash as the
+    // refusal's code, and the demo's refusal of today beside Kuanzia.
+    answer(
+      "POST",
+      CLOSURES,
+      refusal(
+        400,
+        "closure.overlaps",
+        {},
+        { first_day: ["demo.closures_from_tomorrow"] },
+      ),
+    );
+    openForm();
+
+    typeInto(fromBox(), TODAY);
+    typeInto(toBox(), "2026-12-26");
+    typeInto(nameBox(), "Msiba wa bibi");
+    tap(save());
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Duka tayari limefungwa katika moja ya siku hizi.",
+    );
+    expect(errorOf(fromBox())).toBe(
+      "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo.",
+    );
+  });
+
   it("says a refusal of a field it has no box for in that field's own sentence", async () => {
     // A newer server, with a field this app doesn't know: the general "check the marked boxes" would send the owner
     // looking for a mark no box has (setting-form.tsx).
