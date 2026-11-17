@@ -340,7 +340,8 @@ def remove_attachment_file(attachment: Attachment, *, reason: str, by: Actor | N
     """Take the file of `attachment`, of the open shop, away for good, and keep its row, with who (`by`, a person, or
     None for the system, as ATT-7's nightly job), when and why: the retention rule wants the photo gone, not hidden,
     and the row still says there was one (rule 7). A photo that never arrived can be removed too, so a late upload is
-    dropped. Removing one already removed changes nothing, so a nightly job may run twice."""
+    dropped. Removing one already removed keeps its first who, when and why, and deletes its file again, so a nightly
+    job may run twice, and the second run clears what a failed delete left."""
     _check_shop(attachment.shop_id, by)
     # A device alone is no person: the row would keep a remover with no name for good.
     if by is not None and by.staff_id is None:
@@ -354,28 +355,32 @@ def remove_attachment_file(attachment: Attachment, *, reason: str, by: Actor | N
     with transaction.atomic():
         # Locked, as a file's arrival is (receive_attachment_file): an upload and a removal at once take turns.
         fresh = Attachment.objects.select_for_update().get(pk=attachment.pk)
-        if fresh.file_removed_at is not None:
-            return fresh
-        # The file's name and its storage, kept for after the commit. Empty for a photo that never arrived.
-        name, storage, shop_id = fresh.file.name, fresh.file.storage, fresh.shop_id
-        # No file: the empty name, as a waiting row has.
-        fresh.file = ""
-        fresh.file_removed_at = timezone.now()
-        fresh.file_removed_by_id = None if by is None else by.staff_id
-        fresh.file_removed_reason = reason
-        fresh.full_clean(exclude=[field.name for field in Attachment._meta.fields if field.name not in _REMOVAL_FIELDS])
-        # Saved with `by` told to PostgreSQL, as the closures' and the staff services' saves are: the edit history's
-        # line then names the person the row names, even outside an office visit (02 v1.7: one fact, one answer;
-        # apps/core/acting.py). With `by` None, the system acts, and nobody is told.
-        with acting_as(by) if by is not None else nullcontext():
-            fresh.save(update_fields=list(_REMOVAL_FIELDS))
-        if name:
-            # The row first, the file only once the row's change is kept for good (CTRL-3's card): Django runs this
-            # after the transaction commits, and never if it rolls back. Deleted inside the transaction instead, a
-            # rollback would bring the row back as "kept", naming a file that is gone. The other way, the worst left
-            # is a file no row names, if the delete fails after the commit: nothing serves it, and a later clean-up
-            # job can find such leftovers. Opened in the file's own shop: by then, the caller's may have closed.
-            transaction.on_commit(lambda: _delete_stored(storage, name, shop_id))
+        if fresh.file_removed_at is None:
+            fresh.file = ""
+            fresh.file_removed_at = timezone.now()
+            fresh.file_removed_by_id = None if by is None else by.staff_id
+            fresh.file_removed_reason = reason
+            fresh.full_clean(
+                exclude=[field.name for field in Attachment._meta.fields if field.name not in _REMOVAL_FIELDS]
+            )
+            # Saved with `by` told to PostgreSQL, as the closures' and the staff services' saves are: the edit history's
+            # line then names the person the row names, even outside an office visit (02 v1.7: one fact, one answer;
+            # apps/core/acting.py). With `by` None, the system acts, and nobody is told.
+            with acting_as(by) if by is not None else nullcontext():
+                fresh.save(update_fields=list(_REMOVAL_FIELDS))
+        # The file is deleted by its own fixed name, `<shop id>/<attachment id>`, not by the name the row held: a photo
+        # that never arrived, or one removed before, may still have left a file there (an upload whose row change was
+        # undone after the file was written, or a delete that failed), and every removal clears it. Deleting a name with
+        # no file is nothing, in both storages.
+        # The row first, the file only once the row's change is kept for good (CTRL-3's card): Django runs this after
+        # the transaction commits, and never if it rolls back. Deleted inside the transaction instead, a rollback would
+        # bring the row back as "kept", naming a file that is gone. Opened in the file's own shop: by then, the caller's
+        # may have closed. robust=True: a delete that fails is logged, and the deletes after it in the same transaction
+        # still run; without it, one failed delete in a nightly job removing 200 photos would skip the other 199, and
+        # their rows would already say "removed". A file a failed delete left goes at the next removal of the same
+        # photo, which a nightly job asks for again.
+        name, storage, shop_id = attachment_file_name(fresh, ""), fresh.file.storage, fresh.shop_id
+        transaction.on_commit(lambda: _delete_stored(storage, name, shop_id), robust=True)
     return fresh
 
 

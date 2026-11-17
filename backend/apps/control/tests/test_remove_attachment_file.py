@@ -21,11 +21,13 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
 
-from apps.control.models import Attachment, AttachmentKind, AttachmentType, EditEvent
+from apps.control.models import Attachment, AttachmentKind, AttachmentType, EditEvent, attachment_file_name
 from apps.control.services import expect_attachment, receive_attachment_file, remove_attachment_file
+from apps.core.storage import FolderStorage
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 
 pytestmark = pytest.mark.django_db
@@ -133,6 +135,77 @@ def test_removing_twice_changes_nothing(staff_a: Any, django_capture_on_commit_c
         REASON,
         None,
     )
+
+
+@pytest.fixture
+def failing_delete(monkeypatch: pytest.MonkeyPatch) -> set[str]:
+    # The names the storage fails to delete, as a full disk or a wrong permission would; every other delete works. A
+    # test adds a name to make its delete fail, and takes it out once the disk is fixed.
+    failing: set[str] = set()
+    delete = FolderStorage.delete
+
+    def maybe_fail(storage: FolderStorage, name: str) -> None:
+        if name in failing:
+            raise PermissionError(f"cannot delete {name}")
+        delete(storage, name)
+
+    monkeypatch.setattr(FolderStorage, "delete", maybe_fail)
+    return failing
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_failed_delete_stops_no_other(
+    staff_a: Any, failing_delete: set[str], caplog: pytest.LogCaptureFixture
+) -> None:
+    # ATT-7 removes two photos in one transaction, and the first delete fails: the second still runs, and the failure is
+    # logged, not raised at the job after its rows are committed. transaction=True: a real commit, so Django itself
+    # runs the steps after it, as on the server.
+    first, second = photo(staff_a), photo(staff_a)
+    failing_delete.add(str(first.file.name))
+    with shop_context(staff_a.shop_id), transaction.atomic():
+        remove_attachment_file(first, reason=REASON)
+        remove_attachment_file(second, reason=REASON)
+
+    assert file_exists(first, first.file.name)
+    assert not file_exists(second, second.file.name)
+    assert "cannot delete" in caplog.text
+    with shop_context(staff_a.shop_id):
+        assert {row.file_state for row in Attachment.objects.all()} == {"removed"}
+
+
+def test_a_second_run_deletes_what_a_failed_delete_left(
+    staff_a: Any, failing_delete: set[str], django_capture_on_commit_callbacks: CommitSteps
+) -> None:
+    # The night's delete failed, so the photo stayed on disk though its row says removed. The next night's run finds the
+    # row removed, keeps its first who, when and why, and deletes the file again.
+    row = photo(staff_a)
+    name = str(row.file.name)
+    failing_delete.add(name)
+    with shop_context(staff_a.shop_id), django_capture_on_commit_callbacks(execute=True):
+        first = remove_attachment_file(row, reason=REASON)
+    assert file_exists(row, name)
+
+    failing_delete.discard(name)  # the disk is fixed
+    with shop_context(staff_a.shop_id), django_capture_on_commit_callbacks(execute=True):
+        again = remove_attachment_file(row, reason="Tena")
+
+    assert not file_exists(row, name)
+    assert (again.file_removed_at, again.file_removed_reason) == (first.file_removed_at, REASON)
+
+
+def test_removal_deletes_a_file_an_undone_upload_left(
+    staff_a: Any, django_capture_on_commit_callbacks: CommitSteps
+) -> None:
+    # An upload wrote the file, then its row's change was undone (CTRL-3's "file first, then the row"): the row still
+    # waits, and a file sits under its name. Removing the photo deletes that file too, by the photo's own name.
+    row = photo(staff_a, sent=False)
+    name = attachment_file_name(row, "")
+    with shop_context(staff_a.shop_id):
+        default_storage.save(name, ContentFile(JPEG))
+    with shop_context(staff_a.shop_id), django_capture_on_commit_callbacks(execute=True):
+        remove_attachment_file(row, reason=REASON)
+
+    assert not file_exists(row, name)
 
 
 def test_a_photo_that_never_came_can_be_removed(staff_a: Any) -> None:
