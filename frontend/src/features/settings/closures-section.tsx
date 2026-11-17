@@ -11,10 +11,15 @@
 // The page keeps that order. A cancelled closure, or one already over, isn't sent: their days can't change any more,
 // and the audit trail keeps them.
 //
-// Ongeza, which opens the form (closure-form.tsx), is only for someone holding settings.manage on the whole shop, the
-// owner's key (spec §6): a closure closes both sides, and changes everyone's pay, so ATT-8's routes ask the key there,
-// and a manager given it on one side alone gets no button. Everyone else sees the list without it. The button only
-// keeps a door out of sight: the server checks the key itself on every change.
+// The buttons are only for someone holding settings.manage on the whole shop, the owner's key (spec §6): a closure
+// closes both sides, and changes everyone's pay, so ATT-8's routes ask the key there, and a manager given it on one
+// side alone gets none. Everyone else sees the list without them. Ongeza opens the form that adds a closure
+// (closure-form.tsx); beside each closure, Ondoa takes it off with a reason (closure-cancel.tsx), only while its first
+// day is today or later, as the server refuses one already begun (closure.started). The buttons only keep a door out
+// of sight: the server checks the key itself on every change.
+//
+// Each change is said once in the section's status line, as a cancelled closure leaves the list, and its line with
+// it. The keyboard then goes to the section's heading, the nearest place still on the page.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
@@ -26,33 +31,67 @@ import { useTranslations } from "use-intl";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button } from "@/components/design/button";
 import type { WhoIsHere } from "@/features/people/who-is-here";
-import { formatDay } from "@/lib/format";
 
+import { ClosureCancel } from "./closure-cancel";
 import { ClosureForm } from "./closure-form";
-import { type Closure, CLOSURES, useClosures } from "./closures";
+import { type Closure, CLOSURES, useClosures, useDaysOf } from "./closures";
 
 /** The key that lets a person close the shop, on the whole shop: one of the owner's own four (spec §6). */
 const CLOSES_THE_SHOP = "settings.manage";
 
+/** Where the keyboard goes back to once a form under a button closes: the button, as the form and the box that had
+ * focus are gone. Counted, so each close moves it (settings-screen.tsx). */
+function useFocusBack<T extends HTMLElement>() {
+  const target = useRef<T>(null);
+  const [moves, setMoves] = useState(0);
+  useEffect(() => {
+    if (moves > 0) target.current?.focus();
+  }, [moves]);
+  // A pair, so each caller names its ref "…Ref", which the hooks lint knows is a ref.
+  return [target, () => setMoves((count) => count + 1)] as const;
+}
+
 export function ClosuresSection({ me }: { me: WhoIsHere }) {
   const t = useTranslations("shopSettings.closures");
   const closures = useClosures();
+  const daysOf = useDaysOf();
   // On the whole shop only: a key on a side is not enough (see the top of this file).
   const mayChange = me.permissions.whole_shop.includes(CLOSES_THE_SHOP);
+  // The last change made here, said once in the status line (below).
+  const [said, setSaid] = useState<string | null>(null);
+  // Where the keyboard goes once a closure leaves the list: its line, and the button that had it, are gone.
+  const [headingRef, focusHeading] = useFocusBack<HTMLHeadingElement>();
 
   return (
     <section aria-labelledby="area-closures" className="grid gap-4">
       <div className="grid gap-2">
-        <h2 id="area-closures" className="text-xl font-semibold">
+        {/* tabIndex -1: the keyboard can be sent here, though Tab never stops on it (my-settings.tsx). */}
+        <h2
+          ref={headingRef}
+          id="area-closures"
+          tabIndex={-1}
+          className="text-xl font-semibold outline-none"
+        >
           {t("title")}
         </h2>
         <p className="text-muted-foreground">{t("intro")}</p>
       </div>
       {/* A failed read shows above the list, and keeps the last answer under it, as on the rules and Pande. */}
       <ApiErrorAlert error={closures.error} />
+      {/* Always on the page, empty until a change: a role="status" line is read when its words change, and one that
+          appears with its words already in it may not be read at all (offline-banner.tsx). */}
+      <p role="status" className={said ? "font-medium" : "sr-only"}>
+        {said}
+      </p>
       {/* Once the list has come, as the form's date boxes start from the shop's today, which comes with it. */}
       {mayChange && closures.data ? (
-        <AddClosure today={closures.data.today} />
+        <AddClosure
+          today={closures.data.today}
+          onOpen={() => setSaid(null)}
+          onSaved={(closure) =>
+            setSaid(t("added", { name: closure.name, days: daysOf(closure) }))
+          }
+        />
       ) : null}
       {closures.data ? (
         closures.data.closures.length === 0 ? (
@@ -63,7 +102,21 @@ export function ClosuresSection({ me }: { me: WhoIsHere }) {
           <ul role="list" className="grid gap-4">
             {closures.data.closures.map((closure) => (
               <li key={closure.id}>
-                <ClosureLine closure={closure} />
+                <ClosureLine
+                  closure={closure}
+                  today={closures.data.today}
+                  mayChange={mayChange}
+                  onOpen={() => setSaid(null)}
+                  onRemoved={() => {
+                    setSaid(
+                      t("removed", {
+                        name: closure.name,
+                        days: daysOf(closure),
+                      }),
+                    );
+                    focusHeading();
+                  }}
+                />
               </li>
             ))}
           </ul>
@@ -73,67 +126,34 @@ export function ClosuresSection({ me }: { me: WhoIsHere }) {
   );
 }
 
-/** A closure's days as the page writes them: one day as one date, "09/12/2026"; a span as its first and last day,
- * "20/11/2026 – 24/11/2026", both closed. */
-function useDaysOf(): (closure: Closure) => string {
+/** Ongeza, and the form it opens under it. */
+function AddClosure({
+  today,
+  onOpen,
+  onSaved,
+}: {
+  today: string;
+  onOpen: () => void;
+  onSaved: (closure: Closure) => void;
+}) {
   const t = useTranslations("shopSettings.closures");
-  return (closure) =>
-    closure.first_day === closure.last_day
-      ? formatDay(closure.first_day)
-      : t("days", {
-          first: formatDay(closure.first_day),
-          last: formatDay(closure.last_day),
-        });
-}
-
-/** Ongeza, the form it opens under it, and the line that says a closure was saved. */
-function AddClosure({ today }: { today: string }) {
-  const t = useTranslations("shopSettings.closures");
-  const daysOf = useDaysOf();
   const store = useQueryClient();
   const [open, setOpen] = useState(false);
-  // The last closure saved, said once in the status line (below).
-  const [saved, setSaved] = useState<Closure | null>(null);
-  // Where the keyboard goes when the form closes: back to Ongeza, as the form and the box that had focus are gone.
-  // Counted, so each close moves it (settings-screen.tsx).
-  const opener = useRef<HTMLButtonElement>(null);
-  const [closes, setCloses] = useState(0);
-  useEffect(() => {
-    if (closes > 0) opener.current?.focus();
-  }, [closes]);
+  const [ongezaRef, focusOngeza] = useFocusBack<HTMLButtonElement>();
   function close() {
     setOpen(false);
-    setCloses((count) => count + 1);
+    focusOngeza();
   }
 
   return (
     <div className="grid gap-3">
       {/* While the form is open its own Ghairi closes it, so Ongeza steps aside. */}
-      {open ? null : (
-        <div className="flex flex-wrap gap-3">
-          <Button
-            ref={opener}
-            size="normal"
-            onClick={() => {
-              setSaved(null);
-              setOpen(true);
-            }}
-          >
-            {t("add")}
-          </Button>
-        </div>
-      )}
-      {/* Always on the page, empty until a save: a role="status" line is read when its words change, and one that
-          appears with its words already in it may not be read at all (offline-banner.tsx). */}
-      <p role="status" className={saved ? "font-medium" : "sr-only"}>
-        {saved ? t("added", { name: saved.name, days: daysOf(saved) }) : null}
-      </p>
       {open ? (
         <div className="rounded-lg border border-input p-4">
           <ClosureForm
             today={today}
             onSaved={(closure) => {
-              setSaved(closure);
+              onSaved(closure);
               close();
             }}
             onCancel={() => {
@@ -144,20 +164,88 @@ function AddClosure({ today }: { today: string }) {
             }}
           />
         </div>
-      ) : null}
+      ) : (
+        <div className="flex flex-wrap gap-3">
+          <Button
+            ref={ongezaRef}
+            size="normal"
+            onClick={() => {
+              onOpen();
+              setOpen(true);
+            }}
+          >
+            {t("add")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
 
-/** One closure: its name, and its days. */
-function ClosureLine({ closure }: { closure: Closure }) {
+/** One closure: its name and its days, and for whoever may, Ondoa while it hasn't begun, with its form under it. */
+function ClosureLine({
+  closure,
+  today,
+  mayChange,
+  onOpen,
+  onRemoved,
+}: {
+  closure: Closure;
+  /** The shop's today, from the server's answer: a closure whose first day is before it has begun. */
+  today: string;
+  /** Whether the person holds settings.manage on the whole shop. */
+  mayChange: boolean;
+  onOpen: () => void;
+  onRemoved: () => void;
+}) {
+  const t = useTranslations("shopSettings.closures");
   const daysOf = useDaysOf();
+  const [removing, setRemoving] = useState(false);
+  const [ondoaRef, focusOndoa] = useFocusBack<HTMLButtonElement>();
+  // Up to and on its first day: days as text sort as days do ("2026-11-20"). Once one of its days has passed, that
+  // day stays closed, and only its last day can move (closure.started).
+  const mayRemove = mayChange && closure.first_day >= today;
+
   return (
     <div className="grid gap-3 rounded-lg border border-input p-4">
-      <p className="grid gap-1 text-lg">
-        <span className="font-semibold">{closure.name}</span>
-        <span>{daysOf(closure)}</span>
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="grid gap-1 text-lg">
+          <span className="font-semibold">{closure.name}</span>
+          <span>{daysOf(closure)}</span>
+        </p>
+        {/* While the form is open its own Ghairi closes it, so the button steps aside. */}
+        {mayRemove && !removing ? (
+          <Button
+            ref={ondoaRef}
+            kind="second"
+            size="normal"
+            // Starts with the word on the button, and names the closure, as a list of Ondoa buttons reads to a screen
+            // reader as nothing.
+            aria-label={t("removeOf", { name: closure.name })}
+            onClick={() => {
+              onOpen();
+              setRemoving(true);
+            }}
+          >
+            {t("remove")}
+          </Button>
+        ) : null}
+      </div>
+      {removing ? (
+        <ClosureCancel
+          closure={closure}
+          // The line leaves the list once it is read again: the section says so, and takes the keyboard. The form closes
+          // now, so a list that is slow to come back never shows an open Ondoa for a closure already cancelled.
+          onCancelled={() => {
+            setRemoving(false);
+            onRemoved();
+          }}
+          onCancel={() => {
+            setRemoving(false);
+            focusOndoa();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

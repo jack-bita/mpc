@@ -246,6 +246,12 @@
       "days": "{first} – {last}",
       "add": "Add",
       "added": "Saved: {name}, {days}.",
+      "remove": "Remove",
+      "removeOf": "Remove: {name}",
+      "removeAsk": "Remove {name}, {days}? The shop will be open on those days.",
+      "reason": "Reason",
+      "reasonHint": "Kept with your name and the time.",
+      "removed": "Removed: {name}, {days}.",
       "form": {
         "from": "From",
         "fromHint": "Today or a later day.",

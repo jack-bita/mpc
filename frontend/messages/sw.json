@@ -246,6 +246,12 @@
       "days": "{first} – {last}",
       "add": "Ongeza",
       "added": "Imehifadhiwa: {name}, {days}.",
+      "remove": "Ondoa",
+      "removeOf": "Ondoa: {name}",
+      "removeAsk": "Ondoa {name}, {days}? Duka litakuwa wazi siku hizo.",
+      "reason": "Sababu",
+      "reasonHint": "Inahifadhiwa pamoja na jina lako na saa.",
+      "removed": "Imeondolewa: {name}, {days}.",
       "form": {
         "from": "Kuanzia",
         "fromHint": "Leo au siku ya baadaye.",

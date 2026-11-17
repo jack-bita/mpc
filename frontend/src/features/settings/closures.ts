@@ -1,11 +1,18 @@
 // closures.ts — the days the shop is closed, as the server answers, in the store of server answers (ATT-9): one place,
-// read by Siku duka limefungwa (closures-section.tsx) and asked again by each of its forms after a change. Its own
-// file, so the section and its forms both import it without importing each other, as shop-rules.ts.
+// read by Siku duka limefungwa (closures-section.tsx) and asked again by each of its forms after a change; and a
+// closure's days as the page writes them, which the list, the saved lines and Ondoa's question share. Its own file, so
+// the section and its forms both import it without importing each other, as shop-rules.ts.
+//
+// "use client": its useDaysOf asks use-intl for words (use-client.test.ts).
+"use client";
+
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { answerOf } from "@/api/refusal";
 import type { components } from "@/api/schema";
+import { formatDay } from "@/lib/format";
 
 /** One closure, as the server sends it: its days, its name, and who added it. */
 export type Closure = components["schemas"]["Closure"];
@@ -20,4 +27,17 @@ export function useClosures() {
     queryKey: CLOSURES,
     queryFn: () => answerOf(api.GET("/api/v1/shops/closures/")),
   });
+}
+
+/** A closure's days as the page writes them: one day as one date, "09/12/2026"; a span as its first and last day,
+ * "20/11/2026 – 24/11/2026", both closed. */
+export function useDaysOf(): (closure: Closure) => string {
+  const t = useTranslations("shopSettings.closures");
+  return (closure) =>
+    closure.first_day === closure.last_day
+      ? formatDay(closure.first_day)
+      : t("days", {
+          first: formatDay(closure.first_day),
+          last: formatDay(closure.last_day),
+        });
 }

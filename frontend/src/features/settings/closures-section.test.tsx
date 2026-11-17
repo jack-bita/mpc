@@ -1,7 +1,8 @@
 // closures-section.test.tsx — Siku duka limefungwa (ATT-9): the closures from today on, in the server's order,
 // soonest first; a span written as its first and last day, one day as one date; a line when none is coming; the
-// section in English; and why, when the server refuses the read. Then Ongeza: for the owner, who holds
-// settings.manage on the whole shop, and nobody else; a closure saved from it shows in its place, and the page says so.
+// section in English; and why, when the server refuses the read. Then Ongeza and Ondoa: for the owner, who holds
+// settings.manage on the whole shop, and nobody else, Ondoa only beside a closure not yet begun; a closure saved shows
+// in its place, one removed leaves the list, and the page says each.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -39,13 +40,13 @@ const KRISMASI = closure({
   name: "Krismasi",
 });
 
-/** Each closure's line, its words run together as the screen shows them. Given 5 s, not Testing Library's 1, as the
- * first test of a file pays for the page's first load (settings-screen.test.tsx). */
+/** Each closure's name and days, run together as the screen shows them, without its buttons' words. Given 5 s, not
+ * Testing Library's 1, as the first test of a file pays for the page's first load (settings-screen.test.tsx). */
 async function linesShown(): Promise<string[]> {
   const list = await screen.findByRole("list", {}, { timeout: 5_000 });
   return within(list)
     .getAllByRole("listitem")
-    .map((item) => item.textContent ?? "");
+    .map((item) => item.querySelector("p")?.textContent ?? "");
 }
 
 function tap(element: HTMLElement) {
@@ -143,6 +144,7 @@ describe("Ongeza", () => {
     render(<ClosuresSection me={SELLER} />);
 
     expect(await linesShown()).toEqual(["Siku ya Uhuru09/12/2026"]);
+    // No Ongeza, and no Ondoa beside Siku ya Uhuru, which hasn't begun.
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -214,5 +216,126 @@ describe("Ongeza", () => {
       screen.getByRole("button", { name: "Ongeza" }),
     );
     await waitFor(() => expect(reads()).toBe(before + 1));
+  });
+});
+
+describe("Ondoa", () => {
+  // On the shop's today of the tests, Sunday 15 Nov 2026: a funeral that began on the 13th, a closure that starts
+  // today, and Siku ya Uhuru to come.
+  const BEGUN = closure({ first_day: "2026-11-13", last_day: "2026-11-17" });
+  const STARTS_TODAY = closure({
+    first_day: "2026-11-15",
+    last_day: "2026-11-15",
+    name: "Ukarabati wa duka",
+  });
+
+  it("is beside each closure not yet begun, today's included, and not beside one begun (the card's third Done when)", async () => {
+    answer("GET", CLOSURES, {
+      status: 200,
+      body: closuresAnswer([BEGUN, STARTS_TODAY, UHURU]),
+    });
+
+    render(<ClosuresSection me={OWNER} />);
+
+    await linesShown();
+    // Each names its closure, as a list of Ondoa buttons reads to a screen reader as nothing.
+    expect(
+      screen
+        .getAllByRole("button", { name: /^Ondoa: / })
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Ondoa: Ukarabati wa duka", "Ondoa: Siku ya Uhuru"]);
+  });
+
+  it("takes the closure off the list once removed, says so, and gives the keyboard to the section's heading", async () => {
+    let cancelled = false;
+    answer("GET", CLOSURES, () =>
+      Response.json(closuresAnswer(cancelled ? [KRISMASI] : [UHURU, KRISMASI])),
+    );
+    answer("POST", `${CLOSURES}${UHURU.id}/cancel/`, () => {
+      cancelled = true;
+      return Response.json({ ...UHURU, status: "cancelled" });
+    });
+
+    render(<ClosuresSection me={OWNER} />);
+
+    tap(
+      await screen.findByRole(
+        "button",
+        { name: "Ondoa: Siku ya Uhuru" },
+        { timeout: 5_000 },
+      ),
+    );
+    typeInto(screen.getByLabelText("Sababu"), "Tutafanya kazi siku hiyo");
+    tap(screen.getByRole("button", { name: "Ondoa" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe(
+        "Imeondolewa: Siku ya Uhuru, 09/12/2026.",
+      ),
+    );
+    await waitFor(async () =>
+      expect(await linesShown()).toEqual(["Krismasi25/12/2026 – 26/12/2026"]),
+    );
+    // Its line and its button are gone: the keyboard goes to the nearest place still on the page.
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { level: 2, name: "Siku duka limefungwa" }),
+    );
+  });
+
+  it("says it is removed, and reads the list again, when the server answers it was already cancelled (ATT-8's review)", async () => {
+    // Another manager, or this owner's own tap whose answer was lost, cancelled it a moment before: it is removed
+    // either way.
+    let reads = 0;
+    answer("GET", CLOSURES, () => {
+      reads += 1;
+      return Response.json(closuresAnswer(reads === 1 ? [UHURU] : []));
+    });
+    answer(
+      "POST",
+      `${CLOSURES}${UHURU.id}/cancel/`,
+      refusal(400, "closure.not_active"),
+    );
+
+    render(<ClosuresSection me={OWNER} />);
+
+    tap(
+      await screen.findByRole(
+        "button",
+        { name: "Ondoa: Siku ya Uhuru" },
+        { timeout: 5_000 },
+      ),
+    );
+    typeInto(screen.getByLabelText("Sababu"), "Tutafanya kazi siku hiyo");
+    tap(screen.getByRole("button", { name: "Ondoa" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe(
+        "Imeondolewa: Siku ya Uhuru, 09/12/2026.",
+      ),
+    );
+    expect(
+      await screen.findByText("Hakuna siku zijazo ambazo duka limefungwa."),
+    ).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("closes on Ghairi, and gives the keyboard back to the closure's Ondoa", async () => {
+    answer("GET", CLOSURES, { status: 200, body: closuresAnswer([UHURU]) });
+
+    render(<ClosuresSection me={OWNER} />);
+
+    tap(
+      await screen.findByRole(
+        "button",
+        { name: "Ondoa: Siku ya Uhuru" },
+        { timeout: 5_000 },
+      ),
+    );
+    tap(screen.getByRole("button", { name: "Ghairi" }));
+
+    expect(screen.queryByLabelText("Sababu")).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Ondoa: Siku ya Uhuru" }),
+    );
   });
 });
