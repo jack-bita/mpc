@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.33 · 16 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.34 · 17 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -67,6 +67,8 @@
 **Changes in v1.32** (16 Nov 2026, ATT-2): the owner's attendance rules (OWN-7), through Jack: the day's times and its two fines as dated settings (§12, the day's rules), and `Holiday`, a closed day (ATT-8); §20 item 6 is settled. The fines start at nothing, as this public repo names no real amount; E10 takes a made-up fine (spec v1.3, 04 v1.86). Marked **(v1.32)**.
 
 **Changes in v1.33** (16 Nov 2026, ATT-8, from Jack): `Holiday`, one date, becomes `Closure`, a span of days from a first day to a last, as the shop also closes for a family funeral; its last day can move, earlier or later, with a reason; every closed day is off and not paid (§12; spec v1.4, 04 v1.89). Marked **(v1.33)**.
+
+**Changes in v1.34** (17 Nov 2026, CTRL-3): §13, an attachment's fields as built: its kind and the record it is pinned to, its label, and its file's three states, waiting, kept and removed, with who removed it, when and why (04 v1.96). Marked **(v1.34)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
@@ -542,6 +544,7 @@ Advances come from `MoneyMovement` `staff_advance` and are deducted in the next 
 **EditEvent** [R1] — one change to an office record (a staff member, a side, a payment account, a stock location; later products, contacts, roles and devices), written by the database itself, so no change can skip it: who (`created_by`), from which device (`device`, as an AuditEvent's) **(v1.18)**, when (`created_at`), the record (`subject`), and the fields that changed, `before` and `after`. No reason: an action that needs one also writes an AuditEvent. A PIN hash is never copied. Append-only **(v1.9)**.
 
 **Attachment** [R1] — a photo or file on any record: supplier paper, expense receipt, clock-in photo. Photos taken offline upload later, Wi-Fi first.
+- **(v1.34)** Its `kind` (a clock-in photo, a worker's photo; a later kind comes with its record's card) names the table of the record it is pinned to (`subject`: a type code + UUID) and the key that opens it, on the whole shop. Its label, as the record brought it: `content_type` (JPEG or WebP), `size` (1 byte to 1 MB) and `sha256`; with `device` and `created_by`. Its file only moves forward: waiting → kept (`received_at`) → removed (`file_removed_at`, `file_removed_by`, `file_removed_reason`, always with a reason); a photo that never came may be removed too. The row is never deleted (rule 7): a removed photo's row says there was one, and who removed it.
 
 **ImportJob** [R1] — products and selling units, opening stock, contacts, open debts. `status`: `uploaded` → `checked` → `applied`; errors per row; created records point back at the import.
 

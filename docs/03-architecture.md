@@ -2,9 +2,13 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.68 · 17 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.70 · 17 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.70** (17 Nov 2026, CTRL-3's review): §5.13: the demo's file rows are deleted with their photos, written as a decision; an upload with no length is asked to send again (411); a removal always deletes its photo's own name, and a failed delete stops no other (04 v1.97). Marked **(v1.70)**.
+
+**Changes in v1.69** (17 Nov 2026, CTRL-3): §5.13, files and photos as built: the folder on the real server and the database on the demo, each file named by its shop and its own id, the label a record brings and the upload's checks against it, the office's door with each kind's key, and a removal that keeps the row; §5.10 names the office's door (04 v1.96). Marked **(v1.69)**.
 
 **Changes in v1.68** (17 Nov 2026, ATT-9): §7.1's folder map names the shop's closed days in `features/settings/`, *Siku duka limefungwa* on *Mipangilio ya duka* (04 v1.93). Marked **(v1.68)**.
 
@@ -501,7 +505,7 @@ Confirming a one-screen sale:
 
 | Path | What | Who |
 |---|---|---|
-| `/api/v1/<app>/…` | Office REST: products, prices, deliveries, counts, contacts, cash-up, reports, staff, settings, flags, devices (a manager confirms a pairing there, AUTH-5) **(v1.14)**, and lists, renames, blocks and unblocks them; the list shows a side's devices to whoever works on that side, and every change needs `device.manage` on the device's home side (Jack, AUTH-5) **(v1.15)** | Staff session |
+| `/api/v1/<app>/…` | Office REST: products, prices, deliveries, counts, contacts, cash-up, reports, staff, settings, flags, a photo's file (`/api/v1/control/attachments/{id}/file/`, CTRL-3) **(v1.69)**, devices (a manager confirms a pairing there, AUTH-5) **(v1.14)**, and lists, renames, blocks and unblocks them; the list shows a side's devices to whoever works on that side, and every change needs `device.manage` on the device's home side (Jack, AUTH-5) **(v1.15)** | Staff session |
 | `/api/sync/v1/bootstrap`, `/pull`, `/push`, `/attachments/{id}` | Sync (§6) | Device key |
 | `/_allauth/browser/v1/…` | Password login, logout, password reset, session (django-allauth): only these, and they answer in allauth's own shape, not the API's one error shape **(v1.17)** | — |
 | `/api/auth/…` | PIN login, logout, me (our own); and `me/settings/`, where a person changes their own language and font, with no key (UI-9) **(v1.35)** | PIN login: device key. Logout and me: the session, so logout works on a blocked device, and me serves a password login too **(v1.20)**. My settings: the office routes' login, so a suspended person is refused **(v1.35)** |
@@ -533,11 +537,11 @@ The Foods cashier's queue and notifications must update within seconds. Start wi
 
 ### 5.13 Files and photos
 
-- Stored through Django's storage API: on the server's disk in R1 (included in backups, kept in Tanzania); an S3-compatible bucket later, with no code change.
+- Stored through Django's storage API: on the server's disk in R1 (included in backups, kept in Tanzania); an S3-compatible bucket later, with no code change. How it is built **(v1.69)** (`apps/core/storage.py`, CTRL-3): on the real server in the folder `FILES_ROOT`, required, outside the image (OPS-5 mounts it, OPS-8 backs it up), each file readable by the server's own user alone; on the demo in a table of its database (`FILES_IN_DATABASE=yes`), as Render's free plan loses its disk at every restart, and the nightly wipe takes them with the rest. A file's name is `<shop id>/<attachment id>`, never a person's name or the device's file name; both storages refuse a name of another shop than the one open, write a name sent again over the file, and make no address. The demo's file rows are the one place rows are deleted outside a wipe: removing a photo deletes its row there, as it deletes the file from the folder, since the retention rule wants the photo gone, and the attachment's own row keeps who removed it, when and why (rule 7) **(v1.70)**.
 - **Compressed on the device** before saving: longest side 1,600 px, about 150 KB. Re-encoding also strips location data from the photo ✚.
-- **Offline:** the attachment record travels with its document; the image waits in IndexedDB and uploads later (`PUT /api/sync/v1/attachments/{id}`, safe to repeat). Wi-Fi first where the browser can tell; otherwise a device setting.
-- Served only through Django, after a permission and shop check. Never public links.
-- **Retention** ✚: clock-in photos are removed 90 days after their pay run is approved *(default, a setting)* — keep personal data only as long as it's needed.
+- **Offline:** the attachment record travels with its document; the image waits in IndexedDB and uploads later (`PUT /api/sync/v1/attachments/{id}`, safe to repeat). Wi-Fi first where the browser can tell; otherwise a device setting. The record's saving code writes the attachment's row with its label (`expect_attachment`): what it is pinned to, its kind, its type, its size and its SHA-256. The upload checks the file against the label: a JPEG or a WebP by its first bytes, at most 1 MB (read from the request's length first), the same size, SHA-256 and type; the same file again, or a file already removed, answers 204; an id the shop doesn't hold, or a file sent before its record, answers 404 `attachment.not_found`, as any shop's unknown id does **(v1.69)**. A request with no length, sent in pieces, answers 411 `attachment.length_required`, unread, and is sent again **(v1.70)**.
+- Served only through Django, after a permission and shop check. Never public links. `GET /api/v1/control/attachments/{id}/file/`: the kind's key on the whole shop, a clock-in photo's `attendance.manage`, a worker's photo open to anyone working at the shop; asked before the file's state; never cached (`private, no-store`) **(v1.69)**.
+- **Retention** ✚: clock-in photos are removed 90 days after their pay run is approved *(default, a setting)* — keep personal data only as long as it's needed. `remove_attachment_file` takes the file away and keeps the row, with who, when and why; the row first, the file only once the commit is kept, so a rollback never leaves a row naming a file that is gone **(v1.69)**. Each removal deletes the photo's own name, a removed one's again, and a failed delete is logged without stopping the others, so the next run clears what it left **(v1.70)**.
 
 ### 5.14 Search (AD12)
 

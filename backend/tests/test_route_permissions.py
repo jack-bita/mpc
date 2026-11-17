@@ -23,6 +23,7 @@ tests may not import a higher layer (ADR-0035). Fake data only: the repo is publ
     MFANO     Dawa (D), Vyakula (F)    staff_a and staff_a2, given roles test by test
 """
 
+import hashlib
 import uuid
 from collections.abc import Callable, Iterable, Mapping
 from datetime import timedelta
@@ -41,6 +42,9 @@ from rest_framework.response import Response
 from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIClient
 
+from apps.control.api.views import AttachmentViewSet
+from apps.control.models import AttachmentKind, AttachmentType
+from apps.control.services import expect_attachment, receive_attachment_file
 from apps.core.api import base
 from apps.core.api.base import CreateOnceMixin, ShopViewSet
 from apps.core.permissions import Permission, RoleTemplate
@@ -58,6 +62,7 @@ from tests.test_tenancy_sweep import addresses
 SIDES = "/api/v1/shops/sides/"
 SETTINGS = "/api/v1/shops/settings/"
 CLOSURES = "/api/v1/shops/closures/"
+ATTACHMENTS = "/api/v1/control/attachments/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -433,6 +438,13 @@ def test_closures_routes_name_their_permissions() -> None:
     }
 
 
+def test_attachment_routes_name_their_permissions() -> None:
+    # Opening a photo's file only shows it, so the route asks only to see the shop's rows; each kind's own key is asked
+    # inside the action, on the whole shop (CTRL-3, ATTACHMENT_KINDS), as the key depends on the photo. Written out in
+    # full, as above.
+    assert AttachmentViewSet.action_permissions == {"file": base.SEES_THE_SIDE}
+
+
 def test_settings_routes_name_their_permissions() -> None:
     # Seeing the rules needs only to see a side; a new value needs `settings.manage` (SHOP-3), on the row's side, or on
     # the whole shop for a shop's rule. Written out in full, as above.
@@ -466,6 +478,18 @@ def test_suspended_member_gets_nothing_from_routes(
     in_a_week = shop_today(shop_a) + timedelta(days=7)
     with shop_context(shop_a):
         krismasi = add_closure(shop_a, first_day=in_a_week, last_day=in_a_week, name="Krismasi", by=None)
+        # Their own photo, its file kept (CTRL-3).
+        face = b"\xff\xd8\xff a made-up face"
+        own_photo = expect_attachment(
+            id=uuid.uuid7(),
+            kind=AttachmentKind.STAFF_PHOTO,
+            subject=staff_a,
+            content_type=AttachmentType.JPEG,
+            size=len(face),
+            sha256=hashlib.sha256(face).hexdigest(),
+            by=staff_a,
+        )
+        receive_attachment_file(own_photo.pk, content=face)
     stop(how, staff_a)
 
     assert client.get(SIDES).json()["results"] == []
@@ -493,6 +517,8 @@ def test_suspended_member_gets_nothing_from_routes(
     assert client.post(f"{CLOSURES}{krismasi.pk}/cancel/", {"reason": "Hapana"}, format="json").status_code == 404
     later = {"last_day": (in_a_week + timedelta(days=3)).isoformat(), "reason": "Hapana"}
     assert client.post(f"{CLOSURES}{krismasi.pk}/last-day/", later, format="json").status_code == 404
+    # Nor a photo, not even their own face (CTRL-3): not found, as they see no side.
+    assert client.get(f"{ATTACHMENTS}{own_photo.pk}/file/").status_code == 404
     with shop_context(shop_a):
         assert Side.objects.get(pk=sides["F"].pk).is_live is False
         assert Side.objects.get(pk=sides["F"].pk).band == "blue"

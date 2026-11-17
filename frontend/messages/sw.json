@@ -695,6 +695,15 @@
       "started": "Siku hizi zimeshaanza. Badilisha siku ya mwisho badala yake.",
       "not_active": "Siku hizi za kufunga duka zimeshaondolewa."
     },
+    "attachment": {
+      "not_found": "Seva haina picha hii.",
+      "too_big": "Picha hii ni kubwa mno: picha isizidi MB 1.",
+      "not_an_image": "Faili hili si picha. Zinapokelewa picha za JPEG na WebP pekee.",
+      "file_differs": "Picha hii si ile iliyotajwa kwenye kumbukumbu yake. Huenda iliharibika njiani.",
+      "file_waiting": "Picha hii bado haijafika kwenye seva. Itafika kompyuta ikipata mtandao.",
+      "file_removed": "Picha hii imeshaondolewa.",
+      "length_required": "Picha ilitumwa bila kuonyesha ukubwa wake. Itatumwa tena."
+    },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",
     "password_entirely_numeric": "Nenosiri haliwezi kuwa namba tu.",

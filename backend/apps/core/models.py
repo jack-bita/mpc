@@ -14,10 +14,12 @@ are abstract: they make no table of their own, they only pass their columns on t
 inherit them. PPL-1's User builds on the first two, every shop's table on ShopScoped, every office record
 people edit on Editable, every counter record on CounterRecord, and every ledger on AppendOnly.
 
-Two real tables live here too, because every app needs them and `core` is the layer all may import:
+Three real tables live here too, because every app needs them and `core` is the layer all may import:
 ShopSequence, a shop's named counters, such as the one that gives each new device its code (AUTH-1), moved
-only by next_number (apps/core/sequences.py); and Change, a shop's change log, the numbered list of changed
-records that devices pull (SYNC-1, 03 §6.4), written only by recording_changes (apps/core/changes.py).
+only by next_number (apps/core/sequences.py); Change, a shop's change log, the numbered list of changed
+records that devices pull (SYNC-1, 03 §6.4), written only by recording_changes (apps/core/changes.py); and
+StoredFile, the demo's files, kept in the database because its disk doesn't last, written and read only by
+DatabaseStorage (apps/core/storage.py, CTRL-3).
 """
 
 import uuid
@@ -326,3 +328,35 @@ class Change(AppendOnly):
 
     def __str__(self) -> str:
         return f"{self.seq}: {self.op} {self.entity}"
+
+
+class StoredFile(ShopScoped):
+    # One file kept in the database: the demo's storage (DatabaseStorage, apps/core/storage.py), as Render's free plan
+    # loses its disk at every restart. The real server keeps its files in a folder and never writes here. Written and
+    # read only through the storage, by the file's name; nothing else touches this table.
+    # ShopScoped (CORE-2) gives `id`, `shop`, `created_at`, `created_by` (always empty: the storage doesn't know who
+    # acts; the row that names the file, control.Attachment, does) and the guard on reads, so one shop never reads
+    # another's file. No edit history (NO_EDIT_HISTORY in backend/tests/sweep_lists.py, CTRL-3's card): a file is
+    # written whole and never edited, and a history row would copy the photo's bytes into a table kept for good.
+    # A row is deleted when its file is removed: the retention rule (03 §5.13) asks that the photo is gone, not
+    # hidden, as a file in the folder is gone. The record that named it keeps who removed it, when and why (rule 7).
+
+    # The shop, as ShopScoped has it, but with no index of its own: the one-file-per-name rule below is an index that
+    # leads with `shop`, so one on `shop` alone would serve no read, as for the change log (Change, above).
+    shop = models.ForeignKey("shops.Shop", on_delete=models.PROTECT, related_name="+", db_index=False)
+    # The file's name, as the storage was given it: `<shop id>/<file id>`. 100 letters, as a FileField's name.
+    name = models.CharField(max_length=100)
+    # The file itself (PostgreSQL's bytea). A photo is about 150 KB, and the upload route refuses any over 1 MB.
+    content = models.BinaryField()
+
+    class Meta(ShopScoped.Meta):
+        # Built on ShopScoped.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). No error
+        # codes on these rules: only the storage writes this table, never a form or an API (ADR-0032).
+        constraints = [
+            # One file per name in a shop: the same name again writes over the file (update_or_create), never a second
+            # copy. Also the index every read uses (the shop, then the name), leading with `shop` as every index does.
+            models.UniqueConstraint(fields=["shop", "name"], name="core_storedfile_one_per_name"),
+        ]
+
+    def __str__(self) -> str:
+        return self.name

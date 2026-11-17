@@ -8,7 +8,7 @@ on the demo, from Render (render.yaml).
 from wsgiref.headers import Headers
 
 from .base import *  # noqa: F403 — start from the shared settings, then change what differs.
-from .base import BASE_DIR, DATABASES, MIDDLEWARE, env, env_list
+from .base import BASE_DIR, DATABASES, MIDDLEWARE, STORAGES, env, env_list
 
 SECRET_KEY = env("DJANGO_SECRET_KEY")
 
@@ -38,6 +38,20 @@ DATABASES["default"].update(
     HOST=env("DB_HOST"),
     PORT=env("DB_PORT", "5432"),
 )
+
+# Where the shop's files are kept (apps/core/storage.py, CTRL-3). On the demo, FILES_IN_DATABASE=yes (render.yaml,
+# compose.e2e.yml): in a table of its database, as Render's free plan loses its disk at every restart and every deploy.
+# On the real server, in the folder FILES_ROOT names, outside the image: OPS-5 mounts it, so files outlive each new
+# image, and OPS-8 backs it up with the database. Required there, with no default, as every other setting here: a
+# server that started without it would only fail at the first photo, at the counter. A new dict, not an edit: base's
+# STORAGES is the same object in every settings module.
+if env("FILES_IN_DATABASE", "no") == "yes":
+    STORAGES = {**STORAGES, "default": {"BACKEND": "apps.core.storage.DatabaseStorage"}}
+else:
+    STORAGES = {
+        **STORAGES,
+        "default": {"BACKEND": "apps.core.storage.FolderStorage", "OPTIONS": {"location": env("FILES_ROOT")}},
+    }
 
 # A proxy sits in front of Django and talks HTTPS with the browser: Caddy on the real server (03 §13),
 # Render's proxy on the demo (render.yaml). It tells Django the original request was HTTPS with this

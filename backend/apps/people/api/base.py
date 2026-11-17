@@ -16,12 +16,14 @@ pairing, `me` and PIN login (AUTH-4); later sync (SYNC-2 on).
 
 CORE-7's sweep finds every route built on this by itself, a ViewSet's too, and calls each as a device of each shop, and
 with no key at all; one with no GET names a leak test of its own (DEVICE_ROUTES_WITHOUT_A_LOOK,
-backend/tests/sweep_lists.py).
+backend/tests/sweep_lists.py). A route whose address names one row, `<uuid:pk>`, says which table that row is in
+(`model`), so the sweep can ask about each of shop A's rows as shop B's device (CTRL-3).
 """
 
 from contextlib import ExitStack
 from typing import Any, ClassVar
 
+from django.db import models
 from django.http import HttpRequest, HttpResponseBase
 from rest_framework import exceptions
 from rest_framework.permissions import SAFE_METHODS, AllowAny
@@ -45,6 +47,11 @@ class DeviceView(APIView):
     # True on a route a new device calls before a manager has said yes: it runs without a device, and so without a
     # shop. False on every other route, which refuses a visit with no device.
     device_optional: ClassVar[bool] = False
+    # For a route whose address names one row by its id, `<uuid:pk>` (a photo's file, CTRL-3): the table that row is in,
+    # as an office route names its own. The route itself may find the row through a service; the tenancy sweep reads
+    # this to ask about each of shop A's rows as shop B's device, and with no key, and to expect exactly the answer an
+    # id no shop has gets. None on a route whose address names nothing.
+    model: ClassVar[type[models.Model] | None] = None
     # The visit's stack of things to close as it ends: the device's shop, and who acts as PostgreSQL knows it. Set in
     # dispatch(), once per visit; DRF makes a new view object for every visit, so two visits never share it.
     _visit: ExitStack
