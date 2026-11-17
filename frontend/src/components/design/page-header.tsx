@@ -5,12 +5,14 @@
 //
 // The arrow goes back to where the person was, as the browser's own back does (router.back()), not to a
 // page fixed in advance: a manager who came to the settings from the office's home returns there, and one
-// who came from another screen returns to that one. A page opened with nothing before it in the tab, from
-// a bookmark or a link in a new tab, has nowhere to go back to: the browser's back would do nothing, so
-// the arrow goes to `fallback` instead, the office's home unless the page says otherwise.
+// who came from another screen returns to that one. It goes back only when the tab's note says the person
+// moved between the app's own pages (in-app-moves.tsx). With no such note, as on a page opened from a
+// bookmark, a typed address or another website, going back would leave the app, or do nothing, so the arrow
+// goes to `fallback` instead: the office's home unless the page says otherwise.
 //
-// The trade-off: the browser's history can't say whether the page before was the app's own. Someone who
-// typed the address after another website goes back to that website, as the browser's own back would.
+// The browser's history alone can't tell: it doesn't say whose its pages are, and Chrome leaves its new-tab
+// page in a tab's history, so a bookmark opened from it has a page before it that isn't ours (the branch's
+// review, 17 Nov 2026).
 //
 // "use client": it asks use-intl for the arrow's name, and moves to another page in the browser.
 "use client";
@@ -20,9 +22,11 @@ import { useRouter } from "next/navigation";
 import type { Ref } from "react";
 import { useTranslations } from "use-intl";
 
+import { movedInApp } from "@/components/in-app-moves";
+
 import { Button } from "./button";
 
-/** Where the arrow goes when the tab has no page before this one: the office's home (UI-5). */
+/** Where the arrow goes when going back would leave the app, or do nothing: the office's home (UI-5). */
 export const BACK_FALLBACK = "/office/";
 
 export function PageHeader({
@@ -35,7 +39,7 @@ export function PageHeader({
   title: string;
   /** The words under the title that say what the page is for. */
   intro?: string;
-  /** Where the arrow goes when there is no page to go back to. */
+  /** Where the arrow goes when the page before isn't the app's own, or there is none. */
   fallback?: string;
   /** For a page that moves focus to its title as it opens, so a screen reader says where the person is
    * (my-settings.tsx). Given, the title takes focus from code only (tabIndex -1), never from Tab. */
@@ -45,8 +49,8 @@ export function PageHeader({
   const router = useRouter();
 
   function goBack() {
-    // A history of one is this page alone: a fresh tab, or a bookmark opened in one.
-    if (window.history.length > 1) router.back();
+    // Both: the note says the page before is ours; a history of more than this page says there is one.
+    if (movedInApp() && window.history.length > 1) router.back();
     else router.push(fallback);
   }
 

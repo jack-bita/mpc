@@ -1,9 +1,11 @@
 // page-header.test.tsx — the top of a page: the title as its one heading, the words under it, and an arrow
-// that goes back to where the person was, or to the office's home from a fresh tab (Jack, 17 Nov 2026).
+// that goes back to where the person was, but only to the app's own page: else to the office's home (Jack,
+// 17 Nov 2026).
 import { fireEvent, screen } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { MOVED_IN_APP } from "@/components/in-app-moves";
 import { render } from "@/test/render";
 import { router } from "@/test/router";
 
@@ -14,8 +16,14 @@ function historyOf(pages: number) {
   vi.spyOn(window.history, "length", "get").mockReturnValue(pages);
 }
 
+/** Notes, as in-app-moves.tsx does, that the person came here from another of the app's pages. */
+function movedInTheApp() {
+  window.sessionStorage.setItem(MOVED_IN_APP, "1");
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
+  window.sessionStorage.clear();
 });
 
 describe("the page header", () => {
@@ -34,8 +42,9 @@ describe("the page header", () => {
     ).toBeDefined();
   });
 
-  it("goes back to where the person was", () => {
+  it("goes back to where the person was, one of the app's pages", () => {
     historyOf(3);
+    movedInTheApp();
     render(<PageHeader title="Mipangilio ya duka" />);
     fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
     expect(router.back).toHaveBeenCalledOnce();
@@ -50,11 +59,20 @@ describe("the page header", () => {
     expect(router.push).toHaveBeenCalledWith(BACK_FALLBACK);
   });
 
+  it("never goes back out of the app: a bookmark opened from Chrome's new tab", () => {
+    // Chrome keeps its new-tab page in the tab's history: two pages, the first not ours.
+    historyOf(2);
+    render(<PageHeader title="Mipangilio ya duka" />);
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.push).toHaveBeenCalledWith(BACK_FALLBACK);
+  });
+
   it("goes where the page says, when it names its own way out", () => {
     historyOf(1);
-    render(<PageHeader title="Hali ya vifaa" fallback="/devices/" />);
+    render(<PageHeader title="Ukurasa" fallback="/" />);
     fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
-    expect(router.push).toHaveBeenCalledWith("/devices/");
+    expect(router.push).toHaveBeenCalledWith("/");
   });
 
   it("lets a page focus its title, from code only", () => {

@@ -4,7 +4,8 @@
 // once, at build time, and becomes plain HTML in out/ — no server runs it later
 // (ADR-0016). That is also why it may export `metadata`, which only server components can.
 // The app's providers wrap every page here: today the word books, the store of server answers, the
-// device's check of who it is, the sync's moments, and the ask to keep the data; later the session (03 §7.2).
+// device's check of who it is, the sync's moments, the ask to keep the data, and the note of the app's own
+// moves, for the back arrow; later the session (03 §7.2).
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -21,6 +22,9 @@ import { UpdatePrompt } from "@/components/update-prompt";
 import { DeviceCheck } from "@/features/devices/device-check";
 // A blocked device shows the lock in place of every page (UI-3).
 import { DeviceLock } from "@/features/devices/device-lock";
+// Notes, for this tab, that the person moved between the app's own pages: the back arrow goes back only
+// then, never out of the app (page-header.tsx).
+import { InAppMoves } from "@/components/in-app-moves";
 // The two fonts inside the app (ADR-0039).
 import { atkinson, sourceSans } from "@/fonts/fonts";
 // Hands every screen its words from the open book: Swahili, or English after the switch (ADR-0040).
@@ -55,6 +59,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <SyncTriggers />
             <UpdatePrompt />
             <KeepDataAtStart />
+            <InAppMoves />
           </QueryProvider>
         </LanguageProvider>
       </body>
