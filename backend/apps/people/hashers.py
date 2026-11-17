@@ -11,8 +11,8 @@ Argon2id: 19 MiB, 2 passes, 1 lane. About 40 ms on the laptop.
 A stored hash names the cost it was made with. If this cost changes later, each person's hash moves to the new one at
 their next login, with no migration and nobody locked out.
 
-PINs don't come through here: they are hashed directly, with a secret added (apps/people/pins.py), and AUTH-4 sets
-their cost.
+PINs pay the same cost, through this same class (apps/people/pins.py, AUTH-4). They don't go through Django's list of
+hashers, as they have a secret added first, and the test settings swap that list for a fast, weak hasher.
 """
 
 from django.contrib.auth.hashers import Argon2PasswordHasher

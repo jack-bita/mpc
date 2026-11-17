@@ -1,16 +1,20 @@
-"""apps/people/api/throttles.py — pairing is slowed down for whoever asks too often, and how every limit tells who a
-caller is, by the network they call from, never their address (AUTH-5, AUTH-3; 03 §5.10).
+"""apps/people/api/throttles.py — pairing and PIN login are slowed down for whoever asks too often, and how every limit
+tells who a caller is, by the network they call from, never their address (AUTH-5, AUTH-3, AUTH-4; 03 §5.10).
 
-Two limits, 10 an hour each *(default)* (DEFAULT_THROTTLE_RATES, config/settings/base.py):
+Three limits *(default)* (DEFAULT_THROTTLE_RATES, config/settings/base.py):
 
-- the start of a pairing (POST /api/devices/v1/pairing/), per caller's network: its one public IPv4 address, or its
-  IPv6 network (a /64), where each phone has an address of its own. Every device of a shop shares it, so the limit
-  counts the whole shop, and a few devices an hour is plenty;
-- a manager's confirm (POST /api/v1/people/devices/), per person: someone typing codes over and over, by mistake or
-  to guess one, waits.
+- the start of a pairing (POST /api/devices/v1/pairing/), 10 an hour per caller's network: its one public IPv4 address,
+  or its IPv6 network (a /64), where each phone has an address of its own. Every device of a shop shares it, so the
+  limit counts the whole shop, and a few devices an hour is plenty;
+- a manager's confirm (POST /api/v1/people/devices/), 10 an hour per person: someone typing codes over and over, by
+  mistake or to guess one, waits;
+- a try of a PIN (POST /api/auth/pin-login/), 30 a minute per device: each one costs a full check of 19 MiB, and a flood
+  of made-up people meets no lock, as a lock needs a real person to lock (apps/people/services.py). A busy counter's
+  quick switches stay far below it.
 
-What counts: a start the shop really sent, a POST that passed its CSRF check (DeviceView.check_permissions), and a new
-try of a code, a wrong one included, since a guessed code is a refused confirm (DeviceViewSet.get_throttles). A request
+What counts: a start the shop really sent, a POST that passed its CSRF check (DeviceView.check_permissions); a try of a
+PIN that passed its device's login and its CSRF check; and a new try of a code, a wrong one included, since a guessed
+code is a refused confirm (DeviceViewSet.get_throttles). A request
 over its limit is refused with 429 throttled, and `wait`, the seconds until the next try (apps/core/api/errors.py). The
 counts live in the database cache, in PostgreSQL, shared by every server worker, each limit in a table of its own
 (CACHES, config/settings/base.py; ADR-0023). A device's own calls, `me` and later sync, name no limit, so they are
@@ -35,6 +39,8 @@ from django.utils.crypto import salted_hmac
 from rest_framework.request import Request
 from rest_framework.throttling import BaseThrottle, SimpleRateThrottle
 from rest_framework.views import APIView
+
+from apps.people.models import Device
 
 
 def caller_network(address: str) -> str:
@@ -115,3 +121,18 @@ class PairingConfirmThrottle(OwnTableThrottle):
         # The device route hands this limit only a new try of a code (DeviceViewSet.get_throttles,
         # apps/people/api/views.py): never its other actions, a send with no code, nor a confirm sent again.
         return self.cache_format % {"scope": self.scope, "ident": request.user.pk}
+
+
+class PinLoginThrottle(OwnTableThrottle):
+    # A try of a PIN, counted per device: only a paired device gets this far, and each has its own count, so one
+    # laptop's flood slows no other. The device's id names no person.
+    scope = "pin.login"
+    cache_name = "pin_login"
+
+    def get_cache_key(self, request: Request, view: APIView) -> str | None:
+        if request.method != "POST":
+            # Only a try: DRF counts before it finds the action, so a GET, which this route refuses (405), would count
+            # too. None leaves it uncounted, as for pairing's start.
+            return None
+        # cast: DeviceView has refused any visit with no device before DRF asks the limits; mypy can't see that.
+        return self.cache_format % {"scope": self.scope, "ident": cast(Device, request.auth).pk}

@@ -2,7 +2,8 @@
 shop; and what each job may do there: the shop's own roles (Role), the roles a person holds on each side
 (RoleAssignment), and the extra permissions one person holds (PermissionGrant) (02 §5). And the shop's devices:
 Device, a laptop or phone a manager has paired with the shop, and PairingRequest, a device still waiting for a
-manager's yes, which belongs to no shop yet (AUTH-1).
+manager's yes, which belongs to no shop yet (AUTH-1). And PinLock, how one person's PIN tries stand on one device
+(AUTH-4). And DeviceOutage, the offline periods a device reports at its next push, kept as reported (SYNC-5).
 
 A User is the person, not the job: the same person can work at MPC and in its practice shop, and their
 job at each shop (StaffMember) holds the nickname, the status and the PIN, and its roles hang from it.
@@ -22,10 +23,31 @@ from django.db.models.functions import Lower
 
 from apps.core.fields import PhoneField
 from apps.core.languages import Language
-from apps.core.models import Editable, ShopScoped, TimeStamped, UUIDModel
+from apps.core.models import AppendOnly, Editable, ShopScoped, TimeStamped, UUIDModel
 from apps.core.permissions import PERMISSION_CODE_MAX_LENGTH, HeldPermissions, Permission, RoleTemplate
 from apps.people.device_keys import KEY_HASH_LENGTH, KEY_HASH_SHAPE, PAIRING_CODE_ALPHABET, PAIRING_CODE_LENGTH
+from apps.people.pins import FIRST_LOCK_MINUTES, LONGEST_LOCK_MINUTES, PIN_TRIES
 from apps.shops.models import Side
+
+
+class Font(models.TextChoices):
+    # The fonts a person can read the app in, by role, never by name (ADR-0039): the font behind a role can change in
+    # the app (src/fonts/fonts.ts) and no row has to. Each model's check constraint copies these values into its
+    # migration, as Language's do (apps/core/languages.py). Here, not in core: only a person has a font, and a shop
+    # doesn't, so no lower app needs the list. The labels name the role too: they are copied into the migration and the
+    # API's description, so a font's name there would make a swap a migration and a change to the app's promise.
+    DEFAULT = "default", "Default"
+    SECOND = "second", "Second, easy to read"
+
+
+# The two choices a person makes for their own screens, and the only fields of theirs they change themselves
+# (change_own_settings, apps/people/services.py, UI-9). Everything else about a person is set by the shop or the
+# superuser.
+OWN_SETTINGS = ("language", "font")
+
+# The longest app version a laptop may report at a push (SYNC-5): room for a release number and a git commit's 40
+# letters. Here, so the push's check (apps/sync/api/serializers.py) and the column can't disagree.
+APP_VERSION_LENGTH = 64
 
 
 class UserManager(BaseUserManager["User"]):
@@ -86,10 +108,18 @@ class User(UUIDModel, TimeStamped, AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True, null=True, blank=True)
     # The screens follow the logged-in person's language (03 §7.4). Swahili first.
     language = models.CharField(max_length=2, choices=Language, default=Language.SWAHILI)
+    # And the person's font, which follows them the same way: on a shared laptop, one person's choice must not change
+    # the screen for the next (ADR-0039). Only the person changes it (03 §7.4). Room for a longer role's name later.
+    font = models.CharField(max_length=10, choices=Font, default=Font.DEFAULT)
     # Nothing is deleted: a person who must never log in again is switched off instead.
     is_active = models.BooleanField(default=True)
     # May open the Django admin. In practice only the superuser.
     is_staff = models.BooleanField(default=False)
+    # On while this person's password is one someone else typed for them, face to face (ADR-0038): someone else knows
+    # it. Every office route but `me` then refuses them (check_own_password, apps/people/selectors.py) until they choose
+    # their own, which turns it off; or until the superuser disables the password altogether, leaving none to replace.
+    # editable=False: no form shows it, so nobody can tick it off by hand and keep a password the owner knows.
+    must_change_password = models.BooleanField(default=False, editable=False)
 
     objects = UserManager()
 
@@ -129,6 +159,12 @@ class User(UUIDModel, TimeStamped, AbstractBaseUser, PermissionsMixin):
                 name="people_user_language_known",
                 violation_error_code="user.language_unknown",
             ),
+            # ADR-0039: only a role's value, so no font's name is ever stored.
+            models.CheckConstraint(
+                condition=models.Q(font__in=Font.values),
+                name="people_user_font_known",
+                violation_error_code="user.font_unknown",
+            ),
             # The superuser logs in to the admin by email, so one without an email could never log in.
             models.CheckConstraint(
                 condition=models.Q(is_superuser=False) | models.Q(email__isnull=False),
@@ -165,7 +201,7 @@ class StaffMember(ShopScoped):
 
     # PROTECT: nothing is deleted (rule 7). related_name="+": no `user.staffmember_set`; a person's
     # jobs are read through StaffMember.objects, which shows only the current shop's. Django's own index
-    # on `user` stays, unlike `created_by`'s: finding a person's jobs (at login, AUTH-3 and AUTH-4)
+    # on `user` stays, unlike `created_by`'s: finding a person's jobs (at a password's login, AUTH-3)
     # starts from the person, not from a shop.
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
     # What the shop calls them, on the login screen and receipts: "Asha".
@@ -393,7 +429,7 @@ class Device(Editable):
     # `updated_at`, `updated_by` and the `version` that keeps two people's edits apart, for the day a manager renames
     # it (UI-3); the trigger in this table's migration records each change, before and after, but never the key's
     # hash (ADR-0036). Who confirmed it, and when, are the row's `created_by` and `created_at` (02 v1.11). The columns
-    # each sync reports (`last_synced_at`, `unsent_count`...) come with SYNC-5.
+    # each push reports (`last_synced_at`, `unsent_count`, `app_version`) come with SYNC-5.
 
     # What the manager called it, on the device list: "Laptop ya Dawa".
     name = models.CharField(max_length=40)
@@ -412,6 +448,28 @@ class Device(Editable):
     # (apps/people/services.py), at most every few minutes, by itself: its version never moves for it, and its edit
     # history skips it (migration 0008). editable=False: no form or API changes it.
     last_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
+    # What the laptop said about itself at its last push (SYNC-5, 02 §5): when the push arrived, by the server's clock;
+    # how many records it still held unsent, which a drawer's day waits for (M8); and the app's version it runs, as it
+    # names itself. For the device health page (SYNC-14). Empty, all three, until its first push: a made-up 0 would
+    # say "nothing unsent". Moved only by record_sync (apps/people/services.py), at every push, so like last_seen_at:
+    # its version never moves for them, and its edit history skips them (migration 0013).
+    last_synced_at = models.DateTimeField(null=True, blank=True, editable=False)
+    unsent_count = models.PositiveIntegerField(null=True, blank=True, editable=False)
+    app_version = models.CharField(max_length=APP_VERSION_LENGTH, blank=True, editable=False)
+    # How far the laptop's clock was from the server's at that push (SYNC-14, 03 §6.6): its clock as it sent the push
+    # (`sent_at`) minus the server's as it arrived, so a laptop 6 minutes slow says -6 minutes, as a clock-in's own
+    # does (AttendanceEvent.clock_error). The health page shows it, so a manager puts a wrong clock right before it
+    # makes the day's clock-ins wait for review. Empty until the laptop's first push after SYNC-14. Moved with the
+    # report above, by record_sync, so in the same way: its version never moves for it, and its edit history skips it
+    # (migration 0016).
+    clock_error = models.DurationField(null=True, blank=True, editable=False)
+    # The number the laptop's next record should follow (SYNC-5, 02 §17): it numbers its records 1, 2, 3 and never
+    # skips one, so the next is this + 1, and a jump raises a device_gap flag. Mostly the highest it sent; after a
+    # reset that numbers again from 1, the new count's. Empty before its first record. Moved only by the push, record by
+    # record, in each record's own transaction (move_device_number, apps/people/services.py), so a record rolled back
+    # takes its number with it. Moved by every push, as the report above: its version never moves for it, and its
+    # edit history skips it (migration 0014).
+    last_device_seq = models.PositiveBigIntegerField(null=True, blank=True, editable=False)
 
     class Meta(Editable.Meta):
         # Builds on Editable.Meta, so `objects`, with the guard, stays the default manager (CORE-2). The database is
@@ -480,6 +538,38 @@ class Device(Editable):
         # full_clean runs this before the rules above: " Laptop ya Dawa " and "Laptop ya Dawa" are one name on screen.
         super().clean()
         self.name = (self.name or "").strip()
+
+
+class DeviceOutage(AppendOnly):
+    # One offline period a laptop recorded by its own clock, and reported at its next push (SYNC-5; 02 §5): when its
+    # line went, and when it came back. For the device health page (SYNC-14) and the owner's choice on a local hub
+    # (03 AD16). Its id is the laptop's own (ADR-0007), so a push sent again saves each period once. A ledger: written
+    # once, by record_outages (apps/people/services.py), and never changed (ADR-0021); `created_at` is when the server
+    # heard of it, which the health page's week is read by. The times are kept as reported, even a period that "ends"
+    # before it starts (a clock moved back): refusing it would refuse the laptop's whole push, records and all, again
+    # at every sync.
+
+    # No index of their own, either link: the index below leads with `shop` and then `device` (03 §9), as the answer
+    # log's shop link has none (apps/sync/models.py). PROTECT: nothing is deleted (rule 7), so PROTECT never searches
+    # them. related_name="+": a device's outages are read through the guard.
+    shop = models.ForeignKey("shops.Shop", on_delete=models.PROTECT, related_name="+", db_index=False)
+    device = models.ForeignKey(Device, on_delete=models.PROTECT, related_name="+", db_index=False)
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField()
+    # True when the laptop's app lost sight of it before it ended (SYNC-14's review): the laptop went off, its battery
+    # flat in a power cut, or the app was closed or asleep. `ended_at` is then only the last time the app saw it still
+    # cut off, and the real end is unknown: the page shows "18:59 – ?" (Jack's choice), never a short cut the shop
+    # didn't have. False for a period the server's answer ended, and for one an app from before this sent.
+    end_unknown = models.BooleanField(default=False)
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so the guard stays the default manager (CORE-2). A laptop's periods in the order
+        # they began, as the health page lists them; its week is read by when each reached the server (`created_at`),
+        # which needs no index of its own while a shop's laptops report a few periods a day (SYNC-14).
+        indexes = [models.Index(fields=["shop", "device", "started_at"], name="people_deviceoutage_by_device")]
+
+    def __str__(self) -> str:
+        return f"{self.device_id}: {self.started_at:%Y-%m-%d %H:%M} to {self.ended_at:%H:%M}"
 
 
 class PairingRequest(UUIDModel, TimeStamped):
@@ -564,3 +654,47 @@ class PairingRequest(UUIDModel, TimeStamped):
         # The id, never the code: while it waits, the code is what a manager types to claim the device, so it stays
         # out of anything that prints a row, such as a log line or an error page.
         return f"Pairing request {self.pk}"
+
+
+class PinLock(ShopScoped):
+    # How one person's PIN tries stand on one device (03 §5.9). Moved only by check_pin and set_pin
+    # (apps/people/services.py). The right PIN puts its numbers back rather than deleting it (rule 7).
+    # Who typed the wrong PINs is what nobody knows, so its `created_by` stays empty, and it keeps no edit history
+    # (NO_EDIT_HISTORY): only the system moves it, and a row at every wrong PIN would tell the owner nothing.
+
+    # PROTECT: nothing is deleted (rule 7). related_name="+": read through the guarded `objects`. db_index=False: the
+    # unique rule below indexes (shop, staff, device), and nothing is deleted, so PROTECT never has to search either.
+    staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name="+", db_index=False)
+    device = models.ForeignKey(Device, on_delete=models.PROTECT, related_name="+", db_index=False)
+    # Wrong tries since the last lock, or since the right PIN.
+    wrong_tries = models.PositiveSmallIntegerField(default=0, editable=False)
+    # How long the next lock lasts. The minutes themselves, not a count of locks, so nothing here ever grows past the
+    # limit.
+    next_lock_minutes = models.PositiveSmallIntegerField(default=FIRST_LOCK_MINUTES, editable=False)
+    # When the last lock ends, or ended; empty if there has been none since the right PIN.
+    locked_until = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta(ShopScoped.Meta):
+        # Builds on ShopScoped.Meta, so `objects`, with the guard, stays the default manager (CORE-2). The database is
+        # the last guard (03 §5.6).
+        constraints = [
+            # One row per person per device: two rows would be two counts, and each would let five more tries through.
+            # The message is there for the code's sake, as on Side's letter (apps/shops/models.py).
+            models.UniqueConstraint(
+                fields=["shop", "staff", "device"],
+                name="people_pinlock_once",
+                violation_error_code="pin_lock.taken",
+                violation_error_message="This person already has a row for this device.",
+            ),
+            # The fifth wrong try starts a lock and puts the count back, so five is never stored.
+            models.CheckConstraint(
+                condition=models.Q(wrong_tries__lt=PIN_TRIES),
+                name="people_pinlock_wrong_tries_below_the_lock",
+                violation_error_code="pin_lock.too_many_tries",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(next_lock_minutes__range=(FIRST_LOCK_MINUTES, LONGEST_LOCK_MINUTES)),
+                name="people_pinlock_wait_within_limits",
+                violation_error_code="pin_lock.wait_out_of_range",
+            ),
+        ]

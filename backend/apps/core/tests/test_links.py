@@ -19,14 +19,13 @@ from django.db.models import Model
 
 from apps.core.links import (
     LINK_TYPES,
-    TYPE_CODE_MAX_LENGTH,
-    TYPE_CODE_SHAPE,
     UnknownLinkType,
     link_type_of,
     load_link,
     table_of,
 )
 from apps.core.tenancy import NoShopSelected, shop_context
+from apps.core.type_codes import TYPE_CODE_MAX_LENGTH, TYPE_CODE_SHAPE
 from tests.probe.models import Entry, Note
 
 pytestmark = pytest.mark.django_db

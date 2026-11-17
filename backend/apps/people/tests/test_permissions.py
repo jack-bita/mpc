@@ -22,7 +22,13 @@ from django.core.exceptions import PermissionDenied
 from apps.core.permissions import ROLE_TEMPLATES, HeldPermissions, Permission, Person, RoleTemplate
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Role, StaffMember
-from apps.people.permissions import UnknownPermission, effective_permissions, require
+from apps.people.permissions import (
+    UnknownPermission,
+    effective_permissions,
+    given_permissions,
+    held_permissions,
+    require,
+)
 from apps.people.services import assign_role, copy_role_templates, grant_permission, mark_left, suspend, unsuspend
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
@@ -188,3 +194,27 @@ def test_staff_member_answers_for_their_permissions(
         # Suspended, he holds nothing, though the copy in hand still says "active" (X2).
         suspend(staff_a, by=None, reason="Uchunguzi")
         assert juma.held_permissions() == HeldPermissions()
+
+
+def test_given_permissions_ignore_the_status(
+    shop_a: Shop, side_a: Side, staff_a: StaffMember, roles_a: dict[str, Role]
+) -> None:
+    # Held is what a person may do now; given is what they may do once they are back. A suspended owner holds nothing,
+    # so a check of who is stronger than whom must read what they were given, or a manager would look stronger than him.
+    with shop_context(shop_a):
+        assign_role(staff_a, roles_a[RoleTemplate.OWNER], side=None, by=None)
+        grant_permission(staff_a, Permission.STOCK_COUNT, side=side_a, by=None)
+        before = given_permissions(staff_a)
+        assert before == held_permissions(staff_a)
+
+        suspend(staff_a, by=None, reason="Uchunguzi")
+
+        assert held_permissions(staff_a) == HeldPermissions()
+        assert given_permissions(staff_a) == before
+
+
+def test_given_permissions_read_only_the_open_shop(staff_a: StaffMember, shop_b: Shop) -> None:
+    # As for held_permissions: the guard would show another shop's person as holding nothing, and that plain "nothing"
+    # would hide the bug in the calling code. Here it would also let someone look stronger than they are.
+    with shop_context(shop_b), pytest.raises(ShopMismatch):
+        given_permissions(staff_a)

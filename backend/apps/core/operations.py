@@ -9,9 +9,11 @@ migration puts a trigger on its table: a rule stored in PostgreSQL that runs bef
 it is sent, and refuses it.
 The database is the last line of defence (03 §5.6).
 
-Two rules, one operation each. AppendOnlyTrigger refuses every UPDATE and DELETE. VoidStampTrigger is
+Three rules, one operation each. AppendOnlyTrigger refuses every UPDATE and DELETE. VoidStampTrigger is
 for payments, money movements and attendance events: it allows one change, filling the void stamp
-once, and then refuses everything, as the other does.
+once, and then refuses everything, as the other does. NoDeleteTrigger is not for a ledger: it refuses
+only a DELETE, on an office table whose rows are changed but never deleted, and that no other row links
+to, so PROTECT can't guard it either (rule 7): a closure (ATT-8).
 
 Later migrations meet the trigger too. Django fills a column that becomes NOT NULL with an UPDATE, and
 a RunPython fix updates rows: on a ledger with rows, both are refused. A migration that truly needs
@@ -57,10 +59,12 @@ $$;
 # - The name `append_only` only has to be unique per table, so every ledger's trigger can share it.
 # - BEFORE: it runs before the change is written, so a refused change never touches the table.
 # - UPDATE OR DELETE: INSERT is not listed, so new rows are still written. TRUNCATE (emptying the
-#   whole table at once) is not refused either: tests and `manage.py flush` empty tables that way.
+#   whole table at once) is not refused either: tests and `manage.py flush` empty tables that way,
+#   and so does the demo seed every day (apps/demo/services.py), which needs it to reset the demo.
 #   Today only care stops it: the app connects as the database user that owns the tables, the same
 #   one that runs the migrations. Before shop #2 the app gets a database user of its own (03 §5.4);
-#   that user won't own the tables, so it can't TRUNCATE them unless it is given the right.
+#   that user won't own the tables, so it can't TRUNCATE them unless it is given the right. On the
+#   demo, whatever user the seed runs as keeps that right, or every day's first start stops there.
 # - FOR EACH ROW: the rule runs once for each row the command touches, with that row's OLD and NEW.
 #   The void rule needs them; the plain one is built the same way. A command that touches no row runs
 #   no rule, so an update() that matches nothing passes, harmlessly.
@@ -218,3 +222,65 @@ class VoidStampTrigger(AppendOnlyTrigger):
 
     def describe(self) -> str:
         return f"Void-stamp trigger on {self.model_name}"
+
+
+# The no-delete rule, for an office table whose rows are changed but never deleted (rule 7), and that no
+# other table links to: PROTECT guards a row only from the rows that point at it, and the edit history's
+# trigger watches updates only, so without this a stray DELETE (a shell, a bulk delete(), a future admin
+# page) would take the row away with no trace. A closure is the first (ATT-8): one deleted would open its
+# days again, and the attendance would pay them. The same message shape as the plain rule's, and its
+# error code, so Django raises IntegrityError for it too.
+NO_DELETE_FUNCTION = """
+CREATE OR REPLACE FUNCTION core_no_delete() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION '% on % refused: rows are never deleted (rule 7)', TG_OP, TG_TABLE_NAME
+        USING ERRCODE = 'restrict_violation';
+END;
+$$;
+"""
+
+# Puts the rule on one table. DELETE only: the table's rows are still changed (a closure is cancelled, or
+# its last day moved), and its edit history keeps each change. A name of its own, `no_delete`, as the
+# table keeps its `record_edits` trigger beside it. TRUNCATE passes, as for the plain rule: the demo
+# seed empties every table that way each day.
+CREATE_NO_DELETE_TRIGGER = """
+CREATE TRIGGER no_delete
+    BEFORE DELETE ON {table}
+    FOR EACH ROW EXECUTE FUNCTION core_no_delete();
+"""
+
+# Takes the trigger off one table, when its migration is undone. The function stays, as the others do.
+DROP_NO_DELETE_TRIGGER = "DROP TRIGGER no_delete ON {table};"
+
+
+class NoDeleteTrigger(AppendOnlyTrigger):
+    # The step an office table's migration lists after its table is made: NoDeleteTrigger("closure"). The
+    # parent's plumbing (the table's real name, a step that adds no column), with its own rule and its own
+    # undo, as the trigger has a name of its own.
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        # Write the rule, then put it on the table. params=None: the rule's message holds % signs.
+        table = self._table(app_label, schema_editor, to_state)
+        schema_editor.execute(NO_DELETE_FUNCTION, params=None)
+        schema_editor.execute(CREATE_NO_DELETE_TRIGGER.format(table=table), params=None)
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: BaseDatabaseSchemaEditor,
+        from_state: ProjectState,
+        to_state: ProjectState,
+    ) -> None:
+        # Take the trigger off, from the picture in which the table is known, as the parent does.
+        table = self._table(app_label, schema_editor, from_state)
+        schema_editor.execute(DROP_NO_DELETE_TRIGGER.format(table=table), params=None)
+
+    def describe(self) -> str:
+        return f"No-delete trigger on {self.model_name}"

@@ -34,14 +34,16 @@ And it walks the address list for every route of the office API, the routes buil
 
 And it walks the address list for every route a device calls with its key, the routes built on DeviceView
 (apps/people/api/base.py, AUTH-2), calling each as a paired device of shop A, which must see its own shop there, then
-as one of shop B and with no key at all, neither of which may see anything of shop A's. The two devices are paired in
+as one of shop B and with no key at all, neither of which may see anything of shop A's. A device route whose address
+names one row (a photo's file, CTRL-3) is asked about each of shop A's rows, by every request it takes, and must answer
+exactly as about an id no shop has, as an office detail route must. The two devices are paired in
 backend/tests/conftest.py (sweep_device_clients).
 
 A new table, file or route is checked with no change here. The checks are never loosened, nor edited, to let
 something pass: what grows instead lives beside them, the two shops' data in backend/tests/conftest.py, and the
 tables, routes and files allowed to break a rule, each with its reason, in backend/tests/sweep_lists.py.
-Teaching the sweep something new, such as calling the sync routes with a device's key, is a new check, added
-in a reviewed change (backend rules).
+Teaching the sweep something new, such as asking a device route about each row by its id (CTRL-3), is a new check,
+added in a reviewed change (backend rules).
 
 Each check is a function that returns what breaks its rule, as in test_no_floats.py. The tests of the checks
 hand them tables, code and routes built to break the rule (the tables made in a throwaway registry of their
@@ -572,19 +574,20 @@ def own_problems(
 
 def detail_problems(
     client_b: APIClient,
-    route: Route,
+    lookup: str,
     name: str,
     sends: list[str],
     keys: tuple[list[str], set[str]],
     params: Mapping[str, str] | None,
     marks: Marks,
 ) -> list[str]:
-    # Shop B's requests about each of A's rows, each answered exactly as the same request about an id no shop
-    # has. `keys`: A's rows' keys, and the keys B's own rows have. A route may find a row by a key of each shop's
-    # own instead of its id, as a side could be found by its letter: then shop B, asking for A's "D", rightly
-    # gets its own side D. Only a read is sent for such a key, and only A's marks are looked for in the answer:
-    # a change would change B's own row. A leaky route that crashes on such a key, having found both shops'
-    # rows, still turns CI red: the test client raises the crash in the test.
+    # Shop B's requests about each of A's rows, each answered exactly as the same request about an id no shop has: an
+    # office route's, as a staff member of B, or a device route's, as B's device and with no key (CTRL-3). `lookup`: the
+    # part of the address that names the row ("pk"). `keys`: A's rows' keys, and the keys B's own rows have. A route may
+    # find a row by a key of each shop's own instead of its id, as a side could be found by its letter: then shop B,
+    # asking for A's "D", rightly gets its own side D. Only a read is sent for such a key, and only A's marks are looked
+    # for in the answer: a change would change B's own row. A leaky route that crashes on such a key, having found both
+    # shops' rows, still turns CI red: the test client raises the crash in the test.
     found: list[str] = []
     rows, b_keys = keys
     takes_changes = any(method != "get" for method in sends)
@@ -596,7 +599,7 @@ def detail_problems(
             " of its own (backend/tests/conftest.py)"
         )
     for row in rows:
-        row_url = reverse(name, kwargs={route.lookup: row})
+        row_url = reverse(name, kwargs={lookup: row})
         if row in b_keys:
             if "get" in sends:
                 found += shown(send(client_b, "get", row_url, params), marks)
@@ -605,7 +608,7 @@ def detail_problems(
             reply = send(client_b, method, row_url, params)
             # The same request about a row no shop has: an id made just now, which nothing can have.
             nobody = str(uuid.uuid7())
-            control = send(client_b, method, reverse(name, kwargs={route.lookup: nobody}), params)
+            control = send(client_b, method, reverse(name, kwargs={lookup: nobody}), params)
             if reply.status != control.status:
                 found.append(
                     f"shop A's row {row}: {method.upper()} answered {reply.status}, but {control.status} for an id"
@@ -727,7 +730,7 @@ def route_problems(
                 b_keys = {
                     str(value) for value in rows_of(table, shop_b).values_list(route.view.lookup_field, flat=True)
                 }
-                found += detail_problems(client_b, route, route.name, sends, (rows, b_keys), params, marks)
+                found += detail_problems(client_b, route.lookup, route.name, sends, (rows, b_keys), params, marks)
             else:
                 a_ids = [str(pk) for pk in rows_of(table, shop_a).values_list("pk", flat=True)]
                 found += list_problems(client_b, route.name, sends, a_ids, params, marks)
@@ -850,6 +853,12 @@ class DeviceRoute:
             return frozenset(self.actions)
         return frozenset(method for method in ("get", "post", "put", "patch", "delete") if hasattr(self.view, method))
 
+    @property
+    def takes_row(self) -> bool:
+        # A route whose address names one row by its id, and that says which table the row is in (DeviceView.model),
+        # as a photo's file does (CTRL-3). The sweep can then fill the address with each of shop A's rows.
+        return self.takes == {"pk"} and self.view.model is not None
+
 
 def device_routes() -> list[DeviceRoute]:
     # Every route built on DeviceView in the address list, found by itself, as shop_routes() finds the office routes.
@@ -880,40 +889,46 @@ def device_route_problems(device_a: APIClient, device_b: APIClient, shop_a: Shop
     # 03 §5.4 for the routes a device calls with its key: called as a device of shop B, or with no key at all, no route
     # shows anything of shop A's. A device route reads its own shop, the visit's: the one its key's device belongs to.
     # What the sweep sends: a GET, after shop A's own device looks first (device_own_problems); and a POST, sent empty,
-    # as a device's change, such as the start of a pairing, comes. A route that takes another method, or a part in its
-    # address, is reported rather than passed by: teach the sweep, in a reviewed change.
+    # as a device's change, such as the start of a pairing, comes. To a route whose address names one row (takes_row,
+    # as a photo's file, CTRL-3), every request it takes, about each of shop A's rows (device_row_problems). A route
+    # that takes another method, or another part in its address, is reported rather than passed by: teach the sweep, in
+    # a reviewed change.
     marks = marks_of(shop_a, shop_b)
     names = Counter(address.name for address in addresses() if address.name)
     problems: dict[str, list[str]] = {}
     for route in device_routes():
         found: list[str] = []
-        unsent = ", ".join(method.upper() for method in sorted(route.methods - {"get", "post"}))
+        # What the sweep can send this route: to one row, a read, an edit (PUT, PATCH), a POST and a DELETE, last, as
+        # to an office detail route; to an address that names nothing, a GET and a POST.
+        sendable = ("get", "put", "patch", "post", "delete") if route.takes_row else ("get", "post")
+        sends = [method for method in sendable if method in route.methods]
+        unsent = ", ".join(method.upper() for method in sorted(route.methods - set(sends)))
         if unsent:
             found.append(f"answers {unsent}, which the sweep doesn't send here: teach it, in a reviewed change")
-        if not route.methods & {"get", "post"}:
+        if not sends:
             # Nothing the sweep can send: it would pass the route without a single request.
             found.append("answers nothing the sweep can send: teach it, in a reviewed change")
-        elif route.name is None or route.takes:
-            found.append("no address the sweep can build: it needs a name, and no part to fill in")
+        elif route.name is None or (route.takes and not route.takes_row):
+            found.append(
+                "no address the sweep can build: it needs a name, and no part but a row's id (`pk`), whose table the"
+                " view names (`model`)"
+            )
         elif names[route.name] > 1:
             found.append(
                 f"{names[route.name]} routes have this name, and Django finds only one of them by it: give each its own"
             )
+        elif route.takes_row:
+            found += device_row_problems(device_a, device_b, route, route.name, sends, (shop_a, shop_b), marks)
         else:
             url = reverse(route.name)
             own: list[str] = []
             if "get" in route.methods:
                 own = device_own_problems(device_a, url, marks)
             elif route.name not in DEVICE_ROUTES_WITHOUT_A_LOOK:
-                # No GET, so shop A's own device can't look first, and empty POSTs alone prove little: such a route
-                # names its own leak test instead (found in AUTH-2's review).
-                found.append(
-                    "no GET, so shop A's own device can't look first: name a test that proves its answers hold nothing"
-                    " of any shop's in DEVICE_ROUTES_WITHOUT_A_LOOK (backend/tests/sweep_lists.py)"
-                )
+                found.append(NO_LOOK)
             found += own
             if not own:
-                for method in sorted(route.methods & {"get", "post"}):
+                for method in sends:
                     found += [
                         f"shop B's device, {method.upper()}: {problem}"
                         for problem in shown(send(device_b, method, url), marks)
@@ -927,6 +942,54 @@ def device_route_problems(device_a: APIClient, device_b: APIClient, shop_a: Shop
         if found:
             problems[route.name or "(no name)"] = list(dict.fromkeys(found))
     return problems
+
+
+# No GET, so shop A's own device can't look first, and empty changes alone prove little: such a route names its own
+# leak test instead (found in AUTH-2's review).
+NO_LOOK = (
+    "no GET, so shop A's own device can't look first: name a test that proves its answers hold nothing of any shop's in"
+    " DEVICE_ROUTES_WITHOUT_A_LOOK (backend/tests/sweep_lists.py)"
+)
+
+
+def device_row_problems(
+    device_a: APIClient,
+    device_b: APIClient,
+    route: DeviceRoute,
+    name: str,
+    sends: list[str],
+    shops: tuple[Shop, Shop],
+    marks: Marks,
+) -> list[str]:
+    # A device route whose address names one row (CTRL-3): shop B's device, and a visitor with no key, ask about each of
+    # shop A's rows, by every request the route takes, and each answer must be exactly the answer to the same request
+    # about an id no shop has, and show nothing of A's (detail_problems, as for an office detail route). A laptop of
+    # shop B sending shop A's photo id learns nothing, not even that the photo exists. Shop A's own device looks first
+    # through a GET, as on any device route; a route with no GET names its own leak test (NO_LOOK).
+    shop_a, shop_b = shops
+    table = route.view.model
+    # takes_row has checked it; mypy can't see that.
+    assert table is not None
+    rows = [str(pk) for pk in rows_of(table, shop_a).values_list("pk", flat=True)]
+    if not rows:
+        # With no row of shop A's in its own table, the route could leak and still pass.
+        return [f"shop A has no {table._meta.label} rows to look for: add some in backend/tests/conftest.py"]
+    found: list[str] = []
+    own: list[str] = []
+    if "get" in sends:
+        own = device_own_problems(device_a, reverse(name, kwargs={"pk": rows[0]}), marks)
+    elif name not in DEVICE_ROUTES_WITHOUT_A_LOOK:
+        found.append(NO_LOOK)
+    found += own
+    if own:
+        return found  # shop A's own look failed: shop B's answers would prove nothing
+    keys = (rows, {str(pk) for pk in rows_of(table, shop_b).values_list("pk", flat=True)})
+    found += [
+        f"shop B's device, {problem}" for problem in detail_problems(device_b, "pk", name, sends, keys, None, marks)
+    ]
+    # A client of its own with no key. These routes answer a visit with no device by refusing it, and set no key.
+    found += [f"no key, {problem}" for problem in detail_problems(APIClient(), "pk", name, sends, keys, None, marks)]
+    return found
 
 
 @contextmanager
@@ -1712,6 +1775,52 @@ def test_device_route_check_finds_a_leak(
     assert api_route_problems() == [
         "api/v1/probe/count/: a plain Django view, not a ShopViewSet or a DeviceView",
         "^api/v1/probe/raw-count/$: a plain Django view, not a ShopViewSet or a DeviceView",
+    ]
+
+
+@pytest.mark.django_db
+def test_device_route_check_asks_about_each_row(
+    settings: Settings, sweep_shops: tuple[Shop, Shop], sweep_device_clients: tuple[APIClient, APIClient]
+) -> None:
+    # The probe's device routes that name one note (tests/probe/api.py), as a photo's file names its row (CTRL-3): one
+    # built through the guard, one past it, one with a PUT alone, and one whose address takes a part that is no row's.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    shop_a, shop_b = sweep_shops
+    device_a, device_b = sweep_device_clients
+    note = Note(shop=shop_a, text="Note of shop A")
+    note.save()
+    Note(shop=shop_b, text="Note of shop B").save()
+
+    problems = device_route_problems(device_a, device_b, shop_a, shop_b)
+
+    # Through the guard, shop B's device gets for A's note exactly what an id no shop has gets: nothing to report.
+    assert "probe-device-note" not in problems
+    # Past the guard, shop B's device reads A's note, and writes it.
+    leaky = problems["probe-device-leaky-note"]
+    assert f"shop B's device, shop A's row {note.pk}: GET answered 200, but 404 for an id no shop has" in leaky
+    assert f"shop B's device, shop A's row {note.pk}: PUT answered 204, but 404 for an id no shop has" in leaky
+    assert any(problem.startswith("shop B's device, shows what only shop A has:") for problem in leaky)
+    # A PUT alone: asked about each row all the same, and told to name its own leak test, as it has no GET.
+    assert problems["probe-device-note-file"] == [NO_LOOK]
+    # A part that is no row's id: the sweep can't fill it, and says so rather than pass the route by.
+    assert problems["probe-device-nested"] == [
+        "no address the sweep can build: it needs a name, and no part but a row's id (`pk`), whose table the view names"
+        " (`model`)"
+    ]
+
+
+@pytest.mark.django_db
+def test_device_row_check_needs_rows_to_look_for(
+    settings: Settings, sweep_shops: tuple[Shop, Shop], sweep_device_clients: tuple[APIClient, APIClient]
+) -> None:
+    # With no note of shop A's, a leaky route would pass: the check says so instead.
+    settings.ROOT_URLCONF = "tests.probe.urls"
+    shop_a, shop_b = sweep_shops
+
+    problems = device_route_problems(*sweep_device_clients, shop_a, shop_b)
+
+    assert problems["probe-device-leaky-note"] == [
+        "shop A has no probe.Note rows to look for: add some in backend/tests/conftest.py"
     ]
 
 

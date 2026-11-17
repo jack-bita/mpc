@@ -1,0 +1,255 @@
+// sync.ts — one sync of this laptop's shop: the bootstrap if the database was never filled, then the
+// push of what waits in the outbox (SYNC-8), then pulls until nothing more waits (SYNC-7, 03 §6.4); and
+// the line each shop's syncs wait in, and the lock that keeps two tabs from syncing at once (lock.ts), so
+// they run one after another (SYNC-9, 03 §6.5).
+//
+// It runs at the moments triggers.tsx keeps: as the app opens, when the network comes back, 2 s after a
+// save, every 30 s while online, and from Tuma sasa (03 §6.5). How it ended tells the laptop's offline
+// periods whether the server was there (outages.ts, SYNC-14). Last, the photos whose records are in go up
+// (attachments.ts, CTRL-6).
+import { hasCsrfToken } from "@/api/client";
+import { ApiRefusal, NoConnection } from "@/api/refusal";
+import { savedBlocked } from "@/features/devices/this-device";
+
+import type { ShopDatabase } from "../db";
+import { shopDatabase } from "../this-shop";
+import { isAboutTheDevice } from "./answer";
+import { sendAttachments } from "./attachments";
+import { bootstrap, needsBootstrap, WrongShop } from "./bootstrap";
+import { mayPush } from "./backoff";
+import { inTurn } from "./lock";
+import { noteBack, noteCutOff } from "./outages";
+import { heardInTheBackground, pagePlace } from "./page-place";
+import { AppTooOld, pull } from "./pull";
+import { pushKeepingTheWait } from "./push";
+
+/** What a sync is asked for. */
+export interface SyncAsk {
+  /** *Tuma sasa*: the push goes even while it waits after a failure. Someone pressed the button and is
+   * there to see it go (Jack, 12 Nov 2026); one press is one push, never a flood. A failure still makes
+   * the next wait longer. */
+  sendNow?: boolean;
+}
+
+// A shop's syncs in this tab: the one running, and at most one asked for while it runs. Kept by shop: a
+// laptop moved to another shop mid-sync starts that shop's own, never waiting behind the old shop's.
+// This tab only: two tabs are kept apart by the lock (inTurn, below).
+interface Line {
+  running: Promise<void>;
+  next: Next | null;
+}
+
+// The sync asked for while one runs. Its sendNow can still change: a press of Tuma sasa while it waits
+// to start makes it push.
+interface Next {
+  sendNow: boolean;
+  done: Promise<void>;
+}
+
+const lines = new Map<string, Line>();
+
+/**
+ * Syncs the shop's database: fills it once, then pushes, then pulls. A failure is thrown, after a block
+ * or a "not registered" was kept (answer.ts); whatever was saved before it stays, and the next sync goes
+ * on from there.
+ *
+ * Asked while one runs, it runs once more right after it: the running one may have pushed already, and a
+ * record saved since must not wait for the next moment (03 §6.5). Asked again before that one starts, it
+ * joins it: however many asks come in, one runs and one waits, never more. The one after runs however
+ * the one before ended: a failed sync is the next one's to put right.
+ */
+export function syncShop(shopId: string, ask: SyncAsk = {}): Promise<void> {
+  const sendNow = ask.sendNow === true;
+  const line = lines.get(shopId);
+  if (line === undefined) {
+    const fresh: Line = { running: Promise.resolve(), next: null };
+    lines.set(shopId, fresh);
+    fresh.running = runInLine(shopId, fresh, sendNow);
+    return fresh.running;
+  }
+  if (line.next !== null) {
+    // One already waits to start: this ask is the same one, and a Tuma sasa makes it push.
+    line.next.sendNow ||= sendNow;
+    return line.next.done;
+  }
+  const next: Next = { sendNow, done: Promise.resolve() };
+  next.done = line.running
+    // However the one before ended: its failure was thrown to whoever asked for it.
+    .then(nothing, nothing)
+    .then(() => {
+      // It starts now, so it is the one running, and an ask from here on waits behind it.
+      line.next = null;
+      line.running = next.done;
+      return runInLine(shopId, line, next.sendNow);
+    });
+  line.next = next;
+  return next.done;
+}
+
+function nothing(): void {}
+
+// One sync, then the line is ended, unless another waits to start. Only this line's own entry is
+// removed: a line is never replaced while it runs, but the check costs nothing.
+async function runInLine(
+  shopId: string,
+  line: Line,
+  sendNow: boolean,
+): Promise<void> {
+  try {
+    await inTurn(shopId, () => syncOnce(shopId, sendNow));
+  } finally {
+    if (line.next === null && lines.get(shopId) === line) lines.delete(shopId);
+  }
+}
+
+async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
+  // A sync that waited its turn, behind this tab's last one or another tab's, may start after the
+  // laptop heard of its block (a refusal kept by answer.ts, in any tab). It then asks nothing: the server
+  // would refuse it, and a blocked laptop must stop asking (03 §5.9, step 4). The moments stop too
+  // (triggers.tsx); this catches the one already in line.
+  if (savedBlocked()) return;
+  const db = shopDatabase(shopId);
+  // The same for a block the service worker heard while this page was open (SYNC-16): it is kept now,
+  // and nothing is asked.
+  if (await heardInTheBackground(db)) return;
+  // When this sync began asking: a refusal answers a call asked since.
+  const startedAt = Date.now();
+  let talked: Talked;
+  try {
+    talked = await talkToTheServer(db, sendNow);
+  } catch (error) {
+    await noteHowItEnded(db, error, startedAt);
+    throw error;
+  }
+  // The pull got its answer: the server is there, whatever the push did before it. A push that lost its
+  // line while the pull after it worked is no cut. A cut that began after the pull was asked is the line
+  // going again as the answer came, and stays open (outages.ts).
+  await noteSafely(noteBack(db, Date.now(), talked.pullAskedAt));
+  // The photos last (CTRL-6), once the laptop is noted back: ten photos on a slow line may take minutes,
+  // and the office's report of the cut must end when the pull got its answer, not when the photos are
+  // done (SYNC-14). Only after a push the server answered (attachments.ts says why).
+  if (talked.pushed) await sendPhotosSafely(db);
+  // Thrown after the pull, so the failure is still reported (triggers.tsx). A pull that fails
+  // too, as with no network, throws its own instead, which says the same.
+  if (talked.pushFailure !== null) throw talked.pushFailure.error;
+}
+
+/** How one sync's calls went: whether the push went and got the server's answer, a failed push, which
+ * still let the pull run, and when the pull was asked. */
+interface Talked {
+  pushed: boolean;
+  pushFailure: { error: unknown } | null;
+  pullAskedAt: number;
+}
+
+/**
+ * Sends the photos whose records are in (attachments.ts). A block or a "not registered" is thrown on, as
+ * from the push: the sync must ask nothing more. Any other trouble, a database that refused a write, say,
+ * is the photos' own: the records went up and the office's changes came down, so the sync worked, and
+ * failed it would say so at every moment while the photos waited. Logged, and the next sync tries again.
+ */
+async function sendPhotosSafely(db: ShopDatabase): Promise<void> {
+  try {
+    await sendAttachments(db, pagePlace);
+  } catch (error) {
+    if (isAboutTheDevice(error)) throw error;
+    console.error("the photos were not sent", error);
+  }
+}
+
+/**
+ * The calls of one sync: the bootstrap if the database was never filled, the push, then the pulls. Gives
+ * back whether the push got its answer, so the photos may go, a failed push, for the caller to throw once
+ * the pull is done, and when the pull was asked.
+ */
+async function talkToTheServer(
+  db: ShopDatabase,
+  sendNow: boolean,
+): Promise<Talked> {
+  // The first pull asks from the bootstrap's cursor, so the copy and the changes after it meet.
+  //
+  // A bootstrap that finds the app too old for the server writes nothing (bootstrap.ts), but the push still
+  // goes, and the sync stops after it: what this app wrote leaves first, in the shapes it wrote, before the
+  // update (03 §6.8, SYNC-13). An old tab can meet it after a newer version's database upgrade removed the
+  // cursor to fill again, with records still waiting in the outbox the two versions share. The push needs
+  // no cursor; the pull does, so it never runs then.
+  let tooOld: AppTooOld | null = null;
+  if (await needsBootstrap(db)) {
+    try {
+      await bootstrap(db);
+    } catch (error) {
+      if (!(error instanceof AppTooOld)) throw error;
+      tooOld = error;
+    }
+  }
+  // The push before the pull: what this laptop made goes up first, so the pull that follows brings the
+  // server's changes from it, and drops its pending effects as the cursor passes them. A push told to
+  // try later still lets the pull run: the server's trouble saving one record doesn't stop the office's
+  // changes coming down. After a failure, the next push waits a while (backoff.ts), in every tab, as the
+  // wait is kept in the database; unless someone pressed Tuma sasa. The pull never waits.
+  //
+  // No push before the server has given this browser its CSRF token: the push is a change, and would be
+  // refused (403), then wait 30 s for nothing. The token comes with the device check's answer
+  // (DeviceMeView), a moment after the app opens, and the next moment pushes. A laptop has it already,
+  // from its last visit, unless the browser lost it; the pull, a read, needs none.
+  let pushFailure: { error: unknown } | null = null;
+  // Whether the push went and the server answered it: the photos go only then. A "try later" counts:
+  // the server had trouble saving one record, but the records it accepted before it are in sent_archive,
+  // and their photos may go. A push that failed, with no answer or a server error, says the line or the
+  // server is in trouble, and a photo is far bigger than a record.
+  let pushed = false;
+  if (hasCsrfToken() && (sendNow || (await mayPush(db)))) {
+    try {
+      await pushKeepingTheWait(db, pagePlace);
+      pushed = true;
+    } catch (error) {
+      // Blocked, or a key that opens no device: ask nothing more (answer.ts has kept it).
+      if (isAboutTheDevice(error)) throw error;
+      // Any other failure, a 5xx on the push route say, still lets the pull run: the office's
+      // changes, a suspension among them (X2), must not wait for the push to work again.
+      pushFailure = { error };
+    }
+  }
+  // Too old: the update is what the sync leaves, told on as a pull's would be (triggers.tsx), whatever the
+  // push did; a push failure is the new version's to put right, from the same outbox.
+  if (tooOld !== null) throw tooOld;
+  const pullAskedAt = Date.now();
+  await pull(db);
+  // The photos go after this, in syncOnce: a week of them on a slow line must not keep the office's
+  // changes from coming down, a suspension among them (X2).
+  return { pushed, pushFailure, pullAskedAt };
+}
+
+/**
+ * What a sync that failed says about the line (outages.ts): no answer at all is a cut; a refusal, or an
+ * answer this app can't use (too old, another shop's copy), is the server there. A bug says nothing
+ * either way, so it notes nothing.
+ */
+async function noteHowItEnded(
+  db: ShopDatabase,
+  error: unknown,
+  startedAt: number,
+): Promise<void> {
+  if (error instanceof NoConnection) {
+    await noteSafely(noteCutOff(db, Date.now()));
+    return;
+  }
+  if (
+    error instanceof ApiRefusal ||
+    error instanceof AppTooOld ||
+    error instanceof WrongShop
+  )
+    await noteSafely(noteBack(db, Date.now(), startedAt));
+}
+
+/**
+ * A period that can't be noted, a database that refused the write, never stops the sync nor hides how it
+ * ended: it is only logged, and the next moment notes the line again.
+ */
+async function noteSafely(note: Promise<void>): Promise<void> {
+  try {
+    await note;
+  } catch (error) {
+    console.error("the offline period was not noted", error);
+  }
+}

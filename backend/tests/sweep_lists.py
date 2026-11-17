@@ -11,6 +11,8 @@ the sync routes with a device's key, is a new check instead, added in a reviewed
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.core.api.views import HealthView
+from apps.demo.api.views import DemoOpenView
+from apps.people.api.views import LogoutView, OwnSettingsView
 
 # T1's exceptions (02 §16, 03 §5.4): tables that belong to no one shop, so they have no `shop`.
 NO_SHOP = {
@@ -41,13 +43,33 @@ INFRASTRUCTURE = {
 # Routes under api/ that may be built on something other than ShopViewSet, because none of them reads a
 # shop's table, so there is nothing of a shop's for the sweep to look for in them. A route that does read
 # one, such as sync's pull with a device's key, is never listed here: the sweep is taught to call it instead,
-# as a device of shop B, in a reviewed change.
+# as a device of shop B, in a reviewed change. One exception, decided on its card (UI-9): a route whose login, the one
+# every office route shares, reads only the caller's own job and its shop, and for a PIN's session the device that
+# holds the key, each inside the shop its login door names, to refuse them if they may not act; whose save reads only
+# the caller's own jobs and writes their staff line in each of their shops' change logs, each inside the shop the
+# person's door names (SYNC-15, ADR-0042); and whose answer its own test proves holds nothing of a shop's.
 NOT_SHOP_ROUTES: set[type] = {
     # The uptime check: no login, and no table at all (apps/core/api/views.py).
     HealthView,
     # The API's description, and the same as a page: its routes and fields, never a row (CORE-6).
     SpectacularAPIView,
     SpectacularSwaggerView,
+    # Logout: it only deletes this browser's session, which belongs to no shop, and answers with nothing. It reads no
+    # shop's table, on purpose: it must work whatever has happened to the person or the device (AUTH-4's plan, approved
+    # by Jack).
+    LogoutView,
+    # A person's own language and font (UI-9): it changes only the logged-in person, who belongs to no shop, and answers
+    # with their two choices alone, as test_settings_answer_holds_nothing_of_a_shop proves
+    # (apps/people/tests/test_own_settings.py). Its login reads the person's job and its shop, and at a laptop the
+    # device, each inside the shop the login door names, only to refuse them if they may not act. Its save writes the
+    # person's staff line in every shop where they work, so their laptops show the new choice (SYNC-15): it reads only
+    # the person's own job in each, inside the shop the person's door names, and answers nothing of it.
+    OwnSettingsView,
+    # May Jaribu demo show here? (OPS-3, its card's decision): asked with no login by a browser that is no device yet,
+    # it answers one true or false, as test_demo_open_answer_holds_nothing_of_a_shop proves
+    # (apps/demo/tests/test_demo_device.py). It reads the demo's sign and the shops' kinds alone, from the shops
+    # themselves (rule 1's own exception, NO_SHOP), never a table of a shop's.
+    DemoOpenView,
 }
 
 # Office routes whose answers the sweep can't read, such as a PDF or an Excel download, which squeeze their
@@ -63,6 +85,20 @@ DEVICE_ROUTES_WITHOUT_A_LOOK: dict[str, str] = {
     # The start of a pairing: its answer is a code and a time, never anything of a shop's; a device whose key already
     # works is refused (pairing.already_paired), with nothing more.
     "device-pairing": "test_start_pairing_sets_the_key_cookie",
+    # PIN login: its answer is empty, or a refusal's code and nothing more, never a name or a shop, on its own device or
+    # on another shop's (AUTH-4).
+    "auth-pin-login": "test_pin_login_answers_hold_nothing_of_any_shop",
+    # The push (SYNC-4): its answers name only the documents sent, by the ids the laptop sent, with codes; shop B's
+    # laptop sending shop A's ids is refused without a word of A.
+    "sync-push": "test_push_answers_hold_nothing_of_another_shop",
+    # One tap on Jaribu demo (OPS-3): its answer is the demo shop's sellers' PINs, public on purpose, and only where the
+    # demo shop is the only shop; beside any other shop it is refused with its code alone (demo.closed), nothing of
+    # either shop's.
+    "device-demo": "test_one_tap_demo_refused_with_live_shop",
+    # A photo's file (CTRL-3): a PUT and no GET, as a laptop only sends a file, never reads one back. The sweep asks it
+    # about each of shop A's photos as shop B's laptop, with an empty body; its own test sends A's real file under A's
+    # id, and gets the answer an id no shop has gets, with not a word of A's.
+    "sync-attachment-file": "test_attachment_upload_answers_hold_nothing_of_another_shop",
 }
 
 # App files that may build a query by hand, `models.QuerySet(Table)`, which starts from no manager and so from
@@ -71,18 +107,20 @@ HAND_BUILT_QUERIES = {
     # A route's description for the API's schema is made with no visit, so with no shop open: the route's rows
     # come from an empty query (.none()), which reads no row at all (CORE-6).
     "apps/core/api/base.py": "an empty query, .none(), for the API's description",
-    # A login must find the visit's shop before any is open: each door there reads only the shop's id, by what the
-    # request brings (a device's key's hash, a logged-in person's id), and the device or the job is then read through
-    # the guard, inside that shop. A test pins that each door reads a shop's id alone (Jack, AUTH-2, AUTH-3; 03 §5.4).
-    "apps/people/login_doors.py": "a login's door: the shop's id of a key's device or a person's job, and nothing more",
+    # A login must find the visit's shop before any is open, and a change to a person every shop where they work
+    # (SYNC-15): each door there reads only shops' ids, by what the request brings (a device's key's hash, a person's
+    # id), and the device or the job is then read through the guard, inside each shop. A test pins that each door reads
+    # shops' ids alone (Jack, AUTH-2, AUTH-3; ADR-0042; 03 §5.4).
+    "apps/people/login_doors.py": "the doors (ADR-0042): shops' ids of a key's device or a person's jobs, no more",
 }
 
 # App files that may run SQL by hand, `connection.cursor()` or `.raw()`, besides migrations, system jobs and tests,
 # which may anyway: file → why it reads no shop's row.
 RAW_SQL = {
-    # Tells PostgreSQL who acts in an office visit, for the trigger that records office edits: its SQL reads and
-    # writes one setting of the database session, never a table (CTRL-2, ADR-0036).
-    "apps/core/acting.py": "current_setting and set_config on the session's `mpc.staff_id`, never a table",
+    # Tells PostgreSQL who acts in a visit and from which device, for the trigger that records office edits, and reads
+    # the device back for the audit book: its SQL reads and writes settings of the database session, never a table
+    # (CTRL-2, AUTH-8, ADR-0036).
+    "apps/core/acting.py": "current_setting and set_config on the session's `mpc.*` settings, never a table",
 }
 
 # The shop tables people change that keep no edit history of their own trigger (ADR-0036): table → why. Every other
@@ -98,4 +136,11 @@ NO_EDIT_HISTORY = {
     # kept on the row that took it, such as a device's code. From SYNC-1 it moves on every sale, so a history row each
     # time would double the shop's busiest writes and tell nothing new (Jack, AUTH-1).
     "core.ShopSequence": "only the system moves it, and each number is kept on the row that took it",
+    # A person's PIN tries on one device (apps/people/models.py): only the system moves it, at every wrong PIN, and who
+    # typed them is what nobody knows, so a history row would name nobody and tell the owner nothing (AUTH-4's plan,
+    # approved by Jack).
+    "people.PinLock": "only the system moves it, at every wrong PIN, and it names nobody",
+    # The demo's files, kept in the database (apps/core/storage.py): a file is written whole and never edited, and a
+    # history row would copy a photo's bytes into a table kept for good, which the retention rule forbids (CTRL-3).
+    "core.StoredFile": "a file written whole, never edited, whose bytes must never be copied into a history",
 }

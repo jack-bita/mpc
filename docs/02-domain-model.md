@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.14 · 3 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.34 · 17 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -33,6 +33,46 @@
 **Changes in v1.12** (30 Oct 2026, AUTH-2): a choice by Jack, made while planning AUTH-2. A pairing request holds the hash of the device's key only while it waits: confirming moves it to the `Device`, so the hash lives in one place at a time, and no path leads from a key through a request to a device of some shop past the guard (§5). A device's `last_seen_at` moves at most every 5 minutes, and never fills the edit history (§5). Marked **(v1.12)**.
 
 **Changes in v1.14** (3 Nov 2026, AUTH-3): a choice by Jack, made while planning AUTH-3. A password user needs no email: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link (§5; ADR-0038, which supersedes ADR-0017). Marked **(v1.14)**.
+
+**Changes in v1.15** (4 Nov 2026, AUTH-6): a choice by Jack, made while planning AUTH-6. A person has a "must change password" mark, on while their password is one someone else typed. Someone with `staff.manage` on the whole shop may set a temporary password, under the giver rule: for someone who holds no key the setter lacks, and never for the owner. While it is open, a key its setter lacks waits (§5). Marked **(v1.15)**.
+
+**Changes in v1.16** (4 Nov 2026, AUTH-4): what building AUTH-4 settled (04 v1.34, 03 v1.21). A PIN lock's wait stops growing at an hour (Jack), and a new PIN lifts it and ends the old sessions (Jack); `PinLock` keeps the count (§5). Marked **(v1.16)**.
+
+**Changes in v1.17** (4 Nov 2026, AUTH-4's review): a choice by Jack. A PIN logs in as the whole person, so who may set one follows the rule for a temporary password, and only the superuser sets an owner's (§5). Marked **(v1.17)**.
+
+**Changes in v1.18** (4 Nov 2026, AUTH-8): both books name the device a visit came from, and are empty for a visit with none (§13, X3; 03 v1.24, 04 v1.37). Marked **(v1.18)**.
+
+**Changes in v1.19** (5 Nov 2026, AUTH-8's review): X3 now says what §13 already allowed: a visit with no device names none (§16). Marked **(v1.19)**.
+
+**Changes in v1.20** (5 Nov 2026, the design-system cards): a choice by Jack. A person's font is on `User`, beside their language, so it follows them to every device (§5, ADR-0039, 04 v1.40). Marked **(v1.20)**.
+
+**Changes in v1.21** (10 Nov 2026, SYNC-4): a new Flag kind, `invalid_document`: a document a device pushed that the server can't save, raised about its line in the push's answer log, a new append-only record (§13, T2; 03 v1.41). A word for a document a device sends: *kumbukumbu* (Jack, §21). Marked **(v1.21)**.
+
+**Changes in v1.22** (11 Nov 2026, SYNC-5): two choices by Jack. A `device_gap` flag closes itself once every number it was missing has arrived: the system resolves it, with a note of its own that says so. It is the one kind the system may close; every other flag is closed by a person, as v1.8 says (§13, §17; 04 v1.57). And X2 covers a person who has left, as it covers one suspended: what they did offline after they left is flagged (§16). Also what SYNC-5 built: a device's last number and its report on itself (§5), and the offline periods it reports, kept as reported and never changed (§5, T2). Marked **(v1.22)**.
+
+**Changes in v1.25** (13 Nov 2026, SYNC-12's review): Jack's choice: a clock-in carried in a rescue file from a dying laptop is never trusted, and waits for a manager (§12), as its time came from a file anyone could edit. Marked **(v1.25)**.
+
+**Changes in v1.26** (14 Nov 2026, SYNC-14): a device keeps its clock error from its last push, for the sync health page; and an offline period the device's app lost sight of ends where the app last saw it. Marked **(v1.26)**.
+
+**Changes in v1.27** (14 Nov 2026, SYNC-14's review): Jack's choice: an offline period the device's app lost sight of says its end is unknown (`end_unknown`), as the device may have gone off in a power cut. Marked **(v1.27)**.
+
+**Changes in v1.28** (15 Nov 2026, SHOP-3): two choices by Jack, made while planning SHOP-3 (§4, Setting). A rule's new value starts on the shop's today or later, never on a past day, so what a past day answers, and the pay worked out from it, never changes. A side's rule is set one side at a time, never for the whole shop, so a side's old row can never hide a newer shop value. Marked **(v1.28)**.
+
+**Changes in v1.29** (15 Nov 2026, from Jack): the workers pay for their own meals (spec §8.1). A new append-only record, `MealMoney`, the day's money for the meals, typed each day by whoever holds `meals.record`, a key the owner gives to whoever he chooses. It is split equally among the workers who came that day, half days included, and the cook pays no share (`PayRate.shares_meals`). Each `AttendanceDay` carries its `meal_share`, so a worker who leaves mid-month has their pay up to their last day at once, and gets their payslip then, on its own (§12, §15, §16, §18 E11, §20, §21). Marked **(v1.29)**.
+
+**Changes in v1.30** (16 Nov 2026, from Jack): a money rule is whole shillings (§4, Setting): the shop's money has no cents, and every screen refuses them (04 §20, item 25). Marked **(v1.30)**.
+
+**Changes in v1.31** (16 Nov 2026, SHOP-4): a side says which band it shows under the top bar (§4, Side): a field of the side, not a dated setting (04 §20, item 19). Marked **(v1.31)**.
+
+**Changes in v1.32** (16 Nov 2026, ATT-2): the owner's attendance rules (OWN-7), through Jack: the day's times and its two fines as dated settings (§12, the day's rules), and `Holiday`, a closed day (ATT-8); §20 item 6 is settled. The fines start at nothing, as this public repo names no real amount; E10 takes a made-up fine (spec v1.3, 04 v1.86). Marked **(v1.32)**.
+
+**Changes in v1.33** (16 Nov 2026, ATT-8, from Jack): `Holiday`, one date, becomes `Closure`, a span of days from a first day to a last, as the shop also closes for a family funeral; its last day can move, earlier or later, with a reason; every closed day is off and not paid (§12; spec v1.4, 04 v1.89). Marked **(v1.33)**.
+
+**Changes in v1.34** (17 Nov 2026, CTRL-3): §13, an attachment's fields as built: its kind and the record it is pinned to, its label, and its file's three states, waiting, kept and removed, with who removed it, when and why (04 v1.96). Marked **(v1.34)**.
+
+**Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
+
+**Changes in v1.23** (11 Nov 2026, ATT-1): how an attendance event's time is trusted (§12): sent at once, the server's; sent later, the laptop's, unless a sign says its clock moved, and then none, with a flag. Each event names whose it is and keeps its evidence. One choice by Jack: clocking in needs no key, on any of the shop's laptops (§12; 04 v1.58). Marked **(v1.23)**.
 
 ---
 
@@ -173,6 +213,7 @@ A full diagram for GitHub is in Appendix A.
 - `code`: one capital letter, unique within the shop — two sides with one letter would print the same numbers **(v1.5)**
 - `sale_flow`: `one_screen` | `writer_cashier_loader`
 - `is_live` — each side is switched on in settings (spec §11); a new side starts switched off **(v1.5)**
+- `band`: `blue` | `striped`, the band under the top bar that tells a worker at a glance which side a screen is for; blue unless told otherwise, and the owner picks it in settings. A field of the side, not a dated Setting: a colour has no "from 1 December" and changes nobody's pay **(v1.31)**
 - [Later] `branch` → Branch, for a second site
 
 **StockLocation** [R1] ✚ → Side (D2)
@@ -188,21 +229,23 @@ A full diagram for GitHub is in Appendix A.
 - `status`: `active` | `archived` (§14) **(v1.5)**
 
 **Setting** [R1] ✚ → Shop (optional Side) — one dated rule value (D13).
-- `key` (from a fixed list in code, each with a type, a default and a scope: one value for the whole shop, or one a side may override **(v1.7)**), `value`, `effective_from`, `note`. Who set it is the row's `created_by` (§1) **(v1.7)**.
+- `key` (from a fixed list in code, each with a type, a default and a scope: one value for the whole shop, or one a side may override **(v1.7)**; since SHOP-3, a side's rule is set one side at a time **(v1.28)**), `value`, `effective_from`, `note`. Who set it is the row's `created_by` (§1) **(v1.7)**.
 - In force on a date = the latest row with `effective_from` ≤ that date. On one date, the row written last wins (`created_at`, then `id`), so a mistake is fixed with a new row **(v1.7)**. A side row beats a shop row, even an older one, and only for a key a side may override **(v1.7)**. Devices need each row's `created_at` to pick the same row offline **(v1.7)**.
-- Examples: `attendance.on_time_until` 07:35 · `attendance.late_fine` 1,000 · `cash.tolerance` · `count.tolerance_pct` · `expiry.alert_days` 90 · `stock.block_negative` false · `money.rounding_step` 1
+- A new value is a new row, written only through `set_setting` (SHOP-3), from the shop's today on: a row for a past day would change what that day answers, and the fines and the draft pay run worked out from it (Jack, 15 Nov 2026). A side's rule (`cash.tolerance`, `count.tolerance_pct`, `expiry.alert_days`, `stock.block_negative`) gets a row per side, never one for the whole shop: since a side row beats even a newer shop row, a shop value written later would be hidden behind a side's old one, and nobody would see why (Jack, 15 Nov 2026) **(v1.28)**.
+- A money rule (the late fine, the rounding step, the drawer's tolerance) is whole shillings: stored with two places, as every amount is, but always zeros, as the shop's money has no cents and every screen writes money without them; a value with cents is refused (`setting.value_invalid`) (Jack, 16 Nov 2026) **(v1.30)**.
+- Examples: `attendance.on_time_until` 07:35 · `attendance.late_fine`, 0 until the owner types one **(v1.32)** · the other rules of the attendance day (§12) **(v1.32)** · `cash.tolerance` · `count.tolerance_pct` · `expiry.alert_days` 90 · `stock.block_negative` false · `money.rounding_step` 1
 
 ## 5. People & access — module `people`
 
 **User** [R1] — one human, across shops (D12). Global.
-- `full_name`, `phone` (optional, unique, +255…), `email` (optional, for password users too: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link through django-allauth **(v1.14)**), `password` (optional: only for people who log in from their own phone), `language`
+- `full_name`, `phone` (optional, unique, +255…), `email` (optional, for password users too: the owner sets a first or forgotten password face to face, and the person chooses their own at the next login; anyone who has an email may also reset by an email link through django-allauth **(v1.14)**), `password` (optional: only for people who log in from their own phone), `must_change_password` (on while the password is one someone else typed: the person reaches no office screen until they choose their own **(v1.15)**), `language`, `font` (`default` or `second`: the person's own choice, which follows them to every device, ADR-0039 **(v1.20)**)
 
 **StaffMember** [R1] → Shop, User — a person's job at one shop.
 - `display_name`, `photo` (optional: without one, the PIN login screen shows the full name in large letters with the nickname under it) **(v1.4)**, `pin` (hashed), `job_title`, `started_on`, `left_on`
 - `status`: `active` ⇄ `suspended` → `left`. Never deleted. `left` is final: a person who comes back gets a new `StaffMember`, so the old one keeps its history **(v1.4)**.
 - One current job (not `left`) per person per shop. Nicknames are unique among a shop's current staff, whatever the letter case: the login screen and receipts show them **(v1.4)**.
 - `left_on` is set exactly when the status is `left`: never before `started_on`, and never after the shop's today, because leaving takes effect at once **(v1.4)**.
-- PIN: 4 digits, not 1234 and not four of a kind, hashed with Argon2 plus a server secret (03 §5.9). `pin_changed_at` tells devices to drop their offline check. A person who has left gets none **(v1.4)**.
+- PIN: 4 digits, not 1234 and not four of a kind, hashed with Argon2 plus a server secret (03 §5.9). `pin_changed_at` tells devices to drop their offline check. A person who has left gets none **(v1.4)**. Five wrong PINs lock that person on that device for a minute, doubling each time, up to an hour; a new PIN lifts the lock, and ends the sessions made with the old one. `PinLock` keeps the count, one row per person per device: only the system moves it, and it names nobody **(v1.16)**.
 
 **Role** [R1] → Shop — a named bundle of permissions. Copied from templates (Owner, Manager, Seller, Order writer, Cashier, Worker — spec §6); the owner can edit them.
 - `template` (the one it was copied from; blank for a role an owner makes later), `name` (blank on a copied role: the screens show the template's name), `permissions` (its codes, one list). One role per template per shop. The six templates hold what Jack chose for MPC; they live in code, beside the codes (03 §5.8) **(v1.10)**.
@@ -212,6 +255,10 @@ A full diagram for GitHub is in Appendix A.
 **PermissionGrant** [R1] → StaffMember — one extra `permission` for one person, optionally on one `side`. Given once per side, as a role is, and never to someone who has left; a suspended person may still be given a role or a permission, which counts once they are brought back **(v1.10)**.
 
 **Who may give** a role or a permission **(v1.10)**: someone with `staff.manage` on that side, and only codes they hold there themselves, so a manager handed `staff.manage` to add a loader can't make himself Owner (Jack, PPL-3). The system or the superuser sets up a shop's first owner.
+
+**Who may set a temporary password** **(v1.15)**: whoever sets a person's password can log in as them, so this is the giver rule for a whole person (Jack, AUTH-6). Someone with `staff.manage` on the whole shop: the owner, or someone that key has been handed to. Only for someone who holds no key the setter lacks, side by side, counting everything they were given even while suspended. Never for themselves, who change their own with the current password. Only the superuser, in the admin, for an owner, or for someone who can open the admin. Never for someone with no phone and no email, who could not log in with it. A job at another shop isn't looked at until AUTH-7, as a visit reads no other shop's rows. While a temporary password is open, a key its setter lacks is not given: the person chooses their own first, or someone holding that key sets a new one, so the setter gains nothing by knowing it. Honest limit: a setter who logs in as the person and chooses a new password themselves takes the mark off, and no system can tell who typed it. So before giving someone a big key, the owner sets a fresh password for them.
+
+**Who may set a PIN** **(v1.17)**: whoever sets a person's PIN can log in as them, so the same rule applies (Jack, AUTH-4's review). Someone with `staff.manage` on the whole shop, who holds every key the person was given. Never their own. An owner's, or a person's who can open the admin, only by the superuser.
 
 **What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again.
 
@@ -224,7 +271,7 @@ A full diagram for GitHub is in Appendix A.
 
 **Device** [R1] ✚ → Shop — a registered shop laptop or phone. (Moved here from `shops` in v1.1.)
 - `name` ("Laptop ya Dawa"), unique in the shop whatever the letter case **(v1.11)**; `code` (used in numbers; never reused: the shop's own counter gives it **(v1.11)**); `home_side`
-- `status`: `active` ⇄ `blocked` **(v1.11)**; `last_seen_at` (the last time its key reached the server, blocked or not, kept to the nearest 5 minutes and outside the edit history **(v1.12)**), `last_synced_at`, `last_device_seq`; `unsent_count` and `app_version`, reported at each sync **(v1.1)**
+- `status`: `active` ⇄ `blocked` **(v1.11)**; `last_seen_at` (the last time its key reached the server, blocked or not, kept to the nearest 5 minutes and outside the edit history **(v1.12)**), `last_synced_at`, `last_device_seq`; `unsent_count` and `app_version`, reported at each sync **(v1.1)**; `last_device_seq` is the number its next record should follow, and `unsent_count` the records it holds besides the push that reported it; all four outside the edit history, as they move at every push **(v1.22)**; `clock_error`, its clock minus the server's at its last push, empty before its first, moved and kept like them **(v1.26)**
 - The hash of its device key, never the key (03 §5.9). Who confirmed it is the row's `created_by` (§1) **(v1.11)**.
 - Only active devices allow PIN login and offline work.
 - Blocking and unblocking need someone with `device.manage` on the device's home side, and a reason, written in the audit trail (T3). Unblocking keeps the device's key, so the records it holds can still arrive (Jack, AUTH-1) **(v1.11)**.
@@ -235,7 +282,7 @@ A full diagram for GitHub is in Appendix A.
 - `code` (8 characters with no look-alikes such as 0/O or 1/I, valid 10 minutes, works once), `expires_at`, the hash of the device's key while it waits, and, once confirmed, the `Device` it became. Confirming moves the hash to the `Device`: from then on the request holds none (Jack, AUTH-2) **(v1.12)**.
 - No shop: until a manager confirms it, the device belongs to no shop, and anyone may ask. Confirming needs `device.manage` on the home side chosen, and makes the `Device` in the manager's own shop (T1).
 
-**DeviceOutage** [R1] ✚ → Device — one offline period the device recorded: `started_at`, `ended_at`, reported at the next sync **(v1.1)**. Feeds the sync health page and the R2 decision on a local hub (03 AD16).
+**DeviceOutage** [R1] ✚ → Device — one offline period the device recorded: `started_at`, `ended_at`, reported at the next sync **(v1.1)**. Feeds the sync health page and the R2 decision on a local hub (03 AD16). Its id is made on the device, so a resent report keeps it once; its times are the device's clock, kept as reported, and the row is never changed (T2) **(v1.22)**. A period begins when the device can't reach the server and ends when the server answers again; one the device's app lost sight of, closed or asleep, ends where the app last saw it **(v1.26)**, and says its end is unknown (`end_unknown`): the device may have gone off, its battery flat in a power cut, so the cut may have lasted far longer (Jack) **(v1.27)**.
 
 ## 6. Products & prices — module `catalog`
 
@@ -439,38 +486,65 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - `kind`: `in` | `out`; `device`, `photo`, `client_time`, `trusted_time`, `time_check`: `server` | `device_ok` | `unverified`
 - `entered_by` + `reason` when a manager enters it for someone; `void` (by, reason) — a one-time void stamp; nothing else on the event ever changes (T2) **(v1.2)**
 - **Offline time** ✚: an offline event keeps its device time plus evidence — its `device_seq`, the last server time the device saw, and the device's clock error found at the next sync. If time and sequence disagree (a later record with an earlier time), or the clock was wrong at sync, the event is `unverified` and flagged for a manager.
+- `staff`: whose attendance it is, the worker who tapped, by their PIN (a manager entering one for someone comes with ATT-6) **(v1.23)**
+- **The time trusted** **(v1.23)**: sent within 2 minutes of the tap, both by the laptop's clock, it was made online, and takes the server's time of the tap: when the push arrived, less the wait the laptop reports, however wrong the laptop's clock. Sent later, it keeps the laptop's time, unless one sign says the clock moved: its record before has a later time; its time is before the last server time the laptop had seen; as it sent, the laptop's clock was more than 2 minutes off the server's; or its time is more than 2 minutes after the laptop's own clock as it sent. Then no time is trusted: the event is `unverified`, with an `unverified_time` flag naming the worker, and a manager decides. When the sign is a record before with a later time, the flag names that record's maker too: the server sees that a clock moved between the two, not for whose tap (Jack, ATT-1's review). Each event keeps its evidence: the last server time seen and the clock error. **A clock-in carried in a rescue file** from a dying laptop and sent by another (03 §6.7) is never trusted, not even as "sent at once": its time came from a file anyone could edit. It is `unverified`, with an `unverified_time` flag naming the worker alone, and a manager confirms it (Jack, SYNC-12's review) **(v1.25)**.
+- Clocking in needs no key: anyone working at the shop may clock in on any of its laptops, so a Vyakula worker can on the Dawa laptop when Vyakula's is off (Jack, ATT-1). One suspended, or gone, is still flagged (X2) **(v1.23)**.
 
 **AttendanceDay** → StaffMember, date — worked out from the events and the rules in force that day.
-- `first_in`, `last_out`, `status`: `on_time` | `late` | `half` | `absent` | `off` (Sunday, holiday) | `needs_review`
+- `first_in`, `last_out`, `status`: `on_time` | `late` | `half` | `absent` | `off` (Sunday, a closed day **(v1.33)**) | `needs_review`
 - `absence_type`: `office_duty` (paid as a full day) | `permission` (unpaid) | `no_show` (unpaid)
 - `fine`, `rules_used` (copied), `override` (status, by, reason — the worked-out value stays visible)
+- `meal_share` **(v1.29)**: the worker's part of the day's meal money (§15, 14), worked out with the day, so the pay up to any day is a sum of days already worked out. It follows the day's status: a day that needs review has none until a manager decides it.
 - Locked once its pay run is approved.
 
-**PayRate** → StaffMember — `daily_rate`, `effective_from`.
+**The day's rules** **(v1.32)** — the owner's (OWN-7, 16 Nov 2026), each a dated setting of the whole shop (§4). Each time is a minute on the shop's clock, as the counter shows it: a clock-in at 07:35:40 shows 07:35. "By" and "from" take their own minute; "before" and "after" don't.
+- **Arriving:** by `on_time_until` (07:35), on time. After it and before `second_fine_from` (08:00), late, with `late_fine`, the first fine. From `second_fine_from` and before `review_from` (08:30), late, with `second_fine`. From `review_from` and before `afternoon_from` (12:00), needs review. From `afternoon_from` to `midday` (13:00), the afternoon's half day, staying until `closing` (18:40). After `midday`, needs review.
+- **Leaving,** after a morning arrival: before `midday`, needs review. From `midday` to `morning_leave_until` (13:30), the morning's half day. After it and before `closing`, needs review. From `closing`, the full day, or the late one. No clock-out: needs review (§20, item 6).
+- The seven times keep this order, each after the one before it, on every day (`setting.out_of_order`, ATT-2), so no minute lands in two windows.
+- A day that needs review is the owner's *dharura*: a manager or the owner decides it (`override`).
+- The fines start at 0: a shop has no fine until its owner types one. This public repo names no real amount (rule 10).
+- `attendance.enabled`: days count only from the day it is on (ADR-0033). Until then the counter shows no *Mahudhurio*.
+- Sunday is always `off`, and not paid: Sunday work is a deal between the owner and the worker, outside the system.
 
-**PayRun** → Shop — one month. `status`: `draft` → `approved` → `paid`. Recalculated freely while draft; approval freezes payslips, attendance days and advances.
+**Closure** **(v1.33)** → Shop — days the whole shop is closed: a public holiday, or days the owner closes it, such as for a family funeral (Jack, ATT-8). Replaces v1.32's `Holiday`, which held one date.
+- `first_day`, `last_day` (the same for one day), `name`, `status`: `active` | `cancelled`. Who added it is the row's `created_by` (§1).
+- Each day of an active closure is `off`, and not paid, like Sunday, whatever the reason. Two active closures never share a day.
+- Added from the shop's today on. Cancelled up to its first day, or its last day moved earlier or later, each with who, when and why, never deleted (rule 7). No change touches a day before today, so a day already worked out never changes.
+- Eid and Easter move, so the owner types each year's dates.
 
-**Payslip** → PayRun, StaffMember — day counts, the rate(s) used (a mid-month rate change splits the days), lines (days × rate, fines, advances, other additions or deductions with a reason), `net`, and how it was paid. The worker sees their own.
+**PayRate** → StaffMember — `daily_rate`, `shares_meals` (yes; the cook's no) **(v1.29)**, `effective_from`. Dated, so a worker who becomes the cook mid-month pays a share up to that day and none after.
+
+**MealMoney** **(v1.29)** → Shop — the money spent on the workers' meals on one day: the cook makes them at the shop, and the workers pay for their own (spec §8.1).
+- `date`, `amount` (positive), `note`; who typed it is the row's `created_by` (§1). The whole shop's, not a side's: the workers of both sides eat together.
+- Typed each day by whoever holds `meals.record`, a key the owner gives to whoever he chooses (Jack, 15 Nov 2026). A day may have several: the day's meal money is the sum of its rows not voided.
+- Append-only, as money is (T2): a wrong amount is voided (who, when, why) and typed again; nothing else on it ever changes. Locked, like its days, once their pay run is approved.
+
+**PayRun** → Shop — one month. `status`: `draft` → `approved` → `paid`. Recalculated freely while draft; approval freezes payslips, attendance days, advances and meal money **(v1.29)**.
+
+**Payslip** → PayRun, StaffMember — day counts, the rate(s) used (a mid-month rate change splits the days), lines (days × rate, fines, meal shares **(v1.29)**, advances, other additions or deductions with a reason), `net`, and how it was paid. The worker sees their own.
+- **Leaving mid-month** **(v1.29)**: a worker who leaves gets their payslip up to `left_on`, approved and paid on its own, before the month's run: the owner reads it and pays, with nothing to count by hand (Jack, 15 Nov 2026). The month's run then holds it as paid.
 
 Advances come from `MoneyMovement` `staff_advance` and are deducted in the next pay run *(default: in full)*.
 
 ## 13. Control — module `control`
 
 **Flag** [R1] ✚ — one review queue for every difference and every offline rule break.
-- `kind`: `cash_difference` · `count_difference` · `delivery_difference` · `transfer_difference` · `negative_stock` · `duplicate_code` · `late_record` · `unverified_time` · `missing_clock_out` · `suspended_staff_activity` · `device_gap` · `balance_mismatch` · `open_bag_difference` · `production_loss` · `total_mismatch` · `permission_break` · `drawer_conflict` **(v1.1)** · …
+- `kind`: `cash_difference` · `count_difference` · `delivery_difference` · `transfer_difference` · `negative_stock` · `duplicate_code` · `late_record` · `unverified_time` · `missing_clock_out` · `suspended_staff_activity` · `device_gap` · `balance_mismatch` · `open_bag_difference` · `production_loss` · `total_mismatch` · `permission_break` · `drawer_conflict` **(v1.1)** · `invalid_document` **(v1.21)** · …
 - `subject`, `expected`, `actual`, `difference`, `people`, `side`
 - `status`: `open` → `explained` → `resolved` | `dismissed` (by, note)
 - A manager who finds the reason may resolve or dismiss a flag straight from `open`, with their own note. `resolved` and `dismissed` are final **(v1.8)**.
 - Each step is a note, with who and when. Every explanation is kept: each person a flag names may write their own, and none replaces another. Closing a flag needs a note too. Notes are never edited **(v1.8)**.
 - A person a flag names may explain it, but never resolve or dismiss it: Asha can't write "no problem" on her own drawer's shortage. Someone else decides, with `flag.review` on the flag's side (X1) **(v1.8)**.
+- One flag closes itself: a `device_gap`, once every number it was missing has arrived (the record was only late). The system resolves it, with a note of its own saying so, and names no person; the note stays in its history like any other. Every other kind waits for a person (Jack, SYNC-5) **(v1.22)**.
 - Low stock and expiring batches are **alerts** (lists), not flags: nobody has to explain them.
 
 **AuditEvent** [R1] — who did what: `actor`, `device`, `action`, `subject`, `before`, `after`, `reason`, `approval`, `at`. Append-only.
-- `actor` and `at` are the row's `created_by` and `created_at` (§1): empty `actor` when the system acts. A reason is always given (T3). `device` joins when a visit knows its device (AUTH-4), `approval` with the Approval table **(v1.9)**.
+- `actor` and `at` are the row's `created_by` and `created_at` (§1): empty `actor` when the system acts. A reason is always given (T3). `device` is the one the visit came from: empty for a visit with none, such as a password or a nightly job **(v1.18)**. `approval` joins with the Approval table **(v1.9)**.
 
-**EditEvent** [R1] — one change to an office record (a staff member, a side, a payment account, a stock location; later products, contacts, roles and devices), written by the database itself, so no change can skip it: who (`created_by`), when (`created_at`), the record (`subject`), and the fields that changed, `before` and `after`. No reason: an action that needs one also writes an AuditEvent. A PIN hash is never copied. Append-only **(v1.9)**.
+**EditEvent** [R1] — one change to an office record (a staff member, a side, a payment account, a stock location; later products, contacts, roles and devices), written by the database itself, so no change can skip it: who (`created_by`), from which device (`device`, as an AuditEvent's) **(v1.18)**, when (`created_at`), the record (`subject`), and the fields that changed, `before` and `after`. No reason: an action that needs one also writes an AuditEvent. A PIN hash is never copied. Append-only **(v1.9)**.
 
 **Attachment** [R1] — a photo or file on any record: supplier paper, expense receipt, clock-in photo. Photos taken offline upload later, Wi-Fi first.
+- **(v1.34)** Its `kind` (a clock-in photo, a worker's photo; a later kind comes with its record's card) names the table of the record it is pinned to (`subject`: a type code + UUID) and the key that opens it, on the whole shop. Its label, as the record brought it: `content_type` (JPEG or WebP), `size` (1 byte to 1 MB) and `sha256`; with `device` and `created_by`. Its file only moves forward: waiting → kept (`received_at`) → removed (`file_removed_at`, `file_removed_by`, `file_removed_reason`, always with a reason); a photo that never came may be removed too. The row is never deleted (rule 7): a removed photo's row says there was one, and who removed it.
 
 **ImportJob** [R1] — products and selling units, opening stock, contacts, open debts. `status`: `uploaded` → `checked` → `applied`; errors per row; created records point back at the import.
 
@@ -508,7 +582,7 @@ stateDiagram-v2
 - **Transfer** [R2]: `sent` → `received` | `cancelled` (before received).
 - **Job** [R2]: `waiting` → `in_progress` → `ready` → `collected`; `cancelled` before ready (the customer's goods go back).
 - **PayRun** [R1b]: `draft` → `approved` → `paid`.
-- **Flag:** `open` → `explained` → `resolved` | `dismissed`; it may also close straight from `open` **(v1.8)**.
+- **Flag:** `open` → `explained` → `resolved` | `dismissed`; it may also close straight from `open` **(v1.8)**. A `device_gap` resolves itself when its missing records arrive (§13) **(v1.22)**.
 - **StaffMember:** `active` ⇄ `suspended` → `left`. **Product, Contact:** `active` ⇄ `archived`. **PaymentAccount:** `active` ⇄ `archived` **(v1.5)**. **Device:** `active` ⇄ `blocked` **(v1.11)**. **PairingRequest:** `waiting` → `confirmed` | `expired` **(v1.11)**.
 
 ## 15. Calculations
@@ -520,12 +594,13 @@ stateDiagram-v2
 5. **Balance** = the sum of entries. **Open debt** = amount − allocations. **Age** = days since `occurred_at`.
 6. **Expected cash** = opening + cash payments − cash change given + money in − money out.
 7. **Mobile money expected** (account, day) = the sum of payments into it.
-8. **Pay** (spec §8.1) = (on-time + late + office-duty days) × rate + half days × rate ÷ 2 − late days × fine − advances ± adjustments.
+8. **Pay** (spec §8.1) = (on-time + late + office-duty days) × rate + half days × rate ÷ 2 − late days × fine − meal shares **(v1.29)** − advances ± adjustments.
 9. **Line profit** = line total − base qty × unit cost (unknown if the cost is unknown). A period's profit also shows "unknown on N lines worth TZS X".
 10. **Open-bag difference** = loose kg sold between two openings − bag kg.
 11. **Loss %** (production, jobs) = (input kg − output kg) ÷ input kg.
 12. **Expiry:** days left = expiry − today; alert when ≤ `expiry.alert_days`.
 13. **Shopping list:** on hand ≤ reorder level, or an open restock request.
+14. **Meal share** **(v1.29)** (worker, day) = the day's meal money ÷ the workers who came that day (on time, late or half; not office duty, as they eat away *(default)*) and share meals, rounded with the shared function (ADR-0024). Nobody else pays for that day, so a worker who came 10 days pays 10 days' shares. The rounded shares may add up to a few shillings off the day's money.
 
 ## 16. Rules (invariants)
 
@@ -533,7 +608,7 @@ These become database constraints and automated tests.
 
 **Tenancy and history**
 - **T1** Every record (except `User`, `Unit`, the `Shop` itself **(v1.3)** and a `PairingRequest` **(v1.11)**) has a shop, and only points at records of the same shop.
-- **T2** Stock movements, balance entries, allocations, attendance events, audit events and edit events **(v1.9)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
+- **T2** Stock movements, balance entries, allocations, attendance events, audit events, edit events **(v1.9)** the answers the push keeps **(v1.21)**, the offline periods devices report **(v1.22)** and meal money **(v1.29)** are never edited or deleted; fixes are new rows that point at what they fix. Payments, money movements, meal money **(v1.29)** and attendance events can only be **voided** (who, when, why) — a one-time stamp: a voided payment or money movement reverses everything it did, and a voided attendance event no longer counts towards its day **(v1.2)**. Dated-rule rows — prices, product costs, settings, pay rates — are insert-only too, and the database enforces all of this with triggers **(v1.1)**.
 - **T3** Nothing is deleted: cancel, void, suspend, archive — always with who, when and why.
 - **T4** Copied values (price, floor, factor, cost, rate, rules, formula version) never change once the record is confirmed.
 
@@ -571,8 +646,8 @@ These become database constraints and automated tests.
 
 **Access and devices**
 - **X1** Permissions are checked per side.
-- **X2** PIN login works only on active registered devices. A suspended person can't log in once the device has synced; anything they did offline after suspension is flagged.
-- **X3** Every write records the person and the device.
+- **X2** PIN login works only on active registered devices. A suspended person can't log in once the device has synced; anything they did offline after suspension is flagged. The same for a person who has left: from when it was recorded, or from the day after their last day if that is earlier. "After" is by the record's own time on the device (Jack, SYNC-5) **(v1.22)**.
+- **X3** Every write records the person and the device, when the visit has one: a password or a nightly job has none (§13) **(v1.19)**.
 
 ## 17. Offline and sync
 
@@ -580,7 +655,7 @@ These become database constraints and automated tests.
 - **Kept on the device:** products, selling units, current and future-dated prices, batches and stock, contacts with balances (as of the last sync), staff names and status, permissions, and the settings in force plus future-dated ones **(v1.1)**. No PIN hashes: each device makes its own offline PIN check the first time a person logs in online on it **(v1.1)**. Buying prices never go to devices.
 - **Safe to resend:** each document travels with its UUID; sending it twice changes nothing.
 - **Accept, then flag:** the server accepts offline documents and flags what it could only check online — negative stock, a duplicate code, over the credit limit, a suspended worker, an archived product. A price changed meanwhile doesn't matter: the sale keeps the device's price.
-- **Missing records:** a gap in a device's `device_seq` → a `device_gap` flag.
+- **Missing records:** a gap in a device's `device_seq` → a `device_gap` flag, which closes itself if the missing records arrive later (§13) **(v1.22)**.
 - **Foods hand-off** ✚: decided in 03 (AD16) — through the server when there is a network; cashier-only on one screen when there isn't; a local hub only if R1's outage numbers justify it **(v1.1)**.
 - **Long power cuts:** when every device is dead, sales go in a numbered paper receipt book and are entered later as late sales, with a manager's approval (03 §6.11) **(v1.1)**.
 
@@ -607,7 +682,9 @@ Opening count 20 bags +1,000 · sell 3 bags −150 · sell 12.5 kg −12.5 · de
 
 **E9 — Open bag** [R2]. A 50 kg bag opened at 08:00, the next at 16:30; loose kg sold in between: 48.5 → −1.5 kg → a Flag if the tolerance is 1 kg *(e.g.)*, naming who sold loose kg in that window.
 
-**E10 — Payslip** [R1b]. Spec §8.1: 193,000.
+**E10 — Payslip** [R1b]. Spec §8.1: 194,500, with a first fine of 500 for the example **(v1.32)**.
+
+**E11 — Meal shares** [R1b] **(v1.29)**. Monday's meal money is 8,000. 8 workers came, one of them only half a day, and so did the cook: 1,000 each, and none for the cook. In a month where every day's share is 2,000, Asha came 10 days and pays 20,000; Juma came 20 and pays 40,000. Juma leaves on the 15th: his payslip up to the 15th is ready that day.
 
 ## 19. By release
 
@@ -621,7 +698,7 @@ Opening count 20 bags +1,000 · sell 3 bags −150 · sell 12.5 kg −12.5 · de
 | sales | Sale, SaleLine, PaymentAllocation, Return, PrintLog | | Bill, phone orders, handover per line | online orders, proforma |
 | money | Payment, DrawerSession, MoneyMovement | salary payments | side transfers, supplier credit payments | statement matching |
 | services | | | Formula, FormulaVersion, Job, Exchange | machines |
-| staffpay | | AttendanceEvent, AttendanceDay, PayRate, PayRun, Payslip | | |
+| staffpay | | AttendanceEvent, AttendanceDay, PayRate, MealMoney **(v1.29)**, PayRun, Payslip | | |
 | control | Flag, AuditEvent, EditEvent **(v1.9)**, Attachment, ImportJob | | Notification | message log |
 
 ## 20. Parking lot
@@ -633,7 +710,7 @@ Small items, each with a default or a setting. Settled while building; most need
 3. Credit rules: a default limit for new customers, who approves, what happens on non-payment (spec §14).
 4. Machine charge per kg: kg brought in *(default)*, or kg out.
 5. Exchange rate (kg out per kg in): one rate, or one per product.
-6. Attendance: when late becomes a half day, leaving early, a missing clock-out *(default: needs review)*, Sundays and holidays (spec §14).
+6. Attendance: when late becomes a half day, leaving early, a missing clock-out *(default: needs review)*, Sundays and holidays (spec §14). Settled by the owner, 16 Nov 2026: §12, the day's rules; a missing clock-out needs review **(v1.32)**.
 7. Advances: deducted in full next month *(default)*, or in parts.
 8. Inter-side money: cash handed over at day close, or only shown in the report.
 9. Loaders confirming handover on a device (R2), or not.
@@ -641,6 +718,7 @@ Small items, each with a default or a setting. Settled while building; most need
 11. Expiry alert: 90 days *(default)*.
 12. Tax category on products (spec §14: VAT).
 13. Rules for merging duplicate customers.
+14. Meal money from the drawer **(v1.29)**: once the drawer exists (CASH-2), the cash given to the cook could be an expense of the drawer's that fills the day's meal money, so it is typed once, as WAGE-6 does for advances *(default: typed on its own until then)*.
 
 ## 21. Language
 
@@ -663,10 +741,15 @@ One word per idea, the same in code, docs and UI. The Swahili is a draft — Jac
 | DrawerSession | Hesabu ya droo | One drawer's day |
 | Expense | Matumizi | Money paid out for the shop |
 | Advance | Advansi | Money a worker takes before payday |
+| MealMoney | Hela ya chakula | The day's money for the workers' meals, which they pay for out of their pay **(v1.29)** |
 | Attendance | Mahudhurio | Clocking in and out |
+| `clock` `in` · `out` | Ingia kazini · Toka kazini | One tap at a shop laptop as a worker arrives or leaves; *Toka* alone is logging out, *Ingia* logging in **(v1.24)** |
 | PayRun | Mishahara | One month's pay for everyone |
 | Job | Kazi ya mashine | A grinding or mixing order |
 | Flag | Tofauti | A difference someone must explain |
+| Document | Kumbukumbu | A record a device saves at the counter and sends to the server: a sale, a clock-in; English screens say *record* **(v1.21)** |
+
+Times of day are written as the shop's clocks show them: `07:55`, `18:02`, 24 hours, in the shop's own zone, never in Swahili time (`saa 1:55 asubuhi`), so a screen reads as the shop's rules do ("late after 08:00") (Jack, SYNC-11) **(v1.24)**. Swahili screens add the part of the day, so `07:55` is never read as Swahili time, where *saa saba* is 13:00: *asubuhi* from 05:00, *mchana* from 12:00, *jioni* from 16:00, *usiku* from 19:00 ("saa 07:55 asubuhi", "saa 18:02 jioni"); English shows the time alone (Jack, SYNC-11's review) **(v1.24)**.
 
 ## Appendix A — Diagram
 

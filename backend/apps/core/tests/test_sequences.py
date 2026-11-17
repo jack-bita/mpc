@@ -1,7 +1,8 @@
 """apps/core/tests/test_sequences.py — tests for a shop's counters (next_number, apps/core/sequences.py; AUTH-1).
 
 A counter gives 1, 2, 3... per shop and per name, inside the caller's transaction, with its row locked until that
-transaction ends. These tests pin each promise: it counts up from 1; each shop counts alone; it refuses to run
+transaction ends. These tests pin each promise: it counts up from 1; it can give several numbers in one go (SYNC-1),
+and refuses to give none; each shop counts alone; it refuses to run
 outside a transaction, or for a shop that isn't open, or for a name not on the list; a number rolled back is given
 again; and a second pairing at the same moment waits for the first, then gets the next number, never the same one,
 even when both are the shop's first. `core` may not import `shops` (ADR-0035), so the two shops come from
@@ -12,9 +13,10 @@ import pytest
 from django.db import IntegrityError, transaction
 from django.db.models import Model
 from django.db.transaction import TransactionManagementError
+from pytest_django import DjangoAssertNumQueries
 
 from apps.core.models import SequenceName, ShopSequence
-from apps.core.sequences import UnknownSequence, next_number
+from apps.core.sequences import UnknownSequence, next_number, next_numbers
 from apps.core.tenancy import ShopMismatch, shop_context
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
@@ -39,6 +41,28 @@ def test_each_shop_counts_alone(shop_a: Model, shop_b: Model) -> None:
         assert next_number(shop_b, DEVICE) == 1
     with shop_context(shop_a), transaction.atomic():
         assert next_number(shop_a, DEVICE) == 3
+
+
+def test_counter_gives_several_numbers_at_once(
+    shop_a: Model, django_assert_num_queries: DjangoAssertNumQueries
+) -> None:
+    # A save that changes three records takes three change numbers in one go (SYNC-1): one lock and one write, however
+    # many it asks for, so an import of 5,000 products holds its shop's counter for one write, not 5,000.
+    with shop_context(shop_a), transaction.atomic():
+        assert next_number(shop_a, DEVICE) == 1  # the row exists from here on
+        with django_assert_num_queries(2):  # SELECT ... FOR UPDATE, then UPDATE
+            assert list(next_numbers(shop_a, DEVICE, 3)) == [2, 3, 4]
+        assert next_number(shop_a, DEVICE) == 5
+
+
+@pytest.mark.parametrize("how_many", [0, -1])
+def test_counter_refuses_fewer_than_one_number(shop_a: Model, how_many: int) -> None:
+    # Asking for no numbers is a bug in the calling code: it would lock the shop's counter for nothing. Refused before
+    # the counter is touched, so not even its row is made.
+    with shop_context(shop_a), transaction.atomic():
+        with pytest.raises(ValueError, match="at least one"):
+            next_numbers(shop_a, DEVICE, how_many)
+        assert not ShopSequence.objects.exists()
 
 
 def test_rolled_back_number_is_given_again(shop_a: Model) -> None:

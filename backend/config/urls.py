@@ -1,15 +1,16 @@
 """config/urls.py — the root URL list: which path goes to which app.
 
 Each app keeps its own routes in `apps/<app>/api/urls.py`; this file mounts them (03 §5.10), and names
-the answers for an address no route matches and for a crash.
+the answers for an address no route matches, a request Django finds suspicious, and a crash.
 The Django admin, the creator's back room, sits at /admin/; later it gets its own address, admin.<domain>.
 """
 
 from django.contrib import admin
 from django.urls import URLPattern, URLResolver, include, path
 
-# An address no route matches, and a crash: under /api/, they answer in the API's one error shape too
-# (apps/core/api/errors.py); elsewhere, Django's own pages.
+# An address no route matches, a request Django finds suspicious, and a crash: under /api/, they answer in
+# the API's one error shape too (apps/core/api/errors.py); elsewhere, Django's own pages.
+handler400 = "apps.core.api.errors.bad_request_page"
 handler404 = "apps.core.api.errors.not_found_page"
 handler500 = "apps.core.api.errors.server_error_page"
 
@@ -22,8 +23,18 @@ urlpatterns: list[URLPattern | URLResolver] = [
     # A shop's devices: the list, which whoever works on a side sees, and a manager's confirm, rename, block and
     # unblock (AUTH-5).
     path("api/v1/people/", include("apps.people.api.urls")),
+    # A photo's file, opened on an office screen by someone allowed to see it (CTRL-3).
+    path("api/v1/control/", include("apps.control.api.urls")),
     # The routes a device calls with its key: the start of a pairing, and what a paired device learns (AUTH-2).
     path("api/devices/v1/", include("apps.people.api.device_urls")),
+    # The one-tap demo, under the same prefix: may Jaribu demo show here, and the tap that makes this browser a demo
+    # device (OPS-3). In the demo app, which alone may read the seed's people and PINs (ADR-0043); shut wherever a shop
+    # that isn't a demo exists, and on the real server, which never has the demo's sign.
+    path("api/devices/v1/", include("apps.demo.api.urls")),
+    # Sync, also with a device's key: a new device's copy of its shop (SYNC-2), and later the pull and the push.
+    path("api/sync/v1/", include("apps.sync.api.urls")),
+    # Who stands at a shop's device, or is logged in on their own phone: PIN login, "who is here?", logout (AUTH-4).
+    path("api/auth/", include("apps.people.api.auth_urls")),
     # Only the superuser can log in here (PPL-1, apps/people/admin.py).
     path("admin/", admin.site.urls),
     # The owner's and managers' password login and logout: the few routes of django-allauth's JSON API for the

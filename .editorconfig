@@ -23,3 +23,10 @@ indent_style = tab
 # In Markdown, two spaces at the end of a line mean "line break", so they stay.
 [*.md]
 trim_trailing_whitespace = false
+
+# Written by `pnpm gen:api` exactly as drf-spectacular writes it: 4 spaces, and no newline at the end.
+# An editor adding one on save would turn the backend's check red (test_committed_schema_matches_the_code).
+# It is never edited by hand anyway (ADR-0025); this keeps a stray save from changing it.
+[shared/openapi.json]
+indent_size = 4
+insert_final_newline = false

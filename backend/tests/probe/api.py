@@ -26,6 +26,10 @@ Each route is built to pass the sweep, or to break one of its checks in one way:
   device check (AUTH-2): one built the usual way, one that shows every shop's name, one that shows nothing at all;
   LeakyDeviceViewSet leaks the same way, built as a ViewSet, and LeakyOpenDeviceView to anyone with no key;
   DeviceMakerView takes a POST and no GET.
+- DeviceNoteView and LeakyDeviceNoteView are device routes whose address names one note (CTRL-3), as a photo's file
+  does: the first finds it through the guard, so another shop's note is "not found", like an id no shop has; the
+  second reads past the guard, so it shows and changes another shop's note. DeviceNoteFileView takes only a PUT,
+  as the photo's file does, with no GET for its own device to look first through.
 
 tests/probe/urls.py mounts them, but for the last three, which have address lists of their own
 (urls_delete.py, urls_crash.py). Only the sweep's tests use these lists.
@@ -37,7 +41,7 @@ from django.db import connection, models
 from django.http import HttpRequest, HttpResponse, JsonResponse, StreamingHttpResponse
 from rest_framework import mixins, serializers
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSetMixin
@@ -257,14 +261,18 @@ class DeviceShopView(DeviceView):
     # POST that hands nothing back.
     def get(self, request: Request) -> Response:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT current_setting('mpc.shop_id', true), current_setting('mpc.staff_id', true)")
-            acting_shop, acting_staff = cursor.fetchone() or (None, None)
+            cursor.execute(
+                "SELECT current_setting('mpc.shop_id', true), current_setting('mpc.staff_id', true), "
+                "current_setting('mpc.device_id', true)"
+            )
+            acting_shop, acting_staff, acting_device = cursor.fetchone() or (None, None, None)
         return Response(
             {
                 "shop": str(current_shop()),
                 "sides": sorted(Side.objects.values_list("name", flat=True)),
                 "acting_shop": acting_shop,
                 "acting_staff": acting_staff,
+                "acting_device": acting_device,
             }
         )
 
@@ -306,3 +314,50 @@ class BlindDeviceView(DeviceView):
     # Shows nothing to anyone, not even its own device: it leaks nothing, but proves nothing either.
     def get(self, request: Request) -> Response:
         return Response({})
+
+
+class DeviceNoteView(DeviceView):
+    # A device route whose address names one note, built the way a photo's file is (CTRL-3): it says which table the id
+    # is in (`model`), and finds the note through the guard, so shop B's device asking for shop A's note gets the
+    # answer an id no shop has gets. A read shows the note; a PUT writes its text, as the file's upload writes a row.
+    model = Note
+
+    def get(self, request: Request, pk: str) -> Response:
+        return Response(NoteSerializer(_note(Note.objects, pk)).data)
+
+    def put(self, request: Request, pk: str) -> Response:
+        note = _note(Note.objects, pk)
+        note.text = "Written by a device"
+        note.save()
+        return Response(status=204)
+
+
+class LeakyDeviceNoteView(DeviceNoteView):
+    # The mistake the sweep is there to catch: the note read past the guard, through the admin's door, so any device
+    # reads and writes any shop's note by its id.
+    def get(self, request: Request, pk: str) -> Response:
+        return Response(NoteSerializer(_note(Note.all_shops, pk)).data)
+
+    def put(self, request: Request, pk: str) -> Response:
+        note = _note(Note.all_shops, pk)
+        note.text = "Written by a device"
+        note.save()
+        return Response(status=204)
+
+
+class DeviceNoteFileView(DeviceView):
+    # A PUT and no GET, as the photo's file has: shop A's own device can't look first, so the route names its own leak
+    # test, and the sweep still asks about each of A's notes as shop B's device.
+    model = Note
+
+    def put(self, request: Request, pk: str) -> Response:
+        _note(Note.objects, pk)
+        return Response(status=204)
+
+
+def _note(notes: models.Manager[Note], pk: str) -> Note:
+    # One note by its id, through the manager given; an id it can't find is "not found", as an office route answers.
+    note = notes.filter(pk=pk).first()
+    if note is None:
+        raise NotFound()
+    return note

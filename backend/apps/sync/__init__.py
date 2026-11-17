@@ -1,4 +1,5 @@
-"""sync — owns the push, pull and bootstrap endpoints, device sequence tracking and the document router.
+"""sync — owns the push, pull and bootstrap endpoints, device sequence tracking, the list of document types and
+the answer log of pushed documents (PushedDocument, SYNC-4).
 
-Layer 6 (ADR-0015): imports any layer below.
+Layer 6 (ADR-0043): imports any layer below.
 """

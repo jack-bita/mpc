@@ -5,7 +5,7 @@ default, and a scope (one value for the whole shop, or one a side may override).
 stored as text, in one form per kind, so these tests check both ways: text in, a value out, and back.
 
     kind        typed      value               stored
-    Money       "1000"     Decimal("1000")     "1000.00"
+    Money       "1000"     Decimal("1000")     "1000.00"    (whole shillings only)
     TimeOfDay   "07:35"    time(7, 35)         "07:35"
     YesNo       "false"    False               "false"
 
@@ -21,11 +21,14 @@ from typing import Any
 import pytest
 
 from apps.core.settings_registry import (
+    DAY_IN_ORDER,
     KEY_SHAPE,
     KEYS,
+    KINDS,
     REGISTRY,
     Money,
     Percent,
+    Scope,
     SettingKey,
     TimeOfDay,
     ValueKind,
@@ -44,6 +47,13 @@ def test_every_default_is_a_valid_value(key: SettingKey[Any]) -> None:
     assert re.fullmatch(KEY_SHAPE, key.key)
 
 
+def test_each_kind_has_a_name_of_its_own() -> None:
+    # A device reads a rule's stored text by its kind's name ("time" → "07:35"), sent with the rule's default
+    # (SYNC-2), so each kind has one name, no two kinds share one, and every key's kind is on the list.
+    assert [kind.code for kind in KINDS] == ["money", "percent", "whole", "time", "yes_no"]
+    assert {type(key.kind) for key in KEYS} <= set(KINDS)
+
+
 def test_each_key_listed_once() -> None:
     # REGISTRY is built from KEYS by name. A key listed twice would keep only its last entry, and the
     # first one's kind, default or scope would be lost without a word.
@@ -54,10 +64,11 @@ def test_each_key_listed_once() -> None:
     ("kind", "text", "value", "stored"),
     [
         pytest.param(Money(), "1000", Decimal("1000"), "1000.00", id="money_whole_shillings"),
-        pytest.param(Money(), "1500.5", Decimal("1500.5"), "1500.50", id="money_one_place"),
+        # Whole shillings with places that are zeros are still whole: "1500.00" is 1,500.
+        pytest.param(Money(), "1500.00", Decimal("1500.00"), "1500.00", id="money_zero_cents"),
         pytest.param(Money(), "0", Decimal("0"), "0.00", id="money_zero"),
-        # The largest amount a numeric(14,2) column holds (03 §9).
-        pytest.param(Money(), "999999999999.99", Decimal("999999999999.99"), "999999999999.99", id="money_largest"),
+        # The largest whole amount a numeric(14,2) column holds (03 §9).
+        pytest.param(Money(), "999999999999", Decimal("999999999999"), "999999999999.00", id="money_largest"),
         pytest.param(Percent(), "2.5", Decimal("2.5"), "2.50", id="percent"),
         pytest.param(Percent(), "100", Decimal("100"), "100.00", id="percent_all"),
         pytest.param(Whole(maximum=1000), "90", 90, "90", id="whole"),
@@ -80,8 +91,12 @@ def test_value_kinds_read_and_write_text(kind: ValueKind[Any], text: str, value:
 @pytest.mark.parametrize(
     ("kind", "text"),
     [
-        # Money: an exact amount in plain digits, with at most two places (ADR-0024).
+        # Money: an exact amount in plain digits, in whole shillings (ADR-0024; Jack, 16 Nov 2026).
         pytest.param(Money(), "abc", id="money_not_a_number"),
+        # Cents: the shop's money has none, and a rule with them would stop every screen that writes money
+        # (formatMoney refuses cents): a rounding step of 2.50, a late fine of 1,000.50.
+        pytest.param(Money(), "1500.5", id="money_with_cents"),
+        pytest.param(Money(), "0.50", id="money_half_a_shilling"),
         pytest.param(Money(), "1,000", id="money_with_a_comma"),
         pytest.param(Money(), "10.005", id="money_three_places"),
         pytest.param(Money(), "-500", id="money_below_zero"),
@@ -131,6 +146,7 @@ def test_value_kinds_refuse_bad_text(kind: ValueKind[Any], text: str) -> None:
         # A value parse() refuses can't be written either, or it would be stored all the same.
         pytest.param(Money(), Decimal("-500"), id="money_below_zero"),
         pytest.param(Money(), Decimal("Infinity"), id="money_infinite"),
+        pytest.param(Money(), Decimal("1500.50"), id="money_with_cents"),
         pytest.param(TimeOfDay(), time(7, 35, 30), id="time_with_seconds"),
     ],
 )
@@ -138,3 +154,37 @@ def test_to_text_refuses_a_value_it_would_change(kind: ValueKind[Any], value: ob
     # A service or a seed may write a value with to_text() directly, without parse() first.
     with pytest.raises(ValueError):
         kind.to_text(value)
+
+
+def test_attendance_rules_have_the_owners_times() -> None:
+    # The owner's rules (OWN-7, 02 §12), as a new shop starts with them: the day's seven times in the day's
+    # order, and attendance off until the shop switches it on (ADR-0033). The fines have a test of their own
+    # (test_fines_start_at_nothing).
+    times = {key.key: key.default for key in KEYS if isinstance(key.kind, TimeOfDay)}
+    assert times == {
+        "attendance.on_time_until": time(7, 35),
+        "attendance.second_fine_from": time(8, 0),
+        "attendance.review_from": time(8, 30),
+        "attendance.afternoon_from": time(12, 0),
+        "attendance.midday": time(13, 0),
+        "attendance.morning_leave_until": time(13, 30),
+        "attendance.closing": time(18, 40),
+    }
+    # Listed in the day's order too, as the settings page shows them in the registry's order (SHOP-5).
+    assert list(times.values()) == sorted(times.values())
+    # The order set_setting keeps holds all seven, and a new shop starts in it, each strictly after the one before.
+    assert [key.key for key in DAY_IN_ORDER] == list(times)
+    defaults = [key.default for key in DAY_IN_ORDER]
+    assert all(earlier < later for earlier, later in zip(defaults, defaults[1:], strict=False))
+    assert REGISTRY["attendance.enabled"].default is False
+    # Staff work for the shop, not a side (02 §5): every attendance rule has one value for the whole shop.
+    attendance = [key for key in KEYS if key.key.startswith("attendance.")]
+    assert len(attendance) == 10
+    assert {key.scope for key in attendance} == {Scope.SHOP}
+
+
+def test_fines_start_at_nothing() -> None:
+    # A shop has no fine until its owner types one: this public repo names no real amount (rule 10, Jack, ATT-2),
+    # and another shop may fine nobody. The demo types made-up ones (apps/demo/services.py, DEMO_RULES).
+    assert REGISTRY["attendance.late_fine"].default == Decimal("0.00")
+    assert REGISTRY["attendance.second_fine"].default == Decimal("0.00")

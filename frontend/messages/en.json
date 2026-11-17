@@ -4,22 +4,754 @@
   },
   "home": {
     "title": "Welcome",
-    "version": "Version"
+    "version": "Version {version}",
+    "login": "Log in"
   },
   "update": {
     "ready": "A new version is ready",
-    "apply": "Update"
+    "apply": "Update",
+    "sending": "Sending records first…"
+  },
+  "offline": {
+    "title": "Needs the internet",
+    "description": "This page works only when online."
+  },
+  "language": {
+    "switch": "Kiswahili"
+  },
+  "topBar": {
+    "place": "{shop} · {side}"
+  },
+  "pageHeader": {
+    "back": "Back to where you were"
+  },
+  "device": {
+    "lock": {
+      "title": "This device is blocked",
+      "which": "{device} · {shop}",
+      "ask": "Ask a manager to unblock it. The work on this device isn't lost.",
+      "tryAgain": "Try again"
+    },
+    "register": {
+      "title": "Register this device",
+      "intro": "This device isn't registered with a shop yet. Get a code, then give it to a manager to type on their phone.",
+      "start": "Get a code",
+      "giveCode": "Give this code to a manager",
+      "where": "The manager types it on their phone, on the Devices page.",
+      "timeLeft": "The code expires in {time}",
+      "waiting": "Waiting for the manager…",
+      "expired": "This code has expired.",
+      "newCode": "Get a new code",
+      "done": "This device is registered",
+      "which": "Its name is {device}, on the {side} side of {shop}.",
+      "continue": "Continue"
+    },
+    "demo": {
+      "try": "Try the demo",
+      "explain": "This device becomes a laptop of Duka la Mfano, a made-up shop. No real data."
+    },
+    "office": {
+      "title": "Devices",
+      "register": "Register a device",
+      "code": "Device code",
+      "codeHint": "The code the new device shows, like K7QM-4RXT.",
+      "name": "Device name",
+      "nameHint": "The name the list will show, like Laptop Dawa.",
+      "side": "The device's side",
+      "sideHint": "The side the device will serve most.",
+      "pickSide": "Pick a side.",
+      "confirm": "Register",
+      "cancel": "Cancel",
+      "registered": "{device} is registered. It will show the shop's name within a few seconds."
+    },
+    "list": {
+      "empty": "No device is registered yet.",
+      "number": "No. {code} · {side}",
+      "active": "Working",
+      "blocked": "Blocked",
+      "seen": "Seen {when}",
+      "neverSeen": "Not seen yet",
+      "rename": "Rename",
+      "newName": "New name",
+      "save": "Save",
+      "cancel": "Cancel",
+      "block": "Block",
+      "blockReason": "Why are you blocking it?",
+      "blockHint": "For example: stolen, or lost.",
+      "blockConfirm": "Block the device",
+      "unblock": "Unblock",
+      "unblockReason": "Why are you unblocking it?",
+      "unblockHint": "For example: found.",
+      "unblockConfirm": "Unblock the device"
+    },
+    "health": {
+      "title": "Device health",
+      "intro": "Each device as it described itself at its last sync. Offline times are by each device's own clock.",
+      "notToday": "Not synced today. Last: {when}.",
+      "neverSynced": "Not synced yet.",
+      "lastSync": "Last sync: {when}.",
+      "today": "today, {time}",
+      "onDay": "{date}, {time}",
+      "waiting": "{count, plural, =0 {Nothing waiting to send.} one {# record waiting to send.} other {# records waiting to send.}}",
+      "clockRight": "Its clock is right.",
+      "clockAhead": "Its clock is {minutes} min ahead.",
+      "clockBehind": "Its clock is {minutes} min behind.",
+      "clockUnknown": "Its clock isn't known yet.",
+      "version": "App version: {version}",
+      "noOutages": "Not offline this week.",
+      "outages": "Offline this week: {count, plural, one {once} other {# times}}, {total} in all.",
+      "outagesCount": "Offline this week: {count, plural, one {once} other {# times}}.",
+      "outagesAtLeast": "Offline this week: {count, plural, one {once} other {# times}}, at least {total} in all.",
+      "period": "{date}: {from} – {to} ({length})",
+      "periodOdd": "{date}: {from} – {to} (its clock was changed meanwhile)",
+      "periodUnseenEnd": "{date}: {from} – ? (the device went off after {to})",
+      "atDay": "{date} {time}",
+      "underAMinute": "under a minute",
+      "minutes": "{minutes} min",
+      "hours": "{hours} h",
+      "hoursMinutes": "{hours} h {minutes} min"
+    }
+  },
+  "login": {
+    "pinPad": {
+      "typed": "{count} of {length} digits typed",
+      "erase": "Delete"
+    },
+    "picker": {
+      "title": "Who are you?",
+      "empty": "No one works here yet. Ask the shop's owner to add the staff.",
+      "firstSync": "Wait a moment: this laptop is getting the staff list for the first time.",
+      "demoPin": "PIN {pin}"
+    },
+    "pin": {
+      "typePin": "Type your PIN",
+      "back": "Back"
+    },
+    "password": {
+      "title": "Log in",
+      "name": "Phone or email",
+      "nameHint": "Like 0712 345 678",
+      "password": "Password",
+      "send": "Log in",
+      "forgot": "Forgot your password?",
+      "someoneHere": "{name} is logged in on this device. Log them out first, then log in."
+    },
+    "welcome": "Welcome, {name}",
+    "switch": "Switch person",
+    "logout": "Log out",
+    "leaving": "Logging out…",
+    "waiting": "One moment…",
+    "withPassword": "Log in with a password",
+    "unsent": "{count, plural, one {# record not sent yet. It is safe on this laptop, and will be sent by itself.} other {# records not sent yet. They are safe on this laptop, and will be sent by themselves.}}"
+  },
+  "passwordField": {
+    "show": "Show password"
+  },
+  "password": {
+    "chooseTitle": "Choose your password",
+    "chooseIntro": "The password you were given is temporary. Choose your own, then go on.",
+    "temporary": "Temporary password",
+    "new": "New password",
+    "newHint": "8 letters or more, not only numbers, and not like your name or phone.",
+    "again": "Type the new password again",
+    "notTheSame": "Type the same password both times.",
+    "save": "Save",
+    "forgot": {
+      "title": "Forgot your password?",
+      "noEmail": "No email? Ask the owner to set you a temporary password, face to face.",
+      "withEmail": "Have an email? We will send you a link to set a new password.",
+      "email": "Email",
+      "notAnEmail": "Write the whole email, like name@example.com.",
+      "send": "Send the link",
+      "sent": "If this email has an account here, we have sent a link. Open it within an hour.",
+      "back": "Back to log in"
+    },
+    "reset": {
+      "title": "Set a new password",
+      "checking": "Checking the link…",
+      "noKey": "This link is incomplete. Open it again from the email, or ask for a new one.",
+      "askAgain": "Ask for a new link",
+      "done": "Your new password is set. Log in with it now.",
+      "login": "Log in"
+    }
+  },
+  "office": {
+    "welcome": "Welcome, {name}",
+    "nothingYet": "There is nothing in the office you can open here yet."
+  },
+  "mySettings": {
+    "title": "My settings",
+    "intro": "They are yours alone, and follow you to every device you log in on.",
+    "language": "Language",
+    "languages": {
+      "sw": "Kiswahili",
+      "en": "English"
+    },
+    "font": "Font",
+    "fonts": {
+      "default": "The default font",
+      "second": "The second font, easy to read"
+    },
+    "saving": "Saving…",
+    "saved": "Saved."
+  },
+  "shopSettings": {
+    "title": "Shop settings",
+    "intro": "The shop's rules, and each one's value today. A new value starts on the day you choose.",
+    "areas": {
+      "attendance": "Attendance",
+      "money": "Money",
+      "computers": "Computers",
+      "stock": "Stock"
+    },
+    "coming": "From {date}: {value}",
+    "yes": "Yes",
+    "no": "No",
+    "change": "Change",
+    "history": "History",
+    "close": "Close",
+    "changeOf": "Change: {rule}",
+    "changeOfSide": "Change: {rule}, {side}",
+    "historyOf": "History: {rule}",
+    "historyOfSide": "History: {rule}, {side}",
+    "saved": "Saved. The new value starts on {date}.",
+    "form": {
+      "newValue": {
+        "money": "New amount (TSh)",
+        "percent": "New percent (%)",
+        "whole": "New number",
+        "time": "New time",
+        "yes_no": "New value"
+      },
+      "from": "Starting on",
+      "fromHint": "Today or a later day.",
+      "note": "Note (optional)",
+      "noteHint": "Why it changed, for whoever reads the history.",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "past": {
+      "title": "History",
+      "row": "{value}, from {date}",
+      "by": "Set by {name}, {date}",
+      "bySystem": "Set by the system, {date}",
+      "wholeShop": "The whole shop's",
+      "note": "Note: {note}",
+      "default": "{value}, the default",
+      "inUse": "In use now",
+      "coming": "Coming"
+    },
+    "closures": {
+      "title": "Days the shop is closed",
+      "intro": "Days the whole shop is closed, such as a public holiday or a funeral. They are days off, and not paid.",
+      "none": "No closed days coming.",
+      "days": "{first} – {last}",
+      "add": "Add",
+      "added": "Saved: {name}, {days}.",
+      "remove": "Remove",
+      "removeOf": "Remove: {name}",
+      "removeAsk": "Remove {name}, {days}? The shop will be open on those days.",
+      "reason": "Reason",
+      "reasonHint": "Kept with your name and the time.",
+      "removed": "Removed: {name}, {days}.",
+      "changeLastDay": "Change the last day",
+      "changeLastDayOf": "Change the last day: {name}",
+      "newLastDay": "New last day",
+      "newLastDayHint": "Now {last}. It can be earlier or later.",
+      "sameLastDay": "This is already the last day. Pick another day.",
+      "moved": "Last day changed: {name}, {days}.",
+      "gone": "{name}: these days are no longer in the list.",
+      "form": {
+        "from": "From",
+        "fromHint": "Today or a later day.",
+        "to": "To",
+        "toHint": "Leave it empty for one day only.",
+        "name": "Name",
+        "nameHint": "Such as Krismasi, or Msiba wa bibi."
+      }
+    },
+    "sides": {
+      "title": "Sides",
+      "intro": "A side switched off isn't used at the shop's laptops.",
+      "on": "On",
+      "off": "Off",
+      "switchOff": "Switch off",
+      "switchOn": "Switch on",
+      "switchOffOf": "Switch off: {side}",
+      "switchOnOf": "Switch on: {side}",
+      "askOff": "Switch off {side}? The shop's laptops won't use it until you switch it on again.",
+      "askOn": "Switch on {side}? The shop's laptops will start using it.",
+      "yesOff": "Yes, switch off",
+      "yesOn": "Yes, switch on",
+      "no": "No",
+      "switchedOff": "{side} is switched off.",
+      "switchedOn": "{side} is switched on.",
+      "band": "Colour",
+      "bandOf": "{side}'s colour",
+      "bandHint": "The strip under the green bar, so everyone knows the side at a glance.",
+      "looks": {
+        "blue": "Blue",
+        "striped": "Stripes"
+      },
+      "changeBand": "Change",
+      "changeBandOf": "Change colour: {side}",
+      "bandSaved": "{side}'s colour is saved."
+    },
+    "rules": {
+      "attendance": {
+        "enabled": {
+          "name": "Attendance switched on",
+          "help": "When on, the shop laptops show Mahudhurio, and days count from that day.",
+          "shown": "{value}"
+        },
+        "on_time_until": {
+          "name": "On time until",
+          "help": "Anyone who clocks in after this time is late, with the first fine.",
+          "shown": "{value}"
+        },
+        "late_fine": {
+          "name": "First late fine",
+          "help": "Taken off the pay for each late day, before the second fine's time.",
+          "shown": "{value}"
+        },
+        "second_fine_from": {
+          "name": "Second fine from",
+          "help": "Anyone who clocks in from this time gets the second fine instead of the first.",
+          "shown": "{value}"
+        },
+        "second_fine": {
+          "name": "Second late fine",
+          "help": "Taken off the pay for each day someone clocks in from the second fine's time, before the dharura time.",
+          "shown": "{value}"
+        },
+        "review_from": {
+          "name": "Dharura from",
+          "help": "Anyone who clocks in from this time is dharura: a manager or the owner decides the day.",
+          "shown": "{value}"
+        },
+        "afternoon_from": {
+          "name": "Afternoon half day: arrive from",
+          "help": "Anyone who clocks in between this time and midday, and stays until closing, gets a half day.",
+          "shown": "{value}"
+        },
+        "midday": {
+          "name": "Midday",
+          "help": "The morning half ends here and the afternoon half starts. Clocking in after it, or leaving before it, is dharura.",
+          "shown": "{value}"
+        },
+        "morning_leave_until": {
+          "name": "Morning half day: leave by",
+          "help": "Someone who came in the morning and leaves between midday and this time gets a half day.",
+          "shown": "{value}"
+        },
+        "closing": {
+          "name": "Closing time",
+          "help": "Leaving from this time is a full day. Leaving earlier, after the morning half day, is dharura.",
+          "shown": "{value}"
+        }
+      },
+      "money": {
+        "rounding_step": {
+          "name": "Round totals to",
+          "help": "Each sale line's total is rounded to the nearest multiple of this amount.",
+          "shown": "{value}"
+        }
+      },
+      "session": {
+        "idle_minutes": {
+          "name": "Lock after no use",
+          "help": "A shop laptop locks itself when left untouched this long.",
+          "shown": "Minutes: {value}"
+        }
+      },
+      "cash": {
+        "tolerance": {
+          "name": "Drawer difference allowed",
+          "help": "A drawer short or over by this much or less needs no explaining.",
+          "shown": "{value}"
+        }
+      },
+      "count": {
+        "tolerance_pct": {
+          "name": "Stock count difference allowed",
+          "help": "A stock count off by this percent or less needs no explaining.",
+          "shown": "{value}%"
+        }
+      },
+      "expiry": {
+        "alert_days": {
+          "name": "Warn before expiry",
+          "help": "The warning starts this many days before the expiry date.",
+          "shown": "Days: {value}"
+        }
+      },
+      "stock": {
+        "block_negative": {
+          "name": "Block selling more than is in stock",
+          "help": "Yes: a sale of stock that isn't there is refused. No: it goes through, and the difference shows.",
+          "shown": "{value}"
+        }
+      }
+    }
+  },
+  "attendance": {
+    "title": "Attendance",
+    "back": "Back",
+    "clockIn": "Clock in",
+    "clockOut": "Clock out",
+    "switchedOff": "Attendance isn't switched on at this shop. The owner switches it on in Shop settings.",
+    "notInYet": "You haven't clocked in today.",
+    "inSince": "You clocked in at {time}.",
+    "outSince": "You clocked out at {time}.",
+    "timeOfDay": "{time}{part, select, other {}}",
+    "savedIn": "Clocked in at {time}.",
+    "savedOut": "Clocked out at {time}. Goodbye!",
+    "firstSync": "Wait a moment: this laptop is still getting the shop's data for the first time. Try again shortly.",
+    "failed": "Not saved. Try again; if it fails again, tell the manager.",
+    "list": {
+      "title": "Today on this laptop",
+      "empty": "Nobody has clocked in today yet.",
+      "name": "Name",
+      "came": "In",
+      "left": "Out",
+      "unknown": "Unknown worker"
+    },
+    "sendNow": {
+      "waiting": "{count, plural, one {# record waiting to be sent.} other {# records waiting to be sent.}}",
+      "allSent": "Every record has been sent.",
+      "button": "Send now",
+      "offline": "No internet: they will be sent once it is back."
+    }
+  },
+  "needsAttention": {
+    "title": "Records the server refused",
+    "clock": "{name}: {action}, at {time}",
+    "clockOnDay": "{name}: {action}, {date} at {time}",
+    "other": "Record number {number}",
+    "otherOnDay": "Record number {number}, {date}",
+    "unknownPerson": "Unknown worker",
+    "notAgain": "It won't be sent again. Tell the manager.",
+    "reasons": {
+      "typeUnknown": "The server doesn't take this kind of record.",
+      "versionUnknown": "This record is from another version of the app.",
+      "makerUnknown": "Whoever made this record doesn't work at this shop.",
+      "idTaken": "The server already has another record with this id.",
+      "carriedFromUnknown": "This record says it came from a laptop that isn't another laptop of this shop.",
+      "loadedByUnknown": "Whoever loaded this record's file doesn't work at this shop.",
+      "other": "The server refused it. Code: {code}"
+    }
+  },
+  "thisLaptop": {
+    "title": "This laptop",
+    "back": "Back",
+    "keep": {
+      "title": "Keeping the data",
+      "kept": "The browser has agreed to keep the shop's data on this laptop for good.",
+      "notKept": "The browser hasn't agreed to keep the shop's data for good: short of space, it may delete it, records not yet sent included. Install this app, then open this page again.",
+      "cannotAsk": "This browser can't keep the shop's data for good. Use Chrome or Edge."
+    },
+    "install": {
+      "title": "Installing the app",
+      "installed": "The app is installed on this laptop.",
+      "button": "Install",
+      "steps": "Open the browser's menu (⋮ or ⋯), then choose Install."
+    },
+    "rescue": {
+      "title": "Records not sent yet",
+      "none": "No records are waiting to be sent from this laptop.",
+      "waiting": "{count, plural, one {# record is waiting to be sent.} other {# records are waiting to be sent.}}",
+      "why": "If this laptop breaks before sending them, save them to a file. Then a manager loads it on another laptop of this shop, which sends them.",
+      "save": "Save to a file",
+      "load": "Load a file",
+      "added": "{count, plural, one {# record added, and it will be sent by itself.} other {# records added, and they will be sent by themselves.}}",
+      "alreadyHere": "{count, plural, one {# record was here already.} other {# records were here already.}}",
+      "notRescueFile": "This file isn't the shop's records. Choose a file saved on this page.",
+      "wrongShop": "This file belongs to another shop: it was not loaded.",
+      "brokenRecord": "This file is damaged: it was not loaded.",
+      "firstSync": "Wait a little: this laptop is still bringing the shop's data for the first time. Try again shortly.",
+      "failed": "It didn't work. Try again."
+    }
+  },
+  "stock": {
+    "part": "{count} {unit}"
   },
   "slip": {
-    "saleNumber": "Sale number",
-    "date": "Date",
-    "time": "Time",
+    "saleNumber": "Sale number: {number}",
+    "date": "Date: {date}",
+    "time": "Time: {time}",
     "item": "Item",
     "quantity": "Quantity",
     "unitPrice": "@",
     "price": "Price",
-    "total": "Total",
+    "total": "Total: {amount}",
     "thanks": "Thank you, welcome again",
     "print": "Print"
+  },
+  "design": {
+    "title": "The shop's look",
+    "intro": "Every colour, font and piece of the app, in one place. Hover over a piece, press it, or use Tab, to see its other states.",
+    "colours": {
+      "title": "Colours",
+      "primary": "Green: main button, top bar",
+      "primaryForeground": "Text on green",
+      "secondary": "Blue: second button, what is selected",
+      "secondaryForeground": "Text on blue",
+      "ring": "Focus ring: shows where you are",
+      "background": "Screen",
+      "foreground": "Text",
+      "card": "Card",
+      "cardForeground": "Text on a card",
+      "popover": "Pop-up menu",
+      "popoverForeground": "Text on a menu",
+      "muted": "Pale panel",
+      "mutedForeground": "Quiet text",
+      "accent": "Menu row under the mouse",
+      "accentForeground": "Its text",
+      "destructive": "Faded red: warnings only",
+      "border": "Lines",
+      "input": "Edge of a box you type in"
+    },
+    "fonts": {
+      "title": "Fonts",
+      "default": "The default font",
+      "second": "The second font, easy to read",
+      "sample": "Maize bran: 26 mifuko + 35.5 kilo",
+      "digits": "TSh 1,234,560 · TSh 8,888,111"
+    },
+    "buttons": {
+      "title": "Buttons",
+      "main": "Save",
+      "second": "Back",
+      "danger": "Void",
+      "big": "Big",
+      "normal": "Normal",
+      "disabled": "Switched off",
+      "links": "Links that look like buttons: they open another page",
+      "link": "Open a page",
+      "onBar": "On the green top bar",
+      "bar": "Log out"
+    },
+    "fields": {
+      "title": "Boxes to type in",
+      "name": "Customer's name",
+      "nameHint": "Full name, as on their ID",
+      "phone": "Phone number",
+      "phoneError": "Wrong number. Write it like 0712 345 678.",
+      "kilo": "Kilos",
+      "disabled": "Switched off",
+      "search": "Search products",
+      "normal": "A normal-size box",
+      "password": "Password"
+    },
+    "choices": {
+      "title": "Choices",
+      "label": "The device's side",
+      "hint": "The side the device will serve most",
+      "error": "Pick a side.",
+      "disabled": "Switched off"
+    },
+    "cards": {
+      "title": "Cards",
+      "cardTitle": "Today's total",
+      "cardDescription": "Sales on the Drugs side",
+      "cardContent": "TSh 41,000",
+      "cardFooter": "Saved on this device"
+    },
+    "alerts": {
+      "title": "Messages",
+      "infoTitle": "Needs the internet",
+      "infoDescription": "This page works only when online.",
+      "dangerTitle": "The sale wasn't saved",
+      "dangerDescription": "The price is below the lowest allowed. Ask the manager.",
+      "live": "The office's real message: it appears when the network drops. Switch the browser's network off to see it."
+    },
+    "sideBands": {
+      "blue": "Blue",
+      "striped": "White and red stripes"
+    },
+    "tabs": {
+      "title": "Tabs",
+      "hint": "Press a tab, or use Tab and the arrow keys. On a phone the row scrolls sideways, and stays at the top as you scroll down.",
+      "samples": {
+        "attendance": "Attendance",
+        "money": "Money",
+        "computers": "Computers",
+        "stock": "Stock",
+        "closures": "Days the shop is closed",
+        "sides": "Sides"
+      },
+      "content": "The open section shows here. The others are hidden, not lost."
+    },
+    "topBar": {
+      "title": "Top bar",
+      "sampleShop": "MPC",
+      "sampleSides": {
+        "blue": "Dawa",
+        "striped": "Vyakula"
+      }
+    }
+  },
+  "apiError": {
+    "title": "It didn't go through"
+  },
+  "errors": {
+    "invalid": "Some fields are wrong. Check the marked ones.",
+    "bad_request": "The server refused this request.",
+    "version_conflict": "Someone else changed this at the same time. Reload it, then try again.",
+    "server_error": "The server has a problem. Try again later.",
+    "not_found": "It wasn't found.",
+    "not_authenticated": "Log in first.",
+    "authentication_failed": "The login failed. Log in again.",
+    "permission_denied": "You don't have permission to do this.",
+    "method_not_allowed": "This action isn't allowed here.",
+    "not_acceptable": "The server can't answer in this form.",
+    "unsupported_media_type": "The server couldn't read this request.",
+    "parse_error": "The request was damaged on the way. Try again.",
+    "throttled": "Too many tries. Try again in {minutes} min.",
+    "required": "Fill in this field.",
+    "null": "Fill in this field.",
+    "blank": "This field can't be empty.",
+    "max_length": "This is too long.",
+    "min_length": "This is too short.",
+    "max_value": "This number is too big.",
+    "min_value": "This number is too small.",
+    "max_digits": "This number has too many digits.",
+    "max_decimal_places": "Too many digits after the point.",
+    "max_whole_digits": "Too many digits before the point.",
+    "invalid_choice": "This choice isn't on the list.",
+    "does_not_exist": "What you picked doesn't exist.",
+    "incorrect_type": "This value is the wrong kind.",
+    "unique": "This is already taken.",
+    "not_a_list": "A list is needed here.",
+    "not_a_dict": "A group of fields is needed here.",
+    "empty": "This list can't be empty.",
+    "max_string_length": "This number is too long.",
+    "null_characters_not_allowed": "This text has a character that isn't allowed.",
+    "surrogate_characters_not_allowed": "This text has a character that isn't allowed.",
+    "id": {
+      "taken": "This record's id is already in use. Try again.",
+      "not_uuid7": "This record's id is wrong. Update the app."
+    },
+    "device": {
+      "blocked": "This device is blocked. Ask a manager to unblock it.",
+      "name_blank": "Give the device a name.",
+      "name_taken": "Another device already has this name.",
+      "reason_required": "Write a reason.",
+      "not_active": "This device isn't active, so it can't be blocked.",
+      "not_blocked": "This device isn't blocked."
+    },
+    "document": {
+      "type_unknown": "The server doesn't take this kind of record. Update the app.",
+      "version_unknown": "This record comes from another version of the app. Update the app.",
+      "maker_unknown": "The person who made this record doesn't work at this shop.",
+      "carried_from_unknown": "This record says it came from a laptop that isn't another laptop of this shop.",
+      "loaded_by_unknown": "Whoever loaded this record's file doesn't work at this shop."
+    },
+    "session": {
+      "wrong_device": "This login belongs to another device. Log in again here."
+    },
+    "shop": {
+      "suspended": "This shop is suspended. Contact the owner."
+    },
+    "staff": {
+      "suspended": "You are suspended. Talk to a manager or the owner.",
+      "choose_shop": "You work at two shops. Choosing a shop isn't available yet.",
+      "left": "This person has left.",
+      "other_shop": "This belongs to another shop.",
+      "reason_required": "Write a reason.",
+      "temporary_password_open": "This person still has a temporary password. This permission waits until they choose their own."
+    },
+    "password": {
+      "must_change": "Choose your own password before you go on.",
+      "own": "You can't set your own password here.",
+      "superuser_only": "Only the system admin can set this person's password.",
+      "more_keys": "This person has permissions you don't, so you can't set their password.",
+      "no_login_name": "This person has no phone or email to log in with.",
+      "same_as_temporary": "Choose a password other than the temporary one."
+    },
+    "phone": {
+      "invalid": "This phone number isn't right."
+    },
+    "login": {
+      "already_in": "Someone is already logged in on this device. Log out first, then try again.",
+      "switched_off": "You can't log in right now. Talk to the owner."
+    },
+    "email_password_mismatch": "The email or the password is wrong.",
+    "phone_password_mismatch": "The phone or the password is wrong.",
+    "invalid_phone": "Write the whole phone number, like 0712 345 678.",
+    "too_many_login_attempts": "Too many wrong tries. Wait a few minutes, then try again.",
+    "invalid_password_reset": "This link doesn't work any more. Ask for a new one.",
+    "enter_current_password": "The current password is wrong.",
+    "pin": {
+      "wrong": "Wrong PIN.",
+      "locked": "Too many wrong PINs. Try again in {minutes} min.",
+      "offline_first": "This laptop can't check your PIN on its own yet. Log in here once while the network is on, and then you can log in even without it.",
+      "own": "You can't set your own PIN here.",
+      "superuser_only": "Only the system admin can set this person's PIN.",
+      "more_keys": "This person has permissions you don't, so you can't set their PIN.",
+      "not_four_digits": "A PIN is four digits.",
+      "too_easy": "This PIN is too easy to guess, like 1234 or 0000. Choose another."
+    },
+    "demo": {
+      "closed": "The demo isn't open here.",
+      "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in.",
+      "sides_fixed": "On the demo, the sides stay as they are, so every visitor can try them.",
+      "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
+      "no_note": "On the demo, notes aren't kept. Leave this box empty.",
+      "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is."
+    },
+    "closure": {
+      "date_past": "A day that has already passed can't be changed.",
+      "ends_before_it_starts": "The last day is before the first day.",
+      "overlaps": "The shop is already closed on one of these days.",
+      "name_blank": "Write a name, such as Krismasi.",
+      "status_unknown": "This closure's state isn't known.",
+      "reason_required": "Write the reason.",
+      "started": "These days have already started. Change the last day instead.",
+      "not_active": "This closure was already cancelled."
+    },
+    "attachment": {
+      "not_found": "The server has no such photo.",
+      "too_big": "This photo is too big: a photo can be at most 1 MB.",
+      "not_an_image": "This file isn't a photo. Only JPEG and WebP photos are kept.",
+      "file_differs": "This photo isn't the one its record names. It may have been damaged on the way.",
+      "file_waiting": "This photo hasn't reached the server yet. It comes once the laptop is online.",
+      "file_removed": "This photo has been removed.",
+      "length_required": "The photo was sent without its size. It will be sent again."
+    },
+    "password_too_short": "This password is too short.",
+    "password_too_common": "This password is too common. Choose another.",
+    "password_entirely_numeric": "A password can't be only numbers.",
+    "password_too_similar": "This password is too close to the person's name or phone.",
+    "pairing": {
+      "code_invalid": "This code isn't written right. Type it as the device shows it.",
+      "code_unknown": "No device is waiting with this code.",
+      "code_used": "This code was already used.",
+      "code_expired": "This code has expired. Ask the device for a new one.",
+      "already_paired": "This device is already registered."
+    },
+    "setting": {
+      "date_past": "A new value can't start before today.",
+      "key_invalid": "This rule's name isn't valid.",
+      "key_unknown": "This rule isn't known.",
+      "out_of_order": "This time breaks the day's order: each attendance time must be after the one above it and before the one below it, from the day you chose, including changes already set for later days.",
+      "side_not_allowed": "This rule has one value for the whole shop, not for one side.",
+      "side_required": "Choose a side: this rule is set for each side on its own.",
+      "value_blank": "Enter a value.",
+      "value_invalid": "This value doesn't fit this rule."
+    },
+    "side": {
+      "band_unknown": "This side colour isn't known.",
+      "code_invalid": "A side's letter is one capital letter, like D.",
+      "code_taken": "Another side of this shop already has this letter.",
+      "name_blank": "Give the side a name.",
+      "sale_flow_unknown": "This way of selling isn't known."
+    }
+  },
+  "errorFallback": {
+    "noConnection": "Couldn't reach the server. Check the internet, then try again.",
+    "unknownCode": "The server refused. Code: {code}",
+    "unexpected": "Something went wrong. Try again.",
+    "waitAWhile": "Too many tries. Wait a little, then try again."
   }
 }

@@ -7,6 +7,7 @@ a phone and a password through allauth's route, then an office route, /api/v1/sh
     the person                         an office route
     active, one job                    200, their own shop's rows
     suspended                          403 staff.suspended, on the very next request; back again, 200
+    must choose their own password     403 password.must_change, on the very next request; once chosen, 200
     their shop suspended               403 shop.suspended
     jobs at two shops                  403 staff.choose_shop, until AUTH-7
     left, or the superuser: no job     403 not_authenticated
@@ -130,6 +131,35 @@ def test_suspended_staff_stopped_at_next_request(owner: StaffMember, phone: APIC
     assert phone.get(SIDES).status_code == 200
 
 
+def test_must_change_blocks_office_routes(owner: StaffMember, phone: APIClient, shop_a: Shop) -> None:
+    assert phone.get(SIDES).status_code == 200
+
+    # The mark goes on: a read and a change are both stopped, on this very visit, whatever session the person holds.
+    User.objects.filter(pk=owner.user_id).update(must_change_password=True)
+    assert code_of(phone) == (403, "password.must_change")
+    new = {"id": str(uuid.uuid7()), "code": "F", "name": "Vyakula"}
+    answer = phone.post(SIDES, new, HTTP_X_CSRFTOKEN=csrf_token(phone))
+    assert (answer.status_code, answer.json()["code"]) == (403, "password.must_change")
+    with shop_context(shop_a):
+        assert not Side.objects.filter(pk=new["id"]).exists()
+
+    # Only the office routes close: the session is still theirs, as the way to choose a new password needs it.
+    assert phone.get(SESSION).status_code == 200
+
+    # The mark comes off: the same session works again, with no new login.
+    User.objects.filter(pk=owner.user_id).update(must_change_password=False)
+    assert phone.get(SIDES).status_code == 200
+
+
+def test_must_change_leaves_the_admin_open(superuser: User, superuser_client: Client) -> None:
+    # The mark closes a job's office routes, and the admin isn't one of those: the person who resets passwords can't be
+    # locked out by a reset. So the mark protects nothing for someone who can open the admin: one who also has a job
+    # could disable their own password there, and the mark would come off. Nothing is lost, as they hold the whole admin
+    # anyway.
+    User.objects.filter(pk=superuser.pk).update(must_change_password=True)
+    assert superuser_client.get("/admin/").status_code == 200
+
+
 def test_staff_who_left_is_refused(owner: StaffMember, phone: APIClient, shop_a: Shop) -> None:
     with shop_context(shop_a):
         mark_left(owner, left_on=owner.started_on, by=None, reason="Moved to another town")
@@ -186,17 +216,27 @@ def test_logout_stops_office_routes(owner: StaffMember, phone: APIClient) -> Non
     assert code_of(phone) == (403, "not_authenticated")
 
 
-def test_person_door_reads_only_a_shop_id(owner: StaffMember) -> None:
-    # The door reads past the guard, so it reads as little as a login needs: shops' ids, in one query, by the person,
-    # two at most. Everything else is read through the guard, once that shop is open.
+def test_person_door_reads_only_a_shop_id(owner: StaffMember, shop_b: Shop) -> None:
+    # The door reads past the guard, so it reads as little as its callers need: shops' ids, in one query, by the
+    # person, every shop where they work, by id. The login counts them; a change to the person writes a line in each,
+    # in that order (ADR-0042, SYNC-15). Everything else is read through the guard, once each shop is open.
     with CaptureQueriesContext(connection) as queries:
         found = shops_of_person(owner.user_id)
 
     assert found == [owner.shop_id]
     [query] = queries.captured_queries
-    # The one column, under the name values_list() gives it; then the table, the person, and the limit.
+    # The one column, under the name values_list() gives it; then the table, the person, and the order: by the first
+    # column, the shop's id, which Django writes by its place in the list.
     assert query["sql"].startswith('SELECT "people_staffmember"."shop_id" AS "shop_id" FROM "people_staffmember" WHERE')
     assert '"people_staffmember"."user_id" =' in query["sql"]
-    assert query["sql"].endswith("LIMIT 2")
+    assert query["sql"].endswith("ORDER BY 1 ASC")
+    # Jobs at two more shops: every shop, by id, whichever job came first. The last job is at a shop whose id is lower
+    # than all the others, so only the door's own order can put it first: the rows' order on disk would put it last.
+    person = User.objects.get(pk=owner.user_id)
+    first = Shop.objects.create(id=uuid.UUID(int=1), name="Duka la Kwanza", code="KWANZA")
+    for shop in (shop_b, first):
+        with shop_context(shop):
+            add_staff(shop=shop, user=person, display_name="Baba", by=None)
+    assert shops_of_person(owner.user_id) == [first.pk, *sorted([owner.shop_id, shop_b.pk])]
     # Nobody's job leads to no shop.
     assert shops_of_person(uuid.uuid7()) == []

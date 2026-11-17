@@ -17,7 +17,7 @@
 
 # --- Stage 1: build the shop app into plain files, frontend/out/ (ADR-0016).
 # Node 24: the version package.json's "engines" and CI's frontend job use.
-FROM node:24.21.0-trixie-slim AS frontend
+FROM node:24.22.2-trixie-slim AS frontend
 # Next.js would otherwise send anonymous usage data from every build. The Serwist CLI (`serwist build`,
 # part of `pnpm build`) would otherwise ask the npm registry whether a newer version exists (SPIKE-1).
 ENV NEXT_TELEMETRY_DISABLED=1 \
@@ -45,7 +45,7 @@ RUN NEXT_PUBLIC_APP_VERSION=$APP_VERSION pnpm build
 # pyproject.toml: uv refuses to run as any other version, so a mismatch stops this build at once.
 FROM ghcr.io/astral-sh/uv:0.11.33 AS uv
 
-FROM python:3.14.7-slim-trixie AS venv
+FROM python:3.14.10-slim-trixie AS venv
 COPY --from=uv /uv /usr/local/bin/uv
 # UV_PYTHON_DOWNLOADS=0: use this image's Python, never download another; the venv points at it.
 # UV_COMPILE_BYTECODE=1: compile the packages to .pyc now, so the app starts faster and never needs to
@@ -61,7 +61,7 @@ RUN uv sync --locked --no-dev
 # --- Stage 3: the image we ship.
 # The same Python tag as stage 2: the venv's `python` is a link to this image's Python, so the two
 # FROM lines must always match. Dependabot bumps both in one PR.
-FROM python:3.14.7-slim-trixie
+FROM python:3.14.10-slim-trixie
 
 # PYTHONUNBUFFERED: logs come out at once, so `docker logs` shows them as they happen.
 # PYTHONDONTWRITEBYTECODE: don't try to write .pyc files at run time: the `app` user couldn't, and
@@ -92,7 +92,7 @@ COPY backend/ ./
 # demands every variable and stops Django when one is missing (on purpose), so this one command gets
 # throwaway values. They exist only while this line runs; they are not part of the image's environment.
 RUN DJANGO_SECRET_KEY=collectstatic-only DJANGO_ALLOWED_HOSTS=localhost PIN_PEPPER=unused \
-    DB_NAME=unused DB_USER=unused DB_PASSWORD=unused DB_HOST=unused \
+    DB_NAME=unused DB_USER=unused DB_PASSWORD=unused DB_HOST=unused FILES_ROOT=unused \
     python manage.py collectstatic --noinput
 
 # Compile our own code to .pyc too: UV_COMPILE_BYTECODE in stage 2 compiled only the packages.
@@ -124,6 +124,6 @@ EXPOSE 8000
 # --no-control-socket: gunicorn 25.1+ opens a socket through which its `gunicornc` tool can change the
 # workers or stop the server. We never use it, and anything that can steer the server is one more thing
 # to protect. (By default it lives in ~/.gunicorn/, and the `app` user has no home on purpose.)
-# The demo starts through backend/start-demo.sh instead, which runs the migrations, then this same
-# command (OPS-2): change both together.
+# The demo starts through backend/start-demo.sh instead, which runs the migrations and the demo seed,
+# then this same command (OPS-2, DATA-1): change both together.
 CMD ["gunicorn", "--no-control-socket", "config.wsgi"]

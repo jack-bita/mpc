@@ -2,7 +2,8 @@
 (03 §5.10, ADR-0025).
 
 drf-spectacular reads every route and writes the OpenAPI schema: each address, what it takes and what it
-answers. The app's TypeScript types will be generated from it (UI-2), so it must build with no guesses.
+answers. The app's TypeScript types are generated from it (`pnpm gen:api`, UI-2), so it must build with no
+guesses.
 The docs page shows the same description to people: open to every visitor on the demo and on a laptop,
 closed on the real server (API_DOCS_PUBLIC, config/settings/).
 """
@@ -47,8 +48,9 @@ def test_docs_public_on_the_demo(settings: Settings, route: str) -> None:
 
 
 def _schema(folder: Path) -> dict[str, Any]:
-    # The description, written the way UI-2's `pnpm gen:api` will read it. --fail-on-warn turns every
-    # warning into a failure; --validate checks the result against the OpenAPI standard. drf-spectacular
+    # The description, written as `pnpm gen:api` writes it (UI-2). Its --skip-checks isn't needed here:
+    # call_command skips Django's checks by itself. --fail-on-warn turns every warning into a failure;
+    # --validate checks the result against the OpenAPI standard. drf-spectacular
     # keeps its warnings for the whole test run, so they are cleared first: this build is judged on its own.
     reset_generator_stats()
     target = folder / "schema.json"
@@ -78,7 +80,10 @@ def test_schema_says_what_each_route_takes(tmp_path: Path) -> None:
     assert sent(sides["post"]) == "SideCreateRequest"
     assert set(shapes["SideCreateRequest"]["required"]) == {"id", "code", "name"}
     assert sent(side["patch"]) == "SideEditRequest"
-    assert set(shapes["SideEditRequest"]["required"]) == {"name", "version"}
+    # An edit sends a new name, the on/off switch (SHOP-3) or a band (SHOP-4), one at a time, so only the version is
+    # required in the schema; the serializer itself asks for exactly one of the three.
+    assert set(shapes["SideEditRequest"]["required"]) == {"version"}
+    assert set(shapes["SideEditRequest"]["properties"]) == {"name", "is_live", "band", "version"}
     # The id in the address is a UUID, as every id is.
     assert side["get"]["parameters"][0]["schema"] == {"type": "string", "format": "uuid"}
     # And a side can be read and changed, never replaced whole (PUT) or deleted: nothing is deleted (T3).
@@ -89,11 +94,63 @@ def test_a_fields_choices_keep_a_name_of_their_own(tmp_path: Path) -> None:
     # drf-spectacular names a field's fixed choices after the field: a device's `status` would be StatusEnum. Once a
     # second table shows a status of its own, such as a staff member's, the two clash, and drf-spectacular renames
     # both, with a warning that fails the build (above), and the app's types change under it (UI-2). So the device's is
-    # named after its own type (ENUM_NAME_OVERRIDES, config/settings/base.py).
+    # named after its own type (ENUM_NAME_OVERRIDES, config/settings/base.py), and so are the bootstrap's (SYNC-2): a
+    # person's status, which an office staff route will show too (PPL-4), an account's kind, before an attendance
+    # event's (ATT-1), and a rule's scope.
     shapes = _schema(tmp_path)["components"]["schemas"]
 
     assert shapes["Device"]["properties"]["status"]["allOf"][0]["$ref"] == "#/components/schemas/DeviceStatusEnum"
-    assert "StatusEnum" not in shapes
+    assert shapes["StaffRecord"]["properties"]["status"]["allOf"][0]["$ref"] == "#/components/schemas/StaffStatusEnum"
+    kind = shapes["PaymentAccountRecord"]["properties"]["kind"]["allOf"][0]["$ref"]
+    assert kind == "#/components/schemas/PaymentAccountKindEnum"
+    assert shapes["SettingKeyRecord"]["properties"]["scope"]["$ref"] == "#/components/schemas/SettingScopeEnum"
+    assert shapes["SettingKeyRecord"]["properties"]["kind"]["$ref"] == "#/components/schemas/SettingKindEnum"
+    assert {"StatusEnum", "KindEnum", "ScopeEnum", "StaffRecordStatusEnum"}.isdisjoint(shapes)
+
+
+def test_every_route_refuses_in_the_error_shape(tmp_path: Path) -> None:
+    # Every refusal has one shape (apps/core/api/errors.py), and the description must say so on every route:
+    # the app's typed client takes the type of an error from it (UI-2). `default` is OpenAPI's answer for any
+    # status a route doesn't list, so it covers a 400, a 403, a 409 and a 500 alike.
+    schema = _schema(tmp_path)
+    operations = [
+        (path, method, operation)
+        for path, route in schema["paths"].items()
+        for method, operation in route.items()
+        if method in {"get", "post", "patch", "put", "delete"}
+    ]
+
+    # More than the one route the test was written beside, so a broken loop can't pass on nothing.
+    assert len(operations) > 10
+    for path, method, operation in operations:
+        default = operation["responses"].get("default")
+        assert default is not None, f"{method.upper()} {path} has no error answer"
+        assert default["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/ApiError"}
+
+    # The shape's four keys, each typed as tightly as the handler makes it.
+    shape = schema["components"]["schemas"]["ApiError"]
+    # And no note of ours: drf-spectacular would copy the serializer's docstring here, onto the public docs
+    # page, and it is written for the code's readers, not the API's.
+    assert "description" not in shape
+    assert set(shape["required"]) == {"code", "message", "fields", "params"}
+    assert shape["properties"]["fields"]["additionalProperties"] == {"type": "array", "items": {"type": "string"}}
+    assert shape["properties"]["params"]["additionalProperties"] == {
+        "oneOf": [{"type": "string"}, {"type": "integer"}, {"type": "boolean"}],
+        "nullable": True,
+    }
+
+
+def test_committed_schema_matches_the_code(tmp_path: Path, settings: Settings) -> None:
+    # The app's types are generated from shared/openapi.json (`pnpm gen:api`, UI-2), and CI's frontend job checks them
+    # against that file only: it has no Python to read the routes. So this test keeps the file true to the code. A
+    # serializer changed without regenerating turns CI red here, not at the shop (AD11, ADR-0025).
+    # Compared as text, not as parsed JSON: a change of order alone changes the generated types too.
+    committed = Path(settings.BASE_DIR).parent / "shared" / "openapi.json"
+    _schema(tmp_path)
+
+    assert (tmp_path / "schema.json").read_text() == committed.read_text(), (
+        "shared/openapi.json is out of date: run `cd frontend && pnpm gen:api`, and commit both files it writes."
+    )
 
 
 def test_docs_group_routes_by_app(tmp_path: Path) -> None:
@@ -105,3 +162,11 @@ def test_docs_group_routes_by_app(tmp_path: Path) -> None:
     assert schema["paths"]["/api/v1/shops/sides/"]["get"]["tags"] == ["shops"]
     assert schema["paths"]["/api/v1/shops/sides/"]["get"]["operationId"] == "shops_sides_list"
     assert schema["paths"]["/api/health/"]["get"]["tags"] == ["health"]
+
+
+def test_own_settings_route_says_it_needs_a_login(tmp_path: Path) -> None:
+    # A person's own language and font (UI-9) take no key, but they do take a login: the description names only the
+    # session's cookie, as `me` does. An empty entry ({}) would tell a reader of the API that no login is needed.
+    schema = _schema(tmp_path)
+
+    assert schema["paths"]["/api/auth/me/settings/"]["patch"]["security"] == [{"cookieAuth": []}]

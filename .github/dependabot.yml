@@ -91,8 +91,9 @@ updates:
       include: scope
     labels: ["type:chore"]
 
-  # The images in compose.dev.yml (postgres, caddy). Those of backend/Dockerfile have their own
-  # `docker` entry, below.
+  # The images in the compose files at the repo root: compose.dev.yml (postgres, caddy) and
+  # compose.e2e.yml (postgres again, so one PR moves both; scripts/test_same_postgres.py keeps them and
+  # ci.yml equal). Those of backend/Dockerfile have their own `docker` entry, below.
   - package-ecosystem: docker-compose
     directory: /
     schedule:
@@ -105,6 +106,10 @@ updates:
     groups:
       images-minor-and-patch:
         update-types: [minor, patch]
+    # compose.e2e.yml's backend image, mpc-backend:check, is built on the machine that runs the tests
+    # (`make build-image`) and lives in no registry: there is no newer version to look up, so it is left out.
+    ignore:
+      - dependency-name: "mpc-backend"
     commit-message:
       prefix: build
       include: scope

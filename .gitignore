@@ -34,6 +34,9 @@ __pycache__/
 htmlcov/
 # collectstatic's output: the image builds it (backend/Dockerfile, OPS-1).
 backend/staticfiles/
+# The photos saved on Jack's laptop while he tries the app (config/settings/base.py, CTRL-3): made-up, but photos of
+# people all the same, and a folder that grows. The real server keeps its files outside the repo (FILES_ROOT).
+backend/files/
 
 # --- Node and Next.js: dependencies and build output (pnpm and next rebuild them).
 node_modules/
@@ -45,6 +48,9 @@ frontend/next-env.d.ts
 coverage/
 *.tsbuildinfo
 .pnpm-store/
+# Playwright's output (UI-6): each run's traces and screenshots, and the HTML report CI keeps on a failure.
+frontend/test-results/
+frontend/playwright-report/
 
 # --- Logs, editors and operating systems.
 *.log

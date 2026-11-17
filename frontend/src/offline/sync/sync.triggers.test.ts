@@ -1,0 +1,504 @@
+// sync.triggers.test.ts — when the laptop syncs (SYNC-9, 03 §6.5): as the app opens, when the network
+// comes back, 2 s after a save, every 30 s while online, and from Tuma sasa; never while the network is
+// gone, the device unknown or blocked; and what a failed sync leaves.
+//
+// The moments are counted with a stand-in sync and a fake clock: only setTimeout and setInterval are
+// fake, as Dexie's own scheduling (setImmediate) must keep running. The laptop's own tests at the end run
+// the real sync against the fake server, through the hook the root layout uses.
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ApiRefusal, NoConnection } from "@/api/refusal";
+import {
+  saveBlocked,
+  saveDevice,
+  savedDevice,
+} from "@/features/devices/this-device";
+import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
+import { giveCsrfToken } from "@/test/csrf";
+import { answer, sent } from "@/test/fake-server";
+import { ASHA, BOOTSTRAP, DAWA_SIDE } from "@/test/shop-lists";
+
+import { NeverFilled, saveDocument } from "../outbox";
+import { shopDatabase } from "../this-shop";
+import { askToSendNow, tellRecordSaved } from "./asks";
+import { WrongShop } from "./bootstrap";
+import { CURSOR, LAST_DEVICE_SEQ, readCursor } from "./meta";
+import { noteCutOff } from "./outages";
+import { AppTooOld } from "./pull";
+import { BrokenPush } from "./push";
+import type { SyncAsk } from "./sync";
+import { timesTold } from "./too-old";
+import {
+  AFTER_A_SAVE,
+  reportSyncFailure,
+  startSyncTriggers,
+  SYNC_EVERY,
+  useSyncTriggers,
+} from "./triggers";
+
+vi.mock("@/api/client", async (importOriginal) =>
+  (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
+);
+
+const SHOP = DAWA_LAPTOP.shop.id;
+const PUSH = "/api/sync/v1/push/";
+const PULL = "/api/sync/v1/pull/";
+
+const TIMERS = [
+  "setTimeout",
+  "clearTimeout",
+  "setInterval",
+  "clearInterval",
+] as const;
+
+/** A stand-in sync that only counts: each call is one moment. */
+const fakeSync = () =>
+  vi.fn<(shopId: string, ask?: SyncAsk) => Promise<void>>(() =>
+    Promise.resolve(),
+  );
+
+/** jsdom has no network to lose: the tests play the browser's part (offline-banner.test.tsx). */
+function networkGone(): void {
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+}
+
+function networkBack(): void {
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+  window.dispatchEvent(new Event("online"));
+}
+
+const clockIn = () =>
+  saveDocument(shopDatabase(SHOP), {
+    type: "clock",
+    schema_version: 1,
+    created_by: ASHA.id,
+    payload: { kind: "in", last_server_time: "2026-11-12T07:58:00Z" },
+  });
+
+async function filledLaptop(): Promise<void> {
+  await shopDatabase(SHOP).meta.bulkPut([
+    { key: CURSOR, value: 130 },
+    { key: LAST_DEVICE_SEQ, value: 57 },
+  ]);
+}
+
+/** The laptop's offline periods, still open, as the moments left them (outages.ts). A moment doesn't wait
+ * for its note, so a test waits for it to land (vi.waitFor). */
+async function periods() {
+  return (await shopDatabase(SHOP).outages.toArray())
+    .filter((row) => row.ended_at === null)
+    .map(({ started_at, seen_at }) => ({ started_at, seen_at }));
+}
+
+// The moments a test started, stopped after it, so none runs into the next test.
+let stop: () => void = () => undefined;
+
+afterEach(() => {
+  stop();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+describe("the moments", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: [...TIMERS] });
+  });
+
+  it("sync once as the app opens", () => {
+    const sync = fakeSync();
+    stop = startSyncTriggers(SHOP, sync);
+
+    expect(sync).toHaveBeenCalledTimes(1);
+    expect(sync).toHaveBeenLastCalledWith(SHOP, undefined);
+  });
+
+  it("sync every 30 s while online, and skip the ticks while the network is gone", () => {
+    const sync = fakeSync();
+    stop = startSyncTriggers(SHOP, sync);
+
+    vi.advanceTimersByTime(SYNC_EVERY - 1);
+    expect(sync).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    expect(sync).toHaveBeenCalledTimes(2);
+
+    // Offline for two ticks: a sync could only fail, and make the next push wait longer.
+    networkGone();
+    vi.advanceTimersByTime(2 * SYNC_EVERY);
+    expect(sync).toHaveBeenCalledTimes(2);
+  });
+
+  it("wait for the network when the app opens without it, then sync as it comes back", () => {
+    networkGone();
+    const sync = fakeSync();
+    stop = startSyncTriggers(SHOP, sync);
+    expect(sync).not.toHaveBeenCalled();
+
+    networkBack();
+
+    expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  it("sync 2 s after a save, once for saves close together", () => {
+    // Asha clocks in, then Baraka a second later: one sync, 2 s after the first save, takes both.
+    const sync = fakeSync();
+    stop = startSyncTriggers(SHOP, sync);
+
+    tellRecordSaved();
+    vi.advanceTimersByTime(1000);
+    tellRecordSaved();
+    vi.advanceTimersByTime(AFTER_A_SAVE - 1000 - 1);
+    expect(sync).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    expect(sync).toHaveBeenCalledTimes(2);
+
+    // A save after that starts a new wait.
+    tellRecordSaved();
+    vi.advanceTimersByTime(AFTER_A_SAVE);
+    expect(sync).toHaveBeenCalledTimes(3);
+  });
+
+  it("keep a busy counter sending every 2 s, never waiting for a quiet moment", () => {
+    // A save every half second: a wait started again at each one would never end.
+    const sync = fakeSync();
+    stop = startSyncTriggers(SHOP, sync);
+
+    for (let i = 0; i < 8; i++) {
+      tellRecordSaved();
+      vi.advanceTimersByTime(500);
+    }
+
+    expect(sync).toHaveBeenCalledTimes(1 + 2);
+  });
+
+  it("sync 2 s after saveDocument saves a record, and not after a save it refused", async () => {
+    const sync = fakeSync();
+    stop = startSyncTriggers(SHOP, sync);
+
+    // A laptop never filled refuses the save (NeverFilled): nothing new to send.
+    await expect(clockIn()).rejects.toBeInstanceOf(NeverFilled);
+    vi.advanceTimersByTime(AFTER_A_SAVE);
+    expect(sync).toHaveBeenCalledTimes(1);
+
+    await filledLaptop();
+    await clockIn();
+    vi.advanceTimersByTime(AFTER_A_SAVE);
+    expect(sync).toHaveBeenCalledTimes(2);
+  });
+
+  it("send now when Tuma sasa is pressed, asking the push to skip any wait", () => {
+    // That the push then skips it is the sync's to show (push.backoff.test.ts).
+    const sync = fakeSync();
+    stop = startSyncTriggers(SHOP, sync);
+
+    askToSendNow();
+
+    expect(sync).toHaveBeenCalledTimes(2);
+    expect(sync).toHaveBeenLastCalledWith(SHOP, { sendNow: true });
+  });
+
+  it("send nothing for a save made just before they stop", () => {
+    // Asha's save started the 2 s wait, and the laptop was blocked within it: the wait ends with them.
+    const sync = fakeSync();
+    stop = startSyncTriggers(SHOP, sync);
+
+    tellRecordSaved();
+    stop();
+    vi.advanceTimersByTime(AFTER_A_SAVE);
+
+    expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  it("all stop once stopped", () => {
+    const sync = fakeSync();
+    startSyncTriggers(SHOP, sync)();
+
+    tellRecordSaved();
+    askToSendNow();
+    networkBack();
+    vi.advanceTimersByTime(2 * SYNC_EVERY);
+
+    expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  it("go on after a failed sync, which goes to the console when it is no answer of the server's", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const bug = new TypeError("Cannot read properties of undefined");
+    const sync = fakeSync().mockRejectedValueOnce(bug);
+    stop = startSyncTriggers(SHOP, sync);
+    await vi.waitFor(() =>
+      expect(log).toHaveBeenCalledWith("sync failed", bug),
+    );
+
+    vi.advanceTimersByTime(SYNC_EVERY);
+
+    expect(sync).toHaveBeenCalledTimes(2);
+  });
+
+  it("note the cut as the network goes, and at each moment while it is gone (SYNC-14)", async () => {
+    // The router goes off with the power at 10:05: the period opens then, not at the next moment, and
+    // each moment after sees it again, so it is still in sight when the network comes back.
+    vi.useFakeTimers({ toFake: [...TIMERS, "Date"] });
+    vi.setSystemTime(Date.parse("2026-11-14T10:05:10Z"));
+    const sync = fakeSync();
+    stop = startSyncTriggers(SHOP, sync);
+
+    networkGone();
+    window.dispatchEvent(new Event("offline"));
+    await vi.waitFor(async () =>
+      expect(await periods()).toEqual([
+        {
+          started_at: "2026-11-14T10:05:10.000Z",
+          seen_at: "2026-11-14T10:05:10.000Z",
+        },
+      ]),
+    );
+
+    vi.advanceTimersByTime(SYNC_EVERY);
+    await vi.waitFor(async () =>
+      expect(await periods()).toEqual([
+        {
+          started_at: "2026-11-14T10:05:10.000Z",
+          seen_at: "2026-11-14T10:05:40.000Z",
+        },
+      ]),
+    );
+    expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  it("keep an open period in sight at each moment with a network, and open none (SYNC-14)", async () => {
+    // Wi-Fi with no internet: the sync's calls may hang for minutes, and the moments meanwhile keep the
+    // period in sight. Whether the server is back is the sync's to say (sync.outages.test.ts).
+    vi.useFakeTimers({ toFake: [...TIMERS, "Date"] });
+    vi.setSystemTime(Date.parse("2026-11-14T10:05:10Z"));
+    stop = startSyncTriggers(SHOP, fakeSync());
+    await noteCutOff(shopDatabase(SHOP), Date.now());
+
+    vi.advanceTimersByTime(SYNC_EVERY);
+
+    await vi.waitFor(async () =>
+      expect(await periods()).toEqual([
+        {
+          started_at: "2026-11-14T10:05:10.000Z",
+          seen_at: "2026-11-14T10:05:40.000Z",
+        },
+      ]),
+    );
+  });
+
+  it("open no period at a moment with a network (SYNC-14)", async () => {
+    // The app opens online: its first moment sees no cut, so it notes none. Real timers, so the wait
+    // below gives the note time to land, if one were coming.
+    vi.useRealTimers();
+    stop = startSyncTriggers(SHOP, fakeSync());
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await shopDatabase(SHOP).outages.count()).toBe(0);
+  });
+
+  it("note no cut once stopped (SYNC-14)", async () => {
+    // A blocked laptop: no moment, and no period either. Real timers, as above.
+    vi.useRealTimers();
+    startSyncTriggers(SHOP, fakeSync())();
+
+    networkGone();
+    window.dispatchEvent(new Event("offline"));
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await shopDatabase(SHOP).outages.count()).toBe(0);
+  });
+
+  it("tell an app too old for the server, so it updates, and log nothing", async () => {
+    // Not a bug: the server's minimum is above this app's number (pull.ts). The update side listens.
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sync = fakeSync().mockRejectedValueOnce(
+      new AppTooOld('No drawer for the list "product".'),
+    );
+    stop = startSyncTriggers(SHOP, sync);
+
+    await vi.waitFor(() => expect(timesTold()).toBe(1));
+    expect(log).not.toHaveBeenCalled();
+  });
+});
+
+describe("on the laptop", () => {
+  beforeEach(() => {
+    // A working laptop has its CSRF token, from the device check's answer: the push needs it (sync.ts).
+    giveCsrfToken();
+  });
+
+  it("fill a fresh laptop's database as the app opens, then pull", async () => {
+    // A change made in the office after the copy: the first pull brings it.
+    saveDevice(DAWA_LAPTOP);
+    const renamed = { ...DAWA_SIDE, name: "Duka la Dawa" };
+    answer("GET", "/api/sync/v1/bootstrap/", { status: 200, body: BOOTSTRAP });
+    // Nothing waits to go: the push before the pull is the laptop's report alone (SYNC-8).
+    answer("POST", PUSH, { status: 200, body: { answers: [] } });
+    answer("GET", PULL, {
+      status: 200,
+      body: {
+        changes: [
+          {
+            seq: 121,
+            entity: "side",
+            id: DAWA_SIDE.id,
+            op: "upsert",
+            data: renamed,
+          },
+        ],
+        cursor: 121,
+        has_more: false,
+        server_time: "2026-11-11T09:00:00Z",
+        min_app_version: 1,
+      },
+    });
+
+    renderHook(() => useSyncTriggers());
+
+    const db = shopDatabase(SHOP);
+    await vi.waitFor(async () => expect(await readCursor(db)).toBe(121));
+    expect(await db.side.get(DAWA_SIDE.id)).toEqual(renamed);
+    expect(await db.staff.toArray()).toEqual(BOOTSTRAP.staff);
+  });
+
+  it("start no sync while the device isn't registered", async () => {
+    renderHook(() => useSyncTriggers());
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(sent).toHaveLength(0);
+  });
+
+  it("send nothing for a save waiting its 2 s once the device is blocked", async () => {
+    vi.useFakeTimers({ toFake: [...TIMERS] });
+    saveDevice(DAWA_LAPTOP);
+    await filledLaptop();
+    answer("POST", PUSH, { status: 200, body: { answers: [] } });
+    answer("GET", PULL, {
+      status: 200,
+      body: {
+        changes: [],
+        cursor: 130,
+        has_more: false,
+        server_time: "2026-11-12T08:00:00Z",
+        min_app_version: 1,
+      },
+    });
+    renderHook(() => useSyncTriggers());
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+
+    act(() => tellRecordSaved());
+    act(() => saveBlocked());
+    await act(() => vi.advanceTimersByTimeAsync(AFTER_A_SAVE));
+
+    expect(sent).toHaveLength(2);
+  });
+
+  it("stop while the device is blocked, and sync at once when it is unblocked", async () => {
+    saveDevice(DAWA_LAPTOP);
+    await filledLaptop();
+    answer("POST", PUSH, { status: 200, body: { answers: [] } });
+    answer("GET", PULL, {
+      status: 200,
+      body: {
+        changes: [],
+        cursor: 130,
+        has_more: false,
+        server_time: "2026-11-12T08:00:00Z",
+        min_app_version: 1,
+      },
+    });
+    renderHook(() => useSyncTriggers());
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+
+    // The manager blocks the laptop (the device check heard it): no moment asks the server any more.
+    act(() => saveBlocked());
+    networkBack();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(sent).toHaveLength(2);
+
+    // Unblocked: the check names the device again, and the moments start with a sync.
+    act(() => saveDevice(DAWA_LAPTOP));
+    await vi.waitFor(() => expect(sent).toHaveLength(4));
+  });
+});
+
+describe("a failed sync", () => {
+  it("says nothing for the server's answers and a dropped network", () => {
+    // Part of a shop's day: the next moment tries again.
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    reportSyncFailure(
+      new ApiRefusal(500, {
+        code: "server_error",
+        message: "",
+        fields: {},
+        params: {},
+      }),
+    );
+    reportSyncFailure(new NoConnection(new TypeError("Failed to fetch")));
+
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("asks the server about the device at once when its copy was of another shop", async () => {
+    // The Dawa laptop was paired to another shop since it last asked: the bootstrap's copy is that shop's
+    // (WrongShop, bootstrap.ts). Asked now, not at the 5-minute device check, the laptop syncs its new
+    // shop's own database at once, instead of downloading the whole copy again at every 30 s sync.
+    saveDevice(DAWA_LAPTOP);
+    const moved = {
+      ...DAWA_LAPTOP_ANSWER,
+      shop: {
+        ...DAWA_LAPTOP_ANSWER.shop,
+        id: "019a5e00-0000-7000-8000-0000000000b1",
+        name: "Duka la Pili",
+        code: "DP",
+      },
+    };
+    answer("GET", "/api/devices/v1/me/", { status: 200, body: moved });
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    reportSyncFailure(new WrongShop(moved.shop.id, `mpc-shop-${SHOP}`));
+
+    await vi.waitFor(() => expect(savedDevice()?.shop.id).toBe(moved.shop.id));
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("says nothing more when that device check fails too", async () => {
+    // No network by then: the regular device check asks again later, as it would have anyway.
+    saveDevice(DAWA_LAPTOP);
+    answer("GET", "/api/devices/v1/me/", () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    reportSyncFailure(
+      new WrongShop("019a5e00-0000-7000-8000-0000000000b1", `mpc-shop-${SHOP}`),
+    );
+
+    await vi.waitFor(() =>
+      expect(
+        sent.some((request) => request.url.endsWith("/api/devices/v1/me/")),
+      ).toBe(true),
+    );
+    await act(async () => {});
+    expect(savedDevice()?.shop.id).toBe(SHOP);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("goes to the console when the server refuses a push as broken", () => {
+    // A bug in the sync code (SYNC-8): every later push would be refused the same way.
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const broken = new BrokenPush(
+      new ApiRefusal(400, {
+        code: "invalid",
+        message: "",
+        fields: { "documents.0.device_seq": ["invalid"] },
+        params: {},
+      }),
+    );
+
+    reportSyncFailure(broken);
+
+    expect(log).toHaveBeenCalledWith("sync failed", broken);
+  });
+});

@@ -9,12 +9,17 @@ drawer, in one transaction:
     ├── Dawa (D)     → stock location "Dawa" (default) + cash drawer "Dawa"
     └── Vyakula (F)  → stock location "Vyakula" (default) + cash drawer "Vyakula"
 
-If any step fails, nothing is saved: never a shop with half its sides set up.
+If any step fails, nothing is saved: never a shop with half its sides set up. What its devices will keep a copy of,
+each side and its drawer, is named in the shop's change log, numbered once at the end (SYNC-15).
 """
+
+from unittest import mock
 
 import pytest
 from django.core.exceptions import ValidationError
 
+from apps.core.models import Change, ChangeOp, SequenceName
+from apps.core.sequences import next_numbers
 from apps.core.tenancy import shop_context, system_context
 from apps.shops.models import (
     PaymentAccount,
@@ -22,10 +27,13 @@ from apps.shops.models import (
     PaymentAccountSide,
     SaleFlow,
     Shop,
+    ShopKind,
     Side,
+    SideBand,
     StockLocation,
 )
 from apps.shops.services import NewSide, create_shop
+from tests.change_log import lines_after
 
 pytestmark = pytest.mark.django_db
 
@@ -34,7 +42,7 @@ NAME = "Duka la Mfano"
 CODE = "MFANO"
 SIDES = [
     NewSide(code="D", name="Dawa"),
-    NewSide(code="F", name="Vyakula", sale_flow=SaleFlow.WRITER_CASHIER_LOADER),
+    NewSide(code="F", name="Vyakula", sale_flow=SaleFlow.WRITER_CASHIER_LOADER, band=SideBand.STRIPED),
 ]
 
 
@@ -52,10 +60,11 @@ def test_create_shop_makes_location_and_drawer_per_side() -> None:
     side_code = {side.id: side.code for side in sides}
     drawer_name = {drawer.id: drawer.name for drawer in drawers}
     # Each side switched off (is_live False) until the owner agrees to use it (ADR-0033): create_shop is
-    # the one way sides are made, so the rule is checked here as well as on the table's default.
-    assert sorted((side.code, side.name, side.sale_flow, side.is_live) for side in sides) == [
-        ("D", "Dawa", SaleFlow.ONE_SCREEN, False),
-        ("F", "Vyakula", SaleFlow.WRITER_CASHIER_LOADER, False),
+    # the one way sides are made, so the rule is checked here as well as on the table's default. Each keeps the
+    # band it was given, and blue when given none (SHOP-4).
+    assert sorted((side.code, side.name, side.sale_flow, side.is_live, side.band) for side in sides) == [
+        ("D", "Dawa", SaleFlow.ONE_SCREEN, False, SideBand.BLUE),
+        ("F", "Vyakula", SaleFlow.WRITER_CASHIER_LOADER, False, SideBand.STRIPED),
     ]
     # One default location per side, named after it.
     assert sorted((side_code[loc.side_id], loc.name, loc.is_default) for loc in locations) == [
@@ -90,6 +99,27 @@ def test_create_shop_all_or_nothing() -> None:
         assert StockLocation.objects.count() == 0
         assert PaymentAccount.objects.count() == 0
         assert PaymentAccountSide.objects.count() == 0
+        # Side D and its drawer were named before the clash: their lines go back with them.
+        assert Change.objects.count() == 0
+
+
+def test_create_shop_numbers_its_lines_once() -> None:
+    # A new shop's two sides and their drawers are four lines, numbered together at the very end of the shop's one
+    # block, not one numbering per side: the services that make each side join the shop's block (apps/core/changes.py).
+    # A new laptop meets them in the order they were made: each side, then its drawer.
+    with mock.patch("apps.core.changes.next_numbers", wraps=next_numbers) as numbering:
+        shop = create_shop(name=NAME, code=CODE, sides=SIDES)
+
+    numbering.assert_called_once_with(shop.pk, SequenceName.CHANGE, 4)
+    with shop_context(shop):
+        side = {side.code: side.pk for side in Side.objects.all()}
+        drawer = {link.side_id: link.account_id for link in PaymentAccountSide.objects.all()}
+    assert lines_after(shop, 0) == [
+        (1, "side", side["D"], ChangeOp.UPSERT),
+        (2, "payment_account", drawer[side["D"]], ChangeOp.UPSERT),
+        (3, "side", side["F"], ChangeOp.UPSERT),
+        (4, "payment_account", drawer[side["F"]], ChangeOp.UPSERT),
+    ]
 
 
 def test_create_shop_needs_a_side() -> None:
@@ -99,4 +129,31 @@ def test_create_shop_needs_a_side() -> None:
         create_shop(name=NAME, code=CODE, sides=[])
 
     assert refused.value.code == "shop.no_sides"
+    assert not Shop.objects.exists()
+
+
+def test_create_shop_makes_a_live_shop_unless_told() -> None:
+    # Every shop made so far is a real one, and the callers that don't name a kind keep making real ones.
+    shop = create_shop(name=NAME, code=CODE, sides=SIDES)
+
+    assert shop.kind == ShopKind.LIVE
+
+
+def test_create_shop_makes_a_demo_shop() -> None:
+    # The demo seed (DATA-1) makes its shop as a demo one, with the same sides, locations and drawers as any
+    # other: a demo shop works as a real one does, with fake data (ADR-0029).
+    shop = create_shop(name=NAME, code=CODE, sides=SIDES, kind=ShopKind.DEMO)
+
+    assert Shop.objects.get(pk=shop.pk).kind == ShopKind.DEMO
+    with shop_context(shop):
+        assert StockLocation.objects.count() == 2
+
+
+def test_create_shop_refuses_a_practice_shop_with_no_shop_to_copy() -> None:
+    # A practice shop names the live shop it copies (ADR-0014), and create_shop takes no such argument yet. The
+    # model's own rule refuses it, with its code, before anything is written.
+    with pytest.raises(ValidationError) as refused:
+        create_shop(name=NAME, code=CODE, sides=SIDES, kind=ShopKind.PRACTICE)
+
+    assert [error.code for error in refused.value.error_dict["__all__"]] == ["shop.practice_needs_shop"]
     assert not Shop.objects.exists()

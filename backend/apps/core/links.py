@@ -20,13 +20,7 @@ from django.apps import apps
 
 from apps.core.models import ShopScoped
 
-# The shape of a code: small letters and underscores, starting with a letter ("drawer_session"), and its
-# longest length, the size of the column that stores it. The tables that store a link use both: the column
-# (control.Flag's subject_type) and a database rule on its shape. A code that broke either would be refused
-# only when the first link to its table is written, perhaps while a device's records are posted, which must
-# never fail; so a test checks every code in the list instead (apps/core/tests/test_links.py).
-TYPE_CODE_SHAPE = r"^[a-z][a-z_]*$"
-TYPE_CODE_MAX_LENGTH = 40
+# A code's shape and longest length live in apps/core/type_codes.py, which models.py imports too.
 
 # Code → the table it names, as "app.Model". Only shop tables (ShopScoped): a link is a shop's, and it loads
 # through the shop guard.
@@ -51,6 +45,21 @@ LINK_TYPES: dict[str, str] = {
     # A paired device: the history of its edits, such as a new name or a block, and the audit trail's lines about
     # blocking and unblocking it (AUTH-1).
     "device": "people.Device",
+    # A dated rule's row, such as next week's late fine: the change log's lines about it, and the bootstrap's list of
+    # rules, which devices keep a copy of (SYNC-2). A ledger, so it has no edit history to name it.
+    "setting": "shops.Setting",
+    # A pushed document's line in the answer log: the flag an invalid document raises names it (SYNC-4). A ledger,
+    # so it has no edit history to name it.
+    "pushed_document": "sync.PushedDocument",
+    # A tap of Ingia or Toka: the unverified_time flag about it, and the change log's line about it (ATT-1). A
+    # ledger, so it has no edit history to name it.
+    "attendance_event": "staffpay.AttendanceEvent",
+    # Days the shop is closed, such as a funeral: the history of its edits, and the audit trail's lines about cancelling
+    # it and moving its last day (ATT-8).
+    "closure": "shops.Closure",
+    # A photo or file on a record, such as a clock-in photo: the history of its edits, its file arriving and being
+    # removed (CTRL-3).
+    "attachment": "control.Attachment",
 }
 
 
