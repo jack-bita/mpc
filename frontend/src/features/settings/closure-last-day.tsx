@@ -168,7 +168,9 @@ export function ClosureLastDay({
         })}
         error={said(own.last_day) ?? byField.last_day}
         type="date"
-        // The phone's calendar offers nothing the server would refuse for its day alone.
+        // The phone's calendar offers nothing before the earliest day the server takes (see the top of this file). On
+        // the demo it still offers yesterday, which opens today, and the server refuses it there, beside this box, as
+        // a person's change of today (demo.closures_from_tomorrow).
         min={earliest}
         value={day}
         onChange={(event) => setDay(event.target.value)}

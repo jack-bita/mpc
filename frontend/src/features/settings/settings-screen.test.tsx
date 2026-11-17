@@ -1,7 +1,7 @@
-// settings-screen.test.tsx — Mipangilio ya duka (SHOP-5): every rule of the registry on one page, under its
-// area, then the closed days (ATT-9) and the sides; a side's rule with a line per side; each value written its own way; a value set to start later shown
-// beside today's; the page in English; and why, when the server refuses. Then each line's button: Badilisha
-// where the person holds settings.manage, Historia everywhere else, and what each opens.
+// settings-screen.test.tsx — Mipangilio ya duka (SHOP-5): every rule of the registry on one page, under its area, then
+// the closed days (ATT-9) and the sides; a side's rule with a line per side; each value written its own way; a value
+// set to start later shown beside today's; the page in English; and why, when the server refuses. Then each line's
+// button: Badilisha where the person holds settings.manage, Historia everywhere else, and what each opens.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 

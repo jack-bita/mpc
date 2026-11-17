@@ -10,7 +10,7 @@
 //
 // The days are read from the page itself: the Kuanzia box offers nothing before the shop's today, as the server sends
 // it, so the test never leans on the clock of the machine it runs on, nor on its zone. The funeral starts 400 days on:
-// after the seed's three holidays, which all fall within the next five months, so no day clashes with one; and far
+// after the seed's three holidays, which all fall within the next six months, so no day clashes with one; and far
 // past tomorrow, as on the demo a person's change touches only days from tomorrow on (demo.closures_from_tomorrow),
 // even for a run that crosses midnight in Dar es Salaam (SHOP-5's review).
 import type { Locator, Page } from "@playwright/test";
