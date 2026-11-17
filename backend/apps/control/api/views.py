@@ -57,7 +57,14 @@ class AttachmentViewSet(ShopViewSet[Attachment]):
             raise NotFound("This photo hasn't arrived yet.", code="attachment.file_waiting")
         # Opened now, inside the visit, while its shop is open (the storage checks the name's shop); sent after. The
         # type is the label's, which the upload checked against the file's first bytes, never guessed from its name.
-        answer = FileResponse(attachment.file.open("rb"), content_type=attachment.content_type)
+        try:
+            opened = attachment.file.open("rb")
+        except FileNotFoundError:
+            # The row said "kept" as it was read, but the file was gone by the time it was opened: a removal committed
+            # in between, and its delete ran after its commit (remove_attachment_file). Said as the removal it is, not a
+            # crash.
+            raise NotFound("This photo was removed.", code="attachment.file_removed") from None
+        answer = FileResponse(opened, content_type=attachment.content_type)
         # Never kept by the browser or a cache on the way: a photo of a person, behind a key that can be taken away
         # tomorrow (03 §10). nosniff: the browser takes the type as sent, and never runs the file as something else.
         answer["Cache-Control"] = "private, no-store"

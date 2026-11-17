@@ -19,6 +19,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from django.core.files.storage import default_storage
 from django.db.models import Model
 from pytest_django import Settings
 from rest_framework.test import APIClient
@@ -154,6 +155,16 @@ def test_removed_file_says_so(staff_a: Any, staff_client_a: APIClient) -> None:
     row = photo(staff_a)
     with shop_context(staff_a.shop_id):
         remove_attachment_file(row, reason="Siku 90 baada ya mshahara")
+
+    assert code_of(staff_client_a.get(address(row.pk))) == (404, "attachment.file_removed")
+
+
+def test_photo_removed_while_it_is_opened_says_so(staff_a: Any, staff_client_a: APIClient) -> None:
+    # The owner opens Asha's photo at the moment the nightly job removes it: the row was read as kept, but the job's
+    # delete ran before the file was opened. Its file is taken away here behind the row's back, as that delete would.
+    row = photo(staff_a)
+    with shop_context(staff_a.shop_id):
+        default_storage.delete(attachment_file_name(row, ""))
 
     assert code_of(staff_client_a.get(address(row.pk))) == (404, "attachment.file_removed")
 
