@@ -239,6 +239,35 @@
       "inUse": "In use now",
       "coming": "Coming"
     },
+    "closures": {
+      "title": "Days the shop is closed",
+      "intro": "Days the whole shop is closed, such as a public holiday or a funeral. They are days off, and not paid.",
+      "none": "No closed days coming.",
+      "days": "{first} – {last}",
+      "add": "Add",
+      "added": "Saved: {name}, {days}.",
+      "remove": "Remove",
+      "removeOf": "Remove: {name}",
+      "removeAsk": "Remove {name}, {days}? The shop will be open on those days.",
+      "reason": "Reason",
+      "reasonHint": "Kept with your name and the time.",
+      "removed": "Removed: {name}, {days}.",
+      "changeLastDay": "Change the last day",
+      "changeLastDayOf": "Change the last day: {name}",
+      "newLastDay": "New last day",
+      "newLastDayHint": "Now {last}. It can be earlier or later.",
+      "sameLastDay": "This is already the last day. Pick another day.",
+      "moved": "Last day changed: {name}, {days}.",
+      "gone": "{name}: these days are no longer in the list.",
+      "form": {
+        "from": "From",
+        "fromHint": "Today or a later day.",
+        "to": "To",
+        "toHint": "Leave it empty for one day only.",
+        "name": "Name",
+        "nameHint": "Such as Krismasi, or Msiba wa bibi."
+      }
+    },
     "sides": {
       "title": "Sides",
       "intro": "A side switched off isn't used at the shop's laptops.",

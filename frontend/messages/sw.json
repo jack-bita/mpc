@@ -239,6 +239,35 @@
       "inUse": "Inatumika sasa",
       "coming": "Inakuja"
     },
+    "closures": {
+      "title": "Siku duka limefungwa",
+      "intro": "Siku ambazo duka zima limefungwa, kama sikukuu au msiba. Ni siku za mapumziko, na hazilipwi.",
+      "none": "Hakuna siku zijazo ambazo duka limefungwa.",
+      "days": "{first} – {last}",
+      "add": "Ongeza",
+      "added": "Imehifadhiwa: {name}, {days}.",
+      "remove": "Ondoa",
+      "removeOf": "Ondoa: {name}",
+      "removeAsk": "Ondoa {name}, {days}? Duka litakuwa wazi siku hizo.",
+      "reason": "Sababu",
+      "reasonHint": "Inahifadhiwa pamoja na jina lako na saa.",
+      "removed": "Imeondolewa: {name}, {days}.",
+      "changeLastDay": "Badilisha siku ya mwisho",
+      "changeLastDayOf": "Badilisha siku ya mwisho: {name}",
+      "newLastDay": "Siku mpya ya mwisho",
+      "newLastDayHint": "Sasa ni {last}. Inaweza kuwa mapema au baadaye.",
+      "sameLastDay": "Hii tayari ndiyo siku ya mwisho. Chagua siku nyingine.",
+      "moved": "Siku ya mwisho imebadilishwa: {name}, {days}.",
+      "gone": "{name}: siku hizi hazipo tena kwenye orodha.",
+      "form": {
+        "from": "Kuanzia",
+        "fromHint": "Leo au siku ya baadaye.",
+        "to": "Hadi",
+        "toHint": "Acha wazi kama ni siku moja tu.",
+        "name": "Jina",
+        "nameHint": "Kwa mfano Krismasi, au Msiba wa bibi."
+      }
+    },
     "sides": {
       "title": "Pande",
       "intro": "Upande uliozimwa hautumiki kwenye kompyuta za duka.",
