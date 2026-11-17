@@ -25,7 +25,7 @@
 // One line per side, under the rule, not a column per side as the card first said: on the owner's phone two
 // columns of values and buttons don't fit (Jack, 15 Nov 2026).
 //
-// "use client": it asks use-intl for words, and calls the server.
+// "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -93,7 +93,9 @@ export function SettingsScreen() {
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
       {/* The tabs wait for the rules' first answer too, so they never show the closed days and the sides
-          alone, then gain the areas' tabs a moment later and jump. */}
+          alone, then gain the areas' tabs a moment later and jump. A change from the long page, on purpose:
+          the closed days and the sides used to show as soon as `me` came. A first answer that fails stops the
+          wait, and the closed days and the sides show with the reason above them. */}
       {who.data && !waiting ? <SettingsTabs me={who.data} /> : null}
     </div>
   );
@@ -134,11 +136,19 @@ function SettingsTabs({ me }: { me: WhoIsHere }) {
     },
   ];
   const [asked, setAsked] = useTabInAddress();
-  // The tab the address asks for, if the page has it; else the first, Mahudhurio. An old link to a section
-  // since gone, or to an area the person no longer sees, opens the first rather than nothing.
-  const open = sections.some((section) => section.value === asked)
+  // The tab first shown when the address names none the page has, kept from then on. Usually Mahudhurio;
+  // but when the rules' first answer failed, the closed days, the first section left. Kept, so the areas'
+  // tabs arriving with a later answer don't pull the person off the closed days, a form half filled in it.
+  const [firstShown] = useState(() => sections[0]?.value ?? "");
+  const has = (value: string | null) =>
+    sections.some((section) => section.value === value);
+  // The tab the address asks for, if the page has it; else the one first shown. An old link to a section
+  // since gone, or to an area the person no longer sees, opens that rather than nothing.
+  const open = has(asked)
     ? (asked as string)
-    : (sections[0]?.value ?? "");
+    : has(firstShown)
+      ? firstShown
+      : (sections[0]?.value ?? "");
 
   return (
     <>
@@ -161,7 +171,8 @@ function SettingsTabs({ me }: { me: WhoIsHere }) {
  *
  * Read from the address on the first draw: the tabs come only once the server has answered, so always in
  * the browser, never in the page built ahead of time (ADR-0016), which has no address. The typeof check
- * keeps that true even if a later change draws the tabs sooner. */
+ * keeps that true even if a later change draws the tabs sooner. Read once: a link to /settings/?tab=… from
+ * this same page would not change the tab. No such link exists; one that comes must set the tab itself. */
 function useTabInAddress(): [string | null, (value: string) => void] {
   const [asked, setAsked] = useState<string | null>(() =>
     typeof window === "undefined"
@@ -172,8 +183,11 @@ function useTabInAddress(): [string | null, (value: string) => void] {
     setAsked(value);
     const url = new URL(window.location.href);
     url.searchParams.set(TAB_PARAM, value);
-    // Next.js's own history state is kept, so its router still knows the page.
-    window.history.replaceState(window.history.state, "", url);
+    // null, never window.history.state: Next.js wraps replaceState, and given its own state (which carries
+    // its __NA mark) it passes the call straight to the browser without noting the new address. Its router
+    // would then still hold /settings/ with no tab, and put that back at its next update, dropping ?tab.
+    // Given null, it copies its own state across and notes the address (Next's documented way).
+    window.history.replaceState(null, "", url);
   }
   return [asked, choose];
 }

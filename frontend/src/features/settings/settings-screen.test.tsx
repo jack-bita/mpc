@@ -351,8 +351,53 @@ describe("the tabs and the page's top", () => {
     expect(
       screen.getByRole("heading", { name: "Tofauti ya droo inayokubalika" }),
     ).toBeTruthy();
-    // Replaced, not added: the back arrow leaves the page rather than stepping back through the tabs.
     expect(window.location.search).toBe("?tab=money");
+  });
+
+  it("replaces the address rather than adding a page to the history", async () => {
+    rulesAnswer();
+
+    render(<SettingsScreen />);
+
+    const before = window.history.length;
+    fireEvent.click(
+      await screen.findByRole("tab", { name: "Pesa" }, { timeout: 5_000 }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Mzigo" }));
+    // Replaced, not added: the back arrow leaves the page rather than stepping back through the tabs.
+    expect(window.history.length).toBe(before);
+    expect(window.location.search).toBe("?tab=stock");
+  });
+
+  it("stays on the closed days when the rules come late, after a first answer that failed", async () => {
+    answer("GET", ME, { status: 200, body: SELLER });
+    // The first ask fails, so the page shows the closed days and the sides with the reason; the retry then
+    // brings the rules, and their tabs come in front.
+    let asks = 0;
+    answer("GET", RULES, () => {
+      asks += 1;
+      const reply =
+        asks === 1
+          ? refusal(503, "server.unavailable")
+          : { status: 200, body: SHOP_RULES };
+      return Response.json(reply.body, { status: reply.status });
+    });
+    answer("GET", CLOSURES, { status: 200, body: closuresAnswer() });
+    answer("GET", SIDES, {
+      status: 200,
+      body: { next: null, previous: null, results: [] },
+    });
+
+    render(<SettingsScreen />);
+
+    await screen.findByRole(
+      "tab",
+      { name: "Siku duka limefungwa" },
+      { timeout: 5_000 },
+    );
+    expect(openTab()).toBe("Siku duka limefungwa");
+    await screen.findByRole("tab", { name: "Mahudhurio" }, { timeout: 10_000 });
+    expect(openTab()).toBe("Siku duka limefungwa");
   });
 
   it("opens the tab the address names", async () => {
