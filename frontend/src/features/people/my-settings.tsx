@@ -11,7 +11,9 @@
 // call (the app's frames apply it, UI-9). While a change is on its way, its dot shows it already.
 //
 // At its top, the page header (page-header.tsx): the back arrow to where the person was, beside the title.
-// The Rudi button at the bottom stays, to the person's home page.
+// It is the page's only way back: the Rudi button that sat at the bottom went, so every page goes back the
+// same way (Jack, 17 Nov 2026). From a fresh tab, with nowhere to go back to, the arrow goes to the
+// person's home page (home(), below).
 //
 // An office screen, so it needs the internet: offline, the office frame says Inahitaji mtandao, and both
 // choices are switched off, so no tap waits unsaved while it looks done.
@@ -31,7 +33,6 @@ import { api } from "@/api/client";
 import { answerOf, ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { ApiErrorAlert } from "@/components/api-error-alert";
-import { ButtonLink } from "@/components/design/button";
 import { Choice } from "@/components/design/choice";
 import { PageHeader } from "@/components/design/page-header";
 import {
@@ -141,7 +142,7 @@ export function MySettings() {
 
     return (
       <>
-        {/* The arrow goes back to where the person was; from a fresh tab, to the same home as Rudi below. */}
+        {/* The arrow goes back to where the person was; from a fresh tab, to their home page. */}
         <PageHeader
           title={t("title")}
           intro={t("intro")}
@@ -176,13 +177,6 @@ export function MySettings() {
         {/* A change the server refused, as a suspension since the screen opened: why. Its dot is back
             on what is saved. */}
         <ApiErrorAlert error={save.error} />
-        <div>
-          {/* Back to the home page the person came from: the PIN screen's welcome at a shared device,
-              where a PIN's session names its device; the office's home page for a password's. */}
-          <ButtonLink href={home(here)} kind="second" size="normal">
-            {t("back")}
-          </ButtonLink>
-        </div>
       </>
     );
   }

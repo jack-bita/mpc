@@ -302,31 +302,26 @@ describe("Mipangilio yangu", () => {
     );
   });
 
-  it("goes back to the office's home page from a password's session", async () => {
+  it("sends the arrow to the office's home page from a fresh tab, in a password's session", async () => {
+    // No page before this one in the tab: the arrow goes home, the office's for a password's session.
+    vi.spyOn(window.history, "length", "get").mockReturnValue(1);
     answer("GET", ME, { status: 200, body: NEEMA });
 
     render(<MySettings />);
 
-    const back = await screen.findByRole("link", { name: "Rudi" });
-    // The end slash comes from next.config.ts (trailingSlash), which a test doesn't read.
-    expect(back.getAttribute("href")).toMatch(/^\/office\/?$/);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Rudi ulipotoka" }),
+    );
+    expect(router.push).toHaveBeenCalledWith("/office/");
   });
 
-  it("goes back to the PIN screen's welcome from a PIN's session at a device", async () => {
-    // Asha came from the home page of the counter laptop, where she logged in by PIN.
-    answer("GET", ME, {
-      status: 200,
-      body: {
-        ...NEEMA,
-        device: DAWA_LAPTOP_ANSWER.device,
-        home_side: DAWA_LAPTOP_ANSWER.home_side,
-      },
-    });
+  it("has no Rudi button at the bottom: the arrow is the page's one way back", async () => {
+    answer("GET", ME, { status: 200, body: NEEMA });
 
     render(<MySettings />);
 
-    const back = await screen.findByRole("link", { name: "Rudi" });
-    expect(back.getAttribute("href")).toBe("/");
+    await screen.findByRole("button", { name: "Rudi ulipotoka" });
+    expect(screen.queryByRole("link", { name: "Rudi" })).toBeNull();
   });
 
   it("has the back arrow beside its title, to the PIN screen's welcome from a fresh tab", async () => {
@@ -370,7 +365,9 @@ describe("Mipangilio yangu", () => {
       await screen.findByRole("heading", { name: "My settings" }),
     ).toBeTruthy();
     expect(screen.getByRole("radiogroup", { name: "Font" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Back" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Back to where you were" }),
+    ).toBeTruthy();
     // One word the checker can't tell apart: "English", the row naming that language. The Swahili book has
     // the same word, as the bar button's label (language.switch), so the checker counts it. It is the row's,
     // marked as English on purpose, and the bar has no language button while she is logged in.
