@@ -21,6 +21,7 @@ import {
   FIRST_WAIT_MS,
   LONGEST_WAIT_MS,
   MOST_PHOTOS,
+  MOST_TRIES_NOT_FOUND,
   sendAttachments,
 } from "./attachments";
 import { pushFailed } from "./backoff";
@@ -216,6 +217,43 @@ describe("sending the photos", () => {
       wait_until: Date.now() + FIRST_WAIT_MS,
     });
     expect(await db.attachment_files.get(next.label.id)).toBeUndefined();
+  });
+
+  it("sets aside a photo the server still can't find after two days of tries", async () => {
+    // Its record is in, so its row should be too: a row still missing is a handler's bug, or a restore never put
+    // right. Sent again every hour, it would cost some 3.6 MB a day, for good.
+    const [lost, other] = await twoClockInsWithPhotos();
+    await recordsAccepted();
+    await db.attachment_files.bulkUpdate([
+      { key: lost.label.id, changes: { tries: MOST_TRIES_NOT_FOUND - 1 } },
+      { key: other.label.id, changes: { tries: MOST_TRIES_NOT_FOUND - 2 } },
+    ]);
+    for (const photo of [lost, other])
+      answer(
+        "PUT",
+        photoRoute(photo.label.id),
+        refusal(404, "attachment.not_found"),
+      );
+
+    await sendAttachments(db, pagePlace);
+
+    expect(await db.attachment_files.get(lost.label.id)).toMatchObject({
+      state: "set_aside",
+      tries: MOST_TRIES_NOT_FOUND,
+      last_error: "attachment.not_found",
+      wait_until: null,
+    });
+    // One try short, it still waits.
+    expect(await db.attachment_files.get(other.label.id)).toMatchObject({
+      state: "waiting",
+      tries: MOST_TRIES_NOT_FOUND - 1,
+    });
+    // Two days of waits come before the try that gives up: time for a replay after a restore (OPS-11).
+    let waited = 0;
+    for (let tries = 1; tries < MOST_TRIES_NOT_FOUND; tries++)
+      waited += Math.min(FIRST_WAIT_MS * 2 ** (tries - 1), LONGEST_WAIT_MS);
+    expect(waited).toBeGreaterThanOrEqual(48 * 60 * 60_000);
+    expect(waited).toBeLessThan(49 * 60 * 60_000);
   });
 
   it.each([

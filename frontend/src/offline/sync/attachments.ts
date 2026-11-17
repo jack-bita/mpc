@@ -8,7 +8,8 @@
 // Each photo goes alone, to CTRL-3's route, `PUT /api/sync/v1/attachments/{id}/`, its body the file's bytes:
 //
 //   204 kept, the same file again, or a photo already removed → the laptop's copy goes
-//   404 attachment.not_found   → the server holds no row for it yet: it waits, and the others go on
+//   404 attachment.not_found   → the server holds no row for it yet: it waits, and the others go on; after some
+//                                two days of tries, it is set aside with that code (MOST_TRIES_NOT_FOUND)
 //   400 too_big, not_an_image, file_differs → about the file itself, so the same file would get the same answer:
 //                                set aside with its code, as the outbox sets a record aside, and the others go on
 //   no answer, 411, a server error, any other refusal → the round stops, and every photo waits for the next sync
@@ -46,6 +47,14 @@ const SET_ASIDE = new Set([
 /** The server holds no row for the photo yet. Asked by its code, not its status: a 404 of another code (`not_found`,
  * a route this server doesn't have) is no answer about this photo, and stops the round. */
 const NOT_FOUND = "attachment.not_found";
+
+/** The try that gives up on a photo the server still can't find: the 54th, after some two days of waits (1 minute,
+ * doubled each time, then an hour at a time). A photo goes only once its record is in, and the server writes its row
+ * in the record's own transaction, so a row still missing by then is a bug in a record's handler, or a restore the
+ * replay never put right (OPS-11): set aside with its code, the photo stops costing the shop's bundles every hour,
+ * for good. Two days give a replay after a restore the time to bring the record back. Counted over every failed
+ * send, a server error's too: each waits the same, so the count says how long the photo has been trying. */
+export const MOST_TRIES_NOT_FOUND = 54;
 
 /** The first wait after a failed send. */
 export const FIRST_WAIT_MS = 60_000;
@@ -100,18 +109,22 @@ export async function sendAttachments(
     // The wait counts from when it went, not from when its answer came, as the push's does (backoff.ts).
     const sentAt = Date.now();
     const heard = await send(photo, place);
+    const tries = photo.tries + 1;
     if (heard.kept) {
       // Kept on the server: this laptop's copy is no longer needed.
       await db.attachment_files.delete(photo.id);
-    } else if (heard.code !== null && SET_ASIDE.has(heard.code)) {
+    } else if (
+      heard.code !== null &&
+      (SET_ASIDE.has(heard.code) ||
+        (heard.code === NOT_FOUND && tries >= MOST_TRIES_NOT_FOUND))
+    ) {
       await db.attachment_files.update(photo.id, {
         state: "set_aside",
-        tries: photo.tries + 1,
+        tries,
         last_error: heard.code,
         wait_until: null,
       });
     } else {
-      const tries = photo.tries + 1;
       await db.attachment_files.update(photo.id, {
         tries,
         last_error: heard.code,
