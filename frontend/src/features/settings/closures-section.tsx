@@ -20,15 +20,23 @@
 // buttons step aside while one is open. The buttons only keep a door out of sight: the server checks the key itself on
 // every change.
 //
+// Each form reads the list again as it opens (ATT-9's review): a page left open overnight would otherwise offer
+// yesterday's today, and Ondoa beside a closure begun since, which the server would refuse.
+//
 // Each change is said once in the section's status line, as a closure can leave the list, and its line with it: one
 // removed, one whose last day moved to yesterday, one someone else cancelled meanwhile. The keyboard then goes to the
-// section's heading, the nearest place still on the page; otherwise, back to the button that opened the form.
+// section's heading, the nearest place still on the page; otherwise, back to the button that opened the form. A closure
+// can also leave the list while its form is open, when a read finds someone else removed it or the day turned: the
+// section keeps which closure's form is open, says the closure is gone, and takes the keyboard (ATT-9's review). Its own
+// changes close the form with flushSync, at once, before the list's own change reaches the page a moment later
+// (TanStack sends it after a setTimeout), so the section never reads its own change as someone else's.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -43,6 +51,9 @@ import { type Closure, CLOSURES, useClosures, useDaysOf } from "./closures";
 
 /** The key that lets a person close the shop, on the whole shop: one of the owner's own four (spec §6). */
 const CLOSES_THE_SHOP = "settings.manage";
+
+/** The two forms a closure's line opens under it. */
+type LineForm = "remove" | "lastDay";
 
 /** Where the keyboard goes back to once a form under a button closes: the button, as the form and the box that had
  * focus are gone. Counted, so each close moves it (settings-screen.tsx). */
@@ -66,6 +77,33 @@ export function ClosuresSection({ me }: { me: WhoIsHere }) {
   const [said, setSaid] = useState<string | null>(null);
   // Where the keyboard goes once a closure leaves the list: its line, and the button that had it, are gone.
   const [headingRef, focusHeading] = useFocusBack<HTMLHeadingElement>();
+  const store = useQueryClient();
+  // The closure whose form is open on its line, if any, and which form: one at a time in the list. Here, not on the
+  // line, so the section can tell when that closure leaves the list (below).
+  const [open, setOpen] = useState<{
+    id: string;
+    name: string;
+    form: LineForm;
+  } | null>(null);
+
+  // The closure left the list while its form was open: a read found someone else removed it, or the day turned. Its
+  // line and the form are gone, so the section says so and takes the keyboard (see the top of this file). Set during
+  // the render, as React does for a state that follows another: an effect would first show the form gone, unsaid.
+  if (
+    open !== null &&
+    closures.data &&
+    !closures.data.closures.some((each) => each.id === open.id)
+  ) {
+    setOpen(null);
+    setSaid(t("gone", { name: open.name }));
+    focusHeading();
+  }
+
+  /** As any form opens: the last change's line goes, and the list is read again, so today is the shop's today. */
+  function opening() {
+    setSaid(null);
+    void store.invalidateQueries({ queryKey: CLOSURES });
+  }
 
   return (
     <section aria-labelledby="area-closures" className="grid gap-4">
@@ -92,7 +130,7 @@ export function ClosuresSection({ me }: { me: WhoIsHere }) {
       {mayChange && closures.data ? (
         <AddClosure
           today={closures.data.today}
-          onOpen={() => setSaid(null)}
+          onOpen={opening}
           onSaved={(closure) =>
             setSaid(t("added", { name: closure.name, days: daysOf(closure) }))
           }
@@ -111,7 +149,15 @@ export function ClosuresSection({ me }: { me: WhoIsHere }) {
                   closure={closure}
                   today={closures.data.today}
                   mayChange={mayChange}
-                  onOpen={() => setSaid(null)}
+                  form={open?.id === closure.id ? open.form : null}
+                  onForm={(form) => {
+                    if (form !== null) opening();
+                    setOpen(
+                      form === null
+                        ? null
+                        : { id: closure.id, name: closure.name, form },
+                    );
+                  }}
                   onChanged={(sentence, gone) => {
                     setSaid(sentence);
                     if (gone) focusHeading();
@@ -188,7 +234,8 @@ function ClosureLine({
   closure,
   today,
   mayChange,
-  onOpen,
+  form,
+  onForm,
   onChanged,
 }: {
   closure: Closure;
@@ -196,7 +243,10 @@ function ClosureLine({
   today: string;
   /** Whether the person holds settings.manage on the whole shop. */
   mayChange: boolean;
-  onOpen: () => void;
+  /** The form open under the line, if any, as the section keeps it. */
+  form: LineForm | null;
+  /** Opens a form under the line, or closes it with null. */
+  onForm: (form: LineForm | null) => void;
   /** Called after a change, with its sentence, and whether the closure has left the list (see the top of this file). */
   onChanged: (sentence: string, gone: boolean) => void;
 }) {
@@ -204,8 +254,6 @@ function ClosureLine({
   const codes = useCodeWords();
   const daysOf = useDaysOf();
   const store = useQueryClient();
-  // The form open under the line, if any: one at a time.
-  const [open, setOpen] = useState<"remove" | "lastDay" | null>(null);
   const [ondoaRef, focusOndoa] = useFocusBack<HTMLButtonElement>();
   const [lastDayRef, focusLastDay] = useFocusBack<HTMLButtonElement>();
   // Up to and on its first day: days as text sort as days do ("2026-11-20"). Once one of its days has passed, that
@@ -213,11 +261,20 @@ function ClosureLine({
   const mayRemove = mayChange && closure.first_day >= today;
 
   function giveUp(focusTheButton: () => void) {
-    setOpen(null);
+    onForm(null);
     focusTheButton();
     // Asked again: a send whose answer was lost may have changed the closure, and the owner who gives up should still
     // see it as it is (settings-screen.tsx).
     void store.invalidateQueries({ queryKey: CLOSURES });
+  }
+
+  /** After a change of this page's own: the form closes, at once, and the section says the change (see the top of
+   * this file). */
+  function changed(sentence: string, gone: boolean) {
+    flushSync(() => {
+      onForm(null);
+      onChanged(sentence, gone);
+    });
   }
 
   return (
@@ -228,7 +285,7 @@ function ClosureLine({
           <span>{daysOf(closure)}</span>
         </p>
         {/* While a form is open its own Ghairi closes it, so the buttons step aside. */}
-        {mayChange && open === null ? (
+        {mayChange && form === null ? (
           <div className="flex flex-wrap gap-3">
             {mayRemove ? (
               <Button
@@ -238,10 +295,7 @@ function ClosureLine({
                 // Each starts with the word on it, and names the closure, as a list of the same words reads to a screen
                 // reader as nothing.
                 aria-label={t("removeOf", { name: closure.name })}
-                onClick={() => {
-                  onOpen();
-                  setOpen("remove");
-                }}
+                onClick={() => onForm("remove")}
               >
                 {t("remove")}
               </Button>
@@ -251,54 +305,45 @@ function ClosureLine({
               kind="second"
               size="normal"
               aria-label={t("changeLastDayOf", { name: closure.name })}
-              onClick={() => {
-                onOpen();
-                setOpen("lastDay");
-              }}
+              onClick={() => onForm("lastDay")}
             >
               {t("changeLastDay")}
             </Button>
           </div>
         ) : null}
       </div>
-      {open === "remove" ? (
+      {form === "remove" ? (
         <ClosureCancel
           closure={closure}
-          // The line has left the list already (dropClosure, closures.ts): the section says so, and takes the
-          // keyboard.
-          // Already cancelled, by a lost answer or by someone else: in the server's own sentence, true either way
+          // The line leaves the list (dropClosure, closures.ts): the section says so, and takes the keyboard. Already
+          // cancelled, by a lost answer or by someone else: in the server's own sentence, true either way
           // (closure-cancel.tsx).
-          onCancelled={(already) => {
-            setOpen(null);
-            onChanged(
+          onCancelled={(already) =>
+            changed(
               already
                 ? codeMessage(codes, "closure.not_active")
                 : t("removed", { name: closure.name, days: daysOf(closure) }),
               true,
-            );
-          }}
+            )
+          }
           onCancel={() => giveUp(focusOndoa)}
         />
       ) : null}
-      {open === "lastDay" ? (
+      {form === "lastDay" ? (
         <ClosureLastDay
           closure={closure}
           today={today}
           onMoved={(saved) => {
-            setOpen(null);
             // A last day now before today ends the closure: it leaves the list (coming_closures).
             const gone = saved.last_day < today;
-            onChanged(
+            changed(
               t("moved", { name: saved.name, days: daysOf(saved) }),
               gone,
             );
             if (!gone) focusLastDay();
           }}
           // Someone else cancelled it meanwhile: the section says so in the server's sentence, as the line leaves.
-          onGone={() => {
-            setOpen(null);
-            onChanged(codeMessage(codes, "closure.not_active"), true);
-          }}
+          onGone={() => changed(codeMessage(codes, "closure.not_active"), true)}
           onCancel={() => giveUp(focusLastDay)}
         />
       ) : null}

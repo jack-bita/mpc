@@ -217,14 +217,15 @@ describe("Ongeza", () => {
     tap(
       await screen.findByRole("button", { name: "Ongeza" }, { timeout: 5_000 }),
     );
-    const before = reads();
+    // The first read, and the one Ongeza asks for as it opens (ATT-9's review).
+    await waitFor(() => expect(reads()).toBe(2));
     tap(screen.getByRole("button", { name: "Ghairi" }));
 
     expect(screen.queryByLabelText("Kuanzia")).toBeNull();
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Ongeza" }),
     );
-    await waitFor(() => expect(reads()).toBe(before + 1));
+    await waitFor(() => expect(reads()).toBe(3));
   });
   it("reads the list again when the days clash, so the closure they clash with shows (ATT-9's review)", async () => {
     // 20 to 24 November was saved, but its answer was lost, so the page doesn't show it. The owner changes Hadi to the
@@ -619,7 +620,8 @@ describe("Badilisha siku ya mwisho", () => {
     render(<ClosuresSection me={OWNER} />);
 
     await openLastDayOf("Siku ya Uhuru");
-    const before = reads();
+    // The first read, and the one the form asks for as it opens (ATT-9's review).
+    await waitFor(() => expect(reads()).toBe(2));
     tap(screen.getByRole("button", { name: "Ghairi" }));
 
     expect(screen.queryByLabelText("Siku mpya ya mwisho")).toBeNull();
@@ -628,6 +630,66 @@ describe("Badilisha siku ya mwisho", () => {
         name: "Badilisha siku ya mwisho: Siku ya Uhuru",
       }),
     );
-    await waitFor(() => expect(reads()).toBe(before + 1));
+    await waitFor(() => expect(reads()).toBe(3));
+  });
+});
+
+describe("a page left open", () => {
+  it("reads the list again as a form opens, so a page left open overnight takes the shop's new today (ATT-9's review)", async () => {
+    // The page was read on Sunday the 15th and left open; the owner taps Ongeza on Monday morning.
+    let reads = 0;
+    answer("GET", CLOSURES, () => {
+      reads += 1;
+      return Response.json(
+        reads === 1
+          ? closuresAnswer([UHURU])
+          : { ...closuresAnswer([UHURU]), today: "2026-11-16" },
+      );
+    });
+
+    render(<ClosuresSection me={OWNER} />);
+
+    tap(
+      await screen.findByRole("button", { name: "Ongeza" }, { timeout: 5_000 }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Kuanzia").getAttribute("min")).toBe(
+        "2026-11-16",
+      ),
+    );
+  });
+
+  it("says a closure is gone, and gives the keyboard to the heading, when a read finds it removed while its form is open (ATT-9's review)", async () => {
+    // Another manager removed Siku ya Uhuru a moment before the owner tapped its Ondoa: the read the form asks for as
+    // it opens no longer has it.
+    let reads = 0;
+    answer("GET", CLOSURES, () => {
+      reads += 1;
+      return Response.json(
+        closuresAnswer(reads === 1 ? [UHURU, KRISMASI] : [KRISMASI]),
+      );
+    });
+
+    render(<ClosuresSection me={OWNER} />);
+
+    tap(
+      await screen.findByRole(
+        "button",
+        { name: "Ondoa: Siku ya Uhuru" },
+        { timeout: 5_000 },
+      ),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe(
+        "Siku ya Uhuru: siku hizi hazipo tena kwenye orodha.",
+      ),
+    );
+    expect(screen.queryByLabelText("Sababu")).toBeNull();
+    expect(await linesShown()).toEqual(["Krismasi25/12/2026 – 26/12/2026"]);
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { level: 2, name: "Siku duka limefungwa" }),
+    );
   });
 });

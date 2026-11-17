@@ -258,6 +258,7 @@
       "newLastDayHint": "Sasa ni {last}. Inaweza kuwa mapema au baadaye.",
       "sameLastDay": "Hii tayari ndiyo siku ya mwisho. Chagua siku nyingine.",
       "moved": "Siku ya mwisho imebadilishwa: {name}, {days}.",
+      "gone": "{name}: siku hizi hazipo tena kwenye orodha.",
       "form": {
         "from": "Kuanzia",
         "fromHint": "Leo au siku ya baadaye.",

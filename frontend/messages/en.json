@@ -258,6 +258,7 @@
       "newLastDayHint": "Now {last}. It can be earlier or later.",
       "sameLastDay": "This is already the last day. Pick another day.",
       "moved": "Last day changed: {name}, {days}.",
+      "gone": "{name}: these days are no longer in the list.",
       "form": {
         "from": "From",
         "fromHint": "Today or a later day.",
