@@ -4,6 +4,8 @@ Fixed values, so a test never depends on the machine it runs on. pytest-django c
 `test_<DB_NAME>` database for tests that need one, so the development data is never touched.
 """
 
+import atexit
+import shutil
 import tempfile
 
 from .base import *  # noqa: F403 — start from the shared settings, then change what differs.
@@ -21,11 +23,14 @@ PIN_PEPPER = "test-only-not-a-secret"
 INSTALLED_APPS = [*INSTALLED_APPS, "tests.probe"]  # noqa: F405 — defined in .base, through the * above.
 
 # Files the tests save go to a new, empty folder of this run's own, never into backend/files/, Jack's laptop's: a test
-# then never finds a file another run left, and two runs at once never meet. Made once, as pytest loads these settings;
-# the system's temporary folder is emptied by the system. A test of the demo's storage asks for it by name.
+# then never finds a file another run left, and two runs at once never meet. Made once, as pytest loads these settings,
+# and taken away with everything in it as the run ends (atexit), as WSL rarely empties /tmp by itself. A test of the
+# demo's storage asks for it by name.
+_TEST_FILES = tempfile.mkdtemp(prefix="mpc-")
+atexit.register(shutil.rmtree, _TEST_FILES, ignore_errors=True)
 STORAGES = {
     **STORAGES,
-    "default": {"BACKEND": "apps.core.storage.FolderStorage", "OPTIONS": {"location": tempfile.mkdtemp(prefix="mpc-")}},
+    "default": {"BACKEND": "apps.core.storage.FolderStorage", "OPTIONS": {"location": _TEST_FILES}},
 }
 
 # A deliberately weak, fast hasher: tests create many users, and real password hashing is slow on purpose.
