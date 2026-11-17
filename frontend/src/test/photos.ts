@@ -12,7 +12,8 @@ export function madeUpJpeg(size = 64, type = "image/jpeg"): Blob {
   return new Blob([withStart(JPEG_START, size)], { type });
 }
 
-/** A made-up WebP of `size` bytes: "RIFF", the file's length in four bytes, then "WEBP". */
+/** A made-up WebP of `size` bytes: "RIFF", four bytes where a real file keeps its length (left at zero: neither the
+ * laptop nor the server reads them), then "WEBP". */
 export function madeUpWebp(size = 64): Blob {
   const riff = [...ascii("RIFF"), 0, 0, 0, 0, ...ascii("WEBP")];
   return new Blob([withStart(riff, size)], { type: "image/webp" });
