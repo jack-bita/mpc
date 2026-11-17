@@ -136,4 +136,7 @@ NO_EDIT_HISTORY = {
     # typed them is what nobody knows, so a history row would name nobody and tell the owner nothing (AUTH-4's plan,
     # approved by Jack).
     "people.PinLock": "only the system moves it, at every wrong PIN, and it names nobody",
+    # The demo's files, kept in the database (apps/core/storage.py): a file is written whole and never edited, and a
+    # history row would copy a photo's bytes into a table kept for good, which the retention rule forbids (CTRL-3).
+    "core.StoredFile": "a file written whole, never edited, whose bytes must never be copied into a history",
 }

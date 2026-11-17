@@ -56,6 +56,7 @@ docker run --detach --name "$name" --publish 127.0.0.1::8000 \
   --env PIN_PEPPER=smoke-test-only \
   --env DJANGO_ALLOWED_HOSTS=127.0.0.1 \
   --env DB_NAME=unused --env DB_USER=unused --env DB_PASSWORD=unused --env DB_HOST=unused \
+  --env FILES_ROOT=unused \
   "$image" >/dev/null
 # `docker port` says which one it picked, as 127.0.0.1:<port>.
 base="http://$(docker port "$name" 8000/tcp | head -n 1)"
