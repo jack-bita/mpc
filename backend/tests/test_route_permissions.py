@@ -23,8 +23,10 @@ tests may not import a higher layer (ADR-0035). Fake data only: the repo is publ
     MFANO     Dawa (D), Vyakula (F)    staff_a and staff_a2, given roles test by test
 """
 
+import hashlib
 import uuid
 from collections.abc import Callable, Iterable, Mapping
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -40,20 +42,27 @@ from rest_framework.response import Response
 from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIClient
 
+from apps.control.api.views import AttachmentViewSet
+from apps.control.models import AttachmentKind, AttachmentType
+from apps.control.services import expect_attachment, receive_attachment_file
 from apps.core.api import base
 from apps.core.api.base import CreateOnceMixin, ShopViewSet
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember
 from apps.people.services import grant_permission, mark_left, suspend
-from apps.shops.api.views import SideViewSet
-from apps.shops.models import Shop, Side
-from apps.shops.services import add_side
+from apps.shops.api.views import ClosureViewSet, SettingViewSet, SideViewSet
+from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
+from apps.shops.selectors import shop_today
+from apps.shops.services import add_closure, add_side, set_setting
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
 from tests.test_tenancy_sweep import addresses
 
 SIDES = "/api/v1/shops/sides/"
+SETTINGS = "/api/v1/shops/settings/"
+CLOSURES = "/api/v1/shops/closures/"
+ATTACHMENTS = "/api/v1/control/attachments/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -129,8 +138,8 @@ PLAIN_MAKERS = "/api/v1/test/plain-note-makers/"
 
 
 def client_for(staff: StaffMember) -> APIClient:
-    # The way the office screens will call: logged in as this person, at their shop. The logins come later (AUTH-3,
-    # AUTH-4); force_authenticate puts the person straight into `request.auth`, as they will (backend/conftest.py).
+    # The way the office screens call: logged in as this person, at their shop. force_authenticate puts the person
+    # straight into `request.auth`, as the real logins do (AUTH-3, AUTH-4; backend/conftest.py).
     client = APIClient()
     client.force_authenticate(user=staff.user, token=staff)  # type: ignore[arg-type]
     return client
@@ -212,6 +221,94 @@ def test_action_needs_its_permission(
 
 
 @pytest.mark.django_db
+def test_side_switch_needs_settings_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # Switching a side on or off changes what the shop sells from (ADR-0033): `settings.manage`, the owner's, as adding
+    # or renaming one does. A Manager on every side is refused, and Vyakula stays off; the owner may (SHOP-3).
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    switch = {"is_live": True, "version": 1}
+    refused = client_for(staff_a2).patch(f"{SIDES}{sides['F'].pk}/", switch, format="json")
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert Side.objects.get(pk=sides["F"].pk).is_live is False
+
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    assert client_for(staff_a).patch(f"{SIDES}{sides['F'].pk}/", switch, format="json").status_code == 200
+
+
+@pytest.mark.django_db
+def test_side_band_needs_settings_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # A side's band is how every laptop of the shop tells its sides apart (SHOP-4): `settings.manage`, the owner's, as
+    # renaming or switching one is. A Manager on every side is refused, and Vyakula stays blue; the owner may.
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    band = {"band": "striped", "version": 1}
+    refused = client_for(staff_a2).patch(f"{SIDES}{sides['F'].pk}/", band, format="json")
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert Side.objects.get(pk=sides["F"].pk).band == "blue"
+
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    assert client_for(staff_a).patch(f"{SIDES}{sides['F'].pk}/", band, format="json").status_code == 200
+
+
+@pytest.mark.django_db
+def test_setting_needs_settings_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # A rule's new value changes the shop's rules: `settings.manage`, the owner's (spec §6). A Manager on every side
+    # sees the rules and may not change one: refused, and nothing written. The owner may (SHOP-3).
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    today = shop_today(shop_a).isoformat()
+
+    def sent() -> dict[str, str]:
+        return {"id": str(uuid.uuid7()), "key": "attendance.late_fine", "value": "2000", "effective_from": today}
+
+    manager = client_for(staff_a2)
+    assert manager.get(SETTINGS).status_code == 200
+    refused = manager.post(SETTINGS, sent(), format="json")
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert not Setting.objects.filter(shop=shop_a).exists()
+
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    assert client_for(staff_a).post(SETTINGS, sent(), format="json").status_code == 201
+
+
+@pytest.mark.django_db
+def test_settings_list_keeps_to_the_persons_sides(shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember) -> None:
+    # Asha holds one key, on Dawa only: she sees the whole shop's rules, and Dawa's own, never Vyakula's, as every read
+    # keeps to the sides a person sees (PPL-5). Seeing them hides nothing a counter doesn't hold: every rule travels to
+    # every laptop of the shop (SYNC-2). The owner has set the late fine, a row of no side, and a tolerance on each
+    # side: the late fine's row is the whole shop's, so she sees it beside its value, and Vyakula's row stays hidden.
+    today = shop_today(shop_a)
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.STOCK_COUNT, side=sides["D"], by=None)
+        fine = set_setting(shop_a, key="attendance.late_fine", value="2000", effective_from=today, by=None)
+        dawa = set_setting(shop_a, key="cash.tolerance", value="500", effective_from=today, side=sides["D"], by=None)
+        set_setting(shop_a, key="cash.tolerance", value="700", effective_from=today, side=sides["F"], by=None)
+    rules = client_for(staff_a).get(SETTINGS).json()["rules"]
+
+    assert {rule["side"] for rule in rules} == {None, str(sides["D"].pk)}
+    rows = {(rule["key"], row["id"], row["value"]) for rule in rules for row in rule["rows"]}
+    assert rows == {("attendance.late_fine", str(fine.pk), "2000.00"), ("cash.tolerance", str(dawa.pk), "500.00")}
+
+
+@pytest.mark.django_db
+def test_who_sees_no_side_sees_no_rule(sides: dict[str, Side], staff_a: StaffMember) -> None:
+    # A person who holds no key sees no side, and so no row of the whole shop either (PPL-5): not even the shop's rules'
+    # values, which come from the registry and the rows. The answer still says the shop's today.
+    answer = client_for(staff_a).get(SETTINGS).json()
+
+    assert answer["rules"] == []
+
+
+@pytest.mark.django_db
 def test_a_key_on_one_side_opens_only_that_side(shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember) -> None:
     # Rule X1 itself: a key works on the side it was given on, and nowhere else. Juma may change the shop's rules on
     # Dawa only, and counts stock on Vyakula, so he sees both. He may rename Dawa, not Vyakula; and adding a side, an
@@ -260,6 +357,103 @@ def test_side_routes_name_their_permissions() -> None:
     }
 
 
+@pytest.mark.django_db
+def test_closures_need_settings_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # A closed day changes everyone's pay: `settings.manage`, the owner's (spec §6), on the whole shop, as a closure
+    # closes both sides (ATT-8). A Manager on every side sees the closures and may change none: each change refused, and
+    # nothing written. The owner may make all three.
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    today = shop_today(shop_a)
+    with shop_context(shop_a):
+        krismasi = add_closure(
+            shop_a, first_day=today + timedelta(days=5), last_day=today + timedelta(days=6), name="Krismasi", by=None
+        )
+
+    def new() -> dict[str, str]:
+        first = (today + timedelta(days=1)).isoformat()
+        return {"id": str(uuid.uuid7()), "first_day": first, "last_day": first, "name": "Msiba wa bibi"}
+
+    later = {"last_day": (today + timedelta(days=7)).isoformat(), "reason": "Zaidi"}
+    changes: list[tuple[str, Callable[[], dict[str, str]]]] = [
+        (CLOSURES, new),
+        (f"{CLOSURES}{krismasi.pk}/last-day/", lambda: later),
+        (f"{CLOSURES}{krismasi.pk}/cancel/", lambda: {"reason": "Imeahirishwa"}),
+    ]
+    manager = client_for(staff_a2)
+    assert manager.get(CLOSURES).status_code == 200
+    for url, sent in changes:
+        refused = manager.post(url, sent(), format="json")
+        assert refused.status_code == 403, url
+        assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert list(Closure.objects.values_list("name", "last_day", "status")) == [
+            ("Krismasi", today + timedelta(days=6), ClosureStatus.ACTIVE)
+        ]
+
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    owner = client_for(staff_a)
+    assert [owner.post(url, sent(), format="json").status_code for url, sent in changes] == [201, 200, 200]
+
+
+@pytest.mark.django_db
+def test_a_key_on_one_side_changes_no_closure(shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember) -> None:
+    # Juma may change the shop's rules on Dawa only (X1). A closure closes both sides, so changing one is an action on
+    # the whole shop, which needs the key on every side: he sees the closures, as he sees a side, and may add, move or
+    # cancel none of them. Nothing changes.
+    today = shop_today(shop_a)
+    in_a_week = today + timedelta(days=7)
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.SETTINGS_MANAGE, side=sides["D"], by=None)
+        krismasi = add_closure(shop_a, first_day=in_a_week, last_day=in_a_week, name="Krismasi", by=None)
+    juma = client_for(staff_a)
+
+    assert [row["name"] for row in juma.get(CLOSURES).json()["closures"]] == ["Krismasi"]
+    first = (today + timedelta(days=1)).isoformat()
+    new_one = {"id": str(uuid.uuid7()), "first_day": first, "last_day": first, "name": "Msiba wa bibi"}
+    later = {"last_day": (in_a_week + timedelta(days=1)).isoformat(), "reason": "Zaidi"}
+    for url, sent in (
+        (CLOSURES, new_one),
+        (f"{CLOSURES}{krismasi.pk}/last-day/", later),
+        (f"{CLOSURES}{krismasi.pk}/cancel/", {"reason": "Imeahirishwa"}),
+    ):
+        refused = juma.post(url, sent, format="json")
+        assert refused.status_code == 403, url
+        assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert list(Closure.objects.values_list("name", "last_day", "status")) == [
+            ("Krismasi", in_a_week, ClosureStatus.ACTIVE)
+        ]
+
+
+def test_closures_routes_name_their_permissions() -> None:
+    # Seeing the closures needs only to see a side; adding one, moving its last day and cancelling it each need
+    # `settings.manage` (ATT-8). Written out in full, as above.
+    assert ClosureViewSet.action_permissions == {
+        "list": base.SEES_THE_SIDE,
+        "create": Permission.SETTINGS_MANAGE,
+        "cancel": Permission.SETTINGS_MANAGE,
+        "last_day": Permission.SETTINGS_MANAGE,
+    }
+
+
+def test_attachment_routes_name_their_permissions() -> None:
+    # Opening a photo's file only shows it, so the route asks only to see the shop's rows; each kind's own key is asked
+    # inside the action, on the whole shop (CTRL-3, ATTACHMENT_KINDS), as the key depends on the photo. Written out in
+    # full, as above.
+    assert AttachmentViewSet.action_permissions == {"file": base.SEES_THE_SIDE}
+
+
+def test_settings_routes_name_their_permissions() -> None:
+    # Seeing the rules needs only to see a side; a new value needs `settings.manage` (SHOP-3), on the row's side, or on
+    # the whole shop for a shop's rule. Written out in full, as above.
+    assert SettingViewSet.action_permissions == {
+        "list": base.SEES_THE_SIDE,
+        "create": Permission.SETTINGS_MANAGE,
+    }
+
+
 # --- A person who may not work
 
 
@@ -281,6 +475,21 @@ def test_suspended_member_gets_nothing_from_routes(
     # "active": the check must read the status from the database on each visit, never trust that copy (X2).
     give_role(staff_a, RoleTemplate.OWNER, None)
     client = client_for(staff_a)
+    in_a_week = shop_today(shop_a) + timedelta(days=7)
+    with shop_context(shop_a):
+        krismasi = add_closure(shop_a, first_day=in_a_week, last_day=in_a_week, name="Krismasi", by=None)
+        # Their own photo, its file kept (CTRL-3).
+        face = b"\xff\xd8\xff a made-up face"
+        own_photo = expect_attachment(
+            id=uuid.uuid7(),
+            kind=AttachmentKind.STAFF_PHOTO,
+            subject=staff_a,
+            content_type=AttachmentType.JPEG,
+            size=len(face),
+            sha256=hashlib.sha256(face).hexdigest(),
+            by=staff_a,
+        )
+        receive_attachment_file(own_photo.pk, content=face)
     stop(how, staff_a)
 
     assert client.get(SIDES).json()["results"] == []
@@ -290,6 +499,33 @@ def test_suspended_member_gets_nothing_from_routes(
     assert side_name(shop_a, sides["D"]) == "Dawa"
     with shop_context(shop_a):
         assert not Side.objects.filter(code="P").exists()
+    # The shop's rules too (SHOP-3): none shown, not even the whole shop's, whose values come from the registry; no side
+    # switched, and no new value written.
+    assert client.get(SETTINGS).json()["rules"] == []
+    switch = {"is_live": True, "version": 1}
+    assert client.patch(f"{SIDES}{sides['F'].pk}/", switch, format="json").status_code == 404
+    # Nor a side's band (SHOP-4).
+    band = {"band": "striped", "version": 1}
+    assert client.patch(f"{SIDES}{sides['F'].pk}/", band, format="json").status_code == 404
+    today = shop_today(shop_a).isoformat()
+    fine = {"id": str(uuid.uuid7()), "key": "attendance.late_fine", "value": "9000", "effective_from": today}
+    assert client.post(SETTINGS, fine, format="json").status_code == 403
+    # Nor the days the shop is closed (ATT-8): none shown; none added, cancelled or moved.
+    assert client.get(CLOSURES).json()["closures"] == []
+    new_one = {"id": str(uuid.uuid7()), "first_day": today, "last_day": today, "name": "Siku yangu"}
+    assert client.post(CLOSURES, new_one, format="json").status_code == 403
+    assert client.post(f"{CLOSURES}{krismasi.pk}/cancel/", {"reason": "Hapana"}, format="json").status_code == 404
+    later = {"last_day": (in_a_week + timedelta(days=3)).isoformat(), "reason": "Hapana"}
+    assert client.post(f"{CLOSURES}{krismasi.pk}/last-day/", later, format="json").status_code == 404
+    # Nor a photo, not even their own face (CTRL-3): not found, as they see no side.
+    assert client.get(f"{ATTACHMENTS}{own_photo.pk}/file/").status_code == 404
+    with shop_context(shop_a):
+        assert Side.objects.get(pk=sides["F"].pk).is_live is False
+        assert Side.objects.get(pk=sides["F"].pk).band == "blue"
+        assert not Setting.objects.filter(shop=shop_a).exists()
+        assert list(Closure.objects.values_list("name", "last_day", "status")) == [
+            ("Krismasi", in_a_week, ClosureStatus.ACTIVE)
+        ]
 
 
 @pytest.mark.django_db

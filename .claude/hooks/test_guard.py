@@ -66,12 +66,29 @@ class GuardTest(unittest.TestCase):
     def test_generated_api_types_refused(self) -> None:
         self.assertEqual(self.edit("frontend/src/api/schema.d.ts"), 2)
 
+    def test_api_description_refused(self) -> None:
+        # The routes' description, which the types are made from (UI-2): written by `pnpm gen:api`.
+        self.assertEqual(self.edit("shared/openapi.json"), 2)
+
     def test_changelog_refused_for_write_too(self) -> None:
         self.assertEqual(self.run_guard("Write", file_path=str(self.repo / "CHANGELOG.md"), content="x"), 2)
 
     def test_lock_files_refused(self) -> None:
         self.assertEqual(self.edit("backend/uv.lock"), 2)
         self.assertEqual(self.edit("frontend/pnpm-lock.yaml"), 2)
+
+    def test_shadcn_part_refused(self) -> None:
+        # Kept as shadcn wrote it; our look wraps it in components/design/ (ADR-0039).
+        self.assertEqual(self.edit("frontend/src/components/ui/button.tsx"), 2)
+        part = str(self.repo / "frontend/src/components/ui/card.tsx")
+        self.assertEqual(self.run_guard("Write", file_path=part, content="x"), 2)
+
+    def test_shadcn_folder_readme_allowed(self) -> None:
+        # Ours: it changes by hand each time a part is added.
+        self.assertEqual(self.edit("frontend/src/components/ui/README.md"), 0)
+
+    def test_our_pieces_allowed(self) -> None:
+        self.assertEqual(self.edit("frontend/src/components/design/button.tsx"), 0)
 
     def test_ordinary_file_allowed(self) -> None:
         self.assertEqual(self.edit("backend/apps/sales/services.py"), 0)

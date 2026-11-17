@@ -3,10 +3,12 @@
 # Each one is written by a tool, so the tool decides its layout. Formatting it by hand
 # would only make a diff that the tool undoes on its next run.
 
-# Build output (next build) and test coverage reports.
+# Build output (next build), test coverage reports, and Playwright's output (UI-6).
 .next/
 out/
 coverage/
+test-results/
+playwright-report/
 
 # Written by pnpm: change it with `pnpm add` and `pnpm remove`, never by hand (ADR-0025).
 pnpm-lock.yaml
@@ -14,3 +16,7 @@ pnpm-lock.yaml
 # Written by Next.js (next typegen) and by `pnpm gen:api` (ADR-0025).
 next-env.d.ts
 src/api/schema.d.ts
+
+# Written by shadcn (`pnpm shadcn add`) and kept exactly as it wrote them, so a later
+# `shadcn add --diff` shows only shadcn's own changes. Our look is in components/design/ (ADR-0039).
+src/components/ui/

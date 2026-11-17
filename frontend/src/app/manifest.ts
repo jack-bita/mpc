@@ -25,16 +25,17 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     // A window of its own, with no address bar: it looks and feels like an app.
     display: "standalone",
-    // The colour of the title bar, and of the screen while the app starts. Placeholders in the
-    // shop's green, the same as the icon: the design system picks the real colours.
+    // The colour of the title bar, and of the screen while the app starts: the shop's green. A
+    // manifest is plain data and can't read a token, so manifest.test.ts holds this equal to --primary
+    // in globals.css (ADR-0039).
     theme_color: "#15803d",
     background_color: "#15803d",
     // PNG, in the two sizes Chrome asks for. The files are drawn by scripts/make-icons.mjs.
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-      // Android cuts icons into a circle or a rounded square; this one keeps its letters in the
-      // safe middle, so the cut never hides them.
+      // Android cuts icons into a circle or a rounded square; this one draws the godown smaller, in
+      // the safe middle, so the cut never reaches it.
       {
         src: "/icons/icon-maskable-512.png",
         sizes: "512x512",

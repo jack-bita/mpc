@@ -1,0 +1,3527 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "MPC API",
+        "version": "1",
+        "description": "The routes of the MPC shop system. Every refusal has one shape: {\"code\", \"message\", \"fields\", \"params\"}; the app translates the code."
+    },
+    "paths": {
+        "/api/auth/logout/": {
+            "post": {
+                "operationId": "auth_logout_create",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/me/": {
+            "get": {
+                "operationId": "auth_me_retrieve",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WhoIsHere"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/me/settings/": {
+            "patch": {
+                "operationId": "auth_me_settings_partial_update",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OwnSettingsRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OwnSettingsAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/pin-login/": {
+            "post": {
+                "operationId": "auth_pin_login_create",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PinLoginRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/devices/v1/demo/": {
+            "post": {
+                "operationId": "devices_v1_demo_create",
+                "tags": [
+                    "devices"
+                ],
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DemoDevice"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/devices/v1/demo/open/": {
+            "get": {
+                "operationId": "devices_v1_demo_open_retrieve",
+                "tags": [
+                    "devices"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DemoOpen"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/devices/v1/me/": {
+            "get": {
+                "operationId": "devices_v1_me_retrieve",
+                "tags": [
+                    "devices"
+                ],
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeviceMe"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/devices/v1/pairing/": {
+            "post": {
+                "operationId": "devices_v1_pairing_create",
+                "tags": [
+                    "devices"
+                ],
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PairingStart"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/health/": {
+            "get": {
+                "operationId": "health_retrieve",
+                "tags": [
+                    "health"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Health"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/sync/v1/attachments/{id}/": {
+            "put": {
+                "operationId": "sync_v1_attachments_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "sync"
+                ],
+                "requestBody": {
+                    "content": {
+                        "image/jpeg": {
+                            "schema": {
+                                "type": "string",
+                                "format": "binary"
+                            }
+                        },
+                        "image/webp": {
+                            "schema": {
+                                "type": "string",
+                                "format": "binary"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/sync/v1/bootstrap/": {
+            "get": {
+                "operationId": "sync_v1_bootstrap_retrieve",
+                "tags": [
+                    "sync"
+                ],
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BootstrapAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/sync/v1/pull/": {
+            "get": {
+                "operationId": "sync_v1_pull_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "cursor",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 9223372036854775807,
+                            "minimum": 0,
+                            "format": "int64",
+                            "default": 0
+                        },
+                        "description": "The last change number this device read: the bootstrap's cursor, then each page's. 0 for none."
+                    }
+                ],
+                "tags": [
+                    "sync"
+                ],
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PullAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/sync/v1/push/": {
+            "post": {
+                "operationId": "sync_v1_push_create",
+                "tags": [
+                    "sync"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PushBatchRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PushAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/control/attachments/{id}/file/": {
+            "get": {
+                "operationId": "control_attachments_file_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this attachment.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "control"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "image/jpeg": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            },
+                            "image/webp": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/devices/": {
+            "get": {
+                "operationId": "people_devices_list",
+                "parameters": [
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "description": "The pagination cursor value.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedDeviceList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "people_devices_create",
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeviceConfirmRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Device"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/devices/{id}/": {
+            "get": {
+                "operationId": "people_devices_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this device.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Device"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "people_devices_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this device.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeviceEditRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Device"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/devices/{id}/block/": {
+            "post": {
+                "operationId": "people_devices_block_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this device.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeviceReasonRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Device"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/devices/{id}/unblock/": {
+            "post": {
+                "operationId": "people_devices_unblock_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this device.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeviceReasonRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Device"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/devices/health/": {
+            "get": {
+                "operationId": "people_devices_health_list",
+                "tags": [
+                    "people"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/DeviceHealth"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/staff/{id}/temporary-password/": {
+            "post": {
+                "operationId": "people_staff_temporary_password_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this staff member.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TemporaryPasswordRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/shops/closures/": {
+            "get": {
+                "operationId": "shops_closures_list",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "shops"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShopClosuresAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "shops_closures_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "shops"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClosureCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Closure"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/shops/closures/{id}/cancel/": {
+            "post": {
+                "operationId": "shops_closures_cancel_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this closure.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "shops"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClosureReasonRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Closure"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/shops/closures/{id}/last-day/": {
+            "post": {
+                "operationId": "shops_closures_last_day_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this closure.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "shops"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClosureLastDayRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Closure"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/shops/settings/": {
+            "get": {
+                "operationId": "shops_settings_list",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "shops"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShopRulesAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "shops_settings_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "shops"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SettingCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Setting"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/shops/sides/": {
+            "get": {
+                "operationId": "shops_sides_list",
+                "parameters": [
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "description": "The pagination cursor value.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "shops"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedSideList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "shops_sides_create",
+                "tags": [
+                    "shops"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SideCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Side"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/shops/sides/{id}/": {
+            "get": {
+                "operationId": "shops_sides_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this side.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "shops"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Side"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "shops_sides_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this side.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "shops"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SideEditRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Side"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ApiError": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "fields": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "params": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "oneOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                },
+                                {
+                                    "type": "boolean"
+                                }
+                            ],
+                            "nullable": true
+                        }
+                    }
+                },
+                "required": [
+                    "code",
+                    "fields",
+                    "message",
+                    "params"
+                ]
+            },
+            "BootstrapAnswer": {
+                "type": "object",
+                "properties": {
+                    "shop": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The shop this copy is of: a laptop fills only that shop's database, and writes nothing for another."
+                    },
+                    "min_app_version": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "The lowest app number that may still sync, as on every pull page: an app whose own number is lower fills nothing, and updates first."
+                    },
+                    "cursor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "The shop's last change number this copy holds: the first pull asks for what came after."
+                    },
+                    "last_device_seq": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "The laptop's own last number: its next record is this plus one, never 1 again."
+                    },
+                    "side": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SideRecord"
+                        }
+                    },
+                    "payment_account": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PaymentAccountRecord"
+                        }
+                    },
+                    "staff": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/StaffRecord"
+                        }
+                    },
+                    "setting": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SettingRecord"
+                        }
+                    },
+                    "setting_keys": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SettingKeyRecord"
+                        }
+                    }
+                },
+                "required": [
+                    "cursor",
+                    "last_device_seq",
+                    "min_app_version",
+                    "payment_account",
+                    "setting",
+                    "setting_keys",
+                    "shop",
+                    "side",
+                    "staff"
+                ]
+            },
+            "CarriedEnvelopeRequest": {
+                "type": "object",
+                "properties": {
+                    "device": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The laptop that made it."
+                    },
+                    "device_seq": {
+                        "type": "integer",
+                        "maximum": 999999999998,
+                        "minimum": 1,
+                        "format": "int64",
+                        "description": "Its number on the laptop that made it."
+                    },
+                    "loaded_by": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The staff member who loaded the rescue file on the sending laptop."
+                    }
+                },
+                "required": [
+                    "device",
+                    "device_seq",
+                    "loaded_by"
+                ]
+            },
+            "Change": {
+                "oneOf": [
+                    {
+                        "$ref": "#/components/schemas/SideChange"
+                    },
+                    {
+                        "$ref": "#/components/schemas/PaymentAccountChange"
+                    },
+                    {
+                        "$ref": "#/components/schemas/StaffChange"
+                    },
+                    {
+                        "$ref": "#/components/schemas/SettingChange"
+                    }
+                ],
+                "discriminator": {
+                    "propertyName": "entity",
+                    "mapping": {
+                        "side": "#/components/schemas/SideChange",
+                        "payment_account": "#/components/schemas/PaymentAccountChange",
+                        "staff": "#/components/schemas/StaffChange",
+                        "setting": "#/components/schemas/SettingChange"
+                    }
+                }
+            },
+            "ChangeOpEnum": {
+                "enum": [
+                    "upsert",
+                    "archive"
+                ],
+                "type": "string",
+                "description": "* `upsert` - Added or changed\n* `archive` - Archived"
+            },
+            "Closure": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "first_day": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    },
+                    "last_day": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ClosureStatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "added_by": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "added_by",
+                    "created_at",
+                    "first_day",
+                    "id",
+                    "last_day",
+                    "name",
+                    "status"
+                ]
+            },
+            "ClosureCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "first_day": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "last_day": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 60
+                    }
+                },
+                "required": [
+                    "first_day",
+                    "id",
+                    "last_day"
+                ]
+            },
+            "ClosureLastDayRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 500
+                    },
+                    "last_day": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                },
+                "required": [
+                    "last_day",
+                    "reason"
+                ]
+            },
+            "ClosureReasonRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 500
+                    }
+                },
+                "required": [
+                    "reason"
+                ]
+            },
+            "ClosureStatusEnum": {
+                "enum": [
+                    "active",
+                    "cancelled"
+                ],
+                "type": "string",
+                "description": "* `active` - Active\n* `cancelled` - Cancelled"
+            },
+            "DemoDevice": {
+                "type": "object",
+                "properties": {
+                    "pins": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DemoPin"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "pins"
+                ]
+            },
+            "DemoOpen": {
+                "type": "object",
+                "properties": {
+                    "open": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "open"
+                ]
+            },
+            "DemoPin": {
+                "type": "object",
+                "properties": {
+                    "staff_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "pin": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "pin",
+                    "staff_id"
+                ]
+            },
+            "Device": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "code": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "home_side": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DeviceStatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "last_seen_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "version": {
+                        "type": "integer",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "code",
+                    "created_at",
+                    "home_side",
+                    "id",
+                    "last_seen_at",
+                    "name",
+                    "status",
+                    "updated_at",
+                    "version"
+                ]
+            },
+            "DeviceConfirmRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "pairing_code": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 20
+                    },
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                    },
+                    "home_side": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "home_side",
+                    "id",
+                    "name",
+                    "pairing_code"
+                ]
+            },
+            "DeviceEditRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                    },
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                },
+                "required": [
+                    "name",
+                    "version"
+                ]
+            },
+            "DeviceHealth": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "code": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "home_side": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DeviceStatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "last_synced_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "unsent_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "app_version": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "clock_error_seconds": {
+                        "type": "integer",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "outages": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DeviceOutage"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "app_version",
+                    "clock_error_seconds",
+                    "code",
+                    "home_side",
+                    "id",
+                    "last_synced_at",
+                    "name",
+                    "outages",
+                    "status",
+                    "unsent_count"
+                ]
+            },
+            "DeviceMe": {
+                "type": "object",
+                "properties": {
+                    "device": {
+                        "$ref": "#/components/schemas/MeDevice"
+                    },
+                    "home_side": {
+                        "$ref": "#/components/schemas/MeSide"
+                    },
+                    "shop": {
+                        "$ref": "#/components/schemas/MeShop"
+                    }
+                },
+                "required": [
+                    "device",
+                    "home_side",
+                    "shop"
+                ]
+            },
+            "DeviceOutage": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "ended_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "end_unknown": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "end_unknown",
+                    "ended_at",
+                    "id",
+                    "started_at"
+                ]
+            },
+            "DeviceReasonRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 500
+                    }
+                },
+                "required": [
+                    "reason"
+                ]
+            },
+            "DeviceStatusEnum": {
+                "enum": [
+                    "active",
+                    "blocked"
+                ],
+                "type": "string",
+                "description": "* `active` - Active\n* `blocked` - Blocked"
+            },
+            "FlagKindEnum": {
+                "enum": [
+                    "cash_difference",
+                    "count_difference",
+                    "delivery_difference",
+                    "transfer_difference",
+                    "negative_stock",
+                    "duplicate_code",
+                    "late_record",
+                    "unverified_time",
+                    "missing_clock_out",
+                    "suspended_staff_activity",
+                    "device_gap",
+                    "balance_mismatch",
+                    "open_bag_difference",
+                    "production_loss",
+                    "total_mismatch",
+                    "permission_break",
+                    "drawer_conflict",
+                    "invalid_document"
+                ],
+                "type": "string",
+                "description": "* `cash_difference` - Cash difference\n* `count_difference` - Count difference\n* `delivery_difference` - Delivery difference\n* `transfer_difference` - Transfer difference\n* `negative_stock` - Negative stock\n* `duplicate_code` - Duplicate transaction code\n* `late_record` - Late record\n* `unverified_time` - Unverified time\n* `missing_clock_out` - Missing clock-out\n* `suspended_staff_activity` - Suspended staff activity\n* `device_gap` - Device gap\n* `balance_mismatch` - Balance mismatch\n* `open_bag_difference` - Open bag difference\n* `production_loss` - Production loss\n* `total_mismatch` - Total mismatch\n* `permission_break` - Permission break\n* `drawer_conflict` - Drawer conflict\n* `invalid_document` - Invalid document"
+            },
+            "FlagRaised": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/FlagKindEnum"
+                    }
+                },
+                "required": [
+                    "id",
+                    "kind"
+                ]
+            },
+            "FontEnum": {
+                "enum": [
+                    "default",
+                    "second"
+                ],
+                "type": "string",
+                "description": "* `default` - Default\n* `second` - Second, easy to read"
+            },
+            "Health": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "status",
+                    "version"
+                ]
+            },
+            "LanguageEnum": {
+                "enum": [
+                    "sw",
+                    "en"
+                ],
+                "type": "string",
+                "description": "* `sw` - Kiswahili\n* `en` - English"
+            },
+            "MeDevice": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "code": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DeviceStatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "code",
+                    "id",
+                    "name",
+                    "status"
+                ]
+            },
+            "MePermissions": {
+                "type": "object",
+                "properties": {
+                    "whole_shop": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "sides": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MeSideKeys"
+                        }
+                    }
+                },
+                "required": [
+                    "sides",
+                    "whole_shop"
+                ]
+            },
+            "MeShop": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "code": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "currency": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "default_language": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/LanguageEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "code",
+                    "currency",
+                    "default_language",
+                    "id",
+                    "name",
+                    "timezone"
+                ]
+            },
+            "MeSide": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "code": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "band": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SideBandEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "band",
+                    "code",
+                    "id",
+                    "name"
+                ]
+            },
+            "MeSideKeys": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "code": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "band": {
+                        "$ref": "#/components/schemas/SideBandEnum"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "band",
+                    "code",
+                    "id",
+                    "name",
+                    "permissions"
+                ]
+            },
+            "MeStaff": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "job_title": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "display_name",
+                    "id",
+                    "job_title"
+                ]
+            },
+            "MeUser": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "full_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "language": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/LanguageEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "font": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FontEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "font",
+                    "full_name",
+                    "id",
+                    "language"
+                ]
+            },
+            "NullEnum": {
+                "enum": [
+                    null
+                ]
+            },
+            "OutageEnvelopeRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The period's id, made on the laptop (UUIDv7)."
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the laptop's line went, by its clock."
+                    },
+                    "ended_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When it came back, by its clock."
+                    },
+                    "end_unknown": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "True when the laptop's app lost sight of it first: `ended_at` is then the last time it saw it."
+                    }
+                },
+                "required": [
+                    "ended_at",
+                    "id",
+                    "started_at"
+                ]
+            },
+            "OwnSettingsAnswer": {
+                "type": "object",
+                "properties": {
+                    "language": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/LanguageEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "font": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FontEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "font",
+                    "language"
+                ]
+            },
+            "OwnSettingsRequest": {
+                "type": "object",
+                "properties": {
+                    "language": {
+                        "$ref": "#/components/schemas/LanguageEnum"
+                    },
+                    "font": {
+                        "$ref": "#/components/schemas/FontEnum"
+                    }
+                }
+            },
+            "PaginatedDeviceList": {
+                "type": "object",
+                "required": [
+                    "results"
+                ],
+                "properties": {
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?cursor=cD00ODY%3D\""
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?cursor=cj0xJnA9NDg3"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Device"
+                        }
+                    }
+                }
+            },
+            "PaginatedSideList": {
+                "type": "object",
+                "required": [
+                    "results"
+                ],
+                "properties": {
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?cursor=cD00ODY%3D\""
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?cursor=cj0xJnA9NDg3"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Side"
+                        }
+                    }
+                }
+            },
+            "PairingStart": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "code",
+                    "expires_at"
+                ]
+            },
+            "PaymentAccountChange": {
+                "type": "object",
+                "properties": {
+                    "seq": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "entity": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/ChangeOpEnum"
+                    },
+                    "data": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PaymentAccountRecord"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "data",
+                    "entity",
+                    "id",
+                    "op",
+                    "seq"
+                ]
+            },
+            "PaymentAccountKindEnum": {
+                "enum": [
+                    "cash_drawer",
+                    "mobile_money",
+                    "bank"
+                ],
+                "type": "string",
+                "description": "* `cash_drawer` - Cash drawer\n* `mobile_money` - Mobile money\n* `bank` - Bank"
+            },
+            "PaymentAccountRecord": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "kind": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PaymentAccountKindEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "provider": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "number": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "sides": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "kind",
+                    "name",
+                    "number",
+                    "provider",
+                    "sides"
+                ]
+            },
+            "PinLoginRequest": {
+                "type": "object",
+                "properties": {
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid",
+                        "writeOnly": true
+                    },
+                    "pin": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1,
+                        "maxLength": 16
+                    }
+                },
+                "required": [
+                    "pin",
+                    "staff"
+                ]
+            },
+            "PullAnswer": {
+                "type": "object",
+                "properties": {
+                    "changes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Change"
+                        }
+                    },
+                    "cursor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "The last change number this page read, sent or passed over, or the cursor asked when none came: the next pull asks from it."
+                    },
+                    "has_more": {
+                        "type": "boolean",
+                        "description": "More changes wait after this page: ask again at once, from its cursor. A page can hold fewer than 1,000 changes and still have more after it."
+                    },
+                    "server_time": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "min_app_version": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "The lowest app number that may still sync: an app whose own number is lower sends what it holds, then updates."
+                    }
+                },
+                "required": [
+                    "changes",
+                    "cursor",
+                    "has_more",
+                    "min_app_version",
+                    "server_time"
+                ]
+            },
+            "PushAnswer": {
+                "type": "object",
+                "properties": {
+                    "answers": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PushedAnswer"
+                        }
+                    }
+                },
+                "required": [
+                    "answers"
+                ]
+            },
+            "PushAnswerStatusEnum": {
+                "enum": [
+                    "accepted",
+                    "duplicate",
+                    "invalid",
+                    "retry"
+                ],
+                "type": "string",
+                "description": "* `accepted` - accepted\n* `duplicate` - duplicate\n* `invalid` - invalid\n* `retry` - retry"
+            },
+            "PushBatchRequest": {
+                "type": "object",
+                "properties": {
+                    "documents": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PushedEnvelopeRequest"
+                        },
+                        "maxItems": 100
+                    },
+                    "sent_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "The laptop's clock as it sends this push."
+                    },
+                    "app_version": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The app's version on the laptop.",
+                        "maxLength": 64
+                    },
+                    "unsent_count": {
+                        "type": "integer",
+                        "maximum": 2147483547,
+                        "minimum": 0,
+                        "description": "How many records the laptop holds unsent, besides these."
+                    },
+                    "outages": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OutageEnvelopeRequest"
+                        },
+                        "maxItems": 100
+                    }
+                },
+                "required": [
+                    "app_version",
+                    "documents",
+                    "outages",
+                    "sent_at",
+                    "unsent_count"
+                ]
+            },
+            "PushedAnswer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/PushAnswerStatusEnum"
+                    },
+                    "first": {
+                        "nullable": true,
+                        "description": "A duplicate's first answer.\n\n* `accepted` - Accepted\n* `invalid` - Invalid",
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/PushedStatusEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "posted_seq": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "nullable": true,
+                        "description": "The last change number its save took."
+                    },
+                    "flags": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FlagRaised"
+                        }
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": "An invalid one's reason, as the error shape names it."
+                    },
+                    "fields": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "required": [
+                    "code",
+                    "fields",
+                    "first",
+                    "flags",
+                    "id",
+                    "posted_seq",
+                    "status"
+                ]
+            },
+            "PushedEnvelopeRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The document's id, made on the laptop (UUIDv7)."
+                    },
+                    "type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                    },
+                    "schema_version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 1
+                    },
+                    "device_seq": {
+                        "type": "integer",
+                        "maximum": 999999999998,
+                        "minimum": 1,
+                        "format": "int64",
+                        "description": "The laptop's number for it."
+                    },
+                    "client_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "The laptop's clock when it was made: kept, never trusted."
+                    },
+                    "created_by": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The staff member who made it at the counter."
+                    },
+                    "payload": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "description": "The document itself, in its type's shape."
+                    },
+                    "carried_from": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CarriedEnvelopeRequest"
+                            }
+                        ],
+                        "description": "Only for a record a rescue file carried here: where it was made."
+                    }
+                },
+                "required": [
+                    "client_time",
+                    "created_by",
+                    "device_seq",
+                    "id",
+                    "payload",
+                    "schema_version",
+                    "type"
+                ]
+            },
+            "PushedStatusEnum": {
+                "enum": [
+                    "accepted",
+                    "invalid"
+                ],
+                "type": "string",
+                "description": "* `accepted` - Accepted\n* `invalid` - Invalid"
+            },
+            "RuleAnswer": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "$ref": "#/components/schemas/SettingKeyEnum"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/SettingKindEnum"
+                    },
+                    "scope": {
+                        "$ref": "#/components/schemas/SettingScopeEnum"
+                    },
+                    "side": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "description": "Empty for a rule of the whole shop."
+                    },
+                    "default": {
+                        "type": "string"
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "The value in force today, as its kind writes it."
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Setting"
+                        }
+                    }
+                },
+                "required": [
+                    "default",
+                    "key",
+                    "kind",
+                    "rows",
+                    "scope",
+                    "side",
+                    "value"
+                ]
+            },
+            "SaleFlowEnum": {
+                "enum": [
+                    "one_screen",
+                    "writer_cashier_loader"
+                ],
+                "type": "string",
+                "description": "* `one_screen` - One screen\n* `writer_cashier_loader` - Writer, cashier, loader"
+            },
+            "Setting": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "key": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "side": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "value": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "effective_from": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    },
+                    "note": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "set_by": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "effective_from",
+                    "id",
+                    "key",
+                    "note",
+                    "set_by",
+                    "side",
+                    "value"
+                ]
+            },
+            "SettingChange": {
+                "type": "object",
+                "properties": {
+                    "seq": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "entity": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/ChangeOpEnum"
+                    },
+                    "data": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SettingRecord"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "data",
+                    "entity",
+                    "id",
+                    "op",
+                    "seq"
+                ]
+            },
+            "SettingCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60
+                    },
+                    "side": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "value": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "effective_from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "note": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "effective_from",
+                    "id",
+                    "key",
+                    "value"
+                ]
+            },
+            "SettingKeyEnum": {
+                "enum": [
+                    "attendance.enabled",
+                    "attendance.on_time_until",
+                    "attendance.late_fine",
+                    "attendance.second_fine_from",
+                    "attendance.second_fine",
+                    "attendance.review_from",
+                    "attendance.afternoon_from",
+                    "attendance.midday",
+                    "attendance.morning_leave_until",
+                    "attendance.closing",
+                    "money.rounding_step",
+                    "session.idle_minutes",
+                    "cash.tolerance",
+                    "count.tolerance_pct",
+                    "expiry.alert_days",
+                    "stock.block_negative"
+                ],
+                "type": "string",
+                "description": "* `attendance.enabled` - attendance.enabled\n* `attendance.on_time_until` - attendance.on_time_until\n* `attendance.late_fine` - attendance.late_fine\n* `attendance.second_fine_from` - attendance.second_fine_from\n* `attendance.second_fine` - attendance.second_fine\n* `attendance.review_from` - attendance.review_from\n* `attendance.afternoon_from` - attendance.afternoon_from\n* `attendance.midday` - attendance.midday\n* `attendance.morning_leave_until` - attendance.morning_leave_until\n* `attendance.closing` - attendance.closing\n* `money.rounding_step` - money.rounding_step\n* `session.idle_minutes` - session.idle_minutes\n* `cash.tolerance` - cash.tolerance\n* `count.tolerance_pct` - count.tolerance_pct\n* `expiry.alert_days` - expiry.alert_days\n* `stock.block_negative` - stock.block_negative"
+            },
+            "SettingKeyRecord": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/SettingKindEnum"
+                    },
+                    "scope": {
+                        "$ref": "#/components/schemas/SettingScopeEnum"
+                    },
+                    "default": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "default",
+                    "key",
+                    "kind",
+                    "scope"
+                ]
+            },
+            "SettingKindEnum": {
+                "enum": [
+                    "money",
+                    "percent",
+                    "whole",
+                    "time",
+                    "yes_no"
+                ],
+                "type": "string",
+                "description": "* `money` - money\n* `percent` - percent\n* `whole` - whole\n* `time` - time\n* `yes_no` - yes_no"
+            },
+            "SettingRecord": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "key": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "side": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "value": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "effective_from": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "effective_from",
+                    "id",
+                    "key",
+                    "side",
+                    "value"
+                ]
+            },
+            "SettingScopeEnum": {
+                "enum": [
+                    "shop",
+                    "side"
+                ],
+                "type": "string",
+                "description": "* `shop` - shop\n* `side` - side"
+            },
+            "ShopClosuresAnswer": {
+                "type": "object",
+                "properties": {
+                    "today": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "closures": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Closure"
+                        }
+                    }
+                },
+                "required": [
+                    "closures",
+                    "today"
+                ]
+            },
+            "ShopRulesAnswer": {
+                "type": "object",
+                "properties": {
+                    "today": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "rules": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RuleAnswer"
+                        }
+                    }
+                },
+                "required": [
+                    "rules",
+                    "today"
+                ]
+            },
+            "Side": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "code": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "sale_flow": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SaleFlowEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "is_live": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "band": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SideBandEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "version": {
+                        "type": "integer",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "band",
+                    "code",
+                    "created_at",
+                    "id",
+                    "is_live",
+                    "name",
+                    "sale_flow",
+                    "updated_at",
+                    "version"
+                ]
+            },
+            "SideBandEnum": {
+                "enum": [
+                    "blue",
+                    "striped"
+                ],
+                "type": "string",
+                "description": "* `blue` - Blue\n* `striped` - Striped"
+            },
+            "SideChange": {
+                "type": "object",
+                "properties": {
+                    "seq": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "entity": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/ChangeOpEnum"
+                    },
+                    "data": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SideRecord"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "data",
+                    "entity",
+                    "id",
+                    "op",
+                    "seq"
+                ]
+            },
+            "SideCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "code": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1
+                    },
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                    },
+                    "sale_flow": {
+                        "$ref": "#/components/schemas/SaleFlowEnum"
+                    },
+                    "band": {
+                        "$ref": "#/components/schemas/SideBandEnum"
+                    }
+                },
+                "required": [
+                    "code",
+                    "id",
+                    "name"
+                ]
+            },
+            "SideEditRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                    },
+                    "is_live": {
+                        "type": "boolean"
+                    },
+                    "band": {
+                        "$ref": "#/components/schemas/SideBandEnum"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                },
+                "required": [
+                    "version"
+                ]
+            },
+            "SideKeysRecord": {
+                "type": "object",
+                "properties": {
+                    "side": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "permissions",
+                    "side"
+                ]
+            },
+            "SideRecord": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "code": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "sale_flow": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SaleFlowEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "is_live": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "band": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SideBandEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "band",
+                    "code",
+                    "id",
+                    "is_live",
+                    "name",
+                    "sale_flow"
+                ]
+            },
+            "StaffChange": {
+                "type": "object",
+                "properties": {
+                    "seq": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "entity": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/ChangeOpEnum"
+                    },
+                    "data": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StaffRecord"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "data",
+                    "entity",
+                    "id",
+                    "op",
+                    "seq"
+                ]
+            },
+            "StaffKeysRecord": {
+                "type": "object",
+                "properties": {
+                    "every_side": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "sides": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SideKeysRecord"
+                        }
+                    }
+                },
+                "required": [
+                    "every_side",
+                    "sides"
+                ]
+            },
+            "StaffRecord": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "full_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StaffStatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "pin_changed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "language": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/LanguageEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "font": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FontEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "permissions": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StaffKeysRecord"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "display_name",
+                    "font",
+                    "full_name",
+                    "id",
+                    "language",
+                    "permissions",
+                    "pin_changed_at",
+                    "status"
+                ]
+            },
+            "StaffStatusEnum": {
+                "enum": [
+                    "active",
+                    "suspended",
+                    "left"
+                ],
+                "type": "string",
+                "description": "* `active` - Active\n* `suspended` - Suspended\n* `left` - Left"
+            },
+            "TemporaryPasswordRequest": {
+                "type": "object",
+                "properties": {
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1,
+                        "maxLength": 128
+                    },
+                    "reason": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "maxLength": 500
+                    }
+                },
+                "required": [
+                    "password",
+                    "reason"
+                ]
+            },
+            "WhoIsHere": {
+                "type": "object",
+                "properties": {
+                    "user": {
+                        "$ref": "#/components/schemas/MeUser"
+                    },
+                    "staff": {
+                        "$ref": "#/components/schemas/MeStaff"
+                    },
+                    "shop": {
+                        "$ref": "#/components/schemas/MeShop"
+                    },
+                    "device": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MeDevice"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "home_side": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MeSide"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "must_change_password": {
+                        "type": "boolean"
+                    },
+                    "idle_minutes": {
+                        "type": "integer"
+                    },
+                    "permissions": {
+                        "$ref": "#/components/schemas/MePermissions"
+                    }
+                },
+                "required": [
+                    "device",
+                    "home_side",
+                    "idle_minutes",
+                    "must_change_password",
+                    "permissions",
+                    "shop",
+                    "staff",
+                    "user"
+                ]
+            }
+        },
+        "securitySchemes": {
+            "cookieAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "sessionid"
+            },
+            "deviceKey": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "device_key"
+            }
+        }
+    }
+}

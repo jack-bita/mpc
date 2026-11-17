@@ -17,6 +17,7 @@ from allauth.account.models import EmailAddress
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core import mail
 from django.test import Client
+from django.views.debug import ExceptionReporter
 from pytest_django import Settings
 
 from apps.people.models import User
@@ -34,6 +35,7 @@ PHONE = "+255712345678"
 PASSWORD = "mbegu-za-mahindi-2026"
 NEW_PASSWORD = "mbolea-ya-kupandia-2027"
 JSON = "application/json"
+TEST_CLIENT_FILES = ("django/test/client.py", "test_password_reset.py")
 
 
 @pytest.fixture
@@ -49,7 +51,7 @@ def post(client: Client, path: str, **sent: str) -> tuple[int, list[str]]:
 
 def key_from_the_email() -> str:
     # The key, from the link in the last email, as the app reads it from the address bar: after the #.
-    [link] = [word for word in mail.outbox[-1].body.split() if "/password-reset#" in word]
+    [link] = [word for word in mail.outbox[-1].body.split() if "/password-reset/#" in word]
     return link.partition("#")[2]
 
 
@@ -61,7 +63,7 @@ def test_password_reset_by_email(manager: User) -> None:
     # after the #, so no server's log ever sees it.
     [email] = mail.outbox
     assert email.to == [EMAIL]
-    assert "http://testserver/password-reset#" in email.body
+    assert "http://testserver/password-reset/#" in email.body
     key = key_from_the_email()
     assert client.get(RESET, headers={"X-Password-Reset-Key": key}).status_code == 200
 
@@ -71,6 +73,42 @@ def test_password_reset_by_email(manager: User) -> None:
     assert post(client, LOGIN, email=EMAIL, password=NEW_PASSWORD) == (200, [])
     # Their phone logs in with it too: one person, one password (D12).
     assert post(Client(), LOGIN, phone=PHONE, password=NEW_PASSWORD) == (200, [])
+
+
+def test_reset_link_clears_the_mark(manager: User) -> None:
+    # Someone with a temporary password and an email may get back in by the link instead: what they set is their own, so
+    # the mark comes off, whichever way they chose it (ADR-0038).
+    User.objects.filter(pk=manager.pk).update(must_change_password=True)
+    post(Client(), REQUEST, email=EMAIL)
+    assert post(Client(), RESET, key=key_from_the_email(), password=NEW_PASSWORD) == (401, [])
+    manager.refresh_from_db()
+    assert manager.must_change_password is False
+
+
+def test_reset_link_cannot_keep_the_temporary_password(manager: User) -> None:
+    # The same rule by the link as by the change route: the owner knows that one, so it can't become the person's own.
+    User.objects.filter(pk=manager.pk).update(must_change_password=True)
+    post(Client(), REQUEST, email=EMAIL)
+    status, codes = post(Client(), RESET, key=key_from_the_email(), password=PASSWORD)
+    assert (status, codes) == (400, ["password.same_as_temporary"])
+    manager.refresh_from_db()
+    assert manager.must_change_password is True
+
+
+def test_reset_keeps_the_password_out_of_error_reports(manager: User) -> None:
+    # A crash as the new password is hashed. Every variable below this route is hidden (apps/people/api/
+    # password_urls.py); the other routes have a crash test each, in test_password_login.py and test_password_change.py.
+    post(Client(), REQUEST, email=EMAIL)
+    key = key_from_the_email()
+    crashing = mock.patch("django.contrib.auth.base_user.make_password", side_effect=MemoryError("out of memory"))
+    with crashing, pytest.raises(MemoryError) as crash:
+        post(Client(), RESET, key=key, password=NEW_PASSWORD)
+    frames = ExceptionReporter(None, crash.type, crash.value, crash.tb).get_traceback_frames()
+    # Only the server's frames: the test client's own hold what this test sent.
+    on_the_server = [frame for frame in frames if not frame["filename"].endswith(TEST_CLIENT_FILES)]
+    shown = [str(value) for frame in on_the_server for _, value in frame["vars"]]
+    assert shown
+    assert not [value for value in shown if NEW_PASSWORD in value or key in value]
 
 
 def test_password_reset_with_no_phone() -> None:

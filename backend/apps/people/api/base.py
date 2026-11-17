@@ -2,11 +2,11 @@
 
 An office route builds on ShopViewSet (apps/core/api/base.py) and needs a person. A device route builds on DeviceView
 and needs a paired device instead, logged in by its key (apps/people/api/authentication.py): today the start of a
-pairing and `me`; later sync (SYNC-2 on) and PIN login (AUTH-4).
+pairing, `me` and PIN login (AUTH-4); later sync (SYNC-2 on).
 
 - The shop. Right after the login, before any check reads a table, the view opens the device's shop (shop_context)
-  and tells PostgreSQL who acts (acting_as: the shop, and nobody, as a device is no person), and keeps both for the
-  whole visit, the error answer included, as ShopViewSet does. Both close however the visit ends.
+  and tells PostgreSQL who acts (acting_as: the shop, nobody, as a device is no person, and the device itself, X3), and
+  keeps both for the whole visit, the error answer included, as ShopViewSet does. Both close however the visit ends.
 - No device. A route that needs one refuses the visit (401 not_authenticated). A route a new device calls before
   it has a working key says `device_optional = True`, and then runs with no shop open: it may read no shop's table.
 - CSRF. A device's change is checked by its login; a change sent with no device, such as the start of a pairing, is
@@ -16,12 +16,14 @@ pairing and `me`; later sync (SYNC-2 on) and PIN login (AUTH-4).
 
 CORE-7's sweep finds every route built on this by itself, a ViewSet's too, and calls each as a device of each shop, and
 with no key at all; one with no GET names a leak test of its own (DEVICE_ROUTES_WITHOUT_A_LOOK,
-backend/tests/sweep_lists.py).
+backend/tests/sweep_lists.py). A route whose address names one row, `<uuid:pk>`, says which table that row is in
+(`model`), so the sweep can ask about each of shop A's rows as shop B's device (CTRL-3).
 """
 
 from contextlib import ExitStack
 from typing import Any, ClassVar
 
+from django.db import models
 from django.http import HttpRequest, HttpResponseBase
 from rest_framework import exceptions
 from rest_framework.permissions import SAFE_METHODS, AllowAny
@@ -31,7 +33,8 @@ from rest_framework.views import APIView
 
 from apps.core.acting import acting_as
 from apps.core.tenancy import shop_context
-from apps.people.api.authentication import DEVICE_KEY_COOKIE, DeviceKeyAuthentication, enforce_csrf, set_key_cookie
+from apps.people.api.authentication import DeviceKeyAuthentication, enforce_csrf, set_key_cookie
+from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import Device
 
 
@@ -44,6 +47,11 @@ class DeviceView(APIView):
     # True on a route a new device calls before a manager has said yes: it runs without a device, and so without a
     # shop. False on every other route, which refuses a visit with no device.
     device_optional: ClassVar[bool] = False
+    # For a route whose address names one row by its id, `<uuid:pk>` (a photo's file, CTRL-3): the table that row is in,
+    # as an office route names its own. The route itself may find the row through a service; the tenancy sweep reads
+    # this to ask about each of shop A's rows as shop B's device, and with no key, and to expect exactly the answer an
+    # id no shop has gets. None on a route whose address names nothing.
+    model: ClassVar[type[models.Model] | None] = None
     # The visit's stack of things to close as it ends: the device's shop, and who acts as PostgreSQL knows it. Set in
     # dispatch(), once per visit; DRF makes a new view object for every visit, so two visits never share it.
     _visit: ExitStack
@@ -61,8 +69,9 @@ class DeviceView(APIView):
         if isinstance(device, Device):
             self._visit.enter_context(shop_context(device.shop_id))
             # Opened after the shop, so it closes first. An edit a device's visit makes to an office table is then
-            # recorded as made in its shop by nobody (apps/core/acting.py), and an edit of another shop's row refused.
-            self._visit.enter_context(acting_as(device))
+            # recorded as made in its shop, by nobody, on this device (apps/core/acting.py, X3), and an edit of another
+            # shop's row refused.
+            self._visit.enter_context(acting_as(device, device=device))
         elif not self.device_optional:
             # No key, or one that opens no device. English for the logs; the app translates the code (ADR-0032).
             raise exceptions.NotAuthenticated("This route needs a paired device's key.")

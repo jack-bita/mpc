@@ -15,18 +15,22 @@ will (apps/core/acting.py). Outside a visit, each action names its own `by` (the
 only: the repo is public (03 §10).
 """
 
+from collections.abc import Callable
 from datetime import date, datetime
 
 import pytest
 
 from apps.control.models import AuditEvent, EditEvent
 from apps.core.acting import acting_as
+from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, User
 from apps.people.services import add_staff, mark_left, set_pin, suspend
-from apps.shops.models import Shop
+from apps.shops.models import Shop, Side
 
 pytestmark = pytest.mark.django_db
+
+GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
 # Dates in the past: a leaving date can't be in the future.
 START = date(2026, 3, 2)
@@ -61,7 +65,11 @@ def test_staff_edit_recorded_with_person(shop_a: Shop, asha: StaffMember, staff_
     assert lines == 2
 
 
-def test_pin_hash_never_copied_to_history(shop_a: Shop, asha: StaffMember, staff_a: StaffMember) -> None:
+def test_pin_hash_never_copied_to_history(
+    shop_a: Shop, asha: StaffMember, staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # Setting a PIN needs staff.manage (apps/people/services.py), which the owner holds.
+    give_role(staff_a, RoleTemplate.OWNER, None)
     with shop_context(shop_a), acting_as(staff_a):
         set_pin(asha, "4826", by=staff_a)
         [edit] = history_of(asha)
@@ -77,7 +85,10 @@ def test_pin_hash_never_copied_to_history(shop_a: Shop, asha: StaffMember, staff
     assert asha.pin_hash not in f"{edit.before} {edit.after}"
 
 
-def test_staff_action_names_its_by_outside_a_visit(shop_a: Shop, asha: StaffMember, staff_a: StaffMember) -> None:
+def test_staff_action_names_its_by_outside_a_visit(
+    shop_a: Shop, asha: StaffMember, staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    give_role(staff_a, RoleTemplate.OWNER, None)
     # Each staff action takes who acts as `by`, and its audit line names them. The history line of the same change
     # must name the same person, even where no visit told PostgreSQL anyone, as in a job or a command: the two books
     # must never disagree about who did it (02 v1.7).

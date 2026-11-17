@@ -11,6 +11,9 @@ product, only those given on every side count: a key for Vyakula alone opens not
 is written once, in core's HeldPermissions (apps/core/permissions.py). A person who is suspended, or who has left,
 holds nothing at all, whatever they were given; brought back, they hold it all again.
 
+And one question about what they were given, whatever their status (given_permissions): what they would hold if brought
+back, for a check of who holds more than whom (AUTH-6).
+
 Read through the guarded `objects` (CORE-2): the person's shop must be open, and only its rows count.
 """
 
@@ -38,16 +41,27 @@ def held_permissions(staff: StaffMember) -> HeldPermissions:
     """Every permission code `staff` holds, on every side and side by side, in two queries: one for the extra
     permissions, one for the roles, however many sides the shop has. Nothing for a person who is suspended or has
     left."""
+    # The status is read from the database in the same query, not from the copy handed in: a visit may hold a copy
+    # loaded before the person was suspended, which still says "active" (X2).
+    return _read_permissions(staff, Q(staff=staff, staff__status=StaffStatus.ACTIVE))
+
+
+def given_permissions(staff: StaffMember) -> HeldPermissions:
+    """Every permission code `staff` was given, whatever their status: what they hold once they are brought back. Never
+    for what a person may do now, which is held_permissions; this is for comparing two people (HeldPermissions.covers),
+    where a suspended owner must not read as someone with no keys."""
+    return _read_permissions(staff, Q(staff=staff))
+
+
+def _read_permissions(staff: StaffMember, rows: Q) -> HeldPermissions:
+    # The one reading behind both questions above: they differ only in which rows count.
     open_shop = current_shop()
     if open_shop is not ALL_SHOPS and open_shop != staff.shop_id:
         # T1: the guard reads only the open shop's rows, so a person of another shop would quietly hold nothing, and the
         # bug in the calling code would hide behind a plain "no". A server error instead, as for another shop's side.
         raise ShopMismatch("The person belongs to another shop than the one open.")
-    # The status is read from the database in the same query, not from the copy handed in: a visit may hold a copy
-    # loaded before the person was suspended, which still says "active" (X2).
-    held = Q(staff=staff, staff__status=StaffStatus.ACTIVE)
-    grants = PermissionGrant.objects.filter(held).values_list("side_id", "permission")
-    roles = RoleAssignment.objects.filter(held).values_list("side_id", "role__permissions")
+    grants = PermissionGrant.objects.filter(rows).values_list("side_id", "permission")
+    roles = RoleAssignment.objects.filter(rows).values_list("side_id", "role__permissions")
     every_side: set[str] = set()
     on_side: defaultdict[uuid.UUID, set[str]] = defaultdict(set)
 

@@ -69,7 +69,7 @@ INSTALLED_APPS = [
     "allauth",
     "allauth.account",
     "allauth.headless",
-    # Our domain apps, in layer order (ADR-0035; see apps/__init__.py).
+    # Our domain apps, in layer order (ADR-0043; see apps/__init__.py).
     "apps.core",
     "apps.control",
     "apps.shops",
@@ -83,6 +83,8 @@ INSTALLED_APPS = [
     "apps.staffpay",
     "apps.sync",
     "apps.reports",
+    # The demo shop's seed (DATA-1): not a domain app, so on a layer of its own above them all (03 §5.1).
+    "apps.demo",
 ]
 
 # The custom User (apps/people/models.py) replaces Django's own. Set before the first migration and
@@ -104,8 +106,10 @@ MIDDLEWARE = [
 # Who may check a password: allauth's checker alone, for every login, the admin's too (it takes the admin form's email
 # as well as our own login by email or phone, ADR-0038). Never two: Django tries each in turn until one says yes, so a
 # wrong password would be hashed twice and a right one once. The answer's time would then show a right password, and
-# the admin's login has no limit, so a stranger could try passwords there past every limit we count.
-AUTHENTICATION_BACKENDS = ["allauth.account.auth_backends.AuthenticationBackend"]
+# the admin's login has no limit, so a stranger could try passwords there past every limit we count. Ours is allauth's,
+# with its variables hidden from error reports (apps/people/accounts.py). A session names its checker, so a person's
+# session ends once when this name changes.
+AUTHENTICATION_BACKENDS = ["apps.people.accounts.PasswordBackend"]
 
 ROOT_URLCONF = "config.urls"
 
@@ -177,6 +181,17 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# --- Files: photos now, other files later (03 §5.13, CTRL-3). Kept through Django's storage API, so code never names a
+# folder: apps/core/storage.py explains the two places. Here, a folder beside the code, gitignored: Jack's laptop's.
+# prod.py chooses the real server's folder or the demo's database; test.py a folder of each test run's own.
+# "staticfiles" is Django's own default, written out because setting STORAGES replaces the whole list.
+# No MEDIA_URL and no route to the folder: a file has no address, and is served only through Django, after a
+# permission check (FolderStorage.url refuses).
+STORAGES = {
+    "default": {"BACKEND": "apps.core.storage.FolderStorage", "OPTIONS": {"location": str(BASE_DIR / "files")}},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
 # --- Django REST framework: how every API view behaves, unless a view says otherwise (03 §5.10).
 REST_FRAMEWORK = {
     # Every refusal leaves in the API's one error shape, with a code the app translates (ADR-0032).
@@ -205,8 +220,8 @@ REST_FRAMEWORK = {
     # Pairing's two limits, an hour each *(default)* (AUTH-5, apps/people/api/throttles.py): starts per caller's
     # network, which every device of a shop shares (its one IPv4 address, or its IPv6 /64), so a few devices an hour
     # is plenty; a manager's tries of a code per person, a wrong code included. No route is slowed down unless it names
-    # its limit: a device's own calls never are.
-    "DEFAULT_THROTTLE_RATES": {"pairing.start": "10/hour", "pairing.confirm": "10/hour"},
+    # its limit: a device's own calls never are. And a device's tries of a PIN, each a full check of 19 MiB (AUTH-4).
+    "DEFAULT_THROTTLE_RATES": {"pairing.start": "10/hour", "pairing.confirm": "10/hour", "pin.login": "30/minute"},
     # How many proxies stand in front of Django and add the caller's address to X-Forwarded-For: Caddy, 1, on a
     # laptop and on the real server (03 §12). DRF reads the address that many entries from the end; the entries
     # before them are whatever the caller wrote, so without this a phone could claim any address and never be slowed
@@ -238,6 +253,7 @@ CACHES = {
     "default": {**_DATABASE_CACHE, "LOCATION": "throttle_login", "OPTIONS": {"MAX_ENTRIES": 100_000}},
     "pairing_start": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_start"},
     "pairing_confirm": {**_DATABASE_CACHE, "LOCATION": "throttle_pairing_confirm"},
+    "pin_login": {**_DATABASE_CACHE, "LOCATION": "throttle_pin_login"},
 }
 
 # --- The API's description, /api/schema/, and its docs page, /api/docs/ (03 §5.10, ADR-0025).
@@ -247,8 +263,9 @@ SPECTACULAR_SETTINGS = {
         "The routes of the MPC shop system. Every refusal has one shape: "
         '{"code", "message", "fields", "params"}; the app translates the code.'
     ),
-    # The description's own version, not the deploy's commit: CI will compare the app's generated types with
-    # the description (UI-2), and a version that changed with every commit would never match.
+    # The description's own version, not the deploy's commit: CI compares the committed description with the
+    # code (test_committed_schema_matches_the_code, UI-2), and a version that changed with every commit would
+    # never match.
     "VERSION": "1",
     # The description doesn't list its own route.
     "SERVE_INCLUDE_SCHEMA": False,
@@ -264,8 +281,30 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_PATCH": False,
     # A field's fixed choices are named after their own type, not after the field: drf-spectacular would call a
     # device's status StatusEnum, and rename it, with a warning, once another table shows a `status` of its own. The
-    # app's generated types keep these names (UI-2).
-    "ENUM_NAME_OVERRIDES": {"DeviceStatusEnum": "apps.people.models.DeviceStatus"},
+    # app's generated types keep these names (UI-2). The bootstrap's own (SYNC-2): a person's status, which an office
+    # staff route will show too (PPL-4), an account's kind, before an attendance event's own `kind` (ATT-1), and a
+    # rule's scope and kind. And a language, which a person and a shop both have, under two field names (`language`,
+    # `default_language`): one list, one name.
+    "ENUM_NAME_OVERRIDES": {
+        "DeviceStatusEnum": "apps.people.models.DeviceStatus",
+        "LanguageEnum": "apps.core.languages.Language",
+        "StaffStatusEnum": "apps.people.models.StaffStatus",
+        "PaymentAccountKindEnum": "apps.shops.models.PaymentAccountKind",
+        "SettingScopeEnum": "apps.sync.api.serializers.SETTING_SCOPES",
+        "SettingKindEnum": "apps.sync.api.serializers.SETTING_KINDS",
+        # A rule's key on the settings page (SHOP-3): named after the registry, not after the field `key`.
+        "SettingKeyEnum": "apps.shops.api.serializers.SETTING_KEYS",
+        # A pull's change says `upsert` or `archive` (SYNC-3): named after the log's own choices, not after `op`.
+        "ChangeOpEnum": "apps.core.models.ChangeOp",
+        # The push's answers (SYNC-4): a flag's kind, the four answers, and a duplicate's first answer, each named after
+        # its own list, not after the field that holds it (`first`, `kind`, `status`), as another field of that name
+        # would rename them both, and the app's types with them.
+        "FlagKindEnum": "apps.control.models.FlagKind",
+        "PushAnswerStatusEnum": "apps.sync.api.serializers.PUSH_ANSWER_STATUSES",
+        "PushedStatusEnum": "apps.sync.models.PushedStatus",
+        # A side's band (SHOP-4): one name for the office's side, the laptop's copy and `me`, which all carry it.
+        "SideBandEnum": "apps.shops.models.SideBand",
+    },
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.
     "SWAGGER_UI_DIST": "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.0",
@@ -296,8 +335,10 @@ ACCOUNT_EMAIL_VERIFICATION = "none"
 ACCOUNT_ADAPTER = "apps.people.accounts.AccountAdapter"
 # A reset link opens the app (UI-5), at this path on the address the request came to. The key sits after the #, which a
 # browser never sends to a server: so it stays out of Caddy's and Django's logs, and out of any Referer header. A static
-# app (ADR-0016) can read it there with no route of its own for each key.
-HEADLESS_FRONTEND_URLS = {"account_reset_password_from_key": "/password-reset#{key}"}
+# app (ADR-0016) can read it there with no route of its own for each key. The path ends in a slash, as the app's page
+# does (trailingSlash, frontend/next.config.ts): it opens that page itself, rather than leaning on the server's redirect
+# from /password-reset to carry the key along.
+HEADLESS_FRONTEND_URLS = {"account_reset_password_from_key": "/password-reset/#{key}"}
 # Asked to reset an email nobody here has, allauth would send that address a note saying so: anyone could make us send
 # mail to any stranger. The answer to the asker stays the same either way, so nobody learns who has an account.
 ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False
@@ -318,8 +359,26 @@ PASSWORD_RESET_TIMEOUT = 60 * 60
 # the real server's rule. Off unless an environment turns it on: dev.py does, and the demo does (prod.py).
 API_DOCS_PUBLIC = False
 
+# The demo seed's sign (DATA-1, apps/demo/services.py): `manage.py seed_demo` wipes the database, so it runs only where
+# DEMO_SEED=yes is set, the mark of a place that holds demo data alone. The real server never sets it, so the seed
+# refuses there even before its first shop exists (Jack, 8 Nov 2026). Read here, in base.py, so every environment
+# reads it the same way, and off unless that environment turns it on.
+DEMO_SEED = env("DEMO_SEED", "no") == "yes"
+
 # The version this process runs. A deploy builds the image with its git commit as the version
 # (backend/Dockerfile, `make check-image APP_VERSION=<commit>`); every other build, and a laptop, say "dev".
 # The health check shows it, so after a deploy the smoke test can tell whether the new version is
 # answering or the old one still is (OPS-2).
 APP_VERSION = env("APP_VERSION", "dev")
+
+# The lowest app number a shop device may run and still sync (03 §6.8), sent on every pull (SYNC-3): an app whose own
+# number is lower sends its outbox, then updates (SYNC-13). The app's own is APP_NUMBER in frontend/src/lib/version.ts,
+# built into the same image, and a test keeps this one at or below it (apps/sync/tests/test_app_number.py), so the app a
+# server serves is never too old for it. A whole number, raised by hand, the app's with it, in a release that must
+# retire older apps: one that adds a list to the registry, which an older app has no drawer for, or one whose apps stop
+# writing a record shape the server is to drop. The shape leaves DOCUMENT_TYPES only in a later release: an app below
+# the minimum sends its outbox first, in the shapes it wrote, and in the same release the server would refuse them. Not
+# APP_VERSION, a git commit, which can't say whether it is older or newer than another; nor the release number, as
+# every merge deploys before its release exists. In the code, not the environment: it belongs to the code a release
+# ships.
+MIN_APP_VERSION = 1

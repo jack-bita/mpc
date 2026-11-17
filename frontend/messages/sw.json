@@ -4,22 +4,754 @@
   },
   "home": {
     "title": "Karibu",
-    "version": "Toleo"
+    "version": "Toleo {version}",
+    "login": "Ingia"
   },
   "update": {
     "ready": "Toleo jipya liko tayari",
-    "apply": "Sasisha"
+    "apply": "Sasisha",
+    "sending": "Inatuma kumbukumbu kwanza…"
+  },
+  "offline": {
+    "title": "Inahitaji mtandao",
+    "description": "Ukurasa huu unafanya kazi ukiwa mtandaoni tu."
+  },
+  "language": {
+    "switch": "English"
+  },
+  "topBar": {
+    "place": "{shop} · {side}"
+  },
+  "pageHeader": {
+    "back": "Rudi ulipotoka"
+  },
+  "device": {
+    "lock": {
+      "title": "Kifaa hiki kimezuiwa",
+      "which": "{device} · {shop}",
+      "ask": "Mwombe meneja akifungue. Kazi iliyo kwenye kifaa hiki haijapotea.",
+      "tryAgain": "Jaribu tena"
+    },
+    "register": {
+      "title": "Sajili kifaa hiki",
+      "intro": "Kifaa hiki bado hakijasajiliwa kwenye duka. Pata namba, kisha mpe meneja aiandike kwenye simu yake.",
+      "start": "Pata namba",
+      "giveCode": "Mpe meneja namba hii",
+      "where": "Meneja ataiandika kwenye simu yake, kwenye ukurasa wa Vifaa.",
+      "timeLeft": "Namba inaisha baada ya {time}",
+      "waiting": "Kinasubiri meneja…",
+      "expired": "Muda wa namba hii umekwisha.",
+      "newCode": "Pata namba mpya",
+      "done": "Kifaa hiki kimesajiliwa",
+      "which": "Jina lake ni {device}, upande wa {side}, duka la {shop}.",
+      "continue": "Endelea"
+    },
+    "demo": {
+      "try": "Jaribu demo",
+      "explain": "Kifaa hiki kitakuwa kompyuta ya Duka la Mfano, duka la kubuni. Hakuna data halisi."
+    },
+    "office": {
+      "title": "Vifaa",
+      "register": "Sajili kifaa",
+      "code": "Namba ya kifaa",
+      "codeHint": "Namba inayoonekana kwenye kifaa kipya, kama K7QM-4RXT.",
+      "name": "Jina la kifaa",
+      "nameHint": "Jina litakaloonekana kwenye orodha, kama Laptop Dawa.",
+      "side": "Upande wa kifaa",
+      "sideHint": "Upande ambao kifaa kitahudumia zaidi.",
+      "pickSide": "Chagua upande.",
+      "confirm": "Sajili",
+      "cancel": "Ghairi",
+      "registered": "Kifaa {device} kimesajiliwa. Kitaonyesha jina la duka baada ya sekunde chache."
+    },
+    "list": {
+      "empty": "Bado hakuna kifaa kilichosajiliwa.",
+      "number": "Na. {code} · {side}",
+      "active": "Kinafanya kazi",
+      "blocked": "Kimezuiwa",
+      "seen": "Kilionekana {when}",
+      "neverSeen": "Hakijaonekana bado",
+      "rename": "Badilisha jina",
+      "newName": "Jina jipya",
+      "save": "Hifadhi",
+      "cancel": "Ghairi",
+      "block": "Zuia",
+      "blockReason": "Kwa nini unakizuia?",
+      "blockHint": "Mfano: kimeibiwa, au kimepotea.",
+      "blockConfirm": "Zuia kifaa",
+      "unblock": "Fungua",
+      "unblockReason": "Kwa nini unakifungua?",
+      "unblockHint": "Mfano: kimepatikana.",
+      "unblockConfirm": "Fungua kifaa"
+    },
+    "health": {
+      "title": "Hali ya vifaa",
+      "intro": "Kila kifaa kama kilivyojieleza kilipotuma mara ya mwisho. Muda wa kukosa mtandao ni kwa saa ya kifaa chenyewe.",
+      "notToday": "Hakijatuma leo. Mara ya mwisho: {when}.",
+      "neverSynced": "Hakijatuma bado.",
+      "lastSync": "Kilituma mara ya mwisho: {when}.",
+      "today": "leo, saa {time}",
+      "onDay": "{date}, saa {time}",
+      "waiting": "{count, plural, =0 {Hakuna kumbukumbu inayosubiri kutumwa.} one {Kumbukumbu # inasubiri kutumwa.} other {Kumbukumbu # zinasubiri kutumwa.}}",
+      "clockRight": "Saa yake iko sawa.",
+      "clockAhead": "Saa yake iko mbele kwa dakika {minutes}.",
+      "clockBehind": "Saa yake iko nyuma kwa dakika {minutes}.",
+      "clockUnknown": "Saa yake haijulikani bado.",
+      "version": "Toleo la programu: {version}",
+      "noOutages": "Hakijakosa mtandao wiki hii.",
+      "outages": "Bila mtandao wiki hii: mara {count}, {total} kwa jumla.",
+      "outagesCount": "Bila mtandao wiki hii: mara {count}.",
+      "outagesAtLeast": "Bila mtandao wiki hii: mara {count}, angalau {total} kwa jumla.",
+      "period": "{date}: {from} – {to} ({length})",
+      "periodOdd": "{date}: {from} – {to} (saa ya kifaa ilibadilishwa wakati huo)",
+      "periodUnseenEnd": "{date}: {from} – ? (kifaa kilizimika baada ya {to})",
+      "atDay": "{date} {time}",
+      "underAMinute": "chini ya dakika moja",
+      "minutes": "dakika {minutes}",
+      "hours": "saa {hours}",
+      "hoursMinutes": "saa {hours} na dakika {minutes}"
+    }
+  },
+  "login": {
+    "pinPad": {
+      "typed": "Umeandika tarakimu {count} kati ya {length}",
+      "erase": "Futa"
+    },
+    "picker": {
+      "title": "Wewe ni nani?",
+      "empty": "Bado hakuna mfanyakazi hapa. Mwombe mwenye duka awaongeze.",
+      "firstSync": "Subiri kidogo: kompyuta hii inaleta orodha ya wafanyakazi kwa mara ya kwanza.",
+      "demoPin": "PIN {pin}"
+    },
+    "pin": {
+      "typePin": "Andika PIN yako",
+      "back": "Rudi"
+    },
+    "password": {
+      "title": "Ingia",
+      "name": "Simu au barua pepe",
+      "nameHint": "Kama 0712 345 678",
+      "password": "Nenosiri",
+      "send": "Ingia",
+      "forgot": "Umesahau nenosiri?",
+      "someoneHere": "{name} ameingia kwenye kifaa hiki. Mtoe kwanza, kisha uingie."
+    },
+    "welcome": "Karibu, {name}",
+    "switch": "Badilisha mtu",
+    "logout": "Toka",
+    "leaving": "Unatoka…",
+    "waiting": "Subiri kidogo…",
+    "withPassword": "Ingia kwa nenosiri",
+    "unsent": "{count, plural, one {Kumbukumbu # bado haijatumwa. Iko salama kwenye kompyuta hii, na itatumwa yenyewe.} other {Kumbukumbu # bado hazijatumwa. Ziko salama kwenye kompyuta hii, na zitatumwa zenyewe.}}"
+  },
+  "passwordField": {
+    "show": "Onyesha nenosiri"
+  },
+  "password": {
+    "chooseTitle": "Chagua nenosiri lako",
+    "chooseIntro": "Nenosiri ulilopewa ni la muda. Chagua lako mwenyewe, kisha uendelee.",
+    "temporary": "Nenosiri la muda",
+    "new": "Nenosiri jipya",
+    "newHint": "Herufi 8 au zaidi, si namba tu, na lisifanane na jina wala simu yako.",
+    "again": "Andika nenosiri jipya tena",
+    "notTheSame": "Andika nenosiri lile lile mara zote mbili.",
+    "save": "Hifadhi",
+    "forgot": {
+      "title": "Umesahau nenosiri?",
+      "noEmail": "Huna barua pepe? Mwombe mmiliki akuwekee nenosiri la muda, ana kwa ana.",
+      "withEmail": "Una barua pepe? Tutakutumia kiungo cha kuweka nenosiri jipya.",
+      "email": "Barua pepe",
+      "notAnEmail": "Andika barua pepe kamili, kama jina@mfano.com.",
+      "send": "Tuma kiungo",
+      "sent": "Kama barua pepe hii ina akaunti hapa, tumetuma kiungo. Kifungue ndani ya saa moja.",
+      "back": "Rudi kuingia"
+    },
+    "reset": {
+      "title": "Weka nenosiri jipya",
+      "checking": "Tunaangalia kiungo…",
+      "noKey": "Kiungo hiki hakijakamilika. Kifungue tena kutoka kwenye barua pepe, au omba kingine.",
+      "askAgain": "Omba kiungo kingine",
+      "done": "Nenosiri lako jipya limewekwa. Ingia nalo sasa.",
+      "login": "Ingia"
+    }
+  },
+  "office": {
+    "welcome": "Karibu, {name}",
+    "nothingYet": "Bado hakuna kazi ya ofisi unayoweza kufungua hapa."
+  },
+  "mySettings": {
+    "title": "Mipangilio yangu",
+    "intro": "Ni yako peke yako, na inakufuata kwenye kila kifaa unachoingia.",
+    "language": "Lugha",
+    "languages": {
+      "sw": "Kiswahili",
+      "en": "English"
+    },
+    "font": "Herufi",
+    "fonts": {
+      "default": "Herufi ya kawaida",
+      "second": "Herufi ya pili, rahisi kusoma"
+    },
+    "saving": "Inahifadhi…",
+    "saved": "Imehifadhiwa."
+  },
+  "shopSettings": {
+    "title": "Mipangilio ya duka",
+    "intro": "Kanuni za duka, na thamani ya kila moja leo. Thamani mpya huanza siku utakayochagua.",
+    "areas": {
+      "attendance": "Mahudhurio",
+      "money": "Pesa",
+      "computers": "Kompyuta",
+      "stock": "Mzigo"
+    },
+    "coming": "Kuanzia {date}: {value}",
+    "yes": "Ndiyo",
+    "no": "Hapana",
+    "change": "Badilisha",
+    "history": "Historia",
+    "close": "Funga",
+    "changeOf": "Badilisha: {rule}",
+    "changeOfSide": "Badilisha: {rule}, {side}",
+    "historyOf": "Historia: {rule}",
+    "historyOfSide": "Historia: {rule}, {side}",
+    "saved": "Imehifadhiwa. Thamani mpya inaanza {date}.",
+    "form": {
+      "newValue": {
+        "money": "Kiasi kipya (TSh)",
+        "percent": "Asilimia mpya (%)",
+        "whole": "Namba mpya",
+        "time": "Saa mpya",
+        "yes_no": "Thamani mpya"
+      },
+      "from": "Kuanzia tarehe",
+      "fromHint": "Leo au siku ya baadaye.",
+      "note": "Maelezo (si lazima)",
+      "noteHint": "Kwa nini imebadilishwa, kwa atakayesoma historia.",
+      "save": "Hifadhi",
+      "cancel": "Ghairi"
+    },
+    "past": {
+      "title": "Historia",
+      "row": "{value}, kuanzia {date}",
+      "by": "Imewekwa na {name}, {date}",
+      "bySystem": "Imewekwa na mfumo, {date}",
+      "wholeShop": "Ya duka zima",
+      "note": "Maelezo: {note}",
+      "default": "{value}, ya awali",
+      "inUse": "Inatumika sasa",
+      "coming": "Inakuja"
+    },
+    "closures": {
+      "title": "Siku duka limefungwa",
+      "intro": "Siku ambazo duka zima limefungwa, kama sikukuu au msiba. Ni siku za mapumziko, na hazilipwi.",
+      "none": "Hakuna siku zijazo ambazo duka limefungwa.",
+      "days": "{first} – {last}",
+      "add": "Ongeza",
+      "added": "Imehifadhiwa: {name}, {days}.",
+      "remove": "Ondoa",
+      "removeOf": "Ondoa: {name}",
+      "removeAsk": "Ondoa {name}, {days}? Duka litakuwa wazi siku hizo.",
+      "reason": "Sababu",
+      "reasonHint": "Inahifadhiwa pamoja na jina lako na saa.",
+      "removed": "Imeondolewa: {name}, {days}.",
+      "changeLastDay": "Badilisha siku ya mwisho",
+      "changeLastDayOf": "Badilisha siku ya mwisho: {name}",
+      "newLastDay": "Siku mpya ya mwisho",
+      "newLastDayHint": "Sasa ni {last}. Inaweza kuwa mapema au baadaye.",
+      "sameLastDay": "Hii tayari ndiyo siku ya mwisho. Chagua siku nyingine.",
+      "moved": "Siku ya mwisho imebadilishwa: {name}, {days}.",
+      "gone": "{name}: siku hizi hazipo tena kwenye orodha.",
+      "form": {
+        "from": "Kuanzia",
+        "fromHint": "Leo au siku ya baadaye.",
+        "to": "Hadi",
+        "toHint": "Acha wazi kama ni siku moja tu.",
+        "name": "Jina",
+        "nameHint": "Kwa mfano Krismasi, au Msiba wa bibi."
+      }
+    },
+    "sides": {
+      "title": "Pande",
+      "intro": "Upande uliozimwa hautumiki kwenye kompyuta za duka.",
+      "on": "Imewashwa",
+      "off": "Imezimwa",
+      "switchOff": "Zima",
+      "switchOn": "Washa",
+      "switchOffOf": "Zima: {side}",
+      "switchOnOf": "Washa: {side}",
+      "askOff": "Zima upande wa {side}? Hautatumika kwenye kompyuta za duka hadi uuwashe tena.",
+      "askOn": "Washa upande wa {side}? Utaanza kutumika kwenye kompyuta za duka.",
+      "yesOff": "Ndiyo, zima",
+      "yesOn": "Ndiyo, washa",
+      "no": "Hapana",
+      "switchedOff": "Upande wa {side} umezimwa.",
+      "switchedOn": "Upande wa {side} umewashwa.",
+      "band": "Rangi",
+      "bandOf": "Rangi ya {side}",
+      "bandHint": "Ukanda chini ya upau wa kijani, ili kila mtu ajue upande kwa kuutazama tu.",
+      "looks": {
+        "blue": "Bluu",
+        "striped": "Mistari"
+      },
+      "changeBand": "Badilisha",
+      "changeBandOf": "Badilisha rangi: {side}",
+      "bandSaved": "Rangi ya {side} imehifadhiwa."
+    },
+    "rules": {
+      "attendance": {
+        "enabled": {
+          "name": "Mahudhurio yamewashwa",
+          "help": "Yakiwashwa, kitufe cha Mahudhurio kinaonekana kwenye kompyuta za duka, na siku zinahesabiwa kuanzia siku hiyo.",
+          "shown": "{value}"
+        },
+        "on_time_until": {
+          "name": "Mwisho wa kufika kwa wakati",
+          "help": "Anayeingia kazini baada ya saa hii amechelewa, na anakatwa faini ya kwanza.",
+          "shown": "{value}"
+        },
+        "late_fine": {
+          "name": "Faini ya kwanza ya kuchelewa",
+          "help": "Inakatwa kwenye mshahara kwa kila siku aliyochelewa, kabla ya saa ya faini ya pili.",
+          "shown": "{value}"
+        },
+        "second_fine_from": {
+          "name": "Faini ya pili kuanzia",
+          "help": "Anayeingia kazini kuanzia saa hii anakatwa faini ya pili badala ya ya kwanza.",
+          "shown": "{value}"
+        },
+        "second_fine": {
+          "name": "Faini ya pili ya kuchelewa",
+          "help": "Inakatwa kwenye mshahara kwa kila siku aliyoingia kuanzia saa ya faini ya pili, kabla ya saa ya dharura.",
+          "shown": "{value}"
+        },
+        "review_from": {
+          "name": "Dharura kuanzia",
+          "help": "Anayeingia kazini kuanzia saa hii ni dharura: meneja au mwenye duka ataamua siku hiyo.",
+          "shown": "{value}"
+        },
+        "afternoon_from": {
+          "name": "Nusu siku ya mchana: kufika kuanzia",
+          "help": "Anayeingia kati ya saa hii na saa ya mchana, na kukaa hadi kufunga, anapata nusu siku.",
+          "shown": "{value}"
+        },
+        "midday": {
+          "name": "Saa ya mchana",
+          "help": "Nusu ya asubuhi inaishia hapa na nusu ya mchana inaanza. Anayeingia baada ya saa hii, au anayeondoka kabla yake, ni dharura.",
+          "shown": "{value}"
+        },
+        "morning_leave_until": {
+          "name": "Nusu siku ya asubuhi: kuondoka hadi",
+          "help": "Aliyeingia asubuhi na kuondoka kati ya saa ya mchana na saa hii anapata nusu siku.",
+          "shown": "{value}"
+        },
+        "closing": {
+          "name": "Saa ya kufunga",
+          "help": "Anayeondoka kuanzia saa hii anapata siku nzima. Anayeondoka kabla yake, baada ya nusu siku ya asubuhi, ni dharura.",
+          "shown": "{value}"
+        }
+      },
+      "money": {
+        "rounding_step": {
+          "name": "Kuzungusha hesabu hadi",
+          "help": "Jumla ya kila mstari wa mauzo huzungushwa hadi kiasi hiki kilicho karibu.",
+          "shown": "{value}"
+        }
+      },
+      "session": {
+        "idle_minutes": {
+          "name": "Funga baada ya kukaa bila kazi",
+          "help": "Kompyuta ya duka hujifunga ikikaa bila kuguswa kwa muda huu.",
+          "shown": "Dakika {value}"
+        }
+      },
+      "cash": {
+        "tolerance": {
+          "name": "Tofauti ya droo inayokubalika",
+          "help": "Droo ikipungua au kuzidi kwa kiasi hiki au chini yake, hakuna tofauti ya kueleza.",
+          "shown": "{value}"
+        }
+      },
+      "count": {
+        "tolerance_pct": {
+          "name": "Tofauti ya kuhesabu mzigo inayokubalika",
+          "help": "Hesabu ya mzigo ikitofautiana kwa asilimia hii au chini yake, hakuna tofauti ya kueleza.",
+          "shown": "{value}%"
+        }
+      },
+      "expiry": {
+        "alert_days": {
+          "name": "Onya kabla bidhaa haijaisha muda",
+          "help": "Onyo linaanza siku hizi kabla ya tarehe ya kuisha muda.",
+          "shown": "Siku {value}"
+        }
+      },
+      "stock": {
+        "block_negative": {
+          "name": "Zuia kuuza zaidi ya mzigo uliopo",
+          "help": "Ndiyo: mauzo ya mzigo usiokuwepo yanakataliwa. Hapana: yanaruhusiwa, na tofauti inaonekana.",
+          "shown": "{value}"
+        }
+      }
+    }
+  },
+  "attendance": {
+    "title": "Mahudhurio",
+    "back": "Rudi",
+    "clockIn": "Ingia kazini",
+    "clockOut": "Toka kazini",
+    "switchedOff": "Mahudhurio hayajawashwa kwenye duka hili. Mwenye duka huyawasha kwenye Mipangilio ya duka.",
+    "notInYet": "Hujaingia kazini leo.",
+    "inSince": "Uliingia kazini saa {time}.",
+    "outSince": "Ulitoka kazini saa {time}.",
+    "timeOfDay": "{time} {part, select, morning {asubuhi} afternoon {mchana} evening {jioni} other {usiku}}",
+    "savedIn": "Umeingia kazini saa {time}.",
+    "savedOut": "Umetoka kazini saa {time}. Kwaheri!",
+    "firstSync": "Subiri kidogo: kompyuta hii bado inaleta data za duka kwa mara ya kwanza. Jaribu tena baada ya muda mfupi.",
+    "failed": "Haikuhifadhiwa. Jaribu tena; ikishindikana tena, mwambie meneja.",
+    "list": {
+      "title": "Leo kwenye kompyuta hii",
+      "empty": "Bado hakuna aliyeingia kazini leo.",
+      "name": "Jina",
+      "came": "Aliingia",
+      "left": "Alitoka",
+      "unknown": "Mfanyakazi asiyejulikana"
+    },
+    "sendNow": {
+      "waiting": "{count, plural, one {Kumbukumbu # inasubiri kutumwa.} other {Kumbukumbu # zinasubiri kutumwa.}}",
+      "allSent": "Kumbukumbu zote zimetumwa.",
+      "button": "Tuma sasa",
+      "offline": "Hakuna mtandao: zitatumwa mtandao ukirudi."
+    }
+  },
+  "needsAttention": {
+    "title": "Kumbukumbu zilizokataliwa na seva",
+    "clock": "{name}: {action}, saa {time}",
+    "clockOnDay": "{name}: {action}, {date} saa {time}",
+    "other": "Kumbukumbu namba {number}",
+    "otherOnDay": "Kumbukumbu namba {number}, {date}",
+    "unknownPerson": "Mfanyakazi asiyejulikana",
+    "notAgain": "Haitatumwa tena. Mwambie meneja.",
+    "reasons": {
+      "typeUnknown": "Seva haipokei aina hii ya kumbukumbu.",
+      "versionUnknown": "Kumbukumbu hii ni ya toleo jingine la programu.",
+      "makerUnknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili.",
+      "idTaken": "Seva ina kumbukumbu nyingine yenye namba hii ya utambulisho.",
+      "carriedFromUnknown": "Kumbukumbu hii inasema imetoka kwenye kompyuta ambayo si nyingine ya duka hili.",
+      "loadedByUnknown": "Aliyepakia faili la kumbukumbu hii hafanyi kazi katika duka hili.",
+      "other": "Seva imeikataa. Msimbo: {code}"
+    }
+  },
+  "thisLaptop": {
+    "title": "Kompyuta hii",
+    "back": "Rudi",
+    "keep": {
+      "title": "Kuhifadhi data",
+      "kept": "Kivinjari kimekubali kuhifadhi data za duka kwenye kompyuta hii kwa kudumu.",
+      "notKept": "Kivinjari hakijakubali kuhifadhi data za duka kwa kudumu: kikikosa nafasi, kinaweza kuzifuta, pamoja na kumbukumbu ambazo bado hazijatumwa. Sakinisha programu hii, kisha fungua ukurasa huu tena.",
+      "cannotAsk": "Kivinjari hiki hakiwezi kuhifadhi data za duka kwa kudumu. Tumia Chrome au Edge."
+    },
+    "install": {
+      "title": "Kusakinisha programu",
+      "installed": "Programu imesakinishwa kwenye kompyuta hii.",
+      "button": "Sakinisha",
+      "steps": "Fungua menyu ya kivinjari (⋮ au ⋯), kisha chagua Sakinisha."
+    },
+    "rescue": {
+      "title": "Kumbukumbu ambazo hazijatumwa",
+      "none": "Hakuna kumbukumbu inayosubiri kutumwa kutoka kompyuta hii.",
+      "waiting": "{count, plural, one {Kumbukumbu # inasubiri kutumwa.} other {Kumbukumbu # zinasubiri kutumwa.}}",
+      "why": "Kompyuta hii ikiharibika kabla ya kuzituma, zihifadhi kwenye faili. Kisha meneja azipakie kwenye kompyuta nyingine ya duka hili, nayo itazituma.",
+      "save": "Hifadhi kwenye faili",
+      "load": "Pakia faili",
+      "added": "{count, plural, one {Kumbukumbu # imeongezwa, na itatumwa yenyewe.} other {Kumbukumbu # zimeongezwa, na zitatumwa zenyewe.}}",
+      "alreadyHere": "{count, plural, one {Kumbukumbu # ilikuwepo tayari.} other {Kumbukumbu # zilikuwepo tayari.}}",
+      "notRescueFile": "Faili hili si la kumbukumbu za duka. Chagua faili lililohifadhiwa kwenye ukurasa huu.",
+      "wrongShop": "Faili hili ni la duka jingine: halikupakiwa.",
+      "brokenRecord": "Faili hili limeharibika: halikupakiwa.",
+      "firstSync": "Subiri kidogo: kompyuta hii bado inaleta data za duka kwa mara ya kwanza. Jaribu tena baada ya muda mfupi.",
+      "failed": "Haikufanikiwa. Jaribu tena."
+    }
+  },
+  "stock": {
+    "part": "{unit} {count}"
   },
   "slip": {
-    "saleNumber": "Namba ya mauzo",
-    "date": "Tarehe",
-    "time": "Saa",
+    "saleNumber": "Namba ya mauzo: {number}",
+    "date": "Tarehe: {date}",
+    "time": "Saa: {time}",
     "item": "Bidhaa",
     "quantity": "Idadi",
     "unitPrice": "@",
     "price": "Bei",
-    "total": "Jumla",
+    "total": "Jumla: {amount}",
     "thanks": "Asante, karibu tena",
     "print": "Chapisha"
+  },
+  "design": {
+    "title": "Muonekano wa duka",
+    "intro": "Kila rangi, herufi na kipande cha programu, mahali pamoja. Pitisha kipanya juu ya kipande, kibonyeze, au tumia Tab, kuona hali zake nyingine.",
+    "colours": {
+      "title": "Rangi",
+      "primary": "Kijani: kitufe kikuu, upau wa juu",
+      "primaryForeground": "Maandishi juu ya kijani",
+      "secondary": "Bluu: kitufe cha pili, kilichochaguliwa",
+      "secondaryForeground": "Maandishi juu ya bluu",
+      "ring": "Mstari wa Tab: unaonyesha ulipo",
+      "background": "Skrini",
+      "foreground": "Maandishi",
+      "card": "Kadi",
+      "cardForeground": "Maandishi kwenye kadi",
+      "popover": "Menyu inayojitokeza",
+      "popoverForeground": "Maandishi kwenye menyu",
+      "muted": "Paneli hafifu",
+      "mutedForeground": "Maandishi hafifu",
+      "accent": "Mstari wa menyu chini ya kipanya",
+      "accentForeground": "Maandishi yake",
+      "destructive": "Nyekundu iliyofifia: maonyo tu",
+      "border": "Mistari",
+      "input": "Ukingo wa kisanduku cha kuandika"
+    },
+    "fonts": {
+      "title": "Herufi",
+      "default": "Herufi ya kawaida",
+      "second": "Herufi ya pili, rahisi kusoma",
+      "sample": "Pumba ya mahindi: mifuko 26 + kilo 35.5",
+      "digits": "TSh 1,234,560 · TSh 8,888,111"
+    },
+    "buttons": {
+      "title": "Vitufe",
+      "main": "Hifadhi",
+      "second": "Rudi",
+      "danger": "Batilisha",
+      "big": "Kikubwa",
+      "normal": "Cha kawaida",
+      "disabled": "Kimezimwa",
+      "links": "Viungo vinavyofanana na vitufe: vinafungua ukurasa mwingine",
+      "link": "Fungua ukurasa",
+      "onBar": "Kwenye upau wa kijani wa juu",
+      "bar": "Toka"
+    },
+    "fields": {
+      "title": "Visanduku vya kuandika",
+      "name": "Jina la mteja",
+      "nameHint": "Jina kamili, kama lilivyo kwenye kitambulisho",
+      "phone": "Namba ya simu",
+      "phoneError": "Namba si sahihi. Andika kama 0712 345 678.",
+      "kilo": "Kilo",
+      "disabled": "Kimezimwa",
+      "search": "Tafuta bidhaa",
+      "normal": "Kisanduku cha kawaida",
+      "password": "Nenosiri"
+    },
+    "choices": {
+      "title": "Chaguo",
+      "label": "Upande wa kifaa",
+      "hint": "Upande ambao kifaa kitahudumia zaidi",
+      "error": "Chagua upande.",
+      "disabled": "Kimezimwa"
+    },
+    "cards": {
+      "title": "Kadi",
+      "cardTitle": "Jumla ya leo",
+      "cardDescription": "Mauzo ya upande wa Dawa",
+      "cardContent": "TSh 41,000",
+      "cardFooter": "Imehifadhiwa kwenye kifaa hiki"
+    },
+    "alerts": {
+      "title": "Ujumbe",
+      "infoTitle": "Inahitaji mtandao",
+      "infoDescription": "Ukurasa huu unafanya kazi ukiwa mtandaoni tu.",
+      "dangerTitle": "Mauzo hayajahifadhiwa",
+      "dangerDescription": "Bei iko chini ya kiwango cha chini. Muulize meneja.",
+      "live": "Ujumbe halisi wa ofisini: hujitokeza mtandao ukikatika. Zima mtandao kwenye kivinjari kuuona."
+    },
+    "sideBands": {
+      "blue": "Bluu",
+      "striped": "Mistari nyeupe na nyekundu"
+    },
+    "tabs": {
+      "title": "Vichupo",
+      "hint": "Bonyeza kichupo, au tumia Tab na mishale. Kwenye simu, safu inasogea pembeni, na hukaa juu ukishuka chini.",
+      "samples": {
+        "attendance": "Mahudhurio",
+        "money": "Pesa",
+        "computers": "Kompyuta",
+        "stock": "Mzigo",
+        "closures": "Siku duka limefungwa",
+        "sides": "Pande"
+      },
+      "content": "Sehemu iliyo wazi inaonekana hapa. Nyingine zimefichwa, hazijapotea."
+    },
+    "topBar": {
+      "title": "Upau wa juu",
+      "sampleShop": "MPC",
+      "sampleSides": {
+        "blue": "Dawa",
+        "striped": "Vyakula"
+      }
+    }
+  },
+  "apiError": {
+    "title": "Imeshindikana"
+  },
+  "errors": {
+    "invalid": "Baadhi ya sehemu si sahihi. Angalia zilizowekwa alama.",
+    "bad_request": "Seva imekataa ombi hili.",
+    "version_conflict": "Mtu mwingine amebadilisha hiki wakati huo huo. Fungua upya, kisha ujaribu tena.",
+    "server_error": "Seva ina hitilafu. Jaribu tena baadaye.",
+    "not_found": "Hakijapatikana.",
+    "not_authenticated": "Ingia kwanza.",
+    "authentication_failed": "Kuingia kumeshindikana. Ingia tena.",
+    "permission_denied": "Huna ruhusa ya kufanya hili.",
+    "method_not_allowed": "Kitendo hiki hakiruhusiwi hapa.",
+    "not_acceptable": "Seva haiwezi kujibu kwa namna hii.",
+    "unsupported_media_type": "Seva haikuelewa ombi hili.",
+    "parse_error": "Ombi limeharibika njiani. Jaribu tena.",
+    "throttled": "Majaribio mengi mno. Jaribu tena baada ya dakika {minutes}.",
+    "required": "Jaza sehemu hii.",
+    "null": "Jaza sehemu hii.",
+    "blank": "Sehemu hii haiwezi kuwa tupu.",
+    "max_length": "Maandishi ni marefu mno.",
+    "min_length": "Maandishi ni mafupi mno.",
+    "max_value": "Namba ni kubwa mno.",
+    "min_value": "Namba ni ndogo mno.",
+    "max_digits": "Namba ina tarakimu nyingi mno.",
+    "max_decimal_places": "Kuna tarakimu nyingi mno baada ya nukta.",
+    "max_whole_digits": "Kuna tarakimu nyingi mno kabla ya nukta.",
+    "invalid_choice": "Chaguo hili halipo kwenye orodha.",
+    "does_not_exist": "Ulichochagua hakipo.",
+    "incorrect_type": "Thamani hii si ya aina sahihi.",
+    "unique": "Hiki tayari kipo.",
+    "not_a_list": "Orodha inahitajika hapa.",
+    "not_a_dict": "Kundi la sehemu linahitajika hapa.",
+    "empty": "Orodha hii haiwezi kuwa tupu.",
+    "max_string_length": "Namba ni ndefu mno.",
+    "null_characters_not_allowed": "Maandishi yana herufi isiyoruhusiwa.",
+    "surrogate_characters_not_allowed": "Maandishi yana herufi isiyoruhusiwa.",
+    "id": {
+      "taken": "Namba ya utambulisho imeshatumika. Jaribu tena.",
+      "not_uuid7": "Namba ya utambulisho si sahihi. Sasisha programu."
+    },
+    "device": {
+      "blocked": "Kifaa hiki kimezuiwa. Mwombe meneja akifungue.",
+      "name_blank": "Kipe kifaa jina.",
+      "name_taken": "Kifaa kingine tayari kina jina hili.",
+      "reason_required": "Andika sababu.",
+      "not_active": "Kifaa hiki hakitumiki sasa, kwa hiyo hakiwezi kuzuiwa.",
+      "not_blocked": "Kifaa hiki hakijazuiwa."
+    },
+    "document": {
+      "type_unknown": "Seva haipokei aina hii ya kumbukumbu. Sasisha programu.",
+      "version_unknown": "Kumbukumbu hii ni ya toleo jingine la programu. Sasisha programu.",
+      "maker_unknown": "Aliyeandika kumbukumbu hii hafanyi kazi katika duka hili.",
+      "carried_from_unknown": "Kumbukumbu hii inasema imetoka kwenye kompyuta ambayo si nyingine ya duka hili.",
+      "loaded_by_unknown": "Aliyepakia faili la kumbukumbu hii hafanyi kazi katika duka hili."
+    },
+    "session": {
+      "wrong_device": "Kuingia huku ni kwa kifaa kingine. Ingia tena hapa."
+    },
+    "shop": {
+      "suspended": "Duka hili limesimamishwa. Wasiliana na mmiliki."
+    },
+    "staff": {
+      "suspended": "Umesimamishwa. Ongea na meneja au mmiliki.",
+      "choose_shop": "Una kazi kwenye maduka mawili. Kuchagua duka bado hakupo.",
+      "left": "Mtu huyu ameshaacha kazi.",
+      "other_shop": "Hiki ni cha duka jingine.",
+      "reason_required": "Andika sababu.",
+      "temporary_password_open": "Mtu huyu bado ana nenosiri la muda. Ruhusa hii itasubiri hadi achague nenosiri lake."
+    },
+    "password": {
+      "must_change": "Chagua nenosiri lako mwenyewe kabla ya kuendelea.",
+      "own": "Huwezi kuweka nenosiri lako mwenyewe hapa.",
+      "superuser_only": "Nenosiri la mtu huyu linawekwa na msimamizi wa mfumo tu.",
+      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kuweka nenosiri lake.",
+      "no_login_name": "Mtu huyu hana simu wala barua pepe ya kuingilia.",
+      "same_as_temporary": "Chagua nenosiri tofauti na lile la muda."
+    },
+    "phone": {
+      "invalid": "Namba hii ya simu si sahihi."
+    },
+    "login": {
+      "already_in": "Kuna mtu ameingia tayari kwenye kifaa hiki. Toka kwanza, kisha ujaribu tena.",
+      "switched_off": "Huwezi kuingia kwa sasa. Ongea na mmiliki."
+    },
+    "email_password_mismatch": "Barua pepe au nenosiri si sahihi.",
+    "phone_password_mismatch": "Simu au nenosiri si sahihi.",
+    "invalid_phone": "Andika namba ya simu kamili, kama 0712 345 678.",
+    "too_many_login_attempts": "Umekosea mara nyingi mno. Subiri dakika chache, kisha ujaribu tena.",
+    "invalid_password_reset": "Kiungo hiki hakifanyi kazi tena. Omba kingine.",
+    "enter_current_password": "Nenosiri la sasa si sahihi.",
+    "pin": {
+      "wrong": "PIN si sahihi.",
+      "locked": "PIN zimekosewa mara nyingi. Jaribu tena baada ya dakika {minutes}.",
+      "offline_first": "Kompyuta hii haiwezi kuthibitisha PIN yako bila mtandao bado. Ingia mara moja hapa mtandao ukiwepo, kisha utaweza kuingia hata bila mtandao.",
+      "own": "Huwezi kuweka PIN yako mwenyewe hapa.",
+      "superuser_only": "PIN ya mtu huyu inawekwa na msimamizi wa mfumo tu.",
+      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kuweka PIN yake.",
+      "not_four_digits": "PIN iwe tarakimu nne.",
+      "too_easy": "PIN hii ni rahisi mno kukisia, kama 1234 au 0000. Chagua nyingine."
+    },
+    "demo": {
+      "closed": "Demo haipo wazi hapa.",
+      "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia.",
+      "sides_fixed": "Kwenye demo, pande hazibadilishwi, ili kila mgeni aweze kujaribu.",
+      "rules_from_tomorrow": "Kwenye demo, thamani mpya huanza kesho au baadaye, ili kila mgeni wa leo akute duka lilivyo.",
+      "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi.",
+      "closures_from_tomorrow": "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo."
+    },
+    "closure": {
+      "date_past": "Siku iliyoshapita haiwezi kubadilishwa.",
+      "ends_before_it_starts": "Siku ya mwisho iko kabla ya siku ya kwanza.",
+      "overlaps": "Duka tayari limefungwa katika moja ya siku hizi.",
+      "name_blank": "Andika jina, kwa mfano Krismasi.",
+      "status_unknown": "Hali hii ya siku za kufunga duka haijulikani.",
+      "reason_required": "Andika sababu.",
+      "started": "Siku hizi zimeshaanza. Badilisha siku ya mwisho badala yake.",
+      "not_active": "Siku hizi za kufunga duka zimeshaondolewa."
+    },
+    "attachment": {
+      "not_found": "Seva haina picha hii.",
+      "too_big": "Picha hii ni kubwa mno: picha isizidi MB 1.",
+      "not_an_image": "Faili hili si picha. Zinapokelewa picha za JPEG na WebP pekee.",
+      "file_differs": "Picha hii si ile iliyotajwa kwenye kumbukumbu yake. Huenda iliharibika njiani.",
+      "file_waiting": "Picha hii bado haijafika kwenye seva. Itafika kompyuta ikipata mtandao.",
+      "file_removed": "Picha hii imeshaondolewa.",
+      "length_required": "Picha ilitumwa bila kuonyesha ukubwa wake. Itatumwa tena."
+    },
+    "password_too_short": "Nenosiri ni fupi mno.",
+    "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",
+    "password_entirely_numeric": "Nenosiri haliwezi kuwa namba tu.",
+    "password_too_similar": "Nenosiri linafanana mno na jina au simu ya mtu huyu.",
+    "pairing": {
+      "code_invalid": "Namba hii haijaandikwa sawa. Iandike kama inavyoonekana kwenye kifaa.",
+      "code_unknown": "Hakuna kifaa kinachosubiri kwa namba hii.",
+      "code_used": "Namba hii imeshatumika.",
+      "code_expired": "Muda wa namba hii umekwisha. Omba kifaa kionyeshe namba mpya.",
+      "already_paired": "Kifaa hiki tayari kimesajiliwa."
+    },
+    "setting": {
+      "date_past": "Thamani mpya haiwezi kuanza kabla ya leo.",
+      "key_invalid": "Jina hili la kanuni haliko sawa.",
+      "key_unknown": "Kanuni hii haijulikani.",
+      "out_of_order": "Saa hii haifuati mpangilio wa siku: kila saa ya mahudhurio iwe baada ya ile iliyo juu yake na kabla ya ile iliyo chini yake, kuanzia siku uliyochagua, pamoja na mabadiliko yaliyokwisha pangwa kwa siku zijazo.",
+      "side_not_allowed": "Kanuni hii ni moja kwa duka zima, si kwa upande mmoja.",
+      "side_required": "Chagua upande: kanuni hii huwekwa kwa kila upande peke yake.",
+      "value_blank": "Andika thamani.",
+      "value_invalid": "Thamani hii haifai kwa kanuni hii."
+    },
+    "side": {
+      "band_unknown": "Rangi hii ya upande haijulikani.",
+      "code_invalid": "Herufi ya upande iwe herufi kubwa moja, kama D.",
+      "code_taken": "Upande mwingine wa duka hili tayari una herufi hii.",
+      "name_blank": "Upe upande jina.",
+      "sale_flow_unknown": "Njia hii ya kuuza haijulikani."
+    }
+  },
+  "errorFallback": {
+    "noConnection": "Imeshindwa kufika kwenye seva. Angalia mtandao, kisha ujaribu tena.",
+    "unknownCode": "Seva imekataa. Msimbo: {code}",
+    "unexpected": "Kuna hitilafu. Jaribu tena.",
+    "waitAWhile": "Majaribio mengi mno. Subiri kidogo, kisha ujaribu tena."
   }
 }

@@ -24,6 +24,18 @@ const config = {
   // Files under _next/static/ are named after their content already (prod.py, _is_named_after_content),
   // so a second fingerprint would only make the list longer.
   dontCacheBustURLsMatching: /^_next\/static\//,
+
+  // The worker pushes the outbox too (SYNC-16), and each push carries the app's version (src/lib/version.ts).
+  // Next.js writes it into the pages; esbuild must write the same into the worker, or it would look for a
+  // `process` a worker doesn't have. The image build sets it (backend/Dockerfile); elsewhere it is "", which
+  // reads as "dev", as on the pages.
+  esbuildOptions: {
+    define: {
+      "process.env.NEXT_PUBLIC_APP_VERSION": JSON.stringify(
+        process.env.NEXT_PUBLIC_APP_VERSION ?? "",
+      ),
+    },
+  },
 };
 
 export default config;

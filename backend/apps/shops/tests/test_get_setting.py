@@ -7,7 +7,7 @@ these, it answers:
     —      attendance.late_fine   800.00     2026-01-01
     —      attendance.late_fine   1500.00    2026-11-01
 
-    on 2025-12-31  →  1000.00   no row yet: the default from the list in core
+    on 2025-12-31  →     0.00   no row yet: the default from the list in core, no fine (ATT-2)
     on 2026-10-31  →   800.00   the newest row on or before the day
     on 2026-11-01  →  1500.00   a row counts from its own day
 
@@ -48,7 +48,8 @@ def vyakula(shop_a: Shop) -> Side:
 
 
 def add_row(shop: Shop, key: SettingKey[Any], value: str, effective_from: date, side: Side | None = None) -> None:
-    # A row written the way the settings screen will write one (SHOP-3): checked, then saved.
+    # A row checked, then saved, as set_setting saves one (SHOP-3), but with no line and on any day: these tests read
+    # what get_setting answers, and need rows for days already gone by, which the service refuses.
     with shop_context(shop):
         row = Setting(shop=shop, side=side, key=key.key, value=value, effective_from=effective_from)
         row.full_clean()
@@ -62,8 +63,9 @@ def test_default_when_no_rows(shop_a: Shop, dawa: Side) -> None:
         assert get_setting(ON_TIME_UNTIL, shop_a, on=NOV_3) == time(7, 35)
         assert get_setting(CASH_TOLERANCE, shop_a, dawa, on=NOV_3) == Decimal("0.00")
 
-    assert fine == Decimal("1000.00")
-    # Money comes back exact: Python says Decimal("1000") == 1000.0, so check the type too (ADR-0024).
+    # No fine until the owner types one (ATT-2).
+    assert fine == Decimal("0.00")
+    # Money comes back exact: Python says Decimal("0") == 0.0, so check the type too (ADR-0024).
     assert type(fine) is Decimal
 
 
@@ -73,7 +75,7 @@ def test_latest_row_on_or_before_date_wins(shop_a: Shop) -> None:
     add_row(shop_a, LATE_FINE, "800", JAN_1)
 
     with shop_context(shop_a):
-        assert get_setting(LATE_FINE, shop_a, on=DEC_31_2025) == Decimal("1000.00")  # before any row
+        assert get_setting(LATE_FINE, shop_a, on=DEC_31_2025) == Decimal("0.00")  # before any row: the default
         assert get_setting(LATE_FINE, shop_a, on=OCT_31) == Decimal("800.00")
         assert get_setting(LATE_FINE, shop_a, on=NOV_1) == Decimal("1500.00")  # on its own day
         assert get_setting(LATE_FINE, shop_a, on=NOV_3) == Decimal("1500.00")
@@ -81,11 +83,12 @@ def test_latest_row_on_or_before_date_wins(shop_a: Shop) -> None:
 
 def test_future_row_ignored_until_its_day(shop_a: Shop) -> None:
     # Today is 31 Oct, and the owner sets tomorrow's new fine a day early. Being late today still costs
-    # the old fine; devices get the row early and switch on the right day, even offline (03 §5.8).
+    # what it did, here the default, no fine at all; devices get the row early and switch on the right day,
+    # even offline (03 §5.8).
     add_row(shop_a, LATE_FINE, "1500", NOV_1)
 
     with shop_context(shop_a):
-        assert get_setting(LATE_FINE, shop_a, on=OCT_31) == Decimal("1000.00")
+        assert get_setting(LATE_FINE, shop_a, on=OCT_31) == Decimal("0.00")  # the default: no fine yet
         assert get_setting(LATE_FINE, shop_a, on=NOV_1) == Decimal("1500.00")
 
 
@@ -124,7 +127,7 @@ def test_shop_wide_rule_ignores_side_rows(shop_a: Shop, dawa: Side) -> None:
     # database can't hold it: the list of keys lives in code. So the lookup itself never asks for one.
     with shop_context(shop_a):
         Setting.objects.create(shop=shop_a, side=dawa, key=LATE_FINE.key, value="9999.00", effective_from=JAN_1)
-        assert get_setting(LATE_FINE, shop_a, dawa, on=NOV_3) == Decimal("1000.00")  # the default
+        assert get_setting(LATE_FINE, shop_a, dawa, on=NOV_3) == Decimal("0.00")  # the default
 
     add_row(shop_a, LATE_FINE, "1500", JAN_1)
 

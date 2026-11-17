@@ -11,6 +11,8 @@ StaffMember, not even in its tests (ADR-0035).
 from typing import Any
 
 import pytest
+from django.core.exceptions import ValidationError
+from pytest_django import Settings
 
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.shops.models import PaymentAccount, Shop, Side, StockLocation
@@ -46,3 +48,23 @@ def test_add_side_refuses_someone_of_another_shop(shop_a: Shop, staff_b: Any) ->
 
     with shop_context(shop_a):
         assert not Side.objects.exists()
+
+
+def test_no_side_added_on_the_demo(shop_a: Shop, staff_a: Any, settings: Settings) -> None:
+    # On the demo every visitor shares Meneja's login, whose settings.manage (SHOP-5) also adds a side: a visitor could
+    # fill the shop with sides for everyone after them. A person's new side is refused there, before anything is
+    # written, as the switch is (demo.sides_fixed).
+    settings.DEMO_SEED = True
+    with shop_context(shop_a), pytest.raises(ValidationError) as refused:
+        add_side(shop=shop_a, code="X", name="Nyingine", by=staff_a)
+    assert [error.code for error in refused.value.error_list] == ["demo.sides_fixed"]
+    with shop_context(shop_a):
+        assert not Side.objects.filter(code="X").exists()
+
+
+def test_the_system_adds_sides_on_the_demo(shop_a: Shop, settings: Settings) -> None:
+    # The seed makes the demo's two sides as the system (`by` None, set_up_shop), which must still work.
+    settings.DEMO_SEED = True
+    with shop_context(shop_a):
+        add_side(shop=shop_a, code="X", name="Nyingine", by=None)
+        assert Side.objects.filter(code="X").exists()

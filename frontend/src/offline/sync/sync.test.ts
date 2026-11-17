@@ -1,0 +1,476 @@
+// sync.test.ts — one sync of the laptop's shop (SYNC-7): the bootstrap once, then the push (SYNC-8), then
+// pulls; one asked for while another runs runs once more after it, and asks beyond that join it (SYNC-9);
+// a failed one leaves the next free to run.
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ApiRefusal, NoConnection } from "@/api/refusal";
+import {
+  saveBlocked,
+  saveDevice,
+  savedBlocked,
+} from "@/features/devices/this-device";
+
+import { DAWA_LAPTOP } from "@/test/devices";
+import { forgetCsrfToken, giveCsrfToken } from "@/test/csrf";
+import { answer, refusal, sent } from "@/test/fake-server";
+import { ASHA, BOOTSTRAP } from "@/test/shop-lists";
+import { APP_NUMBER } from "@/lib/version";
+
+import { saveDocument } from "../outbox";
+import { shopDatabase } from "../this-shop";
+import { SYNC_CALL_LIMIT_MS } from "./answer";
+import { mayPush } from "./backoff";
+import { WrongShop } from "./bootstrap";
+import { readCursor } from "./meta";
+import { AppTooOld } from "./pull";
+import { syncShop } from "./sync";
+
+vi.mock("@/api/client", async (importOriginal) =>
+  (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
+);
+
+const SHOP = DAWA_LAPTOP.shop.id;
+const BOOTSTRAP_ROUTE = "/api/sync/v1/bootstrap/";
+const PULL = "/api/sync/v1/pull/";
+const PUSH = "/api/sync/v1/push/";
+
+// Every sync pushes first: with nothing waiting, the push is the laptop's report alone (push.loop.test.ts).
+beforeEach(() => {
+  // A working laptop has its CSRF token, from the device check's answer: the push needs it (sync.ts).
+  giveCsrfToken();
+  answer("POST", PUSH, { status: 200, body: { answers: [] } });
+});
+
+afterEach(() => {
+  // The time limit a test stood in for (AbortSignal.timeout), back as the browser has it.
+  vi.restoreAllMocks();
+});
+
+const emptyPage = (cursor: number) => ({
+  status: 200,
+  body: {
+    changes: [],
+    cursor,
+    has_more: false,
+    server_time: "2026-11-11T09:00:00Z",
+    min_app_version: 1,
+  },
+});
+
+const paths = () => sent.map((request) => new URL(request.url).pathname);
+
+/** A filled laptop: its cursor and its last number, as a bootstrap leaves them. */
+async function filledLaptop(): Promise<void> {
+  await shopDatabase(SHOP).meta.bulkPut([
+    { key: "pull_cursor", value: 130 },
+    { key: "last_device_seq", value: 57 },
+  ]);
+}
+
+/** Asha's clock-in, saved on the laptop. */
+const clockIn = () =>
+  saveDocument(shopDatabase(SHOP), {
+    type: "clock",
+    schema_version: 1,
+    created_by: ASHA.id,
+    payload: { kind: "in", last_server_time: "2026-11-12T04:58:00Z" },
+  });
+
+/**
+ * The pull's first answer, held until the test lets it go: a sync stopped halfway, its push gone, while
+ * the test asks again. `pulls` counts the pulls asked for, so a test can wait for the first to arrive.
+ */
+function holdTheFirstPull(): { release: () => void; pulls: () => number } {
+  let release = nothing;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let pulls = 0;
+  answer("GET", PULL, async () => {
+    pulls += 1;
+    if (pulls === 1) await held;
+    return Response.json(emptyPage(130).body);
+  });
+  return { release: () => release(), pulls: () => pulls };
+}
+
+function nothing(): void {}
+
+describe("a sync", () => {
+  it("of an app below min_app_version sends its outbox before a refused fill, then stops", async () => {
+    // A newer version's database upgrade removed the cursor, so this old tab must fill again, with Asha's
+    // clock-in still waiting. The fill says the app is too old and writes nothing (bootstrap.ts); the
+    // clock-in still goes first, in the shape this app wrote it (03 §6.8), and the pull, with no cursor to
+    // ask from, never runs.
+    await filledLaptop();
+    const { id } = await clockIn();
+    await shopDatabase(SHOP).meta.delete("pull_cursor");
+    answer("GET", BOOTSTRAP_ROUTE, {
+      status: 200,
+      body: { ...BOOTSTRAP, min_app_version: APP_NUMBER + 1 },
+    });
+    answer("POST", PUSH, {
+      status: 200,
+      body: { answers: [{ id, status: "accepted", posted_seq: 131 }] },
+    });
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(AppTooOld);
+
+    expect(paths()).toEqual([BOOTSTRAP_ROUTE, PUSH]);
+    expect(await shopDatabase(SHOP).outbox.count()).toBe(0);
+    expect(await readCursor(shopDatabase(SHOP))).toBeNull();
+  });
+
+  it("of an app below min_app_version sends its outbox, then stops before the page", async () => {
+    // Done when: an app below min_app_version sends its outbox, then updates (03 §6.8). Asha's clock-in goes
+    // up first; then the page says the server serves this app no longer, and the pull stops before it, the
+    // cursor where it was. The update follows from AppTooOld: triggers.tsx tells it (too-old.ts), and the
+    // bar switches by itself (update-prompt.test.tsx).
+    await filledLaptop();
+    const { id } = await clockIn();
+    answer("POST", PUSH, {
+      status: 200,
+      body: { answers: [{ id, status: "accepted", posted_seq: 131 }] },
+    });
+    answer("GET", PULL, {
+      status: 200,
+      body: { ...emptyPage(131).body, min_app_version: APP_NUMBER + 1 },
+    });
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(AppTooOld);
+
+    expect(paths()).toEqual([PUSH, PULL]);
+    expect(await shopDatabase(SHOP).outbox.count()).toBe(0);
+    expect(await readCursor(shopDatabase(SHOP))).toBe(130);
+  });
+
+  it("bootstraps a fresh laptop, pushes, then pulls from its cursor", async () => {
+    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+    answer("GET", PULL, emptyPage(120));
+
+    await syncShop(SHOP);
+
+    expect(paths()).toEqual([BOOTSTRAP_ROUTE, PUSH, PULL]);
+    expect(new URL(sent[2]!.url).searchParams.get("cursor")).toBe("120");
+    expect(await readCursor(shopDatabase(SHOP))).toBe(120);
+  });
+
+  it("only pushes and pulls on a laptop already filled", async () => {
+    await shopDatabase(SHOP).meta.bulkPut([
+      { key: "pull_cursor", value: 130 },
+      { key: "last_device_seq", value: 57 },
+    ]);
+    answer("GET", PULL, emptyPage(130));
+
+    await syncShop(SHOP);
+
+    expect(paths()).toEqual([PUSH, PULL]);
+  });
+
+  it("fills again a laptop filled before its number was kept", async () => {
+    // A laptop SYNC-7 filled has a cursor but no number of its own: one more bootstrap gives it one.
+    await shopDatabase(SHOP).meta.put({ key: "pull_cursor", value: 110 });
+    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+    answer("GET", PULL, emptyPage(120));
+
+    await syncShop(SHOP);
+
+    expect(paths()).toEqual([BOOTSTRAP_ROUTE, PUSH, PULL]);
+  });
+
+  it("sends what waits before it pulls", async () => {
+    // Asha's clock-in leaves first: the pull that follows then brings what the server made of it.
+    const db = shopDatabase(SHOP);
+    await db.meta.bulkPut([
+      { key: "pull_cursor", value: 130 },
+      { key: "last_device_seq", value: 57 },
+    ]);
+    const made = await saveDocument(db, {
+      type: "clock",
+      schema_version: 1,
+      created_by: ASHA.id,
+      payload: { kind: "in", last_server_time: "2026-11-12T04:58:00Z" },
+    });
+    answer("GET", PULL, emptyPage(130));
+
+    await syncShop(SHOP);
+
+    expect(paths()).toEqual([PUSH, PULL]);
+    const body = (await sent[0]!.json()) as { documents: { id: string }[] };
+    expect(body.documents.map((document) => document.id)).toEqual([made.id]);
+  });
+
+  it("still pulls when the push is told to try later", async () => {
+    // A retry is the server's trouble saving one record: the office's changes can still come down.
+    const db = shopDatabase(SHOP);
+    await db.meta.bulkPut([
+      { key: "pull_cursor", value: 130 },
+      { key: "last_device_seq", value: 57 },
+    ]);
+    const made = await saveDocument(db, {
+      type: "clock",
+      schema_version: 1,
+      created_by: ASHA.id,
+      payload: { kind: "in", last_server_time: "2026-11-12T04:58:00Z" },
+    });
+    answer("POST", PUSH, {
+      status: 200,
+      body: {
+        answers: [
+          {
+            id: made.id,
+            status: "retry",
+            first: null,
+            posted_seq: null,
+            flags: [],
+            code: "",
+            fields: {},
+          },
+        ],
+      },
+    });
+    answer("GET", PULL, emptyPage(130));
+
+    await syncShop(SHOP);
+
+    expect(paths()).toEqual([PUSH, PULL]);
+    expect(await db.outbox.count()).toBe(1);
+  });
+
+  it("runs once more after the running one, and the asks after that join it", async () => {
+    await filledLaptop();
+    const pull = holdTheFirstPull();
+
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pull.pulls()).toBe(1));
+    const second = syncShop(SHOP);
+    const third = syncShop(SHOP);
+    // Two at most: never two at once, and never a third waiting.
+    expect(second).not.toBe(first);
+    expect(third).toBe(second);
+    expect(paths()).toEqual([PUSH, PULL]);
+
+    pull.release();
+    await Promise.all([first, second]);
+
+    expect(paths()).toEqual([PUSH, PULL, PUSH, PULL]);
+  });
+
+  it("runs one more after the second too, when asked while the second runs", async () => {
+    // The sync after the running one is pulling when Baraka clocks in: one more runs after it, so his
+    // record doesn't wait for the next moment either. Joined to the second, it would.
+    await filledLaptop();
+    const releases: (() => void)[] = [];
+    let pulls = 0;
+    answer("GET", PULL, async () => {
+      pulls += 1;
+      if (pulls <= 2)
+        await new Promise<void>((resolve) => releases.push(resolve));
+      return Response.json(emptyPage(130).body);
+    });
+
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pulls).toBe(1));
+    const second = syncShop(SHOP);
+    releases[0]!();
+    await vi.waitFor(() => expect(pulls).toBe(2));
+    const third = syncShop(SHOP);
+    expect(third).not.toBe(second);
+    // It waits for the second: never two at once.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(paths()).toEqual([PUSH, PULL, PUSH, PULL]);
+    releases[1]!();
+    await Promise.all([first, second, third]);
+
+    expect(paths()).toEqual([PUSH, PULL, PUSH, PULL, PUSH, PULL]);
+  });
+
+  it("sends a record saved while a sync pulls, right after it", async () => {
+    // The sync had pushed already when Asha clocked in: hers goes at once, not at the next moment.
+    await filledLaptop();
+    const pull = holdTheFirstPull();
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pull.pulls()).toBe(1));
+
+    const made = await clockIn();
+    const second = syncShop(SHOP);
+    pull.release();
+    await Promise.all([first, second]);
+
+    const body = (await sent[2]!.json()) as { documents: { id: string }[] };
+    expect(body.documents.map((document) => document.id)).toEqual([made.id]);
+  });
+
+  it("runs the one asked after it, even when the running one fails", async () => {
+    // The first bootstrap meets the server down; the sync asked meanwhile fills the laptop.
+    let release = nothing;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let bootstraps = 0;
+    answer("GET", BOOTSTRAP_ROUTE, async () => {
+      bootstraps += 1;
+      if (bootstraps > 1) return Response.json(BOOTSTRAP);
+      await held;
+      return Response.json(refusal(500, "server_error").body, { status: 500 });
+    });
+    answer("GET", PULL, emptyPage(120));
+
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(bootstraps).toBe(1));
+    const second = syncShop(SHOP);
+    release();
+
+    await expect(first).rejects.toBeInstanceOf(ApiRefusal);
+    await second;
+    expect(await readCursor(shopDatabase(SHOP))).toBe(120);
+  });
+
+  it("asks nothing in a sync that waited its turn once the laptop is blocked", async () => {
+    // The manager blocks the laptop while a sync is pulling and the next one waits behind it: the next
+    // one must not ask the server again.
+    saveDevice(DAWA_LAPTOP);
+    await filledLaptop();
+    const pull = holdTheFirstPull();
+    const first = syncShop(SHOP);
+    await vi.waitFor(() => expect(pull.pulls()).toBe(1));
+    const second = syncShop(SHOP);
+
+    saveBlocked();
+    pull.release();
+    await Promise.all([first, second]);
+
+    expect(paths()).toEqual([PUSH, PULL]);
+  });
+
+  it("gives up on a call left with no answer, as no connection", async () => {
+    // The Wi-Fi is up and its internet gone: the push hangs. Its time limit (2 minutes, stood in for
+    // here) ends it as a lost connection, so the sync ends and the lock goes on to the other tabs.
+    await filledLaptop();
+    const limit = new AbortController();
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(limit.signal);
+    answer(
+      "POST",
+      PUSH,
+      (request) =>
+        new Promise<Response>((_, reject) => {
+          request.signal.addEventListener("abort", () =>
+            reject(request.signal.reason),
+          );
+        }),
+    );
+    answer("GET", PULL, emptyPage(130));
+
+    const sync = syncShop(SHOP);
+    await vi.waitFor(() => expect(paths()).toEqual([PUSH]));
+    limit.abort(new DOMException("No answer in time.", "TimeoutError"));
+
+    await expect(sync).rejects.toBeInstanceOf(NoConnection);
+    expect(timeout).toHaveBeenCalledWith(SYNC_CALL_LIMIT_MS);
+  });
+
+  it("never joins another shop's sync", async () => {
+    // The laptop was moved to another shop while its old shop's sync still ran. The server answers by the
+    // key, so as the new shop, to both: the old shop's sync writes nothing into its database (WrongShop,
+    // SYNC-13), and the new shop's fills its own.
+    const other = "019a5e00-0000-7000-8000-0000000000a2";
+    answer("GET", BOOTSTRAP_ROUTE, {
+      status: 200,
+      body: { ...BOOTSTRAP, shop: other },
+    });
+    answer("GET", PULL, emptyPage(120));
+
+    const first = syncShop(SHOP);
+    const second = syncShop(other);
+    const [old, moved] = await Promise.allSettled([first, second]);
+
+    expect(second).not.toBe(first);
+    expect(old.status === "rejected" && old.reason).toBeInstanceOf(WrongShop);
+    expect(moved.status).toBe("fulfilled");
+    expect(await readCursor(shopDatabase(SHOP))).toBeNull();
+    expect(await readCursor(shopDatabase(other))).toBe(120);
+  });
+
+  it("still pulls when the push fails, then throws the push's failure", async () => {
+    // The server has trouble with the push route alone: the office's changes, a suspension among them
+    // (X2), must still come down. The failure is thrown after, so it is still reported.
+    await shopDatabase(SHOP).meta.bulkPut([
+      { key: "pull_cursor", value: 130 },
+      { key: "last_device_seq", value: 57 },
+    ]);
+    answer("POST", PUSH, refusal(500, "server_error"));
+    answer("GET", PULL, emptyPage(131));
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(ApiRefusal);
+
+    expect(paths()).toEqual([PUSH, PULL]);
+    expect(await readCursor(shopDatabase(SHOP))).toBe(131);
+  });
+
+  it("keeps the push's own failure, and still pulls, when its wait can't be written", async () => {
+    // The server has trouble, and the laptop's disk is full as the wait is written: the server's 500
+    // is still the failure reported, and the office's changes still come down.
+    await filledLaptop();
+    answer("POST", PUSH, refusal(500, "server_error"));
+    answer("GET", PULL, emptyPage(131));
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const full = new Error("disk full");
+    vi.spyOn(shopDatabase(SHOP).meta, "bulkPut").mockRejectedValueOnce(full);
+
+    const error: unknown = await syncShop(SHOP).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(ApiRefusal);
+    expect(paths()).toEqual([PUSH, PULL]);
+    expect(await readCursor(shopDatabase(SHOP))).toBe(131);
+    expect(log).toHaveBeenCalledWith("the push's wait was not kept", full);
+  });
+
+  it("pushes nothing before the server has given a CSRF token, starts no wait, and still pulls", async () => {
+    // The browser lost its cookies but kept the device's copy: the app opens and syncs before the
+    // device check's answer brings the token. The push would be refused, so it waits for the token.
+    forgetCsrfToken();
+    await filledLaptop();
+    await clockIn();
+    answer("GET", PULL, emptyPage(130));
+
+    await syncShop(SHOP);
+    expect(paths()).toEqual([PULL]);
+    expect(await mayPush(shopDatabase(SHOP))).toBe(true);
+
+    // The check's answer brings the token: the next sync pushes at once, with no wait to sit out.
+    giveCsrfToken();
+    await syncShop(SHOP);
+    expect(paths()).toEqual([PULL, PUSH, PULL]);
+  });
+
+  it("pulls nothing once the push says the laptop is blocked", async () => {
+    // A blocked laptop must ask nothing more: the lock is on (answer.ts).
+    saveDevice(DAWA_LAPTOP);
+    await shopDatabase(SHOP).meta.bulkPut([
+      { key: "pull_cursor", value: 130 },
+      { key: "last_device_seq", value: 57 },
+    ]);
+    answer("POST", PUSH, refusal(401, "device.blocked"));
+    answer("GET", PULL, emptyPage(131));
+
+    await expect(syncShop(SHOP)).rejects.toBeInstanceOf(ApiRefusal);
+
+    expect(savedBlocked()).toBe(true);
+    expect(paths()).toEqual([PUSH]);
+  });
+
+  it("leaves the next sync free to run after one fails", async () => {
+    answer("GET", BOOTSTRAP_ROUTE, refusal(500, "server_error"));
+    await expect(syncShop(SHOP)).rejects.toThrow();
+
+    answer("GET", BOOTSTRAP_ROUTE, { status: 200, body: BOOTSTRAP });
+    answer("GET", PULL, emptyPage(120));
+    await syncShop(SHOP);
+
+    expect(await readCursor(shopDatabase(SHOP))).toBe(120);
+  });
+});

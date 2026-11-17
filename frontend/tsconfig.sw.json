@@ -4,6 +4,10 @@
 // `self`, a ServiceWorkerGlobalScope. So it gets the "webworker" types instead of tsconfig.json's "dom"
 // types; with both at once, TypeScript would accept page code that can't run in a worker, and the
 // other way round. esbuild compiles it (serwist.config.mjs); TypeScript only checks it.
+//
+// Since SYNC-16 the worker pushes the outbox too, so it brings in the sync's own files, and with them this
+// check: a file the worker loads that reaches for `window` or `document` fails here, before it fails on
+// the phone. "@/" means src/, as in tsconfig.json, which esbuild reads for the same shortcut.
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -14,7 +18,8 @@
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": { "@/*": ["./src/*"] }
   },
-  "files": ["src/sw.ts"]
+  "files": ["src/sw.ts", "src/sw-env.d.ts"]
 }

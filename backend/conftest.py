@@ -17,7 +17,7 @@ from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import Role, RoleAssignment, StaffMember, User
+from apps.people.models import Device, Role, RoleAssignment, StaffMember, User
 from apps.people.services import add_staff, assign_role, copy_role_templates
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
@@ -92,6 +92,14 @@ def staff_b(shop_b: Shop) -> StaffMember:
 
 
 @pytest.fixture
+def device_a(shop_a: Shop, side_a: Side) -> Device:
+    # A device of shop A, for the tests of a row that names one (X3). Only the row: its key's hash is made up, so it
+    # opens nothing. A test that logs in with a key pairs a device the way the app does (confirm_pairing).
+    with shop_context(shop_a):
+        return Device.objects.create(shop=shop_a, home_side=side_a, name="Laptop ya Dawa", code=1, key_hash="a" * 64)
+
+
+@pytest.fixture
 def give_role() -> Callable[[StaffMember, RoleTemplate, Side | None], None]:
     # Gives a person one of their shop's six roles, on one side or on every side (side=None), the way the app
     # does (assign_role, PPL-3). shop_a and shop_b are bare Shop rows with no roles, so the first role asked for
@@ -113,7 +121,7 @@ def staff_client_a(
     staff_a: StaffMember, give_role: Callable[[StaffMember, RoleTemplate, Side | None], None]
 ) -> APIClient:
     # DRF's test client, logged in as a staff member of shop A, the way the office screens are. A login, AUTH-3's
-    # password session (apps/people/api/staff_session.py) and later AUTH-4's PIN, leaves the person acting in
+    # password or AUTH-4's PIN (apps/people/api/staff_session.py), leaves the person acting in
     # `request.auth`, which names the shop the visit works for (apps/core/api/base.py). force_authenticate skips the
     # login and puts the staff member there directly; apps/people/tests/test_staff_session.py goes through the real
     # one. DRF's type stubs expect its own Token model there; DRF itself takes any object, and ours is the staff member.

@@ -3,7 +3,7 @@
 # Run `make` alone to list the commands. Recipe lines start with a real tab (.editorconfig).
 
 # These names are jobs, not files: without this line, a file called `test` would stop `make test`.
-.PHONY: help dev dev-backend dev-frontend down test check check-backend check-frontend check-image fmt hooks migrate
+.PHONY: help dev dev-backend dev-frontend down test check check-backend check-frontend build-image check-image check-e2e fmt hooks migrate seed
 # Plain `make` shows the list of commands instead of starting something.
 .DEFAULT_GOAL := help
 # `make dev` starts a second make; this hides its "Entering directory" lines.
@@ -15,8 +15,9 @@ COMPOSE = docker compose -f compose.dev.yml
 # keeps its default, so `make check` runs there too.
 UV_RUN = uv run $(if $(wildcard .env),--env-file ../.env)
 
+# Every target with a `## ` description, in file order. Names may hold digits (check-e2e), so 0-9 is in the class.
 help: ## list the commands
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  make %-15s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  make %-15s %s\n", $$1, $$2}'
 
 # --- Running the app
 
@@ -47,22 +48,24 @@ test: ## run the backend and frontend tests
 	cd backend && $(UV_RUN) pytest
 	cd frontend && pnpm test
 
-# Exactly what CI runs (ops rule). CI's three jobs (.github/workflows/ci.yml) call the three parts
+# Exactly what CI runs (ops rule). CI's four jobs (.github/workflows/ci.yml) call the four parts
 # below, so the list lives only here and the laptop and CI can't drift apart. make stops at the
 # first failure, so the last lines printed say what to fix.
-check: check-backend check-frontend check-image ## run everything CI runs; it must pass before any PR
+check: check-backend check-frontend check-image check-e2e ## run everything CI runs; it must pass before any PR
 
 # The Python half: CI's `backend` job.
 # - First, `uv sync --locked`: it fails when uv.lock no longer matches pyproject.toml, instead of
 #   quietly writing a new lock that nobody committed (ADR-0025). It also installs the packages,
 #   which is all CI needs before the checks.
-# - lint-imports checks the layer contracts in pyproject.toml (ADR-0035): an import that climbs a
+# - lint-imports checks the layer contracts in pyproject.toml (ADR-0043): an import that climbs a
 #   layer fails here. Like ruff and mypy it needs no database, so it runs with them, before the
 #   slower checks. --no-logo: no banner, so the last lines printed are the result.
 # - makemigrations --check fails when a model changed without a migration. It runs with the test
 #   settings: they install every app the dev settings do, plus the test-only probe app (CORE-2),
 #   whose tables build on ShopScoped, so their migrations must follow when ShopScoped changes.
 # - pytest prints a coverage report here (pyproject.toml says what is measured), so CI shows it too.
+#   Among its tests, test_committed_schema_matches_the_code fails when shared/openapi.json, which the
+#   app's types are made from, no longer matches the routes (UI-2): run `cd frontend && pnpm gen:api`.
 # - The guard's tests: the guard refuses the costly mistakes, so a broken guard must turn this red.
 # - The GitHub sync script's tests (docs/runbooks/github-setup.md). The guard and the script are
 #   not backend code, but they are Python, and the backend job is the one that has Python.
@@ -81,25 +84,54 @@ check-backend: ## only the backend and the Python tools (CI's backend job)
 # The frontend half: CI's `frontend` job.
 # First, `pnpm install --frozen-lockfile`, for the same reason as `uv sync --locked` above: it fails
 # when pnpm-lock.yaml no longer matches package.json, instead of quietly writing a new one.
+# - check:api fails when src/api/schema.d.ts no longer matches shared/openapi.json, the routes'
+#   description it is made from (ADR-0025). This job has no Python, so it trusts that file; the
+#   backend job's test_committed_schema_matches_the_code keeps the file true to the code. Together:
+#   a serializer changed without `pnpm gen:api` turns one of the two red (UI-2).
+# - After the build, each counter screen's code is weighed, compressed: over 300 KB fails (03 §14,
+#   SYNC-11). Called with node, not as a script in package.json: a change there would make the image's
+#   build install every frontend package again.
 check-frontend: ## only the frontend (CI's frontend job)
 	cd frontend && pnpm install --frozen-lockfile
+	cd frontend && pnpm check:api
 	cd frontend && pnpm lint
 	cd frontend && pnpm typecheck
 	cd frontend && pnpm test
 	cd frontend && pnpm build
+	cd frontend && node scripts/counter-budget.mjs
 
-# The image part: CI's `image` job (OPS-1). It builds the backend image from the repo root (the
-# build context, backend/Dockerfile), then scripts/smoke_image.sh starts it and checks that it serves
-# the API and the app from one address, never as root. Needs Docker, as the database already does.
+# The backend image, which the next two parts both use. It is built from the repo root (the build
+# context, backend/Dockerfile). Needs Docker, as the database already does. A target of its own, named
+# by both: make runs a target once per command, so `make check` builds the image once, not twice.
 # The first build takes minutes. Later ones reuse the slow install layers until a package list
 # changes; a code change still re-runs `pnpm build` and collectstatic, in seconds.
 # APP_VERSION is the version the image carries and /api/health/ shows (backend/Dockerfile). The same value
 # goes to the build and to the check. "dev" by default; the demo's deploy passes the commit (OPS-2):
 #   make check-image APP_VERSION=<commit>
 APP_VERSION ?= dev
-check-image: ## only the backend image: build it, start it, check it (CI's image job)
+build-image: ## only build the backend image (mpc-backend:check), for the two checks below
 	docker build --file backend/Dockerfile --build-arg APP_VERSION=$(APP_VERSION) --tag mpc-backend:check .
+
+# The image part: CI's `image` job (OPS-1). scripts/smoke_image.sh starts the image and checks that it
+# serves the API and the app from one address, never as root.
+check-image: build-image ## only the backend image: build it, start it, check it (CI's image job)
 	bash scripts/smoke_image.sh mpc-backend:check $(APP_VERSION)
+
+# The browser tests: CI's `e2e` job (UI-6, 03 §11). A real Chromium, driven by Playwright, against the
+# image and a fresh PostgreSQL, both in Docker (compose.e2e.yml); scripts/run_e2e.sh starts them, runs
+# the tests and always wipes them.
+# - The packages first, as in check-frontend: Playwright is one of them.
+# - Then Playwright's own Chromium, the exact build its version was made for, into ~/.cache/ms-playwright/.
+#   Only the headless shell (a Chromium with no window), all a test needs. Once there, this does nothing.
+#   On a fresh clone or a new Playwright version, it is a download of about 100-150 MB.
+# The system libraries that Chromium needs come with apt, which needs sudo: CI's job installs them in a
+# step of its own, and a laptop once by hand (`cd frontend && pnpm exec playwright install-deps chromium`).
+# No `sudo` in front: Playwright calls sudo for apt itself and asks for the password, and `sudo pnpm`
+# would fail on most laptops, where pnpm lives in the user's own folders, which sudo's PATH leaves out.
+check-e2e: build-image ## only the browser tests: the image and a fresh database, driven by Playwright (CI's e2e job)
+	cd frontend && pnpm install --frozen-lockfile
+	cd frontend && pnpm exec playwright install --only-shell chromium
+	bash scripts/run_e2e.sh
 
 # Lint fixes first, then formatting: a lint fix can leave code the formatter would still change,
 # and `make check` would then fail its format check (ruff's own advice).
@@ -129,3 +161,11 @@ migrate: ## apply migrations to the dev database (refused before PPL-1) and make
 	@test -f backend/apps/people/migrations/0001_initial.py || { echo "Refused: no migrate before PPL-1 (ADR-0012)." >&2; exit 1; }
 	cd backend && $(UV_RUN) python manage.py migrate
 	cd backend && $(UV_RUN) python manage.py createcachetable
+
+# The demo shop on this laptop's database (DATA-1, apps/demo/services.py): wipes every table of the apps (the cache
+# tables and the list of migrations stay), then makes Duka la Mfano
+# and its people again. DEMO_SEED=yes is the sign the seed asks for: typing `make seed` is how a laptop gives it, as
+# the seed never runs where nobody put the sign. --fresh: made again now, even if today's is there. The seed still
+# refuses a database holding any shop that isn't a demo, such as one made by hand to try something.
+seed: ## wipe the dev database and make the demo shop (refused if it holds a shop that isn't a demo)
+	cd backend && DEMO_SEED=yes $(UV_RUN) python manage.py seed_demo --fresh

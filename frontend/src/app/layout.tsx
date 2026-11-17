@@ -3,17 +3,37 @@
 // This file stays a server component, but in a static export a server component runs
 // once, at build time, and becomes plain HTML in out/ — no server runs it later
 // (ADR-0016). That is also why it may export `metadata`, which only server components can.
-// UI-1 adds the app's providers here: translations, data, session, device (03 §7.2).
+// The app's providers wrap every page here: today the word books, the store of server answers, the
+// device's check of who it is, the sync's moments, the ask to keep the data, and the note of the app's own
+// moves, for the back arrow; later the session (03 §7.2).
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-// Screen text comes from the message files, never from code (ADR-0032). UI-1 replaces this
-// direct import with next-intl, which also handles the English switch.
+// The tab's title is read once, at build time, where no language has been chosen yet. It is the
+// shop's short name, the same in both books.
 import sw from "../../messages/sw.json";
 
+// The store of server answers, which office screens ask through TanStack Query (UI-2).
+import { QueryProvider } from "@/api/provider";
 // Starts the service worker, which keeps the app's files on the device so every page opens offline,
 // and shows the Toleo jipya bar when a new version is ready (SPIKE-1).
 import { UpdatePrompt } from "@/components/update-prompt";
+// Asks the server which device this is, and keeps the answer for the top bar and the lock (UI-3).
+import { DeviceCheck } from "@/features/devices/device-check";
+// A blocked device shows the lock in place of every page (UI-3).
+import { DeviceLock } from "@/features/devices/device-lock";
+// Notes, for this tab, that the person moved between the app's own pages: the back arrow goes back only
+// then, never out of the app (page-header.tsx).
+import { InAppMoves } from "@/components/in-app-moves";
+// The two fonts inside the app (ADR-0039).
+import { atkinson, sourceSans } from "@/fonts/fonts";
+// Hands every screen its words from the open book: Swahili, or English after the switch (ADR-0040).
+import { LanguageProvider } from "@/i18n/provider";
+// Asks the browser to keep the shop's data for good, and listens for its install offer (SYNC-12).
+import { KeepDataAtStart } from "@/offline/keep-data-at-start";
+// Syncs the shop's database at its moments: as the app opens, when the network comes back, 2 s after a
+// save, every 30 s, and from Tuma sasa (SYNC-9).
+import { SyncTriggers } from "@/offline/sync/triggers";
 
 // The one global stylesheet: Tailwind and the design tokens, loaded once for every page.
 import "./globals.css";
@@ -25,10 +45,23 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     // lang="sw": the app is Swahili first, so screen readers and spell checkers use Swahili.
-    <html lang="sw">
+    // After a switch to English, LanguageProvider changes it in the browser.
+    // The two classes hand both fonts to the page under their names; globals.css picks which one
+    // shows. Both are here because a person's choice changes the font with no new page (UI-9).
+    <html lang="sw" className={`${sourceSans.variable} ${atkinson.variable}`}>
       <body>
-        {children}
-        <UpdatePrompt />
+        <LanguageProvider>
+          <QueryProvider>
+            <DeviceLock>{children}</DeviceLock>
+            {/* Outside the lock, so a blocked device still asks, and learns of its unblock. */}
+            <DeviceCheck />
+            {/* Beside the check, whose answers it follows: it stops itself while the device is blocked. */}
+            <SyncTriggers />
+            <UpdatePrompt />
+            <KeepDataAtStart />
+            <InAppMoves />
+          </QueryProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

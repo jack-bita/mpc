@@ -2,7 +2,8 @@
 //
 // Tests run in Node, inside jsdom: a fake browser (document, window, events) that is fast
 // and needs no real browser. Real browsers and offline mode come with Playwright (03 §11).
-// Tests sit next to the code they test, as *.test.ts(x).
+// Tests sit next to the code they test, as *.test.ts(x): in src/, and in scripts/ for the scripts CI runs
+// (the counter's size check, SYNC-11), which the server image never copies.
 import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
@@ -18,6 +19,6 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.ts"],
   },
 });

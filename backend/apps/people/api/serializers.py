@@ -1,20 +1,25 @@
 """apps/people/api/serializers.py — how the people tables look in the API (03 §5.10).
 
 Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a
-shop's devices on the office routes (AUTH-5): a device as the device list shows it, and what a manager sends to say
-yes to a waiting one, to rename one, and to block or unblock one; and the answers of the two routes a device calls
-with its key (apps/people/api/views.py). A key, a key's hash or a PIN's hash is never among the fields: they never
-leave the server (03 §5.9).
+shop's devices on the office routes (AUTH-5): a device as the device list shows it, and as the health page shows it,
+with its last push's report and its offline periods (SYNC-14); what a manager sends to say yes to a waiting one, to
+rename one, and to block or unblock one; what the owner sends to set a temporary password
+(AUTH-6); what a device sends for a PIN login, and what `me` answers (AUTH-4); what a person sends to change their
+own language and font (UI-9); and the answers of the routes a device
+calls with its key (apps/people/api/views.py), the PIN screen's list of people among them (UI-4). A key, a key's hash
+or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
 """
 
+from datetime import timedelta
 from typing import Any
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
-from apps.people.models import Device, PairingRequest
+from apps.people.models import OWN_SETTINGS, Device, DeviceOutage, PairingRequest, StaffMember, User
 from apps.shops.api.fields import SideField
-from apps.shops.models import Shop, Side
+from apps.shops.models import Shop, Side, SideBand
 
 
 class DeviceSerializer(serializers.ModelSerializer[Device]):
@@ -26,6 +31,64 @@ class DeviceSerializer(serializers.ModelSerializer[Device]):
         model = Device
         fields = ["id", "name", "code", "home_side", "status", "last_seen_at", "created_at", "updated_at", "version"]
         read_only_fields = fields
+
+
+class DeviceOutageSerializer(serializers.ModelSerializer[DeviceOutage]):
+    # One offline period a laptop reported (SYNC-14, 02: DeviceOutage): when it lost the server and when it heard it
+    # again, by its own clock, as kept. It may end before it starts, after the laptop's clock was put back: the page
+    # shows it as the laptop said, and says so. With `end_unknown`, its end is only the last time the laptop's app saw
+    # it, as the laptop went off: the page shows "– ?".
+    class Meta:
+        model = DeviceOutage
+        fields = ["id", "started_at", "ended_at", "end_unknown"]
+        read_only_fields = fields
+
+
+class DeviceHealthSerializer(serializers.ModelSerializer[Device]):
+    # A device as the health page shows it (*Hali ya vifaa*, SYNC-14, 03 §5.17): who it is, whether it works, what it
+    # said about itself at its last push (when, how many records still wait on it, which app), how far its clock was
+    # from the server's, and its offline periods of the last week. Every report field is empty until its first push,
+    # so the page can say "not synced yet" rather than show a made-up 0. No key's hash, as on the device list.
+    clock_error_seconds = serializers.SerializerMethodField()
+    outages = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Device
+        fields = [
+            "id",
+            "name",
+            "code",
+            "home_side",
+            "status",
+            "last_synced_at",
+            "unsent_count",
+            "app_version",
+            "clock_error_seconds",
+            "outages",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_clock_error_seconds(self, device: Device) -> int | None:
+        # The laptop's clock minus the server's, in whole seconds (a laptop 6 minutes slow is -360): a number the app
+        # reads at once, where Django's own text for a duration ("-1 23:54:00") would need parsing. Rounded away from
+        # zero, never toward it (SYNC-14's review): a clock 120.4 s fast already makes its clock-ins wait for review
+        # (more than 2 minutes, CLOCK_SLACK), so the page must read it as past the slack, 121, never as 120, within it.
+        # By whole-number division, never through a float. divmod rounds down, which is away from zero for a clock
+        # behind; for one ahead, a part-second left over rounds up.
+        if device.clock_error is None:
+            return None
+        seconds, left = divmod(device.clock_error, timedelta(seconds=1))
+        if left and seconds >= 0:
+            seconds += 1
+        return seconds
+
+    @extend_schema_field(DeviceOutageSerializer(many=True))
+    def get_outages(self, device: Device) -> Any:
+        # Read once for every device by the route (outages_this_week), handed in through the context: one query for
+        # the page, not one per device.
+        periods = self.context["outages"].get(device.pk, [])
+        return DeviceOutageSerializer(periods, many=True).data
 
 
 class DeviceConfirmSerializer(serializers.ModelSerializer[Device]):
@@ -70,6 +133,27 @@ class DeviceReasonSerializer(serializers.Serializer[Any]):
     reason = serializers.CharField(max_length=500, allow_blank=True)
 
 
+class TemporaryPasswordSerializer(serializers.Serializer[Any]):
+    # What the owner sends to set a person's temporary password (AUTH-6, ADR-0038). Only ever read in: the route answers
+    # with nothing, and nothing shows a password back.
+    # DRF takes the spaces off both ends, as allauth's login does with what is typed, and refuses one of only spaces: a
+    # password stored with them could never log in. 128 characters at most, so a huge one can't be sent to the slow
+    # hash. What makes a good password is the service's.
+    password = serializers.CharField(max_length=128, write_only=True)
+    # Why, kept in its audit line with who and when (T3). A blank reason is let through, so the service refuses it with
+    # its own code, staff.reason_required. 500 characters at most, as the audit line keeps (control.AuditEvent).
+    reason = serializers.CharField(max_length=500, allow_blank=True, write_only=True)
+
+
+class PinLoginSerializer(serializers.Serializer[Any]):
+    # What a shop's device sends when someone types their PIN (AUTH-4): who, and the PIN. Only ever read in: the route
+    # answers with nothing, and nothing shows a PIN back.
+    staff = serializers.UUIDField(write_only=True)
+    # 16 characters at most, so a huge text can't reach the slow hash. Not checked as 4 digits here: anything else just
+    # counts as a wrong try, with the same answer.
+    pin = serializers.CharField(max_length=16, write_only=True)
+
+
 class PairingStartSerializer(serializers.ModelSerializer[PairingRequest]):
     # What a new device gets back when it asks to join: the code to show on its screen, and until when it can be typed.
     # Never the key: an answer's body is what page scripts can read; the key goes in its cookie only.
@@ -89,18 +173,23 @@ class MeDeviceSerializer(serializers.ModelSerializer[Device]):
 
 
 class MeSideSerializer(serializers.ModelSerializer[Side]):
-    # The side it mostly serves, which the counter screens open on.
+    # The side it mostly serves, which the counter screens open on, with the band its top bar draws before anyone logs
+    # in (SHOP-4). The device keeps it in its saved copy, so the bar draws it offline too.
     class Meta:
         model = Side
-        fields = ["id", "code", "name"]
+        fields = ["id", "code", "name", "band"]
         read_only_fields = fields
 
 
 class MeShopSerializer(serializers.ModelSerializer[Shop]):
-    # Its shop. Shown by name, so a code claimed by the wrong shop's manager is seen at once (03 §5.9).
+    # Its shop. Shown by name, so a code claimed by the wrong shop's manager is seen at once (03 §5.9). And what an
+    # offline device needs to know of it (SYNC-2's review): its time zone, to tell which of its rules is in force today,
+    # as a rule starts on the shop's own day (02 §1); its currency, for amounts on screen; and its language, for screens
+    # nobody has logged in to yet. Here, not in the bootstrap: a shop's own row has no line in the change log, so a copy
+    # sent once would go stale, and a device asks this route again every 5 minutes (03 §5.9).
     class Meta:
         model = Shop
-        fields = ["id", "name", "code"]
+        fields = ["id", "name", "code", "timezone", "currency", "default_language"]
         read_only_fields = fields
 
 
@@ -110,6 +199,82 @@ class DeviceMeSerializer(serializers.Serializer[Device]):
     device = MeDeviceSerializer(source="*")
     home_side = MeSideSerializer()
     shop = MeShopSerializer()
+
+    def to_internal_value(self, data: Any) -> Any:
+        # Only ever an answer: nothing is sent to this route.
+        raise NotImplementedError
+
+
+class MeUserSerializer(serializers.ModelSerializer[User]):
+    # The person, as the screens greet them, in their own language and font (03 §7.4, UI-9): the app applies both at
+    # every login, so they follow the person to any device. No phone and no email: a screen on a shared laptop doesn't
+    # need them, and the next person could read them there.
+    class Meta:
+        model = User
+        fields = ["id", "full_name", "language", "font"]
+        read_only_fields = fields
+
+
+class OwnSettingsSerializer(serializers.ModelSerializer[User]):
+    # What a person sends to `PATCH /api/auth/me/settings/` (UI-9): one of their two choices, or both, each refused
+    # under its field if it isn't one the app knows (invalid_choice). Only these two fields: anything else sent, another
+    # person's id included, is not read at all. Both optional, as the screen sends only the one just tapped: written
+    # out, though the model's defaults already make them so, as that is a promise to the screen, not a side effect.
+    class Meta:
+        model = User
+        fields = list(OWN_SETTINGS)
+        extra_kwargs = {name: {"required": False} for name in OWN_SETTINGS}
+
+
+class OwnSettingsAnswerSerializer(serializers.ModelSerializer[User]):
+    # What the route answers: both choices, always, as now saved. Read-only, so the API's description, and the app's
+    # types from it, say both are always there.
+    class Meta:
+        model = User
+        fields = list(OWN_SETTINGS)
+        read_only_fields = fields
+
+
+class MeStaffSerializer(serializers.ModelSerializer[StaffMember]):
+    # Their job at this shop. Never the PIN's hash.
+    class Meta:
+        model = StaffMember
+        fields = ["id", "display_name", "job_title"]
+        read_only_fields = fields
+
+
+class MeSideKeysSerializer(serializers.Serializer[Any]):
+    # One side, with what the person may do there. The side's own fields beside its keys, so a screen needs no second
+    # call to name its tabs, nor to draw the band of the side the office's top bar names (SHOP-4).
+    id = serializers.UUIDField(source="side.pk")
+    code = serializers.CharField(source="side.code")
+    name = serializers.CharField(source="side.name")
+    band = serializers.ChoiceField(source="side.band", choices=SideBand.choices)
+    permissions = serializers.ListField(child=serializers.CharField())
+
+
+class MePermissionsSerializer(serializers.Serializer[Any]):
+    # What the person may do (02 §5, X1): on the whole shop, and on each side they hold a key on. A side they hold none
+    # on isn't named: they don't see it on any route either.
+    whole_shop = serializers.ListField(child=serializers.CharField())
+    sides = MeSideKeysSerializer(many=True)
+
+
+class WhoIsHereSerializer(serializers.Serializer[Any]):
+    # What `GET /api/auth/me/` answers (apps/people/selectors.py, who_is_here). `device` and `home_side` are empty for a
+    # password on a person's own phone.
+    user = MeUserSerializer()
+    staff = MeStaffSerializer()
+    shop = MeShopSerializer()
+    device = MeDeviceSerializer(allow_null=True)
+    home_side = MeSideSerializer(allow_null=True)
+    must_change_password = serializers.BooleanField()
+    # How long a shared device's screen may sit unused, in minutes: a PIN's badge's own, or for a password, the shop's
+    # setting. Selling uses the device's key, not the session, so it never pushes the server's idle time forward: the
+    # screen keeps a lock of its own, as long as the badge lasts (UI-4). A phone that is only the person's own never
+    # shows that screen.
+    idle_minutes = serializers.IntegerField()
+    permissions = MePermissionsSerializer(source="*")
 
     def to_internal_value(self, data: Any) -> Any:
         # Only ever an answer: nothing is sent to this route.

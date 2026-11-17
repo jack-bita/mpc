@@ -201,6 +201,24 @@ def test_unknown_page_outside_the_api_keeps_djangos_page(client: Client) -> None
     assert response["Content-Type"].startswith("text/html")
 
 
+def test_suspicious_api_request_answers_in_the_error_shape(client: Client) -> None:
+    # Django refuses a request it finds suspicious before any view runs: a host it doesn't serve, as here,
+    # or a body far too big. Under /api/ that answer is the one shape too, so the app reads it like any
+    # refusal, and nothing of Django's own page (the host, the setting's name) reaches it.
+    response = client.get("/api/health/", HTTP_HOST="not-our-shop.example")
+
+    assert response.status_code == 400
+    assert response.json() == {"code": "bad_request", "message": "Bad request.", "fields": {}, "params": {}}
+
+
+def test_suspicious_page_outside_the_api_keeps_djangos_page(client: Client) -> None:
+    # Outside /api/ nobody reads JSON: a person's browser gets Django's own page.
+    response = client.get("/no-such-page/", HTTP_HOST="not-our-shop.example")
+
+    assert response.status_code == 400
+    assert response["Content-Type"].startswith("text/html")
+
+
 def test_crash_answers_in_the_error_shape_and_is_logged(
     client: Client, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

@@ -6,16 +6,46 @@ shop (T1), never to someone who has left, and the row keeps who gave it. Only so
 give, and only what they hold there themselves (Jack, 29 Oct 2026). Fake data only: the repo is public (03 §10).
 """
 
+from collections.abc import Callable
+
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 
 from apps.core.permissions import ROLE_TEMPLATES, Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import PermissionGrant, Role, RoleAssignment, StaffMember
 from apps.people.services import assign_role, copy_role_templates, grant_permission, mark_left, suspend
 from apps.shops.models import Shop, Side
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
+
+GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_owners_giving_each_other_one_role_take_turns(
+    staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # Each gives the other the Manager role at once. Both lock that role, so they take turns, and the second checks the
+    # role as the first left it. With no lock, the second would never wait, and could check a role an owner was changing
+    # at that moment. Neither ends in a deadlock, though each locks a different person and each line links to the other.
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    give_role(staff_a2, RoleTemplate.OWNER, None)
+    with shop_context(staff_a.shop_id):
+        role = Role.objects.get(template=RoleTemplate.MANAGER)
+
+    def second() -> RoleAssignment:
+        with shop_context(staff_a.shop_id):
+            return assign_role(staff_a2, role, side=None, by=staff_a)
+
+    with shop_context(staff_a.shop_id), transaction.atomic():
+        assign_role(staff_a, role, side=None, by=staff_a2)
+        thread, ended = in_another_transaction(second)
+        wait_until_someone_waits_for_me()
+    thread.join(timeout=5)
+    assert isinstance(ended[0], RoleAssignment)
 
 
 def test_shop_gets_its_own_copy_of_each_template(shop_a: Shop) -> None:

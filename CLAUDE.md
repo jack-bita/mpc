@@ -69,17 +69,17 @@ Open these when a task needs them; don't read them all up front.
 ## Rules that are never broken
 
 These protect money, history and each shop's privacy. If a task seems to need breaking one, stop and ask Jack.
-1. **Tenancy.** Every model has `shop` (except `User`, `Unit`, the `Shop` itself, `PairingRequest` and infrastructure tables), and every query goes through the scoped manager, which fails closed. `system_context()` only in system jobs and commands, never in request code; a login finds its shop only through `apps/people/login_doors.py`, which reads a shop's id and nothing else. (ADR-0037)
-2. **Ledgers are append-only.** Stock movements, balance entries, allocations, attendance events, audit events, flag notes and the people a flag names, the change log, payments, money movements and dated-rule rows (prices, costs, settings, pay rates) are written only by posting services and never updated or deleted. Fixes are new rows; payments, money movements and attendance events can only be voided. (ADR-0008, ADR-0021) The edit history is written only by its trigger. (ADR-0036)
+1. **Tenancy.** Every model has `shop` (except `User`, `Unit`, the `Shop` itself, `PairingRequest` and infrastructure tables), and every query goes through the scoped manager, which fails closed. `system_context()` only in system jobs and commands, never in request code; a login, or a change to a person that must reach each of their shops, finds the shops only through `apps/people/login_doors.py`, which reads shops' ids and nothing else. (ADR-0042)
+2. **Ledgers are append-only.** Stock movements, balance entries, allocations, attendance events, audit events, flag notes and the people a flag names, the change log, the push's stored answers, the offline periods devices report, payments, money movements and dated-rule rows (prices, costs, settings, pay rates) are written only by posting services and never updated or deleted. Fixes are new rows; payments, money movements and attendance events can only be voided. (ADR-0008, ADR-0021) The edit history is written only by its trigger. (ADR-0036)
 3. **Exact numbers.** Money and quantities are `Decimal` in Python, big.js in TypeScript and strings in JSON — never floats. Round only with the shared rounding function. (ADR-0024)
 4. **Logic lives in services and calculations only.** Views, serializers, `save()` and signals stay thin. (ADR-0015)
 5. **Two data paths.** Counter screens use Dexie only; office screens use the API client only. (ADR-0019, ADR-0020)
 6. **A new offline document type needs all four:** a server handler, a schema version, the device side, and tests on both sides.
 7. **Nothing is deleted.** Cancel, void, suspend or archive — always with who, when and why. Foreign keys use `on_delete=PROTECT`.
-8. **Generated files are never edited by hand:** `frontend/src/api/schema.d.ts` (`pnpm gen:api`), `CHANGELOG.md` (release-please), `uv.lock` and `pnpm-lock.yaml` (`uv add`, `pnpm add`). (ADR-0025)
+8. **Generated files are never edited by hand:** `shared/openapi.json` and `frontend/src/api/schema.d.ts` (`pnpm gen:api`), `CHANGELOG.md` (release-please), `uv.lock` and `pnpm-lock.yaml` (`uv add`, `pnpm add`). (ADR-0025) Nor are shadcn's parts in `frontend/src/components/ui/` (`pnpm shadcn add`): our look wraps them in `components/design/`. (ADR-0039)
 9. **Migrations** are read line by line, and once on `main` they are never edited — write a new one. No `migrate` on any database before PPL-1 is merged. (ADR-0012)
 10. **Real shop data never enters the repo:** no real names, phones, debts or prices in code, tests, seeds, docs or commits. Real sheets stay in `private/` (gitignored). Never read or print `.env`.
-11. **UI text** lives in `frontend/messages/sw.json` and `en.json`; the API sends error codes, not sentences. (ADR-0032)
+11. **UI text** lives in `frontend/messages/sw.json` and `en.json`; the API sends error codes, not sentences. (ADR-0040)
 12. **A new dependency** needs Jack's yes first, with the reason; add it with `uv add` or `pnpm add`.
 
 ## Comments
@@ -103,5 +103,5 @@ These protect money, history and each shop's privacy. If a task seems to need br
 ## Claude Code setup
 
 - `.claude/settings.json` — sessions start in plan mode; every commit, push, PR, merge, migration and new dependency asks Jack first; `.env` and `private/` are off limits.
-- `.claude/hooks/guard.py` — refuses the expensive mistakes: editing generated files or migrations already on `main`, `migrate` before PPL-1, committing on `main`, skipping git hooks, force-pushing, pushing to `main`, force-adding ignored files.
+- `.claude/hooks/guard.py` — refuses the expensive mistakes: editing generated files, shadcn's parts or migrations already on `main`, `migrate` before PPL-1, committing on `main`, skipping git hooks, force-pushing, pushing to `main`, force-adding ignored files.
 - Skills `/start-task <ID>` and `/finish-task`; the read-only `reviewer` subagent.

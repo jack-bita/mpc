@@ -5,16 +5,28 @@ under /api/v1/people/ (apps/people/api/urls.py). Today a shop's devices (AUTH-5)
 
     GET   /api/v1/people/devices/                the shop's devices, of the sides the person sees, in pages
     GET   /api/v1/people/devices/{id}/           one device
+    GET   /api/v1/people/devices/health/         the health page: each device's last sync, clock and outages (SYNC-14)
     POST  /api/v1/people/devices/                a manager says yes to a waiting device, with the code it shows
     PATCH /api/v1/people/devices/{id}/           a manager renames it
     POST  /api/v1/people/devices/{id}/block/     a manager stops it at once, with a reason
     POST  /api/v1/people/devices/{id}/unblock/   a manager lets it work again, with a reason
 
+And a staff member's temporary password (AUTH-6):
+
+    POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
+
 And the routes a device calls with its key, built on DeviceView (apps/people/api/base.py), under /api/devices/v1/
-(apps/people/api/device_urls.py):
+(apps/people/api/device_urls.py) and, for PIN login, /api/auth/ (apps/people/api/auth_urls.py):
 
     POST /api/devices/v1/pairing/   a new device asks to join a shop: a code to show, and its key in a cookie
     GET  /api/devices/v1/me/        a paired device learns its shop, its name, its code and its home side
+    POST /api/auth/pin-login/       someone at a paired device types their PIN, and gets a session (AUTH-4)
+
+And what a session itself may ask, built on neither (AUTH-4):
+
+    GET  /api/auth/me/              who is logged in here, where, and what they may do; an office route, in all but name
+    POST /api/auth/logout/          this browser's session ends, at once, whatever has happened to them since
+    PATCH /api/auth/me/settings/    the person changes their own language and font, with no key (UI-9)
 
 Thin: each one calls its service (apps/people/services.py), or reads its rows, and answers with its serializer
 (ADR-0015).
@@ -23,31 +35,54 @@ Thin: each one calls its service (apps/people/services.py), or reads its rows, a
 from collections.abc import Callable
 from typing import Any, cast
 
+from django.contrib.auth import logout
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.utils import extend_schema
-from rest_framework import mixins
+from rest_framework import exceptions, mixins
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import BaseThrottle
+from rest_framework.views import APIView
 
-from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin
+from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin, ShopViewSet
 from apps.core.permissions import Permission
-from apps.people.api.authentication import DEVICE_KEY_COOKIE, set_key_cookie
+from apps.people.api.authentication import set_key_cookie
 from apps.people.api.base import DeviceView
+from apps.people.api.pin_session import PIN_SESSION, pin_session_idle_minutes, start_pin_session
 from apps.people.api.serializers import (
     DeviceConfirmSerializer,
     DeviceEditSerializer,
+    DeviceHealthSerializer,
     DeviceMeSerializer,
     DeviceReasonSerializer,
     DeviceSerializer,
+    OwnSettingsAnswerSerializer,
+    OwnSettingsSerializer,
     PairingStartSerializer,
+    PinLoginSerializer,
+    TemporaryPasswordSerializer,
+    WhoIsHereSerializer,
 )
-from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle
-from apps.people.models import Device, StaffMember
+from apps.people.api.staff_session import MeSessionAuthentication, StaffSessionAuthentication
+from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle, PinLoginThrottle
+from apps.people.device_keys import DEVICE_KEY_COOKIE
+from apps.people.models import Device, StaffMember, User
+from apps.people.selectors import LoginRefused, idle_lock_minutes, outages_this_week, who_is_here
 from apps.people.services import block as block_device
-from apps.people.services import confirm_pairing, rename_device, start_pairing
+from apps.people.services import (
+    change_own_settings,
+    confirm_pairing,
+    pin_login,
+    rename_device,
+    set_temporary_password,
+    start_pairing,
+)
 from apps.people.services import unblock as unblock_device
 
 
@@ -59,11 +94,13 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
     # change is asked on the device's home side, or on the one picked for a new device (03 §5.9).
     side_field = "home_side"
     # Whoever works on a side sees its devices, a seller included, but changes none of them (Jack, 2 Nov 2026): a name
-    # and when it was last seen are no secret. Every change needs device.manage on the home side, which each service
-    # asks again (PPL-5).
+    # and when it was last seen are no secret, nor is how it syncs (SYNC-14): the health page's button is for those
+    # who look after the devices, as the device list's is, but what it shows is the device list's kind. Every change
+    # needs device.manage on the home side, which each service asks again (PPL-5).
     action_permissions = {
         "list": SEES_THE_SIDE,
         "retrieve": SEES_THE_SIDE,
+        "health": SEES_THE_SIDE,
         "create": Permission.DEVICE_MANAGE,
         "partial_update": Permission.DEVICE_MANAGE,
         "block": Permission.DEVICE_MANAGE,
@@ -105,6 +142,17 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
     def edit_row(self, row: Device, data: dict[str, Any]) -> Device:
         return rename_device(row, version=data["version"], name=data["name"], by=self.staff)
 
+    # The health page (*Hali ya vifaa*, SYNC-14, 03 §5.17): every device of the sides the person sees, by its number,
+    # with its last push's report and its offline periods of the last week. One answer, not pages: a shop has a
+    # handful of devices, and the page compares them side by side. The rows come from get_queryset(), so they keep to
+    # the person's sides as the list does (PPL-5); the periods are read once for all of them.
+    @extend_schema(responses=DeviceHealthSerializer(many=True))
+    @action(detail=False, methods=["get"], pagination_class=None)
+    def health(self, request: Request) -> Response:
+        devices = list(self.get_queryset().order_by("code"))
+        outages = outages_this_week(devices, now=timezone.now())
+        return Response(DeviceHealthSerializer(devices, many=True, context={"outages": outages}).data)
+
     # Each action names what it takes and answers: the API's description would otherwise read every POST of this route
     # as a confirm (RouteSchema, apps/core/api/schema.py), and the app's types would be wrong (UI-2).
     @extend_schema(request=DeviceReasonSerializer, responses=DeviceSerializer)
@@ -131,12 +179,156 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
         return Response(self.get_serializer(change(device, by=self.staff, reason=sent.validated_data["reason"])).data)
 
 
+class StaffViewSet(ShopViewSet[StaffMember]):
+    # A shop's people. One action so far: a first or forgotten password, set face to face (ADR-0038). PPL-4 adds the
+    # list, the adding and the rest, and its screen calls this.
+    model = StaffMember
+    # A person's password opens them on every side, whichever side they work on: the row belongs to the whole shop, so
+    # the key is asked on the whole shop, where a key for Dawa alone opens nothing (PPL-5).
+    side_field = None
+    # The owner's own key, which he may hand to a manager (Jack, 4 Nov 2026). The service asks it again, with the rest
+    # of who may (_check_may_set_password, apps/people/services.py).
+    action_permissions = {"temporary_password": Permission.STAFF_MANAGE}
+    serializer_class = TemporaryPasswordSerializer
+
+    # `sent` holds the password while the service runs, and so do the serializer's frames while they read it: every
+    # variable here, and in everything this calls, shows as stars in Django's error reports, as in the service itself.
+    @extend_schema(request=TemporaryPasswordSerializer, responses={204: None})
+    @action(detail=True, methods=["post"], url_path="temporary-password")
+    @sensitive_variables()
+    def temporary_password(self, request: Request, pk: str | None = None) -> Response:
+        # The person, found in the visit's shop and checked for the action's key (get_object; initial() already ran it
+        # once, before the action began): another shop's person is "not found", before anything sent is read.
+        staff = self.get_object()
+        sent = self.get_serializer(data=request.data)
+        sent.is_valid(raise_exception=True)
+        # cast: the login leaves the staff member acting in `request.auth`, which mypy reads as an Actor.
+        set_temporary_password(
+            staff,
+            sent.validated_data["password"],
+            by=cast(StaffMember, self.actor),
+            reason=sent.validated_data["reason"],
+        )
+        # Nothing to answer with, on purpose: once sent, the password is never shown again (ADR-0038).
+        return Response(status=204)
+
+
+class PinLoginView(DeviceView):
+    # 03 §5.9: a shop's device says who stands at it. Built on DeviceView, so a device logs in first, with its key, and
+    # a blocked one never gets here. It takes no one's PIN but its own shop's people's. Limited per device, as each try
+    # costs a full check of 19 MiB (apps/people/api/throttles.py).
+    throttle_classes = [PinLoginThrottle]
+
+    # `sent` holds the PIN while the service runs: every variable here, and in everything this calls, shows as stars in
+    # Django's error reports.
+    @extend_schema(request=PinLoginSerializer, responses={204: None})
+    @sensitive_variables()
+    def post(self, request: Request) -> Response:
+        sent = PinLoginSerializer(data=request.data)
+        sent.is_valid(raise_exception=True)
+        # cast: DeviceView has refused any visit with no device; mypy can't see that.
+        device = cast(Device, request.auth)
+        try:
+            staff = pin_login(device, sent.validated_data["staff"], sent.validated_data["pin"], at=timezone.now())
+        except LoginRefused as refused:
+            # 403: the device is fine, and it is the person who can't act today. English for the logs; the app
+            # translates the code (ADR-0032).
+            raise exceptions.PermissionDenied(str(refused), code=refused.code) from refused
+        start_pin_session(request, staff, device, idle_minutes=idle_lock_minutes(staff.shop))
+        # Nothing to answer with: the app asks `me` next, as after any login.
+        return Response(status=204)
+
+
+class LogoutView(APIView):
+    # Ends the session this browser holds, at once: the row is deleted on the server, so a copy of its number opens
+    # nothing (03 §5.9). DRF's own session login, not ours: it asks nothing about the person's job or the device, so a
+    # suspended person, or someone on a blocked laptop, can still log out. It still checks the CSRF token, so another
+    # website can't log someone out. With no session, nothing to do, and the same answer. It reads no shop's table
+    # (NOT_SHOP_ROUTES, backend/tests/sweep_lists.py).
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [AllowAny]
+
+    # `auth` names the session's cookie by the name the office routes describe it with (StaffSessionScheme). Left to
+    # read DRF's class, the API's description would meet two different classes under one name, and warn. The library's
+    # type hint says a list of texts, but it copies this value into the description as it stands, and OpenAPI wants
+    # this shape (`manage.py spectacular --validate` agrees): the library's hint, not our value, is what is off.
+    @extend_schema(request=None, responses={204: None}, auth=[{"cookieAuth": []}])  # type: ignore[list-item]
+    def post(self, request: Request) -> Response:
+        logout(request._request)
+        return Response(status=204)
+
+
+class AtAShop(BasePermission):
+    # Someone acting as a staff member at a shop: the job the login put in `request.auth` (StaffSessionAuthentication).
+    # Nobody logged in, and the superuser, who is nobody's staff, are refused as an office route refuses them
+    # (ShopViewSet), with not_authenticated, before anything is read. A permission of its own, not AllowAny with a check
+    # after it: the API's description reads the permission to say who may call the route, and AllowAny would tell it
+    # "no login at all" (UI-9's review).
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if request.auth is None:
+            raise exceptions.NotAuthenticated("This route needs a staff login at a shop.")
+        return True
+
+
+class OwnSettingsView(APIView):
+    # A person changes their own language and font (UI-9, ADR-0039). Not an office route: an office route asks every
+    # change for a key of its own (PPL-5), and everyone may change their own choices, so no key fits. Beside logout, as
+    # it acts on the person, who belongs to no shop, not on a shop's rows; its answer holds the two choices and nothing
+    # else. So the sweep doesn't call it (NOT_SHOP_ROUTES, backend/tests/sweep_lists.py), and
+    # test_settings_answer_holds_nothing_of_a_shop proves the answer instead.
+    #
+    # The office routes' own login, though, not logout's: it reads the person afresh on every visit, so a suspended
+    # person, someone on a temporary password, a copied badge or a blocked laptop is refused here as on every office
+    # route (ADR-0038). It reads the person's job and its shop, and for a PIN's session the device that holds the key,
+    # each inside the shop its login door names (apps/people/login_doors.py), only to refuse them. Its save writes the
+    # person's staff line in every shop where they work, so their laptops show the new choice (change_own_settings,
+    # SYNC-15); its answer holds none of it. It checks the CSRF token too, so another website can't change someone's
+    # language.
+    authentication_classes = [StaffSessionAuthentication]
+    permission_classes = [AtAShop]
+    # No answer to OPTIONS, which would describe the route's form to whoever asks: refused as the office routes refuse
+    # it, as the API's own description is the schema (ShopViewSet.initial, apps/core/api/base.py).
+    metadata_class = None
+
+    @extend_schema(request=OwnSettingsSerializer, responses=OwnSettingsAnswerSerializer)
+    def patch(self, request: Request) -> Response:
+        sent = OwnSettingsSerializer(data=request.data, partial=True)
+        sent.is_valid(raise_exception=True)
+        # cast: the login has put the person here, as AtAShop checked; DRF's type stubs can't see that.
+        person = change_own_settings(cast(User, request.user), **sent.validated_data)
+        return Response(OwnSettingsAnswerSerializer(person).data)
+
+
+class MeViewSet(ShopViewSet[StaffMember]):
+    # Who is logged in here, where, and what they may do (03 §5.10). Built on the office routes' base, so the visit's
+    # shop opens as for any office route, and the sweep calls it as shop B's person. It shows only the person's own job,
+    # so it needs no key of its own.
+    model = StaffMember
+    side_field = None
+    action_permissions = {"me": SEES_THE_SIDE}
+    serializer_class = WhoIsHereSerializer
+    # Open to someone on a temporary password, and to nobody else that the office routes refuse.
+    authentication_classes = [MeSessionAuthentication]
+
+    # `auth` as on LogoutView: the same cookie as the office routes, described by the same name.
+    @extend_schema(responses=WhoIsHereSerializer, auth=[{"cookieAuth": []}])  # type: ignore[list-item]
+    def me(self, request: Request) -> Response:
+        session = request._request.session
+        badge = session.get(PIN_SESSION) or {}
+        here = who_is_here(
+            cast(StaffMember, self.actor),
+            device_id=badge.get("device"),
+            idle_minutes=pin_session_idle_minutes(session),
+        )
+        return Response(self.get_serializer(here).data)
+
+
 class PairingView(DeviceView):
     # 03 §5.9, step 1: a new device, with no working key yet, asks to join. So no device is needed, and no shop is open
     # unless its cookie already opens a device, which is then refused.
     device_optional = True
     # Limited per caller's network, so a flood of starts can't fill the waiting list, nor hunt for codes to confirm
-    # (apps/people/api/throttles.py). The device's other route, `me`, names no limit: it is never slowed down.
+    # (apps/people/api/throttles.py). The device's `me` names no limit: it is never slowed down.
     throttle_classes = [PairingStartThrottle]
 
     @extend_schema(request=None, responses={201: PairingStartSerializer})
