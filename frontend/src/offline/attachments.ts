@@ -54,9 +54,10 @@ export async function labelPhoto(
   file: Blob,
   kind: PhotoKind,
 ): Promise<LabelledPhoto> {
+  // Asked before the type, as the server asks (its route reads the length first), and before the file is read: a
+  // phone's own 12 MB photo, handed over unshrunk by mistake, is refused without being read into memory first.
+  if (file.size > LARGEST_PHOTO) throw new BrokenPhoto("too_big");
   const bytes = await file.arrayBuffer();
-  // Asked before the type, as the server asks (its route reads the length first).
-  if (bytes.byteLength > LARGEST_PHOTO) throw new BrokenPhoto("too_big");
   const contentType = imageTypeOf(new Uint8Array(bytes));
   if (contentType === null) throw new BrokenPhoto("not_an_image");
   const digest = await crypto.subtle.digest("SHA-256", bytes);

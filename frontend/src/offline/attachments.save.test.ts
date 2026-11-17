@@ -117,6 +117,18 @@ describe("labelling a photo", () => {
     },
   );
 
+  it("refuses a photo too big without reading it", async () => {
+    // A phone's own photo, handed over unshrunk by mistake: 12 MB never needs to be read to be refused.
+    const file = madeUpJpeg(12 * 1024 * 1024);
+    const read = vi.spyOn(file, "arrayBuffer");
+
+    await expect(labelPhoto(file, "clock_photo")).rejects.toEqual(
+      new BrokenPhoto("too_big"),
+    );
+
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it("keeps a photo of exactly 1 MB, and refuses one byte more", async () => {
     // The server's limit, to the byte (CTRL-3): over it, the photo would wait on the laptop only to be set aside.
     expect(LARGEST_PHOTO).toBe(1_048_576);
