@@ -88,14 +88,16 @@ curl -sI "https://mabatinipumba-demo.onrender.com$(curl -s https://mabatinipumba
 
 ## Every 30 days: the free database
 
-Render's free PostgreSQL expires 30 days after it is created, and Render deletes it 14 days later. Render sends an email before it expires. The data is fake, so nothing needs saving.
+Render's free PostgreSQL expires 30 days after it is created, and Render deletes it 14 days later. From the day it expires it is locked: the demo can't read it, and its pages fail. Render sends an email before that day, and the database's page shows the date (*Your database will expire on …*). The data is fake, so nothing needs saving. Do this a few days **before** the date, not after it: then the demo is down only for the few minutes the steps take.
 
-1. Render → `mabatinipumba-demo-db` → **Settings** → **Delete Database**.
-2. Render → **Blueprints** → the demo's Blueprint → **Manual Sync**. Render creates the database again from `render.yaml`, and the service's `DB_*` values follow it.
-3. The service → **Manual Deploy** → **Deploy latest reference**. The start command runs every migration on the empty database, makes its cache tables, and the demo seed makes the demo's shop.
-4. Check <https://mabatinipumba-demo.onrender.com/api/health/>.
+1. Render → `mabatinipumba-demo-db`: note the date at the top of its page.
+2. Render → **Blueprints**: check that the demo's Blueprint is there, connected to `mpc`. It is the recipe that makes the database again in step 4, so check it before deleting anything.
+3. `mabatinipumba-demo-db` → **Settings** → **Delete Database**, and type what Render asks for to confirm. The page warns: *To prevent this resource from being recreated after deletion, first remove it from Blueprint mabatinipumba-demo or disconnect the Blueprint entirely.* Being recreated is what we want here: delete it, and leave the Blueprint as it is.
+4. Render → **Blueprints** → the demo's Blueprint → **Manual Sync**. Render creates the database again from `render.yaml`, and the service's `DB_*` values follow it. Wait until the database says **Available** (about a minute). Its page now shows a date 30 days later.
+5. The service, `mabatinipumba-demo` → **Manual Deploy** → **Deploy latest reference**, and wait until it says **Live**. The start runs every migration on the empty database, makes its cache tables, and the demo seed makes the demo's shop. Don't skip it because the demo still looks fine: until this deploy the old run is still up, and `/api/health/` answers `ok` all along, as it never reads the database.
+6. Check <https://mabatinipumba-demo.onrender.com/api/devices/v1/demo/open/>: it answers `{"open":true}` once the demo's shop is in the new database.
 
-*Not yet tried:* these steps are checked the first time they are needed, about 30 days after the first setup. Correct this list then, with what Render really showed.
+*Tried on 17 Nov 2026*, six days before the first database expired: the steps worked as written here, and the new database expires on 17 Dec 2026.
 
 ## What the free plan means
 
