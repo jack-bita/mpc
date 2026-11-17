@@ -7,8 +7,9 @@ made the way the app makes them, through the services. The checks never change; 
 a card that adds a route over a new table gives both shops a row of it here, and the sweep fails, saying
 so, while shop A has none; and a card that adds a route needing query parameters gives them here too
 (sweep_queries). Each shop has a paired device: a row of the office device list (AUTH-5), and the visitor the sweep
-sends to every device route (sweep_device_clients, AUTH-2); and dated rules, which the bootstrap sends (SYNC-2). The
-demo seed (DATA-1) could fill the shops later.
+sends to every device route (sweep_device_clients, AUTH-2); dated rules, which the bootstrap sends (SYNC-2); the
+days each shop is closed, which the closures route lists (ATT-8); and a worker's photo with its file, whose id the sweep
+sends the photo routes as shop B (CTRL-3). The demo seed (DATA-1) could fill the shops later.
 
 The sweep knows shop A's rows by their ids, and by the texts and amounts only shop A holds, so that a leak
 with no ids, like a report of names and totals, is found too. So give shop A values of its own: names and
@@ -19,6 +20,7 @@ never count: they are the same in every shop.
 The shops and their staff come from backend/conftest.py. Fake data only: the repo is public (03 §10).
 """
 
+import hashlib
 import uuid
 from collections.abc import Callable
 from datetime import date, timedelta
@@ -27,6 +29,8 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.control.models import AttachmentKind, AttachmentType
+from apps.control.services import expect_attachment, receive_attachment_file
 from apps.core.permissions import RoleTemplate
 from apps.core.settings_registry import CASH_TOLERANCE, LATE_FINE
 from apps.core.tenancy import shop_context
@@ -34,18 +38,24 @@ from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import StaffMember
 from apps.people.services import Outage, confirm_pairing, record_outages, start_pairing
 from apps.shops.models import Setting, Shop, Side
-from apps.shops.services import add_side
+from apps.shops.selectors import shop_today
+from apps.shops.services import add_closure, add_side
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
 
 @pytest.fixture
 def sweep_shops(
-    sweep_sides: tuple[Shop, Shop], sweep_device_keys: tuple[str, str], sweep_settings: tuple[Shop, Shop]
+    sweep_sides: tuple[Shop, Shop],
+    sweep_device_keys: tuple[str, str],
+    sweep_settings: tuple[Shop, Shop],
+    sweep_closures: tuple[Shop, Shop],
+    sweep_attachments: tuple[Shop, Shop],
 ) -> tuple[Shop, Shop]:
     # Shop A, whose rows must never show, and shop B, the visitor's own, each filled with every table below: their
     # sides, a paired device each, which the office device list shows (AUTH-5), with an offline period the health page
-    # shows (SYNC-14), and dated rules, which the bootstrap sends (SYNC-2).
+    # shows (SYNC-14), dated rules, which the bootstrap sends (SYNC-2), days closed, which the closures route lists
+    # (ATT-8), and a photo with its file, which the photo routes are asked about (CTRL-3).
     return sweep_sides
 
 
@@ -78,6 +88,44 @@ def sweep_settings(sweep_sides: tuple[Shop, Shop]) -> tuple[Shop, Shop]:
                 row = Setting(shop=shop, side=on_side, key=key.key, value=value, effective_from=date(2026, 1, 1))
                 row.full_clean()
                 row.save()
+    return sweep_sides
+
+
+@pytest.fixture
+def sweep_closures(sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember) -> tuple[Shop, Shop]:
+    # Each shop closes for three days, ten days from now, under a name only that shop holds: the closures route lists
+    # those to come (ATT-8), so they show whatever day the tests run. Added the way the app adds them (add_closure), by
+    # each shop's own staff member, whose nickname the route shows beside the closure.
+    for shop, staff, name in (
+        (sweep_sides[0], staff_a, "Msiba wa Mfano"),
+        (sweep_sides[1], staff_b, "Sikukuu ya Jirani"),
+    ):
+        with shop_context(shop):
+            first = shop_today(shop) + timedelta(days=10)
+            add_closure(shop, first_day=first, last_day=first + timedelta(days=2), name=name, by=staff)
+    return sweep_sides
+
+
+@pytest.fixture
+def sweep_attachments(sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember) -> tuple[Shop, Shop]:
+    # Each shop's worker has a photo, its row written as its record would bring it (expect_attachment) and its file
+    # sent after it (receive_attachment_file), as the laptop does (CTRL-3). The sweep asks the photo routes about shop
+    # A's as shop B: the laptop's upload and the office's file, which A's own staff opens first. Each photo is bytes
+    # only that shop's has, starting as a JPEG does, so its fingerprint is shop A's mark too.
+    for shop, staff in ((sweep_sides[0], staff_a), (sweep_sides[1], staff_b)):
+        photo = b"\xff\xd8\xff" + f"made-up photo of {staff.display_name}".encode()
+        photo_id = uuid.uuid7()
+        with shop_context(shop):
+            expect_attachment(
+                id=photo_id,
+                kind=AttachmentKind.STAFF_PHOTO,
+                subject=staff,
+                content_type=AttachmentType.JPEG,
+                size=len(photo),
+                sha256=hashlib.sha256(photo).hexdigest(),
+                by=staff,
+            )
+            receive_attachment_file(photo_id, content=photo)
     return sweep_sides
 
 

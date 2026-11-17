@@ -234,7 +234,8 @@ def test_paired_device_learns_its_shop_and_code(manager_a: StaffMember, side_a: 
     assert answer.status_code == 200
     assert answer.json() == {
         "device": {"id": str(device.pk), "name": "Laptop ya Dawa", "code": 1, "status": "active"},
-        "home_side": {"id": str(side_a.pk), "code": "D", "name": "Dawa"},
+        # Its home side's band too, which its top bar draws before anyone logs in (SHOP-4).
+        "home_side": {"id": str(side_a.pk), "code": "D", "name": "Dawa", "band": "blue"},
         # And what it needs offline: its shop's day starts in the shop's own time zone, which a rule's day is in.
         "shop": {
             "id": str(shop_a.pk),

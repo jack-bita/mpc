@@ -9,8 +9,11 @@ from tests.probe.api import (
     BlindDeviceView,
     ClosedNoteViewSet,
     DeviceMakerView,
+    DeviceNoteFileView,
+    DeviceNoteView,
     DeviceShopView,
     EndlessNoteViewSet,
+    LeakyDeviceNoteView,
     LeakyDeviceView,
     LeakyDeviceViewSet,
     LeakyNoteTextViewSet,
@@ -67,5 +70,15 @@ urlpatterns = [
         "api/devices/v1/probe/leaky-set/",
         LeakyDeviceViewSet.as_view({"get": "list"}),
         name="probe-device-leaky-set",
+    ),
+    # Device routes whose address names one note, for the sweep's row check (CTRL-3): guarded, leaky, PUT alone, and
+    # one whose address takes a part that is no row's id, which the sweep can't fill.
+    path("api/devices/v1/probe/notes/<uuid:pk>/", DeviceNoteView.as_view(), name="probe-device-note"),
+    path("api/devices/v1/probe/leaky-notes/<uuid:pk>/", LeakyDeviceNoteView.as_view(), name="probe-device-leaky-note"),
+    path("api/devices/v1/probe/note-files/<uuid:pk>/", DeviceNoteFileView.as_view(), name="probe-device-note-file"),
+    path(
+        "api/devices/v1/probe/owners/<uuid:owner>/notes/",
+        DeviceShopView.as_view(),
+        name="probe-device-nested",
     ),
 ]

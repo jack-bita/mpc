@@ -21,10 +21,16 @@ An EditEvent is one change to an office record, written by PostgreSQL itself, so
 owner renames the side "Dawa" to "Dawa za Mifugo", and a trigger writes who, when, and the name before and after
 (apps/control/operations.py, ADR-0036). No Python code writes this table.
 
+An Attachment is one photo or file on a record (02 §13, CTRL-3): Asha's photo as she clocks in at 07:55. Its record
+reaches the server first, with the photo's label, and the row waits; the file follows when the laptop can send it,
+and is checked against the label. Its file only moves forward, waiting → kept → removed, and the row is never deleted:
+a removed photo's row keeps who removed it, when and why (rule 7). apps/control/services.py writes it.
+
 `control` is layer 0, beside `core`, so every app can raise flags and write audit lines (ADR-0035). It imports
 only `core`: it names the tables of `shops` and `people` by text ("shops.Side"), which is not an import (03 §5.1).
 """
 
+from dataclasses import dataclass
 from typing import Any, NoReturn
 
 from django.core.serializers.json import DjangoJSONEncoder
@@ -32,6 +38,7 @@ from django.db import models
 
 from apps.core.links import load_link
 from apps.core.models import AppendOnly, AppendOnlyError, ShopScoped
+from apps.core.permissions import Permission
 from apps.core.type_codes import TYPE_CODE_MAX_LENGTH, TYPE_CODE_SHAPE
 
 
@@ -242,6 +249,10 @@ class AuditAction(models.TextChoices):
     # A device stopped, perhaps stolen, and let work again (AUTH-1): each with who and why (rule 7).
     DEVICE_BLOCK = "device.block", "Device blocked"
     DEVICE_UNBLOCK = "device.unblock", "Device unblocked"
+    # Days the shop is closed (ATT-8): a closure cancelled before its first day, and its last day moved, each with who
+    # and why, as both change who is paid (rule 7).
+    CLOSURE_CANCEL = "closure.cancel", "Closure cancelled"
+    CLOSURE_LAST_DAY = "closure.last_day", "Closure's last day moved"
 
 
 class AuditEvent(AppendOnly):
@@ -375,4 +386,177 @@ class EditEvent(AppendOnly):
     @property
     def subject(self) -> ShopScoped:
         # The row that changed, loaded from its two columns through the shop guard (apps/core/links.py).
+        return load_link(self.subject_type, self.subject_id)
+
+
+class AttachmentKind(models.TextChoices):
+    # What a photo is of. A fixed list, checked by the database too, as each kind says which record it is pinned to
+    # and who may open it (ATTACHMENT_KINDS, below). A new kind is a new line here, a line below, and a migration that
+    # rebuilds the rule, as a new flag kind is. A kind whose record doesn't exist yet (the supplier's paper on a
+    # delivery, a receipt on an expense) comes with that record's card (STK-4, CASH-2).
+    # Asha's photo as she taps Ingia (ATT-3).
+    CLOCK_PHOTO = "clock_photo", "Clock-in photo"
+    # A worker's face on the PIN tiles (PPL-4).
+    STAFF_PHOTO = "staff_photo", "Staff photo"
+
+
+class AttachmentType(models.TextChoices):
+    # What a file may be: the two kinds of photo a laptop makes when it shrinks one (03 §5.13: longest side 1,600 px,
+    # about 150 KB), and a browser shows. The upload route checks the file's first bytes against this, not its name
+    # (CTRL-3). A PDF or a spreadsheet joins with the card that first needs one (DATA-3's imports).
+    JPEG = "image/jpeg", "JPEG"
+    WEBP = "image/webp", "WebP"
+
+
+# The largest file kept: 1 MB. A photo shrunk on the laptop is about 150 KB, so this leaves room for a busy picture
+# and still refuses a photo nobody shrank (a phone's own, 3 to 5 MB) or anything else sent by mistake. Read before the
+# file is (the upload route asks the request's length first), so a 50 MB upload is refused unread.
+LARGEST_FILE = 1024 * 1024
+
+
+@dataclass(frozen=True)
+class KindRule:
+    # What one kind of attachment is pinned to, and who may open it.
+    # The type code of the table its record is in (apps/core/links.py): "attendance_event" for a clock-in photo.
+    subject_type: str
+    # The key that opens it, held on the whole shop (CTRL-3's office route); None when anyone working at the shop
+    # may, as for a face already on every laptop's PIN tiles.
+    opened_with: Permission | None
+
+
+# Kind → its rule *(defaults, CTRL-3's card: ATT-3 and PPL-4 may change them before they first use them)*.
+ATTACHMENT_KINDS: dict[AttachmentKind, KindRule] = {
+    # A clock-in photo proves who tapped Ingia: it is for whoever fixes attendance (the owner, a manager he gives the
+    # key), not for the other workers. On the whole shop: a worker's attendance is the shop's, not a side's.
+    AttachmentKind.CLOCK_PHOTO: KindRule("attendance_event", Permission.ATTENDANCE_MANAGE),
+    # A worker's face shows on the PIN tiles of every laptop of the shop already, so anyone working there may see it.
+    AttachmentKind.STAFF_PHOTO: KindRule("staff", None),
+}
+
+
+def attachment_file_name(attachment: Attachment, _given: str) -> str:
+    # Where the storage keeps the file (apps/core/storage.py): its shop's id, then its own id. Never the name the
+    # laptop gave the file, nor a person's name: a path is no place for personal data (03 §10), and the same id is
+    # the same file, so a second try writes over the first (ADR-0007). A function of its own, not a lambda, as the
+    # migration names it by its import path.
+    return f"{attachment.shop_id}/{attachment.pk}"
+
+
+class Attachment(ShopScoped):
+    # One photo or file on one record (02 §13): Asha's clock-in photo, a worker's face. ShopScoped (CORE-2) gives `id`
+    # (made where the photo is taken, ADR-0007, so the record that names it and the file sent after it agree on it),
+    # `shop`, `created_at`, `created_by` (who took it or added it) and the guard on reads.
+    # Edit history (RecordEditsV2, in the migration): the file's arrival and its removal are edits of this row, so both
+    # land in the history with the device or the person, beside the row's own columns for them.
+    # Never deleted (NoDeleteTrigger, in the migration): nothing links to an attachment, so PROTECT can't stop a delete,
+    # and a photo's row must outlive its photo, to say that there was one, and who removed it (rule 7).
+
+    kind = models.CharField(max_length=20, choices=AttachmentKind)
+    # The record it is pinned to: its table's code (apps/core/links.py) and its id, as a flag's subject. No foreign
+    # key can point at rows of many tables, so the database can't check this link: expect_attachment does.
+    subject_type = models.CharField(max_length=TYPE_CODE_MAX_LENGTH)
+    subject_id = models.UUIDField()
+    # The label, as the record that brought it declared it: what the file is, how many bytes, and its SHA-256, a
+    # fingerprint that changes if one byte does. The file that comes later must match all three (the upload route),
+    # so a broken upload, or another file sent under this id, is refused instead of kept.
+    content_type = models.CharField(max_length=20, choices=AttachmentType)
+    size = models.PositiveIntegerField()
+    sha256 = models.CharField(max_length=64)
+    # X3: the laptop the photo was taken on, as an audit line names its device. Empty for one added on an office
+    # screen (PPL-4's worker's photo, from the owner's phone). Named, not imported: `control` is layer 0 (ADR-0035).
+    # PROTECT: nothing is deleted (rule 7). db_index=False: indexes lead with `shop`.
+    device = models.ForeignKey(
+        "people.Device", on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
+    )
+    # The file itself, through the storage (apps/core/storage.py): its name there, `<shop id>/<attachment id>`. Empty
+    # while it waits, and again once removed.
+    file = models.FileField(upload_to=attachment_file_name, max_length=100, blank=True)
+    # When the file arrived. Kept after a removal: the history of the photo says it came, then went.
+    received_at = models.DateTimeField(null=True, blank=True)
+    # The file's removal, with who, when and why (rule 7): ATT-7's nightly job, 90 days after the pay run (03 §5.13),
+    # as the system (no one), or later a person. PROTECT and db_index=False, as for `device`.
+    file_removed_at = models.DateTimeField(null=True, blank=True)
+    file_removed_by = models.ForeignKey(
+        "people.StaffMember", on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
+    )
+    # As long as an audit line's reason (AuditEvent).
+    file_removed_reason = models.CharField(max_length=500, blank=True)
+
+    class Meta(ShopScoped.Meta):
+        # Built on ShopScoped.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). The database
+        # is the last guard (03 §5.6); the services check the same rules first. These codes stop a bug in our own code,
+        # as the label comes from our app: no screen shows them yet, so they have no sentences (errors.test.ts). Those a
+        # route sends get theirs with the route.
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(kind__in=AttachmentKind.values),
+                name="control_attachment_kind_known",
+                violation_error_code="attachment.kind_unknown",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(subject_type__regex=TYPE_CODE_SHAPE),
+                name="control_attachment_subject_type_shape",
+                violation_error_code="attachment.subject_type_invalid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(content_type__in=AttachmentType.values),
+                name="control_attachment_type_known",
+                violation_error_code="attachment.not_an_image",
+            ),
+            # At least one byte, and no more than LARGEST_FILE: an empty file is no photo.
+            models.CheckConstraint(
+                condition=models.Q(size__gte=1),
+                name="control_attachment_not_empty",
+                violation_error_code="attachment.empty",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(size__lte=LARGEST_FILE),
+                name="control_attachment_not_too_big",
+                violation_error_code="attachment.too_big",
+            ),
+            # A SHA-256 is 64 hex digits, written in lower case, as Python's hexdigest() and the laptop write it. One
+            # way only, so the upload's fingerprint and the label's compare as plain text.
+            models.CheckConstraint(
+                condition=models.Q(sha256__regex=r"^[0-9a-f]{64}$"),
+                name="control_attachment_sha256_shape",
+                violation_error_code="attachment.sha256_invalid",
+            ),
+            # The file's three states, and nothing between them:
+            #   waiting   no file, not received, not removed
+            #   kept      a file, received, not removed
+            #   removed   no file, removed (received or not: a photo that never came can be removed too)
+            # So a file is there exactly when it arrived and wasn't removed since.
+            models.CheckConstraint(
+                condition=(~models.Q(file="") & models.Q(received_at__isnull=False, file_removed_at__isnull=True))
+                | (models.Q(file="") & (models.Q(received_at__isnull=True) | models.Q(file_removed_at__isnull=False))),
+                name="control_attachment_file_once_received",
+                violation_error_code="attachment.file_state_invalid",
+            ),
+            # Rule 7: a removal always says why, and only a removal has a why and a who.
+            models.CheckConstraint(
+                condition=models.Q(file_removed_at__isnull=False) & ~models.Q(file_removed_reason="")
+                | models.Q(file_removed_at__isnull=True, file_removed_reason="", file_removed_by__isnull=True),
+                name="control_attachment_removal_says_why",
+                violation_error_code="attachment.reason_required",
+            ),
+        ]
+        indexes = [
+            # The question every screen that shows a record's photos asks: this record's attachments. Leads with
+            # `shop` (03 §9).
+            models.Index(fields=["shop", "subject_type", "subject_id"], name="control_attachment_by_subject"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.kind} ({self.file_state})"
+
+    @property
+    def file_state(self) -> str:
+        # Which of the three states the rule above allows the row is in.
+        if self.file_removed_at is not None:
+            return "removed"
+        return "kept" if self.file else "waiting"
+
+    @property
+    def subject(self) -> ShopScoped:
+        # The record it is pinned to, loaded from its two columns through the shop guard (apps/core/links.py).
         return load_link(self.subject_type, self.subject_id)

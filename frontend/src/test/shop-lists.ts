@@ -12,6 +12,7 @@ export const DAWA_SIDE: Schemas["SideRecord"] = {
   name: "Dawa",
   sale_flow: "one_screen",
   is_live: true,
+  band: "blue",
 };
 
 export const DAWA_DRAWER: Schemas["PaymentAccountRecord"] = {

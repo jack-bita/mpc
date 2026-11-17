@@ -22,6 +22,9 @@
   "topBar": {
     "place": "{shop} · {side}"
   },
+  "pageHeader": {
+    "back": "Rudi ulipotoka"
+  },
   "device": {
     "lock": {
       "title": "Kifaa hiki kimezuiwa",
@@ -190,8 +193,7 @@
       "second": "Herufi ya pili, rahisi kusoma"
     },
     "saving": "Inahifadhi…",
-    "saved": "Imehifadhiwa.",
-    "back": "Rudi"
+    "saved": "Imehifadhiwa."
   },
   "shopSettings": {
     "title": "Mipangilio ya duka",
@@ -239,6 +241,35 @@
       "inUse": "Inatumika sasa",
       "coming": "Inakuja"
     },
+    "closures": {
+      "title": "Siku duka limefungwa",
+      "intro": "Siku ambazo duka zima limefungwa, kama sikukuu au msiba. Ni siku za mapumziko, na hazilipwi.",
+      "none": "Hakuna siku zijazo ambazo duka limefungwa.",
+      "days": "{first} – {last}",
+      "add": "Ongeza",
+      "added": "Imehifadhiwa: {name}, {days}.",
+      "remove": "Ondoa",
+      "removeOf": "Ondoa: {name}",
+      "removeAsk": "Ondoa {name}, {days}? Duka litakuwa wazi siku hizo.",
+      "reason": "Sababu",
+      "reasonHint": "Inahifadhiwa pamoja na jina lako na saa.",
+      "removed": "Imeondolewa: {name}, {days}.",
+      "changeLastDay": "Badilisha siku ya mwisho",
+      "changeLastDayOf": "Badilisha siku ya mwisho: {name}",
+      "newLastDay": "Siku mpya ya mwisho",
+      "newLastDayHint": "Sasa ni {last}. Inaweza kuwa mapema au baadaye.",
+      "sameLastDay": "Hii tayari ndiyo siku ya mwisho. Chagua siku nyingine.",
+      "moved": "Siku ya mwisho imebadilishwa: {name}, {days}.",
+      "gone": "{name}: siku hizi hazipo tena kwenye orodha.",
+      "form": {
+        "from": "Kuanzia",
+        "fromHint": "Leo au siku ya baadaye.",
+        "to": "Hadi",
+        "toHint": "Acha wazi kama ni siku moja tu.",
+        "name": "Jina",
+        "nameHint": "Kwa mfano Krismasi, au Msiba wa bibi."
+      }
+    },
     "sides": {
       "title": "Pande",
       "intro": "Upande uliozimwa hautumiki kwenye kompyuta za duka.",
@@ -254,18 +285,68 @@
       "yesOn": "Ndiyo, washa",
       "no": "Hapana",
       "switchedOff": "Upande wa {side} umezimwa.",
-      "switchedOn": "Upande wa {side} umewashwa."
+      "switchedOn": "Upande wa {side} umewashwa.",
+      "band": "Rangi",
+      "bandOf": "Rangi ya {side}",
+      "bandHint": "Ukanda chini ya upau wa kijani, ili kila mtu ajue upande kwa kuutazama tu.",
+      "looks": {
+        "blue": "Bluu",
+        "striped": "Mistari"
+      },
+      "changeBand": "Badilisha",
+      "changeBandOf": "Badilisha rangi: {side}",
+      "bandSaved": "Rangi ya {side} imehifadhiwa."
     },
     "rules": {
       "attendance": {
+        "enabled": {
+          "name": "Mahudhurio yamewashwa",
+          "help": "Yakiwashwa, kitufe cha Mahudhurio kinaonekana kwenye kompyuta za duka, na siku zinahesabiwa kuanzia siku hiyo.",
+          "shown": "{value}"
+        },
         "on_time_until": {
           "name": "Mwisho wa kufika kwa wakati",
-          "help": "Anayeingia kazini baada ya saa hii amechelewa.",
+          "help": "Anayeingia kazini baada ya saa hii amechelewa, na anakatwa faini ya kwanza.",
           "shown": "{value}"
         },
         "late_fine": {
-          "name": "Faini ya kuchelewa",
-          "help": "Inakatwa kwenye mshahara kwa kila siku ya kuchelewa.",
+          "name": "Faini ya kwanza ya kuchelewa",
+          "help": "Inakatwa kwenye mshahara kwa kila siku aliyochelewa, kabla ya saa ya faini ya pili.",
+          "shown": "{value}"
+        },
+        "second_fine_from": {
+          "name": "Faini ya pili kuanzia",
+          "help": "Anayeingia kazini kuanzia saa hii anakatwa faini ya pili badala ya ya kwanza.",
+          "shown": "{value}"
+        },
+        "second_fine": {
+          "name": "Faini ya pili ya kuchelewa",
+          "help": "Inakatwa kwenye mshahara kwa kila siku aliyoingia kuanzia saa ya faini ya pili, kabla ya saa ya dharura.",
+          "shown": "{value}"
+        },
+        "review_from": {
+          "name": "Dharura kuanzia",
+          "help": "Anayeingia kazini kuanzia saa hii ni dharura: meneja au mwenye duka ataamua siku hiyo.",
+          "shown": "{value}"
+        },
+        "afternoon_from": {
+          "name": "Nusu siku ya mchana: kufika kuanzia",
+          "help": "Anayeingia kati ya saa hii na saa ya mchana, na kukaa hadi kufunga, anapata nusu siku.",
+          "shown": "{value}"
+        },
+        "midday": {
+          "name": "Saa ya mchana",
+          "help": "Nusu ya asubuhi inaishia hapa na nusu ya mchana inaanza. Anayeingia baada ya saa hii, au anayeondoka kabla yake, ni dharura.",
+          "shown": "{value}"
+        },
+        "morning_leave_until": {
+          "name": "Nusu siku ya asubuhi: kuondoka hadi",
+          "help": "Aliyeingia asubuhi na kuondoka kati ya saa ya mchana na saa hii anapata nusu siku.",
+          "shown": "{value}"
+        },
+        "closing": {
+          "name": "Saa ya kufunga",
+          "help": "Anayeondoka kuanzia saa hii anapata siku nzima. Anayeondoka kabla yake, baada ya nusu siku ya asubuhi, ni dharura.",
           "shown": "{value}"
         }
       },
@@ -318,6 +399,7 @@
     "back": "Rudi",
     "clockIn": "Ingia kazini",
     "clockOut": "Toka kazini",
+    "switchedOff": "Mahudhurio hayajawashwa kwenye duka hili. Mwenye duka huyawasha kwenye Mipangilio ya duka.",
     "notInYet": "Hujaingia kazini leo.",
     "inSince": "Uliingia kazini saa {time}.",
     "outSince": "Ulitoka kazini saa {time}.",
@@ -487,6 +569,19 @@
       "blue": "Bluu",
       "striped": "Mistari nyeupe na nyekundu"
     },
+    "tabs": {
+      "title": "Vichupo",
+      "hint": "Bonyeza kichupo, au tumia Tab na mishale. Kwenye simu, safu inasogea pembeni, na hukaa juu ukishuka chini.",
+      "samples": {
+        "attendance": "Mahudhurio",
+        "money": "Pesa",
+        "computers": "Kompyuta",
+        "stock": "Mzigo",
+        "closures": "Siku duka limefungwa",
+        "sides": "Pande"
+      },
+      "content": "Sehemu iliyo wazi inaonekana hapa. Nyingine zimefichwa, hazijapotea."
+    },
     "topBar": {
       "title": "Upau wa juu",
       "sampleShop": "MPC",
@@ -602,7 +697,27 @@
       "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia.",
       "sides_fixed": "Kwenye demo, pande hazibadilishwi, ili kila mgeni aweze kujaribu.",
       "rules_from_tomorrow": "Kwenye demo, thamani mpya huanza kesho au baadaye, ili kila mgeni wa leo akute duka lilivyo.",
-      "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi."
+      "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi.",
+      "closures_from_tomorrow": "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo."
+    },
+    "closure": {
+      "date_past": "Siku iliyoshapita haiwezi kubadilishwa.",
+      "ends_before_it_starts": "Siku ya mwisho iko kabla ya siku ya kwanza.",
+      "overlaps": "Duka tayari limefungwa katika moja ya siku hizi.",
+      "name_blank": "Andika jina, kwa mfano Krismasi.",
+      "status_unknown": "Hali hii ya siku za kufunga duka haijulikani.",
+      "reason_required": "Andika sababu.",
+      "started": "Siku hizi zimeshaanza. Badilisha siku ya mwisho badala yake.",
+      "not_active": "Siku hizi za kufunga duka zimeshaondolewa."
+    },
+    "attachment": {
+      "not_found": "Seva haina picha hii.",
+      "too_big": "Picha hii ni kubwa mno: picha isizidi MB 1.",
+      "not_an_image": "Faili hili si picha. Zinapokelewa picha za JPEG na WebP pekee.",
+      "file_differs": "Picha hii si ile iliyotajwa kwenye kumbukumbu yake. Huenda iliharibika njiani.",
+      "file_waiting": "Picha hii bado haijafika kwenye seva. Itafika kompyuta ikipata mtandao.",
+      "file_removed": "Picha hii imeshaondolewa.",
+      "length_required": "Picha ilitumwa bila kuonyesha ukubwa wake. Itatumwa tena."
     },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",
@@ -619,12 +734,14 @@
       "date_past": "Thamani mpya haiwezi kuanza kabla ya leo.",
       "key_invalid": "Jina hili la kanuni haliko sawa.",
       "key_unknown": "Kanuni hii haijulikani.",
+      "out_of_order": "Saa hii haifuati mpangilio wa siku: kila saa ya mahudhurio iwe baada ya ile iliyo juu yake na kabla ya ile iliyo chini yake, kuanzia siku uliyochagua, pamoja na mabadiliko yaliyokwisha pangwa kwa siku zijazo.",
       "side_not_allowed": "Kanuni hii ni moja kwa duka zima, si kwa upande mmoja.",
       "side_required": "Chagua upande: kanuni hii huwekwa kwa kila upande peke yake.",
       "value_blank": "Andika thamani.",
       "value_invalid": "Thamani hii haifai kwa kanuni hii."
     },
     "side": {
+      "band_unknown": "Rangi hii ya upande haijulikani.",
       "code_invalid": "Herufi ya upande iwe herufi kubwa moja, kama D.",
       "code_taken": "Upande mwingine wa duka hili tayari una herufi hii.",
       "name_blank": "Upe upande jina.",

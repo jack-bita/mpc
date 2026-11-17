@@ -81,6 +81,36 @@ describe("the device's saved copy", () => {
     expect(savedDevice()).toBeNull();
   });
 
+  it("keeps the device, with no band, when its band is one the bar can't draw (SHOP-4's review)", () => {
+    // A later app adds a third look; this laptop still runs today's, and its next check saves the new
+    // word. The bar can't draw it, but the device is still this one: forgetting it for a colour would
+    // show a registered laptop as a new one. The band goes; the device stays.
+    for (const band of ["green", 7]) {
+      window.localStorage.setItem(
+        DEVICE_STORAGE_KEY,
+        stored({ ...DAWA_LAPTOP, homeSide: { ...DAWA_LAPTOP.homeSide, band } }),
+      );
+
+      const { id, code, name } = DAWA_LAPTOP.homeSide;
+      expect(savedDevice()).toEqual({
+        ...DAWA_LAPTOP,
+        homeSide: { id, code, name },
+      });
+    }
+  });
+
+  it("still knows a copy saved before the side's band was kept", () => {
+    // An older app saved the home side with its id, letter and name only (UI-3). Reading it as no device
+    // would show a registered laptop as a new one, offline maybe for hours, for want of a colour: so it
+    // stays registered, with no band, until the next check fills it (SHOP-4).
+    const { id, code, name } = DAWA_LAPTOP.homeSide;
+    const oldCopy = { ...DAWA_LAPTOP, homeSide: { id, code, name } };
+    window.localStorage.setItem(DEVICE_STORAGE_KEY, stored(oldCopy));
+
+    expect(savedDevice()).toEqual(oldCopy);
+    expect(savedDevice()?.homeSide.band).toBeUndefined();
+  });
+
   it("keeps the block of a copy whose device it can't read", () => {
     // A blocked laptop must stay locked the day a new app arrives, even if the old app's copy of the
     // device no longer reads.

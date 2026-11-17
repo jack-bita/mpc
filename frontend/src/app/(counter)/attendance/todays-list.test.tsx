@@ -13,7 +13,7 @@ import { LAST_DEVICE_SEQ, LAST_SERVER_TIME } from "@/offline/sync/meta";
 import { shopDatabase } from "@/offline/this-shop";
 import { DAWA, DAWA_LAPTOP } from "@/test/devices";
 import { swahiliIn } from "@/test/language";
-import { staffRow, theLaptopKnows } from "@/test/laptop";
+import { attendanceSwitchedOn, staffRow, theLaptopKnows } from "@/test/laptop";
 import { render } from "@/test/render";
 import { DAWA_SIDE } from "@/test/shop-lists";
 
@@ -84,6 +84,8 @@ beforeEach(async () => {
   });
   saveDevice(DAWA_LAPTOP);
   await theLaptopKnows(ASHA, JUMA);
+  // Attendance on at the shop (ATT-2), so the screen around the list offers its button.
+  await attendanceSwitchedOn();
   await db().side.put(DAWA_SIDE);
   await db().meta.bulkPut([
     { key: LAST_DEVICE_SEQ, value: 57 },

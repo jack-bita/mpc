@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sync/v1/attachments/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["sync_v1_attachments_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sync/v1/bootstrap/": {
         parameters: {
             query?: never;
@@ -190,6 +206,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["sync_v1_push_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/control/attachments/{id}/file/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["control_attachments_file_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -286,6 +318,90 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["people_staff_temporary_password_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shops/closures/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        get: operations["shops_closures_list"];
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["shops_closures_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shops/closures/{id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["shops_closures_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shops/closures/{id}/last-day/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["shops_closures_last_day_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -414,6 +530,42 @@ export interface components {
          * @enum {string}
          */
         ChangeOpEnum: "upsert" | "archive";
+        Closure: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date */
+            readonly first_day: string;
+            /** Format: date */
+            readonly last_day: string;
+            readonly name: string;
+            readonly status: components["schemas"]["ClosureStatusEnum"];
+            readonly added_by: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        ClosureCreateRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            first_day: string;
+            /** Format: date */
+            last_day: string;
+            name?: string;
+        };
+        ClosureLastDayRequest: {
+            reason: string;
+            /** Format: date */
+            last_day: string;
+        };
+        ClosureReasonRequest: {
+            reason: string;
+        };
+        /**
+         * @description * `active` - Active
+         *     * `cancelled` - Cancelled
+         * @enum {string}
+         */
+        ClosureStatusEnum: "active" | "cancelled";
         DemoDevice: {
             readonly pins: components["schemas"]["DemoPin"][];
         };
@@ -559,12 +711,14 @@ export interface components {
             readonly id: string;
             readonly code: string;
             readonly name: string;
+            readonly band: components["schemas"]["SideBandEnum"];
         };
         MeSideKeys: {
             /** Format: uuid */
             id: string;
             code: string;
             name: string;
+            band: components["schemas"]["SideBandEnum"];
             permissions: string[];
         };
         MeStaff: {
@@ -825,8 +979,16 @@ export interface components {
             note?: string;
         };
         /**
-         * @description * `attendance.on_time_until` - attendance.on_time_until
+         * @description * `attendance.enabled` - attendance.enabled
+         *     * `attendance.on_time_until` - attendance.on_time_until
          *     * `attendance.late_fine` - attendance.late_fine
+         *     * `attendance.second_fine_from` - attendance.second_fine_from
+         *     * `attendance.second_fine` - attendance.second_fine
+         *     * `attendance.review_from` - attendance.review_from
+         *     * `attendance.afternoon_from` - attendance.afternoon_from
+         *     * `attendance.midday` - attendance.midday
+         *     * `attendance.morning_leave_until` - attendance.morning_leave_until
+         *     * `attendance.closing` - attendance.closing
          *     * `money.rounding_step` - money.rounding_step
          *     * `session.idle_minutes` - session.idle_minutes
          *     * `cash.tolerance` - cash.tolerance
@@ -835,7 +997,7 @@ export interface components {
          *     * `stock.block_negative` - stock.block_negative
          * @enum {string}
          */
-        SettingKeyEnum: "attendance.on_time_until" | "attendance.late_fine" | "money.rounding_step" | "session.idle_minutes" | "cash.tolerance" | "count.tolerance_pct" | "expiry.alert_days" | "stock.block_negative";
+        SettingKeyEnum: "attendance.enabled" | "attendance.on_time_until" | "attendance.late_fine" | "attendance.second_fine_from" | "attendance.second_fine" | "attendance.review_from" | "attendance.afternoon_from" | "attendance.midday" | "attendance.morning_leave_until" | "attendance.closing" | "money.rounding_step" | "session.idle_minutes" | "cash.tolerance" | "count.tolerance_pct" | "expiry.alert_days" | "stock.block_negative";
         SettingKeyRecord: {
             key: string;
             kind: components["schemas"]["SettingKindEnum"];
@@ -867,6 +1029,11 @@ export interface components {
          * @enum {string}
          */
         SettingScopeEnum: "shop" | "side";
+        ShopClosuresAnswer: {
+            /** Format: date */
+            today: string;
+            closures: components["schemas"]["Closure"][];
+        };
         ShopRulesAnswer: {
             /** Format: date */
             today: string;
@@ -879,12 +1046,19 @@ export interface components {
             readonly name: string;
             readonly sale_flow: components["schemas"]["SaleFlowEnum"];
             readonly is_live: boolean;
+            readonly band: components["schemas"]["SideBandEnum"];
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string | null;
             readonly version: number;
         };
+        /**
+         * @description * `blue` - Blue
+         *     * `striped` - Striped
+         * @enum {string}
+         */
+        SideBandEnum: "blue" | "striped";
         SideChange: {
             seq: number;
             /**
@@ -903,10 +1077,12 @@ export interface components {
             code: string;
             name: string;
             sale_flow?: components["schemas"]["SaleFlowEnum"];
+            band?: components["schemas"]["SideBandEnum"];
         };
         SideEditRequest: {
             name?: string;
             is_live?: boolean;
+            band?: components["schemas"]["SideBandEnum"];
             version: number;
         };
         SideKeysRecord: {
@@ -921,6 +1097,7 @@ export interface components {
             readonly name: string;
             readonly sale_flow: components["schemas"]["SaleFlowEnum"];
             readonly is_live: boolean;
+            readonly band: components["schemas"]["SideBandEnum"];
         };
         StaffChange: {
             seq: number;
@@ -1229,6 +1406,39 @@ export interface operations {
             };
         };
     };
+    sync_v1_attachments_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "image/jpeg": string;
+                "image/webp": string;
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     sync_v1_bootstrap_retrieve: {
         parameters: {
             query?: never;
@@ -1305,6 +1515,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PushAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    control_attachments_file_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this attachment. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/webp": string;
                 };
             };
             default: {
@@ -1559,6 +1800,132 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    shops_closures_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShopClosuresAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    shops_closures_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosureCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Closure"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    shops_closures_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this closure. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosureReasonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Closure"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    shops_closures_last_day_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this closure. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosureLastDayRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Closure"];
+                };
             };
             default: {
                 headers: {

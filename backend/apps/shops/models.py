@@ -11,10 +11,15 @@ makes a new shop with all of these at once (create_shop).
 
 A Setting is one dated value of one of the shop's rules, such as the late fine from 1 Nov (ADR-0013):
 a change is a new row, and get_setting (apps/shops/selectors.py) reads the row in force on a day.
+
+A Closure is a span of days the whole shop is closed: a public holiday, or a family funeral (ATT-8). Each of its days is
+off, and not paid; closed_days (apps/shops/selectors.py) lists them for the attendance day (ATT-4).
 """
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from django.contrib.postgres.constraints import ExclusionConstraint
+from django.contrib.postgres.fields import DateRangeField, RangeBoundary, RangeOperators
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -172,6 +177,15 @@ class SaleFlow(models.TextChoices):
     WRITER_CASHIER_LOADER = "writer_cashier_loader", "Writer, cashier, loader"
 
 
+class SideBand(models.TextChoices):
+    # 02 §4: the band a side shows under the top bar, so a worker sees at a glance which side a screen is for (SHOP-4).
+    # The two looks the app draws (SideBand, frontend/src/components/design/side-band.tsx): blue, like the back of
+    # MPC's godown, and striped white and faded red, like the Foods bags. A field of the side, not a dated rule
+    # (Setting): a colour has no "from 1 December" and changes nobody's pay.
+    BLUE = "blue", "Blue"
+    STRIPED = "striped", "Striped"
+
+
 class Side(Editable):
     # A section of one shop (ADR-0001, 02 §4): its own stock, drawer, staff roles and debts, sharing the
     # shop's products, prices and customers. Editable (CORE-6), built on ShopScoped (CORE-2), gives `id`,
@@ -187,6 +201,10 @@ class Side(Editable):
     # Off until the owner agrees to start using the side (ADR-0033), so a new side never reaches the
     # counters by surprise. Switched by switch_side (apps/shops/services.py, SHOP-3), from the settings page (SHOP-5).
     is_live = models.BooleanField(default=False)
+    # The band under the top bar (SHOP-4). Blue unless told otherwise, so every side shows one; set_side_band
+    # (apps/shops/services.py) changes it. It travels with the side, to every laptop and in `me`, so a bar can draw it
+    # offline too.
+    band = models.CharField(max_length=16, choices=SideBand, default=SideBand.BLUE)
 
     class Meta(Editable.Meta):
         # Builds on Editable.Meta, so `objects`, with the guard, stays the default manager (CORE-2).
@@ -204,6 +222,12 @@ class Side(Editable):
                 condition=models.Q(sale_flow__in=SaleFlow.values),
                 name="shops_side_sale_flow_known",
                 violation_error_code="side.sale_flow_unknown",
+            ),
+            # Only a look the app can draw: a third word would reach every laptop as a band no screen knows.
+            models.CheckConstraint(
+                condition=models.Q(band__in=SideBand.values),
+                name="shops_side_band_known",
+                violation_error_code="side.band_unknown",
             ),
             models.CheckConstraint(
                 condition=~models.Q(name=""),
@@ -446,5 +470,106 @@ class Setting(AppendOnly):
                 self.value = setting_key.kind.to_text(setting_key.kind.parse(self.value))
             except ValueError:
                 errors["value"] = ValidationError("Not a valid value for this setting.", code="setting.value_invalid")
+        if errors:
+            raise ValidationError(errors)
+
+
+class ClosureStatus(models.TextChoices):
+    # 02 §12: a closure closes its days while it is active. Cancelled (the page's Ondoa) before its first day, the row
+    # stays, and the audit trail keeps who cancelled it, when and why (rule 7); its days are open again.
+    ACTIVE = "active", "Active"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+# A closure's days as one PostgreSQL range, its first and its last day both inside ("[]"), so the rule below can ask
+# "do these two closures share a day?" with one operator, && (RangeOperators.OVERLAPS). RangeBoundary writes the "[]"
+# into the rule itself, where a plain value would be a parameter, which a rule's SQL can't take. A Func, not a class of
+# our own: the migration keeps a copy of the rule, and Django can copy a Func as it is.
+CLOSURE_DAYS = models.Func(
+    "first_day",
+    "last_day",
+    RangeBoundary(inclusive_lower=True, inclusive_upper=True),
+    function="DATERANGE",
+    output_field=DateRangeField(),
+)
+
+
+class Closure(ShopScoped):
+    # Days the whole shop is closed (02 §12, ATT-8): Siku ya Uhuru, one day; a family funeral, 20 to 24 November.
+    # Each day of an active closure is off, and not paid, like Sunday (OWN-7), whatever the reason (Jack, 16 Nov
+    # 2026). The whole shop's, not a side's: a funeral closes both sides. ShopScoped (CORE-2) gives `id`, `shop`,
+    # `created_at` and `created_by`: who added it, and when. Not Editable: nobody types over a closure; its two
+    # changes, a cancel and a new last day, each lock the row and keep their reason in the audit trail
+    # (apps/shops/services.py), and the edit history trigger in this table's migration copies the row before each
+    # (ADR-0036). Never deleted (rule 7): nothing links to a closure, so PROTECT can't keep it, and a trigger in the
+    # same migration refuses a DELETE instead. Not on the laptops: the attendance day is worked out on the server
+    # (ATT-4).
+
+    # Both closed: a closure of one day has the same first and last day. Days of the shop's own calendar (02 §1).
+    first_day = models.DateField()
+    last_day = models.DateField()
+    # The owner's own words for it: "Krismasi", "Msiba wa bibi". Short, as the page shows it on one line beside its
+    # days. blank=True: an empty name is still refused, by clean() with our own code beside the box
+    # (closure.name_blank), and by the database's rule below; without it, Django's own `blank` check would answer
+    # first, and the page would show two sentences for one mistake.
+    name = models.CharField(max_length=60, blank=True)
+    status = models.CharField(max_length=10, choices=ClosureStatus, default=ClosureStatus.ACTIVE)
+
+    class Meta(ShopScoped.Meta):
+        # Built on ShopScoped.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). The database
+        # is the last guard (03 §5.6); full_clean checks the same rules first, so a person gets a code (ADR-0032).
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=ClosureStatus.values),
+                name="shops_closure_status_known",
+                violation_error_code="closure.status_unknown",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(name=""),
+                name="shops_closure_name_not_blank",
+                violation_error_code="closure.name_blank",
+            ),
+            # The last day on or after the first: Hadi 20 after Kuanzia 24 is a typo, which would close no day at all.
+            models.CheckConstraint(
+                condition=models.Q(last_day__gte=models.F("first_day")),
+                name="shops_closure_ends_after_it_starts",
+                violation_error_code="closure.ends_before_it_starts",
+            ),
+            # No day in two active closures of one shop: an exclusion rule refuses a row when another row matches it on
+            # every pair below, here the same shop (=) and days that share one (&&). A unique rule can't say "share a
+            # day", only "the same". Only active rows: a cancelled closure closes nothing, so its days are free again.
+            # The shop's id is compared in a GiST index, which ranges need, and which compares a plain value only with
+            # PostgreSQL's btree_gist extension: the migration switches it on. The index leads with `shop` (03 §9).
+            # The message is there for the code's sake, as on Side's letter.
+            ExclusionConstraint(
+                name="shops_closure_days_not_shared",
+                expressions=[("shop", RangeOperators.EQUAL), (CLOSURE_DAYS, RangeOperators.OVERLAPS)],
+                condition=models.Q(status=ClosureStatus.ACTIVE),
+                violation_error_code="closure.overlaps",
+                violation_error_message="Another closure has one of these days.",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} {self.first_day}–{self.last_day}"
+
+    def clean(self) -> None:
+        # full_clean runs this after each field's own checks and before the rules above. Two of those rules are checked
+        # here first, each filed under its own field, so a form shows it beside its box (ATT-9):
+        # - The name, trimmed: a name of spaces alone becomes "", and is refused (closure.name_blank).
+        # - The last day on or after the first (closure.ends_before_it_starts). Here, and not only in the rule above,
+        #   because the overlap rule can't even build a range from 24 back to 20: PostgreSQL refuses it, and Django
+        #   reports that as a clash too (closure.overlaps), a second, wrong code. A field filed here is left out of
+        #   the rules that read it, so full_clean then skips both: one code, the right one.
+        super().clean()
+        self.name = (self.name or "").strip()
+        errors: dict[str, ValidationError] = {}
+        if not self.name:
+            errors["name"] = ValidationError("A closure needs a name.", code="closure.name_blank")
+        # Either day may be missing when its field's own check has failed: that check reports it once.
+        if self.first_day and self.last_day and self.last_day < self.first_day:
+            errors["last_day"] = ValidationError(
+                "The last day is before the first.", code="closure.ends_before_it_starts"
+            )
         if errors:
             raise ValidationError(errors)

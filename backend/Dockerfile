@@ -92,7 +92,7 @@ COPY backend/ ./
 # demands every variable and stops Django when one is missing (on purpose), so this one command gets
 # throwaway values. They exist only while this line runs; they are not part of the image's environment.
 RUN DJANGO_SECRET_KEY=collectstatic-only DJANGO_ALLOWED_HOSTS=localhost PIN_PEPPER=unused \
-    DB_NAME=unused DB_USER=unused DB_PASSWORD=unused DB_HOST=unused \
+    DB_NAME=unused DB_USER=unused DB_PASSWORD=unused DB_HOST=unused FILES_ROOT=unused \
     python manage.py collectstatic --noinput
 
 # Compile our own code to .pyc too: UV_COMPILE_BYTECODE in stage 2 compiled only the packages.

@@ -22,6 +22,9 @@
   "topBar": {
     "place": "{shop} · {side}"
   },
+  "pageHeader": {
+    "back": "Back to where you were"
+  },
   "device": {
     "lock": {
       "title": "This device is blocked",
@@ -190,8 +193,7 @@
       "second": "The second font, easy to read"
     },
     "saving": "Saving…",
-    "saved": "Saved.",
-    "back": "Back"
+    "saved": "Saved."
   },
   "shopSettings": {
     "title": "Shop settings",
@@ -239,6 +241,35 @@
       "inUse": "In use now",
       "coming": "Coming"
     },
+    "closures": {
+      "title": "Days the shop is closed",
+      "intro": "Days the whole shop is closed, such as a public holiday or a funeral. They are days off, and not paid.",
+      "none": "No closed days coming.",
+      "days": "{first} – {last}",
+      "add": "Add",
+      "added": "Saved: {name}, {days}.",
+      "remove": "Remove",
+      "removeOf": "Remove: {name}",
+      "removeAsk": "Remove {name}, {days}? The shop will be open on those days.",
+      "reason": "Reason",
+      "reasonHint": "Kept with your name and the time.",
+      "removed": "Removed: {name}, {days}.",
+      "changeLastDay": "Change the last day",
+      "changeLastDayOf": "Change the last day: {name}",
+      "newLastDay": "New last day",
+      "newLastDayHint": "Now {last}. It can be earlier or later.",
+      "sameLastDay": "This is already the last day. Pick another day.",
+      "moved": "Last day changed: {name}, {days}.",
+      "gone": "{name}: these days are no longer in the list.",
+      "form": {
+        "from": "From",
+        "fromHint": "Today or a later day.",
+        "to": "To",
+        "toHint": "Leave it empty for one day only.",
+        "name": "Name",
+        "nameHint": "Such as Krismasi, or Msiba wa bibi."
+      }
+    },
     "sides": {
       "title": "Sides",
       "intro": "A side switched off isn't used at the shop's laptops.",
@@ -254,18 +285,68 @@
       "yesOn": "Yes, switch on",
       "no": "No",
       "switchedOff": "{side} is switched off.",
-      "switchedOn": "{side} is switched on."
+      "switchedOn": "{side} is switched on.",
+      "band": "Colour",
+      "bandOf": "{side}'s colour",
+      "bandHint": "The strip under the green bar, so everyone knows the side at a glance.",
+      "looks": {
+        "blue": "Blue",
+        "striped": "Stripes"
+      },
+      "changeBand": "Change",
+      "changeBandOf": "Change colour: {side}",
+      "bandSaved": "{side}'s colour is saved."
     },
     "rules": {
       "attendance": {
+        "enabled": {
+          "name": "Attendance switched on",
+          "help": "When on, the shop laptops show Mahudhurio, and days count from that day.",
+          "shown": "{value}"
+        },
         "on_time_until": {
           "name": "On time until",
-          "help": "Anyone who clocks in after this time is late.",
+          "help": "Anyone who clocks in after this time is late, with the first fine.",
           "shown": "{value}"
         },
         "late_fine": {
-          "name": "Late fine",
-          "help": "Taken off the pay for each late day.",
+          "name": "First late fine",
+          "help": "Taken off the pay for each late day, before the second fine's time.",
+          "shown": "{value}"
+        },
+        "second_fine_from": {
+          "name": "Second fine from",
+          "help": "Anyone who clocks in from this time gets the second fine instead of the first.",
+          "shown": "{value}"
+        },
+        "second_fine": {
+          "name": "Second late fine",
+          "help": "Taken off the pay for each day someone clocks in from the second fine's time, before the dharura time.",
+          "shown": "{value}"
+        },
+        "review_from": {
+          "name": "Dharura from",
+          "help": "Anyone who clocks in from this time is dharura: a manager or the owner decides the day.",
+          "shown": "{value}"
+        },
+        "afternoon_from": {
+          "name": "Afternoon half day: arrive from",
+          "help": "Anyone who clocks in between this time and midday, and stays until closing, gets a half day.",
+          "shown": "{value}"
+        },
+        "midday": {
+          "name": "Midday",
+          "help": "The morning half ends here and the afternoon half starts. Clocking in after it, or leaving before it, is dharura.",
+          "shown": "{value}"
+        },
+        "morning_leave_until": {
+          "name": "Morning half day: leave by",
+          "help": "Someone who came in the morning and leaves between midday and this time gets a half day.",
+          "shown": "{value}"
+        },
+        "closing": {
+          "name": "Closing time",
+          "help": "Leaving from this time is a full day. Leaving earlier, after the morning half day, is dharura.",
           "shown": "{value}"
         }
       },
@@ -318,6 +399,7 @@
     "back": "Back",
     "clockIn": "Clock in",
     "clockOut": "Clock out",
+    "switchedOff": "Attendance isn't switched on at this shop. The owner switches it on in Shop settings.",
     "notInYet": "You haven't clocked in today.",
     "inSince": "You clocked in at {time}.",
     "outSince": "You clocked out at {time}.",
@@ -487,6 +569,19 @@
       "blue": "Blue",
       "striped": "White and red stripes"
     },
+    "tabs": {
+      "title": "Tabs",
+      "hint": "Press a tab, or use Tab and the arrow keys. On a phone the row scrolls sideways, and stays at the top as you scroll down.",
+      "samples": {
+        "attendance": "Attendance",
+        "money": "Money",
+        "computers": "Computers",
+        "stock": "Stock",
+        "closures": "Days the shop is closed",
+        "sides": "Sides"
+      },
+      "content": "The open section shows here. The others are hidden, not lost."
+    },
     "topBar": {
       "title": "Top bar",
       "sampleShop": "MPC",
@@ -602,7 +697,27 @@
       "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in.",
       "sides_fixed": "On the demo, the sides stay as they are, so every visitor can try them.",
       "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
-      "no_note": "On the demo, notes aren't kept. Leave this box empty."
+      "no_note": "On the demo, notes aren't kept. Leave this box empty.",
+      "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is."
+    },
+    "closure": {
+      "date_past": "A day that has already passed can't be changed.",
+      "ends_before_it_starts": "The last day is before the first day.",
+      "overlaps": "The shop is already closed on one of these days.",
+      "name_blank": "Write a name, such as Krismasi.",
+      "status_unknown": "This closure's state isn't known.",
+      "reason_required": "Write the reason.",
+      "started": "These days have already started. Change the last day instead.",
+      "not_active": "This closure was already cancelled."
+    },
+    "attachment": {
+      "not_found": "The server has no such photo.",
+      "too_big": "This photo is too big: a photo can be at most 1 MB.",
+      "not_an_image": "This file isn't a photo. Only JPEG and WebP photos are kept.",
+      "file_differs": "This photo isn't the one its record names. It may have been damaged on the way.",
+      "file_waiting": "This photo hasn't reached the server yet. It comes once the laptop is online.",
+      "file_removed": "This photo has been removed.",
+      "length_required": "The photo was sent without its size. It will be sent again."
     },
     "password_too_short": "This password is too short.",
     "password_too_common": "This password is too common. Choose another.",
@@ -619,12 +734,14 @@
       "date_past": "A new value can't start before today.",
       "key_invalid": "This rule's name isn't valid.",
       "key_unknown": "This rule isn't known.",
+      "out_of_order": "This time breaks the day's order: each attendance time must be after the one above it and before the one below it, from the day you chose, including changes already set for later days.",
       "side_not_allowed": "This rule has one value for the whole shop, not for one side.",
       "side_required": "Choose a side: this rule is set for each side on its own.",
       "value_blank": "Enter a value.",
       "value_invalid": "This value doesn't fit this rule."
     },
     "side": {
+      "band_unknown": "This side colour isn't known.",
       "code_invalid": "A side's letter is one capital letter, like D.",
       "code_taken": "Another side of this shop already has this letter.",
       "name_blank": "Give the side a name.",

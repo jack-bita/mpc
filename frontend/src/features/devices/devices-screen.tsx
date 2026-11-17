@@ -6,6 +6,7 @@
 // internet, which the office area says while it is gone. It reads who is logged in first, to offer
 // Sajili kifaa only to someone who holds device.manage on some side; anyone else, a seller included,
 // never sees the button, and sees the list without its buttons. Not logged in, it says to log in first.
+// At its top, the page header: the back arrow to where the person was, beside the title (page-header.tsx).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
@@ -18,6 +19,7 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Alert, AlertDescription } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
+import { PageHeader } from "@/components/design/page-header";
 import { sidesWhere, useWhoIsHere } from "@/features/people/who-is-here";
 
 import { ConfirmDevice, type Device } from "./confirm-device";
@@ -47,7 +49,7 @@ export function DevicesScreen() {
 
   return (
     <div className="grid max-w-3xl gap-6">
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
+      <PageHeader title={t("title")} />
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
       {/* Always on the page, empty and hidden until a device is registered: a role="status" box is

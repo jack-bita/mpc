@@ -17,7 +17,8 @@ with new ids, and the test's rollback takes those back, so the next test must no
 """
 
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 from io import StringIO
 from typing import Any
 from unittest import mock
@@ -34,13 +35,15 @@ from pytest_django import Settings
 
 from apps.core.models import ChangeOp, SequenceName
 from apps.core.sequences import next_numbers
+from apps.core.settings_registry import ATTENDANCE_ON, CLOSING, LATE_FINE, SECOND_FINE
 from apps.core.tenancy import shop_context
 from apps.demo import services
-from apps.demo.services import SHOP_CODE, Seeded, seed_demo
+from apps.demo.services import SHOP_CODE, PublicHoliday, Seeded, coming_public_holidays, seed_demo
 from apps.people.models import PermissionGrant, RoleAssignment, StaffMember, User
 from apps.people.permissions import effective_permissions
 from apps.people.pins import pin_matches
-from apps.shops.models import Shop, ShopKind, Side
+from apps.shops.models import Closure, ClosureStatus, Setting, Shop, ShopKind, Side
+from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
 from apps.sync.registry import REGISTRY
 from tests.change_log import lines_after
@@ -256,6 +259,52 @@ def test_seed_demo_keeps_todays_shop() -> None:
     assert the_demo_shop() == made
 
 
+def test_seed_demo_makes_todays_shop_again_without_its_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A deploy starts the new code on the demo the old code made that morning. A seed that sets one more rule than the
+    # one that made it, as ATT-2's did, makes the shop again at once, so the deploy shows the new rule the same day.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    monkeypatch.setattr(services, "DEMO_RULES", (*services.DEMO_RULES, (CLOSING, "19:00")))
+
+    assert seed_demo() == Seeded.MADE
+    shop = the_demo_shop()
+    assert shop != made
+    with shop_context(shop):
+        assert get_setting(CLOSING, shop, on=shop_today(shop)) == time(19, 0)
+    # Then kept, as it holds them all now.
+    assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_makes_todays_shop_again_without_its_closures(monkeypatch: pytest.MonkeyPatch) -> None:
+    # As for its rules: a deploy whose seed closes one more day than the one that made this morning's demo, as ATT-8's
+    # first did, makes the shop again at once, so the page shows the closure the same day.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    tomorrow = shop_today(made) + timedelta(days=1)
+    extra = PublicHoliday("Siku ya mfano", tomorrow.month, tomorrow.day)
+    monkeypatch.setattr(services, "PUBLIC_HOLIDAYS", (*services.PUBLIC_HOLIDAYS, extra))
+
+    assert seed_demo() == Seeded.MADE
+    shop = the_demo_shop()
+    assert shop != made
+    with shop_context(shop):
+        assert Closure.objects.filter(first_day=tomorrow, name="Siku ya mfano").exists()
+    # Then kept, as it holds them all now.
+    assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_keeps_a_shop_whose_closure_a_visitor_changed() -> None:
+    # A visitor moves the last day of one of the seed's closures, and cancels another: today's demo still holds what
+    # the seed made, so the demo's next wake-up keeps it, and the visitor's work with it.
+    seed_demo(fresh=True)
+    shop = the_demo_shop()
+    with shop_context(shop):
+        first, second = Closure.objects.order_by("first_day")[:2]
+        Closure.objects.filter(pk=first.pk).update(last_day=first.last_day + timedelta(days=1))
+        Closure.objects.filter(pk=second.pk).update(status=ClosureStatus.CANCELLED)
+    assert seed_demo() == Seeded.KEPT
+
+
 def test_seed_demo_makes_yesterdays_shop_again() -> None:
     # The night's redeploy, or the first wake-up of a new day: a demo shop made yesterday is wiped and made again.
     # The day is the shop's own: a whole day back is yesterday in Arusha at any hour.
@@ -282,10 +331,14 @@ def test_seed_demo_makes_the_shop_again_after_midnight_in_arusha(monkeypatch: py
 
 def test_seed_demo_keeps_a_shop_made_after_midnight_in_arusha(monkeypatch: pytest.MonkeyPatch) -> None:
     # Made at 21:10 UTC, 00:10 on 4 March in Arusha; started at 00:30 UTC on 4 March, 03:30 in Arusha. The same day in
-    # the shop's time: kept. Read in UTC, 3 March and 4 March differ and the shop would wrongly be made again.
+    # the shop's time: kept. Read in UTC, 3 March and 4 March differ and the shop would wrongly be made again. Made at
+    # that moment, not today: the shop then holds 4 March's coming holidays, as one made then would, and the seed keeps
+    # a shop only if it holds its day's (ATT-8).
+    made_at = datetime(2026, 3, 3, 21, 10, tzinfo=UTC)
+    monkeypatch.setattr(timezone, "now", lambda: made_at)
     seed_demo(fresh=True)
     made = the_demo_shop()
-    Shop.objects.filter(pk=made.pk).update(created_at=datetime(2026, 3, 3, 21, 10, tzinfo=UTC))
+    Shop.objects.filter(pk=made.pk).update(created_at=made_at)
     monkeypatch.setattr(timezone, "now", lambda: datetime(2026, 3, 4, 0, 30, tzinfo=UTC))
 
     assert seed_demo() == Seeded.KEPT
@@ -397,6 +450,15 @@ def test_seed_demo_switches_its_sides_on() -> None:
         assert {(side.code, side.is_live) for side in Side.objects.all()} == {("D", True), ("F", True)}
 
 
+def test_seed_demo_gives_each_side_its_band() -> None:
+    # The demo shows each side's band under the top bar (SHOP-4): Dawa blue, Vyakula striped, like the Foods bags
+    # (UI-8). A visitor can't change either (demo.sides_fixed), so every visitor sees the same two.
+    seed_demo(fresh=True)
+
+    with shop_context(the_demo_shop()):
+        assert {(side.code, side.band) for side in Side.objects.all()} == {("D", "blue"), ("F", "striped")}
+
+
 def test_seed_demo_lets_its_manager_change_the_shops_rules() -> None:
     # The demo has no owner, and a manager alone may not change the shop's rules (settings.manage is one of the
     # owner's own four, spec §6). Meneja holds that one key besides the role, on the whole shop, so a visitor can try
@@ -415,17 +477,67 @@ def test_seed_demo_lets_its_manager_change_the_shops_rules() -> None:
         assert "settings.manage" not in effective_permissions(asha, None)
 
 
+def test_seed_demo_closes_on_the_coming_public_holidays() -> None:
+    # ATT-9's page shows a shop's closures, and a visitor tries Ondoa and a new last day on them (ATT-8): the demo
+    # closes on the next three public holidays, added by the system, from the shop's own today.
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    today = shop_today(shop)
+    with shop_context(shop):
+        rows = Closure.objects.order_by("first_day")
+        assert [(row.first_day, row.last_day, row.name, row.status, row.created_by) for row in rows] == [
+            (first, last, name, ClosureStatus.ACTIVE, None) for first, last, name in coming_public_holidays(today)
+        ]
+    assert len(coming_public_holidays(today)) == 3
+
+
+def test_coming_public_holidays() -> None:
+    # The next three fixed-date public holidays from a day, that day's own among them; Krismasi and the day after as one
+    # closure of two days. One that began before the day is left out: a closure can't start in the past.
+    uhuru = (date(2026, 12, 9), date(2026, 12, 9), "Siku ya Uhuru")
+    krismasi = (date(2026, 12, 25), date(2026, 12, 26), "Krismasi")
+    mwaka_mpya = (date(2027, 1, 1), date(2027, 1, 1), "Mwaka Mpya")
+    mapinduzi = (date(2027, 1, 12), date(2027, 1, 12), "Mapinduzi ya Zanzibar")
+    karume = (date(2027, 4, 7), date(2027, 4, 7), "Siku ya Karume")
+    assert coming_public_holidays(date(2026, 11, 16)) == [uhuru, krismasi, mwaka_mpya]
+    assert coming_public_holidays(date(2026, 12, 25)) == [krismasi, mwaka_mpya, mapinduzi]
+    # On the 26th Krismasi has begun, so the year's last ones come from the next year.
+    assert coming_public_holidays(date(2026, 12, 26)) == [mwaka_mpya, mapinduzi, karume]
+
+
+def test_seed_demo_sets_its_fines_and_switches_attendance_on() -> None:
+    # A shop's fines start at nothing, as this public repo names no real amount (rule 10), so the demo types made-up
+    # ones, and a visitor sees a late day's fine. Attendance is on from the day the demo is made (ADR-0033), so its
+    # laptops keep Mahudhurio (ATT-2).
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        today = shop_today(shop)
+        assert get_setting(ATTENDANCE_ON, shop, on=today) is True
+        assert get_setting(LATE_FINE, shop, on=today) == Decimal("500.00")
+        assert get_setting(SECOND_FINE, shop, on=today) == Decimal("1500.00")
+        # Set by the system from the shop's own today, with no note, as no person of the demo set them.
+        rows = Setting.objects.order_by("key")
+        assert [(row.key, row.effective_from, row.note, row.created_by) for row in rows] == [
+            ("attendance.enabled", today, "", None),
+            ("attendance.late_fine", today, "", None),
+            ("attendance.second_fine", today, "", None),
+        ]
+
+
 def test_seed_demo_numbers_every_record_once() -> None:
     # A visitor's new laptop starts from the demo shop's change log (SYNC-3): every record it gets names a line, made
     # through the services, and the seed numbers them all once, at the end of its one block (SYNC-15). The demo shop's
-    # two sides, their two drawers and its three people: seven lines, from 1.
+    # two sides, their two drawers, its three rules (ATT-2) and its three people: ten lines, from 1.
     with mock.patch("apps.core.changes.next_numbers", wraps=next_numbers) as numbering:
         seed_demo(fresh=True)
 
     shop = the_demo_shop()
-    numbering.assert_called_once_with(shop.pk, SequenceName.CHANGE, 7)
+    numbering.assert_called_once_with(shop.pk, SequenceName.CHANGE, 10)
     lines = lines_after(shop, 0)
-    assert [number for number, *_ in lines] == list(range(1, 8))
+    assert [number for number, *_ in lines] == list(range(1, 11))
     assert all(op == ChangeOp.UPSERT for *_, op in lines)
     # One line for each record a laptop is sent, and none for anything else: the registry's rows
     # (apps/sync/registry.py).

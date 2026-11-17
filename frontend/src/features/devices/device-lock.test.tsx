@@ -8,7 +8,11 @@ import { api } from "@/api/client";
 import { QueryProvider } from "@/api/provider";
 import { answerOf } from "@/api/refusal";
 import { setLanguage } from "@/i18n/language";
-import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
+import {
+  bandUnderTheBar,
+  DAWA_LAPTOP,
+  DAWA_LAPTOP_ANSWER,
+} from "@/test/devices";
 import { answer, refusal } from "@/test/fake-server";
 import { swahiliIn } from "@/test/language";
 import { render } from "@/test/render";
@@ -95,6 +99,8 @@ describe("the lock", () => {
     expect(message).toContain("Mwombe meneja akifungue.");
     // Nothing of the page shows behind it.
     expect(screen.queryByText("screen")).toBeNull();
+    // Its bar keeps the home side's band, as every bar of the laptop does (SHOP-4).
+    expect(bandUnderTheBar()).toBe("blue");
   });
 
   it("comes at the device's next read of any kind", async () => {

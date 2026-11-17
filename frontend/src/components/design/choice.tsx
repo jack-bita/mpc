@@ -1,5 +1,5 @@
 // choice.tsx — pick one of a few, with a big row for each: a new device's home side, a person's own
-// language and font (UI-9), later a way to pay (UI-3, ADR-0039).
+// language and font (UI-9), a side's band (SHOP-4), later a way to pay (UI-3, ADR-0039).
 //
 // shadcn's radio group (components/ui/radio-group.tsx) gives the behaviour, through Base UI: one choice
 // at a time, the arrow keys move between them, and a screen reader says "radio button, 1 of 2,
@@ -14,8 +14,9 @@
 // name the dot for a screen reader. The order on screen is Field's: name, hint, error, then the rows.
 //
 // A row may be written in a language or a font of its own (UI-9): "English" among Swahili words is said
-// as English, and a font's row shows that font, so a person sees what they pick before they pick it.
-import { useId } from "react";
+// as English, and a font's row shows that font, so a person sees what they pick before they pick it. For
+// the same reason a row may show a picture before its words, as a side's band (SHOP-4).
+import { type ReactNode, useId } from "react";
 
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,9 @@ export interface ChoiceOption {
   lang?: string;
   /** The font the words are shown in, by its role (ADR-0039), when it isn't the page's. */
   font?: "default" | "second";
+  /** Something drawn before the words, so a person sees what they pick: a side's band (SHOP-4). Decoration
+   * only: the words name the row, and a screen reader never hears the picture. */
+  picture?: ReactNode;
 }
 
 /** The row around a dot and its words. Its edge is the box's dark edge (--input, 3:1), and green once
@@ -108,6 +112,16 @@ export function Choice({
         {options.map((option) => (
           <label key={option.value} className={ROW_LOOK}>
             <RadioGroupItem value={option.value} className={DOT_LOOK} />
+            {option.picture ? (
+              // Hidden from a screen reader: the words after it already name the row.
+              <span
+                aria-hidden="true"
+                data-picture=""
+                className="flex shrink-0 items-center"
+              >
+                {option.picture}
+              </span>
+            ) : null}
             {/* data-font changes the font only where font-sans is on the same element (globals.css). */}
             <span
               lang={option.lang}

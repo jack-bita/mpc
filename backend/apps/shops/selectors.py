@@ -1,11 +1,13 @@
 """apps/shops/selectors.py — reads of the shops tables that other code builds on (03 §5.2).
 
-Three so far. get_setting answers "what is this rule on this day?" for a shop, and for one of its sides
+Five so far. get_setting answers "what is this rule on this day?" for a shop, and for one of its sides
 when one is given (D13, ADR-0013). Every later card reads its rules through it: the attendance day reads
 the on-time cut-off and the late fine, a drawer count its tolerance, and so on. shop_today answers "which
 day is it at this shop?", the day a rule's new value may start from at the earliest (SHOP-3). It lives
 here, with the shop, so `shops` can ask it too: `shops` sits below `people` and may not import it (ADR-0043).
-shop_rules lists every rule as the settings page shows it (SHOP-3): its value today, and its rows.
+shop_rules lists every rule as the settings page shows it (SHOP-3): its value today, and its rows. closed_days answers
+"which days in this span was the shop closed?" (ATT-8), for the attendance day (ATT-4), and coming_closures lists the
+closures the settings page shows (ATT-9).
 
 The answer comes from the shop's Setting rows (apps/shops/models.py), or, when there is no row, from the
 list of rules in core (apps/core/settings_registry.py): a new shop works with every rule at its default.
@@ -13,14 +15,15 @@ list of rules in core (apps/core/settings_registry.py): a new shop works with ev
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from apps.core.settings_registry import KEYS, Scope, SettingKey
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
-from apps.shops.models import Setting, Shop, Side
+from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
 
 
 def get_setting[T](key: SettingKey[T], shop: Shop, side: Side | None = None, *, on: date) -> T:
@@ -113,3 +116,37 @@ def shop_rules(shop: Shop, *, rows: Iterable[Setting], sides: Sequence[Side], on
                 )
             )
     return rules
+
+
+def closed_days(shop: Shop, first: date, last: date) -> set[date]:
+    """Each day from `first` to `last`, both counted, on which an active closure closes `shop` (ATT-8): a public
+    holiday, a family funeral. Such a day is off and not paid, like Sunday (02 §12). A cancelled closure closes
+    nothing."""
+    # A shop must be open, and be this one, as for get_setting: another shop's rows would be hidden by the guard, and an
+    # empty answer would pay a closed day without a word. So fail closed instead (ADR-0022).
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch("closed_days was given a shop that is not the one open.")
+    if isinstance(first, datetime) or isinstance(last, datetime):
+        raise TypeError("closed_days needs the shop's business dates, not datetimes.")
+    # The closures that touch the span: starting on or before its last day, and ending on or after its first. `shop=`
+    # although the guard filters too: in a system job (system_context()) the guard shows every shop's rows.
+    spans = Closure.objects.filter(
+        shop=shop, status=ClosureStatus.ACTIVE, first_day__lte=last, last_day__gte=first
+    ).values_list("first_day", "last_day")
+    days: set[date] = set()
+    for closure_first, closure_last in spans:
+        # Only the part of each closure inside the span: a closure from 30 Nov to 2 Dec gives November only the 30th.
+        day = max(closure_first, first)
+        while day <= min(closure_last, last):
+            days.add(day)
+            day += timedelta(days=1)
+    return days
+
+
+def coming_closures(rows: QuerySet[Closure], *, today: date) -> QuerySet[Closure]:
+    """The closures the settings page lists (ATT-9): each active one whose last day is `today` or later, a funeral that
+    began two days ago among them, soonest first. Not one already over, nor a cancelled one: their days can't change
+    any more, and the edit history and the audit trail keep them. `rows`: those the person may see (the route keeps to
+    them, PPL-5)."""
+    return rows.filter(status=ClosureStatus.ACTIVE, last_day__gte=today).order_by("first_day", "id")
