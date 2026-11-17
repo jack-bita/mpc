@@ -663,7 +663,11 @@
       "own": "Huwezi kubadilisha hali yako ya kazi mwenyewe.",
       "superuser_only": "Hali ya kazi ya mtu huyu inabadilishwa na msimamizi wa mfumo tu.",
       "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kubadilisha hali yake ya kazi.",
-      "display_name_taken": "Mfanyakazi mwingine tayari ana jina hili la kuitwa. Chagua jingine."
+      "display_name_taken": "Mfanyakazi mwingine tayari ana jina hili la kuitwa. Chagua jingine.",
+      "not_active": "Mfanyakazi huyu tayari amesimamishwa.",
+      "not_suspended": "Mfanyakazi huyu hajasimamishwa.",
+      "left_in_future": "Siku ya mwisho ya kazi haiwezi kuwa siku ijayo.",
+      "left_before_start": "Siku ya mwisho iko kabla ya siku aliyoanza kazi."
     },
     "password": {
       "must_change": "Chagua nenosiri lako mwenyewe kabla ya kuendelea.",

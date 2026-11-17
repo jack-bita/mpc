@@ -4,6 +4,9 @@ calls (PPL-4; 03 §5.10). What may and may not be done is the services'; these t
     GET   /api/v1/people/staff/        every worker the shop has had, those who left included
     GET   /api/v1/people/staff/{id}/   one worker
     POST  /api/v1/people/staff/        a new worker: the person and their job in one step, with the app's own id
+    POST  /api/v1/people/staff/{id}/suspend/     stop a worker for a while, with a reason
+    POST  /api/v1/people/staff/{id}/unsuspend/   bring them back, with a reason
+    POST  /api/v1/people/staff/{id}/leave/       record their last day, with a reason
 
 Each worker comes with their full name, nickname, job title, first day, status and leaving day, and each role and
 extra key they were given, with its side (none: every side). Only for whoever holds staff.manage on the whole shop
@@ -19,7 +22,7 @@ Fake data only: the repo is public (03 §10).
 
 import uuid
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from django.core.exceptions import PermissionDenied
@@ -27,11 +30,12 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 
+from apps.control.models import AuditAction, AuditEvent, EditEvent
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.api.views import StaffViewSet
 from apps.people.models import Role, StaffMember, User
-from apps.people.services import add_staff, add_worker, grant_permission, mark_left, set_pin
+from apps.people.services import add_staff, add_worker, grant_permission, mark_left, set_pin, suspend
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
@@ -103,6 +107,9 @@ def test_staff_routes_name_their_permissions() -> None:
         "list": Permission.STAFF_MANAGE,
         "retrieve": Permission.STAFF_MANAGE,
         "create": Permission.STAFF_MANAGE,
+        "suspend": Permission.STAFF_MANAGE,
+        "unsuspend": Permission.STAFF_MANAGE,
+        "leave": Permission.STAFF_MANAGE,
         "temporary_password": Permission.STAFF_MANAGE,
     }
 
@@ -325,3 +332,119 @@ def test_the_service_asks_the_key_again(shop_a: Shop, sides: dict[str, Side], gi
         add_worker(shop=shop_a, full_name="Juma Hamisi Mfano", display_name="Juma", by=manager)
 
     assert not User.objects.filter(full_name="Juma Hamisi Mfano").exists()
+
+
+# --- Suspending, bringing back, marking left
+
+
+def change(staff: StaffMember, action: str) -> str:
+    return f"{one(staff)}{action}/"
+
+
+def status_of(staff: StaffMember) -> str:
+    with shop_context(staff.shop_id):
+        return StaffMember.objects.get(pk=staff.pk).status
+
+
+def test_the_owner_suspends_brings_back_and_marks_a_worker_left(baba: StaffMember, asha: StaffMember) -> None:
+    owner = client_for(baba)
+
+    suspended = owner.post(change(asha, "suspend"), {"reason": "Hakuja kazini siku 3"})
+    assert suspended.status_code == 200
+    # The answer is the worker as she is now, as the list shows her, so the page needs no second read.
+    assert (suspended.json()["id"], suspended.json()["status"]) == (str(asha.pk), "suspended")
+
+    back = owner.post(change(asha, "unsuspend"), {"reason": "Amerudi kazini"})
+    assert (back.status_code, back.json()["status"]) == (200, "active")
+
+    left = owner.post(change(asha, "leave"), {"reason": "Amehamia Moshi", "left_on": "2026-11-14"})
+    assert left.status_code == 200
+    assert (left.json()["status"], left.json()["left_on"]) == ("left", "2026-11-14")
+
+
+def test_a_suspension_from_the_route_writes_both_books(baba: StaffMember, asha: StaffMember) -> None:
+    # CTRL-2's review: through the route, as the page will do it, both books name the worker and the owner who acted:
+    # the audit trail with the reason, the edit history with what changed (02 §13).
+    client_for(baba).post(change(asha, "suspend"), {"reason": "Hakuja kazini siku 3"})
+
+    with shop_context(asha.shop_id):
+        [line] = AuditEvent.objects.filter(subject_type="staff", subject_id=asha.pk)
+        [edit] = EditEvent.objects.filter(subject_type="staff", subject_id=asha.pk)
+    assert (line.action, line.created_by_id, line.reason) == (
+        AuditAction.STAFF_SUSPEND,
+        baba.pk,
+        "Hakuja kazini siku 3",
+    )
+    assert edit.created_by_id == baba.pk
+    assert (edit.before, edit.after) == ({"status": "active"}, {"status": "suspended"})
+
+
+@pytest.mark.parametrize("action", ["suspend", "unsuspend", "leave"])
+def test_each_change_of_status_needs_a_reason(action: str, baba: StaffMember, asha: StaffMember) -> None:
+    if action == "unsuspend":
+        with shop_context(asha.shop_id):
+            suspend(asha, by=None, reason="Uchunguzi")
+    before = status_of(asha)
+
+    refused = client_for(baba).post(change(asha, action), {"reason": "   ", "left_on": "2026-11-14"})
+
+    assert refused.status_code == 400
+    assert refused.json()["code"] == "staff.reason_required"
+    assert status_of(asha) == before
+
+
+def test_a_leaving_day_ahead_is_refused(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Leaving takes effect at once: "leaves on Friday" typed on Monday would stop her PIN four days early (02 §5).
+    tomorrow = shop_today(shop_a) + timedelta(days=1)
+
+    refused = client_for(baba).post(
+        change(asha, "leave"), {"reason": "Atahamia Moshi", "left_on": tomorrow.isoformat()}
+    )
+
+    assert refused.status_code == 400
+    assert refused.json()["code"] == "staff.left_in_future"
+    assert status_of(asha) == "active"
+
+
+def test_a_leaving_day_must_be_sent(baba: StaffMember, asha: StaffMember) -> None:
+    refused = client_for(baba).post(change(asha, "leave"), {"reason": "Amehamia Moshi"})
+
+    assert refused.status_code == 400
+    assert refused.json()["fields"] == {"left_on": ["required"]}
+
+
+@pytest.mark.parametrize("action", ["suspend", "unsuspend", "leave"])
+def test_changes_of_status_need_staff_manage(
+    action: str, shop_a: Shop, sides: dict[str, Side], asha: StaffMember, give_role: GiveRole
+) -> None:
+    manager = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(manager, RoleTemplate.MANAGER, None)
+    before = status_of(asha)
+
+    refused = client_for(manager).post(change(asha, action), {"reason": "Hakuja kazini", "left_on": "2026-11-14"})
+
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    assert status_of(asha) == before
+
+
+def test_who_may_reaches_the_route(shop_a: Shop, baba: StaffMember, give_role: GiveRole) -> None:
+    # The service's rule answers through the route with its own code, for the page to say: a manager with the key
+    # still can't suspend the owner (02 §5).
+    meneja = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(meneja, RoleTemplate.MANAGER, None)
+    with shop_context(shop_a):
+        grant_permission(meneja, Permission.STAFF_MANAGE, side=None, by=None)
+
+    refused = client_for(meneja).post(change(baba, "suspend"), {"reason": "Hakuja kazini"})
+
+    assert refused.status_code == 400
+    assert refused.json()["code"] == "staff.superuser_only"
+    assert status_of(baba) == "active"
+
+
+def test_another_shops_worker_is_not_found(baba: StaffMember, staff_b: StaffMember) -> None:
+    hidden = client_for(baba).post(change(staff_b, "suspend"), {"reason": "Hakuja kazini"})
+
+    assert hidden.status_code == 404
+    assert status_of(staff_b) == "active"

@@ -213,6 +213,19 @@ class StaffAddSerializer(serializers.Serializer[Any]):
     started_on = serializers.DateField(required=False, allow_null=True, default=None)
 
 
+class StaffReasonSerializer(serializers.Serializer[Any]):
+    # What a suspension or a bringing back sends: why, kept in its audit line with who and when (rule 7). A blank reason
+    # is let through, so the service refuses it with its own code, staff.reason_required, which the screen translates;
+    # one left out is the form's own `required`. 500 characters at most, as the audit line keeps (control.AuditEvent).
+    reason = serializers.CharField(max_length=500, allow_blank=True)
+
+
+class StaffLeaveSerializer(StaffReasonSerializer):
+    # What a leaving sends: why, and the worker's last day, which the page fills in as today for the owner to change. A
+    # day ahead is the service's to refuse (staff.left_in_future), as leaving takes effect at once.
+    left_on = serializers.DateField()
+
+
 class TemporaryPasswordSerializer(serializers.Serializer[Any]):
     # What the owner sends to set a person's temporary password (AUTH-6, ADR-0038). Only ever read in: the route answers
     # with nothing, and nothing shows a password back.

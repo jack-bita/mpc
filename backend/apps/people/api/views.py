@@ -17,6 +17,9 @@ And a shop's workers, for whoever holds staff.manage on the whole shop (PPL-4), 
     GET   /api/v1/people/staff/                             every worker the shop has had, with what each was given
     GET   /api/v1/people/staff/{id}/                        one worker
     POST  /api/v1/people/staff/                             a new worker: the person and the job, in one step
+    POST  /api/v1/people/staff/{id}/suspend/                stop a worker for a while, with a reason
+    POST  /api/v1/people/staff/{id}/unsuspend/              bring them back, with a reason
+    POST  /api/v1/people/staff/{id}/leave/                  record their last day, with a reason
     POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
 
 And the routes a device calls with its key, built on DeviceView (apps/people/api/base.py), under /api/devices/v1/
@@ -72,6 +75,8 @@ from apps.people.api.serializers import (
     PairingStartSerializer,
     PinLoginSerializer,
     StaffAddSerializer,
+    StaffLeaveSerializer,
+    StaffReasonSerializer,
     StaffSerializer,
     TemporaryPasswordSerializer,
     WhoIsHereSerializer,
@@ -85,10 +90,13 @@ from apps.people.services import (
     add_worker,
     change_own_settings,
     confirm_pairing,
+    mark_left,
     pin_login,
     rename_device,
     set_temporary_password,
     start_pairing,
+    suspend,
+    unsuspend,
 )
 from apps.people.services import block as block_device
 from apps.people.services import unblock as unblock_device
@@ -190,7 +198,8 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
 class StaffViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMixin[StaffMember]):
     # A shop's people, as the workers' page shows them (PPL-4, PPL-6): every worker the shop has had, those who left
     # included, each with every role and extra key they were given; a new worker, made once however often the page
-    # sends him; and a first or forgotten password, set face to face (ADR-0038). PPL-7, PPL-8 and PPL-10 add the roles,
+    # sends him; a worker suspended, brought back or marked left, each with a reason; and a first or forgotten
+    # password, set face to face (ADR-0038). PPL-7, PPL-8 and PPL-10 add the roles,
     # the PIN and the details.
     model = StaffMember
     # A person's job belongs to the whole shop, whichever side they work on: a password opens them on every side, and a
@@ -204,6 +213,9 @@ class StaffViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceM
         "list": Permission.STAFF_MANAGE,
         "retrieve": Permission.STAFF_MANAGE,
         "create": Permission.STAFF_MANAGE,
+        "suspend": Permission.STAFF_MANAGE,
+        "unsuspend": Permission.STAFF_MANAGE,
+        "leave": Permission.STAFF_MANAGE,
         "temporary_password": Permission.STAFF_MANAGE,
     }
     serializer_class = StaffSerializer
@@ -224,6 +236,50 @@ class StaffViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceM
             staff_id=data["id"],
             by=cast(StaffMember, self.actor),
         )
+
+    # Each action names what it takes and answers, as the device routes do: the API's description would otherwise read
+    # every POST of this route as an add (RouteSchema, apps/core/api/schema.py), and the app's types would be wrong.
+    # Each answers with the worker as they are now, as the list shows them, so the page needs no second read.
+    @extend_schema(request=StaffReasonSerializer, responses=StaffSerializer)
+    @action(detail=True, methods=["post"])
+    def suspend(self, request: Request, pk: str | None = None) -> Response:
+        # A worker who stopped coming, stopped at once: their PIN opens nothing from their next request (AUTH-4), and
+        # each laptop hears of it at its next sync (X2). Who may is the service's (_locked_for_a_change).
+        sent = self._reason(request, StaffReasonSerializer)
+        return self._answer(suspend(self._worker(), by=self._acting(), reason=sent["reason"]))
+
+    @extend_schema(request=StaffReasonSerializer, responses=StaffSerializer)
+    @action(detail=True, methods=["post"])
+    def unsuspend(self, request: Request, pk: str | None = None) -> Response:
+        sent = self._reason(request, StaffReasonSerializer)
+        return self._answer(unsuspend(self._worker(), by=self._acting(), reason=sent["reason"]))
+
+    @extend_schema(request=StaffLeaveSerializer, responses=StaffSerializer)
+    @action(detail=True, methods=["post"])
+    def leave(self, request: Request, pk: str | None = None) -> Response:
+        # Final: a worker who comes back is added again, as a new job, and the old one keeps its history (02 §5).
+        sent = self._reason(request, StaffLeaveSerializer)
+        return self._answer(
+            mark_left(self._worker(), left_on=sent["left_on"], by=self._acting(), reason=sent["reason"])
+        )
+
+    def _worker(self) -> StaffMember:
+        # The worker, found in the visit's shop and checked for the action's key (get_object; initial() already ran it
+        # once, before the action began): another shop's worker is "not found", before anything sent is read.
+        return self.get_object()
+
+    def _acting(self) -> StaffMember:
+        # cast: the login leaves the staff member acting in `request.auth`, which mypy reads as an Actor.
+        return cast(StaffMember, self.actor)
+
+    def _reason(self, request: Request, form: type[StaffReasonSerializer]) -> dict[str, Any]:
+        # What was sent, checked. Read after initial() has found the worker, so another shop's is "not found" first.
+        sent = form(data=request.data)
+        sent.is_valid(raise_exception=True)
+        return cast(dict[str, Any], sent.validated_data)
+
+    def _answer(self, staff: StaffMember) -> Response:
+        return Response(self.get_serializer(staff).data)
 
     # `sent` holds the password while the service runs, and so do the serializer's frames while they read it: every
     # variable here, and in everything this calls, shows as stars in Django's error reports, as in the service itself.

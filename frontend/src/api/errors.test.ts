@@ -128,6 +128,12 @@ const CODES_THE_API_SENDS = [
   "staff.more_keys",
   // Adding a worker (PPL-4): two current workers never share a nickname, whatever the letter case.
   "staff.display_name_taken",
+  // Suspending, bringing back and marking left from the office (PPL-4): a person already suspended, one not
+  // suspended, and a last day ahead of today or before the first day.
+  "staff.not_active",
+  "staff.not_suspended",
+  "staff.left_in_future",
+  "staff.left_before_start",
   // Devices and pairing (AUTH-5).
   "device.name_blank",
   "device.name_taken",
