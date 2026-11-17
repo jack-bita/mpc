@@ -195,6 +195,24 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
         return GivenKeySerializer(self._given(staff).keys, many=True).data
 
 
+class StaffAddSerializer(serializers.Serializer[Any]):
+    # What the workers' page sends to add a worker (PPL-4): the job's id, made on the phone (ADR-0007), the person's
+    # full name, and the job's nickname, job title and first day. Spaces at either end are taken off, so spaces alone
+    # are a blank name, refused beside its box. The lengths are the tables' own. add_worker checks the rest: a nickname
+    # another current worker has (staff.display_name_taken).
+    # Required, and a UUIDv7: without an id of its own, a send repeated would look like a second Juma. No unique check
+    # of the id here: the route looks it up itself, first and again after any refusal (CreateOnceMixin).
+    id = serializers.UUIDField(validators=[uuid7_only])
+    full_name = serializers.CharField(max_length=User._meta.get_field("full_name").max_length)
+    display_name = serializers.CharField(max_length=StaffMember._meta.get_field("display_name").max_length)
+    # May be empty: many workers have no title beyond their role.
+    job_title = serializers.CharField(
+        max_length=StaffMember._meta.get_field("job_title").max_length, allow_blank=True, required=False, default=""
+    )
+    # Today, in the shop's time, if none is sent (add_staff).
+    started_on = serializers.DateField(required=False, allow_null=True, default=None)
+
+
 class TemporaryPasswordSerializer(serializers.Serializer[Any]):
     # What the owner sends to set a person's temporary password (AUTH-6, ADR-0038). Only ever read in: the route answers
     # with nothing, and nothing shows a password back.

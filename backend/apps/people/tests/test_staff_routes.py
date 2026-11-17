@@ -3,6 +3,7 @@ calls (PPL-4; 03 §5.10). What may and may not be done is the services'; these t
 
     GET   /api/v1/people/staff/        every worker the shop has had, those who left included
     GET   /api/v1/people/staff/{id}/   one worker
+    POST  /api/v1/people/staff/        a new worker: the person and their job in one step, with the app's own id
 
 Each worker comes with their full name, nickname, job title, first day, status and leaving day, and each role and
 extra key they were given, with its side (none: every side). Only for whoever holds staff.manage on the whole shop
@@ -16,10 +17,12 @@ extra key they were given, with its side (none: every side). Only for whoever ho
 Fake data only: the repo is public (03 §10).
 """
 
+import uuid
 from collections.abc import Callable
 from datetime import date
 
 import pytest
+from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
@@ -28,8 +31,9 @@ from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.api.views import StaffViewSet
 from apps.people.models import Role, StaffMember, User
-from apps.people.services import add_staff, grant_permission, mark_left, set_pin
+from apps.people.services import add_staff, add_worker, grant_permission, mark_left, set_pin
 from apps.shops.models import Shop, Side
+from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
 
 pytestmark = pytest.mark.django_db
@@ -98,6 +102,7 @@ def test_staff_routes_name_their_permissions() -> None:
     assert StaffViewSet.action_permissions == {
         "list": Permission.STAFF_MANAGE,
         "retrieve": Permission.STAFF_MANAGE,
+        "create": Permission.STAFF_MANAGE,
         "temporary_password": Permission.STAFF_MANAGE,
     }
 
@@ -202,3 +207,121 @@ def test_the_list_reads_the_roles_in_the_same_few_queries_however_many_workers(
 
     assert len(answer.json()["results"]) == 5
     assert len(five.captured_queries) == len(two.captured_queries)
+
+
+# --- Adding a worker
+
+
+def new_worker(**changes: object) -> dict[str, object]:
+    # Juma, as the workers' page sends him: with the id the app made itself (ADR-0007).
+    return {
+        "id": str(uuid.uuid7()),
+        "full_name": "Juma Hamisi Mfano",
+        "display_name": "Juma",
+        "job_title": "Mpima pumba",
+        "started_on": "2026-11-16",
+        **changes,
+    }
+
+
+def jobs_named(shop: Shop, nickname: str) -> list[StaffMember]:
+    with shop_context(shop):
+        return list(StaffMember.objects.filter(display_name=nickname).select_related("user"))
+
+
+def test_the_owner_adds_a_worker_in_one_step(shop_a: Shop, baba: StaffMember) -> None:
+    sent = new_worker()
+
+    answer = client_for(baba).post(STAFF, sent)
+
+    assert answer.status_code == 201
+    body = answer.json()
+    assert {key: body[key] for key in ("id", "full_name", "display_name", "job_title", "started_on", "status")} == {
+        "id": sent["id"],
+        "full_name": "Juma Hamisi Mfano",
+        "display_name": "Juma",
+        "job_title": "Mpima pumba",
+        "started_on": "2026-11-16",
+        "status": "active",
+    }
+    # No role and no key yet (PPL-7), nor a PIN (PPL-8): he can't log in until those.
+    assert (body["roles"], body["keys"]) == ([], [])
+    [juma] = jobs_named(shop_a, "Juma")
+    assert str(juma.pk) == sent["id"]
+    # The person and the job, made together: a worker logs in with a PIN, so the person has no password at all.
+    assert juma.user.full_name == "Juma Hamisi Mfano"
+    assert not juma.user.has_usable_password()
+    assert juma.created_by_id == baba.pk
+
+
+def test_the_first_day_is_today_if_none_is_sent(shop_a: Shop, baba: StaffMember) -> None:
+    sent = new_worker()
+    del sent["started_on"]
+    del sent["job_title"]
+
+    body = client_for(baba).post(STAFF, sent).json()
+
+    assert body["started_on"] == shop_today(shop_a).isoformat()
+    assert body["job_title"] == ""
+
+
+def test_a_worker_sent_twice_is_one_worker(shop_a: Shop, baba: StaffMember) -> None:
+    # The phone's answer was lost on a slow network, and it sends again: the same id, so the same Juma, not two.
+    sent = new_worker()
+    owner = client_for(baba)
+
+    first = owner.post(STAFF, sent)
+    again = owner.post(STAFF, sent)
+
+    assert (first.status_code, again.status_code) == (201, 201)
+    assert again.json() == first.json()
+    assert len(jobs_named(shop_a, "Juma")) == 1
+    assert User.objects.filter(full_name="Juma Hamisi Mfano").count() == 1
+
+
+def test_a_nickname_another_current_worker_has_is_refused(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Nicknames name people on the PIN tiles and receipts, so two current workers never share one, whatever the
+    # letter case (02 §5). Refused whole: no person is left behind without a job.
+    refused = client_for(baba).post(STAFF, new_worker(full_name="Asha Juma Mfano", display_name="asha"))
+
+    assert refused.status_code == 400
+    assert refused.json()["code"] == "staff.display_name_taken"
+    assert not User.objects.filter(full_name="Asha Juma Mfano").exists()
+
+
+def test_a_nickname_of_someone_who_left_may_be_used_again(shop_a: Shop, baba: StaffMember, juma: StaffMember) -> None:
+    # The Juma who left keeps his row (rule 7), and a new Juma may be called Juma.
+    assert client_for(baba).post(STAFF, new_worker()).status_code == 201
+    assert sorted(job.status for job in jobs_named(shop_a, "Juma")) == ["active", "left"]
+
+
+def test_blank_names_are_refused_beside_their_boxes(baba: StaffMember) -> None:
+    # Spaces alone are no name: each box gets its own code, so the page says it beside the box (UI-2).
+    refused = client_for(baba).post(STAFF, new_worker(full_name="   ", display_name=""))
+
+    assert refused.status_code == 400
+    assert refused.json()["fields"] == {"full_name": ["blank"], "display_name": ["blank"]}
+
+
+def test_adding_a_worker_needs_staff_manage_on_the_whole_shop(
+    shop_a: Shop, sides: dict[str, Side], give_role: GiveRole
+) -> None:
+    manager = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(manager, RoleTemplate.MANAGER, None)
+
+    refused = client_for(manager).post(STAFF, new_worker())
+
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    assert jobs_named(shop_a, "Juma") == []
+
+
+def test_the_service_asks_the_key_again(shop_a: Shop, sides: dict[str, Side], give_role: GiveRole) -> None:
+    # Whatever calls it, not the route alone (PPL-5): a manager the owner handed no staff.manage adds nobody.
+    manager = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(manager, RoleTemplate.MANAGER, None)
+
+    with shop_context(shop_a), pytest.raises(PermissionDenied):
+        add_worker(shop=shop_a, full_name="Juma Hamisi Mfano", display_name="Juma", by=manager)
+
+    assert not User.objects.filter(full_name="Juma Hamisi Mfano").exists()

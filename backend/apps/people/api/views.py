@@ -16,6 +16,7 @@ And a shop's workers, for whoever holds staff.manage on the whole shop (PPL-4), 
 
     GET   /api/v1/people/staff/                             every worker the shop has had, with what each was given
     GET   /api/v1/people/staff/{id}/                        one worker
+    POST  /api/v1/people/staff/                             a new worker: the person and the job, in one step
     POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
 
 And the routes a device calls with its key, built on DeviceView (apps/people/api/base.py), under /api/devices/v1/
@@ -70,6 +71,7 @@ from apps.people.api.serializers import (
     OwnSettingsSerializer,
     PairingStartSerializer,
     PinLoginSerializer,
+    StaffAddSerializer,
     StaffSerializer,
     TemporaryPasswordSerializer,
     WhoIsHereSerializer,
@@ -79,8 +81,8 @@ from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrott
 from apps.people.device_keys import DEVICE_KEY_COOKIE
 from apps.people.models import Device, StaffMember, User
 from apps.people.selectors import LoginRefused, idle_lock_minutes, outages_this_week, who_is_here
-from apps.people.services import block as block_device
 from apps.people.services import (
+    add_worker,
     change_own_settings,
     confirm_pairing,
     pin_login,
@@ -88,6 +90,7 @@ from apps.people.services import (
     set_temporary_password,
     start_pairing,
 )
+from apps.people.services import block as block_device
 from apps.people.services import unblock as unblock_device
 
 
@@ -184,10 +187,11 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
         return Response(self.get_serializer(change(device, by=self.staff, reason=sent.validated_data["reason"])).data)
 
 
-class StaffViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, ShopViewSet[StaffMember]):
+class StaffViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMixin[StaffMember]):
     # A shop's people, as the workers' page shows them (PPL-4, PPL-6): every worker the shop has had, those who left
-    # included, each with every role and extra key they were given; and a first or forgotten password, set face to face
-    # (ADR-0038). PPL-7, PPL-8 and PPL-10 add the roles, the PIN and the details.
+    # included, each with every role and extra key they were given; a new worker, made once however often the page
+    # sends him; and a first or forgotten password, set face to face (ADR-0038). PPL-7, PPL-8 and PPL-10 add the roles,
+    # the PIN and the details.
     model = StaffMember
     # A person's job belongs to the whole shop, whichever side they work on: a password opens them on every side, and a
     # suspension stops them on every side. So each key is asked on the whole shop, where a key for Dawa alone opens
@@ -199,13 +203,27 @@ class StaffViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, ShopViewSet
     action_permissions = {
         "list": Permission.STAFF_MANAGE,
         "retrieve": Permission.STAFF_MANAGE,
+        "create": Permission.STAFF_MANAGE,
         "temporary_password": Permission.STAFF_MANAGE,
     }
     serializer_class = StaffSerializer
+    create_serializer_class = StaffAddSerializer
 
     def base_rows(self) -> QuerySet[StaffMember]:
         # Each worker's person read in the same query: the full name is the person's (User), not the job's.
         return super().base_rows().select_related("user")
+
+    def create_row(self, data: dict[str, Any]) -> StaffMember:
+        # The app's id goes to the service, so a send repeated finds the job the first one made (CreateOnceMixin).
+        return add_worker(
+            shop=cast(StaffMember, self.actor).shop,
+            full_name=data["full_name"],
+            display_name=data["display_name"],
+            job_title=data["job_title"],
+            started_on=data["started_on"],
+            staff_id=data["id"],
+            by=cast(StaffMember, self.actor),
+        )
 
     # `sent` holds the password while the service runs, and so do the serializer's frames while they read it: every
     # variable here, and in everything this calls, shows as stars in Django's error reports, as in the service itself.

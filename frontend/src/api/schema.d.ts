@@ -317,7 +317,7 @@ export interface paths {
         };
         get: operations["people_staff_list"];
         put?: never;
-        post?: never;
+        post: operations["people_staff_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1175,6 +1175,16 @@ export interface components {
             readonly roles: components["schemas"]["GivenRole"][];
             readonly keys: components["schemas"]["GivenKey"][];
         };
+        StaffAddRequest: {
+            /** Format: uuid */
+            id: string;
+            full_name: string;
+            display_name: string;
+            /** @default  */
+            job_title: string;
+            /** Format: date */
+            started_on?: string | null;
+        };
         StaffChange: {
             seq: number;
             /**
@@ -1872,6 +1882,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedStaffList"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffAddRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
                 };
             };
             default: {

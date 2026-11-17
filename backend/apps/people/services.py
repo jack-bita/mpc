@@ -126,13 +126,17 @@ def add_staff(
     display_name: str,
     job_title: str = "",
     started_on: date | None = None,
+    staff_id: uuid.UUID | None = None,
     by: StaffMember | None,
 ) -> StaffMember:
-    """Give a person a job at a shop. `by`: who adds them; None for the system or the superuser."""
+    """Give a person a job at a shop. `staff_id`: the id the client made for the job (ADR-0007), if it made one. `by`:
+    who adds them; None for the system or the superuser."""
     _check_shop(shop.pk, by)
     if started_on is None:
         started_on = shop_today(shop)
     staff = StaffMember(
+        # The client's id when it sent one, so a send repeated finds the job the first one made (CreateOnceMixin).
+        **({"id": staff_id} if staff_id is not None else {}),
         shop=shop,
         user=user,
         display_name=display_name,
@@ -148,6 +152,40 @@ def add_staff(
         staff.save()
         record_change(staff)
     return staff
+
+
+def add_worker(
+    *,
+    shop: Shop,
+    full_name: str,
+    display_name: str,
+    job_title: str = "",
+    started_on: date | None = None,
+    staff_id: uuid.UUID | None = None,
+    by: StaffMember | None,
+) -> StaffMember:
+    """A new worker, as the owner adds one on the workers' page (PPL-4): the person and their job at this shop, in one
+    step. Juma has never worked at any shop of this system, so he is a new person (User), with no password, as a worker
+    logs in with a PIN (PPL-8), and no phone yet (PPL-10). `staff_id`: the id the app made for the job (ADR-0007). `by`:
+    who adds him, who needs staff.manage on the whole shop, as the route asks too; None for the system or the
+    superuser. Refuses as add_staff does, a nickname another current worker has among them (staff.display_name_taken),
+    and makes nothing then: the person and the job are kept together, or not at all."""
+    _check_shop(shop.pk, by)
+    if by is not None:
+        # Asked again here, whatever calls this, not by the route alone (PPL-5).
+        require(by, Permission.STAFF_MANAGE, None)
+    # One block for both saves, which add_staff's own joins, so a refused job undoes the person too (SYNC-1).
+    with recording_changes(shop):
+        user = User.objects.create_user(full_name=full_name)
+        return add_staff(
+            shop=shop,
+            user=user,
+            display_name=display_name,
+            job_title=job_title,
+            started_on=started_on,
+            staff_id=staff_id,
+            by=by,
+        )
 
 
 def _check_reason(reason: str, *, code: str = "staff.reason_required") -> None:

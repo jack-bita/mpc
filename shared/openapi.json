@@ -955,6 +955,49 @@
                         "description": ""
                     }
                 }
+            },
+            "post": {
+                "operationId": "people_staff_create",
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StaffAddRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Staff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
             }
         },
         "/api/v1/people/staff/{id}/": {
@@ -3555,6 +3598,40 @@
                     "roles",
                     "started_on",
                     "status"
+                ]
+            },
+            "StaffAddRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "full_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 150
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                    },
+                    "job_title": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 60
+                    },
+                    "started_on": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "display_name",
+                    "full_name",
+                    "id"
                 ]
             },
             "StaffChange": {

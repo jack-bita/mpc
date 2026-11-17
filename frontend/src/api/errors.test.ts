@@ -126,6 +126,8 @@ const CODES_THE_API_SENDS = [
   "staff.own",
   "staff.superuser_only",
   "staff.more_keys",
+  // Adding a worker (PPL-4): two current workers never share a nickname, whatever the letter case.
+  "staff.display_name_taken",
   // Devices and pairing (AUTH-5).
   "device.name_blank",
   "device.name_taken",
