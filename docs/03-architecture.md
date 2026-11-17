@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.67 · 16 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.68 · 17 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.68** (17 Nov 2026, ATT-9): §7.1's folder map names the shop's closed days in `features/settings/`, *Siku duka limefungwa* on *Mipangilio ya duka* (04 v1.93). Marked **(v1.68)**.
 
 **Changes in v1.67** (16 Nov 2026, ATT-8): §5.8, closed days: a `Closure` from a first day to a last, its three services and its routes, never touching a day before today, its overlap refused by the service under the shop's lock and by the database's exclusion rule, and a delete refused by a trigger (04 v1.90, v1.91). Marked **(v1.67)**.
 
@@ -724,7 +726,7 @@ frontend/src/
 │                             screen on a registered device's home page: picker, pad, logout, idle lock) (v1.33), and the
 │                             password forms: login, choose your own, forgotten, the email link's (v1.34); office/ (the
 │                             office's frame and home page) (v1.34); settings/ (Mipangilio ya duka: the shop's rules, their
-│                             form and history, and the sides' switches) (v1.62)
+│                             form and history, the shop's closed days (v1.68), and the sides' switches) (v1.62)
 ├── offline/                  db.ts (schema + versions), outbox.ts, push.ts, pull.ts,
 │                             effects.ts, search.ts, pin.ts, clock-today.ts (today's taps, v1.49), storage.ts, network.ts (online or not) (v1.30)
 ├── api/                      schema.d.ts (generated — never edited), client.ts (the typed client and its CSRF token),
