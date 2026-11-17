@@ -3,8 +3,9 @@
 //
 // It owns the list of drawers (Dexie calls them tables) and their versions. Every offline card reads
 // and writes through it: the pull fills the server's drawers (SYNC-7), saveDocument() writes a document
-// and its outbox row (SYNC-8), the offline PIN check keeps its values here (SYNC-10), and the laptop its
-// offline periods until a push takes them (SYNC-14).
+// and its outbox row (SYNC-8), the offline PIN check keeps its values here (SYNC-10), the laptop its
+// offline periods until a push takes them (SYNC-14), and its photos until each goes up after its record
+// (CTRL-6).
 //
 // One database per shop, named after the shop's id, so the practice shop or the demo never mixes with
 // the live shop on one laptop. Which shop this device belongs to lives outside, in mpc.device
@@ -139,6 +140,56 @@ export interface OutageRow {
   end_unknown: boolean;
 }
 
+/** The kinds of photo a laptop takes: Asha's face as she clocks in (ATT-3). The server's list has one more, the
+ * worker's photo, taken on an office screen (PPL-4), never here. The supplier's paper joins with STK-4. */
+export type PhotoKind = "clock_photo";
+
+/** What a photo may be: the two types the server keeps, each known by its first bytes (CTRL-3). */
+export type PhotoType = "image/jpeg" | "image/webp";
+
+/** A photo taken on this laptop, waiting to go up once its record is in (CTRL-6, 03 §5.13). Written with its
+ * record, in one transaction (saveDocument), and taken off the laptop once the server has kept it. Its rules live
+ * in attachments.ts. The label's fields (id to sha256) are the ones its record names, as the server checks the file
+ * against them. Its bytes wait beside it, in attachment_bytes, by the same id. */
+export interface AttachmentFileRow {
+  /** A UUIDv7 made here: the id its record's label names, and the address it goes up to. */
+  id: string;
+  kind: PhotoKind;
+  content_type: PhotoType;
+  /** In bytes, at most 1 MB (LARGEST_PHOTO). */
+  size: number;
+  /** The file's SHA-256, as 64 lower-case hex digits. */
+  sha256: string;
+  /** The record it travels with: it goes only once the server has accepted that record, as the server writes
+   * its row with the record (CTRL-3). */
+  document_id: string;
+  /** Its record's place in the line: photos go in their records' order, oldest first. */
+  device_seq: number;
+  /** Waiting to go, or set aside after a refusal, which no resend would change. */
+  state: "waiting" | "set_aside";
+  /** How many times it was sent and not kept: each makes its next wait longer (sync/attachments.ts). */
+  tries: number;
+  /** The server's code for its last refusal (`attachment.too_big`); null until one came, and after a send that got
+   * no answer at all. */
+  last_error: string | null;
+  /** Until when, on this laptop's clock in ms, it waits after a send that failed; null when it doesn't. Not a search
+   * key: the few photos waiting are read in their order, and the ones still waiting skipped. */
+  wait_until: number | null;
+}
+
+/** A photo's bytes, beside its row in attachment_files, by the same id (CTRL-6). A drawer of their own, so a sync
+ * reads the small rows of every waiting photo to find the ones ready to go, and the bytes of only the one it sends:
+ * kept in the row, each sync would read every waiting photo whole, some 150 KB each, just to skip it, as a photo of
+ * a record set aside is skipped for good. Written with its row, in one transaction, and deleted with it once the
+ * server has kept the photo; a photo set aside keeps its bytes. */
+export interface AttachmentBytesRow {
+  id: string;
+  /** The photo itself. Kept as its bytes, not as the camera's Blob: the bytes are read anyway, to work out the
+   * label's SHA-256, and the tests' pretend database (fake-indexeddb) hands a Blob back empty, so a test of a
+   * Blob would prove nothing. A browser keeps either alike. */
+  bytes: ArrayBuffer;
+}
+
 /** One step in the database's life: its number, its drawers, and an upgrade if old rows must change.
  * A drawer set to null is removed in that step. */
 export interface Version {
@@ -192,6 +243,17 @@ export const VERSIONS: readonly Version[] = [
       outages: "id",
     },
   },
+  {
+    // CTRL-6: the photos that wait for their records (03 §5.13). Two new drawers, empty on every laptop, so no
+    // upgrade, and no new bootstrap: they hold nothing the server sends. A photo's row by record, so a screen finds a
+    // record's photos (ATT-3 shows today's clock-ins); by state and number together, so the send reads what is
+    // waiting already in its records' order, as the push reads the outbox. Its bytes by its id alone.
+    version: 3,
+    stores: {
+      attachment_files: "id, document_id, [state+device_seq]",
+      attachment_bytes: "id",
+    },
+  },
 ];
 
 /** Every drawer, typed: TypeScript knows the staff drawer holds staff rows, keyed by id. */
@@ -208,6 +270,8 @@ export type ShopDatabase = Dexie & {
   pending_effects: EntityTable<PendingEffectRow, "id">;
   sent_archive: EntityTable<SentDocumentRow, "id">;
   outages: EntityTable<OutageRow, "id">;
+  attachment_files: EntityTable<AttachmentFileRow, "id">;
+  attachment_bytes: EntityTable<AttachmentBytesRow, "id">;
 };
 
 /** The database's name in the browser: one per shop, by the shop's id, which never changes. */
