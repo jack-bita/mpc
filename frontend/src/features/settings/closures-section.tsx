@@ -266,10 +266,14 @@ function ClosureLine({
           closure={closure}
           // The line has left the list already (dropClosure, closures.ts): the section says so, and takes the
           // keyboard.
-          onCancelled={() => {
+          // Already cancelled, by a lost answer or by someone else: in the server's own sentence, true either way
+          // (closure-cancel.tsx).
+          onCancelled={(already) => {
             setOpen(null);
             onChanged(
-              t("removed", { name: closure.name, days: daysOf(closure) }),
+              already
+                ? codeMessage(codes, "closure.not_active")
+                : t("removed", { name: closure.name, days: daysOf(closure) }),
               true,
             );
           }}

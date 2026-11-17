@@ -10,7 +10,9 @@
 // A cancel carries no id of its own, as an add does: the closure's id names it. So a cancel sent again, whose first
 // answer the network lost, is refused as closure.not_active, as the first one already cancelled it. The page reads
 // that as done (ATT-8's review): the closure is cancelled either way, by this tap's lost answer or by someone else's
-// cancel a moment before. It says so as it would for its own, and the list is read again, without the closure.
+// cancel a moment before. The section says so in the server's own sentence, "Siku hizi za kufunga duka
+// zimeshaondolewa.", which is true either way, not in the sentence of its own cancel: when someone else cancelled it,
+// this owner's reason isn't the one kept (ATT-9's review). The list is read again, without the closure.
 //
 // The rest of the server's refusals have no box but the reason's, and show above the buttons: closure.started (its
 // first day passed while the page was open), and on the demo, a person's cancel of one that starts today
@@ -48,8 +50,9 @@ export function ClosureCancel({
   onCancel,
 }: {
   closure: Closure;
-  /** Called once the closure is cancelled: by this form, or before it, as a lost answer's (see the top of this file). */
-  onCancelled: () => void;
+  /** Called once the closure is cancelled: by this form, or before it, `already`, as a lost answer's or someone else's
+   * (see the top of this file). */
+  onCancelled: (already: boolean) => void;
   onCancel: () => void;
 }) {
   const t = useTranslations("shopSettings");
@@ -67,7 +70,8 @@ export function ClosureCancel({
   const [blank, setBlank] = useState(false);
 
   const cancel = useMutation({
-    mutationFn: async (sent: string) => {
+    // Whether it was already cancelled, by a cancel before this one.
+    mutationFn: async (sent: string): Promise<boolean> => {
       try {
         await answerOf(
           api.POST("/api/v1/shops/closures/{id}/cancel/", {
@@ -75,21 +79,22 @@ export function ClosureCancel({
             body: { reason: sent },
           }),
         );
+        return false;
       } catch (error) {
         // Already cancelled: done, not refused (see the top of this file).
         if (
           error instanceof ApiRefusal &&
           error.body.code === "closure.not_active"
         )
-          return;
+          return true;
         throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: (already) => {
       // Out of the list at once, then the list asks again: a cancelled closure never stays on the page (closures.ts).
       dropClosure(store, closure.id);
       void store.invalidateQueries({ queryKey: CLOSURES });
-      onCancelled();
+      onCancelled(already);
     },
   });
 

@@ -95,7 +95,7 @@ describe("Ondoa", () => {
     typeInto(reasonBox(), "Tutafungua siku ya Krismasi");
     tap(ondoa());
 
-    await waitFor(() => expect(onCancelled).toHaveBeenCalled());
+    await waitFor(() => expect(onCancelled).toHaveBeenCalledWith(false));
     expect(await sentBodies()).toEqual([
       { reason: "Tutafungua siku ya Krismasi" },
     ]);
@@ -130,8 +130,9 @@ describe("Ondoa", () => {
     await screen.findByRole("alert");
     tap(ondoa());
 
-    await waitFor(() => expect(onCancelled).toHaveBeenCalled());
-    // Done, not refused: no sentence says it failed.
+    // Done, not refused, and said to be already done (closures-section.tsx says it).
+    await waitFor(() => expect(onCancelled).toHaveBeenCalledWith(true));
+    // No sentence says it failed.
     expect(screen.queryByRole("alert")).toBeNull();
   });
 

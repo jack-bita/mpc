@@ -314,9 +314,9 @@ describe("Ondoa", () => {
     );
   });
 
-  it("says it is removed, and reads the list again, when the server answers it was already cancelled (ATT-8's review)", async () => {
+  it("says it was already removed, in the server's sentence, and reads the list again, when the server says so (ATT-9's review)", async () => {
     // Another manager, or this owner's own tap whose answer was lost, cancelled it a moment before: it is removed
-    // either way.
+    // either way, but this owner's reason may not be the one kept, so the page doesn't say "Imeondolewa" as for its own.
     let reads = 0;
     answer("GET", CLOSURES, () => {
       reads += 1;
@@ -342,7 +342,7 @@ describe("Ondoa", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("status").textContent).toBe(
-        "Imeondolewa: Siku ya Uhuru, 09/12/2026.",
+        "Siku hizi za kufunga duka zimeshaondolewa.",
       ),
     );
     expect(
