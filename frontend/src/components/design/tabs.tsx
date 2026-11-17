@@ -79,12 +79,18 @@ export function Tabs({
   onChange: (value: string) => void;
 }) {
   const list = useRef<HTMLDivElement>(null);
-  // Brings the open tab into sight inside the row, sideways only: "nearest" scrolls nothing that already
-  // shows, so the page itself doesn't jump. jsdom has no scrollIntoView, hence the "?.".
+  // Brings the open tab into sight inside the row, by scrolling the row alone, sideways. Not scrollIntoView:
+  // it may scroll the page up or down too, as when the page comes back to a place half way down after the
+  // browser's back. The row is sticky, so the tabs' offsetLeft counts from the row's own edge.
   useEffect(() => {
-    list.current
-      ?.querySelector<HTMLElement>("[data-active]")
-      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    const row = list.current;
+    const tab = row?.querySelector<HTMLElement>("[data-active]");
+    if (!row || !tab) return;
+    const start = tab.offsetLeft;
+    const end = start + tab.offsetWidth;
+    if (start < row.scrollLeft) row.scrollLeft = start;
+    else if (end > row.scrollLeft + row.clientWidth)
+      row.scrollLeft = end - row.clientWidth;
   }, [value]);
 
   return (
@@ -114,13 +120,14 @@ export function Tabs({
       </TabsList>
       {sections.map((section) => (
         // text-base: shadcn's panel makes everything in it small (text-sm), and the screens are sized for
-        // reading at arm's length. A panel takes focus with Tab, so a keyboard reaches the open section
-        // straight from its tab; no ring on it, as the tab above already shows where focus is.
+        // reading at arm's length. Base UI lets Tab stop on the open panel, so a keyboard reaches the section
+        // straight from its tab; once there, the tab no longer shows focus, so the panel shows its own ring,
+        // at full strength (UI-7), where shadcn's outline-none would show nothing (WCAG 2.4.7).
         <TabsContent
           key={section.value}
           value={section.value}
           keepMounted
-          className="text-base"
+          className="rounded-lg text-base focus-visible:ring-[3px] focus-visible:ring-ring"
         >
           {section.content}
         </TabsContent>

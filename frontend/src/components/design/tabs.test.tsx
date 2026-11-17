@@ -123,6 +123,36 @@ describe("the tabs", () => {
     expect(tab).not.toContain("focus-visible:ring-ring/50");
   });
 
+  it("shows a full-strength ring on the open section when Tab stops on it", () => {
+    render(<Page />);
+    const panel = screen.getByRole("tabpanel").className.split(/\s+/);
+    expect(panel).toEqual(
+      expect.arrayContaining([
+        "focus-visible:ring-[3px]",
+        "focus-visible:ring-ring",
+      ]),
+    );
+  });
+
+  it("scrolls the row, not the page, to bring the open tab into sight", () => {
+    render(<Page />);
+    const row = screen.getByRole("tablist");
+    // jsdom lays nothing out: a 200 px row, each tab 120 px wide, side by side.
+    Object.defineProperty(row, "clientWidth", { value: 200 });
+    screen.getAllByRole("tab").forEach((tab, index) => {
+      Object.defineProperty(tab, "offsetLeft", { value: index * 120 });
+      Object.defineProperty(tab, "offsetWidth", { value: 120 });
+    });
+    const page = vi.spyOn(window, "scrollTo");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Pande" }));
+    // Pande ends at 360 px: the row moves 160 px, so its right edge shows.
+    expect(row.scrollLeft).toBe(160);
+    fireEvent.click(screen.getByRole("tab", { name: "Mahudhurio" }));
+    expect(row.scrollLeft).toBe(0);
+    expect(page).not.toHaveBeenCalled();
+  });
+
   it("has words that read on white, at rest and open", () => {
     // At rest --muted-foreground, open --primary: both at least 4.5:1 on the screen's white.
     expect(
