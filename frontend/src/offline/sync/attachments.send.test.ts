@@ -13,14 +13,14 @@ import { answer, refusal, sent } from "@/test/fake-server";
 import { madeUpJpeg } from "@/test/photos";
 import { ASHA } from "@/test/shop-lists";
 
-import { labelPhoto, type LabelledPhoto } from "../attachments";
+import { LARGEST_PHOTO, labelPhoto, type LabelledPhoto } from "../attachments";
 import type { ShopDatabase } from "../db";
 import { saveDocument, type SavedDocument } from "../outbox";
 import { shopDatabase } from "../this-shop";
 import {
   FIRST_WAIT_MS,
   LONGEST_WAIT_MS,
-  MOST_PHOTOS,
+  MOST_BYTES,
   MOST_TRIES_NOT_FOUND,
   sendAttachments,
 } from "./attachments";
@@ -75,13 +75,6 @@ async function clockInWith(
     [labelled],
   );
   return { record, photo: labelled };
-}
-
-/** `count` clock-ins, each with its photo, #58 onwards. */
-async function clockInsWithPhotos(count: number): Promise<LabelledPhoto[]> {
-  const photos: LabelledPhoto[] = [];
-  for (let i = 0; i < count; i++) photos.push((await clockInWith()).photo);
-  return photos;
 }
 
 /** Two clock-ins, each with its photo, #58 and #59. */
@@ -439,16 +432,44 @@ describe("sending the photos", () => {
     ]);
   });
 
-  it("sends at most 10 photos a sync, and the rest at the next", async () => {
-    const photos = await clockInsWithPhotos(MOST_PHOTOS + 2);
+  it("sends at most 1.5 MB of photos a sync, and the rest at the next, in their order", async () => {
+    // Three photos of 600 KB, as a supplier's paper may be (STK-4): two go now, 1.2 MB; the third would pass the
+    // share, so it goes first at the next sync. A smaller one after it never passes it.
+    expect(MOST_BYTES).toBe(1_572_864);
+    const big = async () =>
+      (await clockInWith(await labelPhoto(madeUpJpeg(600_000), "clock_photo")))
+        .photo;
+    const photos = [await big(), await big(), await big()];
+    const small = (await clockInWith()).photo;
     await recordsAccepted();
-    keeps(...photos);
+    keeps(...photos, small);
 
     await sendAttachments(db, pagePlace);
-    expect(photosSent()).toHaveLength(MOST_PHOTOS);
-    expect(await db.attachment_files.count()).toBe(2);
+    expect(photosSent()).toEqual(photos.slice(0, 2).map((p) => p.label.id));
 
     await sendAttachments(db, pagePlace);
+    expect(photosSent().slice(2)).toEqual(
+      [photos[2], small].map((p) => p?.label.id),
+    );
+    expect(await db.attachment_files.count()).toBe(0);
+  });
+
+  it("sends a photo of 1 MB at the next sync when this one's share can't hold it", async () => {
+    // The largest photo the server keeps, after one of 600 KB: 1.6 MB would pass the share, so it waits, and goes
+    // first at the next sync, where the share always holds it.
+    const label = async (size: number) =>
+      (await clockInWith(await labelPhoto(madeUpJpeg(size), "clock_photo")))
+        .photo;
+    const first = await label(600_000);
+    const largest = await label(LARGEST_PHOTO);
+    await recordsAccepted();
+    keeps(first, largest);
+
+    await sendAttachments(db, pagePlace);
+    expect(photosSent()).toEqual([first.label.id]);
+
+    await sendAttachments(db, pagePlace);
+    expect(photosSent()).toEqual([first.label.id, largest.label.id]);
     expect(await db.attachment_files.count()).toBe(0);
   });
 });

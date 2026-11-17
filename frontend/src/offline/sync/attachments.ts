@@ -29,14 +29,17 @@ import Dexie from "dexie";
 
 import { ApiRefusal, NoConnection } from "@/api/refusal";
 
+import { LARGEST_PHOTO } from "../attachments";
 import type { AttachmentFileRow, ShopDatabase } from "../db";
 import { isAboutTheDevice, syncAnswer, syncCallLimit } from "./answer";
 import type { SyncPlace } from "./place";
 
-/** At most this many photos go in one sync, about 1.5 MB on a shop's slow line: the sync holds its lock while
- * they go (lock.ts), and a record saved meanwhile must not wait behind a week of photos. The rest go at the next
- * sync, 30 s later. */
-export const MOST_PHOTOS = 10;
+/** At most this many bytes of photos go in one sync, 1.5 MB, about ten clock-in photos on a shop's slow line: the
+ * sync holds its lock while they go (lock.ts), and a record saved meanwhile must not wait behind a week of photos.
+ * Counted by size, not by number, as a photo of a supplier's paper may be far bigger than a face (STK-4). The first
+ * photo of a sync always goes, whatever its size, so one of 1 MB is never stuck. The rest go at the next sync, 30 s
+ * later. */
+export const MOST_BYTES = LARGEST_PHOTO * 1.5;
 
 /** The refusals that set a photo aside: each is about the file, never the line or the moment (CTRL-3). */
 const SET_ASIDE = new Set([
@@ -88,7 +91,7 @@ export function onCostlyLine(): boolean {
 type Heard = { kept: true } | { kept: false; code: string | null };
 
 /**
- * Sends the waiting photos whose records are in, oldest record first, one at a time, up to MOST_PHOTOS, unless the
+ * Sends the waiting photos whose records are in, oldest record first, one at a time, up to MOST_BYTES, unless the
  * device is on a costly line. A block or a "not registered" is kept (answer.ts) and thrown on, as the sync must then
  * ask nothing more; any other failure only ends the round, as the next sync tries again.
  */
@@ -98,16 +101,20 @@ export async function sendAttachments(
 ): Promise<void> {
   // Only their ids first, then each one's small row as it comes: the bytes are read only for the photo that goes.
   const ids = await waitingInOrder(db).primaryKeys();
-  let sent = 0;
+  let sentBytes = 0;
   for (const id of ids) {
-    if (sent === MOST_PHOTOS) return;
     // Asked before each photo: a device that leaves the shop's Wi-Fi for mobile data mid-round stops sending at once.
     // Waiting for Wi-Fi is no failed send: the photo's wait and tries stay as they were.
     if (onCostlyLine()) return;
-    const ready = await readyToGo(db, id);
-    if (ready === null) continue;
-    const { photo, bytes } = ready;
-    sent += 1;
+    const photo = await readyToGo(db, id);
+    if (photo === null) continue;
+    // Over this sync's share: it goes first at the next one, still in its order, never passed by a smaller one.
+    if (sentBytes > 0 && sentBytes + photo.size > MOST_BYTES) return;
+    sentBytes += photo.size;
+    const kept = await db.attachment_bytes.get(id);
+    // Written in one transaction with its row (outbox.ts), and deleted with it, so never missing.
+    if (kept === undefined) throw new Error(`Photo ${id} has no bytes.`);
+    const { bytes } = kept;
     // The wait counts from when it went, not from when its answer came, as the push's does (backoff.ts).
     const sentAt = Date.now();
     const heard = await send(photo, bytes, place);
@@ -152,16 +159,16 @@ function waitingInOrder(db: ShopDatabase) {
     .between(["waiting", Dexie.minKey], ["waiting", Dexie.maxKey]);
 }
 
-// The photo and its bytes, if it is still waiting, its wait is over, and its record is in; otherwise null. Read in
-// one transaction, so the photo and its record are seen as they stood together; the bytes are read last, only for
-// the photo that goes.
+// The photo's row, if it is still waiting, its wait is over, and its record is in; otherwise null. Read in one
+// transaction, so the photo and its record are seen as they stood together. Its bytes are read after, only for the
+// photo that goes.
 async function readyToGo(
   db: ShopDatabase,
   id: string,
-): Promise<{ photo: AttachmentFileRow; bytes: ArrayBuffer } | null> {
+): Promise<AttachmentFileRow | null> {
   return db.transaction(
     "r",
-    [db.attachment_files, db.sent_archive, db.attachment_bytes],
+    [db.attachment_files, db.sent_archive],
     async () => {
       const photo = await db.attachment_files.get(id);
       if (photo === undefined || photo.state !== "waiting") return null;
@@ -171,11 +178,7 @@ async function readyToGo(
         .where("id")
         .equals(photo.document_id)
         .count();
-      if (accepted === 0) return null;
-      const kept = await db.attachment_bytes.get(id);
-      // Written in one transaction with its row (outbox.ts), and deleted with it, so never missing.
-      if (kept === undefined) throw new Error(`Photo ${id} has no bytes.`);
-      return { photo, bytes: kept.bytes };
+      return accepted > 0 ? photo : null;
     },
   );
 }
