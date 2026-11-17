@@ -149,6 +149,7 @@ describe("saving a record with its photo", () => {
       state: "waiting",
       tries: 0,
       last_error: null,
+      wait_until: null,
     });
     // The bytes as the camera made them: the same file the label's fingerprint was worked out from.
     expect(bytesOf(row?.bytes)).toEqual(bytesOf(photo.bytes));

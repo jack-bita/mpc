@@ -1,0 +1,169 @@
+// attachments.ts — sends the photos waiting on this laptop, each once its record is in (CTRL-6, 03 §5.13).
+//
+// A photo is saved with its record (outbox.ts) and waits in attachment_files. Its record goes first, with the push,
+// and the server writes the photo's row from the record's label, in the record's own transaction (expect_attachment,
+// ATT-3). Only then can the file be kept, so a photo goes only once its record is accepted: in sent_archive. A record
+// still in the outbox, or set aside there (needs_attention), has no row on the server, and its photo waits with it.
+//
+// Each photo goes alone, to CTRL-3's route, `PUT /api/sync/v1/attachments/{id}/`, its body the file's bytes:
+//
+//   204 kept, the same file again, or a photo already removed → the laptop's copy goes
+//   404 attachment.not_found   → the server holds no row for it yet: it waits, and the others go on
+//   400 too_big, not_an_image, file_differs → about the file itself, so the same file would get the same answer:
+//                                set aside with its code, as the outbox sets a record aside, and the others go on
+//   no answer, 411, a server error, any other refusal → the round stops, and every photo waits for the next sync
+//
+// Each failed send makes that photo wait before its next one: 1 minute, then twice as long each time, at most an hour.
+// The sync runs every 30 s, and a photo is some 150 KB: one the server keeps refusing would otherwise go 2,880 times
+// a day, a whole bundle for nothing.
+//
+// It runs in the page's sync alone, at its end (sync.ts): never in the service worker's push (SYNC-16), as a few
+// minutes' wait for a photo costs nothing (the card's default).
+import Dexie from "dexie";
+
+import { ApiRefusal, NoConnection } from "@/api/refusal";
+
+import type { AttachmentFileRow, ShopDatabase } from "../db";
+import { isAboutTheDevice, syncAnswer, syncCallLimit } from "./answer";
+import type { SyncPlace } from "./place";
+
+/** At most this many photos go in one sync, about 1.5 MB on a shop's slow line: the sync holds its lock while
+ * they go (lock.ts), and a record saved meanwhile must not wait behind a week of photos. The rest go at the next
+ * sync, 30 s later. */
+export const MOST_PHOTOS = 10;
+
+/** The refusals that set a photo aside: each is about the file, never the line or the moment (CTRL-3). */
+const SET_ASIDE = new Set([
+  "attachment.too_big",
+  "attachment.not_an_image",
+  "attachment.file_differs",
+]);
+
+/** The server holds no row for the photo yet. Asked by its code, not its status: a 404 of another code (`not_found`,
+ * a route this server doesn't have) is no answer about this photo, and stops the round. */
+const NOT_FOUND = "attachment.not_found";
+
+/** The first wait after a failed send. */
+export const FIRST_WAIT_MS = 60_000;
+
+/** The longest wait: however long the trouble, a photo goes again at least once an hour. */
+export const LONGEST_WAIT_MS = 60 * 60_000;
+
+/** What came back for one photo: kept, a refusal's code, or no answer at all. */
+type Heard = { kept: true } | { kept: false; code: string | null };
+
+/**
+ * Sends the waiting photos whose records are in, oldest record first, one at a time, up to MOST_PHOTOS. A block or
+ * a "not registered" is kept (answer.ts) and thrown on, as the sync must then ask nothing more; any other failure
+ * only ends the round, as the next sync tries again.
+ */
+export async function sendAttachments(
+  db: ShopDatabase,
+  place: SyncPlace,
+): Promise<void> {
+  // Only their ids first: a week offline may hold a hundred photos, and each is read whole only as it goes.
+  const ids = await waitingInOrder(db).primaryKeys();
+  let sent = 0;
+  for (const id of ids) {
+    if (sent === MOST_PHOTOS) return;
+    const photo = await readyToGo(db, id);
+    if (photo === null) continue;
+    sent += 1;
+    // The wait counts from when it went, not from when its answer came, as the push's does (backoff.ts).
+    const sentAt = Date.now();
+    const heard = await send(photo, place);
+    if (heard.kept) {
+      // Kept on the server: this laptop's copy is no longer needed.
+      await db.attachment_files.delete(photo.id);
+    } else if (heard.code !== null && SET_ASIDE.has(heard.code)) {
+      await db.attachment_files.update(photo.id, {
+        state: "set_aside",
+        tries: photo.tries + 1,
+        last_error: heard.code,
+        wait_until: null,
+      });
+    } else {
+      const tries = photo.tries + 1;
+      await db.attachment_files.update(photo.id, {
+        tries,
+        last_error: heard.code,
+        wait_until: sentAt + waitAfter(tries),
+      });
+      // A row not there yet is this photo's alone; anything else is the line's or the server's.
+      if (heard.code !== NOT_FOUND) return;
+    }
+  }
+}
+
+/** The waiting photos, in their records' order: the outbox's own order, so photos go as their records did. */
+function waitingInOrder(db: ShopDatabase) {
+  return db.attachment_files
+    .where("[state+device_seq]")
+    .between(["waiting", Dexie.minKey], ["waiting", Dexie.maxKey]);
+}
+
+// The photo, if it is still waiting, its wait is over, and its record is in; otherwise null. Read in one transaction,
+// so the photo and its record are seen as they stood together.
+async function readyToGo(
+  db: ShopDatabase,
+  id: string,
+): Promise<AttachmentFileRow | null> {
+  return db.transaction(
+    "r",
+    [db.attachment_files, db.sent_archive],
+    async () => {
+      const photo = await db.attachment_files.get(id);
+      if (photo === undefined || photo.state !== "waiting") return null;
+      if (!waitIsOver(photo.wait_until)) return null;
+      // Accepted: the push moved its record to sent_archive (push.ts), in the transaction that read its answer.
+      const accepted = await db.sent_archive
+        .where("id")
+        .equals(photo.document_id)
+        .count();
+      return accepted > 0 ? photo : null;
+    },
+  );
+}
+
+// How long a photo waits after its nth failed send: 1 minute, doubled each time, at most an hour.
+function waitAfter(tries: number): number {
+  return Math.min(FIRST_WAIT_MS * 2 ** (tries - 1), LONGEST_WAIT_MS);
+}
+
+function waitIsOver(until: number | null): boolean {
+  if (until === null) return true;
+  const left = until - Date.now();
+  // No real wait is longer than the longest: more left means the laptop's clock was put back (03 §6.6), and the
+  // photo would wait for as long as it moved (as the push's wait, backoff.ts).
+  return left <= 0 || left > LONGEST_WAIT_MS;
+}
+
+// One photo to the server, and what came back.
+async function send(
+  photo: AttachmentFileRow,
+  place: SyncPlace,
+): Promise<Heard> {
+  try {
+    await syncAnswer(
+      place.api.PUT("/api/sync/v1/attachments/{id}/", {
+        params: { path: { id: photo.id } },
+        // The file's bytes alone, no JSON and no form (CTRL-3). The server's description names the body a string, as
+        // OpenAPI writes any file, so the bytes are handed over as they are, past the client's JSON. fetch gives an
+        // ArrayBuffer its length, so the route never has to answer 411 for want of one.
+        body: photo.bytes as unknown as string,
+        bodySerializer: (bytes) => bytes,
+        // Its type as the label says: the server checks it against the file's first bytes.
+        headers: { "Content-Type": photo.content_type },
+        signal: syncCallLimit(),
+      }),
+      place.hear,
+    );
+    return { kept: true };
+  } catch (error) {
+    if (error instanceof NoConnection) return { kept: false, code: null };
+    // Blocked, or a key that opens no device: kept by syncAnswer, and thrown on, so the sync asks nothing more.
+    if (error instanceof ApiRefusal && !isAboutTheDevice(error))
+      return { kept: false, code: error.body.code };
+    throw error;
+  }
+}

@@ -171,10 +171,14 @@ export interface AttachmentFileRow {
   bytes: ArrayBuffer;
   /** Waiting to go, or set aside after a refusal, which no resend would change. */
   state: "waiting" | "set_aside";
-  /** How many times it was sent, or found its record not yet in. */
+  /** How many times it was sent and not kept: each makes its next wait longer (sync/attachments.ts). */
   tries: number;
-  /** The server's code for its last refusal or wait (`attachment.too_big`); null until one came. */
+  /** The server's code for its last refusal (`attachment.too_big`); null until one came, and after a send that got
+   * no answer at all. */
   last_error: string | null;
+  /** Until when, on this laptop's clock in ms, it waits after a send that failed; null when it doesn't. Not a search
+   * key: the few photos waiting are read in their order, and the ones still waiting skipped. */
+  wait_until: number | null;
 }
 
 /** One step in the database's life: its number, its drawers, and an upgrade if old rows must change.

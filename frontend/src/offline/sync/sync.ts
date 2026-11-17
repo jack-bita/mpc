@@ -5,7 +5,8 @@
 //
 // It runs at the moments triggers.tsx keeps: as the app opens, when the network comes back, 2 s after a
 // save, every 30 s while online, and from Tuma sasa (03 §6.5). How it ended tells the laptop's offline
-// periods whether the server was there (outages.ts, SYNC-14).
+// periods whether the server was there (outages.ts, SYNC-14). Last, the photos whose records are in go up
+// (attachments.ts, CTRL-6).
 import { hasCsrfToken } from "@/api/client";
 import { ApiRefusal, NoConnection } from "@/api/refusal";
 import { savedBlocked } from "@/features/devices/this-device";
@@ -20,6 +21,7 @@ import { noteBack, noteCutOff } from "./outages";
 import { heardInTheBackground, pagePlace } from "./page-place";
 import { AppTooOld, pull } from "./pull";
 import { pushKeepingTheWait } from "./push";
+import { sendAttachments } from "./attachments";
 
 /** What a sync is asked for. */
 export interface SyncAsk {
@@ -135,8 +137,9 @@ interface Talked {
 }
 
 /**
- * The calls of one sync: the bootstrap if the database was never filled, the push, then the pulls. Gives
- * back a failed push, for the caller to throw once the pull is done, and when the pull was asked.
+ * The calls of one sync: the bootstrap if the database was never filled, the push, the pulls, then the
+ * photos. Gives back a failed push, for the caller to throw once the pull is done, and when the pull was
+ * asked.
  */
 async function talkToTheServer(
   db: ShopDatabase,
@@ -169,9 +172,12 @@ async function talkToTheServer(
   // (DeviceMeView), a moment after the app opens, and the next moment pushes. A laptop has it already,
   // from its last visit, unless the browser lost it; the pull, a read, needs none.
   let pushFailure: { error: unknown } | null = null;
+  // Whether the push went and the server answered it, a "try later" included: the photos go only then.
+  let pushed = false;
   if (hasCsrfToken() && (sendNow || (await mayPush(db)))) {
     try {
       await pushKeepingTheWait(db, pagePlace);
+      pushed = true;
     } catch (error) {
       // Blocked, or a key that opens no device: ask nothing more (answer.ts has kept it).
       if (isAboutTheDevice(error)) throw error;
@@ -185,6 +191,11 @@ async function talkToTheServer(
   if (tooOld !== null) throw tooOld;
   const pullAskedAt = Date.now();
   await pull(db);
+  // The photos last (CTRL-6): a week of them on a slow line must not keep the office's changes from coming
+  // down, a suspension among them (X2). Only after a push the server answered: it had the CSRF token, its
+  // wait after a failure was over, and the records accepted just now are in sent_archive. A push that
+  // failed says the line or the server is in trouble, and a photo is far bigger than a record.
+  if (pushed) await sendAttachments(db, pagePlace);
   return { pushFailure, pullAskedAt };
 }
 

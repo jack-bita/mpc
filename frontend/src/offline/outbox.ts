@@ -152,6 +152,7 @@ export async function saveDocument(
             state: "waiting" as const,
             tries: 0,
             last_error: null,
+            wait_until: null,
           })),
         );
       }
