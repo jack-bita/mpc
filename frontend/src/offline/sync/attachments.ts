@@ -7,7 +7,8 @@
 //
 // Each photo goes alone, to CTRL-3's route, `PUT /api/sync/v1/attachments/{id}/`, its body the file's bytes:
 //
-//   204 kept, the same file again, or a photo already removed → the laptop's copy goes
+//   204 kept, the same file again, or a photo already removed → the laptop's copy goes (only a 204: any other
+//                                answer that says all went well proves nothing, and stops the round)
 //   404 attachment.not_found   → the server holds no row for it yet: it waits, and the others go on; after some
 //                                two days of tries, it is set aside with that code (MOST_TRIES_NOT_FOUND)
 //   400 too_big, not_an_image, file_differs → about the file itself, so the same file would get the same answer:
@@ -199,21 +200,30 @@ async function send(
   place: SyncPlace,
 ): Promise<Heard> {
   try {
+    let status = 0;
     await syncAnswer(
-      place.api.PUT("/api/sync/v1/attachments/{id}/", {
-        params: { path: { id: photo.id } },
-        // The file's bytes alone, no JSON and no form (CTRL-3). The server's description names the body a string, as
-        // OpenAPI writes any file, so the bytes are handed over as they are, past the client's JSON. fetch gives an
-        // ArrayBuffer its length, so the route never has to answer 411 for want of one.
-        body: bytes as unknown as string,
-        bodySerializer: (body) => body,
-        // Its type as the label says: the server checks it against the file's first bytes.
-        headers: { "Content-Type": photo.content_type },
-        signal: syncCallLimit(),
-      }),
+      place.api
+        .PUT("/api/sync/v1/attachments/{id}/", {
+          params: { path: { id: photo.id } },
+          // The file's bytes alone, no JSON and no form (CTRL-3). The server's description names the body a string, as
+          // OpenAPI writes any file, so the bytes are handed over as they are, past the client's JSON. fetch gives an
+          // ArrayBuffer its length, so the route never has to answer 411 for want of one.
+          body: bytes as unknown as string,
+          bodySerializer: (body) => body,
+          // Its type as the label says: the server checks it against the file's first bytes.
+          headers: { "Content-Type": photo.content_type },
+          signal: syncCallLimit(),
+        })
+        .then((answer) => {
+          status = answer.response.status;
+          return answer;
+        }),
       place.hear,
     );
-    return { kept: true };
+    // Only the route's own "kept", 204 (CTRL-3), takes the photo off the laptop, which can't be undone: any other
+    // answer that says all went well is one the route never gives, so nothing proves the file is kept. The photo
+    // stays, waits, and the round stops, as after an answer the laptop can't read.
+    return status === 204 ? { kept: true } : { kept: false, code: null };
   } catch (error) {
     if (error instanceof NoConnection) return { kept: false, code: null };
     // Blocked, or a key that opens no device: kept by syncAnswer, and thrown on, so the sync asks nothing more.

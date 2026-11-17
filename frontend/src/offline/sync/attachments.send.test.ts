@@ -356,6 +356,28 @@ describe("sending the photos", () => {
     },
   );
 
+  it("keeps a photo the server answers with any other OK than 204, and stops the round", async () => {
+    // Taking the laptop's only copy away can't be undone: only the route's own "kept" does it (CTRL-3). A 200 is an
+    // answer the route never gives, as from something else in the way, so nothing proves the file is kept.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-17T05:00:00Z"));
+    const [first, second] = await twoClockInsWithPhotos();
+    await recordsAccepted();
+    answer("PUT", photoRoute(first.label.id), { status: 200, body: {} });
+    keeps(second);
+
+    await sendAttachments(db, pagePlace);
+
+    expect(photosSent()).toEqual([first.label.id]);
+    expect(await db.attachment_files.get(first.label.id)).toMatchObject({
+      state: "waiting",
+      tries: 1,
+      last_error: null,
+      wait_until: Date.now() + FIRST_WAIT_MS,
+    });
+    expect(await db.attachment_bytes.get(first.label.id)).toBeDefined();
+  });
+
   it("waits longer after each failed send, at most an hour", async () => {
     // A sync every 30 s would otherwise send the same 150 KB 2,880 times a day.
     vi.useFakeTimers({ toFake: ["Date"] });
