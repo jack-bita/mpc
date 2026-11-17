@@ -226,6 +226,38 @@ describe("Ongeza", () => {
     );
     await waitFor(() => expect(reads()).toBe(before + 1));
   });
+  it("reads the list again when the days clash, so the closure they clash with shows (ATT-9's review)", async () => {
+    // 20 to 24 November was saved, but its answer was lost, so the page doesn't show it. The owner changes Hadi to the
+    // 22nd and taps Hifadhi again, under a new id: the server says the days clash, with his own funeral.
+    let reads = 0;
+    answer("GET", CLOSURES, () => {
+      reads += 1;
+      return Response.json(
+        closuresAnswer(reads === 1 ? [UHURU] : [FUNERAL, UHURU]),
+      );
+    });
+    answer("POST", CLOSURES, refusal(400, "closure.overlaps"));
+
+    render(<ClosuresSection me={OWNER} />);
+
+    tap(
+      await screen.findByRole("button", { name: "Ongeza" }, { timeout: 5_000 }),
+    );
+    typeInto(screen.getByLabelText("Kuanzia"), "2026-11-20");
+    typeInto(screen.getByLabelText("Hadi"), "2026-11-22");
+    typeInto(screen.getByLabelText("Jina"), "Msiba wa bibi");
+    tap(screen.getByRole("button", { name: "Hifadhi" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Duka tayari limefungwa katika moja ya siku hizi.",
+    );
+    await waitFor(async () =>
+      expect(await linesShown()).toEqual([
+        "Msiba wa bibi20/11/2026 – 24/11/2026",
+        "Siku ya Uhuru09/12/2026",
+      ]),
+    );
+  });
 });
 
 describe("Ondoa", () => {
@@ -351,6 +383,44 @@ describe("Badilisha siku ya mwisho", () => {
       ),
     );
   }
+
+  it("reads the list again when a later last day clashes, so the closure it clashes with shows (ATT-9's review)", async () => {
+    // Another manager closed the 26th meanwhile; the owner moves the funeral's last day to the 27th.
+    const added = closure({
+      first_day: "2026-11-26",
+      last_day: "2026-11-26",
+      name: "Ukarabati wa duka",
+    });
+    let reads = 0;
+    answer("GET", CLOSURES, () => {
+      reads += 1;
+      return Response.json(
+        closuresAnswer(reads === 1 ? [FUNERAL] : [FUNERAL, added]),
+      );
+    });
+    answer(
+      "POST",
+      `${CLOSURES}${FUNERAL.id}/last-day/`,
+      refusal(400, "closure.overlaps"),
+    );
+
+    render(<ClosuresSection me={OWNER} />);
+
+    await openLastDayOf("Msiba wa bibi");
+    typeInto(screen.getByLabelText("Siku mpya ya mwisho"), "2026-11-27");
+    typeInto(screen.getByLabelText("Sababu"), "Msiba umeongezeka");
+    tap(screen.getByRole("button", { name: "Hifadhi" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Duka tayari limefungwa katika moja ya siku hizi.",
+    );
+    await waitFor(async () =>
+      expect(await linesShown()).toEqual([
+        "Msiba wa bibi20/11/2026 – 24/11/2026",
+        "Ukarabati wa duka26/11/2026",
+      ]),
+    );
+  });
 
   it("is beside every closure for the owner, begun or not", async () => {
     answer("GET", CLOSURES, {

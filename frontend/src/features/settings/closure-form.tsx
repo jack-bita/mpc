@@ -15,7 +15,10 @@
 //
 // The id is sent again with every try of the same days and name (ADR-0007): a send whose answer the network lost, tried
 // again, gets the stored closure back, not a clash with itself. A changed day or name gets a new id, as the server
-// answers a repeated id with the closure it stored, whatever the new send carries (setting-form.tsx).
+// answers a repeated id with the closure it stored, whatever the new send carries (setting-form.tsx). So if the first
+// send was saved and only its answer lost, a changed try clashes with it (closure.overlaps), a closure the page doesn't
+// show yet: on that refusal the list is read again, so the owner sees what his days clash with, his own closure among
+// them, and changes it there (ATT-9's review).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
@@ -27,7 +30,7 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { useApiErrorWords } from "@/api/errors";
-import { answerOf } from "@/api/refusal";
+import { answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
@@ -93,6 +96,11 @@ export function ClosureForm({
       // The list asks again, so the new closure shows in its place among the others, soonest first.
       void store.invalidateQueries({ queryKey: CLOSURES });
       onSaved(closure);
+    },
+    onError: (error) => {
+      // Days another closure has: the list is read again, so that closure shows (see the top of this file).
+      if (error instanceof ApiRefusal && error.body.code === "closure.overlaps")
+        void store.invalidateQueries({ queryKey: CLOSURES });
     },
   });
 

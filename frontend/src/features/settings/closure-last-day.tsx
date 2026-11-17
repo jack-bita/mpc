@@ -13,7 +13,8 @@
 // What the form can see itself is said at once, in the server's own sentences, and nothing is sent: an empty box, a
 // last day before the first (closure.ends_before_it_starts), one that would open a past day again (closure.date_past),
 // an empty reason. The server checks the rest: days another closure has (closure.overlaps), said above the buttons, as
-// it is about the days together; on the demo, a person's change of today (demo.closures_from_tomorrow), beside the box;
+// it is about the days together, as the list is read again, so the closure it clashes with shows, one added meanwhile
+// among them (ATT-9's review); on the demo, a person's change of today (demo.closures_from_tomorrow), beside the box;
 // and a closure someone else cancelled meanwhile (closure.not_active), which the section says, reading the list again,
 // as the closure has left it.
 //
@@ -107,6 +108,9 @@ export function ClosureLastDay({
         void store.invalidateQueries({ queryKey: CLOSURES });
         onGone();
       }
+      // Days another closure has, maybe one added meanwhile that the page doesn't show yet: the list is read again.
+      if (error instanceof ApiRefusal && error.body.code === "closure.overlaps")
+        void store.invalidateQueries({ queryKey: CLOSURES });
     },
   });
 

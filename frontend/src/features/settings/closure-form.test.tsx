@@ -235,8 +235,10 @@ describe("Ongeza", () => {
   });
 
   it("sends a changed last day under a new id, so the server never answers with the old closure", async () => {
-    // 20 to 24 November is saved, but the answer is lost. The owner makes it end on the 22nd and taps Hifadhi again.
-    // Under the old id, the server would answer with the stored 24th, and the page would say saved for the 22nd.
+    // The first send, 20 to 24 November, never reaches the server: the network drops on the way. The owner makes it end
+    // on the 22nd and taps Hifadhi again. Had the first been saved, the old id would bring back the stored 24th, and the
+    // page would say saved for the 22nd; under a new id it clashes with it instead, which closures-section.test.tsx
+    // shows (ATT-9's review).
     let tries = 0;
     answer("POST", CLOSURES, () => {
       tries += 1;
