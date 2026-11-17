@@ -22,6 +22,9 @@
   "topBar": {
     "place": "{shop} · {side}"
   },
+  "pageHeader": {
+    "back": "Rudi ulipotoka"
+  },
   "device": {
     "lock": {
       "title": "Kifaa hiki kimezuiwa",

@@ -22,6 +22,9 @@
   "topBar": {
     "place": "{shop} · {side}"
   },
+  "pageHeader": {
+    "back": "Back to where you were"
+  },
   "device": {
     "lock": {
       "title": "This device is blocked",
