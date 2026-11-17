@@ -122,6 +122,10 @@ const CODES_THE_API_SENDS = [
   "staff.other_shop",
   "staff.reason_required",
   "staff.temporary_password_open",
+  // Who may suspend a person, bring them back or mark them left: the PIN's rule, with codes of its own (PPL-4).
+  "staff.own",
+  "staff.superuser_only",
+  "staff.more_keys",
   // Devices and pairing (AUTH-5).
   "device.name_blank",
   "device.name_taken",

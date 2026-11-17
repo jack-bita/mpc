@@ -49,7 +49,11 @@ def history_of(staff: StaffMember) -> list[EditEvent]:
     return list(EditEvent.objects.filter(subject_type="staff", subject_id=staff.pk).order_by("id"))
 
 
-def test_staff_edit_recorded_with_person(shop_a: Shop, asha: StaffMember, staff_a: StaffMember) -> None:
+def test_staff_edit_recorded_with_person(
+    shop_a: Shop, asha: StaffMember, staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # Staff A is the owner, who may suspend Asha and mark her left (02 §5, PPL-4).
+    give_role(staff_a, RoleTemplate.OWNER, None)
     with shop_context(shop_a), acting_as(staff_a):
         asha = suspend(asha, by=staff_a, reason="Hakuja kazini siku 3")
         mark_left(asha, left_on=LEFT_ON, by=staff_a, reason="Amehamia Moshi")

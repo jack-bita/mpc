@@ -659,7 +659,10 @@
       "left": "Mtu huyu ameshaacha kazi.",
       "other_shop": "Hiki ni cha duka jingine.",
       "reason_required": "Andika sababu.",
-      "temporary_password_open": "Mtu huyu bado ana nenosiri la muda. Ruhusa hii itasubiri hadi achague nenosiri lake."
+      "temporary_password_open": "Mtu huyu bado ana nenosiri la muda. Ruhusa hii itasubiri hadi achague nenosiri lake.",
+      "own": "Huwezi kubadilisha hali yako ya kazi mwenyewe.",
+      "superuser_only": "Hali ya kazi ya mtu huyu inabadilishwa na msimamizi wa mfumo tu.",
+      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kubadilisha hali yake ya kazi."
     },
     "password": {
       "must_change": "Chagua nenosiri lako mwenyewe kabla ya kuendelea.",

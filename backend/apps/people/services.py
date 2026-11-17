@@ -175,12 +175,32 @@ def _locked(staff: StaffMember) -> StaffMember:
     return StaffMember.objects.select_for_update(no_key=True).get(pk=staff.pk)
 
 
+def _locked_for_a_change(staff: StaffMember, by: StaffMember | None) -> tuple[StaffMember, StaffMember | None]:
+    # A person's status changed by someone at the shop: both jobs locked, then who may asked (PPL-4, AUTH-8). The order
+    # is the point. Asked before the lock, the answer could be out of date by the time the change is written: Neema and
+    # Hamisi suspend each other in the same second, each check sees the other still active, and both go through. Asked
+    # after, on the rows as they are now, the second waits until the first is done and then finds the one it acts as
+    # suspended, holding nothing: refused (PermissionDenied), so the first wins. _locked_pair takes both rows in id
+    # order, so two such changes never wait for each other in a circle. `by` None: the system, or the superuser, who
+    # may change anyone, the owner included; only the person's own row is locked, as before. Returns both rows as
+    # read under the locks, so the change writes the person as they are now, and names the one acting as they are.
+    if by is None:
+        return _locked(staff), None
+    staff, by = _locked_pair(staff, by)
+    # The person's own row (User), read afresh, not locked: who may hangs on the jobs, locked above, and on whether the
+    # person can open the admin, which no shop's screen changes.
+    _check_may_act_as(staff, User.objects.get(pk=staff.user_id), by=by, what="staff")
+    return staff, by
+
+
 def suspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> StaffMember:
-    """Stop an active person working for a while. Their PIN stops working (AUTH-4)."""
+    """Stop an active person working for a while. Their PIN stops working (AUTH-4). `by`: who suspends them, who needs
+    staff.manage on the whole shop and every key the person holds, and is never the person, nor an owner's or an admin
+    person's (_locked_for_a_change); None for the system or the superuser."""
     _check_shop(staff.shop_id, by)
     _check_reason(reason)
     with recording_changes(staff.shop_id):
-        staff = _locked(staff)
+        staff, by = _locked_for_a_change(staff, by)
         if staff.status != StaffStatus.ACTIVE:
             raise ValidationError("Only an active staff member can be suspended.", code="staff.not_active")
         staff.status = StaffStatus.SUSPENDED
@@ -201,11 +221,12 @@ def suspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Staff
 
 
 def unsuspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> StaffMember:
-    """Let a suspended person work again."""
+    """Let a suspended person work again. Who may: as for suspend; bringing someone back hands them every key they hold
+    again, so the one acting must hold those keys too."""
     _check_shop(staff.shop_id, by)
     _check_reason(reason)
     with recording_changes(staff.shop_id):
-        staff = _locked(staff)
+        staff, by = _locked_for_a_change(staff, by)
         if staff.status != StaffStatus.SUSPENDED:
             raise ValidationError("Only a suspended staff member can come back.", code="staff.not_suspended")
         staff.status = StaffStatus.ACTIVE
@@ -224,7 +245,8 @@ def unsuspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Sta
 
 
 def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reason: str) -> StaffMember:
-    """Record that a person left on `left_on`. Final: if they come back, add_staff gives them a new job."""
+    """Record that a person left on `left_on`. Final: if they come back, add_staff gives them a new job. Who may: as
+    for suspend."""
     _check_shop(staff.shop_id, by)
     _check_reason(reason)
     # On their last day or after, never ahead (Jack, 27 Oct): `left` takes effect at once, so "leaves on
@@ -232,7 +254,8 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
     if left_on > shop_today(staff.shop):
         raise ValidationError("A leaving date can't be in the future.", code="staff.left_in_future")
     with recording_changes(staff.shop_id):
-        staff = _locked(staff)
+        staff, by = _locked_for_a_change(staff, by)
+        # Asked of a person at the shop by _locked_for_a_change already; here for the system's own change.
         if staff.status == StaffStatus.LEFT:
             raise ValidationError("This person has already left.", code="staff.left")
         # Active or suspended: a suspended person can leave too, and the line says which they were.
@@ -282,7 +305,7 @@ def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMem
     # Who may, first, before anything else: a refused try pays for no slow hash. Asked again under the locks below, as
     # this copy can be out of date by then.
     if by is not None:
-        _check_may_act_as(staff, staff.user, by=by, secret="pin")
+        _check_may_act_as(staff, staff.user, by=by, what="pin")
     check_pin_strength(pin)
     # Hashed before the lock: Argon2 is slow on purpose, and the row stays locked only for the short
     # write below.
@@ -292,7 +315,7 @@ def set_pin(staff: StaffMember, pin: str, *, by: StaffMember | None) -> StaffMem
             staff = _locked(staff)
         else:
             staff, by = _locked_pair(staff, by)
-            _check_may_act_as(staff, User.objects.get(pk=staff.user_id), by=by, secret="pin")
+            _check_may_act_as(staff, User.objects.get(pk=staff.user_id), by=by, what="pin")
         if staff.status == StaffStatus.LEFT:
             raise ValidationError("A person who has left can't be given a PIN.", code="staff.left")
         staff.pin_hash = pin_hash
@@ -460,29 +483,33 @@ def _locked_pair(staff: StaffMember, by: StaffMember) -> tuple[StaffMember, Staf
 
 
 def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) -> None:
-    _check_may_act_as(staff, user, by=by, secret="password")
+    _check_may_act_as(staff, user, by=by, what="password")
     # A login is by phone or by email. With neither, the password could never be used, and the mark would stay on for
     # good: the owner is told now, and adds the phone first, not when the person can't log in.
     if not user.phone and not user.email:
         raise ValidationError("This person has no phone or email to log in with.", code="password.no_login_name")
 
 
-def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, secret: str) -> None:
-    # Whoever sets a person's password or PIN can log in as them. So this is the giver rule (02 §5), for a whole person:
-    # Baba may hand a manager staff.manage to deal with a forgotten password, and that manager still can't become anyone
-    # stronger than himself (Jack, 4 Nov 2026). `secret`, "password" or "pin", names the refusal's code. Refused as a
-    # ValidationError with its code, as flag.own_flag is, so the screen can say what to do.
+def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, what: str) -> None:
+    # Whoever sets a person's password or PIN can log in as them; whoever suspends them, brings them back or marks them
+    # left decides whether they work at all. So this is the giver rule (02 §5), for a whole person: Baba may hand a
+    # manager staff.manage to deal with a forgotten password, or a worker who stopped coming, and that manager still
+    # can't become, or stop, anyone stronger than himself (Jack, 4 Nov 2026; PPL-4). `what` names the refusal's codes:
+    # "password", "pin", or "staff" for a change of status. Refused as a ValidationError with its code, as
+    # flag.own_flag is, so the screen can say what to do. The English words are for the logs: neutral, as they serve all
+    # three; the screens translate the code (ADR-0032).
     # The key, on the whole shop, read afresh: a giver suspended a moment ago holds nothing (PermissionDenied, 403).
     require(by, Permission.STAFF_MANAGE, None)
     if staff.status == StaffStatus.LEFT:
-        raise ValidationError(f"A person who has left can't be given a {secret}.", code="staff.left")
+        raise ValidationError("This person has left.", code="staff.left")
     if staff.pk == by.pk:
         # A thief holding a logged-in phone could set a new one for its owner, with no current one, and keep the login
         # for good. A person changes their own password by allauth's change route, which asks for the current one. A PIN
-        # has no such route: someone else sets it, face to face, and PPL-4's screen decides how the person types it.
-        raise ValidationError(f"A person doesn't set their own {secret} here.", code=f"{secret}.own")
+        # has no such route: someone else sets it, face to face, and PPL-8's screen decides how the person types it. And
+        # a manager who suspended himself, or marked himself left, would lock himself out by a slip of the finger.
+        raise ValidationError("A person doesn't do this to themselves here.", code=f"{what}.own")
     # The superuser's alone (ADR-0038). Read from the roles, whatever the person's status: a suspended owner holds no
-    # keys but is still the owner, and two owners may have fallen out with each other. When PPL-4 adds an end to a role,
+    # keys but is still the owner, and two owners may have fallen out with each other. When PPL-7 adds an end to a role,
     # an ended Owner role must stop counting here too.
     is_owner = RoleAssignment.objects.filter(staff=staff, role__template=RoleTemplate.OWNER).exists()
     # Someone who can open the admin reads every shop's rows, so they stand above any shop's people: no shop's owner may
@@ -492,11 +519,11 @@ def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, secret
     # their ids alone (ADR-0042, which supersedes ADR-0037; Jack, 4 Nov 2026). Nothing is lost yet, as a person at two
     # shops is refused at every office route until AUTH-7, whose card adds this rule.
     if is_owner or user.is_superuser or user.is_staff:
-        raise ValidationError(f"Only the superuser may reset this person's {secret}.", code=f"{secret}.superuser_only")
+        raise ValidationError("Only the superuser may do this for this person.", code=f"{what}.superuser_only")
     # What the person was given, whatever their status, as they hold it all again once brought back; against what the
     # one acting holds now.
     if not held_permissions(by).covers(given_permissions(staff)):
-        raise ValidationError("This person holds a key the one acting doesn't.", code=f"{secret}.more_keys")
+        raise ValidationError("This person holds a key the one acting doesn't.", code=f"{what}.more_keys")
 
 
 def change_own_settings(user: User, *, language: str | None = None, font: str | None = None) -> User:

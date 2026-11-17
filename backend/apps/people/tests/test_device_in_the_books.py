@@ -24,10 +24,10 @@ from rest_framework.test import APIClient
 
 from apps.control.models import AuditAction, AuditEvent, EditEvent
 from apps.core.acting import DEVICE_SETTING, SHOP_SETTING, acting_as, current_device_id
-from apps.core.permissions import RoleTemplate
+from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
-from apps.people.services import block, confirm_pairing, set_pin, start_pairing, suspend
+from apps.people.services import block, confirm_pairing, grant_permission, set_pin, start_pairing, suspend
 from apps.shops.models import Side
 from tests.concurrency import in_another_transaction
 
@@ -212,8 +212,11 @@ def test_two_managers_blocking_each_others_devices_both_go_through(
 
 def test_staff_action_names_the_device(manager: StaffMember, staff_a: StaffMember, paired: tuple[Device, str]) -> None:
     # The other inner block: the staff actions save through _save (apps/people/services.py), not editing(), and their
-    # route comes with PPL-4. The manager suspends Asha at the laptop, as a visit opens it, and both books say so.
+    # route comes with PPL-4. The manager suspends Asha at the laptop, as a visit opens it, and both books say so. He
+    # holds the key to manage workers, on the whole shop, as a suspension asks since PPL-4 (02 §5).
     laptop = paired[0]
+    with shop_context(manager.shop_id):
+        grant_permission(manager, Permission.STAFF_MANAGE, side=None, by=None)
     with shop_context(manager.shop_id), acting_as(manager, device=laptop):
         suspend(staff_a, by=manager, reason="Hakuja kazini siku 3")
         edit = EditEvent.objects.get(subject_type="staff", subject_id=staff_a.pk)
