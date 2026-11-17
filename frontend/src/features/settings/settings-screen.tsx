@@ -1,6 +1,16 @@
-// settings-screen.tsx — Mipangilio ya duka, the shop's rules on one page (SHOP-5, 03 §5.8): every rule of the
-// registry, grouped by its area, with its value today and any value still to come. A side's rule has a line
-// for each side, as it is set one side at a time (SHOP-3): Dawa's tolerance and Vyakula's are two values.
+// settings-screen.tsx — Mipangilio ya duka, the shop's rules (SHOP-5, 03 §5.8): every rule of the registry, by
+// its area, with its value today and any value still to come. A side's rule has a line for each side, as it is
+// set one side at a time (SHOP-3): Dawa's tolerance and Vyakula's are two values.
+//
+// The page is cut into tabs, one section open at a time (Jack, 17 Nov 2026): one per area of rules (Mahudhurio,
+// Pesa, Kompyuta, Mzigo), then Siku duka limefungwa, the days the whole shop is closed (closures-section.tsx,
+// ATT-9), then Pande, each side with its on/off switch (side-switch.tsx) and its band (side-band-choice.tsx,
+// SHOP-4). As one long page it took a phone many screens of scrolling to reach the sides. A section added
+// later is one more item in `sections`, below: it gets its tab, and the page stays one screen tall.
+//
+// Above the tabs, the page's header: the back arrow to where the person was, the title, and its words
+// (page-header.tsx). The open tab is kept in the address, /settings/?tab=money, so a refresh keeps it, a link
+// can open a section, and coming back to the page finds the section the person left.
 //
 // An office screen: it asks the server through the store of server answers (rule 5), GET
 // /api/v1/shops/settings/, and needs the internet, which the office area says while it is gone. Anyone who
@@ -12,13 +22,10 @@
 // history under it. Everyone else gets Historia, which opens the history alone: they read the rules, and
 // change none. The button only keeps a door out of sight: the server checks the key itself on every save.
 //
-// Under the rules, Siku duka limefungwa: the days the whole shop is closed (closures-section.tsx, ATT-9). At the bottom,
-// Pande: each side with its on/off switch (side-switch.tsx), and its band (side-band-choice.tsx, SHOP-4).
-//
 // One line per side, under the rule, not a column per side as the card first said: on the owner's phone two
 // columns of values and buttons don't fit (Jack, 15 Nov 2026).
 //
-// "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
+// "use client": it asks use-intl for words, and calls the server.
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -34,6 +41,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/design/card";
+import { PageHeader } from "@/components/design/page-header";
+import { Tabs, type TabSection } from "@/components/design/tabs";
 import {
   sidesWhere,
   useWhoIsHere,
@@ -44,6 +53,7 @@ import { formatDay } from "@/lib/format";
 import { ClosuresSection } from "./closures-section";
 import { RuleHistory } from "./rule-history";
 import {
+  type AreaOnPage,
   type RuleLine,
   type RuleOnPage,
   type RuleRow,
@@ -57,6 +67,9 @@ import { SideSwitches } from "./side-switch";
 
 /** The key that lets a person give a rule a new value: one of the owner's own four (spec §6). */
 const CHANGES_RULES = "settings.manage";
+
+/** The address's name for the open tab: /settings/?tab=money. */
+export const TAB_PARAM = "tab";
 
 export function SettingsScreen() {
   const t = useTranslations("shopSettings");
@@ -73,27 +86,23 @@ export function SettingsScreen() {
 
   return (
     <div className="grid max-w-2xl gap-6">
-      <div className="grid gap-2">
-        <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <p className="text-muted-foreground">{t("intro")}</p>
-      </div>
+      <PageHeader title={t("title")} intro={t("intro")} />
       <p role="status" className={waiting ? "text-lg" : "sr-only"}>
         {waiting ? loginWords("waiting") : null}
       </p>
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
-      {who.data ? (
-        <>
-          <RulesByArea me={who.data} />
-          <ClosuresSection me={who.data} />
-          <SideSwitches me={who.data} />
-        </>
-      ) : null}
+      {/* The tabs wait for the rules' first answer too, so they never show the closed days and the sides
+          alone, then gain the areas' tabs a moment later and jump. */}
+      {who.data && !waiting ? <SettingsTabs me={who.data} /> : null}
     </div>
   );
 }
 
-function RulesByArea({ me }: { me: WhoIsHere }) {
+/** The page's sections, each behind its tab, in the order the page always had: the rules' areas, the closed
+ * days, the sides. */
+function SettingsTabs({ me }: { me: WhoIsHere }) {
+  const t = useTranslations("shopSettings");
   const rules = useShopRules();
   const words = useRuleWords();
   // The sides' names, from `me`, as on Hali ya vifaa: the server sends only the lines of the sides the person
@@ -101,42 +110,103 @@ function RulesByArea({ me }: { me: WhoIsHere }) {
   const sideNames = new Map(
     me.permissions.sides.map((side) => [side.id, side.name]),
   );
+  const today = rules.data?.today ?? "";
+  // An area with no rule the person sees has no tab (rulesByArea leaves it out). With no answer from the
+  // server, the rules have no tabs at all, and the closed days and the sides still have theirs.
+  const areas = rules.data ? rulesByArea(rules.data.rules) : [];
+  const sections: TabSection[] = [
+    ...areas.map((area) => ({
+      value: area.area,
+      label: words.area(area.area),
+      content: (
+        <AreaRules area={area} today={today} me={me} sideNames={sideNames} />
+      ),
+    })),
+    {
+      value: "closures",
+      label: t("closures.title"),
+      content: <ClosuresSection me={me} />,
+    },
+    {
+      value: "sides",
+      label: t("sides.title"),
+      content: <SideSwitches me={me} />,
+    },
+  ];
+  const [asked, setAsked] = useTabInAddress();
+  // The tab the address asks for, if the page has it; else the first, Mahudhurio. An old link to a section
+  // since gone, or to an area the person no longer sees, opens the first rather than nothing.
+  const open = sections.some((section) => section.value === asked)
+    ? (asked as string)
+    : (sections[0]?.value ?? "");
 
-  // A failed read shows above the rules, not in their place: a refresh that fails keeps the last answer on
-  // the screen, with the reason above it, as on Vifaa.
-  const failure = <ApiErrorAlert error={rules.error} />;
-  if (!rules.data) return failure;
-  const { today } = rules.data;
   return (
     <>
-      {failure}
-      {rulesByArea(rules.data.rules).map((area) => (
-        // Each area a section with its own heading, so a screen reader can jump from area to area.
-        <section
-          key={area.area}
-          aria-labelledby={`area-${area.area}`}
-          className="grid gap-4"
-        >
-          <h2 id={`area-${area.area}`} className="text-xl font-semibold">
-            {words.area(area.area)}
-          </h2>
-          {/* role="list" written out: Safari with VoiceOver stops calling a <ul> a list once its bullets
-              are styled away, as Tailwind does (device-list.tsx). */}
-          <ul role="list" className="grid gap-4">
-            {area.rules.map((rule) => (
-              <li key={rule.key}>
-                <RuleCard
-                  rule={rule}
-                  today={today}
-                  me={me}
-                  sideNames={sideNames}
-                />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {/* A failed read shows above the tabs, not in their place: a refresh that fails keeps the last answer
+          on the screen, with the reason above it, as on Vifaa. */}
+      <ApiErrorAlert error={rules.error} />
+      <Tabs
+        label={t("title")}
+        sections={sections}
+        value={open}
+        onChange={setAsked}
+      />
     </>
+  );
+}
+
+/** The open tab, as the address names it, and a way to change both. It replaces the address rather than
+ * adding to the history: the back arrow and the browser's back leave the page, as a person expects, rather
+ * than stepping through every tab they opened.
+ *
+ * Read from the address on the first draw: the tabs come only once the server has answered, so always in
+ * the browser, never in the page built ahead of time (ADR-0016), which has no address. The typeof check
+ * keeps that true even if a later change draws the tabs sooner. */
+function useTabInAddress(): [string | null, (value: string) => void] {
+  const [asked, setAsked] = useState<string | null>(() =>
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get(TAB_PARAM),
+  );
+  function choose(value: string) {
+    setAsked(value);
+    const url = new URL(window.location.href);
+    url.searchParams.set(TAB_PARAM, value);
+    // Next.js's own history state is kept, so its router still knows the page.
+    window.history.replaceState(window.history.state, "", url);
+  }
+  return [asked, choose];
+}
+
+/** One area's rules: its heading, then a card for each rule. */
+function AreaRules({
+  area,
+  today,
+  me,
+  sideNames,
+}: {
+  area: AreaOnPage;
+  today: string;
+  me: WhoIsHere;
+  sideNames: ReadonlyMap<string, string>;
+}) {
+  const words = useRuleWords();
+  return (
+    // Each area a section with its own heading, so a screen reader can jump from area to area.
+    <section aria-labelledby={`area-${area.area}`} className="grid gap-4">
+      <h2 id={`area-${area.area}`} className="text-xl font-semibold">
+        {words.area(area.area)}
+      </h2>
+      {/* role="list" written out: Safari with VoiceOver stops calling a <ul> a list once its bullets
+          are styled away, as Tailwind does (device-list.tsx). */}
+      <ul role="list" className="grid gap-4">
+        {area.rules.map((rule) => (
+          <li key={rule.key}>
+            <RuleCard rule={rule} today={today} me={me} sideNames={sideNames} />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
