@@ -11,7 +11,8 @@ from apps.people.api.views import DeviceViewSet, StaffViewSet
 # SimpleRouter, as for the sides (apps/shops/api/urls.py): devices/, devices/{id}/, and the view's two actions,
 # devices/{id}/block/ and devices/{id}/unblock/. `basename` names the routes (device-list, device-detail, device-block,
 # device-unblock), which DRF would otherwise read from a `queryset` in the class body, and ShopViewSet has none. And
-# staff/{id}/temporary-password/ (staff-temporary-password), the staff routes' only one until PPL-4.
+# the workers' routes (staff-list, staff-detail, staff-suspend, staff-unsuspend, staff-leave, PPL-4) and
+# staff/{id}/temporary-password/ (staff-temporary-password, AUTH-6).
 router = SimpleRouter()
 router.register("devices", DeviceViewSet, basename="device")
 router.register("staff", StaffViewSet, basename="staff")

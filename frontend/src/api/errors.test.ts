@@ -3,7 +3,7 @@
 //
 // CODES_THE_API_SENDS is kept by hand: some codes are built as the server runs (`f"{secret}.own"`,
 // apps/people/services.py), so no test can find them all in the backend. It holds every code a route,
-// or a model rule behind it, can send today, and those of the PIN screen to come (PPL-4). Codes that
+// or a model rule behind it, can send today, and those of the PIN screen to come (PPL-8). Codes that
 // only stop a bug, like device.key_not_hashed, are left to the general sentence. A card that adds a code
 // adds it here, with its two sentences; the third test fails on a sentence whose code left the list.
 import { createTranslator } from "use-intl/core";
@@ -62,7 +62,7 @@ const CODES_THE_API_SENDS = [
   "staff.suspended",
   "staff.choose_shop",
   "password.must_change",
-  // PIN login (AUTH-4), and the screen that sets a PIN (PPL-4).
+  // PIN login (AUTH-4), and the screen that sets a PIN (PPL-8).
   "pin.wrong",
   "pin.locked",
   "pin.own",

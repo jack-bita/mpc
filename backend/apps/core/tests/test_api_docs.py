@@ -95,7 +95,7 @@ def test_a_fields_choices_keep_a_name_of_their_own(tmp_path: Path) -> None:
     # second table shows a status of its own, such as a staff member's, the two clash, and drf-spectacular renames
     # both, with a warning that fails the build (above), and the app's types change under it (UI-2). So the device's is
     # named after its own type (ENUM_NAME_OVERRIDES, config/settings/base.py), and so are the bootstrap's (SYNC-2): a
-    # person's status, which an office staff route will show too (PPL-4), an account's kind, before an attendance
+    # person's status, which the workers' office route shows too (PPL-4), an account's kind, before an attendance
     # event's (ATT-1), and a rule's scope.
     shapes = _schema(tmp_path)["components"]["schemas"]
 

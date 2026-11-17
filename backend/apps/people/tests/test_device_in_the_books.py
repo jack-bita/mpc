@@ -212,8 +212,9 @@ def test_two_managers_blocking_each_others_devices_both_go_through(
 
 def test_staff_action_names_the_device(manager: StaffMember, staff_a: StaffMember, paired: tuple[Device, str]) -> None:
     # The other inner block: the staff actions save through _save (apps/people/services.py), not editing(), and their
-    # route comes with PPL-4. The manager suspends Asha at the laptop, as a visit opens it, and both books say so. He
-    # holds the key to manage workers, on the whole shop, as a suspension asks since PPL-4 (02 §5).
+    # routes came with PPL-4 (test_staff_routes.py). The manager suspends Asha at the laptop, as a visit opens it, and
+    # both books say so. He holds the key to manage workers, on the whole shop, as a suspension asks since PPL-4
+    # (02 §5).
     laptop = paired[0]
     with shop_context(manager.shop_id):
         grant_permission(manager, Permission.STAFF_MANAGE, side=None, by=None)

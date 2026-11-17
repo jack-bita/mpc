@@ -241,7 +241,7 @@ def test_another_shops_person_is_not_found(shop_b: Shop, give_role: GiveRole, as
 
 
 def test_route_shows_nothing_to_a_read(baba: StaffMember, asha: StaffMember) -> None:
-    # Only a POST: nothing about the person to read here, and PPL-4 adds the rest of the staff routes.
+    # Only a POST: nothing about the person to read here; the worker's own route shows them (PPL-4).
     assert logged_in(BABA_PHONE).get(route(asha)).status_code == 405
 
 

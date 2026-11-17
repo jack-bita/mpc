@@ -393,7 +393,7 @@ def _delete_stored(storage: Any, name: str, shop_id: uuid.UUID) -> None:
 def _check_file(attachment: Attachment, content: bytes) -> None:
     # The file against its label (CTRL-3). Each refusal names no field: it is about the whole file. The laptop's route
     # reads a file's length before the file itself, so a file over the limit never gets here from it; checked again for
-    # any other caller that hands the file itself, as PPL-4's office upload will.
+    # any other caller that hands the file itself, as PPL-9's office upload will.
     if len(content) > LARGEST_FILE:
         raise ValidationError("A file is kept up to 1 MB.", code="attachment.too_big")
     sniffed = _image_type_of(content)

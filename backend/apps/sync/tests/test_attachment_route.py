@@ -234,7 +234,7 @@ def test_file_of_exactly_1_mb_kept(staff_a: StaffMember, laptop: tuple[Device, s
 
 
 def test_file_too_big_refused_by_the_service_too(staff_a: StaffMember) -> None:
-    # A caller that hands the service the file itself, as PPL-4's office upload will, gets the size checked again.
+    # A caller that hands the service the file itself, as PPL-9's office upload will, gets the size checked again.
     photo = waiting(staff_a)
     with shop_context(staff_a.shop_id), pytest.raises(ValidationError) as refused:
         receive_attachment_file(photo.pk, content=JPEG + b"x" * LARGEST_FILE)

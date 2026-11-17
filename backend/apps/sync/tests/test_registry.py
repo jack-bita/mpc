@@ -236,7 +236,7 @@ def test_people_at_work_are_sent_and_people_gone_are_not(
 def test_a_persons_row_holds_what_the_counter_needs(shop_a: Shop) -> None:
     # The names for the PIN screen's tile; when the PIN last changed, so the laptop drops its own check of the old one
     # (SYNC-10); and the person's language and font, so an offline login shows their own screens (UI-9). A photo joins
-    # with PPL-4. Exactly these fields: what must never travel is test_bootstrap_secrets.py's.
+    # with PPL-9. Exactly these fields: what must never travel is test_bootstrap_secrets.py's.
     asha = hire(shop_a, "Asha Mfano", "Asha")
     with shop_context(shop_a):
         set_pin(asha, "2580", by=None)

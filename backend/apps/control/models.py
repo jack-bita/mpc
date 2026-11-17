@@ -396,7 +396,7 @@ class AttachmentKind(models.TextChoices):
     # delivery, a receipt on an expense) comes with that record's card (STK-4, CASH-2).
     # Asha's photo as she taps Ingia (ATT-3).
     CLOCK_PHOTO = "clock_photo", "Clock-in photo"
-    # A worker's face on the PIN tiles (PPL-4).
+    # A worker's face on the PIN tiles (PPL-9).
     STAFF_PHOTO = "staff_photo", "Staff photo"
 
 
@@ -424,7 +424,7 @@ class KindRule:
     opened_with: Permission | None
 
 
-# Kind → its rule *(defaults, CTRL-3's card: ATT-3 and PPL-4 may change them before they first use them)*.
+# Kind → its rule *(defaults, CTRL-3's card: ATT-3 and PPL-9 may change them before they first use them)*.
 ATTACHMENT_KINDS: dict[AttachmentKind, KindRule] = {
     # A clock-in photo proves who tapped Ingia: it is for whoever fixes attendance (the owner, a manager he gives the
     # key), not for the other workers. On the whole shop: a worker's attendance is the shop's, not a side's.
@@ -463,7 +463,7 @@ class Attachment(ShopScoped):
     size = models.PositiveIntegerField()
     sha256 = models.CharField(max_length=64)
     # X3: the laptop the photo was taken on, as an audit line names its device. Empty for one added on an office
-    # screen (PPL-4's worker's photo, from the owner's phone). Named, not imported: `control` is layer 0 (ADR-0035).
+    # screen (PPL-9's worker's photo, from the owner's phone). Named, not imported: `control` is layer 0 (ADR-0035).
     # PROTECT: nothing is deleted (rule 7). db_index=False: indexes lead with `shop`.
     device = models.ForeignKey(
         "people.Device", on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False

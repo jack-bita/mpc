@@ -7,7 +7,7 @@
 // those who can log in today: someone who left or was switched off isn't on the laptop at all, and a
 // suspended person's row says so, so neither gets a tile, as the server's old route sent neither.
 //
-// A tile shows the full name in large letters with the nickname under it, until photos come (PPL-4; 02 §5).
+// A tile shows the full name in large letters with the nickname under it, until photos come (PPL-9; 02 §5).
 // On the demo, a seller's tile shows their PIN too, as Jaribu demo handed it over (OPS-3, demo-pins.ts):
 // a visitor can't guess it, and this is where they need it. Never on a real shop's laptop, which keeps no
 // demo PINs, and never one kept from yesterday's demo, whose people had other ids.

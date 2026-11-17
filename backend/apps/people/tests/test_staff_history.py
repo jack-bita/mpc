@@ -9,10 +9,10 @@ PostgreSQL's own trigger (EditEvent):
     Staff A   status: active                       status: suspended
     Staff A   status: suspended, left_on: (none)   status: left, left_on: 2026-10-01
 
-A PIN reset shows as a new `pin_changed_at` only: the PIN's hash never leaves its column (03 §5.9). The office
-visit that names who acts comes with the staff screen (PPL-4), so acting_as() opens it here, as the base view
-will (apps/core/acting.py). Outside a visit, each action names its own `by` (the last test). Fake data
-only: the repo is public (03 §10).
+A PIN reset shows as a new `pin_changed_at` only: the PIN's hash never leaves its column (03 §5.9). These tests
+call the services, so acting_as() opens here what an office visit opens (apps/core/acting.py); the routes' own
+visits are test_staff_routes.py's (PPL-4). Outside a visit, each action names its own `by` (the last test). Fake
+data only: the repo is public (03 §10).
 """
 
 from collections.abc import Callable
