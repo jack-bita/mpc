@@ -221,6 +221,18 @@ def test_file_too_big_refused_unread(
     assert code_of(answer) == (400, "attachment.too_big")
 
 
+def test_file_of_exactly_1_mb_kept(staff_a: StaffMember, laptop: tuple[Device, str]) -> None:
+    # The limit is 1 MB itself (1,048,576 bytes), not less: a photo of exactly that size is kept, and one byte more is
+    # refused from its length alone.
+    largest = JPEG[:4] + b"x" * (LARGEST_FILE - 4)
+    photo = waiting(staff_a, largest)
+    client = a_browser(laptop[1])
+
+    assert code_of(put(client, photo.pk, largest + b"x")) == (400, "attachment.too_big")
+    assert put(client, photo.pk, largest).status_code == 204
+    assert kept_bytes(photo) == largest
+
+
 def test_file_too_big_refused_by_the_service_too(staff_a: StaffMember) -> None:
     # A caller that hands the service the file itself, as PPL-4's office upload will, gets the size checked again.
     photo = waiting(staff_a)
