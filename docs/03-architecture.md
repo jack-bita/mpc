@@ -2,9 +2,11 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.72 · 17 Nov 2026 · Portion 3 of the planning pack
+**Version:** 1.73 · 17 Nov 2026 · Portion 3 of the planning pack
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
+
+**Changes in v1.73** (17 Nov 2026, the settings page's layout): §7.1's folder map names two pieces in `components/design/`: `page-header.tsx`, the back arrow beside each page's title, and `tabs.tsx`, a long page in sections behind a row of tabs; *Mipangilio ya duka* is in tabs, its open tab in the address (Jack). Marked **(v1.73)**.
 
 **Changes in v1.72** (17 Nov 2026, CTRL-6's review): §5.13: a photo's bytes in a drawer of their own; the photos go once the laptop is noted back, 1.5 MB a sync; only a 204 takes one off the laptop; one the server still can't find after some two days is set aside. §6.1 lists the bytes' drawer; §6.5 says the photos go after the laptop is noted back. Marked **(v1.72)**.
 
@@ -736,7 +738,7 @@ frontend/src/
 │                             screen on a registered device's home page: picker, pad, logout, idle lock) (v1.33), and the
 │                             password forms: login, choose your own, forgotten, the email link's (v1.34); office/ (the
 │                             office's frame and home page) (v1.34); settings/ (Mipangilio ya duka: the shop's rules, their
-│                             form and history, the shop's closed days (v1.68), and the sides' switches) (v1.62)
+│                             form and history, the shop's closed days (v1.68), and the sides' switches, each behind its tab (v1.73)) (v1.62)
 ├── offline/                  db.ts (schema + versions), outbox.ts, push.ts, pull.ts,
 │                             effects.ts, search.ts, pin.ts, clock-today.ts (today's taps, v1.49), storage.ts, network.ts (online or not) (v1.30)
 ├── api/                      schema.d.ts (generated — never edited), client.ts (the typed client and its CSRF token),
@@ -748,7 +750,8 @@ frontend/src/
 │                             language-button.tsx, offline-banner.tsx, update-prompt.tsx (v1.30), api-error-alert.tsx (v1.31)
 ├── components/ui/            shadcn components
 ├── components/design/        our own pieces in the shop's look; screens use only these (v1.27); password-field.tsx,
-│                             a password box with its eye (v1.34)
+│                             a password box with its eye (v1.34); page-header.tsx, the back arrow beside a page's
+│                             title, and tabs.tsx, a long page in sections behind a row of tabs (v1.73)
 ├── fonts/                    the two font files and their licences, loaded by fonts.ts (v1.28)
 ├── test/                     helpers for tests only: look.ts reads globals.css and does the contrast sums (v1.29);
 │                             render.tsx gives a screen the word books, language.ts finds Swahili left in English,
