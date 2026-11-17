@@ -84,7 +84,7 @@ def test_the_same_name_writes_over_the_file(storage: Storage, shop_a: Model) -> 
             assert file.read() == PHOTO
 
 
-def test_demo_storage_keeps_files_in_their_shop(storage: Storage, shop_a: Model, shop_b: Model) -> None:
+def test_a_file_keeps_to_its_shop(storage: Storage, shop_a: Model, shop_b: Model) -> None:
     # T1: inside shop A's visit, shop B's file can't be written, read, measured or removed, whichever way it is named.
     # Both storages keep it, though the folder has no guard of its own: the check is on the name.
     theirs = name_in(shop_b)
