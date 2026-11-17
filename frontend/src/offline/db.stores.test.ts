@@ -104,14 +104,15 @@ describe("the device database", () => {
         "pending_effects",
         "sent_archive",
         "outages",
+        "attachment_files",
       ].sort(),
     );
   });
 
-  it("starts at its newest version, 2", async () => {
+  it("starts at its newest version, 3", async () => {
     const db = open(MPC);
     await db.open();
-    expect(db.verno).toBe(2);
+    expect(db.verno).toBe(3);
   });
 
   it("refuses two outbox rows on one device_seq", async () => {

@@ -6,12 +6,14 @@
 // the save, as the save tells the sync's moments (sync/asks.ts, SYNC-9), or once the network is back, or
 // once a wait after a failed push is over (sync/backoff.ts). Nothing is lost on the way: a row leaves
 // the outbox only once the server has accepted its document, and a record the server refused stays in
-// it, set aside, for someone to look at.
+// it, set aside, for someone to look at. A record's photos are saved with it, in the same transaction, and go up after
+// it (CTRL-6, attachments.ts).
 import Dexie from "dexie";
 import { useLiveQuery } from "dexie-react-hooks";
 
 import { newId } from "@/lib/ids";
 
+import { checkPhotosNamed, type LabelledPhoto } from "./attachments";
 import type { DocumentRow, PendingEffectRow, ShopDatabase } from "./db";
 import { tellRecordSaved } from "./sync/asks";
 import { LAST_DEVICE_SEQ, readLastDeviceSeq } from "./sync/meta";
@@ -81,9 +83,14 @@ export function checkDraft(draft: Draft): void {
 
 /**
  * Saves a document made on this laptop, ready for the push: the document, the next number, its outbox
- * row and its pending effects, in one transaction (03 §6.2). Either all of it lands, or none of it does:
- * a document saved without its outbox row would never be sent, and a number taken without its document
- * would be a gap the server flags (SYNC-5).
+ * row, its pending effects and its photos, in one transaction (03 §6.2). Either all of it lands, or none
+ * of it does: a document saved without its outbox row would never be sent, and a number taken without
+ * its document would be a gap the server flags (SYNC-5). A record kept without its photo would name a
+ * file the laptop lost, and a photo kept without its record would wait for a record that never was
+ * (CTRL-6).
+ *
+ * Each photo is labelled first (labelPhoto, attachments.ts), its label put in the draft's payload: its
+ * SHA-256 can't be worked out inside the transaction, which would end at that wait.
  *
  * The number is read inside the transaction. Two saves at once, from two tabs, then take turns, as a
  * transaction that writes a drawer waits for the one before it: the second reads the number the first
@@ -93,8 +100,10 @@ export async function saveDocument(
   db: ShopDatabase,
   draft: Draft,
   effects: readonly EffectDraft[] = [],
+  photos: readonly LabelledPhoto[] = [],
 ): Promise<SavedDocument> {
   checkDraft(draft);
+  checkPhotosNamed(draft.payload, photos);
   // The laptop's own clock, with its zone (`Z`), as every time a laptop sends must name it (ATT-1).
   const made: DocumentRow = {
     ...draft,
@@ -103,7 +112,7 @@ export async function saveDocument(
   };
   const saved = await db.transaction(
     "rw",
-    [db.meta, db.documents, db.outbox, db.pending_effects],
+    [db.meta, db.documents, db.outbox, db.pending_effects, db.attachment_files],
     async () => {
       const last = await readLastDeviceSeq(db);
       if (last === null) throw new NeverFilled();
@@ -129,6 +138,20 @@ export async function saveDocument(
             id: newId(),
             document_id: made.id,
             posted_seq: null,
+          })),
+        );
+      }
+      // Waiting to go up once the server has accepted their record (sync/attachments.ts), in its order.
+      if (photos.length > 0) {
+        await db.attachment_files.bulkAdd(
+          photos.map(({ label, bytes }) => ({
+            ...label,
+            document_id: made.id,
+            device_seq,
+            bytes,
+            state: "waiting" as const,
+            tries: 0,
+            last_error: null,
           })),
         );
       }

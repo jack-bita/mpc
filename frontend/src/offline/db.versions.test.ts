@@ -89,6 +89,14 @@ describe("the device database's versions", () => {
     expect(VERSIONS[1]).toEqual({ version: 2, stores: { outages: "id" } });
   });
 
+  it("keeps version 3 exactly as it is: the photos' drawer", () => {
+    // The same rule again, once laptops have moved up to it (CTRL-6).
+    expect(VERSIONS[2]).toEqual({
+      version: 3,
+      stores: { attachment_files: "id, document_id, [state+device_seq]" },
+    });
+  });
+
   it("moves a laptop at version 1 up to version 2 with every row kept", async () => {
     // The Dawa laptop, before SYNC-14, with a clock-in still waiting: the new drawer comes, empty, and
     // nothing it held is lost.
@@ -104,13 +112,45 @@ describe("the device database's versions", () => {
     });
     before.close();
 
-    const after = open(VERSIONS);
+    const after = open(VERSIONS.slice(0, 2));
     await after.open();
 
     expect(after.verno).toBe(2);
     expect(await after.staff.get(ASHA.id)).toEqual(ASHA);
     expect(await after.outbox.count()).toBe(1);
     expect(await after.outages.count()).toBe(0);
+  });
+
+  it("moves a laptop at version 2 up to version 3 with every row kept", async () => {
+    // The Dawa laptop before CTRL-6, with a clock-in still waiting and an offline period not yet sent: the
+    // photos' drawer comes, empty, and nothing it held is lost.
+    const before = open(VERSIONS.slice(0, 2));
+    await before.staff.put(ASHA);
+    await before.outbox.add({
+      id: "0192f000-0000-7000-8000-0000000000d1",
+      type: "clock",
+      device_seq: 58,
+      status: "waiting",
+      attempts: 0,
+      last_error: null,
+    });
+    await before.outages.add({
+      id: "0192f000-0000-7000-8000-0000000000e1",
+      started_at: "2026-11-17T05:00:00.000Z",
+      ended_at: "2026-11-17T06:00:00.000Z",
+      seen_at: "2026-11-17T06:00:00.000Z",
+      end_unknown: false,
+    });
+    before.close();
+
+    const after = open(VERSIONS.slice(0, 3));
+    await after.open();
+
+    expect(after.verno).toBe(3);
+    expect(await after.staff.get(ASHA.id)).toEqual(ASHA);
+    expect(await after.outbox.count()).toBe(1);
+    expect(await after.outages.count()).toBe(1);
+    expect(await after.attachment_files.count()).toBe(0);
   });
 
   it("runs a later version's upgrade on a laptop at the version before, and keeps its rows", async () => {
