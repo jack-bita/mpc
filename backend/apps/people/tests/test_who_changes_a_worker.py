@@ -17,6 +17,9 @@ A suspension stops a person working at once, and a leaving is final, so the rule
 Who may is asked once both people's rows are locked, in id order, so it reads them as they are now: of two managers
 suspending each other at once, the first wins (test_staff.py, AUTH-8). Each rule is checked for all three actions.
 
+On the demo, where every visitor logs in as Meneja, the people the seed made stay as made (demo.people_fixed); a worker
+a visitor added can be changed (Jack, PPL-4: A).
+
 Fake data only: the repo is public (03 §10).
 """
 
@@ -27,12 +30,13 @@ import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from pytest_django import Settings
 
 from apps.control.models import AuditEvent
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, StaffStatus, User
-from apps.people.services import add_staff, grant_permission, mark_left, suspend, unsuspend
+from apps.people.services import add_staff, add_worker, grant_permission, mark_left, suspend, unsuspend
 from apps.shops.models import Shop, Side
 
 pytestmark = pytest.mark.django_db
@@ -264,3 +268,37 @@ def test_both_jobs_are_locked_lightly_and_in_id_order(change: Change, meneja: St
     [lock] = [query["sql"] for query in queries.captured_queries if "FOR NO KEY UPDATE" in query["sql"]]
     assert 'FROM "people_staffmember"' in lock
     assert 'ORDER BY "people_staffmember"."id" ASC' in lock
+
+
+@EACH_CHANGE
+def test_demo_people_fixed(
+    change: Change, shop_a: Shop, meneja: StaffMember, asha: StaffMember, settings: Settings
+) -> None:
+    # On the demo every visitor logs in as Meneja, who holds staff.manage there (apps/demo/services.py). A visitor who
+    # suspended Asha would take her off every other visitor's PIN tiles until the next morning's seed. The seed's people
+    # are those the system made, with no one named as their adder, as Asha here.
+    settings.DEMO_SEED = True
+    ready(asha, change)
+    lines = lines_about(asha)
+
+    with pytest.raises(ValidationError) as refused:
+        do(change, asha, by=meneja)
+
+    assert refused.value.code == "demo.people_fixed"
+    assert_unchanged(asha, change, lines)
+
+    # A worker the visitor added on the page, through Meneja's login: trying the page is the point.
+    with shop_context(shop_a):
+        juma = add_worker(shop=shop_a, full_name="Juma Mfano", display_name="Juma", by=meneja)
+    ready(juma, change)
+    do(change, juma, by=meneja)
+    assert status_of(juma) == change.after
+
+
+def test_the_system_still_changes_the_seeds_people_on_the_demo(asha: StaffMember, settings: Settings) -> None:
+    # The rule stops people, not the system, as for the logins (check_logins_may_change).
+    settings.DEMO_SEED = True
+
+    do(SUSPEND, asha, by=None)
+
+    assert status_of(asha) == StaffStatus.SUSPENDED

@@ -8,8 +8,11 @@ so a visitor can try Badilisha on Mipangilio ya duka (Jack, SHOP-5, 15 Nov 2026)
 shop's rules, and the demo has no owner. A visitor's new value starts tomorrow or later, with no note, so the seed
 makes the shop again before it comes (set_setting: demo.rules_from_tomorrow, demo.no_note, Jack, SHOP-5's second
 review); and the sides stay as the seed made them, as the same key also switches, renames and adds them
-(demo.sides_fixed). The shop starts with attendance switched on and two made-up fines (DEMO_RULES, ATT-2), and closed
-on the next three public holidays (PUBLIC_HOLIDAYS, ATT-8).
+(demo.sides_fixed). Meneja holds staff.manage on the whole shop too, so a visitor can try Wafanyakazi (Jack, PPL-4: A):
+add a worker, then suspend him or mark him left; the people the seed made stay as made (demo.people_fixed,
+apps/people/services.py), so no visitor takes Asha or Baraka off another visitor's PIN tiles. The shop starts with
+attendance switched on and two made-up fines (DEMO_RULES, ATT-2), and closed on the next three public holidays
+(PUBLIC_HOLIDAYS, ATT-8).
 
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
@@ -115,10 +118,12 @@ class DemoPerson:
 PEOPLE = (
     # The manager on every side: device.manage among the role's keys lets them confirm a new laptop on either side
     # (confirm_pairing). A password and no PIN: the manager works from their own phone, as at a real shop.
-    # And the key to the shop's rules, an owner's own (see the top of this file): the one key a visitor needs to try
-    # Mipangilio ya duka. Not the Owner's whole role, whose staff.manage would let a visitor take Meneja's role away
-    # and stop every visitor's one tap (04 PPL-4, OPS-3's note). The key also changes the sides, which the shops'
-    # services keep as the seed made them on the demo (_check_sides_fixed_on_demo, apps/shops/services.py).
+    # And two of an owner's own keys (see the top of this file): the shop's rules, the one key a visitor needs to try
+    # Mipangilio ya duka, which also changes the sides, kept as the seed made them on the demo
+    # (_check_sides_fixed_on_demo, apps/shops/services.py); and its workers, to try Wafanyakazi (PPL-4), whose
+    # services keep the seed's people as made on the demo (demo.people_fixed, apps/people/services.py), as a visitor
+    # who suspended Asha, or took Meneja's role away, would stop every visitor after them (OPS-3's note). Not the
+    # Owner's whole role, whose keys reach further than a visitor needs.
     DemoPerson(
         "Meneja Mfano",
         "Meneja",
@@ -126,7 +131,7 @@ PEOPLE = (
         side=None,
         email=MANAGER_EMAIL,
         password=MANAGER_PASSWORD,
-        keys=(Permission.SETTINGS_MANAGE,),
+        keys=(Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE),
     ),
     # A seller on each side, with a PIN only: they log in at the shop's laptop, as a seller does.
     DemoPerson("Asha Mfano", "Asha", RoleTemplate.SELLER, side="D", pin="2580"),

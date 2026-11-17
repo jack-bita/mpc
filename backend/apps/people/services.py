@@ -224,11 +224,25 @@ def _locked_for_a_change(staff: StaffMember, by: StaffMember | None) -> tuple[St
     # read under the locks, so the change writes the person as they are now, and names the one acting as they are.
     if by is None:
         return _locked(staff), None
+    _check_people_fixed_on_demo(staff)
     staff, by = _locked_pair(staff, by)
     # The person's own row (User), read afresh, not locked: who may hangs on the jobs, locked above, and on whether the
     # person can open the admin, which no shop's screen changes.
     _check_may_act_as(staff, User.objects.get(pk=staff.user_id), by=by, what="staff")
     return staff, by
+
+
+def _check_people_fixed_on_demo(staff: StaffMember) -> None:
+    # On the demo every visitor logs in as Meneja (OPS-3), who holds staff.manage there, so a visitor can try the
+    # workers' page (Jack, PPL-4: A). The people the seed made stay as made: a visitor who suspended Asha, or marked
+    # Baraka left, would take them off every other visitor's PIN tiles until the next morning's seed. Meneja himself
+    # can't be changed by his own login (staff.own), the only one visitors have. A worker a visitor added can be
+    # changed, as trying that is the point. The seed's people are those the system made, with no one named as their
+    # adder: the seed passes no `by`, while a visitor's add names Meneja (add_worker). Only for a person acting: the
+    # system, which is how the seed works, still may. Read from the demo's sign, as check_logins_may_change does, before
+    # anything is locked or written.
+    if settings.DEMO_SEED and staff.created_by_id is None:
+        raise ValidationError("On the demo, the people the seed made stay as they are.", code="demo.people_fixed")
 
 
 def suspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> StaffMember:

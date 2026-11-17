@@ -704,6 +704,7 @@
       "closed": "The demo isn't open here.",
       "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in.",
       "sides_fixed": "On the demo, the sides stay as they are, so every visitor can try them.",
+      "people_fixed": "On the demo, the first workers stay as they are, so every visitor can log in. Add a new worker to try this.",
       "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
       "no_note": "On the demo, notes aren't kept. Leave this box empty.",
       "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is."
