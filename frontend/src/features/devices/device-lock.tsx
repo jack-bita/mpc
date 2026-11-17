@@ -65,7 +65,11 @@ function LockScreen() {
     <div className="flex min-h-svh flex-col">
       <TopBar
         shop={device?.shop.name}
-        side={device ? { name: device.homeSide.name } : undefined}
+        side={
+          device
+            ? { name: device.homeSide.name, band: device.homeSide.band }
+            : undefined
+        }
         actions={<LanguageButton />}
       />
       {/* Inahitaji mtandao while the network is gone, as on office screens: a tap on Jaribu tena then

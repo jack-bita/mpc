@@ -1,12 +1,13 @@
 """apps/shops/tests/test_set_setting.py — set_setting, the one way a rule's new value is written (SHOP-3, ADR-0013).
 
-A new value is a new row, never an edit: the late fine is 1,000 today, and the owner sets 2,000 from 1 December. The
-service checks what Setting.clean() holds (a known key, a value of its kind, no side for a shop's rule), which
-`objects.create` would skip, and two rules of its own, both Jack's (15 Nov 2026):
+A new value is a new row, never an edit: today the late fine is its default, no fine (ATT-2), and the owner sets 2,000
+from 1 December. The service checks what Setting.clean() holds (a known key, a value of its kind, no side for a shop's
+rule), which `objects.create` would skip, and two rules of its own, both Jack's (15 Nov 2026):
 - a value starts on the shop's today or later, never before: an earlier day would change what past days answer, and a
   draft pay run with them;
 - a side's rule (the two tolerances, the expiry alert, blocking stock below zero) is set one side at a time, with no
   row for the whole shop, so a side's old row can never hide a newer shop value (CORE-4: a side's row beats it).
+A third, the attendance day's times kept in order, has its own file (test_day_in_order.py, ATT-2).
 Each saved row lands its line in the shop's change log, so the laptops get it at their next pull (SYNC-2). The staff
 members come from backend/conftest.py and are typed Any: `shops` may not name `people`'s StaffMember (ADR-0043).
 """
@@ -43,8 +44,8 @@ def no_rows(shop: Shop) -> bool:
 
 def test_set_setting_saves_a_new_row(shop_a: Shop, staff_a: Any) -> None:
     # The owner sets the late fine to 2,000 from tomorrow, then to 2,500 from next week. Each is a row of its own: today
-    # still answers the default 1,000, tomorrow 2,000, next week 2,500. The value is stored in its kind's one form
-    # ("2000" as "2000.00"), and who set it is the row's created_by (02 v1.7).
+    # still answers the default, no fine (ATT-2), tomorrow 2,000, next week 2,500. The value is stored in its kind's
+    # one form ("2000" as "2000.00"), and who set it is the row's created_by (02 v1.7).
     today = shop_today(shop_a)
     with shop_context(shop_a):
         tomorrow = today + timedelta(days=1)
@@ -53,7 +54,7 @@ def test_set_setting_saves_a_new_row(shop_a: Shop, staff_a: Any) -> None:
         )
         set_setting(shop_a, key=LATE_FINE.key, value="2500", effective_from=today + timedelta(days=7), by=staff_a)
 
-        assert get_setting(LATE_FINE, shop_a, on=today) == Decimal("1000.00")
+        assert get_setting(LATE_FINE, shop_a, on=today) == Decimal("0.00")
         assert get_setting(LATE_FINE, shop_a, on=today + timedelta(days=1)) == Decimal("2000.00")
         assert get_setting(LATE_FINE, shop_a, on=today + timedelta(days=7)) == Decimal("2500.00")
         saved = Setting.objects.get(pk=first.pk)

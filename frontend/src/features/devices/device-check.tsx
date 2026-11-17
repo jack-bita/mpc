@@ -67,6 +67,8 @@ function fromAnswer(me: DeviceMe): ThisDevice {
       id: me.home_side.id,
       code: me.home_side.code,
       name: me.home_side.name,
+      // The band its top bar draws, kept so the bar draws it offline too (SHOP-4).
+      band: me.home_side.band,
     },
   };
 }

@@ -2,7 +2,7 @@
 
 from rest_framework.routers import SimpleRouter
 
-from apps.shops.api.views import SettingViewSet, SideViewSet
+from apps.shops.api.views import ClosureViewSet, SettingViewSet, SideViewSet
 
 # SimpleRouter: one address for the list and one for each row (sides/, sides/{id}/). Not DefaultRouter,
 # which adds a page listing every route: the API docs do that (CORE-6). `basename` names the routes,
@@ -10,5 +10,6 @@ from apps.shops.api.views import SettingViewSet, SideViewSet
 router = SimpleRouter()
 router.register("sides", SideViewSet, basename="side")
 router.register("settings", SettingViewSet, basename="setting")
+router.register("closures", ClosureViewSet, basename="closure")
 
 urlpatterns = router.urls

@@ -90,6 +90,34 @@ const CODES_THE_API_SENDS = [
   // reader would see under the rule (SHOP-5's second review).
   "demo.rules_from_tomorrow",
   "demo.no_note",
+  // And a visitor's closure, its cancel or its new last day touches only days from tomorrow on (ATT-8).
+  "demo.closures_from_tomorrow",
+  // Days the shop is closed (ATT-8): add_closure's own date_past, Closure.clean()'s two (name_blank,
+  // ends_before_it_starts), the table's exclusion rule (overlaps), and its status rule, which only code that skips
+  // the services could break; it has its words all the same, as setting.key_invalid has.
+  "closure.date_past",
+  "closure.ends_before_it_starts",
+  "closure.name_blank",
+  "closure.overlaps",
+  "closure.status_unknown",
+  // And its two changes' (cancel_closure, change_last_day): a reason always, a closure already cancelled, and a
+  // cancel of one already started, whose last day is moved instead; a moved last day refused for a day before
+  // today is date_past above.
+  "closure.reason_required",
+  "closure.not_active",
+  "closure.started",
+  // A photo's file, sent by a laptop after the record that named it (CTRL-3): an id this shop doesn't hold, or whose
+  // record hasn't arrived yet; over 1 MB; not a JPEG or a WebP by its first bytes; or not the file its record named.
+  "attachment.not_found",
+  "attachment.too_big",
+  "attachment.not_an_image",
+  "attachment.file_differs",
+  // A photo sent with no length (in pieces, as a proxy may send it): never read, and sent again (411).
+  "attachment.length_required",
+  // And on an office screen (CTRL-3's GET): a photo whose record came but whose file the laptop hasn't sent yet, and a
+  // photo whose file was removed, 90 days after its pay run (ATT-7).
+  "attachment.file_waiting",
+  "attachment.file_removed",
   "staff.left",
   "staff.other_shop",
   "staff.reason_required",
@@ -118,14 +146,17 @@ const CODES_THE_API_SENDS = [
   // three (key_unknown, side_not_allowed, value_invalid), and the table's own two rules (key_invalid, value_blank).
   // Those last two never come through set_setting today, as a field's own check or clean() answers first and
   // full_clean then skips that field's table rules; they have their words all the same, in case a route ever sends one.
+  // And set_setting's third (ATT-2): a time of the attendance day out of the day's order, beside the value's box.
   "setting.date_past",
   "setting.key_invalid",
   "setting.key_unknown",
+  "setting.out_of_order",
   "setting.side_not_allowed",
   "setting.side_required",
   "setting.value_blank",
   "setting.value_invalid",
-  // Sides (CORE-6).
+  // Sides (CORE-6), and a side's band (SHOP-4).
+  "side.band_unknown",
   "side.code_invalid",
   "side.code_taken",
   "side.name_blank",

@@ -101,6 +101,23 @@ describe("the design page", () => {
     expect(groups[2]?.hasAttribute("data-disabled")).toBe(true);
   });
 
+  it("shows each choice sample's sides with their bands before their words (SHOP-4)", () => {
+    const { container } = render(<DesignPage />);
+    // Three samples (hint, error, switched off), each row a sample side with its band, as the settings page shows one.
+    const rows = [...container.querySelectorAll("label:has([data-picture])")];
+    expect(
+      rows.map((row) => [
+        row.querySelector("[data-look]")?.getAttribute("data-look"),
+        row.textContent,
+      ]),
+    ).toEqual(
+      Array.from({ length: 3 }, () => [
+        ["blue", t.topBar.sampleSides.blue],
+        ["striped", t.topBar.sampleSides.striped],
+      ]).flat(),
+    );
+  });
+
   it("shows both messages, a card and the top bar with both side bands", () => {
     const { container } = render(<DesignPage />);
     // Two status boxes: the info sample, and the live banner, empty while online.
@@ -111,18 +128,28 @@ describe("the design page", () => {
       t.alerts.dangerTitle,
     );
     expect(screen.getByText(t.cards.cardTitle)).toBeDefined();
-    const looks = [...container.querySelectorAll("[data-look]")].map((band) =>
-      band.getAttribute("data-look"),
+    const looks = [...container.querySelectorAll("header [data-look]")].map(
+      (band) => band.getAttribute("data-look"),
     );
     expect(looks).toEqual(["blue", "striped"]);
     // Each band under a real top bar that names its sample side in words.
-    const bars = [...container.querySelectorAll("[data-look]")].map(
+    const bars = [...container.querySelectorAll("header [data-look]")].map(
       (band) => band.closest("header")?.textContent,
     );
     expect(bars).toEqual([
       expect.stringContaining(`MPC · ${t.topBar.sampleSides.blue}`),
       expect.stringContaining(`MPC · ${t.topBar.sampleSides.striped}`),
     ]);
+  });
+
+  it("wears the page header at its top, and shows the tabs with the settings page's six", () => {
+    render(<DesignPage />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(t.title);
+    expect(
+      screen.getByRole("button", { name: sw.pageHeader.back }),
+    ).toBeDefined();
+    const row = screen.getByRole("tablist", { name: t.tabs.title });
+    expect(row.querySelectorAll("[role=tab]")).toHaveLength(6);
   });
 
   it.each(["default", "second"])(
@@ -139,6 +166,7 @@ describe("the design page", () => {
   it("takes all its words from the message files", () => {
     // ADR-0040. A token's name, like --primary, is code and is shown as it is. Besides the page's own
     // words, the top bars show the language button's word and their sample places, "MPC · Dawa".
+    // The page header's arrow has no visible words: its name is an aria-label.
     const { container } = render(<DesignPage />);
     const places = Object.values(t.topBar.sampleSides).map((side) =>
       sw.topBar.place

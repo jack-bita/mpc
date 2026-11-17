@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.30 · 16 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.34 · 17 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -61,6 +61,14 @@
 **Changes in v1.29** (15 Nov 2026, from Jack): the workers pay for their own meals (spec §8.1). A new append-only record, `MealMoney`, the day's money for the meals, typed each day by whoever holds `meals.record`, a key the owner gives to whoever he chooses. It is split equally among the workers who came that day, half days included, and the cook pays no share (`PayRate.shares_meals`). Each `AttendanceDay` carries its `meal_share`, so a worker who leaves mid-month has their pay up to their last day at once, and gets their payslip then, on its own (§12, §15, §16, §18 E11, §20, §21). Marked **(v1.29)**.
 
 **Changes in v1.30** (16 Nov 2026, from Jack): a money rule is whole shillings (§4, Setting): the shop's money has no cents, and every screen refuses them (04 §20, item 25). Marked **(v1.30)**.
+
+**Changes in v1.31** (16 Nov 2026, SHOP-4): a side says which band it shows under the top bar (§4, Side): a field of the side, not a dated setting (04 §20, item 19). Marked **(v1.31)**.
+
+**Changes in v1.32** (16 Nov 2026, ATT-2): the owner's attendance rules (OWN-7), through Jack: the day's times and its two fines as dated settings (§12, the day's rules), and `Holiday`, a closed day (ATT-8); §20 item 6 is settled. The fines start at nothing, as this public repo names no real amount; E10 takes a made-up fine (spec v1.3, 04 v1.86). Marked **(v1.32)**.
+
+**Changes in v1.33** (16 Nov 2026, ATT-8, from Jack): `Holiday`, one date, becomes `Closure`, a span of days from a first day to a last, as the shop also closes for a family funeral; its last day can move, earlier or later, with a reason; every closed day is off and not paid (§12; spec v1.4, 04 v1.89). Marked **(v1.33)**.
+
+**Changes in v1.34** (17 Nov 2026, CTRL-3): §13, an attachment's fields as built: its kind and the record it is pinned to, its label, and its file's three states, waiting, kept and removed, with who removed it, when and why (04 v1.96). Marked **(v1.34)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
@@ -205,6 +213,7 @@ A full diagram for GitHub is in Appendix A.
 - `code`: one capital letter, unique within the shop — two sides with one letter would print the same numbers **(v1.5)**
 - `sale_flow`: `one_screen` | `writer_cashier_loader`
 - `is_live` — each side is switched on in settings (spec §11); a new side starts switched off **(v1.5)**
+- `band`: `blue` | `striped`, the band under the top bar that tells a worker at a glance which side a screen is for; blue unless told otherwise, and the owner picks it in settings. A field of the side, not a dated Setting: a colour has no "from 1 December" and changes nobody's pay **(v1.31)**
 - [Later] `branch` → Branch, for a second site
 
 **StockLocation** [R1] ✚ → Side (D2)
@@ -224,7 +233,7 @@ A full diagram for GitHub is in Appendix A.
 - In force on a date = the latest row with `effective_from` ≤ that date. On one date, the row written last wins (`created_at`, then `id`), so a mistake is fixed with a new row **(v1.7)**. A side row beats a shop row, even an older one, and only for a key a side may override **(v1.7)**. Devices need each row's `created_at` to pick the same row offline **(v1.7)**.
 - A new value is a new row, written only through `set_setting` (SHOP-3), from the shop's today on: a row for a past day would change what that day answers, and the fines and the draft pay run worked out from it (Jack, 15 Nov 2026). A side's rule (`cash.tolerance`, `count.tolerance_pct`, `expiry.alert_days`, `stock.block_negative`) gets a row per side, never one for the whole shop: since a side row beats even a newer shop row, a shop value written later would be hidden behind a side's old one, and nobody would see why (Jack, 15 Nov 2026) **(v1.28)**.
 - A money rule (the late fine, the rounding step, the drawer's tolerance) is whole shillings: stored with two places, as every amount is, but always zeros, as the shop's money has no cents and every screen writes money without them; a value with cents is refused (`setting.value_invalid`) (Jack, 16 Nov 2026) **(v1.30)**.
-- Examples: `attendance.on_time_until` 07:35 · `attendance.late_fine` 1,000 · `cash.tolerance` · `count.tolerance_pct` · `expiry.alert_days` 90 · `stock.block_negative` false · `money.rounding_step` 1
+- Examples: `attendance.on_time_until` 07:35 · `attendance.late_fine`, 0 until the owner types one **(v1.32)** · the other rules of the attendance day (§12) **(v1.32)** · `cash.tolerance` · `count.tolerance_pct` · `expiry.alert_days` 90 · `stock.block_negative` false · `money.rounding_step` 1
 
 ## 5. People & access — module `people`
 
@@ -482,11 +491,26 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - Clocking in needs no key: anyone working at the shop may clock in on any of its laptops, so a Vyakula worker can on the Dawa laptop when Vyakula's is off (Jack, ATT-1). One suspended, or gone, is still flagged (X2) **(v1.23)**.
 
 **AttendanceDay** → StaffMember, date — worked out from the events and the rules in force that day.
-- `first_in`, `last_out`, `status`: `on_time` | `late` | `half` | `absent` | `off` (Sunday, holiday) | `needs_review`
+- `first_in`, `last_out`, `status`: `on_time` | `late` | `half` | `absent` | `off` (Sunday, a closed day **(v1.33)**) | `needs_review`
 - `absence_type`: `office_duty` (paid as a full day) | `permission` (unpaid) | `no_show` (unpaid)
 - `fine`, `rules_used` (copied), `override` (status, by, reason — the worked-out value stays visible)
 - `meal_share` **(v1.29)**: the worker's part of the day's meal money (§15, 14), worked out with the day, so the pay up to any day is a sum of days already worked out. It follows the day's status: a day that needs review has none until a manager decides it.
 - Locked once its pay run is approved.
+
+**The day's rules** **(v1.32)** — the owner's (OWN-7, 16 Nov 2026), each a dated setting of the whole shop (§4). Each time is a minute on the shop's clock, as the counter shows it: a clock-in at 07:35:40 shows 07:35. "By" and "from" take their own minute; "before" and "after" don't.
+- **Arriving:** by `on_time_until` (07:35), on time. After it and before `second_fine_from` (08:00), late, with `late_fine`, the first fine. From `second_fine_from` and before `review_from` (08:30), late, with `second_fine`. From `review_from` and before `afternoon_from` (12:00), needs review. From `afternoon_from` to `midday` (13:00), the afternoon's half day, staying until `closing` (18:40). After `midday`, needs review.
+- **Leaving,** after a morning arrival: before `midday`, needs review. From `midday` to `morning_leave_until` (13:30), the morning's half day. After it and before `closing`, needs review. From `closing`, the full day, or the late one. No clock-out: needs review (§20, item 6).
+- The seven times keep this order, each after the one before it, on every day (`setting.out_of_order`, ATT-2), so no minute lands in two windows.
+- A day that needs review is the owner's *dharura*: a manager or the owner decides it (`override`).
+- The fines start at 0: a shop has no fine until its owner types one. This public repo names no real amount (rule 10).
+- `attendance.enabled`: days count only from the day it is on (ADR-0033). Until then the counter shows no *Mahudhurio*.
+- Sunday is always `off`, and not paid: Sunday work is a deal between the owner and the worker, outside the system.
+
+**Closure** **(v1.33)** → Shop — days the whole shop is closed: a public holiday, or days the owner closes it, such as for a family funeral (Jack, ATT-8). Replaces v1.32's `Holiday`, which held one date.
+- `first_day`, `last_day` (the same for one day), `name`, `status`: `active` | `cancelled`. Who added it is the row's `created_by` (§1).
+- Each day of an active closure is `off`, and not paid, like Sunday, whatever the reason. Two active closures never share a day.
+- Added from the shop's today on. Cancelled up to its first day, or its last day moved earlier or later, each with who, when and why, never deleted (rule 7). No change touches a day before today, so a day already worked out never changes.
+- Eid and Easter move, so the owner types each year's dates.
 
 **PayRate** → StaffMember — `daily_rate`, `shares_meals` (yes; the cook's no) **(v1.29)**, `effective_from`. Dated, so a worker who becomes the cook mid-month pays a share up to that day and none after.
 
@@ -520,6 +544,7 @@ Advances come from `MoneyMovement` `staff_advance` and are deducted in the next 
 **EditEvent** [R1] — one change to an office record (a staff member, a side, a payment account, a stock location; later products, contacts, roles and devices), written by the database itself, so no change can skip it: who (`created_by`), from which device (`device`, as an AuditEvent's) **(v1.18)**, when (`created_at`), the record (`subject`), and the fields that changed, `before` and `after`. No reason: an action that needs one also writes an AuditEvent. A PIN hash is never copied. Append-only **(v1.9)**.
 
 **Attachment** [R1] — a photo or file on any record: supplier paper, expense receipt, clock-in photo. Photos taken offline upload later, Wi-Fi first.
+- **(v1.34)** Its `kind` (a clock-in photo, a worker's photo; a later kind comes with its record's card) names the table of the record it is pinned to (`subject`: a type code + UUID) and the key that opens it, on the whole shop. Its label, as the record brought it: `content_type` (JPEG or WebP), `size` (1 byte to 1 MB) and `sha256`; with `device` and `created_by`. Its file only moves forward: waiting → kept (`received_at`) → removed (`file_removed_at`, `file_removed_by`, `file_removed_reason`, always with a reason); a photo that never came may be removed too. The row is never deleted (rule 7): a removed photo's row says there was one, and who removed it.
 
 **ImportJob** [R1] — products and selling units, opening stock, contacts, open debts. `status`: `uploaded` → `checked` → `applied`; errors per row; created records point back at the import.
 
@@ -657,7 +682,7 @@ Opening count 20 bags +1,000 · sell 3 bags −150 · sell 12.5 kg −12.5 · de
 
 **E9 — Open bag** [R2]. A 50 kg bag opened at 08:00, the next at 16:30; loose kg sold in between: 48.5 → −1.5 kg → a Flag if the tolerance is 1 kg *(e.g.)*, naming who sold loose kg in that window.
 
-**E10 — Payslip** [R1b]. Spec §8.1: 193,000.
+**E10 — Payslip** [R1b]. Spec §8.1: 194,500, with a first fine of 500 for the example **(v1.32)**.
 
 **E11 — Meal shares** [R1b] **(v1.29)**. Monday's meal money is 8,000. 8 workers came, one of them only half a day, and so did the cook: 1,000 each, and none for the cook. In a month where every day's share is 2,000, Asha came 10 days and pays 20,000; Juma came 20 and pays 40,000. Juma leaves on the 15th: his payslip up to the 15th is ready that day.
 
@@ -685,7 +710,7 @@ Small items, each with a default or a setting. Settled while building; most need
 3. Credit rules: a default limit for new customers, who approves, what happens on non-payment (spec §14).
 4. Machine charge per kg: kg brought in *(default)*, or kg out.
 5. Exchange rate (kg out per kg in): one rate, or one per product.
-6. Attendance: when late becomes a half day, leaving early, a missing clock-out *(default: needs review)*, Sundays and holidays (spec §14).
+6. Attendance: when late becomes a half day, leaving early, a missing clock-out *(default: needs review)*, Sundays and holidays (spec §14). Settled by the owner, 16 Nov 2026: §12, the day's rules; a missing clock-out needs review **(v1.32)**.
 7. Advances: deducted in full next month *(default)*, or in parts.
 8. Inter-side money: cash handed over at day close, or only shown in the report.
 9. Loaders confirming handover on a device (R2), or not.

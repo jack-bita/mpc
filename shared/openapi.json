@@ -326,6 +326,62 @@
                 }
             }
         },
+        "/api/sync/v1/attachments/{id}/": {
+            "put": {
+                "operationId": "sync_v1_attachments_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "sync"
+                ],
+                "requestBody": {
+                    "content": {
+                        "image/jpeg": {
+                            "schema": {
+                                "type": "string",
+                                "format": "binary"
+                            }
+                        },
+                        "image/webp": {
+                            "schema": {
+                                "type": "string",
+                                "format": "binary"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "deviceKey": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/sync/v1/bootstrap/": {
             "get": {
                 "operationId": "sync_v1_bootstrap_retrieve",
@@ -440,6 +496,60 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/PushAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/control/attachments/{id}/file/": {
+            "get": {
+                "operationId": "control_attachments_file_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this attachment.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "control"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "image/jpeg": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            },
+                            "image/webp": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
                                 }
                             }
                         },
@@ -837,6 +947,202 @@
                 "responses": {
                     "204": {
                         "description": "No response body"
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/shops/closures/": {
+            "get": {
+                "operationId": "shops_closures_list",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "shops"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShopClosuresAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "shops_closures_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "shops"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClosureCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Closure"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/shops/closures/{id}/cancel/": {
+            "post": {
+                "operationId": "shops_closures_cancel_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this closure.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "shops"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClosureReasonRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Closure"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/shops/closures/{id}/last-day/": {
+            "post": {
+                "operationId": "shops_closures_last_day_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this closure.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "shops"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClosureLastDayRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Closure"
+                                }
+                            }
+                        },
+                        "description": ""
                     },
                     "default": {
                         "content": {
@@ -1293,6 +1599,120 @@
                 ],
                 "type": "string",
                 "description": "* `upsert` - Added or changed\n* `archive` - Archived"
+            },
+            "Closure": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "first_day": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    },
+                    "last_day": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ClosureStatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "added_by": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "added_by",
+                    "created_at",
+                    "first_day",
+                    "id",
+                    "last_day",
+                    "name",
+                    "status"
+                ]
+            },
+            "ClosureCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "first_day": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "last_day": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 60
+                    }
+                },
+                "required": [
+                    "first_day",
+                    "id",
+                    "last_day"
+                ]
+            },
+            "ClosureLastDayRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 500
+                    },
+                    "last_day": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                },
+                "required": [
+                    "last_day",
+                    "reason"
+                ]
+            },
+            "ClosureReasonRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 500
+                    }
+                },
+                "required": [
+                    "reason"
+                ]
+            },
+            "ClosureStatusEnum": {
+                "enum": [
+                    "active",
+                    "cancelled"
+                ],
+                "type": "string",
+                "description": "* `active` - Active\n* `cancelled` - Cancelled"
             },
             "DemoDevice": {
                 "type": "object",
@@ -1769,9 +2189,18 @@
                     "name": {
                         "type": "string",
                         "readOnly": true
+                    },
+                    "band": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SideBandEnum"
+                            }
+                        ],
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "band",
                     "code",
                     "id",
                     "name"
@@ -1790,6 +2219,9 @@
                     "name": {
                         "type": "string"
                     },
+                    "band": {
+                        "$ref": "#/components/schemas/SideBandEnum"
+                    },
                     "permissions": {
                         "type": "array",
                         "items": {
@@ -1798,6 +2230,7 @@
                     }
                 },
                 "required": [
+                    "band",
                     "code",
                     "id",
                     "name",
@@ -2518,8 +2951,16 @@
             },
             "SettingKeyEnum": {
                 "enum": [
+                    "attendance.enabled",
                     "attendance.on_time_until",
                     "attendance.late_fine",
+                    "attendance.second_fine_from",
+                    "attendance.second_fine",
+                    "attendance.review_from",
+                    "attendance.afternoon_from",
+                    "attendance.midday",
+                    "attendance.morning_leave_until",
+                    "attendance.closing",
                     "money.rounding_step",
                     "session.idle_minutes",
                     "cash.tolerance",
@@ -2528,7 +2969,7 @@
                     "stock.block_negative"
                 ],
                 "type": "string",
-                "description": "* `attendance.on_time_until` - attendance.on_time_until\n* `attendance.late_fine` - attendance.late_fine\n* `money.rounding_step` - money.rounding_step\n* `session.idle_minutes` - session.idle_minutes\n* `cash.tolerance` - cash.tolerance\n* `count.tolerance_pct` - count.tolerance_pct\n* `expiry.alert_days` - expiry.alert_days\n* `stock.block_negative` - stock.block_negative"
+                "description": "* `attendance.enabled` - attendance.enabled\n* `attendance.on_time_until` - attendance.on_time_until\n* `attendance.late_fine` - attendance.late_fine\n* `attendance.second_fine_from` - attendance.second_fine_from\n* `attendance.second_fine` - attendance.second_fine\n* `attendance.review_from` - attendance.review_from\n* `attendance.afternoon_from` - attendance.afternoon_from\n* `attendance.midday` - attendance.midday\n* `attendance.morning_leave_until` - attendance.morning_leave_until\n* `attendance.closing` - attendance.closing\n* `money.rounding_step` - money.rounding_step\n* `session.idle_minutes` - session.idle_minutes\n* `cash.tolerance` - cash.tolerance\n* `count.tolerance_pct` - count.tolerance_pct\n* `expiry.alert_days` - expiry.alert_days\n* `stock.block_negative` - stock.block_negative"
             },
             "SettingKeyRecord": {
                 "type": "object",
@@ -2608,6 +3049,25 @@
                 "type": "string",
                 "description": "* `shop` - shop\n* `side` - side"
             },
+            "ShopClosuresAnswer": {
+                "type": "object",
+                "properties": {
+                    "today": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "closures": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Closure"
+                        }
+                    }
+                },
+                "required": [
+                    "closures",
+                    "today"
+                ]
+            },
             "ShopRulesAnswer": {
                 "type": "object",
                 "properties": {
@@ -2655,6 +3115,14 @@
                         "type": "boolean",
                         "readOnly": true
                     },
+                    "band": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SideBandEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -2672,6 +3140,7 @@
                     }
                 },
                 "required": [
+                    "band",
                     "code",
                     "created_at",
                     "id",
@@ -2681,6 +3150,14 @@
                     "updated_at",
                     "version"
                 ]
+            },
+            "SideBandEnum": {
+                "enum": [
+                    "blue",
+                    "striped"
+                ],
+                "type": "string",
+                "description": "* `blue` - Blue\n* `striped` - Striped"
             },
             "SideChange": {
                 "type": "object",
@@ -2735,6 +3212,9 @@
                     },
                     "sale_flow": {
                         "$ref": "#/components/schemas/SaleFlowEnum"
+                    },
+                    "band": {
+                        "$ref": "#/components/schemas/SideBandEnum"
                     }
                 },
                 "required": [
@@ -2753,6 +3233,9 @@
                     },
                     "is_live": {
                         "type": "boolean"
+                    },
+                    "band": {
+                        "$ref": "#/components/schemas/SideBandEnum"
                     },
                     "version": {
                         "type": "integer",
@@ -2809,9 +3292,18 @@
                     "is_live": {
                         "type": "boolean",
                         "readOnly": true
+                    },
+                    "band": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SideBandEnum"
+                            }
+                        ],
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "band",
                     "code",
                     "id",
                     "is_live",

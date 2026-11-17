@@ -54,6 +54,12 @@ services:
       # the old version keeps running (docs/runbooks/demo.md, Troubleshooting).
       - key: DEMO_SEED
         value: "yes"
+      # The demo's files (photos, CTRL-3) are kept in its database, not on the service's disk: the free plan's disk is
+      # wiped at every restart and every deploy, and the service sleeps after 15 minutes without a visit, so a photo
+      # kept there would be gone within the hour (config/settings/prod.py, apps/core/storage.py). The real server leaves
+      # this out, and keeps its files in a folder, FILES_ROOT.
+      - key: FILES_IN_DATABASE
+        value: "yes"
       # The API's description and docs page (/api/schema/, /api/docs/) are open to every visitor on the demo:
       # the API is part of what the demo shows (ADR-0029). The real server leaves this out (prod.py).
       - key: API_DOCS_PUBLIC

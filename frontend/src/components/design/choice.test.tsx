@@ -1,5 +1,6 @@
 // choice.test.tsx — the choice piece: one pick at a time, a whole row to tap, its name, hint and error
-// tied to the group, and edges and a focus ring that can be seen (UI-3, ADR-0039).
+// tied to the group, and edges and a focus ring that can be seen (UI-3, ADR-0039); a row's own language,
+// font (UI-9) and picture (SHOP-4).
 //
 // jsdom paints nothing, so the colours are sums on the tokens in globals.css (src/test/look.ts), and
 // seen by eye on /design.
@@ -197,5 +198,37 @@ describe("the choice", () => {
     const words = screen.getByText("Dawa");
     expect(words.hasAttribute("lang")).toBe(false);
     expect(words.hasAttribute("data-font")).toBe(false);
+  });
+
+  it("shows a row's picture before its words, and names the row by its words alone", () => {
+    // A side's band beside its word (SHOP-4): the owner sees the colour he picks. The picture is decoration: a
+    // screen reader says the words, never the picture.
+    render(
+      <Choice
+        label="Rangi"
+        options={[
+          { value: "blue", label: "Bluu", picture: <i data-testid="blue" /> },
+          { value: "striped", label: "Mistari" },
+        ]}
+        value="blue"
+        onValueChange={() => undefined}
+      />,
+    );
+
+    const row = radio("Bluu").closest("label");
+    const picture = screen.getByTestId("blue");
+    expect(row?.contains(picture)).toBe(true);
+    expect(picture.closest("[data-picture]")?.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
+    // Before the words, after the dot.
+    expect(
+      picture.compareDocumentPosition(screen.getByText("Bluu")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // A row with no picture has none.
+    expect(
+      radio("Mistari").closest("label")?.querySelector("[data-picture]"),
+    ).toBeNull();
   });
 });

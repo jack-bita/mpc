@@ -181,6 +181,17 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# --- Files: photos now, other files later (03 §5.13, CTRL-3). Kept through Django's storage API, so code never names a
+# folder: apps/core/storage.py explains the two places. Here, a folder beside the code, gitignored: Jack's laptop's.
+# prod.py chooses the real server's folder or the demo's database; test.py a folder of each test run's own.
+# "staticfiles" is Django's own default, written out because setting STORAGES replaces the whole list.
+# No MEDIA_URL and no route to the folder: a file has no address, and is served only through Django, after a
+# permission check (FolderStorage.url refuses).
+STORAGES = {
+    "default": {"BACKEND": "apps.core.storage.FolderStorage", "OPTIONS": {"location": str(BASE_DIR / "files")}},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
 # --- Django REST framework: how every API view behaves, unless a view says otherwise (03 §5.10).
 REST_FRAMEWORK = {
     # Every refusal leaves in the API's one error shape, with a code the app translates (ADR-0032).
@@ -291,6 +302,8 @@ SPECTACULAR_SETTINGS = {
         "FlagKindEnum": "apps.control.models.FlagKind",
         "PushAnswerStatusEnum": "apps.sync.api.serializers.PUSH_ANSWER_STATUSES",
         "PushedStatusEnum": "apps.sync.models.PushedStatus",
+        # A side's band (SHOP-4): one name for the office's side, the laptop's copy and `me`, which all carry it.
+        "SideBandEnum": "apps.shops.models.SideBand",
     },
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.

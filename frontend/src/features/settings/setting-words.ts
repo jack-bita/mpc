@@ -30,8 +30,16 @@ export type Area = (typeof AREAS)[number];
 /** Each rule's area, by its key. Not read from the key's first part: the drawer's tolerance (`cash.`) sits
  * with money, and the stock count's (`count.`) with the stock, where the owner looks for them. */
 export const RULE_AREA: Record<SettingKey, Area> = {
+  "attendance.enabled": "attendance",
   "attendance.on_time_until": "attendance",
   "attendance.late_fine": "attendance",
+  "attendance.second_fine_from": "attendance",
+  "attendance.second_fine": "attendance",
+  "attendance.review_from": "attendance",
+  "attendance.afternoon_from": "attendance",
+  "attendance.midday": "attendance",
+  "attendance.morning_leave_until": "attendance",
+  "attendance.closing": "attendance",
   "money.rounding_step": "money",
   "cash.tolerance": "money",
   "session.idle_minutes": "computers",

@@ -201,23 +201,121 @@ class SettingKey[T]:
     description: str
 
 
-# --- The rules R1 and R1b read first (04 CORE-4).
+# --- The attendance day: the owner's rules (OWN-7, 16 Nov 2026; 02 §12, the day's rules). CORE-4 put the first
+# two here, the on-time cut-off and the late fine; ATT-2 added the rest.
+#
+# Attendance belongs to the shop, not a side: staff work for the shop (02 §5), so every rule here is SHOP.
+# Each time is a minute on the shop's clock, as the counter shows it ("07:35"): a clock-in at 07:35:40 shows
+# 07:35, so it is on time. "By" and "from" take their own minute; "before" and "after" don't. The windows
+# follow one another through the day, with the owner's times:
+#
+#   arrives   by 07:35 on time · before 08:00 first fine · before 08:30 second fine · before 12:00 dharura
+#             · 12:00 to 13:00 the afternoon's half day · after 13:00 dharura
+#   leaves    before 13:00 dharura · 13:00 to 13:30 the morning's half day · before 18:40 dharura
+#             · from 18:40 the full day
+#
+# Dharura is the owner's word for a day that needs review: a manager or the owner decides it. The times are
+# MPC's, as a new shop starts with them until its owner types its own. These keys only say the rules: ATT-4
+# works out each day from them.
 
-# Attendance belongs to the shop, not a side: staff work for the shop (02 §5), so both rules are SHOP.
+# The switch for the whole part (ADR-0033): attendance starts on the day the owner chooses, so it is off until
+# a shop switches it on. A dated rule, so "on from 1 December" waits for its day by itself. While it is off,
+# the counter shows no Mahudhurio; the server still takes a clock-in that comes, as a laptop that hadn't heard
+# of the switch yet would otherwise see its taps refused.
+ATTENDANCE_ON = SettingKey(
+    key="attendance.enabled",
+    kind=YesNo(),
+    default=False,
+    scope=Scope.SHOP,
+    description="On: the counter shows Mahudhurio, and days count from the day it is on (ADR-0033).",
+)
 ON_TIME_UNTIL = SettingKey(
     key="attendance.on_time_until",
     kind=TimeOfDay(),
     default=time(7, 35),
     scope=Scope.SHOP,
-    description="Arriving by this time is on time; after it, late (spec §8.1).",
+    description="Arriving by this minute is on time; after it, and before second_fine_from, late with the first fine.",
 )
+# Both fines start at 0, so a shop has no fine until its owner types one: this public repo names no real amount
+# (rule 10, Jack, 16 Nov 2026), and another shop may fine nobody. The first fine had an amount as its default until
+# ATT-2: a default is not a limit, so lowering it leaves every old row readable (see the top of this file), and no
+# real shop had rows yet.
 LATE_FINE = SettingKey(
     key="attendance.late_fine",
     kind=Money(),
-    default=Decimal("1000.00"),
+    default=Decimal("0.00"),
     scope=Scope.SHOP,
-    description="Taken off a late day's pay (spec §8.1).",
+    description="The first fine: taken off the pay of a day that arrived after on_time_until, before second_fine_from.",
 )
+SECOND_FINE_FROM = SettingKey(
+    key="attendance.second_fine_from",
+    kind=TimeOfDay(),
+    default=time(8, 0),
+    scope=Scope.SHOP,
+    description="Arriving from this minute, and before review_from, is late with the second fine.",
+)
+SECOND_FINE = SettingKey(
+    key="attendance.second_fine",
+    kind=Money(),
+    default=Decimal("0.00"),
+    scope=Scope.SHOP,
+    description="The second fine: taken off the pay of a day that arrived from second_fine_from, before review_from.",
+)
+REVIEW_FROM = SettingKey(
+    key="attendance.review_from",
+    kind=TimeOfDay(),
+    default=time(8, 30),
+    scope=Scope.SHOP,
+    description="Arriving from this minute, and before afternoon_from, makes the day need review (dharura).",
+)
+AFTERNOON_FROM = SettingKey(
+    key="attendance.afternoon_from",
+    kind=TimeOfDay(),
+    default=time(12, 0),
+    scope=Scope.SHOP,
+    description="Arriving from this minute to midday, and leaving from closing, is the afternoon's half day.",
+)
+MIDDAY = SettingKey(
+    key="attendance.midday",
+    kind=TimeOfDay(),
+    default=time(13, 0),
+    scope=Scope.SHOP,
+    description="The morning's half ends and the afternoon's starts: arriving after it, or leaving before it, "
+    "needs review.",
+)
+MORNING_LEAVE_UNTIL = SettingKey(
+    key="attendance.morning_leave_until",
+    kind=TimeOfDay(),
+    default=time(13, 30),
+    scope=Scope.SHOP,
+    description="Leaving from midday to this minute, after a morning arrival, is the morning's half day; "
+    "after it, and before closing, the day needs review.",
+)
+CLOSING = SettingKey(
+    key="attendance.closing",
+    kind=TimeOfDay(),
+    default=time(18, 40),
+    scope=Scope.SHOP,
+    description="Leaving from this minute is the full day; the afternoon's half day stays until it.",
+)
+
+# The day's seven times in the day's order. Each is after the one before it, strictly, on every day, so no minute lands
+# in two windows: an on-time cut-off of 08:00 beside a second fine from 08:00 would make a clock-in at 08:00 both on
+# time and late, and ATT-4 would pay that day two ways. set_setting refuses a time that isn't after the one before it
+# and before the one after it, on its start day and on each later day one of those two changes (setting.out_of_order,
+# apps/shops/services.py).
+DAY_IN_ORDER: tuple[SettingKey[time], ...] = (
+    ON_TIME_UNTIL,
+    SECOND_FINE_FROM,
+    REVIEW_FROM,
+    AFTERNOON_FROM,
+    MIDDAY,
+    MORNING_LEAVE_UNTIL,
+    CLOSING,
+)
+
+# --- The other rules R1 reads first (04 CORE-4).
+
 # Prices are shared by the sides (ADR-0001), so their rounding is too. At least 1: a step of 0 would
 # leave nothing to round to.
 ROUNDING_STEP = SettingKey(
@@ -270,9 +368,19 @@ BLOCK_NEGATIVE_STOCK = SettingKey(
 )
 
 # Every key, in one place. Any: the keys hold values of different types, so the list can't name one.
+# Each area in the order the settings page shows it (SHOP-5): the attendance day's rules in the day's order,
+# its switch first.
 KEYS: tuple[SettingKey[Any], ...] = (
+    ATTENDANCE_ON,
     ON_TIME_UNTIL,
     LATE_FINE,
+    SECOND_FINE_FROM,
+    SECOND_FINE,
+    REVIEW_FROM,
+    AFTERNOON_FROM,
+    MIDDAY,
+    MORNING_LEAVE_UNTIL,
+    CLOSING,
     ROUNDING_STEP,
     IDLE_MINUTES,
     CASH_TOLERANCE,

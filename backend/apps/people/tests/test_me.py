@@ -32,7 +32,7 @@ from apps.people.api.views import MeViewSet
 from apps.people.models import Device, StaffMember, User
 from apps.people.permissions import effective_permissions
 from apps.people.services import block, confirm_pairing, grant_permission, set_pin, start_pairing, suspend
-from apps.shops.models import Setting, Shop, Side
+from apps.shops.models import Setting, Shop, Side, SideBand
 from apps.shops.services import add_side
 
 pytestmark = pytest.mark.django_db
@@ -114,7 +114,7 @@ def asha(staff_a: StaffMember) -> StaffMember:
 @pytest.fixture
 def vyakula(shop_a: Shop) -> Side:
     with shop_context(shop_a):
-        return add_side(shop=shop_a, code="F", name="Vyakula", by=None)
+        return add_side(shop=shop_a, code="F", name="Vyakula", band=SideBand.STRIPED, by=None)
 
 
 @pytest.fixture
@@ -174,6 +174,21 @@ def test_me_lists_every_side_for_a_key_on_every_side(
     assert [side["code"] for side in client.get(ME).data["permissions"]["sides"]] == ["D", "F", "P"]
 
 
+def test_the_band_travels_on_the_side(
+    asha: StaffMember, laptop_key: str, side_a: Side, vyakula: Side, give_role: GiveRole
+) -> None:
+    # The top bar draws the band of the side it names (SHOP-4): the device's home side before a login, and in the
+    # office the side the person works on, read from her sides here (sideAt, who-is-here.ts). So both carry it.
+    # Dawa, the laptop's home side, kept the default; Vyakula was made striped, like the Foods bags.
+    give_role(asha, RoleTemplate.SELLER, side_a)
+    give_role(asha, RoleTemplate.CASHIER, vyakula)
+
+    data = logged_in(asha, laptop_key).get(ME).data
+
+    assert data["home_side"]["band"] == "blue"
+    assert {side["code"]: side["band"] for side in data["permissions"]["sides"]} == {"D": "blue", "F": "striped"}
+
+
 def test_me_names_who_and_where(asha: StaffMember, laptop: Device, laptop_key: str, side_a: Side) -> None:
     answer = logged_in(asha, laptop_key).get(ME)
 
@@ -206,7 +221,7 @@ def test_me_names_who_and_where(asha: StaffMember, laptop: Device, laptop_key: s
         "default_language": "sw",
     }
     assert data["device"] == {"id": str(laptop.pk), "name": laptop.name, "code": laptop.code, "status": "active"}
-    assert data["home_side"] == {"id": str(side_a.pk), "code": side_a.code, "name": side_a.name}
+    assert data["home_side"] == {"id": str(side_a.pk), "code": side_a.code, "name": side_a.name, "band": "blue"}
     assert data["must_change_password"] is False
 
 

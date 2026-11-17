@@ -95,6 +95,10 @@ DEVICE_ROUTES_WITHOUT_A_LOOK: dict[str, str] = {
     # demo shop is the only shop; beside any other shop it is refused with its code alone (demo.closed), nothing of
     # either shop's.
     "device-demo": "test_one_tap_demo_refused_with_live_shop",
+    # A photo's file (CTRL-3): a PUT and no GET, as a laptop only sends a file, never reads one back. The sweep asks it
+    # about each of shop A's photos as shop B's laptop, with an empty body; its own test sends A's real file under A's
+    # id, and gets the answer an id no shop has gets, with not a word of A's.
+    "sync-attachment-file": "test_attachment_upload_answers_hold_nothing_of_another_shop",
 }
 
 # App files that may build a query by hand, `models.QuerySet(Table)`, which starts from no manager and so from
@@ -136,4 +140,7 @@ NO_EDIT_HISTORY = {
     # typed them is what nobody knows, so a history row would name nobody and tell the owner nothing (AUTH-4's plan,
     # approved by Jack).
     "people.PinLock": "only the system moves it, at every wrong PIN, and it names nobody",
+    # The demo's files, kept in the database (apps/core/storage.py): a file is written whole and never edited, and a
+    # history row would copy a photo's bytes into a table kept for good, which the retention rule forbids (CTRL-3).
+    "core.StoredFile": "a file written whole, never edited, whose bytes must never be copied into a history",
 }

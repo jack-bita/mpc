@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import OfficeLayout from "@/app/(office)/layout";
 import SetupLayout from "@/app/(setup)/layout";
 import { saveDevice } from "@/features/devices/this-device";
-import { DAWA_LAPTOP } from "@/test/devices";
+import { bandUnderTheBar, DAWA_LAPTOP } from "@/test/devices";
 import { swahiliIn } from "@/test/language";
 import { render } from "@/test/render";
 
@@ -68,12 +68,49 @@ describe("the bar once someone logs in", () => {
     ).toBeTruthy();
   });
 
+  it("draws the band of the device's home side while nobody is logged in", () => {
+    // The Dawa laptop's band, from its saved copy, so it shows offline too (SHOP-4).
+    saveDevice({
+      ...DAWA_LAPTOP,
+      homeSide: { ...DAWA_LAPTOP.homeSide, band: "striped" },
+    });
+
+    render(
+      <AppFrame area="login">
+        <p>screen</p>
+      </AppFrame>,
+    );
+
+    expect(bandUnderTheBar()).toBe("striped");
+  });
+
+  it("draws no band from a copy saved before the band was kept", () => {
+    // The next check fills it; until then the bar names the side in words only, as before.
+    const { id, code, name } = DAWA_LAPTOP.homeSide;
+    saveDevice({ ...DAWA_LAPTOP, homeSide: { id, code, name } });
+
+    render(
+      <AppFrame area="login">
+        <p>screen</p>
+      </AppFrame>,
+    );
+
+    expect(
+      within(screen.getByRole("banner")).getByText("MPC · Dawa"),
+    ).toBeTruthy();
+    expect(bandUnderTheBar()).toBeNull();
+  });
+
   it("names the person, and the side they work on in place of the device's", () => {
     // Neema works on Vyakula, and logs in at the Dawa laptop.
     saveDevice(DAWA_LAPTOP);
 
     render(
-      <AppFrame area="login" person="Neema" side={{ name: "Vyakula" }}>
+      <AppFrame
+        area="login"
+        person="Neema"
+        side={{ name: "Vyakula", band: "striped" }}
+      >
         <p>screen</p>
       </AppFrame>,
     );
@@ -81,6 +118,8 @@ describe("the bar once someone logs in", () => {
     const bar = within(screen.getByRole("banner"));
     expect(bar.getByText("MPC · Vyakula")).toBeTruthy();
     expect(bar.getByText("Neema")).toBeTruthy();
+    // Her side's band, not the laptop's blue (SHOP-4).
+    expect(bandUnderTheBar()).toBe("striped");
   });
 
   it("names the shop of who is logged in, on a phone that knows no device", () => {

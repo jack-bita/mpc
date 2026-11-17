@@ -29,7 +29,8 @@ export function row(fields: Partial<RuleRow> = {}): RuleRow {
   };
 }
 
-/** One line of the answer: the late fine's, at its default, unless told otherwise. */
+/** One line of the answer: the late fine's, unless told otherwise, with a default of 1,000 for these tests only, a
+ * value with thousands to write: the registry's own is 0 (ATT-2). */
 export function line(fields: Partial<RuleLine> = {}): RuleLine {
   return {
     key: "attendance.late_fine",
@@ -67,8 +68,17 @@ function sideRule(
 export const SHOP_RULES: components["schemas"]["ShopRulesAnswer"] = {
   today: TODAY,
   rules: [
+    shopRule("attendance.enabled", "yes_no", "false"),
     shopRule("attendance.on_time_until", "time", "07:35"),
-    shopRule("attendance.late_fine", "money", "1000.00"),
+    // No fine until the owner types one (ATT-2).
+    shopRule("attendance.late_fine", "money", "0.00"),
+    shopRule("attendance.second_fine_from", "time", "08:00"),
+    shopRule("attendance.second_fine", "money", "0.00"),
+    shopRule("attendance.review_from", "time", "08:30"),
+    shopRule("attendance.afternoon_from", "time", "12:00"),
+    shopRule("attendance.midday", "time", "13:00"),
+    shopRule("attendance.morning_leave_until", "time", "13:30"),
+    shopRule("attendance.closing", "time", "18:40"),
     shopRule("money.rounding_step", "money", "1.00"),
     shopRule("session.idle_minutes", "whole", "15"),
     ...sideRule("cash.tolerance", "money", "0.00"),

@@ -29,6 +29,7 @@ from apps.shops.models import (
     Shop,
     ShopKind,
     Side,
+    SideBand,
     StockLocation,
 )
 from apps.shops.services import NewSide, create_shop
@@ -41,7 +42,7 @@ NAME = "Duka la Mfano"
 CODE = "MFANO"
 SIDES = [
     NewSide(code="D", name="Dawa"),
-    NewSide(code="F", name="Vyakula", sale_flow=SaleFlow.WRITER_CASHIER_LOADER),
+    NewSide(code="F", name="Vyakula", sale_flow=SaleFlow.WRITER_CASHIER_LOADER, band=SideBand.STRIPED),
 ]
 
 
@@ -59,10 +60,11 @@ def test_create_shop_makes_location_and_drawer_per_side() -> None:
     side_code = {side.id: side.code for side in sides}
     drawer_name = {drawer.id: drawer.name for drawer in drawers}
     # Each side switched off (is_live False) until the owner agrees to use it (ADR-0033): create_shop is
-    # the one way sides are made, so the rule is checked here as well as on the table's default.
-    assert sorted((side.code, side.name, side.sale_flow, side.is_live) for side in sides) == [
-        ("D", "Dawa", SaleFlow.ONE_SCREEN, False),
-        ("F", "Vyakula", SaleFlow.WRITER_CASHIER_LOADER, False),
+    # the one way sides are made, so the rule is checked here as well as on the table's default. Each keeps the
+    # band it was given, and blue when given none (SHOP-4).
+    assert sorted((side.code, side.name, side.sale_flow, side.is_live, side.band) for side in sides) == [
+        ("D", "Dawa", SaleFlow.ONE_SCREEN, False, SideBand.BLUE),
+        ("F", "Vyakula", SaleFlow.WRITER_CASHIER_LOADER, False, SideBand.STRIPED),
     ]
     # One default location per side, named after it.
     assert sorted((side_code[loc.side_id], loc.name, loc.is_default) for loc in locations) == [

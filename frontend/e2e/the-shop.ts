@@ -1,6 +1,6 @@
 // the-shop.ts — what the browser tests share (UI-6, SYNC-11): the demo shop's people and logins, the story's
-// two browsers as fixtures, a new laptop joining the shop, and a seller logging in by PIN. Not a test itself:
-// Playwright runs only *.spec.ts files.
+// two browsers as fixtures, a new laptop joining the shop, a seller logging in by PIN, and days as the date boxes and
+// the page write them (ATT-9's review). Not a test itself: Playwright runs only *.spec.ts files.
 //
 // The shop is the demo's, made by the demo seed (`manage.py seed_demo`, backend/apps/demo/services.py) on an
 // empty database as the test container starts, as the demo does (backend/start-demo.sh, compose.e2e.yml),
@@ -48,6 +48,20 @@ export function words(
     /\{(\w+)\}/g,
     (_, name: string) => values[name] ?? `{${name}}`,
   );
+}
+
+/** `count` days after `day`, both as a date box writes them: "2026-11-15", 2 → "2026-11-17". Days only, in UTC, so no
+ * zone moves it. */
+export function daysAfter(day: string, count: number): string {
+  const next = new Date(`${day}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + count);
+  return next.toISOString().slice(0, 10);
+}
+
+/** "2026-11-16" as the page writes a day: "16/11/2026" (formatDay, src/lib/format.ts). */
+export function asShown(day: string): string {
+  const [year, month, date] = day.split("-");
+  return `${date}/${month}/${year}`;
 }
 
 // The story's two browsers, as fixtures: Playwright opens each before a test that names it, and closes it

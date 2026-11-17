@@ -25,8 +25,16 @@ describe("the rules by area", () => {
       ),
     ).toEqual([
       [
+        ["attendance.enabled", 1],
         ["attendance.on_time_until", 1],
         ["attendance.late_fine", 1],
+        ["attendance.second_fine_from", 1],
+        ["attendance.second_fine", 1],
+        ["attendance.review_from", 1],
+        ["attendance.afternoon_from", 1],
+        ["attendance.midday", 1],
+        ["attendance.morning_leave_until", 1],
+        ["attendance.closing", 1],
       ],
       [
         ["money.rounding_step", 1],
@@ -51,7 +59,7 @@ describe("the rules by area", () => {
 
     const keys = page.flatMap((area) => area.rules.map((rule) => rule.key));
     expect(keys).not.toContain("attendance.half_day_after");
-    expect(keys).toHaveLength(8);
+    expect(keys).toHaveLength(16);
   });
 
   it("leaves out an area with no rule the person sees", () => {

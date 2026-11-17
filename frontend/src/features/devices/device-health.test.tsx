@@ -307,6 +307,15 @@ describe("Hali ya vifaa", () => {
     expect(card.className).not.toContain("ring-destructive");
   });
 
+  it("has the back arrow beside its title", () => {
+    answer("GET", ME, { status: 200, body: OWNER });
+
+    render(<DeviceHealthScreen />);
+
+    expect(screen.getByRole("button", { name: "Rudi ulipotoka" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
+  });
+
   it("says why when the server refuses the page", async () => {
     answer("GET", ME, { status: 200, body: OWNER });
     answer("GET", HEALTH, refusal(403, "not_authenticated"));

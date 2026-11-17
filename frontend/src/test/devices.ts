@@ -16,6 +16,7 @@ export const DAWA_LAPTOP_ANSWER: components["schemas"]["DeviceMe"] = {
     id: "019a5e00-0000-7000-8000-0000000000d1",
     code: "D",
     name: "Dawa",
+    band: "blue",
   },
   shop: {
     id: "019a5e00-0000-7000-8000-0000000000a1",
@@ -44,22 +45,43 @@ export const DAWA_LAPTOP: ThisDevice = {
     id: "019a5e00-0000-7000-8000-0000000000d1",
     code: "D",
     name: "Dawa",
+    band: "blue",
   },
 };
 
-/** The Dawa and Vyakula sides, as `me` names them. */
-export const DAWA = { id: DAWA_LAPTOP.homeSide.id, code: "D", name: "Dawa" };
+/** The look of the band under the top bar, or null when it shows none (SideBand's `data-look`). */
+export function bandUnderTheBar(): string | null {
+  return (
+    document.querySelector("header [data-look]")?.getAttribute("data-look") ??
+    null
+  );
+}
+
+/** The Dawa and Vyakula sides, as `me` names them, each with its band: Vyakula striped, like the Foods bags
+ * (SHOP-4). */
+export const DAWA = {
+  id: DAWA_LAPTOP.homeSide.id,
+  code: "D",
+  name: "Dawa",
+  band: "blue" as const,
+};
 export const VYAKULA = {
   id: "019a5e00-0000-7000-8000-0000000000f1",
   code: "F",
   name: "Vyakula",
+  band: "striped" as const,
 };
 
 /** What GET /api/auth/me/ answers for someone at MPC on their own phone, holding `keys` on each side
  * named. Fake people: made-up names. */
 export function whoIsHere(
   keys: {
-    side: { id: string; code: string; name: string };
+    side: {
+      id: string;
+      code: string;
+      name: string;
+      band: components["schemas"]["SideBandEnum"];
+    };
     permissions: string[];
   }[],
 ): components["schemas"]["WhoIsHere"] {

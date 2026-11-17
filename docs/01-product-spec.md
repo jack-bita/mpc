@@ -2,12 +2,16 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.2 · 15 Nov 2026 · Portion 1 of the planning pack
+**Version:** 1.4 · 16 Nov 2026 · Portion 1 of the planning pack
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Open questions are collected in §14. Key decisions are recorded as ADRs in `docs/adr/`.
 
 **Changes in v1.1** (18 Oct 2026): applies the build plan's Appendix A (`04-build-plan.md`). Attendance (R1b) is built and switched on first, then the Drugs side (R1), then the Foods side (R2); every part lives in the one website and is switched on in settings (§7.8, §10, §11, §14 — 04 BP7, ADR-0033). §6 now states the side decision (02 D1, ADR-0001).
 
 **Changes in v1.2** (15 Nov 2026, from Jack): the shop's cook makes the workers' meals, and each worker pays for their own out of their pay. The day's meal money is typed each day and split among the workers who came that day, so a worker who leaves mid-month is paid at once, with nothing to count by hand (§6, §7.8, §8.1; 02 v1.29, 04 v1.78). Marked **(v1.2)**.
+
+**Changes in v1.3** (16 Nov 2026, from the owner, through Jack, OWN-7): the attendance rules in §8.1 are the owner's: two fines, the half days' windows, and *dharura*, a day a manager decides. The fines' amounts are the owner's to type on the real server, so this public spec names none, and the payslip example takes a made-up fine of 500 (02 v1.32, 04 v1.86). Marked **(v1.3)**.
+
+**Changes in v1.4** (16 Nov 2026, from Jack, ATT-8): besides Sundays and public holidays, the owner may close the shop for days of his own, such as a family funeral: each closure runs from a first day to a last, which he may move, and nobody is paid on its days (§8.1; 02 v1.33, 04 v1.89). Marked **(v1.4)**.
 
 ---
 
@@ -212,11 +216,14 @@ In this order: a price list with in-stock status (browse by animal and problem) 
 
 ### 8.1 Attendance and pay
 - **On time:** arrives by 07:35 → full day.
-- **Late:** arrives after 07:35 → full day minus a fixed fine of TZS 1,000 *(setting)*.
-- **Half day:** morning-only or afternoon-only work. Half-day pay = daily rate ÷ 2.
+- **Late** **(v1.3)**: arrives after 07:35 and before 08:00 → full day minus the first fine; from 08:00 and before 08:30 → full day minus the second fine. Both fines are settings the owner types; this spec names no amount.
+- **Half day** **(v1.3)**: the morning (arrives on time or late, leaves from 13:00 to 13:30) or the afternoon (arrives from 12:00 to 13:00, leaves at closing, 18:40). Half-day pay = daily rate ÷ 2.
+- **Dharura** **(v1.3)**: any other arrival or leaving time, and a missing clock-out. The day needs review: a manager or the owner decides it.
+- **Sundays and public holidays** **(v1.3)**: the shop is closed and nobody is paid. Sunday work is a deal between the owner and the worker, outside the system.
+- **Other closed days** **(v1.4)**: the owner may close the shop for days of his own, such as a family funeral, from a first day to a last. Nobody is paid on them, as on a public holiday. If the shop opens again sooner, or stays closed longer, he moves the last day, with a reason.
 - **Absent:** office duty → paid; with permission → unpaid; no-show → unpaid.
 - **Meals** **(v1.2)**: the cook makes the workers' meals at the shop, and each worker pays for their own. Each day, the day's meal money is typed in and split equally among the workers who came that day, half days included; the cook pays no share. So a worker who came 10 days pays 10 days of meals, not a share of the whole month.
-- **Pay** = (full days × daily rate) + (half days × daily rate ÷ 2) − (late days × fine) − meal shares − advances. Paid monthly. The daily rate is set per worker. Sundays are not paid.
+- **Pay** = (full days × daily rate) + (half days × daily rate ÷ 2) − the late days' fines − meal shares − advances. Paid monthly. The daily rate is set per worker. Sundays are not paid.
 - **Leaving mid-month** **(v1.2)**: a worker who leaves is paid up to their last day. The system already holds that pay, worked out day by day, so the owner reads it and pays.
 
 Examples (these become automated tests):
@@ -224,13 +231,18 @@ Examples (these become automated tests):
 | Case | Result |
 |---|---|
 | Arrives 07:20, leaves at closing | Full day |
-| Arrives 07:50, leaves at closing | Full day − 1,000 |
-| Arrives 11:00, leaves at closing | Half day |
-| Arrives 13:30, leaves at closing | Half day |
-| Arrives 07:20, leaves at 12:00 | Half day |
+| Arrives 07:50, leaves at closing | Full day − the first fine |
+| Arrives 08:10, leaves at closing **(v1.3)** | Full day − the second fine |
+| Arrives 09:00, leaves at closing **(v1.3)** | Dharura |
+| Arrives 12:30, leaves at closing **(v1.3)** | Half day |
+| Arrives 13:30, leaves at closing | Dharura **(v1.3)** |
+| Arrives 07:20, leaves at 13:10 **(v1.3)** | Half day |
+| Arrives 07:20, leaves at 12:00 | Dharura **(v1.3)** |
+| Arrives 07:20, leaves at 16:00 **(v1.3)** | Dharura |
+| Arrives 07:20, never clocks out **(v1.3)** | Dharura |
 | Doesn't come, no office reason | No pay |
 
-Payslip example (daily rate 9,000): 20 days on time + 3 late = 23 × 9,000 = 207,000; 2 half days × 4,500 = 9,000; 3 fines = −3,000; advance = −20,000 → **193,000**.
+Payslip example (daily rate 9,000, a first fine of 500 for the example **(v1.3)**): 20 days on time + 3 late = 23 × 9,000 = 207,000; 2 half days × 4,500 = 9,000; 3 fines = −1,500; advance = −20,000 → **194,500**.
 
 ### 8.2 Money
 - **Expected cash** = opening cash + cash sales + cash debt repayments − cash change given for Lipa Namba overpayments − expenses − advances − withdrawals.
@@ -299,7 +311,7 @@ Baselines to record before launch: customers on a busy Foods day (50–100+), op
 
 To settle while building. Each one has a safe default or is a setting.
 
-- **Attendance:** when "late" becomes "half day"; leaving after 13:00 or arriving late in the afternoon; any extra penalty for a no-show; whether the shop opens on Sundays and public holidays.
+- **Attendance:** settled by the owner on 16 Nov 2026 (§8.1, OWN-7) **(v1.3)**: when "late" becomes "half day"; leaving after 13:00 or arriving late in the afternoon; Sundays and public holidays. Still open: any extra penalty for a no-show.
 - **Products:** special items (prescription-only drugs, vaccines kept cold, poisons); jumla thresholds; open-bag tolerance.
 - **The product:** its name (separate from MPC); target market *(default: agro-vet and farm-supply shops)*; Swahili with an English switch.
 - **The owner's decisions:** credit rules (who, approval, limits, non-payment); discount and floor limits; who sees buying prices and profit; who may cancel or refund; prices visible online; customers seeing their own debt; budget (devices, router UPS, printer, SMS/WhatsApp, hosting); a second branch; VAT and vet-drug licence rules; TRA receipt practice; permission to use the shop's name and numbers in the portfolio; an SMS for each debt.
