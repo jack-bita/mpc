@@ -235,12 +235,12 @@ def _locked_for_a_change(staff: StaffMember, by: StaffMember | None) -> tuple[St
 def _check_people_fixed_on_demo(staff: StaffMember) -> None:
     # On the demo every visitor logs in as Meneja (OPS-3), who holds staff.manage there, so a visitor can try the
     # workers' page (Jack, PPL-4: A). The people the seed made stay as made: a visitor who suspended Asha, or marked
-    # Baraka left, would take them off every other visitor's PIN tiles until the next morning's seed. Meneja himself
-    # can't be changed by his own login (staff.own), the only one visitors have. A worker a visitor added can be
-    # changed, as trying that is the point. The seed's people are those the system made, with no one named as their
-    # adder: the seed passes no `by`, while a visitor's add names Meneja (add_worker). Only for a person acting: the
-    # system, which is how the seed works, still may. Read from the demo's sign, as check_logins_may_change does, before
-    # anything is locked or written.
+    # Baraka left, would take them off every other visitor's PIN tiles until the next morning's seed; and Meneja is
+    # one of them, so his own login, the only one visitors have, is refused here, before staff.own is asked. A worker
+    # a visitor added can be changed, as trying that is the point. The seed's people are those the system made, with
+    # no one named as their adder: the seed passes no `by`, while a visitor's add names Meneja (add_worker). Only for a
+    # person acting: the system, which is how the seed works, still may. Read from the demo's sign, as
+    # check_logins_may_change does, before anything is locked or written.
     if settings.DEMO_SEED and staff.created_by_id is None:
         raise ValidationError("On the demo, the people the seed made stay as they are.", code="demo.people_fixed")
 

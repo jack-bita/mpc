@@ -42,7 +42,7 @@ from apps.demo.services import SHOP_CODE, PublicHoliday, Seeded, coming_public_h
 from apps.people.models import PermissionGrant, RoleAssignment, StaffMember, User
 from apps.people.permissions import effective_permissions
 from apps.people.pins import pin_matches
-from apps.people.services import add_worker, suspend
+from apps.people.services import add_worker, mark_left, suspend
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, ShopKind, Side
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
@@ -489,12 +489,16 @@ def test_seed_demo_lets_a_visitor_manage_the_workers_they_add() -> None:
         assert "staff.manage" in effective_permissions(meneja, None)
         juma = add_worker(shop=meneja.shop, full_name="Juma Mfano", display_name="Juma", by=meneja)
         assert suspend(juma, by=meneja, reason="Jaribio").status == "suspended"
-        for nickname in ("Asha", "Baraka"):
-            seller = StaffMember.objects.get(display_name=nickname)
-            with pytest.raises(ValidationError) as refused:
-                suspend(seller, by=meneja, reason="Jaribio")
-            assert refused.value.code == "demo.people_fixed"
-            assert StaffMember.objects.get(pk=seller.pk).status == "active"
+        # Meneja among them: a visitor who suspended him, or marked him left, through his own login, would lock every
+        # visitor after out of the office and stop every one tap.
+        for nickname in ("Asha", "Baraka", "Meneja"):
+            person = StaffMember.objects.get(display_name=nickname)
+            with pytest.raises(ValidationError) as suspending:
+                suspend(person, by=meneja, reason="Jaribio")
+            with pytest.raises(ValidationError) as leaving:
+                mark_left(person, left_on=person.started_on, by=meneja, reason="Jaribio")
+            assert suspending.value.code == leaving.value.code == "demo.people_fixed", nickname
+            assert StaffMember.objects.get(pk=person.pk).status == "active"
 
 
 def test_seed_demo_closes_on_the_coming_public_holidays() -> None:
