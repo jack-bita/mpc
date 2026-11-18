@@ -394,12 +394,12 @@ describe("a session the server ends", () => {
       screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
     ).toBeDefined();
     expect(logouts()).toHaveLength(1);
-    // Juma taps his tile, then Rudi: the reason was for her, and is gone. The tiles come a moment after
+    // Juma taps his tile, then the arrow back: the reason was for her, and is gone. The tiles come a moment after
     // the question, from the laptop's copy.
     fireEvent.click(
       await screen.findByRole("button", { name: "Juma Mfano Juma" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Rudi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
     expect(
       screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
     ).toBeDefined();
@@ -456,9 +456,27 @@ describe("the way in by password", () => {
     render(<AtTheDevice device={DAWA_LAPTOP} />);
     await screen.findByRole("heading", { name: "Wewe ni nani?" });
 
-    const link = screen.getByRole("link", { name: "Ingia kwa nenosiri" });
+    // Found, not got: it comes with the tiles' first read, so the demo's never flashes (OPS-13).
+    const link = await screen.findByRole("link", {
+      name: "Ingia kwa nenosiri",
+    });
     // The end slash comes from next.config.ts (trailingSlash), which a test doesn't read.
     expect(link.getAttribute("href")).toMatch(/^\/login\/?$/);
+  });
+
+  it("isn't under the PIN pad: someone who tapped their tile logs in with their PIN", async () => {
+    // Juma tapped his tile: the pad asks for his PIN, and a password button there would lead him to a
+    // page that knows nothing of him (Jack, OPS-13).
+    theLaptop(null);
+    render(<AtTheDevice device={DAWA_LAPTOP} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Juma Mfano Juma" }),
+    );
+    await screen.findByRole("heading", { name: "Juma Mfano" });
+
+    expect(
+      screen.queryByRole("link", { name: "Ingia kwa nenosiri" }),
+    ).toBeNull();
   });
 
   it("isn't there while someone is logged in", async () => {

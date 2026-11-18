@@ -9,11 +9,22 @@
 // her tile, as a visitor reads it, never typed in from this file: if the tile showed none, or a wrong one, the
 // story would stop there. It is then checked against the seed's, so the README's PIN is the one that works.
 //
+// And the demo's manager (OPS-13): one tap, his tile, the password login with both boxes already filled, Ingia, and
+// his office, with Wafanyakazi. On the way, the back arrow from the login takes the visitor back to the tiles, where
+// they came from (Jack, OPS-13), as a real browser's history does, which no Vitest test has.
+//
 // The container's database holds the demo shop alone, as the seed makes it (compose.e2e.yml), so the demo is open
-// there. The other stories pair laptops of their own in the same shop; this one taps, and pairs none.
+// there. The other stories pair laptops of their own in the same shop; these tap, and pair none.
 import sw from "../messages/sw.json";
 
-import { ASHA, expect, logsIn, test } from "./the-shop";
+import {
+  ASHA,
+  expect,
+  logsIn,
+  MANAGER_EMAIL,
+  MANAGER_PASSWORD,
+  test,
+} from "./the-shop";
 
 const PULL = "/api/sync/v1/pull/";
 // The card's promise.
@@ -86,4 +97,69 @@ test("a visitor goes from the demo link to an offline clock-in in under a minute
   });
 
   expect(Date.now() - started).toBeLessThan(A_MINUTE);
+});
+
+test("the demo's manager logs in from his tile, with nothing typed", async ({
+  laptop,
+}) => {
+  const counter = await laptop.newPage();
+  // His tile, as a screen reader names it: his two names, then the words under them, where a seller's PIN is.
+  const managersTile = counter.getByRole("link", {
+    name: `Meneja Mfano Meneja ${sw.login.withPassword}`,
+    exact: true,
+  });
+  const loginHeading = counter.getByRole("heading", {
+    level: 1,
+    name: sw.login.password.title,
+  });
+
+  await test.step("the visitor opens the demo and taps Jaribu demo", async () => {
+    await counter.goto("/");
+    await counter
+      .getByRole("button", { name: sw.device.demo.try, exact: true })
+      .click();
+    await expect(
+      counter.getByRole("heading", { name: sw.login.picker.title }),
+    ).toBeVisible();
+  });
+
+  await test.step("Meneja's tile opens the password login, never the PIN pad", async () => {
+    await managersTile.click();
+    await expect(loginHeading).toBeVisible();
+    await expect(counter.getByText(sw.login.pin.typePin)).toHaveCount(0);
+  });
+
+  await test.step("the back arrow goes back to the tiles, where the visitor was", async () => {
+    await counter
+      .getByRole("button", { name: sw.pageHeader.back, exact: true })
+      .click();
+    await expect(
+      counter.getByRole("heading", { name: sw.login.picker.title }),
+    ).toBeVisible();
+    await managersTile.click();
+    await expect(loginHeading).toBeVisible();
+  });
+
+  await test.step("both boxes are filled with the demo's public login, which says so", async () => {
+    await expect(counter.getByText(sw.login.password.demo)).toBeVisible();
+    await expect(counter.getByLabel(sw.login.password.name)).toHaveValue(
+      MANAGER_EMAIL,
+    );
+    // exact: the eye beside the box is labelled "Onyesha nenosiri", which holds the word too.
+    await expect(
+      counter.getByLabel(sw.login.password.password, { exact: true }),
+    ).toHaveValue(MANAGER_PASSWORD);
+  });
+
+  await test.step("Ingia, with nothing typed, opens his office and Wafanyakazi", async () => {
+    await counter
+      .getByRole("button", { name: sw.login.password.send, exact: true })
+      .click();
+    await counter
+      .getByRole("link", { name: sw.workers.title, exact: true })
+      .click();
+    await expect(
+      counter.getByRole("heading", { level: 1, name: sw.workers.title }),
+    ).toBeVisible();
+  });
 });

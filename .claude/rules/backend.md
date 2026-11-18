@@ -20,7 +20,7 @@ An app imports only from lower layers; import-linter checks it in CI.
 | 4 | `inventory`, `money` — `inventory` may import `money` |
 | 5 | `sales`, `services`, `staffpay` — `services` may import `sales` |
 | 6 | `sync`, `reports` |
-| 7 | `demo` — the demo seed (`manage.py seed_demo`, DATA-1) and the one-tap demo's two routes (`apps/demo/api/`, OPS-3), which alone may read the seed's people and PINs: no tables; it may import every app, and no app imports it |
+| 7 | `demo` — the demo seed (`manage.py seed_demo`, DATA-1) and the one-tap demo's two routes (`apps/demo/api/`, OPS-3), which alone may read the seed's people, PINs and the manager's public login (OPS-13): no tables; it may import every app, and no app imports it |
 
 Every app may import `control`; `control` imports only `core`. A model may name a higher-layer model by string (`"sales.Sale"`) — that is not an import.
 
@@ -66,4 +66,4 @@ Every app may import `control`; `control` imports only `core`. A model may name 
 ## Privacy
 
 - Logs are JSON lines with request id, shop, side, device and staff id — never names, phone numbers or amounts.
-- Buying prices, PIN hashes and passwords never leave the server; payslips never go to shared devices.
+- Buying prices, PIN hashes and passwords never leave the server; payslips never go to shared devices. The one exception is the demo's public login, which the README prints: taken from the seed's own list (`PEOPLE`, `apps/demo/services.py`), never from the database, and handed over only by the one-tap demo's answer, beside the sellers' PINs (OPS-13).

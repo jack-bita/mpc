@@ -2030,10 +2030,41 @@
                             "$ref": "#/components/schemas/DemoPin"
                         },
                         "readOnly": true
+                    },
+                    "logins": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DemoLogin"
+                        },
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "logins",
                     "pins"
+                ]
+            },
+            "DemoLogin": {
+                "type": "object",
+                "properties": {
+                    "staff_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "login": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "password": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "login",
+                    "password",
+                    "staff_id"
                 ]
             },
             "DemoOpen": {

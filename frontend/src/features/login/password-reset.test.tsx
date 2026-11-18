@@ -9,6 +9,7 @@ import { makeQueryClient } from "@/api/query-client";
 import { allauthRefusal, answer, fakeFetch, sent } from "@/test/fake-server";
 import { stillHoldsTheSecret } from "@/test/last-person";
 import { render } from "@/test/render";
+import { router } from "@/test/router";
 
 import { PasswordReset } from "./password-reset";
 
@@ -62,6 +63,17 @@ const resets = (method: string) =>
   );
 
 describe("the email link's page", () => {
+  it("has the back arrow, to the login: an email link has no page of the app's before it", async () => {
+    // Every page reached from another has the arrow at its top left (Jack, OPS-13).
+    aWorkingKey();
+    openTheLink();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Rudi ulipotoka" }),
+    );
+    expect(router.push).toHaveBeenCalledWith("/login/");
+  });
+
   it("reads the key after the #, clears it from the browser, and checks it", async () => {
     aWorkingKey();
     const entries = window.history.length;

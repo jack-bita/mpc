@@ -124,8 +124,7 @@
       "demoPin": "PIN {pin}"
     },
     "pin": {
-      "typePin": "Andika PIN yako",
-      "back": "Rudi"
+      "typePin": "Andika PIN yako"
     },
     "password": {
       "title": "Ingia",
@@ -134,6 +133,7 @@
       "password": "Nenosiri",
       "send": "Ingia",
       "forgot": "Umesahau nenosiri?",
+      "demo": "Hizi ni taarifa za kuingia za demo, ziko wazi kwa kila mtu. Bonyeza Ingia.",
       "someoneHere": "{name} ameingia kwenye kifaa hiki. Mtoe kwanza, kisha uingie."
     },
     "welcome": "Karibu, {name}",
@@ -163,8 +163,7 @@
       "email": "Barua pepe",
       "notAnEmail": "Andika barua pepe kamili, kama jina@mfano.com.",
       "send": "Tuma kiungo",
-      "sent": "Kama barua pepe hii ina akaunti hapa, tumetuma kiungo. Kifungue ndani ya saa moja.",
-      "back": "Rudi kuingia"
+      "sent": "Kama barua pepe hii ina akaunti hapa, tumetuma kiungo. Kifungue ndani ya saa moja."
     },
     "reset": {
       "title": "Weka nenosiri jipya",
@@ -466,7 +465,6 @@
   },
   "attendance": {
     "title": "Mahudhurio",
-    "back": "Rudi",
     "clockIn": "Ingia kazini",
     "clockOut": "Toka kazini",
     "switchedOff": "Mahudhurio hayajawashwa kwenye duka hili. Mwenye duka huyawasha kwenye Mipangilio ya duka.",
@@ -513,7 +511,6 @@
   },
   "thisLaptop": {
     "title": "Kompyuta hii",
-    "back": "Rudi",
     "keep": {
       "title": "Kuhifadhi data",
       "kept": "Kivinjari kimekubali kuhifadhi data za duka kwenye kompyuta hii kwa kudumu.",

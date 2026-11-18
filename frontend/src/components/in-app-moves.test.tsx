@@ -13,6 +13,11 @@ vi.mock("next/navigation", async (importOriginal) => ({
   usePathname: () => where.path,
 }));
 
+/** Pretends the tab's history holds `pages` pages. */
+function historyOf(pages: number) {
+  vi.spyOn(window.history, "length", "get").mockReturnValue(pages);
+}
+
 /** Pretends this page was loaded whole from `from`, or from nowhere. */
 function referrer(from: string) {
   vi.spyOn(document, "referrer", "get").mockReturnValue(from);
@@ -38,11 +43,26 @@ describe("the app's own moves", () => {
   });
 
   it("count a move inside the app, as Next.js changes the address", () => {
+    // A link or a push: a new address, and one more page in the tab's history, the one before it ours.
     referrer("");
+    historyOf(1);
     const { rerender } = render(<InAppMoves />);
     where.path = "/settings/";
+    historyOf(2);
     rerender(<InAppMoves />);
     expect(movedInApp()).toBe(true);
+  });
+
+  it("count no redirect, which changes the address and adds no page", () => {
+    // A bookmark to /office/, opened from Chrome's new tab while logged out: the office sends the person
+    // to /login/ with router.replace. The page before /login/ is Chrome's, not ours, so the arrow there
+    // must not go back to it (OPS-13's review).
+    referrer("");
+    historyOf(2);
+    const { rerender } = render(<InAppMoves />);
+    where.path = "/login/";
+    rerender(<InAppMoves />);
+    expect(movedInApp()).toBe(false);
   });
 
   it("count a whole page loaded from one of the app's own, as a login's redirect", () => {

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ALLAUTH } from "@/api/allauth";
 import { allauthRefusal, answer, fakeFetch, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
+import { router } from "@/test/router";
 
 import { ForgotPassword } from "./forgot-password";
 
@@ -56,11 +57,23 @@ describe("a forgotten password", () => {
       ),
     ).toBeTruthy();
     expect(await requests()[0]?.json()).toEqual({ email: "neema@example.com" });
-    // The form is gone, with the way back to the login in its place.
+    // The form is gone; the way back is the arrow at the top, as before it went.
     expect(screen.queryByLabelText("Barua pepe")).toBeNull();
     expect(
-      screen.getByRole("link", { name: "Rudi kuingia" }).getAttribute("href"),
-    ).toMatch(/^\/login\/?$/);
+      screen.getByRole("button", { name: "Rudi ulipotoka" }),
+    ).toBeDefined();
+  });
+
+  it("has the back arrow, to the login with no page of the app's before, and no Rudi kuingia", () => {
+    // Every page reached from another has the arrow at its top left, the one way back (Jack, OPS-13).
+    render(<ForgotPassword />);
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Umesahau nenosiri?" }),
+    ).toBeDefined();
+    expect(screen.queryByRole("link", { name: "Rudi kuingia" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
+    expect(router.push).toHaveBeenCalledWith("/login/");
   });
 
   it("asks for a whole email before it sends anything", async () => {

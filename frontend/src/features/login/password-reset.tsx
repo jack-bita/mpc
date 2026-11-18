@@ -19,6 +19,9 @@
 //                         already logged in: either way, "log in with it now"
 // A key that died meanwhile says so too, with the way to ask for another (forgot-password.tsx).
 //
+// The back arrow at the top, as on every page reached from another (Jack, OPS-13): an email link opens
+// the page with no page of the app's before it, so the arrow goes to /login/. The ways forward stay below.
+//
 // "use client": it asks use-intl for words, reads the browser's address, and calls the server.
 "use client";
 
@@ -34,6 +37,7 @@ import { useApiErrorWords } from "@/api/errors";
 import { ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button, ButtonLink } from "@/components/design/button";
+import { PageHeader } from "@/components/design/page-header";
 import { PasswordField } from "@/components/design/password-field";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 
@@ -141,7 +145,7 @@ export function PasswordReset() {
 
   return (
     <div className="flex max-w-md flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("reset.title")}</h1>
+      <PageHeader title={t("reset.title")} fallback="/login/" />
       {whatShows()}
     </div>
   );

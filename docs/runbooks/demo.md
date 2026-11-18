@@ -40,7 +40,7 @@ The demo seed (`manage.py seed_demo`, DATA-1) makes one made-up shop, *Duka la M
 
 | Who | Logs in with | Where |
 |---|---|---|
-| Meneja, the manager, on every side, who may also change the shop's rules (SHOP-5) | `meneja@example.com` and the password `jaribu-demo` | `/login/`, on a phone or a second browser |
+| Meneja, the manager, on every side, who may also change the shop's rules (SHOP-5) | `meneja@example.com` and the password `jaribu-demo` | his tile on a laptop tapped in with *Jaribu demo*, which opens `/login/` with both filled (OPS-13); or `/login/`, on a phone or a second browser |
 | Asha, a seller on Dawa | PIN `2580` | a laptop's PIN screen: one tapped in with *Jaribu demo* shows it on her tile (OPS-3), or one the manager registered |
 | Baraka, a seller on Vyakula | PIN `1470` | the same, on his tile |
 

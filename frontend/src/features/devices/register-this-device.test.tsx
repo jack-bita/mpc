@@ -8,6 +8,7 @@ import { DAWA_LAPTOP, DAWA_LAPTOP_ANSWER } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { swahiliIn } from "@/test/language";
 import { render } from "@/test/render";
+import { router } from "@/test/router";
 
 import { RegisterThisDevice, WAIT_CHECK_EVERY } from "./register-this-device";
 import { saveDevice } from "./this-device";
@@ -216,6 +217,34 @@ describe("Sajili kifaa hiki", () => {
     // The token the check brought goes with the start.
     const start = sent.find((request) => request.method === "POST");
     expect(start?.headers.get("X-CSRFToken")).toBe("fr3sh");
+  });
+
+  it("has the back arrow, to the welcome with no page of the app's before", () => {
+    // Every page reached from another has the arrow at its top left, the one way back (Jack, OPS-13).
+    render(<RegisterThisDevice />);
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Sajili kifaa hiki" }),
+    ).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
+    expect(router.push).toHaveBeenCalledWith("/");
+  });
+
+  it("keeps the back arrow once registered, beside Endelea", () => {
+    // Endelea goes on, to the PIN screen; the arrow goes back, to where the person was.
+    saveDevice(DAWA_LAPTOP);
+    render(<RegisterThisDevice />);
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Kifaa hiki kimesajiliwa",
+      }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Rudi ulipotoka" }),
+    ).toBeDefined();
+    expect(screen.getByRole("link", { name: "Endelea" })).toBeDefined();
   });
 
   it("shows a registered device its name, and no way to get a code", () => {

@@ -1,20 +1,21 @@
 // demo.ts — the one-tap demo (OPS-3, BP15): whether Jaribu demo may show on this server, the tap that
-// makes this browser a device of the demo shop, and the sellers' PINs the tap hands over, kept on the
-// laptop for the PIN screen to show under their tiles.
+// makes this browser a device of the demo shop, and the sellers' PINs and the manager's login the tap
+// hands over (OPS-13), kept on the laptop for the PIN screen's tiles.
 //
 // GET /api/devices/v1/demo/open/ answers true only where the demo shop is the only shop: never on the
 // real server, which never has the demo's sign, nor beside a live shop. POST /api/devices/v1/demo/ makes
-// the device, puts its key in a cookie page scripts can never read (AUTH-2), and answers with the PINs.
+// the device, puts its key in a cookie page scripts can never read (AUTH-2), and answers with the PINs
+// and the logins.
 // The device itself the app learns as every device does, from its own check (device-check.tsx).
 //
-// The PINs are kept on the laptop by demo-pins.ts, which never calls the server, for the PIN screen.
+// Both are kept on the laptop by demo-pins.ts, which never calls the server, for the PIN screen.
 import Dexie from "dexie";
 
 import { api, csrfHeader } from "@/api/client";
 import { answerOf, ApiRefusal } from "@/api/refusal";
 import { databaseName } from "@/offline/db";
 
-import { savePins } from "./demo-pins";
+import { saveLogins, savePins } from "./demo-pins";
 import { checkThisDevice } from "./device-check";
 import type { ThisDevice } from "./this-device";
 
@@ -28,9 +29,9 @@ export async function askDemoOpen(): Promise<boolean> {
 }
 
 /**
- * The tap: this browser becomes a device of the demo shop, and keeps the PINs. Gives back the device, as
- * its own check saved it. A refusal (demo.closed, too many tries) or no answer is thrown, for the screen
- * to show.
+ * The tap: this browser becomes a device of the demo shop, and keeps the PINs and the logins. Gives back
+ * the device, as its own check saved it. A refusal (demo.closed, too many tries) or no answer is thrown,
+ * for the screen to show.
  */
 export async function tryTheDemo(): Promise<ThisDevice> {
   // The tap is a change, so it needs the CSRF token, as a pairing's start does (pairing.ts): the device's
@@ -41,15 +42,16 @@ export async function tryTheDemo(): Promise<ThisDevice> {
   try {
     const made = await answerOf(api.POST("/api/devices/v1/demo/"));
     // Kept before the device is saved: the moment it is, the home page swaps to the PIN screen, whose
-    // tiles must already find their PINs.
+    // tiles must already find their PINs, and Meneja's tile his login.
     savePins(made.pins);
+    saveLogins(made.logins);
   } catch (error) {
     // pairing.already_paired: this browser's key already opens a device. A tap before this one made it,
     // and the check after that tap got no answer (the network dropped for a second), so the visitor saw
     // an error and tapped again. Not a dead end: the device is there, so this tap goes on to the check, as
     // Sajili kifaa hiki does after a yes in the code's last second (register-this-device.tsx). The PINs
-    // came with the first tap's answer, kept above; only an answer lost on its way leaves none, and the
-    // tiles then show no PIN.
+    // and the logins came with the first tap's answer, kept above; only an answer lost on its way leaves
+    // none, and the tiles then show no PIN, and Meneja no tile.
     if (!(
       error instanceof ApiRefusal &&
       error.body.code === "pairing.already_paired"

@@ -124,8 +124,7 @@
       "demoPin": "PIN {pin}"
     },
     "pin": {
-      "typePin": "Type your PIN",
-      "back": "Back"
+      "typePin": "Type your PIN"
     },
     "password": {
       "title": "Log in",
@@ -134,6 +133,7 @@
       "password": "Password",
       "send": "Log in",
       "forgot": "Forgot your password?",
+      "demo": "This is the demo's public login, open to everyone. Press Log in.",
       "someoneHere": "{name} is logged in on this device. Log them out first, then log in."
     },
     "welcome": "Welcome, {name}",
@@ -163,8 +163,7 @@
       "email": "Email",
       "notAnEmail": "Write the whole email, like name@example.com.",
       "send": "Send the link",
-      "sent": "If this email has an account here, we have sent a link. Open it within an hour.",
-      "back": "Back to log in"
+      "sent": "If this email has an account here, we have sent a link. Open it within an hour."
     },
     "reset": {
       "title": "Set a new password",
@@ -466,7 +465,6 @@
   },
   "attendance": {
     "title": "Attendance",
-    "back": "Back",
     "clockIn": "Clock in",
     "clockOut": "Clock out",
     "switchedOff": "Attendance isn't switched on at this shop. The owner switches it on in Shop settings.",
@@ -513,7 +511,6 @@
   },
   "thisLaptop": {
     "title": "This laptop",
-    "back": "Back",
     "keep": {
       "title": "Keeping the data",
       "kept": "The browser has agreed to keep the shop's data on this laptop for good.",

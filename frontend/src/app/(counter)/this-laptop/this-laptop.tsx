@@ -13,7 +13,8 @@ import { useEffect } from "react";
 import { useTranslations } from "use-intl";
 
 import { Alert, AlertDescription } from "@/components/design/alert";
-import { Button, ButtonLink } from "@/components/design/button";
+import { Button } from "@/components/design/button";
+import { PageHeader } from "@/components/design/page-header";
 import { askToKeepData, install, useKeepData } from "@/offline/keep-data";
 
 import { Rescue } from "./rescue";
@@ -30,12 +31,8 @@ export function ThisLaptopScreen() {
 
   return (
     <div className="grid max-w-md gap-6">
-      <div>
-        <ButtonLink href="/" kind="second" size="normal">
-          {t("back")}
-        </ButtonLink>
-      </div>
-      <h1 className="text-3xl font-semibold">{t("title")}</h1>
+      {/* The back arrow to the welcome, as on every page reached from another (Jack, OPS-13). */}
+      <PageHeader title={t("title")} fallback="/" />
 
       <section className="grid gap-3">
         <h2 className="text-xl font-semibold">{t("keep.title")}</h2>

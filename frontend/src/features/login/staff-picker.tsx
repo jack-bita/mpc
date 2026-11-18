@@ -10,10 +10,25 @@
 // gets his tile with his PIN, at the next sync; and on the demo, where no visitor can set a PIN, the
 // workers a visitor makes up never crowd the tiles of every visitor after (Jack, PPL-4's review).
 //
+// One more, on the demo only (OPS-13, Jack: A): the demo's manager, who has a password and no PIN. One tap
+// on Jaribu demo kept his public login on this laptop (demo-pins.ts), so he gets a tile too, a link to the
+// password login, never the PIN pad, which can't let in someone with no PIN: `/login/?as=<his id>`, whose
+// page starts with both boxes filled (password-login.tsx). A real shop's laptop keeps no demo login, so
+// there an owner or manager with no PIN still has no tile, and logs in by the password button under the
+// tiles.
+//
+// That button, *Ingia kwa nenosiri* to `/login/`, is here, under the tiles, and only here: never under the
+// PIN pad, where the person picked logs in with their PIN (Jack, OPS-13). Not on the demo either, where the
+// manager's own tile does its job: two ways to one page would only make a visitor wonder; nor before the
+// demo's first sync, which brings that tile, as a laptop that keeps a demo login is the demo's (OPS-13's
+// review). On a real shop it stays, before the first sync and on a shop with nobody yet too, as the
+// owner's way in to add them.
+//
 // A tile shows the full name in large letters with the nickname under it, until photos come (PPL-9; 02 §5).
 // On the demo, a seller's tile shows their PIN too, as Jaribu demo handed it over (OPS-3, demo-pins.ts):
-// a visitor can't guess it, and this is where they need it. Never on a real shop's laptop, which keeps no
-// demo PINs, and never one kept from yesterday's demo, whose people had other ids.
+// a visitor can't guess it, and this is where they need it; the manager's shows *Ingia kwa nenosiri*,
+// where his PIN would be. Never on a real shop's laptop, which keeps no demo PINs or logins, and never one
+// kept from yesterday's demo, whose people had other ids.
 //
 // "use client": it reads the laptop's database and its words, both in the browser only.
 "use client";
@@ -23,8 +38,12 @@ import { useEffect, useRef } from "react";
 import { useTranslations } from "use-intl";
 
 import type { components } from "@/api/schema";
-import { Button } from "@/components/design/button";
-import { demoPin } from "@/features/devices/demo-pins";
+import { Button, ButtonLink } from "@/components/design/button";
+import {
+  demoLogin,
+  demoPin,
+  keepsDemoLogins,
+} from "@/features/devices/demo-pins";
 import { readCursor } from "@/offline/sync/meta";
 import { useShopDatabase } from "@/offline/this-shop";
 
@@ -32,9 +51,10 @@ import { useShopDatabase } from "@/offline/this-shop";
 export type StaffRow = components["schemas"]["StaffRecord"];
 
 /**
- * Who gets a tile: the active people with a PIN, A to Z. Undefined while the first read runs, so nothing flashes;
- * null while this laptop has had no first sync, whose copy the tiles wait for. Live: a sync that adds,
- * renames or suspends someone redraws the tiles by itself.
+ * Who gets a tile: the active people with a PIN, or with a demo login kept here (OPS-13), A to Z.
+ * Undefined while the first read runs, so nothing flashes; null while this laptop has had no first sync,
+ * whose copy the tiles wait for. Live: a sync that adds, renames or suspends someone redraws the tiles by
+ * itself.
  */
 function useTiles(): StaffRow[] | null | undefined {
   const db = useShopDatabase();
@@ -48,11 +68,30 @@ function useTiles(): StaffRow[] | null | undefined {
       return people
         .filter(
           (person) =>
-            person.status === "active" && person.pin_changed_at !== null,
+            person.status === "active" &&
+            (person.pin_changed_at !== null || opensThePassword(person)),
         )
         .sort(byName);
     });
   }, [db]);
+}
+
+/** Whether this person's tile opens the password login, not the PIN pad: on the demo, the manager, who
+ * has no PIN, and whose login one tap kept here (OPS-13). Someone with a PIN keeps the pad, a login kept or
+ * not: the server hands over a login only for someone with none (_demo_logins). */
+function opensThePassword(person: StaffRow): boolean {
+  return person.pin_changed_at === null && demoLogin(person.id) !== undefined;
+}
+
+/** Whether the password button shows under the tiles: never while the first read runs, as it may be the
+ * demo's, which has none; before the first sync only on a laptop that keeps no demo login, as the first sync
+ * brings the demo manager's tile (OPS-13's review); after it, unless a tile already opens the password. */
+function showsThePasswordButton(
+  people: StaffRow[] | null | undefined,
+): boolean {
+  if (people === undefined) return false;
+  if (people === null) return !keepsDemoLogins();
+  return !people.some(opensThePassword);
 }
 
 // A to Z by full name, then nickname, then id: the order the server sends the rows in (staff_rows,
@@ -72,8 +111,10 @@ export function StaffPicker({
   onPick: (person: StaffRow) => void;
 }) {
   const t = useTranslations("login.picker");
+  // The login's book, for the password button's words, which the manager's tile says the same way.
+  const words = useTranslations("login");
   const people = useTiles();
-  // The tiles' step has come, and whatever had focus (a tapped tile, Rudi, Toka) left with the last one:
+  // The tiles' step has come, and whatever had focus (a tapped tile, the PIN pad's arrow, Toka) left with the last one:
   // focus moves to the question, so a screen reader says it, and Tab goes on from here (as UI-3's forms
   // do).
   const heading = useRef<HTMLHeadingElement>(null);
@@ -100,27 +141,62 @@ export function StaffPicker({
         <ul role="list" className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           {people.map((person) => (
             <li key={person.id}>
-              {/* The shop's button, so a tile has its colours, focus ring and press look, all checked in
-                  button.test.tsx. Two lines don't fit its 52 px, so it grows (h-auto), and never shrinks
-                  below a finger's size (min-h, from the same token). */}
-              <Button
-                kind="second"
-                className="h-auto min-h-(--control-big) w-full flex-col gap-1 py-4 whitespace-normal"
-                onClick={() => onPick(person)}
-              >
-                <span className="text-2xl">{person.full_name}</span>
-                {/* A space between the two names, so a screen reader says "Asha Mfano Asha", not
-                    "Asha MfanoAsha". Invisible: the tile sets its lines one under the other. */}{" "}
-                <span className="text-lg font-normal">
-                  {person.display_name}
-                </span>
-                <DemoPin staffId={person.id} />
-              </Button>
+              {opensThePassword(person) ? (
+                // The demo's manager: a real link, to the password login with his id, as the button's
+                // look on a link is ButtonLink's (ADR-0039). Same size and look as every tile.
+                <ButtonLink
+                  href={`/login/?as=${person.id}`}
+                  kind="second"
+                  className={TILE}
+                >
+                  <Names person={person} />{" "}
+                  <span className="text-base font-normal">
+                    {words("withPassword")}
+                  </span>
+                </ButtonLink>
+              ) : (
+                // The shop's button, so a tile has its colours, focus ring and press look, all checked in
+                // button.test.tsx.
+                <Button
+                  kind="second"
+                  className={TILE}
+                  onClick={() => onPick(person)}
+                >
+                  <Names person={person} />
+                  <DemoPin staffId={person.id} />
+                </Button>
+              )}
             </li>
           ))}
         </ul>
       )}
+      {showsThePasswordButton(people) && (
+        // The second kind, under the tiles, which are what the counter is for (Jack, 8 Nov 2026, at
+        // UI-5's review). A seller who taps it still needs a password.
+        <div>
+          <ButtonLink href="/login/" kind="second" size="normal">
+            {words("withPassword")}
+          </ButtonLink>
+        </div>
+      )}
     </div>
+  );
+}
+
+// A tile's size: two lines don't fit a button's 52 px, so it grows (h-auto), and never shrinks below a
+// finger's size (min-h, from the same token).
+const TILE =
+  "h-auto min-h-(--control-big) w-full flex-col gap-1 py-4 whitespace-normal";
+
+/** A tile's two names: the full name large, the nickname under it. */
+function Names({ person }: { person: StaffRow }) {
+  return (
+    <>
+      <span className="text-2xl">{person.full_name}</span>
+      {/* A space between the two names, so a screen reader says "Asha Mfano Asha", not
+          "Asha MfanoAsha". Invisible: the tile sets its lines one under the other. */}{" "}
+      <span className="text-lg font-normal">{person.display_name}</span>
+    </>
   );
 }
 

@@ -25,6 +25,7 @@ import { ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button, ButtonLink } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
+import { PageHeader } from "@/components/design/page-header";
 
 import { checkThisDevice, DEVICE_CHECK } from "./device-check";
 import {
@@ -73,7 +74,8 @@ export function RegisterThisDevice() {
 
   return (
     <div className="flex max-w-xl flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
+      {/* The back arrow to the welcome, as on every page reached from another (Jack, OPS-13). */}
+      <PageHeader title={t("title")} fallback="/" />
       {pairing ? (
         <Waiting
           pairing={pairing}
@@ -179,13 +181,8 @@ function Registered({ device }: { device: ThisDevice }) {
 
   return (
     <div className="flex max-w-xl flex-col gap-4">
-      <h1
-        ref={heading}
-        tabIndex={-1}
-        className="text-2xl font-semibold outline-none"
-      >
-        {t("done")}
-      </h1>
+      {/* The arrow stays once registered: Endelea goes on, the arrow back to where the person was. */}
+      <PageHeader title={t("done")} fallback="/" headingRef={heading} />
       {/* The shop by name: a code claimed by another shop's manager shows here at once (03 §5.9). */}
       <p>
         {t("which", {

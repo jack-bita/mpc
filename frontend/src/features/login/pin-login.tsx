@@ -34,7 +34,7 @@ import { api } from "@/api/client";
 import { forgetTheLastPerson, mayPassLater } from "@/api/query-client";
 import { answerOf } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
-import { Button } from "@/components/design/button";
+import { PageHeader } from "@/components/design/page-header";
 import type { ShopDatabase } from "@/offline/db";
 import { useOnline } from "@/offline/network";
 import { checkPinOffline, rememberPin } from "@/offline/pin";
@@ -58,8 +58,8 @@ export function PinLogin({
   /** Why the last session ended, when it didn't end by itself: `me` refused it, as when the person was
    * suspended while logged in. Shown above the tiles until someone is picked. */
   notice?: unknown;
-  /** Called as a tile is tapped: the home page then drops the notice for good, so Rudi doesn't bring the
-   * last person's reason back for the next one (UI-4's review). */
+  /** Called as a tile is tapped: the home page then drops the notice for good, so the PIN pad's arrow back
+   * to the tiles doesn't bring the last person's reason back for the next one (UI-4's review). */
   onPick?: () => void;
   /** The home page knows the server can't be asked now: `me` got no answer, or a logout waits unheard.
    * The PIN is then checked on this laptop, never sent. */
@@ -146,7 +146,7 @@ export function PinLogin({
     if (!pending) padHeading.current?.focus();
   }, [person, pending]);
 
-  // Back to the tiles, with the last refusal forgotten: the next person starts clean.
+  // Back to the tiles, by the arrow, with the last refusal forgotten: the next person starts clean.
   function back() {
     login.reset();
     here.reset();
@@ -167,25 +167,25 @@ export function PinLogin({
       </div>
     );
 
-  // Step 2: the pad, under the name of the person picked.
+  // Step 2: the pad, under the name of the person picked, with the back arrow beside it, at the top left as
+  // on every page reached from another (Jack, OPS-13): a step inside the home page, so the arrow goes back
+  // to the tiles, never to another page.
   return (
-    <div className="grid justify-items-center gap-6">
-      <h1
-        ref={padHeading}
-        tabIndex={-1}
-        className="text-3xl font-semibold outline-none"
-      >
-        {person.full_name}
-      </h1>
-      <p className="text-lg">{t("typePin")}</p>
+    <div className="grid gap-6">
+      {/* The arrow is off while the PIN is on its way: the answer could still log the person in, behind
+          the tiles the next person would see. */}
+      <PageHeader
+        title={person.full_name}
+        intro={t("typePin")}
+        headingRef={padHeading}
+        onBack={back}
+        backDisabled={pending}
+      />
       {/* The no, the server's or the laptop's: a wrong PIN, a lock with its minutes, a suspension. */}
       <ApiErrorAlert error={refused} />
-      <PinPad onPin={send} disabled={pending} />
-      {/* Off while the PIN is on its way too: the answer could still log the person in, behind the
-          tiles the next person would see. */}
-      <Button kind="second" onClick={back} disabled={pending}>
-        {t("back")}
-      </Button>
+      <div className="grid justify-items-center">
+        <PinPad onPin={send} disabled={pending} />
+      </div>
     </div>
   );
 }

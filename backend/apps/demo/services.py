@@ -41,7 +41,8 @@ rows: the demo can't hold anything a real shop couldn't, and a service that chan
 
 It also owns the one-tap demo (OPS-3, BP15): a recruiter has no manager to confirm a pairing code, so *Jaribu demo*
 makes the visitor's browser a device of the demo shop at once (register_demo_device), and hands it the sellers' PINs
-from PEOPLE below, the one list the seed sets them from, for the PIN screen to show under their tiles. It is open only
+from PEOPLE below, the one list the seed sets them from, for the PIN screen to show under their tiles; and the
+manager's login, for his tile, which opens the password login with both boxes filled (OPS-13). It is open only
 where the seed itself may run, and the seed has made the demo shop (demo_shop_if_open): the same sign and the same
 "no shop but a demo one" that keep the wipe shut keep this shut on the real server.
 
@@ -378,11 +379,24 @@ class DemoPin:
 
 
 @dataclass(frozen=True)
+class DemoLogin:
+    # One person's password login, for the PIN screen's tile of someone with no PIN (OPS-13): today Meneja, whose tile
+    # opens the password login with both boxes filled. `login` is what goes in its first box: the email, the one login
+    # name the seed gives (_demo_logins).
+    # The password is the seed's public one, from PEOPLE, never read from the database, which keeps only its hash:
+    # "passwords never leave the server" holds for every real one, and this one is printed in the README.
+    staff_id: uuid.UUID
+    login: str
+    password: str
+
+
+@dataclass(frozen=True)
 class DemoDevice:
-    # What one tap on Jaribu demo gives the visitor's browser (register_demo_device): its device, the PINs to show, and
-    # its key, which goes in its cookie only, never in an answer's body (AUTH-2).
+    # What one tap on Jaribu demo gives the visitor's browser (register_demo_device): its device, the PINs and the
+    # logins to show, and its key, which goes in its cookie only, never in an answer's body (AUTH-2).
     device: Device
     pins: tuple[DemoPin, ...]
+    logins: tuple[DemoLogin, ...]
     # repr=False, as NewPairing's (apps/people/services.py): a test's failure message, a log line or an error page that
     # printed this would otherwise show the key itself.
     key: str = field(repr=False)
@@ -408,10 +422,11 @@ def demo_shop_if_open() -> Shop | None:
 @sensitive_variables("replacing", "pairing")
 def register_demo_device(*, replacing: str | None = None) -> DemoDevice:
     """One tap on Jaribu demo (OPS-3, BP15): the visitor's browser becomes a device of the demo shop, with no code to
-    read out and no manager to say yes, and gets the demo sellers' PINs to show. `replacing`: the key the browser's
-    cookie holds now, if any, as for start_pairing. Refusals: the demo isn't open here (demo.closed, demo_shop_if_open);
-    a key that already opens a device (pairing.already_paired), which a new cookie would lose for good. A key from
-    yesterday's demo, whose device the seed's daily wipe took, opens nothing, so that browser gets a new device."""
+    read out and no manager to say yes, and gets the demo sellers' PINs and the manager's login to show (OPS-13).
+    `replacing`: the key the browser's cookie holds now, if any, as for start_pairing. Refusals: the demo isn't open
+    here (demo.closed, demo_shop_if_open); a key that already opens a device (pairing.already_paired), which a new
+    cookie would lose for good. A key from yesterday's demo, whose device the seed's daily wipe took, opens nothing, so
+    that browser gets a new device."""
     shop = demo_shop_if_open()
     if shop is None:
         # English for the logs; the app translates the code (ADR-0040).
@@ -440,22 +455,41 @@ def register_demo_device(*, replacing: str | None = None) -> DemoDevice:
             # a key no browser holds, and the browser taps again for a new one. Harmless: nothing can use it, and
             # the next daily reset takes it with the rest.
             pins = _demo_pins()
-    return DemoDevice(device=device, pins=pins, key=pairing.key)
+            logins = _demo_logins()
+    return DemoDevice(device=device, pins=pins, logins=logins, key=pairing.key)
 
 
 def _demo_pins() -> tuple[DemoPin, ...]:
-    # Each person of PEOPLE who has a PIN, found in the demo shop (the caller opens it) by the nickname the seed gave
-    # them. Every visitor shares Meneja's public password, and a manager may add and let staff go (PPL-4), and rename
-    # them (PPL-10). The seed's people stay as made on the demo (demo.people_fixed), but a guard missed must not stop
-    # every tap: a visitor could mark Asha as left and add a new "Asha" (a nickname is unique among current staff
-    # only), or rename her. So the seed's own row is taken, the first made: a UUIDv7 id starts with the time it was
-    # made. And someone no longer found is left out: a tile with no PIN, never a tap refused for every visitor until
-    # the next reset.
+    # Each person of PEOPLE who has a PIN, as the seed's own row (_seeds_own).
     pins = []
     for person in PEOPLE:
         if person.pin is None:
             continue
-        staff = StaffMember.objects.filter(display_name=person.display_name).order_by("pk").first()
+        staff = _seeds_own(person)
         if staff is not None:
             pins.append(DemoPin(staff_id=staff.pk, pin=person.pin))
     return tuple(pins)
+
+
+def _demo_logins() -> tuple[DemoLogin, ...]:
+    # Each person of PEOPLE who logs in only with a password (OPS-13): no PIN, so no tile until now (PPL-4's rule), and
+    # a login name for the box. Someone with a PIN gets none: their tile opens the PIN pad, never the password login.
+    logins = []
+    for person in PEOPLE:
+        if person.pin is not None or person.password is None or person.email is None:
+            continue
+        staff = _seeds_own(person)
+        if staff is not None:
+            logins.append(DemoLogin(staff_id=staff.pk, login=person.email, password=person.password))
+    return tuple(logins)
+
+
+def _seeds_own(person: DemoPerson) -> StaffMember | None:
+    # The seed's row of this person, found in the demo shop (the caller opens it) by the nickname the seed gave them.
+    # Every visitor shares Meneja's public password, and a manager may add and let staff go (PPL-4), and rename them
+    # (PPL-10). The seed's people stay as made on the demo (demo.people_fixed), but a guard missed must not stop every
+    # tap: a visitor could mark Asha as left and add a new "Asha" (a nickname is unique among current staff only), or
+    # rename her. So the seed's own row is taken, the first made: a UUIDv7 id starts with the time it was made. And
+    # someone no longer found is None, left out by the caller: a tile with no PIN or no login, never a tap refused for
+    # every visitor until the next reset.
+    return StaffMember.objects.filter(display_name=person.display_name).order_by("pk").first()
