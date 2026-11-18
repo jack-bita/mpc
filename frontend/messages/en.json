@@ -410,6 +410,21 @@
     "switchedOff": "Switched off by the system admin. They can't log in.",
     "leftHeading": "Those who left",
     "noneLeft": "Nobody.",
+    "add": "Add",
+    "added": "{name} has been added. Their name shows on the shop's laptops once they are given a PIN.",
+    "form": {
+      "fullName": "Full name",
+      "fullNameHint": "Their whole name, like Juma Mfano.",
+      "nickname": "Nickname",
+      "nicknameHint": "A short name the shop's laptops will show, like Juma.",
+      "jobTitle": "Job title",
+      "jobTitleHint": "Optional. Like Drugs seller.",
+      "firstDay": "First day",
+      "firstDayHint": "The day they start work.",
+      "farDay": "{day} is far from today. If it is right, press Save again.",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
     "roles": {
       "owner": "Owner",
       "manager": "Manager",

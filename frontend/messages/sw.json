@@ -410,6 +410,21 @@
     "switchedOff": "Amezimwa na msimamizi wa mfumo. Hawezi kuingia.",
     "leftHeading": "Walioondoka",
     "noneLeft": "Hakuna.",
+    "add": "Ongeza",
+    "added": "{name} ameongezwa. Jina lake litaonekana kwenye kompyuta za duka baada ya kupewa PIN.",
+    "form": {
+      "fullName": "Jina kamili",
+      "fullNameHint": "Jina lake lote, kama Juma Mfano.",
+      "nickname": "Jina la kuitwa",
+      "nicknameHint": "Jina fupi litakaloonekana kwenye kompyuta za duka, kama Juma.",
+      "jobTitle": "Kazi",
+      "jobTitleHint": "Si lazima. Kama Muuzaji wa dawa.",
+      "firstDay": "Siku ya kwanza",
+      "firstDayHint": "Siku anayoanza kazi.",
+      "farDay": "{day} iko mbali na leo. Kama ni sahihi, bonyeza Hifadhi tena.",
+      "save": "Hifadhi",
+      "cancel": "Ghairi"
+    },
     "roles": {
       "owner": "Mmiliki",
       "manager": "Meneja",

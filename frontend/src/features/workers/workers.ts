@@ -11,7 +11,7 @@
 // key again on every read and every change.
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -56,6 +56,21 @@ async function allWorkers(): Promise<Worker[]> {
 /** The shop's workers, from the store of server answers. */
 export function useWorkers() {
   return useQuery({ queryKey: WORKERS, queryFn: allWorkers });
+}
+
+/** A worker the server just answered with, in the list at once: a new one at the top, as the list comes newest
+ * first; one already on it (a send tried again, a suspension) changed in its place. The list is asked again after,
+ * so the server's own order settles it; until then the page never shows the list without the worker just saved,
+ * even when that read fails (closures.ts keeps a closure the same way). */
+export function keepWorker(store: QueryClient, worker: Worker): void {
+  store.setQueryData<Worker[]>(
+    WORKERS,
+    (list) =>
+      list &&
+      (list.some((each) => each.id === worker.id)
+        ? list.map((each) => (each.id === worker.id ? worker : each))
+        : [worker, ...list]),
+  );
 }
 
 /** The six roles every shop starts with, by the code of the template each was copied from (RoleTemplate,

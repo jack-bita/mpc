@@ -6,6 +6,9 @@
 // just added is at the top; those who left sit under their own heading at the bottom (a default of the card), so
 // the list a manager reads each day stays short as the years add names.
 //
+// Above the list, Ongeza opens the form for a new worker (worker-form.tsx); once he is added, one line says so, and
+// that his name reaches the shop's laptops once PPL-8 gives him a PIN.
+//
 // An office screen: it asks the server through the store of server answers (rule 5), and needs the internet,
 // which the office area says while it is gone. Its routes ask staff.manage on the whole shop (PPL-4); someone
 // without it has no button on the office home, and opening the address shows the server's refusal.
@@ -13,14 +16,26 @@
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
-import { Card } from "@/components/design/card";
+import { Alert, AlertDescription } from "@/components/design/alert";
+import { Button } from "@/components/design/button";
+import { Card, CardContent } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
 import { useWhoIsHere, type WhoIsHere } from "@/features/people/who-is-here";
+import { shopToday } from "@/offline/rules";
 
-import { useRoleWords, useWorkers, type Worker } from "./workers";
+import { WorkerForm } from "./worker-form";
+import {
+  mayManageStaff,
+  useRoleWords,
+  useWorkers,
+  type Worker,
+  WORKERS,
+} from "./workers";
 
 export function WorkersScreen() {
   const t = useTranslations("workers");
@@ -43,6 +58,7 @@ export function WorkersScreen() {
       </p>
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
+      {who.data && !waiting ? <AddWorker me={who.data} /> : null}
       {/* The list is asked here alone and handed down, never asked again by the part that shows it: a part
           that mounts on a failed read asks it again (TanStack's retryOnMount), which brings the wait back,
           which takes the part away, which mounts again on the next failure, round and round, asking the
@@ -51,6 +67,78 @@ export function WorkersScreen() {
         <WorkerList me={who.data} list={workers} />
       ) : null}
     </div>
+  );
+}
+
+/** Ongeza, its form, and the line that says who was added. Only for someone holding staff.manage on the whole
+ * shop, as the server asks; anyone else, who reached the page by its address, sees the list's refusal alone. */
+function AddWorker({ me }: { me: WhoIsHere }) {
+  const t = useTranslations("workers");
+  const store = useQueryClient();
+  // The shop's today, read as the form opens, not as the page did: a page left open overnight starts the first day's
+  // box on the new day.
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const [added, setAdded] = useState<Worker | null>(null);
+
+  // Where the keyboard goes when the form closes: back to Ongeza, as the form and the box that had focus are gone
+  // (laptops are keyboard first). Counted, so each close moves it (devices-screen.tsx).
+  const opener = useRef<HTMLButtonElement>(null);
+  const [closes, setCloses] = useState(0);
+  useEffect(() => {
+    if (closes > 0) opener.current?.focus();
+  }, [closes]);
+  function closeTheForm() {
+    setOpenOn(null);
+    setCloses((count) => count + 1);
+  }
+
+  if (!mayManageStaff(me)) return null;
+  return (
+    <>
+      {/* Always on the page, empty and hidden until a worker is added: a role="status" box is read when its words
+          change, and one that appears with its words already in it may not be read at all (offline-banner.tsx). */}
+      <div className={added ? undefined : "sr-only"}>
+        <Alert kind="info">
+          {added ? (
+            <AlertDescription>
+              {/* No field says who has a PIN, so it is said here, once, for the worker just added (a default of the
+                  card): a laptop shows a tile only for someone with one (PPL-4's review), which PPL-8 gives. */}
+              {t("added", { name: added.display_name })}
+            </AlertDescription>
+          ) : null}
+        </Alert>
+      </div>
+      {openOn !== null ? (
+        <Card>
+          <CardContent>
+            <WorkerForm
+              today={openOn}
+              onSaved={(worker) => {
+                setAdded(worker);
+                closeTheForm();
+              }}
+              onCancel={() => {
+                closeTheForm();
+                // Asked again here too: a send whose answer was lost may have added the worker.
+                void store.invalidateQueries({ queryKey: WORKERS });
+              }}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <div>
+          <Button
+            ref={opener}
+            onClick={() => {
+              setAdded(null);
+              setOpenOn(shopToday(me.shop.timezone, Date.now()));
+            }}
+          >
+            {t("add")}
+          </Button>
+        </div>
+      )}
+    </>
   );
 }
 

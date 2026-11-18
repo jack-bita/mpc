@@ -1,6 +1,6 @@
 // workers-screen.test.tsx — Wafanyakazi lists the shop's workers, each with their names, roles, sides and status,
-// newest first, those who left under their own heading (PPL-6).
-import { screen, within } from "@testing-library/react";
+// newest first, those who left under their own heading (PPL-6); and Ongeza, whose worker comes at the top.
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
@@ -215,5 +215,109 @@ describe("the workers' page", () => {
 
     const line = screen.getByText("Subiri kidogo…");
     expect(line.getAttribute("role")).toBe("status");
+  });
+});
+
+describe("Ongeza on the workers' page", () => {
+  const asha = worker({ display_name: "Asha", full_name: "Asha Mfano" });
+  const juma = worker({ display_name: "Juma", full_name: "Juma Mfano" });
+
+  /** Opens the form and types Juma's names. */
+  async function typeJuma() {
+    fireEvent.click(await screen.findByRole("button", { name: "Ongeza" }));
+    fireEvent.change(screen.getByLabelText("Jina kamili"), {
+      target: { value: "Juma Mfano" },
+    });
+    fireEvent.change(screen.getByLabelText("Jina la kuitwa"), {
+      target: { value: "Juma" },
+    });
+  }
+
+  it("adds Juma at the top of the list, says he gets a tile with a PIN, and gives the keyboard back to Ongeza", async () => {
+    theShopHas([asha]);
+    answer("POST", STAFF, { status: 201, body: juma });
+    render(<WorkersScreen />);
+
+    await typeJuma();
+    // The list asked again after the add answers with Juma in it.
+    answer("GET", STAFF, { status: 200, body: staffPage([juma, asha]) });
+    fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
+
+    expect(
+      await screen.findByText(
+        "Juma ameongezwa. Jina lake litaonekana kwenye kompyuta za duka baada ya kupewa PIN.",
+      ),
+    ).toBeTruthy();
+    const [first] = await rowsHere();
+    expect(within(first!).getByText("Juma · Juma Mfano")).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Ongeza" }),
+    );
+  });
+
+  it("keeps Juma on the list when the read after the add fails", async () => {
+    // The server's answer is put in the list at once (keepWorker), so a failed read never hides him.
+    theShopHas([asha]);
+    answer("POST", STAFF, { status: 201, body: juma });
+    render(<WorkersScreen />);
+
+    await typeJuma();
+    answer("GET", STAFF, refusal(403, "staff.suspended"));
+    fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
+
+    await screen.findByRole("alert");
+    const rows = await rowsHere();
+    expect(rows.map((row) => row.querySelector("p")?.textContent)).toEqual([
+      "Juma · Juma Mfano",
+      "Asha · Asha Mfano",
+    ]);
+  });
+
+  it("starts the first day at the shop's today", async () => {
+    theShopHas([asha]);
+    vi.useFakeTimers({
+      now: Date.parse("2026-11-18T21:30:00Z"),
+      toFake: ["Date"],
+    });
+    render(<WorkersScreen />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Ongeza" }));
+
+    // 21:30 UTC is 00:30 on the 19th in Dar es Salaam: the shop's day, whatever the phone's zone.
+    expect(
+      (screen.getByLabelText("Siku ya kwanza") as HTMLInputElement).value,
+    ).toBe("2026-11-19");
+    vi.useRealTimers();
+  });
+
+  it("asks the list again on Ghairi, as a send whose answer was lost may have added the worker", async () => {
+    theShopHas([asha]);
+    render(<WorkersScreen />);
+
+    await typeJuma();
+    const reads = () =>
+      sent.filter(
+        (request) => request.method === "GET" && request.url.endsWith(STAFF),
+      ).length;
+    const before = reads();
+    fireEvent.click(screen.getByRole("button", { name: "Ghairi" }));
+
+    await waitFor(() => expect(reads()).toBe(before + 1));
+    expect(screen.queryByLabelText("Jina kamili")).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Ongeza" }),
+    );
+  });
+
+  it("offers no Ongeza to someone without staff.manage on the whole shop", async () => {
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: ["staff.manage"] }]),
+    });
+    answer("GET", STAFF, refusal(403, "permission_denied"));
+    render(<WorkersScreen />);
+
+    await screen.findByRole("alert");
+    expect(screen.queryByRole("button", { name: "Ongeza" })).toBeNull();
   });
 });
