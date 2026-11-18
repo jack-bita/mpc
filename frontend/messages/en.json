@@ -441,11 +441,13 @@
       "suspend": "Suspend",
       "unsuspend": "Bring back",
       "leave": "Mark as left",
+      "hireAgain": "Hire again",
       "title": {
         "edit": "Edit {name}'s details",
         "suspend": "Suspend {name}",
         "unsuspend": "Bring {name} back to work",
-        "leave": "{name} left work"
+        "leave": "{name} left work",
+        "hireAgain": "Hire {name} again"
       },
       "reason": "Reason",
       "reasonHint": "Kept with your name and the time.",
@@ -460,7 +462,9 @@
         "suspend": "{name} is suspended.",
         "unsuspend": "{name} is back at work.",
         "leave": "{name} has left. Their last day was {day}."
-      }
+      },
+      "back": "{name} is back at work.",
+      "backLink": "Open their page now"
     },
     "roles": {
       "owner": "Owner",

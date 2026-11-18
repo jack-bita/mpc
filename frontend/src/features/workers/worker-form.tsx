@@ -1,4 +1,5 @@
-// worker-form.tsx — Ongeza: a new worker joins the shop (PPL-6, PPL-4). Opens under Ongeza on Wafanyakazi.
+// worker-form.tsx — Ongeza: a new worker joins the shop (PPL-6, PPL-4). Opens under Ongeza on Wafanyakazi. And Mwajiri
+// tena (PPL-11): the same boxes, for a worker who left and is hired again, opened on his old job's page (`again`).
 //
 // Four boxes: Jina kamili, the person's whole name, as the PIN tiles show it without a photo (02 §5); Jina la kuitwa,
 // the nickname the shop calls them by, on every laptop and every record; Kazi, a job title, which may be empty, as
@@ -21,6 +22,13 @@
 // No phone (PPL-10), role (PPL-7) or PIN (PPL-8) yet: a new worker can't log in until those cards, which the screen
 // says once he is added.
 //
+// Mwajiri tena: Baraka left on 12 March and comes back. He is the same person, so he keeps his own full name, and the
+// form has no Jina kamili box (Badilisha fixes it); his nickname and job title start as his old job's, and the first day
+// at today. The old job's id goes with the new job's own (`hire_again`), and the server gives the same person a new job.
+// A first day before his last day is said at once (staff.back_before_left); the server says it too when a later job of
+// his ended after it. Another manager who hired him first: the server's staff.already_member above the buttons; Ghairi
+// reads the worker again (worker-actions.tsx), and his old page then links to the new one.
+//
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
@@ -29,6 +37,7 @@ import { type FormEvent, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
+import type { components } from "@/api/schema";
 import { useApiErrorWords } from "@/api/errors";
 import { answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -63,15 +72,19 @@ function daysBetween(from: string, to: string): number {
 
 export function WorkerForm({
   today,
+  again,
   onSaved,
   onCancel,
 }: {
   /** The shop's today, in its own time zone: where the first day's box starts. */
   today: string;
+  /** Mwajiri tena: the job that ended, whose person is hired again (see the top). None for a new worker. */
+  again?: Worker;
   onSaved: (worker: Worker) => void;
   onCancel: () => void;
 }) {
   const t = useTranslations("workers.form");
+  const titles = useTranslations("workers.actions.title");
   const codes = useCodeWords();
   const { fieldMessages } = useApiErrorWords();
   const online = useOnline();
@@ -80,23 +93,19 @@ export function WorkerForm({
   // The last send: its id, and what it carried, so a try of the same keeps its id (see the top of this file).
   const lastSend = useRef<{ id: string; carried: string } | null>(null);
   const [fullName, setFullName] = useState("");
-  const [nickname, setNickname] = useState("");
-  const [jobTitle, setJobTitle] = useState("");
+  const [nickname, setNickname] = useState(again?.display_name ?? "");
+  const [jobTitle, setJobTitle] = useState(again?.job_title ?? "");
   const [firstDay, setFirstDay] = useState(today);
   const [own, setOwn] = useState<Checks>({});
   // The far first day the form has asked about: Hifadhi again with this same day sends it.
   const [askedAbout, setAskedAbout] = useState<string | null>(null);
 
   const save = useMutation({
-    mutationFn: (body: {
-      id: string;
-      full_name: string;
-      display_name: string;
-      job_title: string;
-      started_on: string;
-    }) => answerOf(api.POST("/api/v1/people/staff/", { body })),
+    mutationFn: (body: components["schemas"]["StaffAddRequest"]) =>
+      answerOf(api.POST("/api/v1/people/staff/", { body })),
     onSuccess: (worker) => {
-      // At the top of the list at once, newest first, then the list asks again (workers.ts).
+      // At the top of the list at once, newest first, then the list asks again (workers.ts): for one hired again,
+      // his old job's link to the new one with it.
       keepWorker(store, worker);
       void store.invalidateQueries({ queryKey: WORKERS });
       onSaved(worker);
@@ -113,9 +122,12 @@ export function WorkerForm({
     const called = nickname.trim();
     const title = jobTitle.trim();
     const checks: Checks = {};
-    if (full === "") checks.full_name = "blank";
+    if (again === undefined && full === "") checks.full_name = "blank";
     if (called === "") checks.display_name = "blank";
     if (firstDay === "") checks.started_on = "required";
+    // Days as text sort as days do. The same day may: a leaving marked by mistake is mended at once.
+    else if (again?.left_on && firstDay < again.left_on)
+      checks.started_on = "staff.back_before_left";
     setOwn(checks);
     if (Object.keys(checks).length > 0) return;
     // A day far from today: asked about once, beside its box; the same day again is the owner's answer.
@@ -125,16 +137,21 @@ export function WorkerForm({
       return;
     }
     // The same id for a try of the same boxes; a new one once any of them changed.
-    const carried = JSON.stringify([full, called, title, firstDay]);
+    const carried = JSON.stringify([again?.id, full, called, title, firstDay]);
     if (lastSend.current?.carried !== carried)
       lastSend.current = { id: newId(), carried };
-    save.mutate({
+    const job = {
       id: lastSend.current.id,
-      full_name: full,
       display_name: called,
       job_title: title,
       started_on: firstDay,
-    });
+    };
+    // Hired again: the old job's id, and no full name, as the person keeps his own.
+    save.mutate(
+      again === undefined
+        ? { ...job, full_name: full }
+        : { ...job, hire_again: again.id },
+    );
   }
 
   // Where each refusal shows: beside its box, the form's own first, then the server's. The nickname taken, the whole
@@ -152,18 +169,25 @@ export function WorkerForm({
   return (
     // noValidate: the browser's own checks would speak its language, not the shop's.
     <form noValidate onSubmit={send} className="grid gap-6">
-      <Field
-        label={t("fullName")}
-        hint={t("fullNameHint")}
-        error={said(own.full_name) ?? byField.full_name}
-        value={fullName}
-        onChange={(event) => setFullName(event.target.value)}
-        autoComplete="off"
-        // As the server keeps it (User.full_name, 150 characters).
-        maxLength={150}
-        // The person just asked for this form: the keyboard starts in its first box, where Ongeza was.
-        autoFocus
-      />
+      {again === undefined ? (
+        <Field
+          label={t("fullName")}
+          hint={t("fullNameHint")}
+          error={said(own.full_name) ?? byField.full_name}
+          value={fullName}
+          onChange={(event) => setFullName(event.target.value)}
+          autoComplete="off"
+          // As the server keeps it (User.full_name, 150 characters).
+          maxLength={150}
+          // The person just asked for this form: the keyboard starts in its first box, where Ongeza was.
+          autoFocus
+        />
+      ) : (
+        // On the old job's page, as the status forms are: whom the form hires again.
+        <h2 className="text-lg font-semibold">
+          {titles("hireAgain", { name: again.display_name })}
+        </h2>
+      )}
       <Field
         label={t("nickname")}
         hint={t("nicknameHint")}
@@ -177,6 +201,8 @@ export function WorkerForm({
         autoComplete="off"
         // As the server keeps it (StaffMember.display_name, 40 characters).
         maxLength={40}
+        // Mwajiri tena has no Jina kamili: the keyboard starts here, where the button was.
+        autoFocus={again !== undefined}
       />
       <Field
         label={t("jobTitle")}

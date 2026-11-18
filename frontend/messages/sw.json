@@ -441,11 +441,13 @@
       "suspend": "Simamisha",
       "unsuspend": "Rudisha",
       "leave": "Ameondoka",
+      "hireAgain": "Mwajiri tena",
       "title": {
         "edit": "Badilisha taarifa za {name}",
         "suspend": "Simamisha {name}",
         "unsuspend": "Mrudishe {name} kazini",
-        "leave": "{name} ameondoka kazini"
+        "leave": "{name} ameondoka kazini",
+        "hireAgain": "Mwajiri tena {name}"
       },
       "reason": "Sababu",
       "reasonHint": "Itahifadhiwa pamoja na jina lako na muda.",
@@ -460,7 +462,9 @@
         "suspend": "{name} amesimamishwa.",
         "unsuspend": "{name} amerudishwa kazini.",
         "leave": "{name} ameondoka. Siku yake ya mwisho ni {day}."
-      }
+      },
+      "back": "{name} amerudi kazini.",
+      "backLink": "Fungua ukurasa wake wa sasa"
     },
     "roles": {
       "owner": "Mmiliki",
