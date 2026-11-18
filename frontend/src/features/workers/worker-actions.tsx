@@ -3,13 +3,14 @@
 // reason, which the audit trail keeps with who and when (rule 7).
 //
 // The worker's status decides which show: working, Badilisha, Simamisha and Ameondoka; suspended, Badilisha, Rudisha
-// and Ameondoka; left, none, as leaving is for good and a job that ended keeps what it said then (a worker hired again comes back through Ongeza, PPL-11's row). On one's own page there
-// is no button, and one line says why, in staff.own's sentence: nobody changes their own job (PPL-4).
+// and Ameondoka; left, none, as leaving is for good and a job that ended keeps what it said then (a worker hired again
+// comes back through Ongeza, PPL-11's row). On one's own page there is no button, and one line says why, in staff.own's
+// sentence: nobody changes their own job or details (PPL-4, PPL-10).
 //
 // Badilisha opens its own form (worker-details-form.tsx) in place of the worker's details: the page hides them while it
 // is open (onEditing), as the same details are then in its boxes. The other buttons open their form in place of the
-// buttons: Sababu, and for Ameondoka the last day, which starts at the
-// shop's today and offers nothing after it (staff.left_in_future) nor before the first day (staff.left_before_start).
+// buttons: Sababu, and for Ameondoka the last day, which starts at the shop's today and offers nothing after it
+// (staff.left_in_future) nor before the first day (staff.left_before_start).
 // What the form can see is said at once, beside its box, and nothing is sent. The server's own refusals of who may
 // (staff.own, staff.more_keys, staff.superuser_only, demo.people_fixed…) show above the buttons; the three that say
 // the worker changed since the page read them (staff.not_active, staff.not_suspended, staff.left), as another manager

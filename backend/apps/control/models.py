@@ -246,7 +246,7 @@ class AuditAction(models.TextChoices):
     STAFF_LEAVE = "staff.leave", "Staff member left"
     # A worker's details fixed (PPL-10): their full name, phone, nickname, job title or first day, each before and
     # after, with who and why. The person's own details have no edit history, as a person belongs to no shop (ADR-0036).
-    STAFF_DETAILS = "staff.details_changed", "Staff member's details fixed"
+    STAFF_DETAILS_CHANGED = "staff.details_changed", "Staff member's details fixed"
     # A first or forgotten password, set face to face (AUTH-6): who did it and why, never the password (ADR-0038).
     STAFF_TEMPORARY_PASSWORD = "staff.temporary_password", "Temporary password set"
     # A device stopped, perhaps stolen, and let work again (AUTH-1): each with who and why (rule 7).

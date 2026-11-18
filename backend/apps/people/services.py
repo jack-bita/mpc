@@ -214,14 +214,15 @@ def _locked(staff: StaffMember) -> StaffMember:
 
 
 def _locked_for_a_change(staff: StaffMember, by: StaffMember | None) -> tuple[StaffMember, StaffMember | None]:
-    # A person's status changed by someone at the shop: both jobs locked, then who may asked (PPL-4, AUTH-8). The order
-    # is the point. Asked before the lock, the answer could be out of date by the time the change is written: Neema and
-    # Hamisi suspend each other in the same second, each check sees the other still active, and both go through. Asked
-    # after, on the rows as they are now, the second waits until the first is done and then finds the one it acts as
-    # suspended, holding nothing: refused (PermissionDenied), so the first wins. _locked_pair takes both rows in id
-    # order, so two such changes never wait for each other in a circle. `by` None: the system, or the superuser, who
-    # may change anyone, the owner included; only the person's own row is locked, as before. Returns both rows as
-    # read under the locks, so the change writes the person as they are now, and names the one acting as they are.
+    # A person's job changed by someone at the shop, its status or their details (PPL-10): both jobs locked, then who
+    # may asked (PPL-4, AUTH-8). The order is the point. Asked before the lock, the answer could be out of date by the
+    # time the change is written: Neema and Hamisi suspend each other in the same second, each check sees the other
+    # still active, and both go through. Asked after, on the rows as they are now, the second waits until the first is
+    # done and then finds the one it acts as suspended, holding nothing: refused (PermissionDenied), so the first wins.
+    # _locked_pair takes both rows in id order, so two such changes never wait for each other in a circle. `by` None:
+    # the system, or the superuser, who may change anyone, the owner included; only the person's own row is locked, as
+    # before. Returns both rows as read under the locks, so the change writes the person as they are now, and names the
+    # one acting as they are.
     if by is None:
         return _locked(staff), None
     _check_people_fixed_on_demo(staff)
@@ -378,10 +379,12 @@ def change_worker(
         # the page reads the worker again. editing() asks this again below, under the same lock.
         if staff.version != version:
             raise VersionConflict()
-        # The person locked too, lightly (no key), after the jobs, as every change to a person's job takes them: two
-        # managers of two shops fixing one person's name at once take turns, and each line's "before" is true. A new
-        # phone takes the full lock as it saves (a plain unique column, .claude/rules/backend.md): nothing is locked
-        # after it here.
+        # The person locked too, lightly (no key), after the jobs: two managers of two shops fixing one person's name
+        # at once take turns, and each line's "before" is true. A new phone takes the full lock as it saves, as
+        # PostgreSQL counts a plain unique column as part of the row's key (AUTH-8). Locks still follow it: the audit
+        # line's light ones, and, for a new name or nickname, the shops' change counters. No circle can form: every
+        # service that writes a person and then counters takes the person first (change_own_settings, change_person),
+        # and none holds a shop's counter while it waits for a person.
         user = User.objects.select_for_update(no_key=True).get(pk=staff.user_id)
         was = {name: getattr(user, name) for name in PERSON_DETAILS} | {
             name: getattr(staff, name) for name in JOB_DETAILS
@@ -409,7 +412,7 @@ def change_worker(
         # The person's details have no edit history (ADR-0036): User belongs to no shop. So the audit line keeps all of
         # them, the job's beside them, with who and why: Baba sees who changed Asha's phone, and why, in one line.
         audit(
-            action=AuditAction.STAFF_DETAILS,
+            action=AuditAction.STAFF_DETAILS_CHANGED,
             subject=fresh,
             reason=reason,
             by=by,
@@ -695,12 +698,12 @@ def _check_may_set_password(staff: StaffMember, user: User, *, by: StaffMember) 
 
 def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, what: str) -> None:
     # Whoever sets a person's password or PIN can log in as them; whoever suspends them, brings them back or marks them
-    # left decides whether they work at all. So this is the giver rule (02 §5), for a whole person: Baba may hand a
-    # manager staff.manage to deal with a forgotten password, or a worker who stopped coming, and that manager still
-    # can't become, or stop, anyone stronger than himself (Jack, 4 Nov 2026; PPL-4). `what` names the refusal's codes:
-    # "password", "pin", or "staff" for a change of status. Refused as a ValidationError with its code, as
-    # flag.own_flag is, so the screen can say what to do. The English words are for the logs: neutral, as they serve all
-    # three; the screens translate the code (ADR-0032).
+    # left decides whether they work at all; whoever fixes their phone sets their login name (PPL-10). So this is the
+    # giver rule (02 §5), for a whole person: Baba may hand a manager staff.manage to deal with a forgotten password, or
+    # a worker who stopped coming, and that manager still can't become, or stop, anyone stronger than himself (Jack,
+    # 4 Nov 2026; PPL-4). `what` names the refusal's codes: "password", "pin", or "staff" for a change of status or of
+    # their details. Refused as a ValidationError with its code, as flag.own_flag is, so the screen can say what to do.
+    # The English words are for the logs: neutral, as they serve all three; the screens translate the code (ADR-0032).
     # The key, on the whole shop, read afresh: a giver suspended a moment ago holds nothing (PermissionDenied, 403).
     require(by, Permission.STAFF_MANAGE, None)
     if staff.status == StaffStatus.LEFT:
@@ -785,12 +788,13 @@ def change_person(user: User, *, changed: Collection[str]) -> User:
 
 def _record_each_job(user: User) -> None:
     # A person's own row changed, in a way every shop where they work shows on their staff row: their language and font
-    # (UI-9), or their name or switch-off in the admin. The person belongs to no shop, so each shop gets a line of its
-    # own, naming the person's job there, in the transaction that saved the person (SYNC-15). The shops come from the
-    # person's door, read before any shop is open, ordered by id (ADR-0042): one block per shop, one after another,
-    # never one inside another. Two such saves at once then take the shops' counters in the same order, so neither can
-    # hold one counter while waiting for the other's. Each block numbers at its own end and keeps its counter until the
-    # commit, a moment later.
+    # (UI-9), their name or switch-off in the admin, or their name fixed on the workers' page (PPL-10). The person
+    # belongs to no shop, so each shop gets a line of its own, naming the person's job there, in the transaction that
+    # saved the person (SYNC-15). The shops come from the person's door, ordered by id: read before any shop is open, or
+    # inside the visit of the shop where the fix is made (ADR-0044). One block per shop, one after another, never one
+    # inside another, each opening its shop over the visit's and handing it back as it ends. Two such saves at once then
+    # take the shops' counters in the same order, so neither can hold one counter while waiting for the other's. Each
+    # block numbers at its own end and keeps its counter until the commit, a moment later.
     if not transaction.get_connection().in_atomic_block:
         # Outside a transaction, each shop's line would commit alone, and a failure later would leave the person unsaved
         # and some shops' laptops told of a change that never happened. A bug in the calling code, so a server error.

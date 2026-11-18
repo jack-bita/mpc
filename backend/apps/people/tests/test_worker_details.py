@@ -267,7 +267,7 @@ def test_each_fix_writes_one_audit_line_with_before_and_after(asha: StaffMember,
     )
 
     [line] = details_lines(asha)
-    assert (line.action, line.reason, line.created_by_id) == (AuditAction.STAFF_DETAILS, WHY, meneja.pk)
+    assert (line.action, line.reason, line.created_by_id) == (AuditAction.STAFF_DETAILS_CHANGED, WHY, meneja.pk)
     assert line.before == {"full_name": "Asha Mfano", "phone": None, "job_title": "Muuzji", "started_on": "2026-03-02"}
     assert line.after == {
         "full_name": "Asha Mfano Mpya",

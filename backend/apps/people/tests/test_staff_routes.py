@@ -524,7 +524,7 @@ def test_the_owner_fixes_a_workers_details(baba: StaffMember, asha: StaffMember)
     )
     with shop_context(asha.shop_id):
         [line] = AuditEvent.objects.filter(subject_type="staff", subject_id=asha.pk)
-    assert (line.action, line.created_by_id, line.reason) == (AuditAction.STAFF_DETAILS, baba.pk, WHY)
+    assert (line.action, line.created_by_id, line.reason) == (AuditAction.STAFF_DETAILS_CHANGED, baba.pk, WHY)
 
 
 def test_a_fix_from_an_old_copy_is_a_conflict(baba: StaffMember, asha: StaffMember) -> None:

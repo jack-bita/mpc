@@ -45,7 +45,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
   // Badilisha's form is open: it holds the details in its boxes, so the page doesn't show them twice.
   const [editing, setEditing] = useState(false);
   // Whether this is the demo, where no worker gets a phone (Jack, PPL-10: A). Asked here, the part always on the page,
-  // and handed down (.claude/rules/frontend.md), only once a form opens, and once a visit: it changes only on a
+  // and handed down (PPL-6's list, #272), only once a form opens, and once a visit: it changes only on a
   // deploy, as for Jaribu demo (try-the-demo.tsx). Unknown, or not answered, the box is on: the server refuses a
   // phone on the demo all the same (demo.phones_fixed).
   const demo = useQuery({
