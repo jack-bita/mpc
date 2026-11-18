@@ -17,6 +17,7 @@ And a shop's workers, for whoever holds staff.manage on the whole shop (PPL-4), 
     GET   /api/v1/people/staff/                             every worker the shop has had, with what each was given
     GET   /api/v1/people/staff/{id}/                        one worker
     POST  /api/v1/people/staff/                             a new worker: the person and the job, in one step
+    PATCH /api/v1/people/staff/{id}/                        fix their details, with the version read and a reason
     POST  /api/v1/people/staff/{id}/suspend/                stop a worker for a while, with a reason
     POST  /api/v1/people/staff/{id}/unsuspend/              bring them back, with a reason
     POST  /api/v1/people/staff/{id}/leave/                  record their last day, with a reason
@@ -64,6 +65,7 @@ from apps.people.api.authentication import set_key_cookie
 from apps.people.api.base import DeviceView
 from apps.people.api.pin_session import PIN_SESSION, pin_session_idle_minutes, start_pin_session
 from apps.people.api.serializers import (
+    STAFF_DETAILS,
     DeviceConfirmSerializer,
     DeviceEditSerializer,
     DeviceHealthSerializer,
@@ -75,6 +77,7 @@ from apps.people.api.serializers import (
     PairingStartSerializer,
     PinLoginSerializer,
     StaffAddSerializer,
+    StaffEditSerializer,
     StaffLeaveSerializer,
     StaffReasonSerializer,
     StaffSerializer,
@@ -89,6 +92,7 @@ from apps.people.selectors import LoginRefused, idle_lock_minutes, outages_this_
 from apps.people.services import (
     add_worker,
     change_own_settings,
+    change_worker,
     confirm_pairing,
     mark_left,
     pin_login,
@@ -195,12 +199,14 @@ class DeviceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnce
         return Response(self.get_serializer(change(device, by=self.staff, reason=sent.validated_data["reason"])).data)
 
 
-class StaffViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMixin[StaffMember]):
+class StaffViewSet(
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceMixin[StaffMember], EditMixin[StaffMember]
+):
     # A shop's people, as the workers' page shows them (PPL-4, PPL-6): every worker the shop has had, those who left
     # included, each with every role and extra key they were given; a new worker, made once however often the page
-    # sends him; a worker suspended, brought back or marked left, each with a reason; and a first or forgotten
-    # password, set face to face (ADR-0038). PPL-7, PPL-8 and PPL-10 add the roles,
-    # the PIN and the details.
+    # sends him; a worker's details fixed, from the copy the page read, with a reason (PATCH, PPL-10); a worker
+    # suspended, brought back or marked left, each with a reason; and a first or forgotten password, set face to face
+    # (ADR-0038). PPL-7 and PPL-8 add the roles and the PIN.
     model = StaffMember
     # A person's job belongs to the whole shop, whichever side they work on: a password opens them on every side, and a
     # suspension stops them on every side. So each key is asked on the whole shop, where a key for Dawa alone opens
@@ -213,6 +219,7 @@ class StaffViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceM
         "list": Permission.STAFF_MANAGE,
         "retrieve": Permission.STAFF_MANAGE,
         "create": Permission.STAFF_MANAGE,
+        "partial_update": Permission.STAFF_MANAGE,
         "suspend": Permission.STAFF_MANAGE,
         "unsuspend": Permission.STAFF_MANAGE,
         "leave": Permission.STAFF_MANAGE,
@@ -220,6 +227,7 @@ class StaffViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceM
     }
     serializer_class = StaffSerializer
     create_serializer_class = StaffAddSerializer
+    edit_serializer_class = StaffEditSerializer
 
     def base_rows(self) -> QuerySet[StaffMember]:
         # Each worker's person read in the same query: the full name is the person's (User), not the job's.
@@ -236,6 +244,13 @@ class StaffViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, CreateOnceM
             staff_id=data["id"],
             by=cast(StaffMember, self.actor),
         )
+
+    def edit_row(self, row: StaffMember, data: dict[str, Any]) -> StaffMember:
+        # Only the boxes the page sent: one left out stays as it is (change_worker). Who may is the service's
+        # (_locked_for_a_change), asked once both jobs are locked; the answer is the worker as now, with their new
+        # version.
+        details = {name: data[name] for name in STAFF_DETAILS if name in data}
+        return change_worker(row, version=data["version"], reason=data["reason"], by=self._acting(), **details)
 
     # Each action names what it takes and answers, as the device routes do: the API's description would otherwise read
     # every POST of this route as an add (RouteSchema, apps/core/api/schema.py), and the app's types would be wrong.

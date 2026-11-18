@@ -337,7 +337,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        patch: operations["people_staff_partial_update"];
         trace?: never;
     };
     "/api/v1/people/staff/{id}/leave/": {
@@ -1220,6 +1220,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly full_name: string;
+            readonly phone: string | null;
             readonly display_name: string;
             readonly job_title: string;
             /** Format: date */
@@ -1230,6 +1231,7 @@ export interface components {
             readonly switched_off: boolean;
             readonly roles: components["schemas"]["GivenRole"][];
             readonly keys: components["schemas"]["GivenKey"][];
+            readonly version: number;
         };
         StaffAddRequest: {
             /** Format: uuid */
@@ -1252,6 +1254,16 @@ export interface components {
             id: string;
             op: components["schemas"]["ChangeOpEnum"];
             data: components["schemas"]["StaffRecord"] | null;
+        };
+        StaffEditRequest: {
+            reason: string;
+            version: number;
+            full_name?: string;
+            phone?: string;
+            display_name?: string;
+            job_title?: string;
+            /** Format: date */
+            started_on?: string;
         };
         StaffKeysRecord: {
             every_side: string[];
@@ -2000,6 +2012,40 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffEditRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {
