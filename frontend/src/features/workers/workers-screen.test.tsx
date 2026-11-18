@@ -68,6 +68,20 @@ describe("the workers' page", () => {
     expect(within(neema!).getByText("Meneja (Pande zote)")).toBeTruthy();
   });
 
+  it("opens each worker's own page from their name", async () => {
+    // Jack's picture: tap a worker's name and see everything of theirs.
+    const asha = worker({ display_name: "Asha", full_name: "Asha Mfano" });
+    theShopHas([asha]);
+
+    render(<WorkersScreen />);
+
+    const link = await screen.findByRole("link", { name: "Asha · Asha Mfano" });
+    // The slash before "?" comes from next.config.ts (trailingSlash), which a test doesn't read.
+    expect(link.getAttribute("href")).toMatch(
+      new RegExp(`^/workers/view/?\\?id=${asha.id}$`),
+    );
+  });
+
   it("joins two roles the language's way, and names a role the owner made by its own name", async () => {
     theShopHas([
       worker({

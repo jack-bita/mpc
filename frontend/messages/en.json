@@ -425,6 +425,15 @@
       "save": "Save",
       "cancel": "Cancel"
     },
+    "view": {
+      "title": "Worker",
+      "noWorker": "No worker chosen. Go back to the list of workers.",
+      "noJobTitle": "None",
+      "status": "Status",
+      "lastDay": "Last day",
+      "roles": "Role",
+      "extraKeys": "Extra permissions"
+    },
     "roles": {
       "owner": "Owner",
       "manager": "Manager",

@@ -25,6 +25,7 @@ import { Alert, AlertDescription } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
+import { TextLink } from "@/components/design/text-link";
 import { useWhoIsHere, type WhoIsHere } from "@/features/people/who-is-here";
 import { shopToday } from "@/offline/rules";
 
@@ -185,7 +186,8 @@ function Workers({ workers, me }: { workers: Worker[]; me: WhoIsHere }) {
           VoiceOver stops calling a <ul> a list once its bullets are styled away, as Tailwind does. */}
       <ul role="list" className="divide-y divide-border">
         {workers.map((worker) => (
-          <li key={worker.id} className="grid gap-1 px-4 py-3">
+          // relative: the name's link stretches over its whole row (WorkerRow).
+          <li key={worker.id} className="relative grid gap-1 px-4 py-3">
             <WorkerRow worker={worker} me={me} />
           </li>
         ))}
@@ -206,11 +208,19 @@ function WorkerRow({ worker, me }: { worker: Worker; me: WhoIsHere }) {
 
   return (
     <>
-      <p className="font-semibold">
-        {t("names", {
-          nickname: worker.display_name,
-          fullName: worker.full_name,
-        })}
+      <p>
+        {/* The name opens the worker's own page (Jack's picture). Its tap area is the whole row, an empty box laid
+            over it (after:absolute), so a finger on the roles or the status opens it too; a screen reader still
+            hears one link, named by the names alone. */}
+        <TextLink
+          href={`/workers/view/?id=${worker.id}`}
+          className="after:absolute after:inset-0"
+        >
+          {t("names", {
+            nickname: worker.display_name,
+            fullName: worker.full_name,
+          })}
+        </TextLink>
       </p>
       <p>{roles}</p>
       {/* A key given apart from any role: counted only. Their names come with PPL-8, which gives them. */}

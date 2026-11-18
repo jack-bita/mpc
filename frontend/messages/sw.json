@@ -425,6 +425,15 @@
       "save": "Hifadhi",
       "cancel": "Ghairi"
     },
+    "view": {
+      "title": "Mfanyakazi",
+      "noWorker": "Hakuna mfanyakazi aliyechaguliwa. Rudi kwenye orodha ya wafanyakazi.",
+      "noJobTitle": "Hakuna",
+      "status": "Hali",
+      "lastDay": "Siku ya mwisho",
+      "roles": "Cheo",
+      "extraKeys": "Ruhusa za ziada"
+    },
     "roles": {
       "owner": "Mmiliki",
       "manager": "Meneja",

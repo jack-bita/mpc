@@ -1,5 +1,6 @@
 // workers.ts — the shop's workers as the office reads them (PPL-6, 03 §5.10): the list's place in the store of
-// server answers, the reading of every page, the key the page asks, and the words for each role and its side.
+// server answers, the reading of every page, one worker for their own page, a saved worker kept in both at once,
+// the key the page asks, and the words for each role and its side.
 //
 // GET /api/v1/people/staff/ answers everyone the shop has had, those who left included, newest first, in pages of
 // 50 (CursorPage, PPL-4). A shop has tens of workers over the years, not hundreds, so one screen holds them all,
@@ -11,7 +12,11 @@
 // key again on every read and every change.
 "use client";
 
-import { type QueryClient, useQuery } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -58,11 +63,38 @@ export function useWorkers() {
   return useQuery({ queryKey: WORKERS, queryFn: allWorkers });
 }
 
+/** One worker's place in the store, under the list's: a change that asks the list again (invalidateQueries with
+ * WORKERS) asks every worker's page again too, as TanStack matches a key by its start. */
+export function workerKey(id: string) {
+  return [...WORKERS, id] as const;
+}
+
+/** One worker, for their own page (GET /api/v1/people/staff/{id}/). No id in the address, nothing is asked. */
+export function useWorker(id: string | null) {
+  const store = useQueryClient();
+  return useQuery({
+    queryKey: workerKey(id ?? ""),
+    queryFn: () =>
+      answerOf(
+        api.GET("/api/v1/people/staff/{id}/", {
+          params: { path: { id: id ?? "" } },
+        }),
+      ),
+    enabled: id !== null,
+    // From the list at once, when the person came from it: the page shows with no wait, then asks the server again
+    // as it opens (the store's staleTime is 0), so it soon shows the worker as they are now, whoever changed them.
+    initialData: () =>
+      store.getQueryData<Worker[]>(WORKERS)?.find((each) => each.id === id),
+    initialDataUpdatedAt: () => store.getQueryState(WORKERS)?.dataUpdatedAt,
+  });
+}
+
 /** A worker the server just answered with, in the list at once: a new one at the top, as the list comes newest
  * first; one already on it (a send tried again, a suspension) changed in its place. The list is asked again after,
  * so the server's own order settles it; until then the page never shows the list without the worker just saved,
- * even when that read fails (closures.ts keeps a closure the same way). */
+ * even when that read fails (closures.ts keeps a closure the same way). Their own page gets the answer too. */
 export function keepWorker(store: QueryClient, worker: Worker): void {
+  store.setQueryData(workerKey(worker.id), worker);
   store.setQueryData<Worker[]>(
     WORKERS,
     (list) =>
