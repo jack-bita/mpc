@@ -239,13 +239,16 @@ def test_such_a_phone_may_change_and_may_go_once_there_is_an_email(asha: StaffMe
 def test_a_phone_another_person_has_is_refused_and_says_only_that(asha: StaffMember, shop_b: Shop) -> None:
     # Someone at another shop already has the number. The refusal says it is in use, under the phone's box, and
     # nothing more: not whose it is, nor at which shop, which this shop has no right to know.
-    User.objects.create_user(full_name="Mtu wa Duka Jingine", phone="0712 345 678")
+    other = User.objects.create_user(full_name="Mtu wa Duka Jingine", phone="0712 345 678")
+    with shop_context(shop_b):
+        add_staff(shop=shop_b, user=other, display_name="Mtu", by=None)
 
     with pytest.raises(ValidationError) as refused:
         fix(asha, phone="0712345678")
 
     assert codes(refused) == {"phone": ["unique"]}
     assert "Mtu wa Duka Jingine" not in str(refused.value)
+    assert not any(sign in str(refused.value) for sign in (shop_b.name, shop_b.code, str(shop_b.pk)))
     assert (stored(asha).user.phone, stored(asha).version) == (None, 1)
 
 

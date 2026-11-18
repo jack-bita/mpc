@@ -17,8 +17,10 @@ PPL-10's cards):
     the system or the superuser, who is nobody's staff   done, for anyone
 
 Who may is asked once both people's rows are locked, in id order, so it reads them as they are now: of two managers
-suspending each other at once, the first wins (test_staff.py, AUTH-8). Each rule is checked for all four actions, and
-each action that goes through writes its one audit line.
+suspending each other at once, the first wins (test_staff.py, AUTH-8). Most rules are checked for all four actions:
+acting on oneself, for the three that can be tried on oneself (bringing oneself back is refused sooner, as a suspended
+person holds no keys), and acting on an admin person, for a suspension alone. Each action that goes through writes its
+one audit line.
 
 On the demo, where every visitor logs in as Meneja, the people the seed made stay as made (demo.people_fixed); a worker
 a visitor added can be changed (Jack, PPL-4: A).
@@ -307,6 +309,10 @@ def test_both_jobs_are_locked_lightly_and_in_id_order(change: Change, meneja: St
     locks = [query["sql"] for query in queries.captured_queries if re.search(r"FOR (NO KEY )?UPDATE", query["sql"])]
     people_locks = [lock for lock in locks if re.search(r'FROM "people_(staffmember|user)"', lock)]
     assert all("FOR NO KEY UPDATE" in lock for lock in people_locks)
+    if change is FIX:
+        # A fix changes the person too (their name, their phone), so the person is locked after the jobs: two managers
+        # of two shops fixing one person's name take turns, and each audit line's "before" is true (change_worker).
+        assert any('FROM "people_user"' in lock for lock in people_locks)
     lock = locks[0]
     assert 'FROM "people_staffmember"' in lock
     assert 'ORDER BY "people_staffmember"."id" ASC' in lock
