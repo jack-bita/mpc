@@ -16,7 +16,8 @@
 //
 // What the form can see is said at once, beside its box, in the server's own sentences, and nothing is sent: an empty
 // name or nickname (`blank`), an empty first day (`required`), an empty Sababu (staff.reason_required). A first day
-// moved more than 30 days from today is asked about once, as on Ongeza (worker-form.tsx). The server says the rest:
+// moved more than 30 days from both today and the day it was is asked about once, as a year typed wrong would be on
+// Ongeza (worker-form.tsx); fixing a long-time worker's first day by a few days asks nothing (PPL-10's review). The server says the rest:
 // a wrong phone (phone.invalid) and one another person has (`unique`) beside Simu, a nickname another current worker
 // has (staff.display_name_taken) beside Jina la kuitwa, and who may (staff.own, staff.more_keys…) above the buttons.
 //
@@ -59,7 +60,8 @@ const BOXES = [
 ] as const;
 type Box = (typeof BOXES)[number];
 
-/** How far from today a first day may move before the form asks once more: about a month, either way, as on Ongeza. */
+/** How far a first day may move, from today and from the day it was, before the form asks once more: about a month,
+ * either way, as on Ongeza. */
 const FAR_DAYS = 30;
 
 /** The whole request's codes that are about one box: shown beside it, not above the buttons. The services raise them
@@ -186,10 +188,12 @@ export function DetailsForm({
     if (why === "") checks.reason = "staff.reason_required";
     setOwn(checks);
     if (Object.keys(checks).length > 0) return;
-    // A first day moved far from today: asked about once, beside its box; the same day again is the owner's answer.
+    // A first day moved far from both today and the day it was: asked about once, beside its box; the same day again
+    // is the owner's answer. Far from today alone is no sign of a slip: a worker who started two years ago is.
     const far =
       changed.includes("started_on") &&
-      Math.abs(daysBetween(today, now.started_on)) > FAR_DAYS;
+      Math.abs(daysBetween(today, now.started_on)) > FAR_DAYS &&
+      Math.abs(daysBetween(start.boxes.started_on, now.started_on)) > FAR_DAYS;
     if (far && askedAbout !== now.started_on) {
       setAskedAbout(now.started_on);
       return;

@@ -447,6 +447,26 @@ describe("Badilisha", () => {
       { version: 1, reason: WHY, started_on: "2025-11-03" },
     ]);
   });
+
+  it("asks nothing when a long-time worker's first day moves by a few days (PPL-10's review)", async () => {
+    // Juma started in March 2024; the owner finds it was the 4th, not the 2nd. Far from today, but no slip.
+    const juma = worker({ started_on: "2024-03-02" });
+    theServerHas(juma);
+    answer("PATCH", `${STAFF}${juma.id}/`, () =>
+      Response.json({ ...juma, started_on: "2024-03-04", version: 2 }),
+    );
+    render(<WorkerScreen id={juma.id} />);
+    fireEvent.click(await findButton("Badilisha"));
+
+    typeInto(box("Siku ya kwanza"), "2024-03-04");
+    typeInto(box("Sababu"), WHY);
+    fireEvent.click(button("Hifadhi"));
+
+    await screen.findByText("Taarifa za Juma zimehifadhiwa.");
+    expect(await fixesSent()).toEqual([
+      { version: 1, reason: WHY, started_on: "2024-03-04" },
+    ]);
+  });
 });
 
 describe("on the demo", () => {
