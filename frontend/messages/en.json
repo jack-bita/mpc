@@ -394,6 +394,76 @@
       }
     }
   },
+  "workers": {
+    "title": "Workers",
+    "intro": "Everyone who works at the shop, and everyone who has.",
+    "names": "{nickname} · {fullName}",
+    "noRole": "No role yet",
+    "roleOnSide": "{role} ({side})",
+    "allSides": "All sides",
+    "extraKeys": "{count, plural, one {# extra permission} other {# extra permissions}}",
+    "status": {
+      "active": "Working",
+      "suspended": "Suspended",
+      "left": "Left"
+    },
+    "switchedOff": "Switched off by the system admin. They can't log in.",
+    "leftHeading": "Those who left",
+    "noneLeft": "Nobody.",
+    "add": "Add",
+    "added": "{name} has been added. Their name shows on the shop's laptops once they are given a PIN.",
+    "form": {
+      "fullName": "Full name",
+      "fullNameHint": "Their whole name, like Juma Mfano.",
+      "nickname": "Nickname",
+      "nicknameHint": "A short name the shop's laptops will show, like Juma.",
+      "jobTitle": "Job title",
+      "jobTitleHint": "Optional. Like Drugs seller.",
+      "firstDay": "First day",
+      "firstDayHint": "The day they start work.",
+      "farDay": "{day} is far from today. If it is right, press Save again.",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "view": {
+      "title": "Worker",
+      "noWorker": "No worker chosen. Go back to the list of workers.",
+      "noJobTitle": "None",
+      "status": "Status",
+      "lastDay": "Last day",
+      "roles": "Role",
+      "extraKeys": "Extra permissions"
+    },
+    "actions": {
+      "suspend": "Suspend",
+      "unsuspend": "Bring back",
+      "leave": "Mark as left",
+      "title": {
+        "suspend": "Suspend {name}",
+        "unsuspend": "Bring {name} back to work",
+        "leave": "{name} left work"
+      },
+      "reason": "Reason",
+      "reasonHint": "Kept with your name and the time.",
+      "lastDay": "Last day",
+      "lastDayHint": "Their last day at work. It can't be a day ahead.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "done": {
+        "suspend": "{name} is suspended.",
+        "unsuspend": "{name} is back at work.",
+        "leave": "{name} has left. Their last day was {day}."
+      }
+    },
+    "roles": {
+      "owner": "Owner",
+      "manager": "Manager",
+      "seller": "Seller",
+      "order_writer": "Order writer",
+      "cashier": "Cashier",
+      "worker": "Worker"
+    }
+  },
   "attendance": {
     "title": "Attendance",
     "back": "Back",
