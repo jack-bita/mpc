@@ -39,6 +39,7 @@ from apps.core.tenancy import shop_context
 from apps.people.api.views import StaffViewSet
 from apps.people.models import Role, StaffMember, User
 from apps.people.services import add_staff, add_worker, grant_permission, mark_left, set_pin, suspend
+from apps.people.services import hire_again as services_hire_again
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
@@ -488,6 +489,37 @@ def test_a_hire_again_sent_twice_is_one_job(shop_a: Shop, baba: StaffMember, jum
 
     assert (first.status_code, again.status_code) == (201, 201)
     assert again.json() == first.json()
+    assert len(jobs_named(shop_a, "Juma")) == 2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_one_hire_again_sent_twice_at_once_is_one_job(
+    shop_a: Shop, sides: dict[str, Side], baba: StaffMember, juma: StaffMember
+) -> None:
+    # The review: the first send holds Juma's person locked, his new job made and not yet committed, when its own copy
+    # arrives. The copy waits on the lock, then finds him back already (staff.already_member); its id names the first's
+    # job, so the route answers with that job (CreateOnceMixin's twin), not a refusal, and there is one job, not two.
+    sent = hire_again(juma)
+
+    def the_second_send() -> object:
+        return client_for(baba).post(STAFF, sent)
+
+    with shop_context(shop_a), transaction.atomic():
+        services_hire_again(
+            juma,
+            display_name="Juma",
+            job_title="Mpima pumba",
+            started_on=date(2026, 11, 16),
+            staff_id=uuid.UUID(str(sent["id"])),
+            by=baba,
+        )
+        second, ended = in_another_transaction(the_second_send)
+        wait_until_someone_waits_for_me()
+    second.join(timeout=5)
+
+    assert not second.is_alive(), "The second send still waits after the first committed."
+    answer = ended[0]
+    assert (answer.status_code, answer.json()["id"]) == (201, sent["id"])  # type: ignore[attr-defined]
     assert len(jobs_named(shop_a, "Juma")) == 2
 
 
