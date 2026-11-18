@@ -1,7 +1,8 @@
 """apps/people/services.py — every write to the people tables, one function per action (ADR-0015).
 
 A staff member's working life at one shop (02 §5): they are added, have their details fixed (change_worker, PPL-10),
-are suspended, brought back and marked as left, and given a PIN (set_pin; apps/people/pins.py hashes it) or a
+are suspended, brought back and marked as left, hired again with a new job once they left (hire_again, PPL-11), and
+given a PIN (set_pin; apps/people/pins.py hashes it) or a
 temporary password, face to face (set_temporary_password, AUTH-6). A PIN login finds the person and checks their
 PIN, with its count of wrong tries (pin_login, check_pin, AUTH-4). And what they may do there: a shop gets
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
@@ -188,6 +189,69 @@ def add_worker(
         )
 
 
+def hire_again(
+    old: StaffMember,
+    *,
+    display_name: str,
+    job_title: str = "",
+    started_on: date | None = None,
+    staff_id: uuid.UUID | None = None,
+    by: StaffMember | None,
+) -> StaffMember:
+    """A worker who left, hired again as the same person (PPL-11, 02 §5): a new job at this shop for the person of
+    `old`, a job here that ended. Baraka left on 12 March and Baba hires him again in June: one person still, so his
+    phone and his password stay his, and his new job starts on `started_on` (today if None), with the nickname and job
+    title typed for it. The old job keeps what it said, and its history with it. `staff_id`: the id the app made for the
+    new job (ADR-0007). `by`: who hires him, who needs staff.manage on the whole shop, as for an add: he comes back with
+    no role, no extra key and no PIN, so hiring him gives nobody anything over him; None for the system or the
+    superuser. Refuses a job that hasn't ended (staff.not_left), a person back already (staff.already_member), one who
+    works at another shop now (staff.works_elsewhere), a first day before his latest last day (staff.back_before_left),
+    and, as add_staff does, a nickname another current worker holds (staff.display_name_taken)."""
+    _check_shop(old.shop_id, by)
+    if by is not None:
+        # Asked again here, whatever calls this, not by the route alone (PPL-5).
+        require(by, Permission.STAFF_MANAGE, None)
+    shop = old.shop
+    if started_on is None:
+        started_on = shop_today(shop)
+    # One block for the checks and the save, which add_staff's own joins: the new job is written on what the checks saw.
+    with recording_changes(shop):
+        # The person's row locked first, lightly (no key: the new job's link to them only reads it), and every check
+        # read after it. Meneja and Baba tap Mwajiri tena on Baraka in the same second: the second waits here until the
+        # first is done, then finds him back already (staff.already_member), not a server error from the database's
+        # rule (people_staffmember_one_current_job), which a check run before the first commit could not see. No job is
+        # locked, so this never waits in a circle with change_worker, which locks the jobs before the person.
+        person = User.objects.select_for_update(no_key=True).get(pk=old.user_id)
+        # His jobs here, read through the guard, with the shop named too: under system_context() the guard shows every
+        # shop, and another shop's job must not count as one here.
+        here = list(StaffMember.objects.filter(shop_id=shop.pk, user_id=person.pk))
+        if next(job for job in here if job.pk == old.pk).status != StaffStatus.LEFT:
+            raise ValidationError("This job hasn't ended.", code="staff.not_left")
+        if any(job.status != StaffStatus.LEFT for job in here):
+            raise ValidationError("This person works here already.", code="staff.already_member")
+        # A current job at another shop, found through the person's door, which reads shops' ids alone (ADR-0045): a
+        # job here too would make him a person at two shops before AUTH-7, whose login AUTH-3 refuses, and this shop
+        # could then fix the name and phone the other shows (ADR-0044). Only counted; the refusal names no shop.
+        if any(shop_id != shop.pk for shop_id in shops_of_person(person.pk)):
+            raise ValidationError("This person works at another shop.", code="staff.works_elsewhere")
+        # Never before his latest last day here, of every job that ended: two jobs on the same days would count and pay
+        # those days twice. The same day may: a leaving marked by mistake is mended at once (default).
+        last_day = max(cast(date, job.left_on) for job in here)
+        if started_on < last_day:
+            raise ValidationError(
+                {"started_on": ValidationError("The first day is before the last one.", code="staff.back_before_left")}
+            )
+        return add_staff(
+            shop=shop,
+            user=person,
+            display_name=display_name,
+            job_title=job_title,
+            started_on=started_on,
+            staff_id=staff_id,
+            by=by,
+        )
+
+
 def _check_reason(reason: str, *, code: str = "staff.reason_required") -> None:
     # Rule 7: a suspension, a leaving or a device's block is always recorded with who, when and why. Checked
     # before anything is locked; audit() keeps the reason, trimmed, in the action's own line (CTRL-2). `code`
@@ -298,7 +362,7 @@ def unsuspend(staff: StaffMember, *, by: StaffMember | None, reason: str) -> Sta
 
 
 def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reason: str) -> StaffMember:
-    """Record that a person left on `left_on`. Final: if they come back, add_staff gives them a new job. Who may: as
+    """Record that a person left on `left_on`. Final: if they come back, hire_again gives them a new job. Who may: as
     for suspend."""
     _check_shop(staff.shop_id, by)
     _check_reason(reason)

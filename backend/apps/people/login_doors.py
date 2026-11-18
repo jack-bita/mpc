@@ -1,11 +1,12 @@
 """apps/people/login_doors.py — the login doors: the few reads past the guard, which a login makes before any shop is
-open (AUTH-2; 03 §5.4), and a change to a person makes before any is open or inside the visit of the shop where it is
-made (PPL-10).
+open (AUTH-2; 03 §5.4), a change to a person makes before any is open or inside the visit of the shop where it is
+made (PPL-10), and a hire again makes inside that visit too (PPL-11).
 
 Every read of a shop's table goes through the guard, which shows only the shop the visit has opened, and refuses
-while none is (ADR-0044, which supersedes ADR-0042). A login can't wait for that: from what a request brings, it must
+while none is (ADR-0045, which supersedes ADR-0044). A login can't wait for that: from what a request brings, it must
 first find which shop the visit works for; nor can a change to a person, who belongs to no shop, that each shop where
-they work must hear of. So each gets a door here, which reads the one thing it needs, shops' ids, and nothing else;
+they work must hear of; nor a hire again, which must know whether the person works at another shop now. So each gets
+a door here, which reads the one thing it needs, shops' ids, and nothing else;
 everything after it is read through the guard, inside each shop. Doors are few and named, as system_context() and
 the admin's `all_shops` are, so `grep` finds them all. A door starts from no manager, since the guarded one would
 refuse, so this file is on the sweep's HAND_BUILT_QUERIES (backend/tests/sweep_lists.py), with its reason; a test
@@ -15,7 +16,8 @@ apps/people/tests/test_staff_session.py).
 Two doors: a device's key (AUTH-2), which a PIN's session goes through on every visit too (AUTH-4), and a person
 (AUTH-3), who belongs to no shop until their jobs are found: a login with a password, and a change to the person that
 every shop where they work must hear of, their language, font, name or switch-off (SYNC-15), the name also from a
-fix on the workers' page, inside the visit of the shop where it is made (PPL-10, ADR-0044).
+fix on the workers' page, inside the visit of the shop where it is made (PPL-10, ADR-0044); and a hire again on that
+page, which counts the person's other shops and refuses if there is one, until AUTH-7 (hire_again, ADR-0045).
 """
 
 import uuid
@@ -40,10 +42,11 @@ def shop_of_device_key(key_hash: str) -> uuid.UUID | None:
 def shops_of_person(user_id: uuid.UUID) -> list[uuid.UUID]:
     """The shops where this person has a current job, one that isn't `left`: suspended ones too, since the login must
     say why it refuses them, and their laptops still show them. Only the shops' ids, every one, ordered by id: the login
-    counts them (none, one, more than one; AUTH-7 lets a person choose), and a change to the person writes a line in
-    each, one shop after another in this order, so two such saves never wait for each other in a circle (SYNC-15). Each
-    caller then reads the job itself through the guard, inside its shop. One current job per shop is a database rule
-    (people_staffmember_one_current_job), so no shop comes twice."""
+    counts them (none, one, more than one; AUTH-7 lets a person choose), and so does a hire again, which any shop but
+    its own refuses (PPL-11); a change to the person writes a line in each, one shop after another in this order, so
+    two such saves never wait for each other in a circle (SYNC-15). Each caller then reads the job itself through the
+    guard, inside its shop. One current job per shop is a database rule (people_staffmember_one_current_job), so no
+    shop comes twice."""
     # A query of its own, built on no manager, as above. Found by Django's own index on `user`, which stays for this
     # very read: a person's jobs start from the person, not from a shop (apps/people/models.py). No limit: a person has
     # a handful of jobs at most.
