@@ -3,7 +3,7 @@
 // with who and when (rule 7).
 //
 // The worker's status decides which show: working, Simamisha and Ameondoka; suspended, Rudisha and Ameondoka; left,
-// none, as leaving is for good (a worker hired again comes back through Ongeza, PPL-10's row). On one's own page there
+// none, as leaving is for good (a worker hired again comes back through Ongeza, PPL-11's row). On one's own page there
 // is no button, and one line says why, in staff.own's sentence: nobody changes their own job (PPL-4).
 //
 // Each button opens its form in place of the buttons: Sababu, and for Ameondoka the last day, which starts at the
