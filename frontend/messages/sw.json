@@ -124,8 +124,7 @@
       "demoPin": "PIN {pin}"
     },
     "pin": {
-      "typePin": "Andika PIN yako",
-      "back": "Rudi"
+      "typePin": "Andika PIN yako"
     },
     "password": {
       "title": "Ingia",
@@ -164,8 +163,7 @@
       "email": "Barua pepe",
       "notAnEmail": "Andika barua pepe kamili, kama jina@mfano.com.",
       "send": "Tuma kiungo",
-      "sent": "Kama barua pepe hii ina akaunti hapa, tumetuma kiungo. Kifungue ndani ya saa moja.",
-      "back": "Rudi kuingia"
+      "sent": "Kama barua pepe hii ina akaunti hapa, tumetuma kiungo. Kifungue ndani ya saa moja."
     },
     "reset": {
       "title": "Weka nenosiri jipya",

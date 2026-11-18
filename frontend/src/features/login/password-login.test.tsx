@@ -417,6 +417,21 @@ describe("the password login", () => {
   });
 });
 
+describe("the back arrow", () => {
+  it("is at the top, and goes to the welcome with no page of the app's before", async () => {
+    // Every page reached from another has the arrow at its top left, the one way back (Jack, OPS-13): to
+    // the tiles or the welcome the person came from, or to `/` when the app has no page before this one,
+    // as a bookmark opens it.
+    render(<PasswordLogin />);
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Ingia" }),
+    ).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
+    expect(router.push).toHaveBeenCalledWith("/");
+  });
+});
+
 describe("the demo manager's login", () => {
   // The demo's manager, and the public login one tap on Jaribu demo kept for him (OPS-13). Fake ids; the
   // login is the demo's own, which the README prints.

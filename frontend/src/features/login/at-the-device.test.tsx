@@ -399,7 +399,7 @@ describe("a session the server ends", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Juma Mfano Juma" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Rudi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
     expect(
       screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
     ).toBeDefined();

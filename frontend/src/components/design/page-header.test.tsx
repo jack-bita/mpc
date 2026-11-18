@@ -75,6 +75,28 @@ describe("the page header", () => {
     expect(router.push).toHaveBeenCalledWith("/");
   });
 
+  it("goes back to the step before, for a step inside one page", () => {
+    // The PIN pad, inside the home page: back to the tiles, never to another page (OPS-13).
+    historyOf(3);
+    movedInTheApp();
+    const back = vi.fn();
+    render(<PageHeader title="Asha Mfano" onBack={back} />);
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
+    expect(back).toHaveBeenCalledOnce();
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("holds the arrow while the page says so", () => {
+    // A PIN on its way: its answer could still log the person in, behind the tiles the next one sees.
+    const back = vi.fn();
+    render(<PageHeader title="Asha Mfano" onBack={back} backDisabled />);
+    const arrow = screen.getByRole("button", { name: "Rudi ulipotoka" });
+    expect((arrow as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(arrow);
+    expect(back).not.toHaveBeenCalled();
+  });
+
   it("lets a page focus its title, from code only", () => {
     const heading = createRef<HTMLHeadingElement>();
     render(<PageHeader title="Mipangilio yangu" headingRef={heading} />);

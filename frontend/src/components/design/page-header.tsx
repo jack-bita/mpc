@@ -14,6 +14,11 @@
 // page in a tab's history, so a bookmark opened from it has a page before it that isn't ours (the branch's
 // review, 17 Nov 2026).
 //
+// A step inside one page, as the PIN pad inside `/` (pin-login.tsx), has no page before it to go back to:
+// it gives `onBack`, which takes the person to the step before, the tiles, as its old *Rudi* did. And while
+// a step must not be left, as while a PIN is on its way, it holds the arrow (`backDisabled`). Every page
+// and step reached from another wears this arrow, and no *Rudi* button of its own (Jack, OPS-13).
+//
 // "use client": it asks use-intl for the arrow's name, and moves to another page in the browser.
 "use client";
 
@@ -34,6 +39,8 @@ export function PageHeader({
   intro,
   fallback = BACK_FALLBACK,
   headingRef,
+  onBack,
+  backDisabled = false,
 }: {
   /** The page's title, its one <h1>. */
   title: string;
@@ -44,11 +51,16 @@ export function PageHeader({
   /** For a page that moves focus to its title as it opens, so a screen reader says where the person is
    * (my-settings.tsx). Given, the title takes focus from code only (tabIndex -1), never from Tab. */
   headingRef?: Ref<HTMLHeadingElement>;
+  /** For a step inside one page: the arrow goes back to the step before, and never moves to a page. */
+  onBack?: () => void;
+  /** Holds the arrow, while the step mustn't be left (a PIN on its way). */
+  backDisabled?: boolean;
 }) {
   const t = useTranslations("pageHeader");
   const router = useRouter();
 
   function goBack() {
+    if (onBack) return onBack();
     // Both: the note says the page before is ours; a history of more than this page says there is one.
     if (movedInApp() && window.history.length > 1) router.back();
     else router.push(fallback);
@@ -67,6 +79,7 @@ export function PageHeader({
           aria-label={t("back")}
           className="w-(--control-normal) shrink-0 px-0"
           onClick={goBack}
+          disabled={backDisabled}
         >
           <ArrowLeft aria-hidden className="size-6" />
         </Button>

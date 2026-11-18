@@ -76,7 +76,7 @@ describe("the pin login", () => {
   });
 
   it("moves the keyboard to each step's heading, and back to it after a refusal", async () => {
-    // The tile tapped, Rudi and a key switched off while the PIN is away all leave the page: focus would
+    // The tile tapped, the back arrow and a key switched off while the PIN is away all leave the page: focus would
     // fall to nothing, and a screen reader would say nothing of the new step (UI-3 did this for its forms).
     await theShop(refusal(400, "pin.wrong"));
     render(<PinLogin />);
@@ -87,7 +87,7 @@ describe("the pin login", () => {
       screen.getByRole("heading", { level: 1, name: "Asha Mfano" }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Rudi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
     expect(document.activeElement).toBe(
       screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
     );
@@ -155,7 +155,7 @@ describe("the pin login", () => {
       );
     expect(held()).not.toContain("4830");
     // Rudi, and the try itself is let go of: the store's list of changes is empty.
-    fireEvent.click(screen.getByRole("button", { name: "Rudi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
     await vi.waitFor(() =>
       expect(store.getMutationCache().getAll()).toEqual([]),
     );
@@ -202,19 +202,40 @@ describe("the pin login", () => {
       ).toBe(true),
     );
     expect(
-      (screen.getByRole("button", { name: "Rudi" }) as HTMLButtonElement)
-        .disabled,
+      (
+        screen.getByRole("button", {
+          name: "Rudi ulipotoka",
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 
-  it("goes back to the picker with Rudi, and forgets the last refusal", async () => {
+  it("has the back arrow beside the person's name, and no Rudi button", async () => {
+    // Every page and step reached from another has the arrow at its top left, the one way back (Jack,
+    // OPS-13): here, back to the tiles.
+    await theShop(refusal(400, "pin.wrong"));
+    render(<PinLogin />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Asha Mfano Asha" }),
+    );
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Asha Mfano" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Rudi ulipotoka" }),
+    ).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Rudi" })).toBeNull();
+  });
+
+  it("goes back to the picker with the arrow, and forgets the last refusal", async () => {
     // Juma tapped Asha's tile by mistake and typed his own PIN.
     await theShop(refusal(400, "pin.wrong"));
     render(<PinLogin />);
     await ashaTypes("4830");
     await screen.findByText("PIN si sahihi.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Rudi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
 
     expect(
       screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
@@ -287,7 +308,9 @@ describe("the pin login", () => {
 
     expect(await screen.findByText("Wrong PIN.")).toBeDefined();
     expect(screen.getByText("Type your PIN")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Back" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Back to where you were" }),
+    ).toBeDefined();
     expect(swahiliIn(container)).toEqual([]);
   });
 });

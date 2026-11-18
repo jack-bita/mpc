@@ -124,8 +124,7 @@
       "demoPin": "PIN {pin}"
     },
     "pin": {
-      "typePin": "Type your PIN",
-      "back": "Back"
+      "typePin": "Type your PIN"
     },
     "password": {
       "title": "Log in",
@@ -164,8 +163,7 @@
       "email": "Email",
       "notAnEmail": "Write the whole email, like name@example.com.",
       "send": "Send the link",
-      "sent": "If this email has an account here, we have sent a link. Open it within an hour.",
-      "back": "Back to log in"
+      "sent": "If this email has an account here, we have sent a link. Open it within an hour."
     },
     "reset": {
       "title": "Set a new password",

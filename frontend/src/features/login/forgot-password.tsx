@@ -9,6 +9,9 @@
 // The server answers the same whether or not anyone here has that email, and sends nothing to a stranger:
 // so the screen says only that a link went *if* the email has an account, never whether it has one.
 //
+// The way back is the arrow at the top, as on every page reached from another (Jack, OPS-13): to the login
+// the person came from, or to /login/ with no page of the app's before; no *Rudi kuingia* button.
+//
 // "use client": it asks use-intl for words, and calls the server.
 "use client";
 
@@ -22,8 +25,9 @@ import { z } from "zod";
 import { callAllauth } from "@/api/allauth";
 import { useApiErrorWords } from "@/api/errors";
 import { ApiErrorAlert } from "@/components/api-error-alert";
-import { Button, ButtonLink } from "@/components/design/button";
+import { Button } from "@/components/design/button";
 import { Field } from "@/components/design/field";
+import { PageHeader } from "@/components/design/page-header";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 
 // The form's own word for something that isn't an email. Not a server's code, so its sentence is in the
@@ -82,7 +86,7 @@ export function ForgotPassword() {
 
   return (
     <div className="flex max-w-md flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
+      <PageHeader title={t("title")} fallback="/login/" />
       {/* The way most people get back in: first, as most have no email. */}
       <p>{t("noEmail")}</p>
       {ask.isSuccess ? (
@@ -90,11 +94,6 @@ export function ForgotPassword() {
           <p ref={sentLine} tabIndex={-1} className="outline-none">
             {t("sent")}
           </p>
-          <div>
-            <ButtonLink href="/login/" kind="second">
-              {t("back")}
-            </ButtonLink>
-          </div>
         </>
       ) : (
         <>
@@ -120,13 +119,10 @@ export function ForgotPassword() {
             />
             {/* What no box can show: too many links asked, no network. */}
             <ApiErrorAlert error={onABox ? null : ask.error} />
-            <div className="flex flex-wrap gap-3">
+            <div>
               <Button type="submit" disabled={ask.isPending}>
                 {t("send")}
               </Button>
-              <ButtonLink href="/login/" kind="second">
-                {t("back")}
-              </ButtonLink>
             </div>
           </form>
         </>

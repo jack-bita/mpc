@@ -50,6 +50,7 @@ import { answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button, ButtonLink } from "@/components/design/button";
 import { Field } from "@/components/design/field";
+import { PageHeader } from "@/components/design/page-header";
 import { PasswordField } from "@/components/design/password-field";
 import { demoLogin } from "@/features/devices/demo-pins";
 import { useWhoIsHere, WHO_IS_HERE } from "@/features/people/who-is-here";
@@ -182,7 +183,9 @@ export function PasswordLogin({
 
   return (
     <div className="flex max-w-md flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
+      {/* The back arrow, as on every page reached from another (Jack, OPS-13): to where the person was,
+          the tiles or the welcome; with no page of the app's before, to the welcome, `/`. */}
+      <PageHeader title={t("title")} fallback="/" />
       {/* role="status": a screen reader says its words as they change. Always on the page, empty and
           hidden from the eye while there is nothing to say, as one that comes with its words in it often
           goes unsaid (offline-banner.tsx). */}
