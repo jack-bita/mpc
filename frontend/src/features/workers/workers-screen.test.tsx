@@ -1,6 +1,13 @@
 // workers-screen.test.tsx — Wafanyakazi lists the shop's workers, each with their names, roles, sides and status,
 // newest first, those who left under their own heading (PPL-6); and Ongeza, whose worker comes at the top.
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
@@ -9,6 +16,7 @@ import { answer, refusal, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
 import { MANAGER, role, STAFF, staffPage, worker } from "@/test/workers";
 
+import { WORKERS } from "./workers";
 import { WorkersScreen } from "./workers-screen";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -321,6 +329,36 @@ describe("Ongeza on the workers' page", () => {
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Ongeza" }),
     );
+  });
+
+  it("keeps Ongeza's form, and what was typed, when a list that never answered is asked again (PPL-6's review)", async () => {
+    // The list's first read found no network; the owner opens Ongeza, types Juma, switches to WhatsApp to check his
+    // spelling, and comes back: the page asks the list again, and goes back to waiting for it. The form stays.
+    // Retries off, so the test needn't wait for the store's own tries after the first failure.
+    const store = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    answer("GET", ME, { status: 200, body: MANAGER });
+    answer("GET", STAFF, () => {
+      throw new TypeError("Failed to fetch");
+    });
+    render(
+      <QueryClientProvider client={store}>
+        <WorkersScreen />
+      </QueryClientProvider>,
+    );
+    await typeJuma();
+
+    // The read again, which never answers: the list waits once more.
+    answer("GET", STAFF, () => new Promise<Response>(() => undefined));
+    await act(() => {
+      void store.invalidateQueries({ queryKey: WORKERS });
+    });
+
+    await screen.findByText("Subiri kidogo…");
+    expect(
+      (screen.getByLabelText("Jina la kuitwa") as HTMLInputElement).value,
+    ).toBe("Juma");
   });
 
   it("offers no Ongeza to someone without staff.manage on the whole shop", async () => {

@@ -59,7 +59,10 @@ export function WorkersScreen() {
       </p>
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
-      {who.data && !waiting ? <AddWorker me={who.data} /> : null}
+      {/* As soon as the page knows who is here, never tied to the list's wait: a list whose first read failed goes
+          back to waiting at each new read (TanStack sets a query with no answer back to pending), and Ongeza would
+          go with it, the half-typed form, its id and the line that says who was added (PPL-6's review). */}
+      {who.data ? <AddWorker me={who.data} /> : null}
       {/* The list is asked here alone and handed down, never asked again by the part that shows it: a part
           that mounts on a failed read asks it again (TanStack's retryOnMount), which brings the wait back,
           which takes the part away, which mounts again on the next failure, round and round, asking the
