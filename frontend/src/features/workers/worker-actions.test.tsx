@@ -256,6 +256,40 @@ describe("the buttons on a worker's page", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("shows the server's refusal of a last day before the first day beside its box (PPL-6's review)", async () => {
+    // The phone's calendar offers nothing before the first day, but the server checks it too, by the first day it
+    // holds, which another manager may have moved since the page read it (PPL-10).
+    theServerHas(ASHA);
+    answer("POST", route("leave"), refusal(400, "staff.left_before_start"));
+    render(<WorkerScreen id={ASHA.id} />);
+
+    fireEvent.click(await findButton("Ameondoka"));
+    typeInto(reasonBox(), "Amepata kazi nyingine");
+    fireEvent.click(button("Hifadhi"));
+
+    await waitFor(() =>
+      expect(errorOf(lastDayBox())).toBe(
+        "Siku ya mwisho iko kabla ya siku aliyoanza kazi.",
+      ),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows the server's refusal of the reason beside Sababu, though it is the whole request's code (PPL-6's review)", async () => {
+    // The form takes the spaces off and asks for a reason itself; the service asks again, with no field, for any
+    // client that skips the form.
+    theServerHas(ASHA);
+    answer("POST", route("suspend"), refusal(400, "staff.reason_required"));
+    render(<WorkerScreen id={ASHA.id} />);
+
+    fireEvent.click(await findButton("Simamisha"));
+    typeInto(reasonBox(), "Hakuja siku tatu");
+    fireEvent.click(button("Hifadhi"));
+
+    await waitFor(() => expect(errorOf(reasonBox())).toBe("Andika sababu."));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("shows a refusal of who may above the buttons, as the demo's of its own people", async () => {
     // On the demo, Asha stays as the seed made her, so every visitor can log in as her (PPL-4).
     theServerHas(ASHA);
@@ -295,6 +329,53 @@ describe("the buttons on a worker's page", () => {
     // The buttons fit her as she is now.
     await findButton("Rudisha");
     expect(screen.queryByLabelText("Sababu")).toBeNull();
+  });
+
+  it("reads the worker again when someone else brought them back first (PPL-6's review)", async () => {
+    // Two managers tap Rudisha on Asha at once: the second phone hears she is no longer suspended.
+    const suspended = { ...ASHA, status: "suspended" as const };
+    const server = theServerHas(suspended);
+    answer("POST", route("unsuspend"), () => {
+      server.now(ASHA);
+      return Response.json(
+        { code: "staff.not_suspended", message: "", fields: {}, params: {} },
+        { status: 400 },
+      );
+    });
+    render(<WorkerScreen id={ASHA.id} />);
+
+    fireEvent.click(await findButton("Rudisha"));
+    typeInto(reasonBox(), "Ameomba radhi");
+    fireEvent.click(button("Hifadhi"));
+
+    expect(
+      await screen.findByText("Mfanyakazi huyu hajasimamishwa."),
+    ).toBeTruthy();
+    await findButton("Simamisha");
+    expect(screen.queryByLabelText("Sababu")).toBeNull();
+  });
+
+  it("reads the worker again when someone else marked them left first (PPL-6's review)", async () => {
+    // Two managers mark Asha left at once, the likeliest race on this page: the second phone hears she already left,
+    // and no button is left for her.
+    const server = theServerHas(ASHA);
+    answer("POST", route("leave"), () => {
+      server.now({ ...ASHA, status: "left", left_on: "2026-11-18" });
+      return Response.json(
+        { code: "staff.left", message: "", fields: {}, params: {} },
+        { status: 400 },
+      );
+    });
+    render(<WorkerScreen id={ASHA.id} />);
+
+    fireEvent.click(await findButton("Ameondoka"));
+    typeInto(reasonBox(), "Amepata kazi nyingine");
+    fireEvent.click(button("Hifadhi"));
+
+    expect(await screen.findByText("Mtu huyu ameshaacha kazi.")).toBeTruthy();
+    await screen.findByText("Ameondoka", { selector: "span" });
+    expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Ameondoka" })).toBeNull();
   });
 
   it("offers no button on one's own page, and says why", async () => {
