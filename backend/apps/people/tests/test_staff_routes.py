@@ -506,6 +506,28 @@ def test_a_hire_agains_refusals_reach_the_page(baba: StaffMember, asha: StaffMem
     assert before.json()["fields"] == {"started_on": ["staff.back_before_left"]}
 
 
+def test_one_working_at_another_shop_is_refused_naming_no_shop(
+    shop_a: Shop, shop_b: Shop, baba: StaffMember, juma: StaffMember
+) -> None:
+    # Juma works at shop B by now: refused until AUTH-7 (ADR-0045), and the answer says only that, never which shop,
+    # its name, its code or its id, nor his job there.
+    with shop_context(shop_b):
+        at_b = add_staff(shop=shop_b, user=User.objects.get(pk=juma.user_id), display_name="Juma", by=None)
+
+    refused = client_for(baba).post(STAFF, hire_again(juma))
+
+    assert refused.status_code == 400
+    assert (refused.json()["code"], refused.json()["fields"], refused.json()["params"]) == (
+        "staff.works_elsewhere",
+        {},
+        {},
+    )
+    body = refused.content.decode()
+    for secret in ("Duka Jingine", "JINGINE", str(shop_b.pk), str(at_b.pk)):
+        assert secret not in body
+    assert len(jobs_named(shop_a, "Juma")) == 1
+
+
 def test_a_full_name_is_needed_only_for_a_new_person(baba: StaffMember) -> None:
     # A worker hired again keeps his own (Badilisha fixes it); a new one needs one.
     sent = new_worker()
