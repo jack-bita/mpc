@@ -402,12 +402,24 @@ def change_worker(
         # once more, checks every rule (full_clean), and moves the version on, naming who fixed it. Moved even when
         # only the person's details changed: the page's copy holds them too, so a second fix of Asha's phone, typed on
         # the copy read before the first, is refused like any other.
-        with editing(staff, version=version, by=by) as fresh:
-            for name in JOB_DETAILS:
-                setattr(fresh, name, getattr(staff, name))
-        person_changed = [name for name in PERSON_DETAILS if name in changed]
-        if person_changed:
-            user.save(update_fields=person_changed)
+        try:
+            with editing(staff, version=version, by=by) as fresh:
+                for name in JOB_DETAILS:
+                    setattr(fresh, name, getattr(staff, name))
+            person_changed = [name for name in PERSON_DETAILS if name in changed]
+            if person_changed:
+                # A savepoint of its own, as editing() has: a refused save undoes only itself, and the checks below can
+                # still read.
+                with transaction.atomic():
+                    user.save(update_fields=person_changed)
+        except IntegrityError:
+            # Meneja names Asha "Juma" while Baba names Neema "Juma", in the same second: each check above passed, as
+            # neither saw the other's save, not yet committed; the database's unique rule waits for the first and
+            # refuses the second (people_staffmember_nickname_unique; a phone's, likewise). The checks, asked again,
+            # now see the first's save and answer with their code beside the box, not a server error. Anything they
+            # don't find is another rule broken: a bug, raised as it is.
+            _check_details(user, staff, sent_person, sent_job)
+            raise
         fresh.user = user
         # The person's details have no edit history (ADR-0036): User belongs to no shop. So the audit line keeps all of
         # them, the job's beside them, with who and why: Baba sees who changed Asha's phone, and why, in one line.

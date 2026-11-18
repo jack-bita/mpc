@@ -21,6 +21,7 @@ from datetime import date, timedelta
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from pytest_django import Settings
 
 from apps.control.models import AuditAction, AuditEvent, EditEvent
@@ -34,6 +35,7 @@ from apps.people.services import add_staff, add_worker, change_worker, grant_per
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from tests.change_log import lines_written
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -326,6 +328,44 @@ def test_a_suspended_worker_can_still_be_fixed(asha: StaffMember, meneja: StaffM
     now = stored(asha)
     assert (now.status, now.job_title, now.version) == ("suspended", "Muuzaji", 2)
     assert len(details_lines(asha)) == 1
+
+
+def fixed_at_the_same_moment(first: StaffMember, second: StaffMember, **details: str) -> object:
+    # The first fix saved and not yet committed when the second arrives: the second's check can't see it, so its save
+    # reaches the database's unique rule, which waits for the first. Once the first commits, the second is refused.
+    def the_second_fix() -> object:
+        return fix(second, version=1, by=None, **details)
+
+    with transaction.atomic():
+        fix(first, version=1, by=None, **details)
+        other, ended = in_another_transaction(the_second_fix)
+        wait_until_someone_waits_for_me()
+    other.join(timeout=5)
+    assert not other.is_alive(), "The second fix still waits after the first committed."
+    return ended[0]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_nickname_taken_at_the_same_moment_answers_as_taken(asha: StaffMember, staff_a2: StaffMember) -> None:
+    # Meneja names Asha "Juma" while Baba names the other worker "Juma": the second hears it is taken, not a server
+    # error.
+    refused = fixed_at_the_same_moment(asha, staff_a2, display_name="Juma")
+
+    assert isinstance(refused, ValidationError)
+    assert refused.error_dict["__all__"][0].code == "staff.display_name_taken"
+    assert (stored(staff_a2).display_name, stored(staff_a2).version) == ("Staff A2", 1)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_phone_taken_at_the_same_moment_answers_as_taken(asha: StaffMember, staff_a2: StaffMember) -> None:
+    refused = fixed_at_the_same_moment(asha, staff_a2, phone="0712 345 678")
+
+    assert isinstance(refused, ValidationError)
+    assert {name: [error.code for error in errors] for name, errors in refused.error_dict.items()} == {
+        "phone": ["unique"]
+    }
+    assert (stored(staff_a2).user.phone, stored(staff_a2).version) == (None, 1)
+    assert details_lines(staff_a2) == []
 
 
 def test_a_worker_who_left_cant_be_fixed(asha: StaffMember) -> None:
