@@ -31,7 +31,7 @@ pytestmark = pytest.mark.django_db
 
 def changeable_tables() -> list[type[models.Model]]:
     # Every shop table of our apps (backend/apps/; the test-only probe app is not one) whose rows can change: built
-    # on ShopScoped, and not a ledger. Editable tables are among them, and so are older ones like StaffMember.
+    # on ShopScoped, and not a ledger. Editable tables are among them, and so are older ones like RoleAssignment.
     return [
         table
         for table in apps.get_models()

@@ -2,10 +2,11 @@
 // and under it the buttons that change them (worker-actions.tsx).
 //
 // As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Their full name, nickname, job
-// title and first day; their status, and their last day once they left; each role with its side; the keys given apart
-// from a role, counted (their names come with PPL-8); and whether the superuser switched them off. Later cards add
-// here: the roles' buttons and the PIN (PPL-8), fixing a name (PPL-10), the photo (PPL-9), and the pay so far (WAGE-2),
-// so the owner pays one who leaves at once.
+// title, first day and phone; their status, and their last day once they left; each role with its side; the keys
+// given apart from a role, counted (their names come with PPL-8); and whether the superuser switched them off.
+// Badilisha turns the details into boxes, in their place (PPL-10, worker-details-form.tsx). Later cards add here: the
+// roles' buttons and the PIN (PPL-8), the photo (PPL-9), and the pay so far (WAGE-2), so the owner pays one who leaves
+// at once.
 //
 // At /workers/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address
 // (app/(office)/workers/view/page.tsx). It asks GET /api/v1/people/staff/{id}/, and shows the list's copy at once when
@@ -15,13 +16,16 @@
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Card, CardContent } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
+import { askDemoOpen, DEMO_OPEN } from "@/features/devices/demo";
 import { useWhoIsHere, type WhoIsHere } from "@/features/people/who-is-here";
-import { formatDay } from "@/lib/format";
+import { formatDay, formatPhone } from "@/lib/format";
 
 import { WorkerActions } from "./worker-actions";
 import { useRoleWords, useWorker, type Worker } from "./workers";
@@ -38,6 +42,18 @@ export function WorkerScreen({ id }: { id: string | null }) {
   // Until both answer the first time, through the store's own tries too, as on the list (workers-screen.tsx); with no
   // id, nothing is asked, so nothing is waited for. The list's copy, shown at once, is no wait (useWorker).
   const waiting = who.isPending || (id !== null && worker.isPending);
+  // Badilisha's form is open: it holds the details in its boxes, so the page doesn't show them twice.
+  const [editing, setEditing] = useState(false);
+  // Whether this is the demo, where no worker gets a phone (Jack, PPL-10: A). Asked here, the part always on the page,
+  // and handed down (PPL-6's list, #272), only once a form opens, and once a visit: it changes only on a
+  // deploy, as for Jaribu demo (try-the-demo.tsx). Unknown, or not answered, the box is on: the server refuses a
+  // phone on the demo all the same (demo.phones_fixed).
+  const demo = useQuery({
+    queryKey: DEMO_OPEN,
+    queryFn: askDemoOpen,
+    staleTime: Infinity,
+    enabled: editing,
+  });
 
   return (
     <div className="grid max-w-2xl gap-6">
@@ -58,9 +74,20 @@ export function WorkerScreen({ id }: { id: string | null }) {
       {who.data && !waiting ? <ApiErrorAlert error={worker.error} /> : null}
       {who.data && worker.data && !waiting ? (
         <>
-          <WorkerDetails worker={worker.data} me={who.data} />
-          {/* Simamisha, Rudisha and Ameondoka, as the worker's status allows (worker-actions.tsx). */}
-          <WorkerActions worker={worker.data} me={who.data} />
+          {editing ? null : (
+            <WorkerDetails worker={worker.data} me={who.data} />
+          )}
+          {/* Badilisha, Simamisha, Rudisha and Ameondoka, as the worker's status allows (worker-actions.tsx). */}
+          <WorkerActions
+            // A worker of its own: on another worker's page, as the browser's back and forward move the address, any
+            // form open on the last one closes, its boxes and its version with it, so Asha's boxes never go to
+            // Baraka; its unmount tells the page to show the details again (onEditing).
+            key={worker.data.id}
+            worker={worker.data}
+            me={who.data}
+            demo={demo.data === true}
+            onEditing={setEditing}
+          />
         </>
       ) : null}
     </div>
@@ -82,6 +109,12 @@ function WorkerDetails({ worker, me }: { worker: Worker; me: WhoIsHere }) {
             {worker.job_title === "" ? t("view.noJobTitle") : worker.job_title}
           </Pair>
           <Pair label={t("form.firstDay")}>{formatDay(worker.started_on)}</Pair>
+          {/* As the shop writes it, 0712 345 678; for whoever manages the workers, never a laptop (PPL-10). */}
+          <Pair label={t("form.phone")}>
+            {worker.phone === null
+              ? t("view.noPhone")
+              : formatPhone(worker.phone)}
+          </Pair>
           <Pair label={t("view.status")}>
             <span className={STATUS_LOOK[worker.status]}>
               {t(`status.${worker.status}`)}

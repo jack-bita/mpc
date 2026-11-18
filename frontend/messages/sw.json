@@ -420,6 +420,8 @@
       "jobTitleHint": "Si lazima. Kama Muuzaji wa dawa.",
       "firstDay": "Siku ya kwanza",
       "firstDayHint": "Siku anayoanza kazi.",
+      "phone": "Simu",
+      "phoneHint": "Si lazima. Kama 0712 345 678. Ukiiacha tupu, namba inaondolewa.",
       "farDay": "{day} iko mbali na leo. Kama ni sahihi, bonyeza Hifadhi tena.",
       "save": "Hifadhi",
       "cancel": "Ghairi"
@@ -428,16 +430,19 @@
       "title": "Mfanyakazi",
       "noWorker": "Hakuna mfanyakazi aliyechaguliwa. Rudi kwenye orodha ya wafanyakazi.",
       "noJobTitle": "Hakuna",
+      "noPhone": "Hakuna",
       "status": "Hali",
       "lastDay": "Siku ya mwisho",
       "roles": "Cheo",
       "extraKeys": "Ruhusa za ziada"
     },
     "actions": {
+      "edit": "Badilisha",
       "suspend": "Simamisha",
       "unsuspend": "Rudisha",
       "leave": "Ameondoka",
       "title": {
+        "edit": "Badilisha taarifa za {name}",
         "suspend": "Simamisha {name}",
         "unsuspend": "Mrudishe {name} kazini",
         "leave": "{name} ameondoka kazini"
@@ -448,7 +453,10 @@
       "lastDayHint": "Siku yake ya mwisho kazini. Haiwezi kuwa siku ijayo.",
       "save": "Hifadhi",
       "cancel": "Ghairi",
+      "nothingChanged": "Hukubadilisha chochote.",
+      "changedMeanwhile": "Taarifa za {name} zimebadilika tangu ulipozifungua. Hizi ndizo taarifa zake sasa: jaribu tena kama bado kuna cha kurekebisha.",
       "done": {
+        "edit": "Taarifa za {name} zimehifadhiwa.",
         "suspend": "{name} amesimamishwa.",
         "unsuspend": "{name} amerudishwa kazini.",
         "leave": "{name} ameondoka. Siku yake ya mwisho ni {day}."
@@ -727,9 +735,9 @@
       "other_shop": "Hiki ni cha duka jingine.",
       "reason_required": "Andika sababu.",
       "temporary_password_open": "Mtu huyu bado ana nenosiri la muda. Ruhusa hii itasubiri hadi achague nenosiri lake.",
-      "own": "Huwezi kubadilisha hali yako ya kazi mwenyewe.",
-      "superuser_only": "Hali ya kazi ya mtu huyu inabadilishwa na msimamizi wa mfumo tu.",
-      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kubadilisha hali yake ya kazi.",
+      "own": "Huwezi kubadilisha hali yako ya kazi wala taarifa zako mwenyewe.",
+      "superuser_only": "Hali ya kazi na taarifa za mtu huyu zinabadilishwa na msimamizi wa mfumo tu.",
+      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kubadilisha hali yake ya kazi wala taarifa zake.",
       "display_name_taken": "Mfanyakazi mwingine tayari ana jina hili la kuitwa. Chagua jingine.",
       "not_active": "Mfanyakazi huyu tayari amesimamishwa.",
       "not_suspended": "Mfanyakazi huyu hajasimamishwa.",
@@ -745,7 +753,8 @@
       "same_as_temporary": "Chagua nenosiri tofauti na lile la muda."
     },
     "phone": {
-      "invalid": "Namba hii ya simu si sahihi."
+      "invalid": "Namba hii ya simu si sahihi.",
+      "needed_to_log_in": "Mtu huyu anaingia kwa namba hii. Weka namba nyingine badala ya kuiondoa."
     },
     "login": {
       "already_in": "Kuna mtu ameingia tayari kwenye kifaa hiki. Toka kwanza, kisha ujaribu tena.",
@@ -772,6 +781,7 @@
       "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia.",
       "sides_fixed": "Kwenye demo, pande hazibadilishwi, ili kila mgeni aweze kujaribu.",
       "people_fixed": "Kwenye demo, wafanyakazi wa mwanzo hawabadilishwi, ili kila mgeni aweze kuingia. Ongeza mfanyakazi mpya ujaribu.",
+      "phones_fixed": "Kwenye demo, wafanyakazi hawawekewi namba ya simu, ili namba halisi ya mtu isionekane kwa kila mgeni.",
       "rules_from_tomorrow": "Kwenye demo, thamani mpya huanza kesho au baadaye, ili kila mgeni wa leo akute duka lilivyo.",
       "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi.",
       "closures_from_tomorrow": "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo."

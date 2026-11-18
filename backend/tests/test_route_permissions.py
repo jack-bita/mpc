@@ -553,7 +553,7 @@ def test_suspended_member_gets_nothing_from_routes(
     # Nor a photo, not even their own face (CTRL-3): not found, as they see no side.
     assert client.get(f"{ATTACHMENTS}{own_photo.pk}/file/").status_code == 404
     # Nor the shop's workers (PPL-4): the list and one worker refused, as the key is asked first; nobody added; and
-    # nobody suspended, brought back or marked left: not found, as they see no side.
+    # nobody fixed (PPL-10), suspended, brought back or marked left: not found, as they see no side.
     assert client.get(WORKERS).status_code == 403
     assert client.get(f"{WORKERS}{juma.pk}/").status_code == 403
     worker = {"id": str(uuid.uuid7()), "full_name": "Asha Mfano", "display_name": "Asha"}
@@ -564,6 +564,8 @@ def test_suspended_member_gets_nothing_from_routes(
         ("leave", {"reason": "Hapana", "left_on": today}),
     ):
         assert client.post(f"{WORKERS}{juma.pk}/{change}/", sent, format="json").status_code == 404, change
+    fix = {"version": 1, "reason": "Hapana", "job_title": "Fundi"}
+    assert client.patch(f"{WORKERS}{juma.pk}/", fix, format="json").status_code == 404
     with shop_context(shop_a):
         assert Side.objects.get(pk=sides["F"].pk).is_live is False
         assert Side.objects.get(pk=sides["F"].pk).band == "blue"
@@ -572,6 +574,7 @@ def test_suspended_member_gets_nothing_from_routes(
             ("Krismasi", in_a_week, ClosureStatus.ACTIVE)
         ]
         assert StaffMember.objects.get(pk=juma.pk).status == "active"
+        assert (StaffMember.objects.get(pk=juma.pk).job_title, StaffMember.objects.get(pk=juma.pk).version) == ("", 1)
         assert not StaffMember.objects.filter(display_name="Asha").exists()
 
 

@@ -4,13 +4,14 @@ calls (PPL-4; 03 §5.10). What may and may not be done is the services'; these t
     GET   /api/v1/people/staff/        every worker the shop has had, those who left included
     GET   /api/v1/people/staff/{id}/   one worker
     POST  /api/v1/people/staff/        a new worker: the person and their job in one step, with the app's own id
+    PATCH /api/v1/people/staff/{id}/   fix their details, from the version the page read, with a reason (PPL-10)
     POST  /api/v1/people/staff/{id}/suspend/     stop a worker for a while, with a reason
     POST  /api/v1/people/staff/{id}/unsuspend/   bring them back, with a reason
     POST  /api/v1/people/staff/{id}/leave/       record their last day, with a reason
 
-Each worker comes with their full name, nickname, job title, first day, status and leaving day, and each role and
-extra key they were given, with its side (none: every side). Only for whoever holds staff.manage on the whole shop
-(PPL-4's card): the page shows roles, and later pay (WAGE-2).
+Each worker comes with their full name, phone, nickname, job title, first day, status and leaving day, each role and
+extra key they were given, with its side (none: every side), and the version a fix sends back. Only for whoever
+holds staff.manage on the whole shop (PPL-4's card): the page shows roles, and later pay (WAGE-2).
 
     shop     side          who          what they were given
     MFANO    Dawa (D)      Baba         Owner, every side
@@ -108,6 +109,7 @@ def test_staff_routes_name_their_permissions() -> None:
         "list": Permission.STAFF_MANAGE,
         "retrieve": Permission.STAFF_MANAGE,
         "create": Permission.STAFF_MANAGE,
+        "partial_update": Permission.STAFF_MANAGE,
         "suspend": Permission.STAFF_MANAGE,
         "unsuspend": Permission.STAFF_MANAGE,
         "leave": Permission.STAFF_MANAGE,
@@ -131,12 +133,16 @@ def test_the_owner_lists_every_worker_the_shop_has_had(
     assert rows["Asha"] == {
         "id": str(asha.pk),
         "full_name": "Asha Mfano",
+        # No phone yet: it is added on her page (PPL-10).
+        "phone": None,
         "display_name": "Asha",
         "job_title": "Muuzaji wa dawa",
         "started_on": "2026-03-02",
         "status": "active",
         "left_on": None,
         "switched_off": False,
+        # The job's version, which a fix sends back: nobody has fixed her yet.
+        "version": 1,
         # A copied role's name is empty: the page shows its template's, translated (02 §5).
         "roles": [
             {
@@ -165,11 +171,15 @@ def test_the_owner_reads_one_worker(baba: StaffMember, asha: StaffMember) -> Non
 
 
 def test_no_secret_of_a_worker_is_shown(baba: StaffMember, asha: StaffMember) -> None:
-    # Never a PIN's hash, nor when it was set, nor the person's phone or email, which PPL-10 decides on (03 §5.9).
+    # Never a PIN's hash, nor when it was set, nor the person's email or password (03 §5.9). The phone is shown, to
+    # whoever manages the workers, as they type it and a temporary password needs it (PPL-10); never to a laptop
+    # (apps/sync/tests/test_bootstrap_secrets.py).
     with shop_context(asha.shop_id):
         set_pin(asha, "4829", by=None)
+    User.objects.filter(pk=asha.user_id).update(phone="+255712345678", email="asha@example.com")
     for answer in (client_for(baba).get(STAFF).json()["results"][0], client_for(baba).get(one(asha)).json()):
-        assert not {"pin_hash", "pin_changed_at", "phone", "email", "password", "user"} & set(answer)
+        assert not {"pin_hash", "pin_changed_at", "email", "password", "user"} & set(answer)
+    assert client_for(baba).get(one(asha)).json()["phone"] == "+255712345678"
 
 
 def test_another_shops_workers_never_show(baba: StaffMember, asha: StaffMember, staff_b: StaffMember) -> None:
@@ -489,6 +499,104 @@ def test_another_shops_worker_is_not_found(baba: StaffMember, staff_b: StaffMemb
 
     assert hidden.status_code == 404
     assert status_of(staff_b) == "active"
+
+
+WHY = "Niliandika vibaya"
+
+
+def test_the_owner_fixes_a_workers_details(baba: StaffMember, asha: StaffMember) -> None:
+    # Only the boxes the page changed, the version it read, and why. The answer is Asha as she is now, with her new
+    # version, so the page needs no second read; her phone as it is stored.
+    fixed = client_for(baba).patch(
+        one(asha),
+        {"version": 1, "reason": WHY, "full_name": "Asha Mfano Mpya", "phone": "0712 345 678", "job_title": "Muuzaji"},
+        format="json",
+    )
+
+    assert fixed.status_code == 200
+    body = fixed.json()
+    assert (body["full_name"], body["phone"], body["job_title"], body["display_name"], body["version"]) == (
+        "Asha Mfano Mpya",
+        "+255712345678",
+        "Muuzaji",
+        "Asha",
+        2,
+    )
+    with shop_context(asha.shop_id):
+        [line] = AuditEvent.objects.filter(subject_type="staff", subject_id=asha.pk)
+    assert (line.action, line.created_by_id, line.reason) == (AuditAction.STAFF_DETAILS_CHANGED, baba.pk, WHY)
+
+
+def test_a_fix_from_an_old_copy_is_a_conflict(baba: StaffMember, asha: StaffMember) -> None:
+    # Meneja fixed Asha after Baba read her page: Baba's fix, from version 1, would undo Meneja's.
+    owner = client_for(baba)
+    owner.patch(one(asha), {"version": 1, "reason": WHY, "job_title": "Muuzaji"}, format="json")
+
+    refused = owner.patch(one(asha), {"version": 1, "reason": WHY, "job_title": "Fundi"}, format="json")
+
+    assert refused.status_code == 409
+    assert refused.json()["code"] == "version_conflict"
+    assert owner.get(one(asha)).json()["job_title"] == "Muuzaji"
+
+
+def test_a_fix_needs_the_version_and_a_reason(baba: StaffMember, asha: StaffMember) -> None:
+    owner = client_for(baba)
+
+    unread = owner.patch(one(asha), {"reason": WHY, "job_title": "Muuzaji"}, format="json")
+    assert (unread.status_code, unread.json()["fields"]) == (400, {"version": ["required"]})
+
+    no_reason = owner.patch(one(asha), {"version": 1, "reason": "   ", "job_title": "Muuzaji"}, format="json")
+    assert (no_reason.status_code, no_reason.json()["code"]) == (400, "staff.reason_required")
+
+    assert owner.get(one(asha)).json()["job_title"] == "Muuzaji wa dawa"
+
+
+def test_a_fixs_refusals_come_beside_their_boxes(baba: StaffMember, asha: StaffMember) -> None:
+    # Spaces alone are no name, refused by the route's own check, as on Ongeza; a wrong phone by the service, under its
+    # box too, so the page says each beside its own box.
+    owner = client_for(baba)
+
+    blank = owner.patch(one(asha), {"version": 1, "reason": WHY, "full_name": "   "}, format="json")
+    assert (blank.status_code, blank.json()["fields"]) == (400, {"full_name": ["blank"]})
+
+    wrong = owner.patch(one(asha), {"version": 1, "reason": WHY, "phone": "12345"}, format="json")
+    assert (wrong.status_code, wrong.json()["fields"]) == (400, {"phone": ["phone.invalid"]})
+
+
+def test_fixing_a_worker_needs_staff_manage(
+    shop_a: Shop, sides: dict[str, Side], asha: StaffMember, give_role: GiveRole
+) -> None:
+    # A manager the owner handed no staff.manage: today he could put his own phone on Asha's job.
+    manager = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(manager, RoleTemplate.MANAGER, None)
+
+    refused = client_for(manager).patch(
+        one(asha), {"version": 1, "reason": WHY, "phone": "0712 345 678"}, format="json"
+    )
+
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    assert User.objects.get(pk=asha.user_id).phone is None
+
+
+def test_who_may_fix_reaches_the_route(shop_a: Shop, baba: StaffMember, give_role: GiveRole) -> None:
+    # A manager with the key still can't fix the owner, nor himself (02 §5): each said by its own code.
+    meneja = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(meneja, RoleTemplate.MANAGER, None)
+    with shop_context(shop_a):
+        grant_permission(meneja, Permission.STAFF_MANAGE, side=None, by=None)
+
+    for person, code in ((baba, "staff.superuser_only"), (meneja, "staff.own")):
+        refused = client_for(meneja).patch(one(person), {"version": 1, "reason": WHY, "job_title": "X"}, format="json")
+        assert (refused.status_code, refused.json()["code"]) == (400, code)
+
+
+def test_another_shops_worker_is_not_found_for_a_fix(baba: StaffMember, staff_b: StaffMember) -> None:
+    hidden = client_for(baba).patch(one(staff_b), {"version": 1, "reason": WHY, "job_title": "X"}, format="json")
+
+    assert hidden.status_code == 404
+    with shop_context(staff_b.shop_id):
+        assert StaffMember.objects.get(pk=staff_b.pk).version == 1
 
 
 def test_a_create_sent_again_shows_no_worker_to_whoever_lacks_the_key(

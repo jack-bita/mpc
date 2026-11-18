@@ -1,8 +1,10 @@
-"""apps/people/tests/test_who_changes_a_worker.py — who may suspend a person, bring them back or mark them left (PPL-4;
-02 §5).
+"""apps/people/tests/test_who_changes_a_worker.py — who may suspend a person, bring them back, mark them left or fix
+their details (PPL-4, PPL-10; 02 §5).
 
-A suspension stops a person working at once, and a leaving is final, so the rule is the one for setting a PIN
-(apps/people/tests/test_who_sets_a_pin.py), with codes of its own (the PIN's rule, by default, PPL-4's card):
+A suspension stops a person working at once, and a leaving is final; a fix may change a person's phone, which is a
+login name, so whoever sets it could then set a temporary password and log in as them. So the rule is the one for
+setting a PIN (apps/people/tests/test_who_sets_a_pin.py), with codes of its own (the PIN's rule, by default, PPL-4's and
+PPL-10's cards):
 
     the one acting                                       the answer
     holds staff.manage on the whole shop, and every
@@ -15,7 +17,10 @@ A suspension stops a person working at once, and a leaving is final, so the rule
     the system or the superuser, who is nobody's staff   done, for anyone
 
 Who may is asked once both people's rows are locked, in id order, so it reads them as they are now: of two managers
-suspending each other at once, the first wins (test_staff.py, AUTH-8). Each rule is checked for all three actions.
+suspending each other at once, the first wins (test_staff.py, AUTH-8). Most rules are checked for all four actions:
+acting on oneself, for the three that can be tried on oneself (bringing oneself back is refused sooner, as a suspended
+person holds no keys), and acting on an admin person, for a suspension alone. Each action that goes through writes its
+one audit line.
 
 On the demo, where every visitor logs in as Meneja, the people the seed made stay as made (demo.people_fixed); a worker
 a visitor added can be changed (Jack, PPL-4: A).
@@ -23,6 +28,7 @@ a visitor added can be changed (Jack, PPL-4: A).
 Fake data only: the repo is public (03 §10).
 """
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -36,7 +42,15 @@ from apps.control.models import AuditEvent
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, StaffStatus, User
-from apps.people.services import add_staff, add_worker, grant_permission, mark_left, suspend, unsuspend
+from apps.people.services import (
+    add_staff,
+    add_worker,
+    change_worker,
+    grant_permission,
+    mark_left,
+    suspend,
+    unsuspend,
+)
 from apps.shops.models import Shop, Side
 
 pytestmark = pytest.mark.django_db
@@ -46,8 +60,9 @@ GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
 @dataclass(frozen=True)
 class Change:
-    # One of the three actions on a person: what the person's status must be before it (`before`, set by the system
-    # first, if need be), the action itself, and the status it leaves.
+    # One of the four actions on a person: what the person's status must be before it (`before`, set by the system
+    # first, if need be), the action itself, and the status it leaves. A fix leaves the status as it was: what proves it
+    # went through is its audit line, which every action writes (assert_done).
     before: StaffStatus
     act: Callable[[StaffMember, StaffMember | None], object]
     after: StaffStatus
@@ -68,9 +83,21 @@ LEAVE = Change(
     lambda staff, by: mark_left(staff, left_on=staff.started_on, by=by, reason="Amehamia Moshi"),
     StaffStatus.LEFT,
 )
+# A fix of the worker's job title, from the copy the page read: none of these actions moves the version on, so the
+# fixture's copy is still the one in the database.
+FIX = Change(
+    StaffStatus.ACTIVE,
+    lambda staff, by: change_worker(staff, version=staff.version, reason="Alikosewa kazi", by=by, job_title="Fundi"),
+    StaffStatus.ACTIVE,
+)
 EACH_CHANGE = pytest.mark.parametrize(
     "change",
-    [pytest.param(SUSPEND, id="suspend"), pytest.param(BRING_BACK, id="bring back"), pytest.param(LEAVE, id="leave")],
+    [
+        pytest.param(SUSPEND, id="suspend"),
+        pytest.param(BRING_BACK, id="bring back"),
+        pytest.param(LEAVE, id="leave"),
+        pytest.param(FIX, id="fix"),
+    ],
 )
 
 
@@ -108,6 +135,12 @@ def assert_unchanged(staff: StaffMember, change: Change, lines: int) -> None:
     assert lines_about(staff) == lines
 
 
+def assert_done(staff: StaffMember, change: Change, lines: int) -> None:
+    # The status it leaves, and its one audit line, with who and why (T3).
+    assert status_of(staff) == change.after
+    assert lines_about(staff) == lines + 1
+
+
 @pytest.fixture
 def baba(shop_a: Shop, give_role: GiveRole) -> StaffMember:
     staff = job(shop_a, "Baba")
@@ -135,19 +168,21 @@ def asha(shop_a: Shop, side_a: Side, give_role: GiveRole) -> StaffMember:
 @EACH_CHANGE
 def test_manager_with_the_key_changes_a_worker(change: Change, meneja: StaffMember, asha: StaffMember) -> None:
     ready(asha, change)
+    lines = lines_about(asha)
 
     do(change, asha, by=meneja)
 
-    assert status_of(asha) == change.after
+    assert_done(asha, change, lines)
 
 
 @EACH_CHANGE
 def test_owner_changes_a_worker(change: Change, baba: StaffMember, asha: StaffMember) -> None:
     ready(asha, change)
+    lines = lines_about(asha)
 
     do(change, asha, by=baba)
 
-    assert status_of(asha) == change.after
+    assert_done(asha, change, lines)
 
 
 @EACH_CHANGE
@@ -179,9 +214,12 @@ def test_key_on_one_side_is_not_enough(change: Change, shop_a: Shop, side_a: Sid
     assert_unchanged(asha, change, lines)
 
 
-@pytest.mark.parametrize("change", [pytest.param(SUSPEND, id="suspend"), pytest.param(LEAVE, id="leave")])
+@pytest.mark.parametrize(
+    "change", [pytest.param(SUSPEND, id="suspend"), pytest.param(LEAVE, id="leave"), pytest.param(FIX, id="fix")]
+)
 def test_nobody_changes_themselves(change: Change, baba: StaffMember, meneja: StaffMember) -> None:
-    # A manager who suspended himself, or marked himself left, would lock himself out by a slip of the finger.
+    # A manager who suspended himself, or marked himself left, would lock himself out by a slip of the finger. One who
+    # put his own phone on his job could set himself a temporary password with no current one: he asks the owner.
     for person in (baba, meneja):
         with pytest.raises(ValidationError) as refused:
             do(change, person, by=person)
@@ -247,25 +285,35 @@ def test_manager_cannot_change_a_stronger_person(change: Change, meneja: StaffMe
 
 @EACH_CHANGE
 def test_the_system_may_change_anyone(change: Change, baba: StaffMember) -> None:
-    # The superuser is nobody's staff, so `by` is None: the one way an owner is suspended or marked left.
+    # The superuser is nobody's staff, so `by` is None: the one way an owner is suspended, marked left or fixed.
     ready(baba, change)
+    lines = lines_about(baba)
 
     do(change, baba, by=None)
 
-    assert status_of(baba) == change.after
+    assert_done(baba, change, lines)
 
 
 @EACH_CHANGE
 def test_both_jobs_are_locked_lightly_and_in_id_order(change: Change, meneja: StaffMember, asha: StaffMember) -> None:
     # Lessons 2 and 3, pinned in what is sent to PostgreSQL: both rows are locked before who may is asked, so the
     # answer reads them as they are now; light locks (no key), in one order, so two managers acting on each other take
-    # turns and never wait for each other in a circle.
+    # turns and never wait for each other in a circle. The first lock: a fix then locks the job again inside editing(),
+    # which this transaction already holds, and the person after the jobs, every one of them lightly. The shop's change
+    # counter, which a status change takes for its laptops' line, is locked whole, as it must be (SYNC-1).
     ready(asha, change)
 
     with CaptureQueriesContext(connection) as queries:
         do(change, asha, by=meneja)
 
-    [lock] = [query["sql"] for query in queries.captured_queries if "FOR NO KEY UPDATE" in query["sql"]]
+    locks = [query["sql"] for query in queries.captured_queries if re.search(r"FOR (NO KEY )?UPDATE", query["sql"])]
+    people_locks = [lock for lock in locks if re.search(r'FROM "people_(staffmember|user)"', lock)]
+    assert all("FOR NO KEY UPDATE" in lock for lock in people_locks)
+    if change is FIX:
+        # A fix changes the person too (their name, their phone), so the person is locked after the jobs: two managers
+        # of two shops fixing one person's name take turns, and each audit line's "before" is true (change_worker).
+        assert any('FROM "people_user"' in lock for lock in people_locks)
+    lock = locks[0]
     assert 'FROM "people_staffmember"' in lock
     assert 'ORDER BY "people_staffmember"."id" ASC' in lock
 
@@ -291,8 +339,9 @@ def test_demo_people_fixed(
     with shop_context(shop_a):
         juma = add_worker(shop=shop_a, full_name="Juma Mfano", display_name="Juma", by=meneja)
     ready(juma, change)
+    lines = lines_about(juma)
     do(change, juma, by=meneja)
-    assert status_of(juma) == change.after
+    assert_done(juma, change, lines)
 
 
 def test_the_system_still_changes_the_seeds_people_on_the_demo(asha: StaffMember, settings: Settings) -> None:

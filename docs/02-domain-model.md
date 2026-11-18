@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.35 · 17 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.37 · 18 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -71,6 +71,10 @@
 **Changes in v1.34** (17 Nov 2026, CTRL-3): §13, an attachment's fields as built: its kind and the record it is pinned to, its label, and its file's three states, waiting, kept and removed, with who removed it, when and why (04 v1.96). Marked **(v1.34)**.
 
 **Changes in v1.35** (17 Nov 2026, PPL-4): §5, who may suspend a person, bring them back or mark them left: the PIN's rule *(default)*, asked once both people's rows are locked, so of two managers suspending each other at once the first wins (04 v1.100). Marked **(v1.35)**.
+
+**Changes in v1.36** (18 Nov 2026, PPL-10): §5, who may fix a worker's details, their full name, nickname, job title, first day and phone: the PIN's rule *(default)*, as a phone is a login name; every change asks why and writes an audit line, as the full name and the phone are the person's, which no shop's edit history keeps (Jack: A, 04 v1.110). Marked **(v1.36)**.
+
+**Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
@@ -263,6 +267,8 @@ A full diagram for GitHub is in Appendix A.
 **Who may set a PIN** **(v1.17)**: whoever sets a person's PIN can log in as them, so the same rule applies (Jack, AUTH-4's review). Someone with `staff.manage` on the whole shop, who holds every key the person was given. Never their own. An owner's, or a person's who can open the admin, only by the superuser.
 
 **Who may suspend, bring back or mark left** **(v1.35)**: a suspension stops a person working at once, and a leaving is final, so the PIN's rule applies *(default)* (PPL-4). Someone with `staff.manage` on the whole shop, who holds every key the person was given, so a manager can't suspend the owner. Never themselves. An owner's, or a person's who can open the admin, only by the superuser. Who may is asked once both people's rows are locked: when two managers suspend each other at once, the first wins, and the second, now suspended, holds nothing and is refused (Jack, AUTH-8).
+
+**Who may fix a worker's details** **(v1.36)**: their full name, nickname, job title, first day and phone, typed wrong. A phone is a login name, so whoever sets it could then set a temporary password and log in as the person: the PIN's rule applies *(default)* (PPL-10). Someone with `staff.manage` on the whole shop, who holds every key the person was given. Never their own. An owner's, or a person's who can open the admin, only by the superuser. Not a person who has left; a suspended one, yes. Every change asks why, and writes an audit line with each field before and after (Jack, 18 Nov 2026: A): the full name and the phone are the person's, across shops, and no shop's edit history can keep them. A phone another person has is refused, saying only that it is in use. A phone that is a person's only way in, as they have a password and no email, may change, as they then log in with the new number and the same password, but is never taken off: they could never log in again (Jack, 18 Nov 2026: A) **(v1.37)**.
 
 **What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again.
 

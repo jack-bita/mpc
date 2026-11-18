@@ -44,13 +44,14 @@ export function role(
   };
 }
 
-/** A worker as the list answers them: Juma, working since 2 Nov 2026 with no role yet, unless told otherwise. Each
- * its own id. */
+/** A worker as the list answers them: Juma, working since 2 Nov 2026 with no role and no phone yet, never fixed
+ * since he was added (version 1), unless told otherwise. Each its own id. */
 export function worker(fields: Partial<Worker> = {}): Worker {
   made += 1;
   return {
     id: `019a8302-0000-7000-8000-${String(made).padStart(12, "0")}`,
     full_name: "Juma Mfano",
+    phone: null,
     display_name: "Juma",
     job_title: "",
     started_on: "2026-11-02",
@@ -59,6 +60,7 @@ export function worker(fields: Partial<Worker> = {}): Worker {
     switched_off: false,
     roles: [],
     keys: [],
+    version: 1,
     ...fields,
   };
 }

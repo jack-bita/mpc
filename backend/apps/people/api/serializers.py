@@ -165,11 +165,15 @@ class StaffListSerializer(serializers.ListSerializer[StaffMember]):
 
 
 class StaffSerializer(serializers.ModelSerializer[StaffMember]):
-    # A worker as the workers' page shows them (PPL-4, PPL-6): their full name, which is the person's (User), their
-    # nickname, job title, first day, status and leaving day, and every role and extra key they were given. No `shop`:
-    # it is always the visit's own. Never their PIN's hash, nor when it was set, nor their phone or email (03 §5.9):
-    # the phone is PPL-10's.
+    # A worker as the workers' page shows them (PPL-4, PPL-6): their full name and phone, which are the person's (User),
+    # their nickname, job title, first day, status and leaving day, and every role and extra key they were given. No
+    # `shop`: it is always the visit's own. Never their PIN's hash, nor when it was set, nor their email or password
+    # (03 §5.9). The phone, for whoever manages the workers (the route's staff.manage), as they type it and a temporary
+    # password needs it (PPL-10); never to a laptop, whose copy of the people is StaffRecord's (apps/sync).
+    # `version` is the job's, which a fix sends back (apps/core/editing.py): the model keeps it out of every form and
+    # API field it could be written through (editable=False), so here it is only read.
     full_name = serializers.CharField(source="user.full_name", read_only=True)
+    phone = serializers.CharField(source="user.phone", read_only=True, allow_null=True)
     # The superuser switched the person off in the admin: their job may still say "active", but they log in nowhere,
     # and no laptop shows them (staff_rows, SYNC-15). Said apart from `status`, which is the job's (PPL-4's review).
     switched_off = serializers.SerializerMethodField()
@@ -181,6 +185,7 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
         fields = [
             "id",
             "full_name",
+            "phone",
             "display_name",
             "job_title",
             "started_on",
@@ -189,6 +194,7 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
             "switched_off",
             "roles",
             "keys",
+            "version",
         ]
         read_only_fields = fields
         list_serializer_class = StaffListSerializer
@@ -235,6 +241,30 @@ class StaffReasonSerializer(serializers.Serializer[Any]):
     # is let through, so the service refuses it with its own code, staff.reason_required, which the screen translates;
     # one left out is the form's own `required`. 500 characters at most, as the audit line keeps (control.AuditEvent).
     reason = serializers.CharField(max_length=500, allow_blank=True)
+
+
+# What a fix may send: the person's details and the job's (change_worker, PPL-10).
+STAFF_DETAILS = ("full_name", "phone", "display_name", "job_title", "started_on")
+
+
+class StaffEditSerializer(StaffReasonSerializer):
+    # What the worker's page sends to fix a worker's details (PPL-10): the boxes it changed, the version of the worker
+    # it read, and why (Jack, PPL-10: A). Every detail may be left out: one left out stays as it is. Spaces at either
+    # end are taken off, so spaces alone are a blank name, refused beside its box, as on Ongeza; the lengths are the
+    # tables' own. change_worker checks the rest: a wrong phone (phone.invalid), one another person has (unique), a
+    # nickname another current worker has (staff.display_name_taken), a stale version (409 version_conflict).
+    version = serializers.IntegerField(min_value=1)
+    full_name = serializers.CharField(max_length=User._meta.get_field("full_name").max_length, required=False)
+    # As it was typed, "0712 345 678": longer than the 16 characters stored, as the admin's box takes (PhoneField).
+    # Empty takes the phone off.
+    phone = serializers.CharField(max_length=32, allow_blank=True, required=False)
+    display_name = serializers.CharField(
+        max_length=StaffMember._meta.get_field("display_name").max_length, required=False
+    )
+    job_title = serializers.CharField(
+        max_length=StaffMember._meta.get_field("job_title").max_length, allow_blank=True, required=False
+    )
+    started_on = serializers.DateField(required=False)
 
 
 class StaffLeaveSerializer(StaffReasonSerializer):

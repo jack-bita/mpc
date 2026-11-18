@@ -1045,6 +1045,61 @@
                         "description": ""
                     }
                 }
+            },
+            "patch": {
+                "operationId": "people_staff_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this staff member.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StaffEditRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Staff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
             }
         },
         "/api/v1/people/staff/{id}/leave/": {
@@ -3748,6 +3803,11 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "phone": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
                     "display_name": {
                         "type": "string",
                         "readOnly": true
@@ -3792,6 +3852,10 @@
                             "$ref": "#/components/schemas/GivenKey"
                         },
                         "readOnly": true
+                    },
+                    "version": {
+                        "type": "integer",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -3801,10 +3865,12 @@
                     "job_title",
                     "keys",
                     "left_on",
+                    "phone",
                     "roles",
                     "started_on",
                     "status",
-                    "switched_off"
+                    "switched_off",
+                    "version"
                 ]
             },
             "StaffAddRequest": {
@@ -3873,6 +3939,45 @@
                     "id",
                     "op",
                     "seq"
+                ]
+            },
+            "StaffEditRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 500
+                    },
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "full_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 150
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                    },
+                    "job_title": {
+                        "type": "string",
+                        "maxLength": 60
+                    },
+                    "started_on": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                },
+                "required": [
+                    "reason",
+                    "version"
                 ]
             },
             "StaffKeysRecord": {

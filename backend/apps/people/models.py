@@ -195,9 +195,14 @@ class StaffStatus(models.TextChoices):
     LEFT = "left", "Left"
 
 
-class StaffMember(ShopScoped):
-    # A person's job at one shop (02 §5, D12). ShopScoped (CORE-2) gives `id`, `shop`, `created_at`,
-    # `created_by` and the guard on reads.
+class StaffMember(Editable):
+    # A person's job at one shop (02 §5, D12). ShopScoped (CORE-2), through Editable, gives `id`, `shop`,
+    # `created_at`, `created_by` and the guard on reads. Editable (CORE-6) adds `updated_at`, `updated_by` and the
+    # `version` that keeps two people's fixes of one worker apart (PPL-10): Baba and Meneja both open Asha's page,
+    # both fix her nickname, and the second save is refused (409 version_conflict) instead of undoing the first.
+    # Only the fixes go through editing() and move the version; a suspension, a leaving or a PIN locks the row its
+    # own way (_locked_for_a_change) and writes only its own columns, so a fix half-typed on another screen still
+    # saves, on top of the row as it is then.
 
     # PROTECT: nothing is deleted (rule 7). related_name="+": no `user.staffmember_set`; a person's
     # jobs are read through StaffMember.objects, which shows only the current shop's. Django's own index
@@ -218,10 +223,10 @@ class StaffMember(ShopScoped):
     # Devices compare this with their own copy and drop an old offline PIN check (03 §5.9).
     pin_changed_at = models.DateTimeField(null=True, blank=True, editable=False)
 
-    class Meta(ShopScoped.Meta):
-        # Builds on ShopScoped.Meta, so `objects`, with the guard, stays the default manager (CORE-2).
-        # The database is the last guard (03 §5.6); the services check the same rules first (full_clean),
-        # so a person gets a code, not a database error (ADR-0032).
+    class Meta(Editable.Meta):
+        # Builds on Editable.Meta, itself built on ShopScoped.Meta, so `objects`, with the guard, stays the default
+        # manager (CORE-2). The database is the last guard (03 §5.6); the services check the same rules first
+        # (full_clean), so a person gets a code, not a database error (ADR-0032).
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(status__in=StaffStatus.values),

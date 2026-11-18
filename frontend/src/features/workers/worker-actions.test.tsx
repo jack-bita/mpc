@@ -86,28 +86,32 @@ const lastDayBox = () =>
   screen.getByLabelText("Siku ya mwisho") as HTMLInputElement;
 
 describe("the buttons on a worker's page", () => {
-  it("offers Simamisha and Ameondoka to a working worker", async () => {
+  it("offers Badilisha, Simamisha and Ameondoka to a working worker", async () => {
     theServerHas(ASHA);
 
     render(<WorkerScreen id={ASHA.id} />);
 
     await findButton("Simamisha");
+    expect(button("Badilisha")).toBeTruthy();
     expect(button("Ameondoka")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Rudisha" })).toBeNull();
   });
 
-  it("offers Rudisha and Ameondoka to a suspended one, and none to one who left", async () => {
+  it("offers Badilisha, Rudisha and Ameondoka to a suspended one, and none to one who left", async () => {
     const suspended = { ...ASHA, status: "suspended" as const };
     theServerHas(suspended);
 
     const { unmount } = render(<WorkerScreen id={ASHA.id} />);
 
     await findButton("Rudisha");
+    // A suspended worker's details can still be fixed (02 §5, PPL-10).
+    expect(button("Badilisha")).toBeTruthy();
     expect(button("Ameondoka")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
     unmount();
 
-    // Leaving is for good: a worker hired again comes back through Ongeza.
+    // Leaving is for good: a worker hired again comes back through Ongeza, and a job that ended keeps what it said
+    // then, so it can't be fixed either (staff.left).
     const hamisi = worker({
       display_name: "Hamisi",
       status: "left",
@@ -117,7 +121,7 @@ describe("the buttons on a worker's page", () => {
     render(<WorkerScreen id={hamisi.id} />);
 
     await screen.findByText("Ameondoka", { selector: "span" });
-    for (const name of ["Simamisha", "Rudisha", "Ameondoka"])
+    for (const name of ["Badilisha", "Simamisha", "Rudisha", "Ameondoka"])
       expect(screen.queryByRole("button", { name })).toBeNull();
   });
 
@@ -379,15 +383,18 @@ describe("the buttons on a worker's page", () => {
   });
 
   it("offers no button on one's own page, and says why", async () => {
-    // Nobody changes their own job (PPL-4): Neema, logged in, opens her own page.
+    // Nobody changes their own job or details (PPL-4, PPL-10): Neema, logged in, opens her own page.
     const neema = worker({ id: MANAGER.staff.id, display_name: "Neema" });
     theServerHas(neema);
 
     render(<WorkerScreen id={neema.id} />);
 
     expect(
-      await screen.findByText("Huwezi kubadilisha hali yako ya kazi mwenyewe."),
+      await screen.findByText(
+        "Huwezi kubadilisha hali yako ya kazi wala taarifa zako mwenyewe.",
+      ),
     ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Badilisha" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Ameondoka" })).toBeNull();
   });

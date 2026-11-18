@@ -420,6 +420,8 @@
       "jobTitleHint": "Optional. Like Drugs seller.",
       "firstDay": "First day",
       "firstDayHint": "The day they start work.",
+      "phone": "Phone",
+      "phoneHint": "Optional. Like 0712 345 678. Empty takes the number off.",
       "farDay": "{day} is far from today. If it is right, press Save again.",
       "save": "Save",
       "cancel": "Cancel"
@@ -428,16 +430,19 @@
       "title": "Worker",
       "noWorker": "No worker chosen. Go back to the list of workers.",
       "noJobTitle": "None",
+      "noPhone": "None",
       "status": "Status",
       "lastDay": "Last day",
       "roles": "Role",
       "extraKeys": "Extra permissions"
     },
     "actions": {
+      "edit": "Edit",
       "suspend": "Suspend",
       "unsuspend": "Bring back",
       "leave": "Mark as left",
       "title": {
+        "edit": "Edit {name}'s details",
         "suspend": "Suspend {name}",
         "unsuspend": "Bring {name} back to work",
         "leave": "{name} left work"
@@ -448,7 +453,10 @@
       "lastDayHint": "Their last day at work. It can't be a day ahead.",
       "save": "Save",
       "cancel": "Cancel",
+      "nothingChanged": "Nothing was changed.",
+      "changedMeanwhile": "{name}'s details changed since you opened them. These are their details now: try again if something still needs fixing.",
       "done": {
+        "edit": "{name}'s details are saved.",
         "suspend": "{name} is suspended.",
         "unsuspend": "{name} is back at work.",
         "leave": "{name} has left. Their last day was {day}."
@@ -727,9 +735,9 @@
       "other_shop": "This belongs to another shop.",
       "reason_required": "Write a reason.",
       "temporary_password_open": "This person still has a temporary password. This permission waits until they choose their own.",
-      "own": "You can't change your own work status.",
-      "superuser_only": "Only the system admin can change this person's work status.",
-      "more_keys": "This person has permissions you don't, so you can't change their work status.",
+      "own": "You can't change your own work status or details.",
+      "superuser_only": "Only the system admin can change this person's work status or details.",
+      "more_keys": "This person has permissions you don't, so you can't change their work status or details.",
       "display_name_taken": "Another worker already has this nickname. Choose another.",
       "not_active": "This worker is already suspended.",
       "not_suspended": "This worker isn't suspended.",
@@ -745,7 +753,8 @@
       "same_as_temporary": "Choose a password other than the temporary one."
     },
     "phone": {
-      "invalid": "This phone number isn't right."
+      "invalid": "This phone number isn't right.",
+      "needed_to_log_in": "This person logs in with this number. Type another number instead of taking it off."
     },
     "login": {
       "already_in": "Someone is already logged in on this device. Log out first, then try again.",
@@ -772,6 +781,7 @@
       "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in.",
       "sides_fixed": "On the demo, the sides stay as they are, so every visitor can try them.",
       "people_fixed": "On the demo, the first workers stay as they are, so every visitor can log in. Add a new worker to try this.",
+      "phones_fixed": "On the demo, workers get no phone number, so nobody's real number is shown to every visitor.",
       "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
       "no_note": "On the demo, notes aren't kept. Leave this box empty.",
       "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is."

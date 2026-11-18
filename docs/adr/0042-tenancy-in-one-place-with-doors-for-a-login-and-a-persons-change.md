@@ -1,10 +1,11 @@
 ---
-status: accepted
+status: superseded
 date: 2026-11-10
 source: "SYNC-15, in the plan Jack approved on 10 Nov 2026; supersedes ADR-0037 (03 §2 — AD8, §5.4)"
 standing: decided
 cost-to-change: medium
 revisit: "before a second real shop goes live (R3): switch on row-level security"
+superseded-by: ADR-0044
 ---
 
 # ADR-0042 · Tenancy is enforced in one place, with named doors for a login and a person's change; row-level security comes later
