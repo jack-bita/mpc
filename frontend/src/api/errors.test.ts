@@ -89,6 +89,8 @@ const CODES_THE_API_SENDS = [
   // The demo's people stay as the seed made them, so no visitor takes Asha or Baraka off another's PIN tiles; a
   // worker a visitor added can be changed (PPL-4).
   "demo.people_fixed",
+  // And no worker gets a phone there, so no stranger's real number is shown to every visitor (PPL-10).
+  "demo.phones_fixed",
   // On the demo, a visitor's rule starts tomorrow or later, after the night's seed, and keeps no note, which every
   // reader would see under the rule (SHOP-5's second review).
   "demo.rules_from_tomorrow",

@@ -1,9 +1,9 @@
 """apps/people/services.py — every write to the people tables, one function per action (ADR-0015).
 
-A staff member's working life at one shop (02 §5): they are added, suspended, brought back and marked
-as left, and given a PIN (set_pin; apps/people/pins.py hashes it) or a temporary password, face to face
-(set_temporary_password, AUTH-6). A PIN login finds the person and checks their PIN, with its count of wrong tries
-(pin_login, check_pin, AUTH-4). And what they may do there: a shop gets
+A staff member's working life at one shop (02 §5): they are added, have their details fixed (change_worker, PPL-10),
+are suspended, brought back and marked as left, and given a PIN (set_pin; apps/people/pins.py hashes it) or a
+temporary password, face to face (set_temporary_password, AUTH-6). A PIN login finds the person and checks their
+PIN, with its count of wrong tries (pin_login, check_pin, AUTH-4). And what they may do there: a shop gets
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
@@ -39,7 +39,7 @@ write that shop's line (_record_each_job).
 
 import math
 import uuid
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -59,7 +59,7 @@ from apps.control.models import AuditAction, AuditEvent
 from apps.control.services import audit
 from apps.core.acting import acting_as
 from apps.core.changes import record_change, recording_changes
-from apps.core.editing import editing
+from apps.core.editing import VersionConflict, editing
 from apps.core.links import link_type_of
 from apps.core.models import ChangeOp, SequenceName, ShopScoped
 from apps.core.permissions import ROLE_TEMPLATES, HeldPermissions, Permission, RoleTemplate
@@ -328,6 +328,144 @@ def mark_left(staff: StaffMember, *, left_on: date, by: StaffMember | None, reas
         # Archive: a person who left is no longer sent, and every laptop drops them from its PIN screen.
         record_change(staff, ChangeOp.ARCHIVE)
     return staff
+
+
+# What a fix may change on a worker's page (PPL-10): the person's own details, which follow them to every shop where
+# they work (D12), and their job's, which are this shop's alone.
+PERSON_DETAILS = ("full_name", "phone")
+JOB_DETAILS = ("display_name", "job_title", "started_on")
+
+
+def change_worker(
+    staff: StaffMember,
+    *,
+    version: int,
+    reason: str,
+    by: StaffMember | None,
+    full_name: str | None = None,
+    phone: str | None = None,
+    display_name: str | None = None,
+    job_title: str | None = None,
+    started_on: date | None = None,
+) -> StaffMember:
+    """Fix a worker's details, typed wrong when they were added, or changed since: their full name and phone, which are
+    the person's (User), and their nickname, job title and first day, which are their job's here (02 §5). A detail left
+    None stays as it is: the page sends only the boxes it changed. `phone` "" takes the phone off. `version`: the job's
+    version the page read; an older one is refused (VersionConflict, 409 version_conflict), as someone fixed the worker
+    since. `by`: who fixes them, under the PIN's rule (_locked_for_a_change); None for the system or the superuser.
+    `reason` is required, and kept in the fix's audit line with each changed detail, before and after. Returns the job
+    as saved, its person read with it."""
+    _check_shop(staff.shop_id, by)
+    _check_reason(reason)
+    if phone is not None and by is not None:
+        _check_phones_fixed_on_demo()
+    # Spaces around a name say nothing, and "  " is no name: trimmed here, so a blank one is refused as blank. The
+    # nickname's own clean() trims it too; the phone's field cleans what was typed into one stored form.
+    sent_person = {"full_name": _trimmed(full_name), "phone": phone}
+    sent_job = {"display_name": _trimmed(display_name), "job_title": _trimmed(job_title), "started_on": started_on}
+    # One transaction for the job, the person, the audit line and every shop's line: all, or none. Not a block of one
+    # shop: a new full name writes a line in each shop where the person works, each in a block of its own, one after
+    # another, never one inside another (SYNC-15), as change_own_settings does.
+    with transaction.atomic():
+        # Both jobs locked, then who may asked on them as they are now (the PIN's rule, 02 §5): a manager handed
+        # staff.manage can fix his workers, never himself, never the owner, nor anyone holding a key he lacks.
+        staff, by = _locked_for_a_change(staff, by)
+        # Asked of a person at the shop by _locked_for_a_change already; here for the system's own fix too. A job that
+        # ended is history: what it said then stays as it was.
+        if staff.status == StaffStatus.LEFT:
+            raise ValidationError("This person has already left.", code="staff.left")
+        # A stale copy is refused before its boxes are judged: whatever they hold, they were typed on an old copy, and
+        # the page reads the worker again. editing() asks this again below, under the same lock.
+        if staff.version != version:
+            raise VersionConflict()
+        # The person locked too, lightly (no key), after the jobs, as every change to a person's job takes them: two
+        # managers of two shops fixing one person's name at once take turns, and each line's "before" is true. A new
+        # phone takes the full lock as it saves (a plain unique column, .claude/rules/backend.md): nothing is locked
+        # after it here.
+        user = User.objects.select_for_update(no_key=True).get(pk=staff.user_id)
+        was = {name: getattr(user, name) for name in PERSON_DETAILS} | {
+            name: getattr(staff, name) for name in JOB_DETAILS
+        }
+        # Every box sent, checked before anything is written, and every refusal together, each under its own box: a
+        # wrong phone and an empty nickname are both said at once.
+        _check_details(user, staff, sent_person, sent_job)
+        changed = [name for name in (*PERSON_DETAILS, *JOB_DETAILS) if _now(user, staff, name) != was[name]]
+        if not changed:
+            # Nothing to fix: no new version, no audit line, no line for the laptops. The page sends only what changed,
+            # so this is a box typed back as it was.
+            return staff
+        # The job, through editing(): it reads the job again under the lock already held, refuses a stale version
+        # once more, checks every rule (full_clean), and moves the version on, naming who fixed it. Moved even when
+        # only the person's details changed: the page's copy holds them too, so a second fix of Asha's phone, typed on
+        # the copy read before the first, is refused like any other.
+        with editing(staff, version=version, by=by) as fresh:
+            for name in JOB_DETAILS:
+                setattr(fresh, name, getattr(staff, name))
+        person_changed = [name for name in PERSON_DETAILS if name in changed]
+        if person_changed:
+            user.save(update_fields=person_changed)
+        fresh.user = user
+        # The person's details have no edit history (ADR-0036): User belongs to no shop. So the audit line keeps all of
+        # them, the job's beside them, with who and why: Baba sees who changed Asha's phone, and why, in one line.
+        audit(
+            action=AuditAction.STAFF_DETAILS,
+            subject=fresh,
+            reason=reason,
+            by=by,
+            before={name: was[name] for name in changed},
+            after={name: _now(user, fresh, name) for name in changed},
+        )
+        # What a laptop shows travels on the staff row: the full name in every shop where the person works, this one
+        # included (_record_each_job); the nickname, here. The job title, the first day and the phone never leave the
+        # server, so they tell no laptop anything.
+        if "full_name" in changed:
+            _record_each_job(user)
+        elif "display_name" in changed:
+            with recording_changes(fresh.shop_id):
+                record_change(fresh)
+    return fresh
+
+
+def _trimmed(value: str | None) -> str | None:
+    return None if value is None else value.strip()
+
+
+def _now(user: User, staff: StaffMember, name: str) -> object:
+    # A detail as it stands now: the person's on the person, the job's on the job.
+    return getattr(user if name in PERSON_DETAILS else staff, name)
+
+
+def _check_details(
+    user: User, staff: StaffMember, sent_person: Mapping[str, str | None], sent_job: Mapping[str, object]
+) -> None:
+    # Each sent detail set on the rows in hand, never saved here, and checked by the rules every form keeps
+    # (full_clean): a blank name (blank), a wrong phone (phone.invalid), a phone another person has (unique, which says
+    # only that it is in use, never by whom or at which shop), a nickname a current worker holds
+    # (staff.display_name_taken). Only the person's sent details are judged: the rest of the person isn't this fix's
+    # to judge, as in change_own_settings. The job is judged whole, as editing() will judge it. Every refusal together.
+    for name, value in (*sent_person.items(), *sent_job.items()):
+        if value is not None:
+            setattr(user if name in PERSON_DETAILS else staff, name, value)
+    refused: dict[str, list[ValidationError]] = {}
+    person_sent = {name for name, value in sent_person.items() if value is not None}
+    not_sent = [column.name for column in User._meta.concrete_fields if column.name not in person_sent]
+    for row, exclude in ((user, not_sent), (staff, None)):
+        try:
+            row.full_clean(exclude=exclude)
+        except ValidationError as error:
+            for name, errors in error.error_dict.items():
+                refused.setdefault(name, []).extend(errors)
+    if refused:
+        raise ValidationError(refused)
+
+
+def _check_phones_fixed_on_demo() -> None:
+    # On the demo every visitor logs in as Meneja (OPS-3), so a stranger could type a real person's phone on a worker
+    # they added, for every later visitor to read on the workers' page until the next morning's seed. And a phone serves
+    # no login there: the logins stay as they are (check_logins_may_change). So no worker gets one (Jack, PPL-10: A);
+    # their other details can be fixed. Only for a person acting: the system still may.
+    if settings.DEMO_SEED:
+        raise ValidationError("On the demo, workers get no phone.", code="demo.phones_fixed")
 
 
 def check_logins_may_change() -> None:
