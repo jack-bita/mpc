@@ -30,19 +30,23 @@ person's door may serve:
 
 - A **door** reads the shops' ids that a login, a change to a person that must reach each of their shops, or a hire
   again needs, and nothing else: before any shop is open, for a login, the person's own settings and the admin; or
-  inside the visit of the shop where the act is made, for a fix on the workers' page (`change_worker`, PPL-10) and a
-  hire again (`hire_again`, PPL-11).
-- For a hire again, the door's answer is only counted: a shop other than the visit's among the ids refuses the hire
-  (`staff.works_elsewhere`). Nothing of that shop is read or opened, and the refusal names no shop.
+  inside the visit of the shop where the act is made, for a fix on the workers' page (`change_worker`, PPL-10), a
+  hire again (`hire_again`, PPL-11), and the check of a phone typed on *Ongeza* (`add_worker`, PPL-11), which asks
+  whether a hire again would take the person, and so reads the door only for a person whose every job at this shop
+  ended.
+- For a hire again, and for that phone, the door's answer is only counted: a shop other than the visit's among the ids
+  refuses the hire (`staff.works_elsewhere`), or leaves the phone only in use (`unique`). Nothing of that shop is read
+  or opened, and neither answer names a shop.
 
 ## Consequences
 
 - **Good:** One door still answers "where does this person work?" for every caller, and a hire again can't make a
   person at two shops before AUTH-7.
 - **Good:** Nothing new past the guard: still shops' ids alone, from the one listed file, with its test.
-- **Cost:** The manager at shop A learns that Baraka works at some other shop of the system. It names no shop and
-  nothing of it, and Baraka's own job at shop A ended, so shop A knew him; a phone typed on *Ongeza* tells even less,
-  as such a phone is only "in use".
+- **Cost:** The manager at shop A learns that Baraka, who worked there, now works at some other shop of the system:
+  from a hire again's refusal, or, less directly, from his phone answering only "in use" on *Ongeza* where it would
+  name him if he worked nowhere. Either way the same one fact: it names no shop and nothing of it, and Baraka's own job
+  at shop A ended, so shop A knew him.
 - **Cost:** No second wall (RLS) yet, as ADR-0044 said.
 
 ## Alternatives considered
@@ -61,7 +65,8 @@ person's door may serve:
   `test_own_settings_recorded_in_every_shop`; SYNC-4's `test_uuid_from_other_shop_rejected_silently`; PPL-10's
   `test_a_full_name_fix_reaches_every_shop_where_they_work`.
 - PPL-11: `test_a_person_working_at_another_shop_is_not_hired_again`, which hires again inside shop A's visit a person
-  with a current job at shop B.
+  with a current job at shop B; `test_the_phone_of_anyone_else_is_only_in_use[left here, works elsewhere]`, which types
+  that person's phone on *Ongeza* there.
 
 ## Related
 
