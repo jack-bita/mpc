@@ -483,6 +483,17 @@ describe("the demo manager's login", () => {
     expect(screen.queryByText(PUBLIC_LINE)).toBeNull();
   });
 
+  it("starts empty, with no line, for a built-in name in the address", async () => {
+    // A link to a real shop's /login/?as=constructor: no login is kept by that name, so nothing is said
+    // about the demo (OPS-13's review).
+    render(<PasswordLogin forStaff="constructor" />);
+
+    const name =
+      await screen.findByLabelText<HTMLInputElement>("Simu au barua pepe");
+    expect(name.value).toBe("");
+    expect(screen.queryByText(PUBLIC_LINE)).toBeNull();
+  });
+
   it("starts empty with no id, a login kept or not", async () => {
     // The owner on his own phone, or the password button under a real shop's tiles: as before OPS-13.
     saveLogins([KEPT]);

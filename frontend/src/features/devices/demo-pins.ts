@@ -27,7 +27,7 @@ export interface DemoLogin {
 
 /** The PIN kept for this staff member, or undefined: none kept, or none of theirs. */
 export function demoPin(staffId: string): string | undefined {
-  return keptPins()[staffId];
+  return ownEntry(keptPins(), staffId);
 }
 
 /** Keeps the PINs one tap handed over, in place of any kept before. */
@@ -39,7 +39,14 @@ export function savePins(
 
 /** The login kept for this staff member, or undefined: none kept, or none of theirs. */
 export function demoLogin(staffId: string): DemoLogin | undefined {
-  return keptLogins()[staffId];
+  return ownEntry(keptLogins(), staffId);
+}
+
+// What was kept under this id itself, never a name every object answers to: a plain object gives
+// "constructor" or "__proto__" one of its own, so /login/?as=constructor said a real shop's page held the
+// demo's login (OPS-13's review).
+function ownEntry<T>(kept: Record<string, T>, staffId: string): T | undefined {
+  return Object.hasOwn(kept, staffId) ? kept[staffId] : undefined;
 }
 
 /** Keeps the logins one tap handed over, in place of any kept before. */

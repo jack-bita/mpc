@@ -83,6 +83,20 @@ describe("the demo's kept logins", () => {
     expect(demoLogin(MENEJA)).toBeDefined();
   });
 
+  it("answers no built-in name of JavaScript's objects as a kept login or PIN", () => {
+    // Any object answers "constructor" or "__proto__" with one of its own: a link to /login/?as=constructor
+    // made a real shop's login page say it held the demo's public login (OPS-13's review).
+    expect(demoLogin("constructor")).toBeUndefined();
+    expect(demoLogin("__proto__")).toBeUndefined();
+    expect(demoLogin("toString")).toBeUndefined();
+    expect(demoPin("constructor")).toBeUndefined();
+
+    saveLogins([MENEJA_LOGIN]);
+    savePins([{ staff_id: ASHA, pin: "2580" }]);
+    expect(demoLogin("constructor")).toBeUndefined();
+    expect(demoPin("hasOwnProperty")).toBeUndefined();
+  });
+
   it("reads anything it can't make sense of as none", () => {
     // Written by hand, or by another version of the app: a tile with no login is the worst that follows.
     window.localStorage.setItem(
