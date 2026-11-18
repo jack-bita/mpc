@@ -66,4 +66,4 @@ Every app may import `control`; `control` imports only `core`. A model may name 
 ## Privacy
 
 - Logs are JSON lines with request id, shop, side, device and staff id — never names, phone numbers or amounts.
-- Buying prices, PIN hashes and passwords never leave the server; payslips never go to shared devices.
+- Buying prices, PIN hashes and passwords never leave the server; payslips never go to shared devices. The one exception is the demo's public login, which the README prints: taken from the seed's own list (`PEOPLE`, `apps/demo/services.py`), never from the database, and handed over only by the one-tap demo's answer, beside the sellers' PINs (OPS-13).

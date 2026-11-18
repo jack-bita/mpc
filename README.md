@@ -28,7 +28,7 @@ Pay, selling, payments, debts and stock are not built yet. The [build plan](docs
 
 **Demo:** <https://mabatinipumba-demo.onrender.com>, with fake data only. It sleeps when nobody uses it, so the first visit takes about a minute. It holds one made-up shop, *Duka la Mfano*, made fresh every night; the logins are public on purpose:
 
-- **The manager:** on a phone or a second browser, `/login/` with `meneja@example.com` and `jaribu-demo`.
+- **The manager:** after *Jaribu demo*, tap Meneja's tile: the login opens with `meneja@example.com` and `jaribu-demo` already filled, so *Ingia* is one tap. Or, on a phone or a second browser, `/login/` with the same.
 - **A seller at a laptop:** tap *Jaribu demo* on the Karibu screen, then a seller's tile, which shows the PIN: Asha (PIN `2580`, Dawa) or Baraka (PIN `1470`, Vyakula). Turn the network off and clock in: it works offline. Or the long way, as a real shop: *Sajili kifaa hiki*, and the manager confirms its code.
 
 ## Start here
