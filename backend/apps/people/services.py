@@ -148,10 +148,21 @@ def add_staff(
     )
     with recording_changes(shop):
         # Every field, clean() and the rules in Meta, before anything is written: a clash comes back
-        # as a code. Two adds at the very same moment can both pass this; the database's unique
-        # index then refuses the second.
+        # as a code.
         staff.full_clean()
-        staff.save()
+        try:
+            # A savepoint of its own, so a refused save undoes only itself and the checks below can still read.
+            with transaction.atomic():
+                staff.save()
+        except IntegrityError:
+            # Two adds at the very same moment can both pass the check: Meneja adds Asha as "Asha" while Baba hires
+            # the other Asha again as "Asha", each check blind to the other's save, not yet committed. The database's
+            # unique rule waits for the first and refuses the second (PPL-11's review). Asked again, the checks now see
+            # the first's save and answer with their code (staff.display_name_taken, staff.already_member), not a
+            # server error. Anything they don't find, as an id another shop holds, is raised as it is, for the route
+            # to read (CreateOnceMixin).
+            staff.full_clean()
+            raise
         record_change(staff)
     return staff
 
