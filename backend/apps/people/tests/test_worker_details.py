@@ -315,6 +315,19 @@ def test_what_no_laptop_shows_tells_no_laptop(asha: StaffMember) -> None:
     assert lines == []
 
 
+def test_a_suspended_worker_can_still_be_fixed(asha: StaffMember, meneja: StaffMember) -> None:
+    # 02 §5: never one who left, but a suspended one, yes. Asha is suspended while a missing week is looked into, and
+    # Meneja fixes her job title in the meantime: the fix goes through, and she stays suspended.
+    with shop_context(asha.shop_id):
+        suspend(asha, by=None, reason="Hakuja siku tatu")
+
+    fix(asha, by=meneja, job_title="Muuzaji")
+
+    now = stored(asha)
+    assert (now.status, now.job_title, now.version) == ("suspended", "Muuzaji", 2)
+    assert len(details_lines(asha)) == 1
+
+
 def test_a_worker_who_left_cant_be_fixed(asha: StaffMember) -> None:
     # Her job is history: what it said then stays as it was, even for the system.
     with shop_context(asha.shop_id):
