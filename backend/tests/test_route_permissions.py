@@ -50,8 +50,8 @@ from apps.core.api import base
 from apps.core.api.base import CreateOnceMixin, ShopViewSet
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import StaffMember
-from apps.people.services import grant_permission, mark_left, suspend
+from apps.people.models import StaffMember, User
+from apps.people.services import add_staff, grant_permission, mark_left, suspend
 from apps.shops.api.views import ClosureViewSet, SettingViewSet, SideViewSet
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
 from apps.shops.selectors import shop_today
@@ -64,6 +64,7 @@ SIDES = "/api/v1/shops/sides/"
 SETTINGS = "/api/v1/shops/settings/"
 CLOSURES = "/api/v1/shops/closures/"
 ATTACHMENTS = "/api/v1/control/attachments/"
+WORKERS = "/api/v1/people/staff/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -518,6 +519,10 @@ def test_suspended_member_gets_nothing_from_routes(
             by=staff_a,
         )
         receive_attachment_file(own_photo.pk, content=face)
+        # A worker of theirs (PPL-4).
+        juma = add_staff(
+            shop=shop_a, user=User.objects.create_user(full_name="Juma Mfano"), display_name="Juma", by=None
+        )
     stop(how, staff_a)
 
     assert client.get(SIDES).json()["results"] == []
@@ -547,6 +552,18 @@ def test_suspended_member_gets_nothing_from_routes(
     assert client.post(f"{CLOSURES}{krismasi.pk}/last-day/", later, format="json").status_code == 404
     # Nor a photo, not even their own face (CTRL-3): not found, as they see no side.
     assert client.get(f"{ATTACHMENTS}{own_photo.pk}/file/").status_code == 404
+    # Nor the shop's workers (PPL-4): the list and one worker refused, as the key is asked first; nobody added; and
+    # nobody suspended, brought back or marked left: not found, as they see no side.
+    assert client.get(WORKERS).status_code == 403
+    assert client.get(f"{WORKERS}{juma.pk}/").status_code == 403
+    worker = {"id": str(uuid.uuid7()), "full_name": "Asha Mfano", "display_name": "Asha"}
+    assert client.post(WORKERS, worker, format="json").status_code == 403
+    for change, sent in (
+        ("suspend", {"reason": "Hapana"}),
+        ("unsuspend", {"reason": "Hapana"}),
+        ("leave", {"reason": "Hapana", "left_on": today}),
+    ):
+        assert client.post(f"{WORKERS}{juma.pk}/{change}/", sent, format="json").status_code == 404, change
     with shop_context(shop_a):
         assert Side.objects.get(pk=sides["F"].pk).is_live is False
         assert Side.objects.get(pk=sides["F"].pk).band == "blue"
@@ -554,6 +571,8 @@ def test_suspended_member_gets_nothing_from_routes(
         assert list(Closure.objects.values_list("name", "last_day", "status")) == [
             ("Krismasi", in_a_week, ClosureStatus.ACTIVE)
         ]
+        assert StaffMember.objects.get(pk=juma.pk).status == "active"
+        assert not StaffMember.objects.filter(display_name="Asha").exists()
 
 
 @pytest.mark.django_db
