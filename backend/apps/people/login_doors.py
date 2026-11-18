@@ -6,20 +6,19 @@ Every read of a shop's table goes through the guard, which shows only the shop t
 while none is (ADR-0045, which supersedes ADR-0044). A login can't wait for that: from what a request brings, it must
 first find which shop the visit works for; nor can a change to a person, who belongs to no shop, that each shop where
 they work must hear of; nor a hire again, which must know whether the person works at another shop now. So each gets
-a door here, which reads the one thing it needs, shops' ids, and nothing else;
-everything after it is read through the guard, inside each shop. Doors are few and named, as system_context() and
-the admin's `all_shops` are, so `grep` finds them all. A door starts from no manager, since the guarded one would
-refuse, so this file is on the sweep's HAND_BUILT_QUERIES (backend/tests/sweep_lists.py), with its reason; a test
-pins that each door reads a shop's id alone (apps/people/tests/test_device_authentication.py,
-apps/people/tests/test_staff_session.py).
+a door here, which reads the one thing it needs, shops' ids, and nothing else; everything after it is read through
+the guard, inside each shop. Doors are few and named, as system_context() and the admin's `all_shops` are, so `grep`
+finds them all. A door starts from no manager, since the guarded one would refuse, so this file is on the sweep's
+HAND_BUILT_QUERIES (backend/tests/sweep_lists.py), with its reason; a test pins that each door reads a shop's id alone
+(apps/people/tests/test_device_authentication.py, apps/people/tests/test_staff_session.py).
 
 Two doors: a device's key (AUTH-2), which a PIN's session goes through on every visit too (AUTH-4), and a person
 (AUTH-3), who belongs to no shop until their jobs are found: a login with a password, and a change to the person that
 every shop where they work must hear of, their language, font, name or switch-off (SYNC-15), the name also from a
 fix on the workers' page, inside the visit of the shop where it is made (PPL-10, ADR-0044); and a hire again on that
 page, which counts the person's other shops and refuses if there is one, until AUTH-7 (hire_again), as does the check
-of a phone typed on Ongeza, for a person whose every job here ended, which then answers that the phone is only in use
-(add_worker, ADR-0045).
+of a phone typed on Ongeza, for a person whose every job here ended, which then answers that the phone is only in
+use (add_worker, ADR-0045).
 """
 
 import uuid

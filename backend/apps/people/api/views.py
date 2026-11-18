@@ -16,7 +16,8 @@ And a shop's workers, for whoever holds staff.manage on the whole shop (PPL-4), 
 
     GET   /api/v1/people/staff/                             every worker the shop has had, with what each was given
     GET   /api/v1/people/staff/{id}/                        one worker
-    POST  /api/v1/people/staff/                             a new worker: the person and the job, in one step
+    POST  /api/v1/people/staff/                             a new worker: the person and the job, in one step;
+                                                            or, with hire_again, a new job for one who left (PPL-11)
     PATCH /api/v1/people/staff/{id}/                        fix their details, with the version read and a reason
     POST  /api/v1/people/staff/{id}/suspend/                stop a worker for a while, with a reason
     POST  /api/v1/people/staff/{id}/unsuspend/              bring them back, with a reason

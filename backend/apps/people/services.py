@@ -2,9 +2,9 @@
 
 A staff member's working life at one shop (02 §5): they are added, have their details fixed (change_worker, PPL-10),
 are suspended, brought back and marked as left, hired again with a new job once they left (hire_again, PPL-11), and
-given a PIN (set_pin; apps/people/pins.py hashes it) or a
-temporary password, face to face (set_temporary_password, AUTH-6). A PIN login finds the person and checks their
-PIN, with its count of wrong tries (pin_login, check_pin, AUTH-4). And what they may do there: a shop gets
+given a PIN (set_pin; apps/people/pins.py hashes it) or a temporary password, face to face (set_temporary_password,
+AUTH-6). A PIN login finds the person and checks their PIN, with its count of wrong tries (pin_login, check_pin,
+AUTH-4). And what they may do there: a shop gets
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
@@ -290,7 +290,9 @@ def hire_again(
         # read after it. Meneja and Baba tap Mwajiri tena on Baraka in the same second: the second waits here until the
         # first is done, then finds him back already (staff.already_member), not a server error from the database's
         # rule (people_staffmember_one_current_job), which a check run before the first commit could not see. No job is
-        # locked, so this never waits in a circle with change_worker, which locks the jobs before the person.
+        # locked for a change: the new job's link to the one acting takes only the lightest lock on that job (KEY
+        # SHARE), which change_worker's lock of it (no key) never waits for, so this never waits in a circle with
+        # change_worker, which locks the jobs before the person.
         person = User.objects.select_for_update(no_key=True).get(pk=old.user_id)
         # His jobs here, read through the guard, with the shop named too: under system_context() the guard shows every
         # shop, and another shop's job must not count as one here.

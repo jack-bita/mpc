@@ -173,7 +173,8 @@ export function WorkerActions({
         <WorkerForm
           today={open.today}
           again={worker}
-          // He works on his new job now: its page, where the back arrow returns here.
+          // He works on his new job now: its page. Its back arrow returns here when this page was reached inside the
+          // app, else to the list (in-app-moves.tsx), as for any page.
           onSaved={(back) => router.push(pageOf(back.id))}
           onCancel={() => cancelled("hireAgain")}
         />

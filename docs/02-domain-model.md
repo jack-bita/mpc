@@ -74,9 +74,9 @@
 
 **Changes in v1.36** (18 Nov 2026, PPL-10): §5, who may fix a worker's details, their full name, nickname, job title, first day and phone: the PIN's rule *(default)*, as a phone is a login name; every change asks why and writes an audit line, as the full name and the phone are the person's, which no shop's edit history keeps (Jack: A, 04 v1.110). Marked **(v1.36)**.
 
-**Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; a phone of anyone else is refused as in use and joins nobody (04 v1.115). Marked **(v1.38)**.
-
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
+
+**Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; a phone of anyone else is refused as in use and joins nobody (04 v1.115). Marked **(v1.38)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
