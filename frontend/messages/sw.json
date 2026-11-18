@@ -454,7 +454,7 @@
       "save": "Hifadhi",
       "cancel": "Ghairi",
       "nothingChanged": "Hukubadilisha chochote.",
-      "changedMeanwhile": "Mtu mwingine amebadilisha taarifa za {name} kabla yako. Hizi ndizo taarifa zake sasa: jaribu tena kama bado kuna cha kurekebisha.",
+      "changedMeanwhile": "Taarifa za {name} zimebadilika tangu ulipozifungua. Hizi ndizo taarifa zake sasa: jaribu tena kama bado kuna cha kurekebisha.",
       "done": {
         "edit": "Taarifa za {name} zimehifadhiwa.",
         "suspend": "{name} amesimamishwa.",

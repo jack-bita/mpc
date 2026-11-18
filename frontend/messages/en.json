@@ -454,7 +454,7 @@
       "save": "Save",
       "cancel": "Cancel",
       "nothingChanged": "Nothing was changed.",
-      "changedMeanwhile": "Someone else changed {name}'s details before you. These are their details now: try again if something still needs fixing.",
+      "changedMeanwhile": "{name}'s details changed since you opened them. These are their details now: try again if something still needs fixing.",
       "done": {
         "edit": "{name}'s details are saved.",
         "suspend": "{name} is suspended.",

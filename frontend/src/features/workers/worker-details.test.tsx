@@ -303,7 +303,7 @@ describe("Badilisha", () => {
 
     expect(
       await screen.findByText(
-        "Mtu mwingine amebadilisha taarifa za Asha kabla yako. Hizi ndizo taarifa zake sasa: jaribu tena kama bado kuna cha kurekebisha.",
+        "Taarifa za Asha zimebadilika tangu ulipozifungua. Hizi ndizo taarifa zake sasa: jaribu tena kama bado kuna cha kurekebisha.",
       ),
     ).toBeTruthy();
     // Read again: Baba's fix on the page, nothing of Meneja's.
@@ -417,7 +417,7 @@ describe("Badilisha", () => {
     expect(box("Kazi").value).toBe("Muuzaji");
     typeInto(box("Sababu"), WHY);
     fireEvent.click(button("Hifadhi"));
-    await screen.findByText(/Mtu mwingine amebadilisha taarifa za Asha/);
+    await screen.findByText(/Taarifa za Asha zimebadilika tangu ulipozifungua/);
     expect(await fixesSent()).toEqual([
       { version: 1, reason: WHY, job_title: "Muuzaji" },
     ]);

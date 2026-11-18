@@ -9,8 +9,8 @@
 // have no other history.
 //
 // Only the boxes that changed are sent, with the version of the worker the form opened on (apps/core/editing.py). If
-// someone else fixed them since, the server refuses it (409 version_conflict): the form closes, one line says someone
-// else changed them first, and the page reads them again, so nobody's fix is undone by an old copy. The version and
+// someone else fixed them since, the server refuses it (409 version_conflict): the form closes, one line says they
+// changed since the form opened, and the page reads them again, so nobody's fix is undone by an old copy. The version and
 // each box's start are kept from the moment the form opened, never the page's newer read: sending a newer version
 // with boxes typed on an older copy would undo the other person's fix all the same.
 //
@@ -147,7 +147,9 @@ export function DetailsForm({
       onDone(changed);
     },
     onError: (error) => {
-      // Someone else got there first: read the worker again, so the page shows them as they are now.
+      // The worker changed since the form opened: someone else got there first, or this very fix went through and its
+      // answer was lost, then was sent again. Read the worker again, so the page shows them as they are now; the line
+      // says what happened in words true of both (PPL-10's review).
       if (
         error instanceof ApiRefusal &&
         CHANGED_MEANWHILE.has(error.body.code)
