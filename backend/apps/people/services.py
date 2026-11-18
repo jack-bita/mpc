@@ -64,6 +64,7 @@ from apps.core.editing import VersionConflict, editing
 from apps.core.links import link_type_of
 from apps.core.models import ChangeOp, SequenceName, ShopScoped
 from apps.core.permissions import ROLE_TEMPLATES, HeldPermissions, Permission, RoleTemplate
+from apps.core.phones import normalise_phone
 from apps.core.sequences import next_number
 from apps.core.tenancy import ALL_SHOPS, current_shop, shop_context
 from apps.people.device_keys import (
@@ -162,22 +163,30 @@ def add_worker(
     display_name: str,
     job_title: str = "",
     started_on: date | None = None,
+    phone: str | None = None,
     staff_id: uuid.UUID | None = None,
     by: StaffMember | None,
 ) -> StaffMember:
     """A new worker, as the owner adds one on the workers' page (PPL-4): the person and their job at this shop, in one
     step. Juma has never worked at any shop of this system, so he is a new person (User), with no password, as a worker
-    logs in with a PIN (PPL-8), and no phone yet (PPL-10). `staff_id`: the id the app made for the job (ADR-0007). `by`:
-    who adds him, who needs staff.manage on the whole shop, as the route asks too; None for the system or the
-    superuser. Refuses as add_staff does, a nickname another current worker has among them (staff.display_name_taken),
-    and makes nothing then: the person and the job are kept together, or not at all."""
+    logs in with a PIN (PPL-8). `phone`, typed as people write it, or None or "" for none (PPL-11): stored in one form,
+    as every phone is. `staff_id`: the id the app made for the job (ADR-0007). `by`: who adds him, who needs
+    staff.manage on the whole shop, as the route asks too; None for the system or the superuser. Refuses as add_staff
+    does, a nickname another current worker has among them (staff.display_name_taken); a wrong phone (phone.invalid);
+    the phone of a worker who left here, whom hire_again brings back instead (staff.left_here); and any other phone a
+    person has (unique). It makes nothing then: the person and the job are kept together, or not at all."""
     _check_shop(shop.pk, by)
     if by is not None:
         # Asked again here, whatever calls this, not by the route alone (PPL-5).
         require(by, Permission.STAFF_MANAGE, None)
+        # An empty box is no phone, which the demo allows.
+        if phone:
+            _check_phones_fixed_on_demo()
     # One block for both saves, which add_staff's own joins, so a refused job undoes the person too (SYNC-1).
     with recording_changes(shop):
-        user = User.objects.create_user(full_name=full_name)
+        if phone:
+            _check_phone_of_one_who_left(shop, phone)
+        user = _new_person(full_name, phone or None)
         return add_staff(
             shop=shop,
             user=user,
@@ -187,6 +196,56 @@ def add_worker(
             staff_id=staff_id,
             by=by,
         )
+
+
+def _check_phone_of_one_who_left(shop: Shop, phone: str) -> None:
+    # Baba starts adding Baraka as new, forgetting he worked here until 12 March, and types his phone. A second person
+    # with Baraka's phone can't be made (it is unique), and shouldn't be: Baraka is one person. So the add makes
+    # nothing, and the answer names his old job, so the page offers Mwajiri tena (hire_again). Only for a person whose
+    # every job here ended, and who works nowhere now, whom hire_again would take: the same check, asked of the same
+    # door (ADR-0045). For anyone else, the phone is only in use, which create_user says (unique): never by whom or
+    # where, and never joined, as a manager of shop B who could join shop A's owner by his phone could then set his PIN
+    # or a temporary password, and log in as him at shop A. Nothing locked: this only reads; the hire locks as it goes.
+    try:
+        typed = normalise_phone(phone)
+    except ValidationError:
+        # Not a phone: create_user says so beside the box (phone.invalid), with every other refusal of the add.
+        return
+    # The person's row is global, so this reads no shop's table; their jobs here are read through the guard, with the
+    # shop named too, as under system_context() the guard shows every shop.
+    person = User.objects.filter(phone=typed).first()
+    if person is None:
+        return
+    here = list(StaffMember.objects.filter(shop_id=shop.pk, user_id=person.pk))
+    if not here or any(job.status != StaffStatus.LEFT for job in here) or shops_of_person(person.pk):
+        return
+    # The job that ended last, whose page Mwajiri tena opens from. What the answer carries, the workers' list already
+    # shows whoever may add: the full name and the last day, never the phone. A refusal of the whole add, as only that
+    # carries its values in the API's answer (apps/core/api/errors.py); the page shows it under Simu.
+    latest = max(here, key=lambda job: (cast(date, job.left_on), job.started_on))
+    raise ValidationError(
+        "This phone is of a worker who left.",
+        code="staff.left_here",
+        params={"staff": latest.pk, "full_name": person.full_name, "left_on": latest.left_on},
+    )
+
+
+def _new_person(full_name: str, phone: str | None) -> User:
+    # A person, through create_user, which checks every field first, so a wrong phone and a blank name come back
+    # together. A savepoint of its own, as a refused save must undo only itself: Meneja adds Juma with a new phone while
+    # Baba adds Hamisi with the same one, in the same second. Each check passed, as neither saw the other's save, not
+    # yet committed; the database's unique rule waits for the first and refuses the second. Asked again, the phone is
+    # found, and the second hears it is in use (unique), as a fix does (change_worker), not a server error. Anything
+    # else is another rule broken: a bug, raised as it is.
+    try:
+        with transaction.atomic():
+            return User.objects.create_user(full_name=full_name, phone=phone)
+    except IntegrityError:
+        if phone is not None and User.objects.filter(phone=normalise_phone(phone)).exists():
+            raise ValidationError(
+                {"phone": ValidationError("A person with this phone exists.", code="unique")}
+            ) from None
+        raise
 
 
 def hire_again(

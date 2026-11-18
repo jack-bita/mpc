@@ -8,22 +8,29 @@ phone has found him.
 
 Refused: a job that hasn't ended; a person who works here again already, even when two managers hire him at the same
 moment; a person who works at another shop now, until AUTH-7 (ADR-0045); a first day before his last one; a nickname
-another current worker holds by now. Who may is the add's, staff.manage on the whole shop. Fake data only: the repo is
-public (03 §10).
+another current worker holds by now. Who may is the add's, staff.manage on the whole shop.
+
+And Ongeza's Simu box (add_worker): a new worker gets their phone as they are added. Baraka's phone, typed there by a
+Baba who forgot he once worked here, makes nobody: the answer names his old job, so the page offers Mwajiri tena
+(staff.left_here). Any other phone a person has is only in use, saying nothing of whose, and joins nobody: a manager
+who could join someone to his shop by their phone could then set their PIN and log in as them. On the demo, no phone
+(PPL-10). Fake data only: the repo is public (03 §10).
 """
 
 import uuid
 from datetime import date, timedelta
+from typing import cast
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from pytest_django import Settings
 
 from apps.core.models import ChangeOp
 from apps.core.permissions import Permission
 from apps.core.tenancy import shop_context, system_context
 from apps.people.models import StaffMember, StaffStatus, User
-from apps.people.services import add_staff, grant_permission, hire_again, mark_left, suspend
+from apps.people.services import add_staff, add_worker, grant_permission, hire_again, mark_left, suspend
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_today
 from tests.change_log import lines_written
@@ -34,12 +41,13 @@ pytestmark = pytest.mark.django_db
 FIRST_DAY = date(2025, 1, 2)
 LAST_DAY = date(2026, 3, 12)
 BACK_ON = date(2026, 6, 1)
+PHONE = "0712 345 678"
 
 
 @pytest.fixture
 def baraka(shop_a: Shop) -> StaffMember:
-    # His job at shop A, which ended on 12 March.
-    user = User.objects.create_user(full_name="Baraka Mfano")
+    # His job at shop A, which ended on 12 March. His phone stays his.
+    user = User.objects.create_user(full_name="Baraka Mfano", phone=PHONE)
     with shop_context(shop_a):
         job = add_staff(
             shop=shop_a, user=user, display_name="Baraka", job_title="Muuzaji wa dawa", started_on=FIRST_DAY, by=None
@@ -263,3 +271,128 @@ def test_two_managers_hiring_him_again_at_once_the_second_is_told_he_is_back(bar
     assert isinstance(refused, ValidationError)
     assert refused.code == "staff.already_member"
     assert len(jobs_of(baraka.user_id, baraka.shop)) == 2
+
+
+# Ongeza's Simu box.
+
+
+def add(shop: Shop, *, phone: str, full_name: str = "Juma Mfano", display_name: str = "Juma") -> StaffMember:
+    # As Ongeza sends it, by the system: who may add is the route's and add_worker's own, tested with the routes.
+    with shop_context(shop):
+        return add_worker(shop=shop, full_name=full_name, display_name=display_name, phone=phone, by=None)
+
+
+def phone_codes(refused: pytest.ExceptionInfo[ValidationError]) -> list[str]:
+    return [error.code or "" for error in refused.value.error_dict["phone"]]
+
+
+def test_a_new_worker_gets_their_phone(shop_a: Shop) -> None:
+    # Typed as people write it; stored as every phone is (apps/core/phones.py), so a login by it finds him.
+    juma = add(shop_a, phone="0754 000 111")
+
+    assert User.objects.get(pk=juma.user_id).phone == "+255754000111"
+
+
+def test_an_empty_phone_box_is_no_phone(shop_a: Shop) -> None:
+    juma = add(shop_a, phone="")
+
+    assert User.objects.get(pk=juma.user_id).phone is None
+
+
+def test_a_wrong_phone_is_refused_beside_its_box(shop_a: Shop) -> None:
+    with pytest.raises(ValidationError) as refused:
+        add(shop_a, phone="12345")
+
+    assert phone_codes(refused) == ["phone.invalid"]
+    assert not User.objects.filter(full_name="Juma Mfano").exists()
+
+
+def test_the_phone_of_a_worker_who_left_finds_him(baraka: StaffMember) -> None:
+    # Baba starts adding Baraka as new. His phone finds him: nothing is made, and the answer names his old job, his full
+    # name and his last day, which the workers' list already shows whoever may add, so the page asks "Mwajiri tena?".
+    people = User.objects.count()
+
+    with pytest.raises(ValidationError) as refused:
+        add(baraka.shop, phone=PHONE, full_name="Baraka Mfano", display_name="Baraka")
+
+    assert refused.value.code == "staff.left_here"
+    assert refused.value.params == {"staff": baraka.pk, "full_name": "Baraka Mfano", "left_on": LAST_DAY}
+    assert User.objects.count() == people
+    assert len(jobs_of(baraka.user_id, baraka.shop)) == 1
+
+
+def test_the_phone_names_his_latest_job(baraka: StaffMember) -> None:
+    # He came back once and left again on 30 September: Mwajiri tena is offered from the job that ended last.
+    second = hire(baraka)
+    with shop_context(baraka.shop_id):
+        mark_left(second, left_on=date(2026, 9, 30), by=None, reason="Amerudi shule")
+
+    with pytest.raises(ValidationError) as refused:
+        add(baraka.shop, phone=PHONE)
+
+    assert refused.value.params == {"staff": second.pk, "full_name": "Baraka Mfano", "left_on": date(2026, 9, 30)}
+
+
+@pytest.mark.parametrize("whose", ["works here", "works at another shop", "left here, works elsewhere", "no job"])
+def test_the_phone_of_anyone_else_is_only_in_use(baraka: StaffMember, shop_b: Shop, whose: str) -> None:
+    # Never joined, and never named: shop B's manager who typed shop A's owner's phone must learn nothing, and must get
+    # no way to set his PIN. Baraka, who left here, works at shop B by now: hiring him again would be refused
+    # (staff.works_elsewhere), so his phone too is only in use here, and says nothing of another shop.
+    person = User.objects.get(pk=baraka.user_id)
+    if whose == "works here":
+        person = User.objects.create_user(full_name="Asha Mfano", phone="0754 000 111")
+        with shop_context(baraka.shop_id):
+            add_staff(shop=baraka.shop, user=person, display_name="Asha", by=None)
+    elif whose == "works at another shop":
+        person = User.objects.create_user(full_name="Asha Mfano", phone="0754 000 111")
+        with shop_context(shop_b):
+            add_staff(shop=shop_b, user=person, display_name="Asha", by=None)
+    elif whose == "left here, works elsewhere":
+        with shop_context(shop_b):
+            add_staff(shop=shop_b, user=person, display_name="Baraka", by=None)
+    else:
+        person = User.objects.create_user(full_name="Asha Mfano", phone="0754 000 111")
+    people = User.objects.count()
+
+    with pytest.raises(ValidationError) as refused:
+        add(baraka.shop, phone=cast(str, person.phone))
+
+    assert phone_codes(refused) == ["unique"]
+    assert all(not error.params or "full_name" not in error.params for error in refused.value.error_dict["phone"])
+    assert User.objects.count() == people
+
+
+def test_no_phone_on_ongeza_on_the_demo(shop_a: Shop, meneja: StaffMember, settings: Settings) -> None:
+    # Every visitor logs in as Meneja: a stranger's real number typed on a worker they added would show to every later
+    # visitor (PPL-10). An empty box is no phone, so the add goes through.
+    settings.DEMO_SEED = True
+    with shop_context(shop_a), pytest.raises(ValidationError) as refused:
+        add_worker(shop=shop_a, full_name="Juma Mfano", display_name="Juma", phone=PHONE, by=meneja)
+    assert refused.value.code == "demo.phones_fixed"
+
+    with shop_context(shop_a):
+        juma = add_worker(shop=shop_a, full_name="Juma Mfano", display_name="Juma", phone="", by=meneja)
+    assert User.objects.get(pk=juma.user_id).phone is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_phone_taken_at_the_same_moment_answers_as_taken(shop_a: Shop) -> None:
+    # Meneja adds Juma with a new phone while Baba adds Hamisi with the same one, in the same second: each check passes,
+    # as neither sees the other's save; the database's unique rule waits for the first and refuses the second. The
+    # second hears the number is in use, not a server error.
+    def the_second_add() -> object:
+        return add(shop_a, phone="0754 000 111", full_name="Hamisi Mfano", display_name="Hamisi")
+
+    with transaction.atomic():
+        add(shop_a, phone="0754 000 111")
+        other, ended = in_another_transaction(the_second_add)
+        wait_until_someone_waits_for_me()
+    other.join(timeout=5)
+    assert not other.is_alive(), "The second add still waits after the first committed."
+
+    refused = ended[0]
+    assert isinstance(refused, ValidationError)
+    assert {name: [error.code for error in errors] for name, errors in refused.error_dict.items()} == {
+        "phone": ["unique"]
+    }
+    assert not User.objects.filter(full_name="Hamisi Mfano").exists()
