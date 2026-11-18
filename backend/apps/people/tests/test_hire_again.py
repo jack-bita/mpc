@@ -217,6 +217,18 @@ def test_only_this_shops_jobs_count_for_the_first_day(baraka: StaffMember, shop_
     assert (new.shop_id, new.started_on) == (baraka.shop_id, date(2026, 4, 1))
 
 
+def test_a_person_switched_off_is_hired_again_and_stays_off(baraka: StaffMember) -> None:
+    # The superuser switched Baraka off in the admin, for every shop. Hiring him again is a shop's choice and gives him
+    # the job; it never switches him back on, which only the superuser does: he still logs in nowhere, and his page says
+    # so (switched_off), so Baba sees why (Jack, PPL-11's review: A).
+    User.objects.filter(pk=baraka.user_id).update(is_active=False)
+
+    new = hire(baraka)
+
+    assert new.status == StaffStatus.ACTIVE
+    assert User.objects.get(pk=baraka.user_id).is_active is False
+
+
 def test_a_nickname_another_worker_holds_now_is_refused(baraka: StaffMember) -> None:
     # While Baraka was away, a second Baraka joined: nicknames are unique among current workers (02 §5).
     other = User.objects.create_user(full_name="Baraka Mwingine")
