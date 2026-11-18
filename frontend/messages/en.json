@@ -465,7 +465,6 @@
   },
   "attendance": {
     "title": "Attendance",
-    "back": "Back",
     "clockIn": "Clock in",
     "clockOut": "Clock out",
     "switchedOff": "Attendance isn't switched on at this shop. The owner switches it on in Shop settings.",
@@ -512,7 +511,6 @@
   },
   "thisLaptop": {
     "title": "This laptop",
-    "back": "Back",
     "keep": {
       "title": "Keeping the data",
       "kept": "The browser has agreed to keep the shop's data on this laptop for good.",

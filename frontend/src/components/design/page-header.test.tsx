@@ -97,6 +97,15 @@ describe("the page header", () => {
     expect(back).not.toHaveBeenCalled();
   });
 
+  it("leaves the arrow out where the page says, and keeps the title", () => {
+    // The clock-out's goodbye: she is on her way out, and the page logs her out by itself.
+    render(<PageHeader title="Mahudhurio" arrow={false} />);
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Mahudhurio" }),
+    ).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Rudi ulipotoka" })).toBeNull();
+  });
+
   it("lets a page focus its title, from code only", () => {
     const heading = createRef<HTMLHeadingElement>();
     render(<PageHeader title="Mipangilio yangu" headingRef={heading} />);

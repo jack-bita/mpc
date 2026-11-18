@@ -1,6 +1,6 @@
 // this-laptop.test.tsx — the Kompyuta hii screen (SYNC-12): what it says for each of the browser's answers.
 // The browser's storage is a stand-in: jsdom has none to ask.
-import { act, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -9,6 +9,7 @@ import {
   watchInstall,
 } from "@/offline/keep-data";
 import { render } from "@/test/render";
+import { router } from "@/test/router";
 
 import { ThisLaptopScreen } from "./this-laptop";
 
@@ -27,6 +28,18 @@ function browserKeeps(yes: boolean) {
     },
   });
 }
+
+describe("the way back", () => {
+  it("is the back arrow, to the welcome with no page of the app's before, and no Rudi", () => {
+    // Every page reached from another has the arrow at its top left, the one way back (Jack, OPS-13).
+    browserKeeps(true);
+    render(<ThisLaptopScreen />);
+
+    expect(screen.queryByRole("link", { name: "Rudi" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
+    expect(router.push).toHaveBeenCalledWith("/");
+  });
+});
 
 describe("keeping the data", () => {
   it("says the browser keeps it", async () => {

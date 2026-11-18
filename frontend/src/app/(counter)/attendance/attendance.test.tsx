@@ -267,7 +267,16 @@ describe("clocking out", () => {
     ).toEqual(["in", "out"]);
   });
 
-  it("offers no Rudi during the goodbye, and leaving the screen then logs her out at once", async () => {
+  it("has the back arrow, to her welcome with no page of the app's before, and no Rudi", async () => {
+    // Every page reached from another has the arrow at its top left, the one way back (Jack, OPS-13).
+    await theScreen();
+
+    expect(screen.queryByRole("link", { name: "Rudi" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
+    expect(router.push).toHaveBeenCalledWith("/");
+  });
+
+  it("offers no back arrow during the goodbye, and leaving the screen then logs her out at once", async () => {
     // Asha taps Toka kazini, then Back in the browser out of habit, and walks out. The laptop must not stay
     // on her welcome for the next 15 minutes, for anyone to clock in as her.
     await tappedEarlier(ASHA, "in", MORNING);
@@ -278,11 +287,17 @@ describe("clocking out", () => {
         <AttendancePage />
       </CounterLayout>,
     );
-    expect(await screen.findByRole("link", { name: "Rudi" })).toBeDefined();
+    expect(
+      await screen.findByRole("button", { name: "Rudi ulipotoka" }),
+    ).toBeDefined();
 
     fireEvent.click(await screen.findByRole("button", { name: "Toka kazini" }));
     await screen.findByText("Umetoka kazini saa 18:02 jioni. Kwaheri!");
-    expect(screen.queryByRole("link", { name: "Rudi" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rudi ulipotoka" })).toBeNull();
+    // The title stays, the page's one heading, as she reads her goodbye.
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Mahudhurio" }),
+    ).toBeDefined();
 
     unmount();
 
@@ -366,7 +381,10 @@ describe("while attendance is switched off (ATT-2)", () => {
     expect(await screen.findByText(switchedOff)).toBeDefined();
     expect(clockIn()).toBeNull();
     expect(clockOut()).toBeNull();
-    expect(screen.getByRole("link", { name: "Rudi" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Rudi ulipotoka" }),
+    ).toBeDefined();
+    expect(screen.queryByRole("link", { name: "Rudi" })).toBeNull();
   });
 
   it("still shows the taps the server refused, and what waits to be sent", async () => {

@@ -465,7 +465,6 @@
   },
   "attendance": {
     "title": "Mahudhurio",
-    "back": "Rudi",
     "clockIn": "Ingia kazini",
     "clockOut": "Toka kazini",
     "switchedOff": "Mahudhurio hayajawashwa kwenye duka hili. Mwenye duka huyawasha kwenye Mipangilio ya duka.",
@@ -512,7 +511,6 @@
   },
   "thisLaptop": {
     "title": "Kompyuta hii",
-    "back": "Rudi",
     "keep": {
       "title": "Kuhifadhi data",
       "kept": "Kivinjari kimekubali kuhifadhi data za duka kwenye kompyuta hii kwa kudumu.",

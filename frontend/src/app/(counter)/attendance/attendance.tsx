@@ -39,7 +39,8 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Alert, AlertDescription } from "@/components/design/alert";
-import { Button, ButtonLink } from "@/components/design/button";
+import { Button } from "@/components/design/button";
+import { PageHeader } from "@/components/design/page-header";
 import { useThisDevice } from "@/features/devices/this-device";
 import {
   askToLeave,
@@ -174,12 +175,7 @@ export function AttendanceScreen() {
   if (attendanceOn === false && !saved)
     return (
       <div className="grid max-w-md gap-6">
-        <div>
-          <ButtonLink href="/" kind="second" size="normal">
-            {t("back")}
-          </ButtonLink>
-        </div>
-        <h1 className="text-3xl font-semibold">{t("title")}</h1>
+        <PageHeader title={t("title")} fallback="/" />
         <p className="text-lg">{t("switchedOff")}</p>
         <NeedsAttention />
         <SendNow />
@@ -188,15 +184,9 @@ export function AttendanceScreen() {
 
   return (
     <div className="grid max-w-md gap-6">
-      {/* Rudi to her welcome, but not during the goodbye: she has clocked out, and is on her way out. */}
-      {!leaving && (
-        <div>
-          <ButtonLink href="/" kind="second" size="normal">
-            {t("back")}
-          </ButtonLink>
-        </div>
-      )}
-      <h1 className="text-3xl font-semibold">{t("title")}</h1>
+      {/* The back arrow to her welcome, as on every page reached from another (Jack, OPS-13), but not
+          during the goodbye: she has clocked out, and is on her way out. */}
+      <PageHeader title={t("title")} fallback="/" arrow={!leaving} />
       {/* role="status": a screen reader says what was saved as it changes. Always on the page, as a status
           line that comes with its words in it often goes unsaid (offline-banner.tsx). */}
       <p role="status" className={status ? "text-lg" : "sr-only"}>
