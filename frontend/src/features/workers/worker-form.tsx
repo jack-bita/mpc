@@ -35,7 +35,10 @@
 // nobody and names Baraka's old job (staff.left_here, with his full name and last day), and under Simu the form says
 // whose phone it is, with Mwajiri tena: a question in words, not a refusal in red, as Baba did nothing wrong. Tapped,
 // it hires Baraka again with the boxes already typed, his old job named, and neither his full name nor his phone sent,
-// as the person keeps his own. A phone anyone else has is only `unique` beside Simu: never whose (the server's rule).
+// as the person keeps his own. The form keeps whom the phone found until Simu changes, not only while the server's
+// answer is on show (the review): a hire again whose answer the network lost keeps its Mwajiri tena, which sends the
+// same id again and so gets the job the first made, never a second Baraka; a phone typed anew forgets him. A phone
+// anyone else has is only `unique` beside Simu: never whose (the server's rule).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
@@ -130,6 +133,8 @@ export function WorkerForm({
   const [jobTitle, setJobTitle] = useState(again?.job_title ?? "");
   const [firstDay, setFirstDay] = useState(today);
   const [phone, setPhone] = useState("");
+  // Whom the phone found, a worker who left here (staff.left_here): kept until Simu changes (see the top).
+  const [found, setFound] = useState<(OldJob & { name: string }) | null>(null);
   const [own, setOwn] = useState<Checks>({});
   // The far first day the form has asked about: Hifadhi again with this same day sends it.
   const [askedAbout, setAskedAbout] = useState<string | null>(null);
@@ -143,6 +148,11 @@ export function WorkerForm({
       keepWorker(store, worker);
       void store.invalidateQueries({ queryKey: WORKERS });
       onSaved(worker);
+    },
+    onError: (error) => {
+      // The phone found a worker who left: kept, so a later refusal or a lost answer doesn't take Mwajiri tena away.
+      const named = foundBy(error);
+      if (named !== null) setFound(named);
     },
   });
 
@@ -215,7 +225,6 @@ export function WorkerForm({
     save.error instanceof ApiRefusal ? save.error.body.code : undefined;
   const nicknameTaken = code === NICKNAME_TAKEN;
   // The phone found a worker who left: said under Simu, with Mwajiri tena, not above the buttons.
-  const found = foundBy(save.error);
   const phoneOnDemo = code === NO_PHONE_ON_DEMO;
   const askingAboutTheDay =
     askedAbout !== null &&
@@ -298,7 +307,11 @@ export function WorkerForm({
             // A phone's keypad, with + and spaces.
             inputMode="tel"
             value={phone}
-            onChange={(event) => setPhone(event.target.value)}
+            onChange={(event) => {
+              setPhone(event.target.value);
+              // Another phone is another person, or none: whom the last one found is forgotten.
+              setFound(null);
+            }}
             disabled={demo}
             autoComplete="off"
             // As typed, longer than the 16 characters stored (StaffAddSerializer, 32).
@@ -330,7 +343,7 @@ export function WorkerForm({
           beside a box or under Simu already. */}
       <ApiErrorAlert
         error={
-          nicknameTaken || found !== null || phoneOnDemo
+          nicknameTaken || code === LEFT_HERE || phoneOnDemo
             ? null
             : aboutTheWholeRequest(save.error)
         }

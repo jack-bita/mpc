@@ -406,6 +406,47 @@ describe("Simu on Ongeza", () => {
     expect((await sentBodies()).length).toBe(1);
   });
 
+  it("keeps Mwajiri tena after a hire again whose answer was lost, and sends it again under the same id (the review)", async () => {
+    // The network drops on the way back: the server may have hired him. Tried again, the same id gets the job the
+    // first made, never a second (ADR-0007), and Baba is never left with only Hifadhi, a new add, to try.
+    const back = worker({ full_name: "Baraka Mfano", display_name: "Baraka" });
+    let tries = 0;
+    answer("POST", STAFF, () => {
+      tries += 1;
+      if (tries === 1) return Response.json(HIS_PHONE.body, { status: 400 });
+      if (tries === 2) throw new TypeError("Failed to fetch");
+      return Response.json(back, { status: 201 });
+    });
+    const { onSaved } = openForm();
+
+    typeBaraka();
+    tap(save());
+    tap(await screen.findByRole("button", { name: "Mwajiri tena" }));
+    await screen.findByRole("alert");
+    expect(
+      screen.getByText("Simu hii ni ya Baraka Mfano, aliyeondoka 12/03/2026."),
+    ).toBeTruthy();
+    tap(screen.getByRole("button", { name: "Mwajiri tena" }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(back));
+    const [, lost, again] = await sentBodies();
+    expect(again).toEqual(lost);
+    expect(again?.hire_again).toBe(BARAKAS_OLD_JOB);
+  });
+
+  it("forgets whose phone it was once Simu changes (the review)", async () => {
+    answer("POST", STAFF, HIS_PHONE);
+    openForm();
+
+    typeBaraka();
+    tap(save());
+    await screen.findByRole("button", { name: "Mwajiri tena" });
+    typeInto(phoneBox(), "0754 000 111");
+
+    expect(screen.queryByRole("button", { name: "Mwajiri tena" })).toBeNull();
+    expect(screen.queryByText(/Simu hii ni ya/)).toBeNull();
+  });
+
   it("is off on the demo, and says why where its hint would be (PPL-10: no phone there)", () => {
     openForm({ demo: true });
 
