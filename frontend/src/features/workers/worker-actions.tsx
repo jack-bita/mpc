@@ -75,6 +75,7 @@ export function WorkerActions({
 }) {
   const t = useTranslations("workers.actions");
   const codes = useCodeWords();
+  const store = useQueryClient();
   const [open, setOpen] = useState<{ action: Action; today: string } | null>(
     null,
   );
@@ -134,6 +135,9 @@ export function WorkerActions({
           onCancel={() => {
             setBackTo({ to: open.action });
             setOpen(null);
+            // Asked again: a send whose answer was lost may have changed the worker, and the page would go on showing
+            // Simamisha for a worker the server suspended (PPL-6's review), as Ongeza's Ghairi asks the list again.
+            void store.invalidateQueries({ queryKey: WORKERS });
           }}
         />
       ) : OFFERED[worker.status].length > 0 ? (

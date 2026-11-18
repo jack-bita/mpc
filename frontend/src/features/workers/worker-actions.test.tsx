@@ -405,6 +405,28 @@ describe("the buttons on a worker's page", () => {
     expect((button("Hifadhi") as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("reads the worker again on Ghairi, as a send whose answer was lost may have changed them (PPL-6's review)", async () => {
+    // Simamisha's answer is lost on the way back, though the server suspended Asha; the owner gives up and taps
+    // Ghairi. The page must not go on saying she works, with Simamisha.
+    const server = theServerHas(ASHA);
+    answer("POST", route("suspend"), () => {
+      server.now({ ...ASHA, status: "suspended" });
+      throw new TypeError("Failed to fetch");
+    });
+    render(<WorkerScreen id={ASHA.id} />);
+
+    fireEvent.click(await findButton("Simamisha"));
+    typeInto(reasonBox(), "Hakuja siku tatu");
+    fireEvent.click(button("Hifadhi"));
+    await screen.findByRole("alert");
+    fireEvent.click(button("Ghairi"));
+
+    await findButton("Rudisha");
+    expect(
+      screen.getByText("Amesimamishwa", { selector: "span" }),
+    ).toBeTruthy();
+  });
+
   it("closes on Ghairi, sends nothing, and gives the keyboard back to the button", async () => {
     theServerHas(ASHA);
     render(<WorkerScreen id={ASHA.id} />);
