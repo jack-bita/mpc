@@ -1,16 +1,18 @@
 """apps/demo/tests/test_demo_device.py — the one-tap demo: Jaribu demo makes a visitor's browser a device of the demo
-shop, and hands it the sellers' PINs, only where the demo shop is the only shop (OPS-3, BP15, ADR-0029).
+shop, and hands it the sellers' PINs and the manager's login, only where the demo shop is the only shop (OPS-3, OPS-13,
+BP15, ADR-0029).
 
     GET  /api/devices/v1/demo/open/   true only where the demo is open
-    POST /api/devices/v1/demo/        one tap: a working device's key in the cookie, and the PINs to show
+    POST /api/devices/v1/demo/        one tap: a working device's key in the cookie, the PINs to show, and the
+                                      manager's login for his tile to fill in
 
 Shut in three cases, each proven here: a shop that isn't a demo (the real server's, or one beside the demo shop), no
 demo sign (the real server never sets it), and no demo shop yet. Open, the tap makes a device through the two steps of
 every pairing, refuses a browser whose key already works, gives yesterday's browser a new device, and counts against
 the start of a pairing's limit.
 
-The PINs are written here as the visitors read them, never imported from the seed, as in test_seed_demo.py: a changed
-PIN must turn a test red. Fake data only: the repo is public (03 §10).
+The PINs and the manager's login are written here as the visitors read them, never imported from the seed, as in
+test_seed_demo.py: a changed PIN or password must turn a test red. Fake data only: the repo is public (03 §10).
 """
 
 from collections.abc import Iterator
@@ -42,8 +44,13 @@ DEMO_OPEN = "/api/devices/v1/demo/open/"
 PAIRING = "/api/devices/v1/pairing/"
 ME = "/api/devices/v1/me/"
 PIN_LOGIN = "/api/auth/pin-login/"
+SESSION = "/_allauth/browser/v1/auth/session"
+PASSWORD_LOGIN = "/_allauth/browser/v1/auth/login"
 # The demo's public PINs, as visitors read them (README, docs/runbooks/demo.md).
 PINS = {"Asha": "2580", "Baraka": "1470"}
+# The manager's public login, as visitors read it there too.
+MANAGER_LOGIN = "meneja@example.com"
+MANAGER_PASSWORD = "jaribu-demo"
 # The start of a pairing's limit, an hour, which the tap shares (config/settings/base.py).
 LIMIT = 10
 
@@ -176,14 +183,43 @@ def test_one_tap_demo_makes_a_working_device(demo_shop: Shop) -> None:
 
 def test_one_tap_demo_answers_the_seeds_pins(demo_shop: Shop) -> None:
     # The PIN screen shows each seller's PIN under their tile, found by their staff id. Meneja logs in with a password,
-    # so has no PIN to show.
+    # so has no PIN to show: his tile gets his login instead (the next test).
+    ids = staff_ids(demo_shop)
+
+    answer = APIClient().post(DEMO)
+
+    assert answer.json()["pins"] == [{"staff_id": ids[name], "pin": pin} for name, pin in PINS.items()]
+
+
+def test_one_tap_hands_over_the_managers_login(demo_shop: Shop) -> None:
+    # OPS-13: Meneja has no PIN, so his tile opens the password login, filled with what the tap hands over. Only he:
+    # Asha and Baraka log in with the PIN under their tiles, and get no login here. The answer holds these two lists
+    # and nothing else, so nothing more of the shop's can slip into a stranger's browser.
     ids = staff_ids(demo_shop)
 
     answer = APIClient().post(DEMO)
 
     assert answer.json() == {
         "pins": [{"staff_id": ids[name], "pin": pin} for name, pin in PINS.items()],
+        "logins": [{"staff_id": ids["Meneja"], "login": MANAGER_LOGIN, "password": MANAGER_PASSWORD}],
     }
+
+
+def test_one_tap_demo_managers_login_logs_in(demo_shop: Shop) -> None:
+    # What the login page fills in works: the visitor's browser, a device now, logs Meneja in with it, as Ingia sends
+    # it. The email goes as `email`, as the app's login box sends an email (login-name.ts).
+    browser = APIClient()
+    login = browser.post(DEMO).json()["logins"][0]
+    browser.get(SESSION)
+
+    answer = browser.post(
+        PASSWORD_LOGIN,
+        {"email": login["login"], "password": login["password"]},
+        format="json",
+        HTTP_X_CSRFTOKEN=browser.cookies["csrftoken"].value,
+    )
+
+    assert answer.status_code == 200
 
 
 def test_one_tap_demo_pins_name_the_seeds_own_people(demo_shop: Shop) -> None:

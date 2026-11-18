@@ -648,6 +648,13 @@ export interface components {
         ClosureStatusEnum: "active" | "cancelled";
         DemoDevice: {
             readonly pins: components["schemas"]["DemoPin"][];
+            readonly logins: components["schemas"]["DemoLogin"][];
+        };
+        DemoLogin: {
+            /** Format: uuid */
+            readonly staff_id: string;
+            readonly login: string;
+            readonly password: string;
         };
         DemoOpen: {
             readonly open: boolean;

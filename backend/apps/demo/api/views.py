@@ -3,7 +3,8 @@ config/urls.py beside the device routes of apps/people/api/device_urls.py:
 
     GET  /api/devices/v1/demo/open/   may Jaribu demo show here? true only where the demo shop is the only shop
     POST /api/devices/v1/demo/        one tap: this browser becomes a device of the demo shop, its key in a cookie,
-                                      and gets the demo sellers' PINs to show under their tiles
+                                      and gets the demo sellers' PINs to show under their tiles, and the
+                                      manager's login for his (OPS-13)
 
 Thin: each calls apps/demo/services.py and answers with its serializer (ADR-0015). Both are shut on the real server,
 which never has the demo's sign, and on any database with a shop that isn't a demo (demo_shop_if_open).
