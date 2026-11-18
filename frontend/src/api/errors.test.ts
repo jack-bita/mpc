@@ -185,6 +185,8 @@ const CODES_THE_API_SENDS = [
   "phone_password_mismatch",
   "invalid_phone",
   "phone.invalid",
+  // A fix that would take off the only phone someone with a password logs in by (PPL-10's review).
+  "phone.needed_to_log_in",
   "too_many_login_attempts",
   "invalid_password_reset",
   "enter_current_password",

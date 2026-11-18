@@ -389,6 +389,7 @@ def change_worker(
         # Every box sent, checked before anything is written, and every refusal together, each under its own box: a
         # wrong phone and an empty nickname are both said at once.
         _check_details(user, staff, sent_person, sent_job)
+        _check_a_login_name_is_left(user, had_phone=was["phone"] is not None)
         changed = [name for name in (*PERSON_DETAILS, *JOB_DETAILS) if _now(user, staff, name) != was[name]]
         if not changed:
             # Nothing to fix: no new version, no audit line, no line for the laptops. The page sends only what changed,
@@ -457,6 +458,18 @@ def _check_details(
                 refused.setdefault(name, []).extend(errors)
     if refused:
         raise ValidationError(refused)
+
+
+def _check_a_login_name_is_left(user: User, *, had_phone: bool) -> None:
+    # A login is by phone or by email (AUTH-3). Baba set Asha a temporary password, and she has no email: her phone is
+    # her only way in. Meneja empties her Simu box, and she could never log in again, her temporary password's mark on
+    # for good, which password.no_login_name exists to prevent (_check_may_set_password). So the phone of someone with a
+    # password and no email may change, as she then logs in with the new number and the same password, but never go.
+    # A worker who logs in with a PIN alone has no password to lose (create_user leaves it unusable): theirs may go.
+    if had_phone and user.phone is None and user.has_usable_password() and not user.email:
+        raise ValidationError(
+            {"phone": ValidationError("This person logs in with this phone.", code="phone.needed_to_log_in")}
+        )
 
 
 def _check_phones_fixed_on_demo() -> None:

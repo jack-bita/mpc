@@ -753,7 +753,8 @@
       "same_as_temporary": "Choose a password other than the temporary one."
     },
     "phone": {
-      "invalid": "This phone number isn't right."
+      "invalid": "This phone number isn't right.",
+      "needed_to_log_in": "This person logs in with this number. Type another number instead of taking it off."
     },
     "login": {
       "already_in": "Someone is already logged in on this device. Log out first, then try again.",

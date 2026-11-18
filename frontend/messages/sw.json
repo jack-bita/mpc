@@ -753,7 +753,8 @@
       "same_as_temporary": "Chagua nenosiri tofauti na lile la muda."
     },
     "phone": {
-      "invalid": "Namba hii ya simu si sahihi."
+      "invalid": "Namba hii ya simu si sahihi.",
+      "needed_to_log_in": "Mtu huyu anaingia kwa namba hii. Weka namba nyingine badala ya kuiondoa."
     },
     "login": {
       "already_in": "Kuna mtu ameingia tayari kwenye kifaa hiki. Toka kwanza, kisha ujaribu tena.",

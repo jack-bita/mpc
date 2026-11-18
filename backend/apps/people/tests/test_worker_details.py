@@ -185,10 +185,44 @@ def test_a_phone_is_stored_in_one_form(asha: StaffMember) -> None:
 
 
 def test_an_empty_phone_box_takes_the_phone_off(asha: StaffMember) -> None:
+    # Asha logs in with her PIN alone: she has no password, so a phone she no longer has may go.
     fix(asha, phone="0712 345 678")
     fix(asha, version=2, phone="")
 
     # NULL, never "": many people without a phone must not clash on `unique` (apps/people/models.py).
+    assert stored(asha).user.phone is None
+
+
+def with_a_password(staff: StaffMember, *, email: str | None = None) -> None:
+    # The person logs in with a password from their own phone, as a temporary one leaves them (AUTH-6).
+    person = User.objects.get(pk=staff.user_id)
+    person.set_password("siri-ya-mfano-2026")
+    person.email = email
+    person.save()
+
+
+def test_a_phone_that_is_someones_only_way_in_cant_be_taken_off(asha: StaffMember) -> None:
+    # Baba set Asha a temporary password, and she has no email: emptying her phone would lock her out for good.
+    fix(asha, phone="0712 345 678")
+    with_a_password(asha)
+
+    with pytest.raises(ValidationError) as refused:
+        fix(asha, version=2, phone="")
+
+    assert codes(refused) == {"phone": ["phone.needed_to_log_in"]}
+    assert (stored(asha).user.phone, stored(asha).version, len(details_lines(asha))) == ("+255712345678", 2, 1)
+
+
+def test_such_a_phone_may_change_and_may_go_once_there_is_an_email(asha: StaffMember) -> None:
+    # A new number keeps her way in: she logs in with it and the same password. With an email, she has another.
+    fix(asha, phone="0712 345 678")
+    with_a_password(asha)
+
+    fix(asha, version=2, phone="0754 000 111")
+    assert stored(asha).user.phone == "+255754000111"
+
+    with_a_password(asha, email="asha@example.com")
+    fix(asha, version=3, phone="")
     assert stored(asha).user.phone is None
 
 

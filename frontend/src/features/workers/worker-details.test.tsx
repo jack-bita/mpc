@@ -242,6 +242,27 @@ describe("Badilisha", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("says beside Simu that a phone someone logs in by can't be taken off (PPL-10's review)", async () => {
+    // Asha has a password and no email: her phone is her only way in.
+    theServerHas({ ...ASHA, phone: "+255712345678" });
+    answer(
+      "PATCH",
+      ASHAS,
+      refusal(400, "invalid", {}, { phone: ["phone.needed_to_log_in"] }),
+    );
+    await openTheFix();
+
+    typeInto(box("Simu"), "");
+    typeInto(box("Sababu"), WHY);
+    fireEvent.click(button("Hifadhi"));
+
+    await waitFor(() =>
+      expect(errorOf(box("Simu"))).toBe(
+        "Mtu huyu anaingia kwa namba hii. Weka namba nyingine badala ya kuiondoa.",
+      ),
+    );
+  });
+
   it("shows who may above the buttons, and keeps the boxes", async () => {
     theServerHas(ASHA);
     answer("PATCH", ASHAS, refusal(400, "staff.superuser_only"));
