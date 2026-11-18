@@ -1,7 +1,9 @@
-"""apps/people/login_doors.py — the login doors: the few reads that run before any shop is open (AUTH-2; 03 §5.4).
+"""apps/people/login_doors.py — the login doors: the few reads past the guard, which a login makes before any shop is
+open (AUTH-2; 03 §5.4), and a change to a person makes before any is open or inside the visit of the shop where it is
+made (PPL-10).
 
 Every read of a shop's table goes through the guard, which shows only the shop the visit has opened, and refuses
-while none is (ADR-0042, which supersedes ADR-0037). A login can't wait for that: from what a request brings, it must
+while none is (ADR-0044, which supersedes ADR-0042). A login can't wait for that: from what a request brings, it must
 first find which shop the visit works for; nor can a change to a person, who belongs to no shop, that each shop where
 they work must hear of. So each gets a door here, which reads the one thing it needs, shops' ids, and nothing else;
 everything after it is read through the guard, inside each shop. Doors are few and named, as system_context() and
@@ -12,7 +14,8 @@ apps/people/tests/test_staff_session.py).
 
 Two doors: a device's key (AUTH-2), which a PIN's session goes through on every visit too (AUTH-4), and a person
 (AUTH-3), who belongs to no shop until their jobs are found: a login with a password, and a change to the person that
-every shop where they work must hear of, their language, font, name or switch-off (SYNC-15, ADR-0042).
+every shop where they work must hear of, their language, font, name or switch-off (SYNC-15), the name also from a
+fix on the workers' page, inside the visit of the shop where it is made (PPL-10, ADR-0044).
 """
 
 import uuid
