@@ -184,8 +184,15 @@ export function PasswordLogin({
   return (
     <div className="flex max-w-md flex-col gap-6">
       {/* The back arrow, as on every page reached from another (Jack, OPS-13): to where the person was,
-          the tiles or the welcome; with no page of the app's before, to the welcome, `/`. */}
-      <PageHeader title={t("title")} fallback="/" />
+          the tiles or the welcome; with no page of the app's before, to the welcome, `/`. Held while the
+          login is on its way, after it worked, and while a Toka is: the answer opens the office even
+          once the page is left (the store's own onSuccess), in front of whoever steps up next at a shared
+          laptop, as the PIN pad's arrow is held (OPS-13's review). */}
+      <PageHeader
+        title={t("title")}
+        fallback="/"
+        backDisabled={login.isPending || login.isSuccess || leaving}
+      />
       {/* role="status": a screen reader says its words as they change. Always on the page, empty and
           hidden from the eye while there is nothing to say, as one that comes with its words in it often
           goes unsaid (offline-banner.tsx). */}

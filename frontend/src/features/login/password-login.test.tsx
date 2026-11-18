@@ -430,6 +430,33 @@ describe("the back arrow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
     expect(router.push).toHaveBeenCalledWith("/");
   });
+
+  it("is held while the login is on its way, and after it worked", async () => {
+    // At the shop laptop Baba taps Ingia, then the arrow: the tiles would show, then his answer would land
+    // and open his office in front of whoever steps up next (OPS-13's review). As the PIN pad's arrow is.
+    let answerTheLogin: (answer: Response) => void = () => {};
+    answer(
+      "POST",
+      LOGIN,
+      () => new Promise<Response>((resolve) => (answerTheLogin = resolve)),
+    );
+    render(<PasswordLogin />);
+
+    await logIn("0712 345 678", "siri-ya-neema");
+    const arrow = screen.getByRole<HTMLButtonElement>("button", {
+      name: "Rudi ulipotoka",
+    });
+    await waitFor(() => expect(arrow.disabled).toBe(true));
+    fireEvent.click(arrow);
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+
+    answerTheLogin(Response.json({ status: 200 }, { status: 200 }));
+    await waitFor(() =>
+      expect(router.replace).toHaveBeenCalledWith(AFTER_LOGIN),
+    );
+    expect(arrow.disabled).toBe(true);
+  });
 });
 
 describe("the demo manager's login", () => {
