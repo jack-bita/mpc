@@ -30,8 +30,8 @@ export async function askDemoOpen(): Promise<boolean> {
 
 /**
  * The tap: this browser becomes a device of the demo shop, and keeps the PINs and the logins. Gives back
- * the device, as its own check saved it. A refusal (demo.closed, too many tries) or no answer is thrown, for the screen
- * to show.
+ * the device, as its own check saved it. A refusal (demo.closed, too many tries) or no answer is thrown,
+ * for the screen to show.
  */
 export async function tryTheDemo(): Promise<ThisDevice> {
   // The tap is a change, so it needs the CSRF token, as a pairing's start does (pairing.ts): the device's

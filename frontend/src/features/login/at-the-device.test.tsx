@@ -394,7 +394,7 @@ describe("a session the server ends", () => {
       screen.getByRole("heading", { level: 1, name: "Wewe ni nani?" }),
     ).toBeDefined();
     expect(logouts()).toHaveLength(1);
-    // Juma taps his tile, then Rudi: the reason was for her, and is gone. The tiles come a moment after
+    // Juma taps his tile, then the arrow back: the reason was for her, and is gone. The tiles come a moment after
     // the question, from the laptop's copy.
     fireEvent.click(
       await screen.findByRole("button", { name: "Juma Mfano Juma" }),

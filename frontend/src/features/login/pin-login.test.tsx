@@ -154,7 +154,7 @@ describe("the pin login", () => {
           .map((change) => change.state.variables),
       );
     expect(held()).not.toContain("4830");
-    // Rudi, and the try itself is let go of: the store's list of changes is empty.
+    // The arrow back to the tiles, and the try itself is let go of: the store's list of changes is empty.
     fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
     await vi.waitFor(() =>
       expect(store.getMutationCache().getAll()).toEqual([]),
@@ -187,7 +187,7 @@ describe("the pin login", () => {
     ).toBeDefined();
   });
 
-  it("takes no key and no Rudi while the PIN is on its way", async () => {
+  it("takes no key and holds the back arrow while the PIN is on its way", async () => {
     // A slow 3G answer: nothing the person taps meanwhile may send a second PIN, nor leave the step, as
     // the answer could still log her in behind the picker.
     await theShop(() => new Promise<Response>(() => {}));

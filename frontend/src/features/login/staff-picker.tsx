@@ -51,10 +51,10 @@ import { useShopDatabase } from "@/offline/this-shop";
 export type StaffRow = components["schemas"]["StaffRecord"];
 
 /**
- * Who gets a tile: the active people with a PIN, or with a demo login kept here (OPS-13), A to Z. Undefined
- * while the first read runs, so nothing flashes;
- * null while this laptop has had no first sync, whose copy the tiles wait for. Live: a sync that adds,
- * renames or suspends someone redraws the tiles by itself.
+ * Who gets a tile: the active people with a PIN, or with a demo login kept here (OPS-13), A to Z.
+ * Undefined while the first read runs, so nothing flashes; null while this laptop has had no first sync,
+ * whose copy the tiles wait for. Live: a sync that adds, renames or suspends someone redraws the tiles by
+ * itself.
  */
 function useTiles(): StaffRow[] | null | undefined {
   const db = useShopDatabase();
@@ -114,7 +114,7 @@ export function StaffPicker({
   // The login's book, for the password button's words, which the manager's tile says the same way.
   const words = useTranslations("login");
   const people = useTiles();
-  // The tiles' step has come, and whatever had focus (a tapped tile, Rudi, Toka) left with the last one:
+  // The tiles' step has come, and whatever had focus (a tapped tile, the PIN pad's arrow, Toka) left with the last one:
   // focus moves to the question, so a screen reader says it, and Tab goes on from here (as UI-3's forms
   // do).
   const heading = useRef<HTMLHeadingElement>(null);

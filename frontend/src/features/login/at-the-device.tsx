@@ -378,7 +378,7 @@ export function AtTheDevice({
         </>
       );
     // Plain "nobody is logged in" is no error to show: only a session that ended for a reason says why,
-    // and only until the first tile is tapped, which forgets it for good, Rudi included. No answer at all:
+    // and only until the first tile is tapped, which forgets it for good, the PIN pad's arrow back included. No answer at all:
     // the reason above the tiles, as the PIN is checked on the laptop.
     if (ended || noAnswer || unheard)
       return (

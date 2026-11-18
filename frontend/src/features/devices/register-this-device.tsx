@@ -24,8 +24,8 @@ import { useTranslations } from "use-intl";
 import { ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button, ButtonLink } from "@/components/design/button";
-import { PageHeader } from "@/components/design/page-header";
 import { Card, CardContent } from "@/components/design/card";
+import { PageHeader } from "@/components/design/page-header";
 
 import { checkThisDevice, DEVICE_CHECK } from "./device-check";
 import {

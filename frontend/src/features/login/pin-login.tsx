@@ -58,8 +58,8 @@ export function PinLogin({
   /** Why the last session ended, when it didn't end by itself: `me` refused it, as when the person was
    * suspended while logged in. Shown above the tiles until someone is picked. */
   notice?: unknown;
-  /** Called as a tile is tapped: the home page then drops the notice for good, so Rudi doesn't bring the
-   * last person's reason back for the next one (UI-4's review). */
+  /** Called as a tile is tapped: the home page then drops the notice for good, so the PIN pad's arrow back
+   * to the tiles doesn't bring the last person's reason back for the next one (UI-4's review). */
   onPick?: () => void;
   /** The home page knows the server can't be asked now: `me` got no answer, or a logout waits unheard.
    * The PIN is then checked on this laptop, never sent. */

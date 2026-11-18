@@ -381,7 +381,8 @@ class DemoPin:
 @dataclass(frozen=True)
 class DemoLogin:
     # One person's password login, for the PIN screen's tile of someone with no PIN (OPS-13): today Meneja, whose tile
-    # opens the password login with both boxes filled. `login` is what goes in its first box, the email or the phone.
+    # opens the password login with both boxes filled. `login` is what goes in its first box: the email, the one login
+    # name the seed gives (_demo_logins).
     # The password is the seed's public one, from PEOPLE, never read from the database, which keeps only its hash:
     # "passwords never leave the server" holds for every real one, and this one is printed in the README.
     staff_id: uuid.UUID

@@ -7,7 +7,7 @@
 //
 // Three kinds for screens, by what pressing does:
 //   main    green, filled: the one action a screen is for (Uza, Hifadhi).
-//   second  blue outline: another action beside it (Rudi, Ghairi).
+//   second  blue outline: another action beside it (Ghairi, Ingia kwa nenosiri).
 //   danger  faded-red outline: an action that takes something away (Batilisha). An outline, not a
 //           fill: it must never shout louder than the screen's main action.
 // And one for the green top bar (UI-1), where none of the three can sit: the green main button
