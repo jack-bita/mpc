@@ -134,6 +134,7 @@
       "password": "Password",
       "send": "Log in",
       "forgot": "Forgot your password?",
+      "demo": "This is the demo's public login, open to everyone. Press Log in.",
       "someoneHere": "{name} is logged in on this device. Log them out first, then log in."
     },
     "welcome": "Welcome, {name}",

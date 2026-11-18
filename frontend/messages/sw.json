@@ -134,6 +134,7 @@
       "password": "Nenosiri",
       "send": "Ingia",
       "forgot": "Umesahau nenosiri?",
+      "demo": "Hizi ni taarifa za kuingia za demo, ziko wazi kwa kila mtu. Bonyeza Ingia.",
       "someoneHere": "{name} ameingia kwenye kifaa hiki. Mtoe kwanza, kisha uingie."
     },
     "welcome": "Karibu, {name}",

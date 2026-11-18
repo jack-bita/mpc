@@ -22,6 +22,13 @@
 // Toka ends that session on the server, sent again until it is heard, and the store forgets the person;
 // the form shows then. A login answered 409 asks `me` again, to learn whose session it met.
 //
+// On the demo, the manager's tile on the PIN screen leads here with his id, `/login/?as=<id>` (OPS-13,
+// staff-picker.tsx): the page hands it on as `forStaff`, and if one tap on Jaribu demo kept a login for
+// that id on this laptop (demo-pins.ts), both boxes start filled, with a line saying it is the demo's
+// public login, so the visitor taps Ingia and types nothing. Any other id, or none, starts empty, as on a
+// real shop, whose laptop keeps no demo login. Only what the person sees changes: what is sent, and every
+// refusal, is the same as for a login typed by hand.
+//
 // Its page, /login/, is outside the counter's lock (rule 5): logging in calls the server.
 //
 // "use client": it asks use-intl for words, and calls the server.
@@ -30,7 +37,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "use-intl";
 import { z } from "zod";
@@ -44,6 +51,7 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button, ButtonLink } from "@/components/design/button";
 import { Field } from "@/components/design/field";
 import { PasswordField } from "@/components/design/password-field";
+import { demoLogin } from "@/features/devices/demo-pins";
 import { useWhoIsHere, WHO_IS_HERE } from "@/features/people/who-is-here";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 
@@ -64,7 +72,12 @@ const LOGIN_FORM = z.object({
 });
 type LoginForm = z.infer<typeof LOGIN_FORM>;
 
-export function PasswordLogin() {
+export function PasswordLogin({
+  forStaff = null,
+}: {
+  /** The staff id the address names (`?as=`), from the demo manager's tile; null for none. */
+  forStaff?: string | null;
+}) {
   const t = useTranslations("login.password");
   // The PIN login's book, for its "Subiri kidogo…", which this page says the same way.
   const loginWords = useTranslations("login");
@@ -74,9 +87,15 @@ export function PasswordLogin() {
   const router = useRouter();
   const me = useWhoIsHere();
 
+  // The demo's public login kept for this id, if any (OPS-13). Read once, as the boxes start: what the
+  // person types after is theirs.
+  const [demo] = useState(() => (forStaff ? demoLogin(forStaff) : undefined));
   const form = useForm<LoginForm>({
     resolver: zodResolver(LOGIN_FORM),
-    defaultValues: { name: "", password: "" },
+    defaultValues: {
+      name: demo?.login ?? "",
+      password: demo?.password ?? "",
+    },
   });
 
   const login = useMutation({
@@ -203,6 +222,8 @@ export function PasswordLogin() {
   function theForm() {
     return (
       <>
+        {/* Said before the boxes, so the visitor knows why they are filled, and that it is no secret. */}
+        {demo && <p>{t("demo")}</p>}
         {/* noValidate: the browser's own checks would speak its language, not the shop's. */}
         <form
           noValidate

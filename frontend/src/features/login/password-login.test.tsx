@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ALLAUTH } from "@/api/allauth";
 import { makeQueryClient } from "@/api/query-client";
+import { DEMO_LOGINS_KEY, saveLogins } from "@/features/devices/demo-pins";
 import { WHO_IS_HERE } from "@/features/people/who-is-here";
+import { setLanguage } from "@/i18n/language";
 import { DAWA, DAWA_LAPTOP_ANSWER, whoIsHere } from "@/test/devices";
 import {
   allauthRefusal,
@@ -68,6 +70,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  window.localStorage.removeItem(DEMO_LOGINS_KEY);
   vi.unstubAllGlobals();
   document.cookie = "csrftoken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
 });
@@ -411,5 +414,80 @@ describe("the password login", () => {
     );
     expect(router.replace).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Nenosiri")).toBeTruthy();
+  });
+});
+
+describe("the demo manager's login", () => {
+  // The demo's manager, and the public login one tap on Jaribu demo kept for him (OPS-13). Fake ids; the
+  // login is the demo's own, which the README prints.
+  const MENEJA = "019a5e00-0000-7000-8000-0000000000c1";
+  const KEPT = {
+    staff_id: MENEJA,
+    login: "meneja@example.com",
+    password: "jaribu-demo",
+  };
+  const PUBLIC_LINE =
+    "Hizi ni taarifa za kuingia za demo, ziko wazi kwa kila mtu. Bonyeza Ingia.";
+
+  it("starts with both boxes filled, says it is the demo's public login, and logs in with one tap", async () => {
+    // His tile led here (staff-picker.tsx): the visitor types nothing.
+    saveLogins([KEPT]);
+    answer("POST", LOGIN, { status: 200, body: { status: 200 } });
+    render(<PasswordLogin forStaff={MENEJA} />);
+
+    const name =
+      await screen.findByLabelText<HTMLInputElement>("Simu au barua pepe");
+    expect(name.value).toBe("meneja@example.com");
+    expect(screen.getByLabelText<HTMLInputElement>("Nenosiri").value).toBe(
+      "jaribu-demo",
+    );
+    expect(screen.getByText(PUBLIC_LINE)).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ingia" }));
+
+    await waitFor(() => expect(logins()).toHaveLength(1));
+    expect(await logins()[0]?.json()).toEqual({
+      email: "meneja@example.com",
+      password: "jaribu-demo",
+    });
+    await waitFor(() =>
+      expect(router.replace).toHaveBeenCalledWith(AFTER_LOGIN),
+    );
+  });
+
+  it("starts empty for an id this laptop kept no login for", async () => {
+    // Yesterday's Meneja, whom the reset made again with a new id, or any id typed into the address: the
+    // form as it always is, and no line about the demo.
+    saveLogins([KEPT]);
+    render(<PasswordLogin forStaff="019a5e00-0000-7000-8000-0000000000ff" />);
+
+    const name =
+      await screen.findByLabelText<HTMLInputElement>("Simu au barua pepe");
+    expect(name.value).toBe("");
+    expect(screen.getByLabelText<HTMLInputElement>("Nenosiri").value).toBe("");
+    expect(screen.queryByText(PUBLIC_LINE)).toBeNull();
+  });
+
+  it("starts empty with no id, a login kept or not", async () => {
+    // The owner on his own phone, or the password button under a real shop's tiles: as before OPS-13.
+    saveLogins([KEPT]);
+    render(<PasswordLogin />);
+
+    const name =
+      await screen.findByLabelText<HTMLInputElement>("Simu au barua pepe");
+    expect(name.value).toBe("");
+    expect(screen.queryByText(PUBLIC_LINE)).toBeNull();
+  });
+
+  it("says the line in English after the switch", async () => {
+    setLanguage("en");
+    saveLogins([KEPT]);
+    render(<PasswordLogin forStaff={MENEJA} />);
+
+    expect(
+      await screen.findByText(
+        "This is the demo's public login, open to everyone. Press Log in.",
+      ),
+    ).toBeDefined();
   });
 });
