@@ -386,7 +386,9 @@ describe("the buttons on a worker's page", () => {
     render(<WorkerScreen id={neema.id} />);
 
     expect(
-      await screen.findByText("Huwezi kubadilisha hali yako ya kazi mwenyewe."),
+      await screen.findByText(
+        "Huwezi kubadilisha hali yako ya kazi wala taarifa zako mwenyewe.",
+      ),
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Ameondoka" })).toBeNull();

@@ -252,7 +252,7 @@ describe("Badilisha", () => {
     fireEvent.click(button("Hifadhi"));
 
     expect((await screen.findByRole("alert")).textContent).toContain(
-      "Hali ya kazi ya mtu huyu inabadilishwa na msimamizi wa mfumo tu.",
+      "Hali ya kazi na taarifa za mtu huyu zinabadilishwa na msimamizi wa mfumo tu.",
     );
     expect(box("Kazi").value).toBe("Muuzaji");
   });
