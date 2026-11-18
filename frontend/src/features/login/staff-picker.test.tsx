@@ -116,6 +116,18 @@ describe("the staff picker", () => {
     ]);
   });
 
+  it("gives someone with no PIN no tile", async () => {
+    // Juma was added in the office, and has no PIN yet: a tile would lead to a PIN pad that can't let him in. On
+    // the demo, a visitor's made-up workers never get one, so they never crowd the tiles of every visitor after
+    // (Jack, PPL-4's review: A). His tile comes with his PIN, at the next sync.
+    await theLaptopKnows(ASHA, { ...JUMA, pin_changed_at: null });
+    render(<StaffPicker onPick={vi.fn()} />);
+
+    expect((await tiles()).map((tile) => tile.textContent)).toEqual([
+      "Asha Mfano Asha",
+    ]);
+  });
+
   it("gives a tile to someone a sync adds, with no reload", async () => {
     await theLaptopKnows(ASHA);
     render(<StaffPicker onPick={vi.fn()} />);
