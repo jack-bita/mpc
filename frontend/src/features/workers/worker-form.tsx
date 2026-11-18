@@ -329,7 +329,10 @@ export function WorkerForm({
           </p>
           {found ? (
             <div>
+              {/* The second kind: a suggestion beside a box, so the form keeps one main button, Hifadhi, as every
+                  form here does. */}
               <Button
+                kind="second"
                 onClick={() => go(found)}
                 disabled={save.isPending || !online}
               >
