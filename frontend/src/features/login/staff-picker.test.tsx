@@ -243,6 +243,22 @@ describe("the staff picker", () => {
     expect(picked).not.toHaveBeenCalled();
   });
 
+  it("keeps the PIN pad for someone with a PIN, a login kept for them or not", async () => {
+    // The server hands over a login only for someone with no PIN (_demo_logins), but the tile never trusts
+    // that alone: Asha has a PIN, so her tile picks her for the pad, and opens no password page (OPS-13's
+    // review).
+    saveLogins([{ ...MENEJA_LOGIN, staff_id: ASHA.id }]);
+    await theLaptopKnows(ASHA);
+    const picked = vi.fn();
+    render(<StaffPicker onPick={picked} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Asha Mfano Asha" }),
+    );
+    expect(picked).toHaveBeenCalledWith(ASHA);
+    expect(screen.queryByRole("link", { name: /Asha/ })).toBeNull();
+  });
+
   it("gives no tile for a login kept for other people", async () => {
     // Yesterday's demo kept a login of a Meneja the reset made again with a new id: today's Meneja, with no PIN,
     // gets no tile from it, as on a real shop's laptop, which keeps none.
