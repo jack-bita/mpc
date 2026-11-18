@@ -394,6 +394,31 @@
       }
     }
   },
+  "workers": {
+    "title": "Wafanyakazi",
+    "intro": "Wanaofanya kazi dukani, na waliowahi kufanya kazi hapa.",
+    "names": "{nickname} · {fullName}",
+    "noRole": "Hana cheo bado",
+    "roleOnSide": "{role} ({side})",
+    "allSides": "Pande zote",
+    "extraKeys": "{count, plural, one {Ruhusa # ya ziada} other {Ruhusa # za ziada}}",
+    "status": {
+      "active": "Anafanya kazi",
+      "suspended": "Amesimamishwa",
+      "left": "Ameondoka"
+    },
+    "switchedOff": "Amezimwa na msimamizi wa mfumo. Hawezi kuingia.",
+    "leftHeading": "Walioondoka",
+    "noneLeft": "Hakuna.",
+    "roles": {
+      "owner": "Mmiliki",
+      "manager": "Meneja",
+      "seller": "Muuzaji",
+      "order_writer": "Mwandishi wa oda",
+      "cashier": "Keshia",
+      "worker": "Mfanyakazi"
+    }
+  },
   "attendance": {
     "title": "Mahudhurio",
     "back": "Rudi",

@@ -394,6 +394,31 @@
       }
     }
   },
+  "workers": {
+    "title": "Workers",
+    "intro": "Everyone who works at the shop, and everyone who has.",
+    "names": "{nickname} · {fullName}",
+    "noRole": "No role yet",
+    "roleOnSide": "{role} ({side})",
+    "allSides": "All sides",
+    "extraKeys": "{count, plural, one {# extra permission} other {# extra permissions}}",
+    "status": {
+      "active": "Working",
+      "suspended": "Suspended",
+      "left": "Left"
+    },
+    "switchedOff": "Switched off by the system admin. They can't log in.",
+    "leftHeading": "Those who left",
+    "noneLeft": "Nobody.",
+    "roles": {
+      "owner": "Owner",
+      "manager": "Manager",
+      "seller": "Seller",
+      "order_writer": "Order writer",
+      "cashier": "Cashier",
+      "worker": "Worker"
+    }
+  },
   "attendance": {
     "title": "Attendance",
     "back": "Back",

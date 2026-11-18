@@ -3,10 +3,11 @@
 //
 // Where a manager lands after logging in on their own phone (Jack, 7 Nov 2026): big buttons are easy to
 // tap, and the page grows a button as each office screen comes (products, prices, reports…). Today there
-// are three. Two are for whoever holds device.manage on some side: Vifaa, as its Sajili kifaa is theirs
+// are four. Two are for whoever holds device.manage on some side: Vifaa, as its Sajili kifaa is theirs
 // (UI-3), and Hali ya vifaa, as keeping the devices working is theirs too (SYNC-14). Mipangilio ya duka is
 // for anyone who works on a side: reading the shop's rules needs no key, and changing one is the owner's,
-// which the page itself asks for (SHOP-5).
+// which the page itself asks for (SHOP-5). Wafanyakazi is for whoever holds staff.manage on the whole shop,
+// as even reading the workers is behind it (PPL-6).
 // A button for a screen someone may not use stays off the page; the server still checks every change
 // itself (PPL-5), so this only keeps a door nobody may use out of sight. Under them, for everyone,
 // Mipangilio yangu: a person's own language and font need no key (UI-9).
@@ -25,6 +26,7 @@ import {
   useWhoIsHere,
   type WhoIsHere,
 } from "@/features/people/who-is-here";
+import { mayManageStaff } from "@/features/workers/workers";
 
 export function OfficeHome() {
   const t = useTranslations("office");
@@ -34,6 +36,7 @@ export function OfficeHome() {
   // The PIN login's book, for its "Subiri kidogo…", which the office says the same way.
   const loginWords = useTranslations("login");
   const settings = useTranslations("mySettings");
+  const workers = useTranslations("workers");
   const me = useWhoIsHere();
   // Focus on the welcome as each person arrives: after a login, or Chagua nenosiri lako's Hifadhi, the
   // button that had it is gone. A screen reader then says where the person is, and Tab goes on to the
@@ -61,6 +64,13 @@ export function OfficeHome() {
         href: "/settings/",
         label: shopSettings("title"),
         open: here.permissions.sides.length > 0,
+      },
+      {
+        // The workers' page shows each worker's roles, and later their pay (WAGE-2): its routes ask
+        // staff.manage on the whole shop, not on a side, as a worker belongs to the shop (PPL-4).
+        href: "/workers/",
+        label: workers("title"),
+        open: mayManageStaff(here),
       },
     ].filter((screen) => screen.open);
 

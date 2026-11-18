@@ -1,5 +1,5 @@
 // office-home.test.tsx — the office's home page greets the person, with a big button for each office
-// screen they may open (UI-5), Mipangilio ya duka among them (SHOP-5).
+// screen they may open (UI-5), Mipangilio ya duka (SHOP-5) and Wafanyakazi (PPL-6) among them.
 import { QueryClientProvider } from "@tanstack/react-query";
 import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -9,6 +9,7 @@ import { WHO_IS_HERE } from "@/features/people/who-is-here";
 import { DAWA, whoIsHere } from "@/test/devices";
 import { answer, refusal } from "@/test/fake-server";
 import { render } from "@/test/render";
+import { MANAGER } from "@/test/workers";
 
 import { OfficeHome } from "./office-home";
 
@@ -101,6 +102,29 @@ describe("the office's home page", () => {
       name: "Mipangilio ya duka",
     });
     expect(link.getAttribute("href")).toMatch(/^\/settings\/?$/);
+  });
+
+  it("opens Wafanyakazi for whoever holds staff.manage on the whole shop (PPL-6)", async () => {
+    answer("GET", ME, { status: 200, body: MANAGER });
+
+    render(<OfficeHome />);
+
+    const link = await screen.findByRole("link", { name: "Wafanyakazi" });
+    expect(link.getAttribute("href")).toMatch(/^\/workers\/?$/);
+  });
+
+  it("offers no Wafanyakazi for staff.manage on one side alone", async () => {
+    // A worker belongs to the shop, not a side: the routes ask the key on the whole shop (PPL-4), so a key
+    // held on Dawa alone opens nothing there.
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: ["staff.manage"] }]),
+    });
+
+    render(<OfficeHome />);
+
+    await screen.findByRole("link", { name: "Mipangilio ya duka" });
+    expect(screen.queryByRole("link", { name: "Wafanyakazi" })).toBeNull();
   });
 
   it("says when there is nothing to open, for someone who works on no side", async () => {
