@@ -17,6 +17,7 @@ with new ids, and the test's rollback takes those back, so the next test must no
 """
 
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from io import StringIO
@@ -34,6 +35,7 @@ from django.utils import timezone
 from pytest_django import Settings
 
 from apps.core.models import ChangeOp, SequenceName
+from apps.core.permissions import Permission
 from apps.core.sequences import next_numbers
 from apps.core.settings_registry import ATTENDANCE_ON, CLOSING, LATE_FINE, SECOND_FINE
 from apps.core.tenancy import shop_context
@@ -292,6 +294,29 @@ def test_seed_demo_makes_todays_shop_again_without_its_closures(monkeypatch: pyt
     with shop_context(shop):
         assert Closure.objects.filter(first_day=tomorrow, name="Siku ya mfano").exists()
     # Then kept, as it holds them all now.
+    assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_makes_todays_shop_again_without_its_peoples_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    # As for its rules and closures: a deploy whose seed gives one of its people one more key than this morning's demo
+    # holds, as PPL-4's gave Meneja staff.manage, makes the shop again at once, so the deploy shows what the key opens
+    # the same day. Kept instead, the live demo went a whole day with no Wafanyakazi for Meneja (#275).
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    meneja = next(person for person in services.PEOPLE if person.keys)
+    # One of the owner's own four, which no role of the demo holds: only the seed's grant can give it.
+    more = replace(meneja, keys=(*meneja.keys, Permission.PAY_APPROVE))
+    monkeypatch.setattr(services, "PEOPLE", tuple(more if person is meneja else person for person in services.PEOPLE))
+
+    assert seed_demo() == Seeded.MADE
+    shop = the_demo_shop()
+    assert shop != made
+    with shop_context(shop):
+        staff = StaffMember.objects.get(display_name=meneja.display_name)
+        assert PermissionGrant.objects.filter(
+            staff=staff, permission=Permission.PAY_APPROVE, side__isnull=True
+        ).exists()
+    # Then kept, as its people hold them all now.
     assert seed_demo() == Seeded.KEPT
 
 

@@ -33,8 +33,8 @@ safe only on a database that holds nothing but demo data, so the seed refuses, b
 Once a day, not on every start (DATA-1's plan, 8 Nov 2026): the free demo sleeps after 15 minutes with no visitor,
 and every wake-up runs its start again. A visitor back from a break should find the PIN screen with their work still
 there (the idle lock, UI-4), so a start keeps a demo shop made today, in the shop's own time, and makes it again only
-when it was made on an earlier day, or lacks a rule this seed sets, as a demo an older seed made that morning does on
-a deploy's day (ATT-2). `fresh=True` makes it again whatever its day.
+when it was made on an earlier day, or lacks a rule, a closure or a person's extra key this seed sets, as a demo an
+older seed made that morning does on a deploy's day (ATT-2, ATT-8, #275). `fresh=True` makes it again whatever its day.
 
 Made through the services, as a real shop is set up (set_up_shop, add_staff, assign_role, set_pin), never by writing
 rows: the demo can't hold anything a real shop couldn't, and a service that changes its rules changes the demo too.
@@ -69,7 +69,7 @@ from apps.core.changes import recording_changes
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SECOND_FINE, SettingKey
 from apps.core.tenancy import shop_context
-from apps.people.models import Device, Role, StaffMember, User
+from apps.people.models import Device, PermissionGrant, Role, StaffMember, User
 from apps.people.services import (
     add_staff,
     assign_role,
@@ -212,7 +212,13 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
     # the real server never has the sign, so the look already rules it out; closing it would take a table lock written
     # in SQL by hand, for a case that can't occur.
     _check_may_seed()
-    if not fresh and (shop := _made_today()) is not None and _holds_its_rules(shop) and _holds_its_closures(shop):
+    if (
+        not fresh
+        and (shop := _made_today()) is not None
+        and _holds_its_rules(shop)
+        and _holds_its_closures(shop)
+        and _holds_its_keys(shop)
+    ):
         return Seeded.KEPT
     try:
         _wipe_and_make()
@@ -286,6 +292,28 @@ def _holds_its_rules(shop: Shop) -> bool:
             Setting.objects.filter(shop=shop, created_by__isnull=True).values_list("key", flat=True)
         )
     return {rule.key for rule, _value in DEMO_RULES} <= set_by_the_system
+
+
+def _holds_its_keys(shop: Shop) -> bool:
+    # Whether today's demo gives each of the seed's people every extra key this seed gives them (DemoPerson.keys), on
+    # the whole shop, as the seed gives them: as for its rules, a deploy whose seed gives a person a new key must not
+    # keep a demo made that morning without it. PPL-4's deploy kept a Meneja with no staff.manage, so the workers' page
+    # stayed out of every visitor's reach until the next morning (#275). The person is found by their nickname among
+    # those the system made (created_by empty): a visitor's own workers never count. Nothing a visitor does takes a
+    # seed person's key away, as no route takes a key away yet (PPL-7) and the seed's people stay as made
+    # (demo.people_fixed).
+    wanted = {person.display_name: set(person.keys) for person in PEOPLE if person.keys}
+    with shop_context(shop):
+        given = PermissionGrant.objects.filter(
+            shop=shop,
+            side__isnull=True,
+            staff__created_by__isnull=True,
+            staff__display_name__in=wanted,
+        ).values_list("staff__display_name", "permission")
+        held: dict[str, set[str]] = {}
+        for name, permission in given:
+            held.setdefault(name, set()).add(permission)
+    return all(keys <= held.get(name, set()) for name, keys in wanted.items())
 
 
 def _holds_its_closures(shop: Shop) -> bool:
