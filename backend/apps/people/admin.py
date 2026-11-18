@@ -1,7 +1,7 @@
 """apps/people/admin.py — the Django admin page for people: the creator's back room.
 
 Only the superuser opens it, to see and fix people before any office screen exists; the owner adds staff
-from the app's own staff screen (PPL-4), not here. It owns the add and edit forms for a User and the
+from the app's own workers' page (PPL-6), not here. It owns the add and edit forms for a User and the
 page's three rules: the id is shown but never typed in, nobody is deleted, and a password typed here is temporary
 (ADR-0038). A reset here is kept in Django's own admin log, with who and when, and not in the shop's audit trail: a
 person belongs to no one shop, and this page reads no shop's rows. And a PIN's badge never opens the site (AUTH-4). An

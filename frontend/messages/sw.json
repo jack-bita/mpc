@@ -659,7 +659,15 @@
       "left": "Mtu huyu ameshaacha kazi.",
       "other_shop": "Hiki ni cha duka jingine.",
       "reason_required": "Andika sababu.",
-      "temporary_password_open": "Mtu huyu bado ana nenosiri la muda. Ruhusa hii itasubiri hadi achague nenosiri lake."
+      "temporary_password_open": "Mtu huyu bado ana nenosiri la muda. Ruhusa hii itasubiri hadi achague nenosiri lake.",
+      "own": "Huwezi kubadilisha hali yako ya kazi mwenyewe.",
+      "superuser_only": "Hali ya kazi ya mtu huyu inabadilishwa na msimamizi wa mfumo tu.",
+      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kubadilisha hali yake ya kazi.",
+      "display_name_taken": "Mfanyakazi mwingine tayari ana jina hili la kuitwa. Chagua jingine.",
+      "not_active": "Mfanyakazi huyu tayari amesimamishwa.",
+      "not_suspended": "Mfanyakazi huyu hajasimamishwa.",
+      "left_in_future": "Siku ya mwisho ya kazi haiwezi kuwa siku ijayo.",
+      "left_before_start": "Siku ya mwisho iko kabla ya siku aliyoanza kazi."
     },
     "password": {
       "must_change": "Chagua nenosiri lako mwenyewe kabla ya kuendelea.",
@@ -696,6 +704,7 @@
       "closed": "Demo haipo wazi hapa.",
       "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia.",
       "sides_fixed": "Kwenye demo, pande hazibadilishwi, ili kila mgeni aweze kujaribu.",
+      "people_fixed": "Kwenye demo, wafanyakazi wa mwanzo hawabadilishwi, ili kila mgeni aweze kuingia. Ongeza mfanyakazi mpya ujaribu.",
       "rules_from_tomorrow": "Kwenye demo, thamani mpya huanza kesho au baadaye, ili kila mgeni wa leo akute duka lilivyo.",
       "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi.",
       "closures_from_tomorrow": "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo."

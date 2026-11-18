@@ -14,6 +14,7 @@ line are kept together or not at all:
 Every test works inside `shop_context(shop)`, as a visit will. Fake data only: the repo is public (03 §10).
 """
 
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
@@ -22,13 +23,16 @@ from django.core.exceptions import ValidationError
 
 from apps.control.models import AuditAction, AuditEvent, EditEvent
 from apps.control.services import audit
+from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people import services
 from apps.people.models import StaffMember, StaffStatus, User
 from apps.people.services import add_staff, mark_left, suspend, unsuspend
-from apps.shops.models import Shop
+from apps.shops.models import Shop, Side
 
 pytestmark = pytest.mark.django_db
+
+GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
 # Dates in the past: a leaving date can't be in the future.
 START = date(2026, 3, 2)
@@ -40,6 +44,13 @@ def asha(shop_a: Shop) -> StaffMember:
     user = User.objects.create_user(full_name="Asha Demo")
     with shop_context(shop_a):
         return add_staff(shop=shop_a, user=user, display_name="Asha", started_on=START, by=None)
+
+
+@pytest.fixture(autouse=True)
+def staff_a_is_the_owner(staff_a: StaffMember, give_role: GiveRole) -> None:
+    # Staff A acts in these tests as the owner, who may suspend Asha, bring her back and mark her left: since PPL-4 the
+    # one acting needs the key to manage workers, on the whole shop, and every key the person holds (02 §5).
+    give_role(staff_a, RoleTemplate.OWNER, None)
 
 
 def lines_about(staff: StaffMember) -> list[AuditEvent]:

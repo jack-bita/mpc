@@ -141,7 +141,7 @@ export interface OutageRow {
 }
 
 /** The kinds of photo a laptop takes: Asha's face as she clocks in (ATT-3). The server's list has one more, the
- * worker's photo, taken on an office screen (PPL-4), never here. The supplier's paper joins with STK-4. */
+ * worker's photo, taken on an office screen (PPL-9), never here. The supplier's paper joins with STK-4. */
 export type PhotoKind = "clock_photo";
 
 /** What a photo may be: the two types the server keeps, each known by its first bytes (CTRL-3). */

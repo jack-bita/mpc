@@ -659,7 +659,15 @@
       "left": "This person has left.",
       "other_shop": "This belongs to another shop.",
       "reason_required": "Write a reason.",
-      "temporary_password_open": "This person still has a temporary password. This permission waits until they choose their own."
+      "temporary_password_open": "This person still has a temporary password. This permission waits until they choose their own.",
+      "own": "You can't change your own work status.",
+      "superuser_only": "Only the system admin can change this person's work status.",
+      "more_keys": "This person has permissions you don't, so you can't change their work status.",
+      "display_name_taken": "Another worker already has this nickname. Choose another.",
+      "not_active": "This worker is already suspended.",
+      "not_suspended": "This worker isn't suspended.",
+      "left_in_future": "The last day can't be in the future.",
+      "left_before_start": "The last day is before the day they started."
     },
     "password": {
       "must_change": "Choose your own password before you go on.",
@@ -696,6 +704,7 @@
       "closed": "The demo isn't open here.",
       "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in.",
       "sides_fixed": "On the demo, the sides stay as they are, so every visitor can try them.",
+      "people_fixed": "On the demo, the first workers stay as they are, so every visitor can log in. Add a new worker to try this.",
       "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
       "no_note": "On the demo, notes aren't kept. Leave this box empty.",
       "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is."

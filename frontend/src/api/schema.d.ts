@@ -308,6 +308,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/people/staff/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["people_staff_list"];
+        put?: never;
+        post: operations["people_staff_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/people/staff/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["people_staff_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/people/staff/{id}/leave/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["people_staff_leave_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/people/staff/{id}/suspend/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["people_staff_suspend_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/staff/{id}/temporary-password/": {
         parameters: {
             query?: never;
@@ -318,6 +382,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["people_staff_temporary_password_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/people/staff/{id}/unsuspend/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["people_staff_unsuspend_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -676,6 +756,23 @@ export interface components {
          * @enum {string}
          */
         FontEnum: "default" | "second";
+        GivenKey: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly permission: string;
+            /** Format: uuid */
+            readonly side: string | null;
+        };
+        GivenRole: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly role: string;
+            readonly template: string;
+            readonly name: string;
+            /** Format: uuid */
+            readonly side: string | null;
+        };
         Health: {
             status: string;
             version: string;
@@ -791,6 +888,19 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Side"][];
+        };
+        PaginatedStaffList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["Staff"][];
         };
         PairingStart: {
             readonly code: string;
@@ -1099,6 +1209,31 @@ export interface components {
             readonly is_live: boolean;
             readonly band: components["schemas"]["SideBandEnum"];
         };
+        Staff: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly full_name: string;
+            readonly display_name: string;
+            readonly job_title: string;
+            /** Format: date */
+            readonly started_on: string;
+            readonly status: components["schemas"]["StaffStatusEnum"];
+            /** Format: date */
+            readonly left_on: string | null;
+            readonly switched_off: boolean;
+            readonly roles: components["schemas"]["GivenRole"][];
+            readonly keys: components["schemas"]["GivenKey"][];
+        };
+        StaffAddRequest: {
+            /** Format: uuid */
+            id: string;
+            full_name: string;
+            display_name: string;
+            /** @default  */
+            job_title: string;
+            /** Format: date */
+            started_on?: string | null;
+        };
         StaffChange: {
             seq: number;
             /**
@@ -1114,6 +1249,14 @@ export interface components {
         StaffKeysRecord: {
             every_side: string[];
             sides: components["schemas"]["SideKeysRecord"][];
+        };
+        StaffLeaveRequest: {
+            reason: string;
+            /** Format: date */
+            left_on: string;
+        };
+        StaffReasonRequest: {
+            reason: string;
         };
         StaffRecord: {
             /** Format: uuid */
@@ -1778,6 +1921,165 @@ export interface operations {
             };
         };
     };
+    people_staff_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStaffList"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffAddRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_leave_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffLeaveRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_suspend_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffReasonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     people_staff_temporary_password_create: {
         parameters: {
             query?: never;
@@ -1800,6 +2102,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_unsuspend_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffReasonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
             };
             default: {
                 headers: {

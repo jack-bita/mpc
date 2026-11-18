@@ -84,7 +84,7 @@ def test_expect_attachment_writes_a_waiting_row(shop_a: Model, staff_a: Any, dev
 
 
 def test_office_attachment_names_no_device(shop_a: Model, staff_a: Any) -> None:
-    # A photo the owner adds on an office screen, from his own phone, comes from no shop laptop (PPL-4).
+    # A photo the owner adds on an office screen, from his own phone, comes from no shop laptop (PPL-9).
     with shop_context(shop_a):
         stored = expect(staff_a, staff_a)
 

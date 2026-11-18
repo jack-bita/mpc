@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.34 · 17 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.35 · 17 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -69,6 +69,8 @@
 **Changes in v1.33** (16 Nov 2026, ATT-8, from Jack): `Holiday`, one date, becomes `Closure`, a span of days from a first day to a last, as the shop also closes for a family funeral; its last day can move, earlier or later, with a reason; every closed day is off and not paid (§12; spec v1.4, 04 v1.89). Marked **(v1.33)**.
 
 **Changes in v1.34** (17 Nov 2026, CTRL-3): §13, an attachment's fields as built: its kind and the record it is pinned to, its label, and its file's three states, waiting, kept and removed, with who removed it, when and why (04 v1.96). Marked **(v1.34)**.
+
+**Changes in v1.35** (17 Nov 2026, PPL-4): §5, who may suspend a person, bring them back or mark them left: the PIN's rule *(default)*, asked once both people's rows are locked, so of two managers suspending each other at once the first wins (04 v1.100). Marked **(v1.35)**.
 
 **Changes in v1.24** (13 Nov 2026, SYNC-11): the clock-in screen's words, and how a time of day is written (§21): *Ingia kazini* and *Toka kazini*, as *Toka* alone is logging out; times as `07:55`, never Swahili time (Jack's choice; 04 v1.64). Marked **(v1.24)**.
 
@@ -259,6 +261,8 @@ A full diagram for GitHub is in Appendix A.
 **Who may set a temporary password** **(v1.15)**: whoever sets a person's password can log in as them, so this is the giver rule for a whole person (Jack, AUTH-6). Someone with `staff.manage` on the whole shop: the owner, or someone that key has been handed to. Only for someone who holds no key the setter lacks, side by side, counting everything they were given even while suspended. Never for themselves, who change their own with the current password. Only the superuser, in the admin, for an owner, or for someone who can open the admin. Never for someone with no phone and no email, who could not log in with it. A job at another shop isn't looked at until AUTH-7, as a visit reads no other shop's rows. While a temporary password is open, a key its setter lacks is not given: the person chooses their own first, or someone holding that key sets a new one, so the setter gains nothing by knowing it. Honest limit: a setter who logs in as the person and chooses a new password themselves takes the mark off, and no system can tell who typed it. So before giving someone a big key, the owner sets a fresh password for them.
 
 **Who may set a PIN** **(v1.17)**: whoever sets a person's PIN can log in as them, so the same rule applies (Jack, AUTH-4's review). Someone with `staff.manage` on the whole shop, who holds every key the person was given. Never their own. An owner's, or a person's who can open the admin, only by the superuser.
+
+**Who may suspend, bring back or mark left** **(v1.35)**: a suspension stops a person working at once, and a leaving is final, so the PIN's rule applies *(default)* (PPL-4). Someone with `staff.manage` on the whole shop, who holds every key the person was given, so a manager can't suspend the owner. Never themselves. An owner's, or a person's who can open the admin, only by the superuser. Who may is asked once both people's rows are locked: when two managers suspend each other at once, the first wins, and the second, now suspended, holds nothing and is refused (Jack, AUTH-8).
 
 **What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again.
 

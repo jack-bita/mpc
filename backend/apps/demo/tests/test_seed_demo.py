@@ -42,6 +42,7 @@ from apps.demo.services import SHOP_CODE, PublicHoliday, Seeded, coming_public_h
 from apps.people.models import PermissionGrant, RoleAssignment, StaffMember, User
 from apps.people.permissions import effective_permissions
 from apps.people.pins import pin_matches
+from apps.people.services import add_worker, mark_left, suspend
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, ShopKind, Side
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
@@ -223,8 +224,9 @@ def test_seed_demo_is_repeatable() -> None:
                 "email": "meneja@example.com",
                 "staff": False,
                 "roles": [("manager", "every side")],
-                # The owner's key to the shop's rules, so a visitor can try Badilisha (SHOP-5).
-                "keys": [("settings.manage", "every side")],
+                # The owner's key to the shop's rules, so a visitor can try Badilisha (SHOP-5); and to its workers, so a
+                # visitor can try Wafanyakazi (PPL-4).
+                "keys": [("settings.manage", "every side"), ("staff.manage", "every side")],
                 "pin works": False,
                 "password works": True,
             },
@@ -461,9 +463,9 @@ def test_seed_demo_gives_each_side_its_band() -> None:
 
 def test_seed_demo_lets_its_manager_change_the_shops_rules() -> None:
     # The demo has no owner, and a manager alone may not change the shop's rules (settings.manage is one of the
-    # owner's own four, spec §6). Meneja holds that one key besides the role, on the whole shop, so a visitor can try
-    # Badilisha on Mipangilio ya duka (Jack, SHOP-5). Not the Owner's whole role: no staff.manage, so no visitor can
-    # take Meneja's role away from every other visitor (04 PPL-4).
+    # owner's own four, spec §6). Meneja holds that key besides the role, on the whole shop, so a visitor can try
+    # Badilisha on Mipangilio ya duka (Jack, SHOP-5). Not the Owner's whole role: the demo's people stay as the seed
+    # made them, which the Owner's role would let a visitor change (see the test below, PPL-4).
     seed_demo(fresh=True)
 
     with shop_context(the_demo_shop()):
@@ -472,9 +474,31 @@ def test_seed_demo_lets_its_manager_change_the_shops_rules() -> None:
         assert "settings.manage" in effective_permissions(meneja, None)
         for side in Side.objects.all():
             assert "settings.manage" in effective_permissions(meneja, side)
-        assert "staff.manage" not in effective_permissions(meneja, None)
         # The sellers change no rule.
         assert "settings.manage" not in effective_permissions(asha, None)
+
+
+def test_seed_demo_lets_a_visitor_manage_the_workers_they_add() -> None:
+    # Every visitor logs in as Meneja, who holds staff.manage on the whole shop, so a visitor can try Wafanyakazi: add a
+    # worker, then suspend him (Jack, PPL-4: A). The seed's people stay as made, so no visitor takes Asha or Baraka off
+    # another visitor's PIN tiles, nor stops Meneja's one tap (demo.people_fixed; Meneja can't change himself).
+    seed_demo(fresh=True)
+
+    with shop_context(the_demo_shop()):
+        meneja = StaffMember.objects.select_related("shop").get(display_name="Meneja")
+        assert "staff.manage" in effective_permissions(meneja, None)
+        juma = add_worker(shop=meneja.shop, full_name="Juma Mfano", display_name="Juma", by=meneja)
+        assert suspend(juma, by=meneja, reason="Jaribio").status == "suspended"
+        # Meneja among them: a visitor who suspended him, or marked him left, through his own login, would lock every
+        # visitor after out of the office and stop every one tap.
+        for nickname in ("Asha", "Baraka", "Meneja"):
+            person = StaffMember.objects.get(display_name=nickname)
+            with pytest.raises(ValidationError) as suspending:
+                suspend(person, by=meneja, reason="Jaribio")
+            with pytest.raises(ValidationError) as leaving:
+                mark_left(person, left_on=person.started_on, by=meneja, reason="Jaribio")
+            assert suspending.value.code == leaving.value.code == "demo.people_fixed", nickname
+            assert StaffMember.objects.get(pk=person.pk).status == "active"
 
 
 def test_seed_demo_closes_on_the_coming_public_holidays() -> None:

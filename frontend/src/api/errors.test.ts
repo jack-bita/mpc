@@ -3,7 +3,7 @@
 //
 // CODES_THE_API_SENDS is kept by hand: some codes are built as the server runs (`f"{secret}.own"`,
 // apps/people/services.py), so no test can find them all in the backend. It holds every code a route,
-// or a model rule behind it, can send today, and those of the PIN screen to come (PPL-4). Codes that
+// or a model rule behind it, can send today, and those of the PIN screen to come (PPL-8). Codes that
 // only stop a bug, like device.key_not_hashed, are left to the general sentence. A card that adds a code
 // adds it here, with its two sentences; the third test fails on a sentence whose code left the list.
 import { createTranslator } from "use-intl/core";
@@ -62,7 +62,7 @@ const CODES_THE_API_SENDS = [
   "staff.suspended",
   "staff.choose_shop",
   "password.must_change",
-  // PIN login (AUTH-4), and the screen that sets a PIN (PPL-4).
+  // PIN login (AUTH-4), and the screen that sets a PIN (PPL-8).
   "pin.wrong",
   "pin.locked",
   "pin.own",
@@ -86,6 +86,9 @@ const CODES_THE_API_SENDS = [
   // The demo's sides stay as the seed made them, switched on and named, so every visitor's one tap works (SHOP-3,
   // and a rename or a new side since SHOP-5's review).
   "demo.sides_fixed",
+  // The demo's people stay as the seed made them, so no visitor takes Asha or Baraka off another's PIN tiles; a
+  // worker a visitor added can be changed (PPL-4).
+  "demo.people_fixed",
   // On the demo, a visitor's rule starts tomorrow or later, after the night's seed, and keeps no note, which every
   // reader would see under the rule (SHOP-5's second review).
   "demo.rules_from_tomorrow",
@@ -122,6 +125,18 @@ const CODES_THE_API_SENDS = [
   "staff.other_shop",
   "staff.reason_required",
   "staff.temporary_password_open",
+  // Who may suspend a person, bring them back or mark them left: the PIN's rule, with codes of its own (PPL-4).
+  "staff.own",
+  "staff.superuser_only",
+  "staff.more_keys",
+  // Adding a worker (PPL-4): two current workers never share a nickname, whatever the letter case.
+  "staff.display_name_taken",
+  // Suspending, bringing back and marking left from the office (PPL-4): a person already suspended, one not
+  // suspended, and a last day ahead of today or before the first day.
+  "staff.not_active",
+  "staff.not_suspended",
+  "staff.left_in_future",
+  "staff.left_before_start",
   // Devices and pairing (AUTH-5).
   "device.name_blank",
   "device.name_taken",

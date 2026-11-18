@@ -127,7 +127,7 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
             # is the schema (apps/core/api/schema.py).
             raise exceptions.MethodNotAllowed(request.method or "")
         # Every action is named, a route's own @actions included, before it reads or writes anything.
-        self.permission_needed()
+        needed = self.permission_needed()
         lookup = self.lookup_url_kwarg or self.lookup_field
         # CreateOnceMixin's own create asks with the new row's side, once it has read what was sent. Only that one:
         # DRF's own CreateModelMixin, or a create a route writes over it, never asks, so it is asked here with the
@@ -135,7 +135,12 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         # and then DRF's create is the one that runs.
         asks_for_itself = self.action == "create" and getattr(type(self), "create", None) is CreateOnceMixin.create
         if request.method in SAFE_METHODS:
-            # Showing rows needs only to see their sides, which every read of the route keeps to (get_queryset).
+            # Showing rows needs only to see their sides, which every read of the route keeps to (get_queryset). A show
+            # action behind a key of its own, which only a route of the whole shop's rows may name (permission_needed),
+            # asks it on the whole shop, before any row is read, for the list and the one row alike: the shop's workers
+            # are for whoever manages them, not for everyone who works there (PPL-4).
+            if needed is not SEES_THE_SIDE:
+                self.check_side_permission(request, None)
             return
         if lookup in self.kwargs:
             # A change to one row: the row is found and checked now, with its own side, before the action runs
@@ -157,10 +162,12 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
             raise ImproperlyConfigured(
                 f"{type(self).__name__} names no permission for its action {self.action!r} (action_permissions)."
             )
-        if needed is not SEES_THE_SIDE and self.request.method in SAFE_METHODS:
-            # A show action behind a key of its own, as debts (debt.view) and reports (report.view) will be. Nothing
-            # yet keeps its rows to the sides where that key is held: it would show every side the person sees. The
-            # first card that shows rows behind a key builds that (Jack, PPL-5; CAT-2's note).
+        if needed is not SEES_THE_SIDE and self.request.method in SAFE_METHODS and self.side_field is not None:
+            # A show action behind a key of its own, on a route of a side's rows, as debts (debt.view) and reports
+            # (report.view) will be. Nothing yet keeps its rows to the sides where that key is held: it would show
+            # every side the person sees. The first card that shows a side's rows behind a key builds that (Jack,
+            # PPL-5; CAT-2's note). A route of the whole shop's rows (side_field None) has no side to keep to: it may
+            # name a key, which initial() asks on the whole shop, as the shop's workers do (PPL-4).
             raise ImproperlyConfigured(
                 f"{type(self).__name__}.{self.action} shows rows behind {needed}: "
                 "a show action with a key of its own waits for the card that first needs one (PPL-5)."
@@ -258,7 +265,8 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         needed = self.permission_needed()
         if needed is SEES_THE_SIDE or self._replaying:
             # Only to see the side, which every read of the route already keeps to (get_queryset): a row handed out
-            # was found among the person's own sides. A create sent again is such a read too (_replay below).
+            # was found among the person's own sides. A create sent again is such a read too (_replay below), which
+            # asks a key of its own when the route reads its rows behind one.
             return
         if needed not in self.held.on(side_id):
             # English for the logs; the screens translate the code (ADR-0032).
@@ -316,6 +324,14 @@ class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
             self.check_object_permissions(request, row)
         finally:
             self._replaying = False
+        # And the key a read of the row needs, when the route shows its rows behind one: the answer is the row, so a
+        # repeat is a read. Without it, Asha, who may not read the shop's workers, could send Baba's id, which every
+        # laptop knows, as a new worker's, and get Baba's row back (PPL-4's review). The key the route names for one
+        # row (retrieve), else for its list; asked on the row's side, as a read of it is.
+        read = self.action_permissions.get("retrieve", self.action_permissions.get("list", SEES_THE_SIDE))
+        if read is not SEES_THE_SIDE and read not in self.held.on(self.side_of(row)):
+            # English for the logs; the screens translate the code (ADR-0032).
+            raise exceptions.PermissionDenied(f"This person may not {read} here.")
         return row
 
     def _create(self, request: Request) -> M:

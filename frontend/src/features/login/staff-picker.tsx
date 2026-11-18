@@ -5,9 +5,12 @@
 // every 30 seconds (SYNC-9): never from the server, so the tiles show the same with no network, the way
 // in to an offline PIN login (SYNC-10). A person added in the office gets a tile at the next sync. Only
 // those who can log in today: someone who left or was switched off isn't on the laptop at all, and a
-// suspended person's row says so, so neither gets a tile, as the server's old route sent neither.
+// suspended person's row says so, so neither gets a tile, as the server's old route sent neither. Nor does
+// someone with no PIN yet, whose tile would lead to a pad that can't let them in: Juma, added in the office,
+// gets his tile with his PIN, at the next sync; and on the demo, where no visitor can set a PIN, the
+// workers a visitor makes up never crowd the tiles of every visitor after (Jack, PPL-4's review).
 //
-// A tile shows the full name in large letters with the nickname under it, until photos come (PPL-4; 02 §5).
+// A tile shows the full name in large letters with the nickname under it, until photos come (PPL-9; 02 §5).
 // On the demo, a seller's tile shows their PIN too, as Jaribu demo handed it over (OPS-3, demo-pins.ts):
 // a visitor can't guess it, and this is where they need it. Never on a real shop's laptop, which keeps no
 // demo PINs, and never one kept from yesterday's demo, whose people had other ids.
@@ -29,7 +32,7 @@ import { useShopDatabase } from "@/offline/this-shop";
 export type StaffRow = components["schemas"]["StaffRecord"];
 
 /**
- * Who gets a tile: the active people, A to Z. Undefined while the first read runs, so nothing flashes;
+ * Who gets a tile: the active people with a PIN, A to Z. Undefined while the first read runs, so nothing flashes;
  * null while this laptop has had no first sync, whose copy the tiles wait for. Live: a sync that adds,
  * renames or suspends someone redraws the tiles by itself.
  */
@@ -42,7 +45,12 @@ function useTiles(): StaffRow[] | null | undefined {
       // No cursor: no copy yet. An empty list then would say the shop has nobody, which isn't so.
       if ((await readCursor(db)) === null) return null;
       const people = await db.staff.toArray();
-      return people.filter((person) => person.status === "active").sort(byName);
+      return people
+        .filter(
+          (person) =>
+            person.status === "active" && person.pin_changed_at !== null,
+        )
+        .sort(byName);
     });
   }, [db]);
 }

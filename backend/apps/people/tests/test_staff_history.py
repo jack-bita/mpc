@@ -9,10 +9,10 @@ PostgreSQL's own trigger (EditEvent):
     Staff A   status: active                       status: suspended
     Staff A   status: suspended, left_on: (none)   status: left, left_on: 2026-10-01
 
-A PIN reset shows as a new `pin_changed_at` only: the PIN's hash never leaves its column (03 §5.9). The office
-visit that names who acts comes with the staff screen (PPL-4), so acting_as() opens it here, as the base view
-will (apps/core/acting.py). Outside a visit, each action names its own `by` (the last test). Fake data
-only: the repo is public (03 §10).
+A PIN reset shows as a new `pin_changed_at` only: the PIN's hash never leaves its column (03 §5.9). These tests
+call the services, so acting_as() opens here what an office visit opens (apps/core/acting.py); the routes' own
+visits are test_staff_routes.py's (PPL-4). Outside a visit, each action names its own `by` (the last test). Fake
+data only: the repo is public (03 §10).
 """
 
 from collections.abc import Callable
@@ -49,7 +49,11 @@ def history_of(staff: StaffMember) -> list[EditEvent]:
     return list(EditEvent.objects.filter(subject_type="staff", subject_id=staff.pk).order_by("id"))
 
 
-def test_staff_edit_recorded_with_person(shop_a: Shop, asha: StaffMember, staff_a: StaffMember) -> None:
+def test_staff_edit_recorded_with_person(
+    shop_a: Shop, asha: StaffMember, staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # Staff A is the owner, who may suspend Asha and mark her left (02 §5, PPL-4).
+    give_role(staff_a, RoleTemplate.OWNER, None)
     with shop_context(shop_a), acting_as(staff_a):
         asha = suspend(asha, by=staff_a, reason="Hakuja kazini siku 3")
         mark_left(asha, left_on=LEFT_ON, by=staff_a, reason="Amehamia Moshi")

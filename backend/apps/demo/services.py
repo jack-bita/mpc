@@ -8,8 +8,11 @@ so a visitor can try Badilisha on Mipangilio ya duka (Jack, SHOP-5, 15 Nov 2026)
 shop's rules, and the demo has no owner. A visitor's new value starts tomorrow or later, with no note, so the seed
 makes the shop again before it comes (set_setting: demo.rules_from_tomorrow, demo.no_note, Jack, SHOP-5's second
 review); and the sides stay as the seed made them, as the same key also switches, renames and adds them
-(demo.sides_fixed). The shop starts with attendance switched on and two made-up fines (DEMO_RULES, ATT-2), and closed
-on the next three public holidays (PUBLIC_HOLIDAYS, ATT-8).
+(demo.sides_fixed). Meneja holds staff.manage on the whole shop too, so a visitor can try Wafanyakazi (Jack, PPL-4: A):
+add a worker, then suspend him or mark him left; the people the seed made stay as made (demo.people_fixed,
+apps/people/services.py), so no visitor takes Asha or Baraka off another visitor's PIN tiles. The shop starts with
+attendance switched on and two made-up fines (DEMO_RULES, ATT-2), and closed on the next three public holidays
+(PUBLIC_HOLIDAYS, ATT-8).
 
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
@@ -115,10 +118,12 @@ class DemoPerson:
 PEOPLE = (
     # The manager on every side: device.manage among the role's keys lets them confirm a new laptop on either side
     # (confirm_pairing). A password and no PIN: the manager works from their own phone, as at a real shop.
-    # And the key to the shop's rules, an owner's own (see the top of this file): the one key a visitor needs to try
-    # Mipangilio ya duka. Not the Owner's whole role, whose staff.manage would let a visitor take Meneja's role away
-    # and stop every visitor's one tap (04 PPL-4, OPS-3's note). The key also changes the sides, which the shops'
-    # services keep as the seed made them on the demo (_check_sides_fixed_on_demo, apps/shops/services.py).
+    # And two of an owner's own keys (see the top of this file): the shop's rules, the one key a visitor needs to try
+    # Mipangilio ya duka, which also changes the sides, kept as the seed made them on the demo
+    # (_check_sides_fixed_on_demo, apps/shops/services.py); and its workers, to try Wafanyakazi (PPL-4), whose
+    # services keep the seed's people as made on the demo (demo.people_fixed, apps/people/services.py), as a visitor
+    # who suspended Asha, or took Meneja's role away, would stop every visitor after them (OPS-3's note). Not the
+    # Owner's whole role, whose keys reach further than a visitor needs.
     DemoPerson(
         "Meneja Mfano",
         "Meneja",
@@ -126,7 +131,7 @@ PEOPLE = (
         side=None,
         email=MANAGER_EMAIL,
         password=MANAGER_PASSWORD,
-        keys=(Permission.SETTINGS_MANAGE,),
+        keys=(Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE),
     ),
     # A seller on each side, with a PIN only: they log in at the shop's laptop, as a seller does.
     DemoPerson("Asha Mfano", "Asha", RoleTemplate.SELLER, side="D", pin="2580"),
@@ -395,8 +400,8 @@ def register_demo_device(*, replacing: str | None = None) -> DemoDevice:
             # The second, by the demo's manager, standing in for the yes a real laptop gets on the manager's phone:
             # Meneja holds device.manage on every side (PEOPLE). Found by the login visitors read, which no route
             # changes. So the device list shows Meneja as who confirmed it, as for any laptop. A visitor who took
-            # Meneja's role away would stop every tap until the next reset: a note on PPL-4's card asks it to keep the
-            # seed's people as made on the demo, as their logins are (demo.logins_fixed).
+            # Meneja's role away would stop every tap until the next reset: so the seed's people stay as made on the
+            # demo, as their logins are (demo.people_fixed, PPL-4; their roles, PPL-7).
             manager = StaffMember.objects.get(user__email=MANAGER_EMAIL)
             home_side = Side.objects.get(code=DEMO_DEVICE_SIDE)
             # Named by its pairing code, "Demo K7P2-MXQ9", as the register screen shows a code: no two requests ever
@@ -412,10 +417,12 @@ def register_demo_device(*, replacing: str | None = None) -> DemoDevice:
 
 def _demo_pins() -> tuple[DemoPin, ...]:
     # Each person of PEOPLE who has a PIN, found in the demo shop (the caller opens it) by the nickname the seed gave
-    # them. Every visitor shares Meneja's public password, so once a manager can add, rename and let staff go (PPL-4),
-    # a visitor may mark Asha as left and add a new "Asha" (a nickname is unique among current staff only), or rename
-    # her. So the seed's own row is taken, the first made: a UUIDv7 id starts with the time it was made. And someone
-    # no longer found is left out: a tile with no PIN, never a tap refused for every visitor until the next reset.
+    # them. Every visitor shares Meneja's public password, and a manager may add and let staff go (PPL-4), and rename
+    # them (PPL-10). The seed's people stay as made on the demo (demo.people_fixed), but a guard missed must not stop
+    # every tap: a visitor could mark Asha as left and add a new "Asha" (a nickname is unique among current staff
+    # only), or rename her. So the seed's own row is taken, the first made: a UUIDv7 id starts with the time it was
+    # made. And someone no longer found is left out: a tile with no PIN, never a tap refused for every visitor until
+    # the next reset.
     pins = []
     for person in PEOPLE:
         if person.pin is None:

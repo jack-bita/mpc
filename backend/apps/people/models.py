@@ -362,7 +362,7 @@ class RoleAssignment(ShopScoped):
     # One role given to one person, on one side or on all of them (02 §5): Asha is Cashier on Vyakula. Who gave it,
     # and when, are the row's `created_by` and `created_at`. Made only by assign_role (apps/people/services.py),
     # which checks that the person, the role and the side all belong to the row's shop (T1). Taking a role away
-    # comes with the staff screens (PPL-4), as an edit the history records (ADR-0036): nothing is deleted.
+    # comes with PPL-7, as an edit the history records (ADR-0036): nothing is deleted.
 
     # PROTECT: nothing is deleted (rule 7). related_name="+": a person's roles are read through the guarded
     # `objects` (apps/people/permissions.py). db_index=False: the unique rule below indexes (shop, staff, ...),
@@ -390,7 +390,7 @@ class RoleAssignment(ShopScoped):
 class PermissionGrant(ShopScoped):
     # One extra permission for one person, on one side or on all of them (02 §5): Juma may count the stock on
     # Vyakula. Made only by grant_permission (apps/people/services.py), with the same checks as a role is given;
-    # taken back with the staff screens (PPL-4), as a role is. Links as on RoleAssignment above.
+    # taken back with PPL-7, as a role is. Links as on RoleAssignment above.
     staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name="+", db_index=False)
     # A code from the list (apps/core/permissions.py).
     permission = models.CharField(max_length=PERMISSION_CODE_MAX_LENGTH)

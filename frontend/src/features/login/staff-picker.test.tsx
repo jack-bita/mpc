@@ -58,7 +58,7 @@ describe("the staff picker", () => {
     // Named as a screen reader says it: the full name, a space, the nickname. Without the space it says
     // "Asha MfanoAsha", one word.
     const asha = screen.getByRole("button", { name: "Asha Mfano Asha" });
-    // The full name in large letters, the nickname under it, until photos come (PPL-4; 02 §5).
+    // The full name in large letters, the nickname under it, until photos come (PPL-9; 02 §5).
     expect(within(asha).getByText("Asha Mfano").className).toContain(
       "text-2xl",
     );
@@ -109,6 +109,18 @@ describe("the staff picker", () => {
   it("gives a suspended person no tile", async () => {
     // Her row says so since the last sync: she can't log in today, online or off (X2).
     await theLaptopKnows(ASHA, { ...JUMA, status: "suspended" });
+    render(<StaffPicker onPick={vi.fn()} />);
+
+    expect((await tiles()).map((tile) => tile.textContent)).toEqual([
+      "Asha Mfano Asha",
+    ]);
+  });
+
+  it("gives someone with no PIN no tile", async () => {
+    // Juma was added in the office, and has no PIN yet: a tile would lead to a PIN pad that can't let him in. On
+    // the demo, a visitor's made-up workers never get one, so they never crowd the tiles of every visitor after
+    // (Jack, PPL-4's review: A). His tile comes with his PIN, at the next sync.
+    await theLaptopKnows(ASHA, { ...JUMA, pin_changed_at: null });
     render(<StaffPicker onPick={vi.fn()} />);
 
     expect((await tiles()).map((tile) => tile.textContent)).toEqual([
