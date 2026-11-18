@@ -4,8 +4,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { makeQueryClient } from "@/api/query-client";
-import { DAWA, VYAKULA } from "@/test/devices";
+import { forgetTheLastPerson, makeQueryClient } from "@/api/query-client";
+import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
 import { router } from "@/test/router";
@@ -147,6 +147,40 @@ describe("a worker's own page", () => {
     );
     answerAsha(Response.json({ ...ASHA, status: "active" }));
     await waitFor(() => expect(valueOf("Hali")).toBe("Anafanya kazi"));
+  });
+
+  it("shows the next person nothing of the last one's copy, after a logout (PPL-6's review)", async () => {
+    // On the Dawa laptop, Neema opens Asha's page from the list, then taps Toka. Juma, a seller, logs in with his PIN
+    // and opens Asha's page from the browser's history: the server refuses him, and the page shows no Asha.
+    const store = makeQueryClient();
+    store.setQueryData(WORKERS, [ASHA]);
+    theServerHas(ASHA);
+    const neema = render(
+      <QueryClientProvider client={store}>
+        <WorkerScreen id={ASHA.id} />
+      </QueryClientProvider>,
+    );
+    await detailsShown();
+    neema.unmount();
+
+    // The logout, as every login, logout and quick switch does (UI-4).
+    await forgetTheLastPerson(store);
+    answer("GET", ME, {
+      status: 200,
+      body: whoIsHere([{ side: DAWA, permissions: ["sale.create"] }]),
+    });
+    answer("GET", `${STAFF}${ASHA.id}/`, refusal(403, "permission_denied"));
+    render(
+      <QueryClientProvider client={store}>
+        <WorkerScreen id={ASHA.id} />
+      </QueryClientProvider>,
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Huna ruhusa ya kufanya hili.",
+    );
+    expect(screen.queryByText("Jina kamili")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
   });
 
   it("says when the server knows no such worker, asking once", async () => {

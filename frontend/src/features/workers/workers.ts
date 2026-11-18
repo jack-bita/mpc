@@ -81,11 +81,13 @@ export function useWorker(id: string | null) {
         }),
       ),
     enabled: id !== null,
-    // From the list at once, when the person came from it: the page shows with no wait, then asks the server again
-    // as it opens (the store's staleTime is 0), so it soon shows the worker as they are now, whoever changed them.
-    initialData: () =>
+    // From the list at once, when the person came from it: the page shows with no wait while it asks the server, so
+    // it soon shows the worker as they are now, whoever changed them. A placeholder, never initialData: TanStack
+    // keeps a query's initialData as the state it goes back to, and forgetTheLastPerson's reset would put the last
+    // person's copy back, for the next person to see, the buttons with it, beside their own refusal (UI-4, PPL-6's
+    // review). A placeholder is never kept: a reset forgets it, and a refused read shows no worker.
+    placeholderData: () =>
       store.getQueryData<Worker[]>(WORKERS)?.find((each) => each.id === id),
-    initialDataUpdatedAt: () => store.getQueryState(WORKERS)?.dataUpdatedAt,
   });
 }
 
