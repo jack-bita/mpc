@@ -19,8 +19,10 @@
 //
 // That button, *Ingia kwa nenosiri* to `/login/`, is here, under the tiles, and only here: never under the
 // PIN pad, where the person picked logs in with their PIN (Jack, OPS-13). Not on the demo either, where the
-// manager's own tile does its job: two ways to one page would only make a visitor wonder. On a real shop
-// it stays, before the first sync and on a shop with nobody yet too, as the owner's way in to add them.
+// manager's own tile does its job: two ways to one page would only make a visitor wonder; nor before the
+// demo's first sync, which brings that tile, as a laptop that keeps a demo login is the demo's (OPS-13's
+// review). On a real shop it stays, before the first sync and on a shop with nobody yet too, as the
+// owner's way in to add them.
 //
 // A tile shows the full name in large letters with the nickname under it, until photos come (PPL-9; 02 §5).
 // On the demo, a seller's tile shows their PIN too, as Jaribu demo handed it over (OPS-3, demo-pins.ts):
@@ -37,7 +39,11 @@ import { useTranslations } from "use-intl";
 
 import type { components } from "@/api/schema";
 import { Button, ButtonLink } from "@/components/design/button";
-import { demoLogin, demoPin } from "@/features/devices/demo-pins";
+import {
+  demoLogin,
+  demoPin,
+  keepsDemoLogins,
+} from "@/features/devices/demo-pins";
 import { readCursor } from "@/offline/sync/meta";
 import { useShopDatabase } from "@/offline/this-shop";
 
@@ -75,6 +81,17 @@ function useTiles(): StaffRow[] | null | undefined {
  * not: the server hands over a login only for someone with none (_demo_logins). */
 function opensThePassword(person: StaffRow): boolean {
   return person.pin_changed_at === null && demoLogin(person.id) !== undefined;
+}
+
+/** Whether the password button shows under the tiles: never while the first read runs, as it may be the
+ * demo's, which has none; before the first sync only on a laptop that keeps no demo login, as the first sync
+ * brings the demo manager's tile (OPS-13's review); after it, unless a tile already opens the password. */
+function showsThePasswordButton(
+  people: StaffRow[] | null | undefined,
+): boolean {
+  if (people === undefined) return false;
+  if (people === null) return !keepsDemoLogins();
+  return !people.some(opensThePassword);
 }
 
 // A to Z by full name, then nickname, then id: the order the server sends the rows in (staff_rows,
@@ -153,10 +170,9 @@ export function StaffPicker({
           ))}
         </ul>
       )}
-      {people !== undefined && !people?.some(opensThePassword) && (
+      {showsThePasswordButton(people) && (
         // The second kind, under the tiles, which are what the counter is for (Jack, 8 Nov 2026, at
-        // UI-5's review). A seller who taps it still needs a password. Not while the first read runs, so
-        // the demo's never flashes before the manager's tile comes.
+        // UI-5's review). A seller who taps it still needs a password.
         <div>
           <ButtonLink href="/login/" kind="second" size="normal">
             {words("withPassword")}

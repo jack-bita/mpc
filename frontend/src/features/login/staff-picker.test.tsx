@@ -298,6 +298,22 @@ describe("the staff picker", () => {
     ).toBeDefined();
   });
 
+  it("offers no password button on the demo before the first sync either", async () => {
+    // Just after the tap, the laptop waits for its first copy of the staff, which brings Meneja's tile: the
+    // button would show for that moment, and lead a visitor to an empty form (OPS-13's review).
+    saveLogins([MENEJA_LOGIN]);
+    render(<StaffPicker onPick={vi.fn()} />);
+
+    expect(
+      await screen.findByText(
+        "Subiri kidogo: kompyuta hii inaleta orodha ya wafanyakazi kwa mara ya kwanza.",
+      ),
+    ).toBeDefined();
+    expect(
+      screen.queryByRole("link", { name: "Ingia kwa nenosiri" }),
+    ).toBeNull();
+  });
+
   it("offers no password button on the demo, where the manager's tile does its job", async () => {
     // Asha and Baraka have PINs, and Meneja his own tile: a second way to the same page would only make a
     // visitor wonder which to take (Jack, OPS-13).

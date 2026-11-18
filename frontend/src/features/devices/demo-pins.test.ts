@@ -9,6 +9,7 @@ import {
   DEMO_PINS_KEY,
   demoLogin,
   demoPin,
+  keepsDemoLogins,
   saveLogins,
   savePins,
 } from "./demo-pins";
@@ -63,6 +64,16 @@ describe("the demo's kept logins", () => {
   it("keeps none on a laptop that never tried the demo", () => {
     // A real shop's laptop: its tiles stay as PPL-4 made them, a tile only for someone with a PIN.
     expect(demoLogin(MENEJA)).toBeUndefined();
+    expect(keepsDemoLogins()).toBe(false);
+  });
+
+  it("says whether this laptop keeps any demo login", () => {
+    // The PIN screen asks it before the first sync, when there are no tiles to look at yet.
+    saveLogins([MENEJA_LOGIN]);
+    expect(keepsDemoLogins()).toBe(true);
+    // A tap whose answer had no login: none kept.
+    saveLogins([]);
+    expect(keepsDemoLogins()).toBe(false);
   });
 
   it("puts a new tap's logins in place of yesterday's", () => {

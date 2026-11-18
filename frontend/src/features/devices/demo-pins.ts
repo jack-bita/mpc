@@ -49,6 +49,12 @@ function ownEntry<T>(kept: Record<string, T>, staffId: string): T | undefined {
   return Object.hasOwn(kept, staffId) ? kept[staffId] : undefined;
 }
 
+/** Whether this laptop keeps any demo login: then it is the demo's, as only one tap on Jaribu demo keeps
+ * them. The PIN screen asks it before the first sync, with no tiles to look at yet (staff-picker.tsx). */
+export function keepsDemoLogins(): boolean {
+  return Object.keys(keptLogins()).length > 0;
+}
+
 /** Keeps the logins one tap handed over, in place of any kept before. */
 export function saveLogins(
   logins: readonly { staff_id: string; login: string; password: string }[],
