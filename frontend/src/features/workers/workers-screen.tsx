@@ -31,6 +31,7 @@ import { shopToday } from "@/offline/rules";
 
 import { WorkerForm } from "./worker-form";
 import {
+  type GivenRole,
   mayManageStaff,
   useRoleWords,
   useWorkers,
@@ -154,6 +155,8 @@ function WorkerList({
   list: ReturnType<typeof useWorkers>;
 }) {
   const t = useTranslations("workers");
+  // The roles' words, the sides' names among them, worked out once for the whole list, not once a row.
+  const { roleOnSide } = useRoleWords(me);
 
   // A failed read shows above the list, not in its place: a refresh that fails (the session ended, the network
   // dropped) keeps the workers last read on the screen, with the reason above them, as on Vifaa. A first read
@@ -166,7 +169,7 @@ function WorkerList({
   return (
     <>
       {failure}
-      <Workers workers={here} me={me} />
+      <Workers workers={here} roleOnSide={roleOnSide} />
       <section className="grid gap-3" aria-labelledby="workers-left">
         <h2 id="workers-left" className="text-lg font-semibold">
           {t("leftHeading")}
@@ -174,15 +177,24 @@ function WorkerList({
         {gone.length === 0 ? (
           <p>{t("noneLeft")}</p>
         ) : (
-          <Workers workers={gone} me={me} />
+          <Workers workers={gone} roleOnSide={roleOnSide} />
         )}
       </section>
     </>
   );
 }
 
+/** How a role is written with its side, "Muuzaji (Dawa)" (useRoleWords). */
+type RoleOnSide = (given: GivenRole) => string;
+
 /** One group of workers, in one panel, a row each. */
-function Workers({ workers, me }: { workers: Worker[]; me: WhoIsHere }) {
+function Workers({
+  workers,
+  roleOnSide,
+}: {
+  workers: Worker[];
+  roleOnSide: RoleOnSide;
+}) {
   return (
     <Card className="py-0">
       {/* A list, so a screen reader says how many workers there are. role="list" written out: Safari with
@@ -191,7 +203,7 @@ function Workers({ workers, me }: { workers: Worker[]; me: WhoIsHere }) {
         {workers.map((worker) => (
           // relative: the name's link stretches over its whole row (WorkerRow).
           <li key={worker.id} className="relative grid gap-1 px-4 py-3">
-            <WorkerRow worker={worker} me={me} />
+            <WorkerRow worker={worker} roleOnSide={roleOnSide} />
           </li>
         ))}
       </ul>
@@ -199,10 +211,15 @@ function Workers({ workers, me }: { workers: Worker[]; me: WhoIsHere }) {
   );
 }
 
-function WorkerRow({ worker, me }: { worker: Worker; me: WhoIsHere }) {
+function WorkerRow({
+  worker,
+  roleOnSide,
+}: {
+  worker: Worker;
+  roleOnSide: RoleOnSide;
+}) {
   const t = useTranslations("workers");
   const format = useFormatter();
-  const { roleOnSide } = useRoleWords(me);
   // "Muuzaji (Dawa) na Keshia (Vyakula)": the browser joins them the language's own way.
   const roles =
     worker.roles.length === 0
