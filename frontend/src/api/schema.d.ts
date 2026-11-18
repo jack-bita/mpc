@@ -1220,6 +1220,7 @@ export interface components {
             readonly status: components["schemas"]["StaffStatusEnum"];
             /** Format: date */
             readonly left_on: string | null;
+            readonly switched_off: boolean;
             readonly roles: components["schemas"]["GivenRole"][];
             readonly keys: components["schemas"]["GivenKey"][];
         };

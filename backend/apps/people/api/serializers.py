@@ -170,12 +170,26 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
     # it is always the visit's own. Never their PIN's hash, nor when it was set, nor their phone or email (03 §5.9):
     # the phone is PPL-10's.
     full_name = serializers.CharField(source="user.full_name", read_only=True)
+    # The superuser switched the person off in the admin: their job may still say "active", but they log in nowhere,
+    # and no laptop shows them (staff_rows, SYNC-15). Said apart from `status`, which is the job's (PPL-4's review).
+    switched_off = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
     keys = serializers.SerializerMethodField()
 
     class Meta:
         model = StaffMember
-        fields = ["id", "full_name", "display_name", "job_title", "started_on", "status", "left_on", "roles", "keys"]
+        fields = [
+            "id",
+            "full_name",
+            "display_name",
+            "job_title",
+            "started_on",
+            "status",
+            "left_on",
+            "switched_off",
+            "roles",
+            "keys",
+        ]
         read_only_fields = fields
         list_serializer_class = StaffListSerializer
 
@@ -185,6 +199,9 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
         if staff.pk not in given:
             given.update(given_to([staff.pk]))
         return given[staff.pk]
+
+    def get_switched_off(self, staff: StaffMember) -> bool:
+        return not staff.user.is_active
 
     @extend_schema_field(GivenRoleSerializer(many=True))
     def get_roles(self, staff: StaffMember) -> Any:

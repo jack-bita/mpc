@@ -135,6 +135,7 @@ def test_the_owner_lists_every_worker_the_shop_has_had(
         "started_on": "2026-03-02",
         "status": "active",
         "left_on": None,
+        "switched_off": False,
         # A copied role's name is empty: the page shows its template's, translated (02 §5).
         "roles": [
             {
@@ -464,3 +465,15 @@ def test_a_create_sent_again_shows_no_worker_to_whoever_lacks_the_key(
         assert refused.status_code == 403, person.display_name
         assert refused.json()["code"] == "permission_denied"
         assert "Baba Mfano" not in refused.content.decode()
+
+
+def test_a_person_the_superuser_switched_off_is_shown_so(baba: StaffMember, asha: StaffMember) -> None:
+    # PPL-4's review: the superuser switched Asha's person off in the admin. Her job still says "active", but she logs
+    # in nowhere, and no laptop shows her (staff_rows, SYNC-15): the list says so, or Baba would wonder why.
+    User.objects.filter(pk=asha.user_id).update(is_active=False)
+
+    rows = {row["display_name"]: row for row in client_for(baba).get(STAFF).json()["results"]}
+
+    assert (rows["Asha"]["status"], rows["Asha"]["switched_off"]) == ("active", True)
+    assert rows["Baba"]["switched_off"] is False
+    assert client_for(baba).get(one(asha)).json()["switched_off"] is True

@@ -3744,6 +3744,10 @@
                         "readOnly": true,
                         "nullable": true
                     },
+                    "switched_off": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
                     "roles": {
                         "type": "array",
                         "items": {
@@ -3768,7 +3772,8 @@
                     "left_on",
                     "roles",
                     "started_on",
-                    "status"
+                    "status",
+                    "switched_off"
                 ]
             },
             "StaffAddRequest": {
