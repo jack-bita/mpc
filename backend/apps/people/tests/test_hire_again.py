@@ -333,11 +333,24 @@ def test_the_phone_names_his_latest_job(baraka: StaffMember) -> None:
     assert refused.value.params == {"staff": second.pk, "full_name": "Baraka Mfano", "left_on": date(2026, 9, 30)}
 
 
-@pytest.mark.parametrize("whose", ["works here", "works at another shop", "left here, works elsewhere", "no job"])
+@pytest.mark.parametrize(
+    "whose",
+    [
+        "works here",
+        "works at another shop",
+        "left here, works elsewhere",
+        "left here, suspended elsewhere",
+        "left here, back here",
+        "left another shop, works nowhere",
+        "no job",
+    ],
+)
 def test_the_phone_of_anyone_else_is_only_in_use(baraka: StaffMember, shop_b: Shop, whose: str) -> None:
     # Never joined, and never named: shop B's manager who typed shop A's owner's phone must learn nothing, and must get
-    # no way to set his PIN. Baraka, who left here, works at shop B by now: hiring him again would be refused
-    # (staff.works_elsewhere), so his phone too is only in use here, and says nothing of another shop.
+    # no way to set his PIN. Baraka, who left here, works at shop B by now, or is suspended there, which is a job still
+    # (the door counts it): hiring him again would be refused (staff.works_elsewhere), so his phone too is only in use
+    # here, and says nothing of another shop. Back here already, he is no one to hire again. And a person who left
+    # shop B, and works nowhere, is shop B's to name: typed at shop A, never.
     person = User.objects.get(pk=baraka.user_id)
     if whose == "works here":
         person = User.objects.create_user(full_name="Asha Mfano", phone="0754 000 111")
@@ -350,6 +363,17 @@ def test_the_phone_of_anyone_else_is_only_in_use(baraka: StaffMember, shop_b: Sh
     elif whose == "left here, works elsewhere":
         with shop_context(shop_b):
             add_staff(shop=shop_b, user=person, display_name="Baraka", by=None)
+    elif whose == "left here, suspended elsewhere":
+        with shop_context(shop_b):
+            at_b = add_staff(shop=shop_b, user=person, display_name="Baraka", by=None)
+            suspend(at_b, by=None, reason="Hakuja siku tatu")
+    elif whose == "left here, back here":
+        hire(baraka)
+    elif whose == "left another shop, works nowhere":
+        person = User.objects.create_user(full_name="Asha Mfano", phone="0754 000 111")
+        with shop_context(shop_b):
+            at_b = add_staff(shop=shop_b, user=person, display_name="Asha", started_on=FIRST_DAY, by=None)
+            mark_left(at_b, left_on=LAST_DAY, by=None, reason="Amehamia Moshi")
     else:
         person = User.objects.create_user(full_name="Asha Mfano", phone="0754 000 111")
     people = User.objects.count()

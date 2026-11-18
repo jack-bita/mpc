@@ -426,6 +426,25 @@ def test_a_phone_in_use_says_only_that(baba: StaffMember, staff_b: StaffMember) 
     assert "Staff Demo B" not in refused.content.decode()
 
 
+def test_another_shops_leavers_phone_is_only_in_use(baba: StaffMember, staff_b: StaffMember) -> None:
+    # The worker who left shop B, and works nowhere now, is shop B's to name. Typed at shop A, his phone is only in use:
+    # no name, no last day, no job's id.
+    with shop_context(staff_b.shop_id):
+        mark_left(staff_b, left_on=shop_today(staff_b.shop), by=None, reason="Amehamia Moshi")
+    User.objects.filter(pk=staff_b.user_id).update(phone="+255754000111")
+
+    refused = client_for(baba).post(STAFF, new_worker(phone="0754 000 111"))
+
+    assert refused.status_code == 400
+    assert (refused.json()["code"], refused.json()["fields"], refused.json()["params"]) == (
+        "invalid",
+        {"phone": ["unique"]},
+        {},
+    )
+    assert "Staff Demo B" not in refused.content.decode()
+    assert str(staff_b.pk) not in refused.content.decode()
+
+
 def hire_again(old: StaffMember, **changes: object) -> dict[str, object]:
     # Mwajiri tena, as the page sends it: the old job's id, and the new job's own id, nickname, title and first day.
     return {
