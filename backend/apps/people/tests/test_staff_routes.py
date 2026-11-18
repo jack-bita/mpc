@@ -26,7 +26,7 @@ from datetime import date, timedelta
 
 import pytest
 from django.core.exceptions import PermissionDenied
-from django.db import connection
+from django.db import connection, transaction
 from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 
@@ -39,6 +39,7 @@ from apps.people.services import add_staff, add_worker, grant_permission, mark_l
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -283,6 +284,45 @@ def test_a_worker_sent_twice_is_one_worker(shop_a: Shop, baba: StaffMember) -> N
 
     assert (first.status_code, again.status_code) == (201, 201)
     assert again.json() == first.json()
+    assert len(jobs_named(shop_a, "Juma")) == 1
+    assert User.objects.filter(full_name="Juma Hamisi Mfano").count() == 1
+
+
+def test_an_id_another_shop_holds_is_refused_and_makes_no_person(baba: StaffMember, staff_b: StaffMember) -> None:
+    # PPL-4's review: the id names the new job, and another shop's job has it. Refused with the code that tells
+    # nothing of that job (CreateOnceMixin), and the person made first is undone with the refused job.
+    refused = client_for(baba).post(STAFF, new_worker(id=str(staff_b.pk)))
+
+    assert refused.status_code == 400
+    assert refused.json()["fields"] == {"id": ["id.taken"]}
+    assert not User.objects.filter(full_name="Juma Hamisi Mfano").exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_one_worker_sent_twice_at_once_is_one_worker(shop_a: Shop, sides: dict[str, Side], baba: StaffMember) -> None:
+    # PPL-4's review: the first send has made Juma and not yet committed when the second arrives, so the second can't
+    # see him: it makes a person too, and its job waits on the first's id in the database. Once the first commits, the
+    # second's job is refused, its person undone with it, and the stored Juma is the answer (CreateOnceMixin's twin).
+    sent = new_worker()
+
+    def the_second_send() -> object:
+        return client_for(baba).post(STAFF, sent)
+
+    with shop_context(shop_a), transaction.atomic():
+        add_worker(
+            shop=shop_a,
+            full_name="Juma Hamisi Mfano",
+            display_name="Juma",
+            staff_id=uuid.UUID(str(sent["id"])),
+            by=baba,
+        )
+        second, ended = in_another_transaction(the_second_send)
+        wait_until_someone_waits_for_me()
+    second.join(timeout=5)
+
+    assert not second.is_alive(), "The second send still waits after the first committed."
+    answer = ended[0]
+    assert (answer.status_code, answer.json()["id"]) == (201, sent["id"])  # type: ignore[attr-defined]
     assert len(jobs_named(shop_a, "Juma")) == 1
     assert User.objects.filter(full_name="Juma Hamisi Mfano").count() == 1
 
