@@ -422,6 +422,8 @@
       "firstDayHint": "The day they start work.",
       "phone": "Phone",
       "phoneHint": "Optional. Like 0712 345 678. Empty takes the number off.",
+      "newPhoneHint": "Optional. Like 0712 345 678.",
+      "foundLeft": "This phone belongs to {name}, who left on {day}.",
       "farDay": "{day} is far from today. If it is right, press Save again.",
       "save": "Save",
       "cancel": "Cancel"

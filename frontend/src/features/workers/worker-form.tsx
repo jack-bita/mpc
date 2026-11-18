@@ -1,9 +1,11 @@
 // worker-form.tsx — Ongeza: a new worker joins the shop (PPL-6, PPL-4). Opens under Ongeza on Wafanyakazi. And Mwajiri
 // tena (PPL-11): the same boxes, for a worker who left and is hired again, opened on his old job's page (`again`).
 //
-// Four boxes: Jina kamili, the person's whole name, as the PIN tiles show it without a photo (02 §5); Jina la kuitwa,
+// Five boxes: Jina kamili, the person's whole name, as the PIN tiles show it without a photo (02 §5); Jina la kuitwa,
 // the nickname the shop calls them by, on every laptop and every record; Kazi, a job title, which may be empty, as
-// many workers have no title beyond their role; and Siku ya kwanza, the first day of work.
+// many workers have no title beyond their role; Siku ya kwanza, the first day of work; and Simu, their phone, which
+// may be empty (PPL-11), sent as typed for the server to store in its one form, and off on the demo, where no worker
+// gets one, with the server's own sentence saying why in place of its hint (demo.phones_fixed, PPL-10).
 //
 // The first day starts at the shop's today, as most workers are added the morning they start. The server takes any
 // date (PPL-4's review): a worker added late, or one starting next month. So a day more than 30 days before or after
@@ -19,8 +21,8 @@
 // gets the stored worker back, not a second Juma. A changed box gets a new id, as the server answers a repeated id
 // with the worker it stored, whatever the new send carries (closure-form.tsx).
 //
-// No phone (PPL-10), role (PPL-7) or PIN (PPL-8) yet: a new worker can't log in until those cards, which the screen
-// says once he is added.
+// No role (PPL-7) or PIN (PPL-8) yet: a new worker can't log in until those cards, which the screen says once he is
+// added.
 //
 // Mwajiri tena: Baraka left on 12 March and comes back. He is the same person, so he keeps his own full name, and the
 // form has no Jina kamili box (Badilisha fixes it); his nickname and job title start as his old job's, and the first day
@@ -28,6 +30,12 @@
 // A first day before his last day is said at once (staff.back_before_left); the server says it too when a later job of
 // his ended after it. Another manager who hired him first: the server's staff.already_member above the buttons; Ghairi
 // reads the worker again (worker-actions.tsx), and his old page then links to the new one.
+//
+// And from Ongeza itself: Baba, who forgot Baraka worked here, types him in as new, with his phone. The server makes
+// nobody and names Baraka's old job (staff.left_here, with his full name and last day), and under Simu the form says
+// whose phone it is, with Mwajiri tena: a question in words, not a refusal in red, as Baba did nothing wrong. Tapped,
+// it hires Baraka again with the boxes already typed, his old job named, and neither his full name nor his phone sent,
+// as the person keeps his own. A phone anyone else has is only `unique` beside Simu: never whose (the server's rule).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
@@ -57,6 +65,27 @@ const FAR_DAYS = 30;
 /** The whole request's code the server sends for a nickname taken, shown beside Jina la kuitwa (see the top). */
 const NICKNAME_TAKEN = "staff.display_name_taken";
 
+/** The server's code for the phone of a worker who left here, which names his old job (see the top). */
+const LEFT_HERE = "staff.left_here";
+
+/** The server's code for a phone sent on the demo, shown beside Simu if the box was on (see the top). */
+const NO_PHONE_ON_DEMO = "demo.phones_fixed";
+
+/** A job that ended, whose person is hired again: its id, and its last day, before which the new job can't start. */
+type OldJob = { id: string; left_on: string };
+
+/** The old job the server named for a phone typed on Ongeza (staff.left_here), with whose it is; else null. */
+function foundBy(error: unknown): (OldJob & { name: string }) | null {
+  if (!(error instanceof ApiRefusal) || error.body.code !== LEFT_HERE)
+    return null;
+  const { staff, full_name, left_on } = error.body.params;
+  return typeof staff === "string" &&
+    typeof full_name === "string" &&
+    typeof left_on === "string"
+    ? { id: staff, name: full_name, left_on }
+    : null;
+}
+
 /** The form's own checks, by box, as the codes the server would send. */
 type Checks = {
   full_name?: string;
@@ -73,6 +102,7 @@ function daysBetween(from: string, to: string): number {
 export function WorkerForm({
   today,
   again,
+  demo = false,
   onSaved,
   onCancel,
 }: {
@@ -80,10 +110,13 @@ export function WorkerForm({
   today: string;
   /** Mwajiri tena: the job that ended, whose person is hired again (see the top). None for a new worker. */
   again?: Worker;
+  /** This is the demo, where no worker gets a phone: Simu is off. */
+  demo?: boolean;
   onSaved: (worker: Worker) => void;
   onCancel: () => void;
 }) {
   const t = useTranslations("workers.form");
+  const actions = useTranslations("workers.actions");
   const titles = useTranslations("workers.actions.title");
   const codes = useCodeWords();
   const { fieldMessages } = useApiErrorWords();
@@ -96,6 +129,7 @@ export function WorkerForm({
   const [nickname, setNickname] = useState(again?.display_name ?? "");
   const [jobTitle, setJobTitle] = useState(again?.job_title ?? "");
   const [firstDay, setFirstDay] = useState(today);
+  const [phone, setPhone] = useState("");
   const [own, setOwn] = useState<Checks>({});
   // The far first day the form has asked about: Hifadhi again with this same day sends it.
   const [askedAbout, setAskedAbout] = useState<string | null>(null);
@@ -115,18 +149,24 @@ export function WorkerForm({
   function send(event: FormEvent) {
     // The browser would send the form itself and load a new page; the app sends it instead.
     event.preventDefault();
+    go(again ? { id: again.id, left_on: again.left_on ?? "" } : undefined);
+  }
+
+  /** Hifadhi: a new worker, or, with `old`, its person hired again (from the page, or the job a phone found). */
+  function go(old: OldJob | undefined) {
     // The last send's refusal is about what was sent then: each tap shows only what it finds (setting-form.tsx).
     save.reset();
     // As the server keeps them: the spaces around each taken off, so spaces alone are no name.
     const full = fullName.trim();
     const called = nickname.trim();
     const title = jobTitle.trim();
+    const typedPhone = phone.trim();
     const checks: Checks = {};
-    if (again === undefined && full === "") checks.full_name = "blank";
+    if (old === undefined && full === "") checks.full_name = "blank";
     if (called === "") checks.display_name = "blank";
     if (firstDay === "") checks.started_on = "required";
     // Days as text sort as days do. The same day may: a leaving marked by mistake is mended at once.
-    else if (again?.left_on && firstDay < again.left_on)
+    else if (old !== undefined && firstDay < old.left_on)
       checks.started_on = "staff.back_before_left";
     setOwn(checks);
     if (Object.keys(checks).length > 0) return;
@@ -136,8 +176,15 @@ export function WorkerForm({
       setAskedAbout(firstDay);
       return;
     }
-    // The same id for a try of the same boxes; a new one once any of them changed.
-    const carried = JSON.stringify([again?.id, full, called, title, firstDay]);
+    // The same id for a try of the same boxes; a new one once any of them changed, or a hire again took its place.
+    const carried = JSON.stringify([
+      old?.id,
+      full,
+      called,
+      title,
+      firstDay,
+      typedPhone,
+    ]);
     if (lastSend.current?.carried !== carried)
       lastSend.current = { id: newId(), carried };
     const job = {
@@ -146,11 +193,16 @@ export function WorkerForm({
       job_title: title,
       started_on: firstDay,
     };
-    // Hired again: the old job's id, and no full name, as the person keeps his own.
+    // Hired again: the old job's id, and no full name nor phone, as the person keeps his own. A new worker: his phone
+    // only if one was typed.
     save.mutate(
-      again === undefined
-        ? { ...job, full_name: full }
-        : { ...job, hire_again: again.id },
+      old !== undefined
+        ? { ...job, hire_again: old.id }
+        : {
+            ...job,
+            full_name: full,
+            ...(typedPhone === "" ? {} : { phone: typedPhone }),
+          },
     );
   }
 
@@ -159,8 +211,12 @@ export function WorkerForm({
   const byField = fieldMessages(save.error);
   const said = (code?: string) =>
     code === undefined ? undefined : codeMessage(codes, code);
-  const nicknameTaken =
-    save.error instanceof ApiRefusal && save.error.body.code === NICKNAME_TAKEN;
+  const code =
+    save.error instanceof ApiRefusal ? save.error.body.code : undefined;
+  const nicknameTaken = code === NICKNAME_TAKEN;
+  // The phone found a worker who left: said under Simu, with Mwajiri tena, not above the buttons.
+  const found = foundBy(save.error);
+  const phoneOnDemo = code === NO_PHONE_ON_DEMO;
   const askingAboutTheDay =
     askedAbout !== null &&
     askedAbout === firstDay &&
@@ -230,9 +286,54 @@ export function WorkerForm({
           {askingAboutTheDay ? t("farDay", { day: formatDay(firstDay) }) : null}
         </p>
       </div>
-      {/* What no box names: an id another shop holds, no network, no key, the server's own problem. */}
+      {/* A new worker's phone; a worker hired again keeps his own. */}
+      {again === undefined ? (
+        <div className="grid gap-2">
+          <Field
+            label={t("phone")}
+            // On the demo, why the box is off, in the server's own sentence, where the hint would be.
+            hint={demo ? said(NO_PHONE_ON_DEMO) : t("newPhoneHint")}
+            error={phoneOnDemo ? said(NO_PHONE_ON_DEMO) : byField.phone}
+            type="tel"
+            // A phone's keypad, with + and spaces.
+            inputMode="tel"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            disabled={demo}
+            autoComplete="off"
+            // As typed, longer than the 16 characters stored (StaffAddSerializer, 32).
+            maxLength={32}
+          />
+          {/* Whose phone it is, when it is a worker's who left: a question in words, as the far day's, on the page
+              from the start for a screen reader to say when its words come. */}
+          <p role="status" className="font-semibold">
+            {found
+              ? t("foundLeft", {
+                  name: found.name,
+                  day: formatDay(found.left_on),
+                })
+              : null}
+          </p>
+          {found ? (
+            <div>
+              <Button
+                onClick={() => go(found)}
+                disabled={save.isPending || !online}
+              >
+                {actions("hireAgain")}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {/* What no box names: an id another shop holds, no network, no key, the server's own problem. Not what is said
+          beside a box or under Simu already. */}
       <ApiErrorAlert
-        error={nicknameTaken ? null : aboutTheWholeRequest(save.error)}
+        error={
+          nicknameTaken || found !== null || phoneOnDemo
+            ? null
+            : aboutTheWholeRequest(save.error)
+        }
       />
       <div className="flex flex-wrap gap-3">
         {/* Switched off while it is sent, so a second tap sends nothing, and while offline, so nothing waits unsent

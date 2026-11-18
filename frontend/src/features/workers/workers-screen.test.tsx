@@ -396,4 +396,24 @@ describe("Ongeza on the workers' page", () => {
     await screen.findByRole("alert");
     expect(screen.queryByRole("button", { name: "Ongeza" })).toBeNull();
   });
+
+  it("keeps Simu off on the demo, and says why (PPL-10, PPL-11: no phone there)", async () => {
+    theShopHas([asha]);
+    answer("GET", "/api/devices/v1/demo/open/", {
+      status: 200,
+      body: { open: true },
+    });
+    render(<WorkersScreen />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Ongeza" }));
+
+    await waitFor(() =>
+      expect((screen.getByLabelText("Simu") as HTMLInputElement).disabled).toBe(
+        true,
+      ),
+    );
+    expect(
+      screen.getByText(/Kwenye demo, wafanyakazi hawawekewi namba/),
+    ).toBeTruthy();
+  });
 });

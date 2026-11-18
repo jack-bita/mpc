@@ -7,7 +7,7 @@
 // the list a manager reads each day stays short as the years add names.
 //
 // Above the list, Ongeza opens the form for a new worker (worker-form.tsx); once he is added, one line says so, and
-// that his name reaches the shop's laptops once PPL-8 gives him a PIN.
+// that his name reaches the shop's laptops once PPL-8 gives him a PIN. On the demo, its Simu box is off (PPL-11).
 //
 // An office screen: it asks the server through the store of server answers (rule 5), and needs the internet,
 // which the office area says while it is gone. Its routes ask staff.manage on the whole shop (PPL-4); someone
@@ -16,7 +16,7 @@
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "use-intl";
 
@@ -26,6 +26,7 @@ import { Button } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
 import { TextLink } from "@/components/design/text-link";
+import { askDemoOpen, DEMO_OPEN } from "@/features/devices/demo";
 import { useWhoIsHere, type WhoIsHere } from "@/features/people/who-is-here";
 import { shopToday } from "@/offline/rules";
 
@@ -84,6 +85,15 @@ function AddWorker({ me }: { me: WhoIsHere }) {
   // box on the new day.
   const [openOn, setOpenOn] = useState<string | null>(null);
   const [added, setAdded] = useState<Worker | null>(null);
+  // Whether this is the demo, where no worker gets a phone (PPL-10, PPL-11), as the worker's page asks it: here, the
+  // part always on the page once the person is known, only once the form opens, and once a visit. Unknown, or not
+  // answered, the box is on: the server refuses a phone on the demo all the same (demo.phones_fixed).
+  const demo = useQuery({
+    queryKey: DEMO_OPEN,
+    queryFn: askDemoOpen,
+    staleTime: Infinity,
+    enabled: openOn !== null,
+  });
 
   // Where the keyboard goes when the form closes: back to Ongeza, as the form and the box that had focus are gone
   // (laptops are keyboard first). Counted, so each close moves it (devices-screen.tsx).
@@ -118,6 +128,7 @@ function AddWorker({ me }: { me: WhoIsHere }) {
           <CardContent>
             <WorkerForm
               today={openOn}
+              demo={demo.data === true}
               onSaved={(worker) => {
                 setAdded(worker);
                 closeTheForm();

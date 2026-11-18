@@ -422,6 +422,8 @@
       "firstDayHint": "Siku anayoanza kazi.",
       "phone": "Simu",
       "phoneHint": "Si lazima. Kama 0712 345 678. Ukiiacha tupu, namba inaondolewa.",
+      "newPhoneHint": "Si lazima. Kama 0712 345 678.",
+      "foundLeft": "Simu hii ni ya {name}, aliyeondoka {day}.",
       "farDay": "{day} iko mbali na leo. Kama ni sahihi, bonyeza Hifadhi tena.",
       "save": "Hifadhi",
       "cancel": "Ghairi"
