@@ -35,6 +35,8 @@ afterEach(() => {
   vi.useRealTimers();
   // A test that moved the window's focus gives it back to the browser's own (focusManager).
   focusManager.setFocused(undefined);
+  // A test that takes the network away puts it back after (navigator.onLine's spy).
+  vi.restoreAllMocks();
 });
 
 /** Asha, a seller on Dawa since 3 Nov, with no phone yet, never fixed since she was added (version 1). */
@@ -307,6 +309,49 @@ describe("Badilisha", () => {
     // Read again: Baba's fix on the page, nothing of Meneja's.
     expect(await screen.findByText("Fundi")).toBeTruthy();
     expect(screen.queryByLabelText("Kazi")).toBeNull();
+  });
+
+  it("switches Hifadhi off while there is no network, so nothing waits unsent while it looks done", async () => {
+    theServerHas(ASHA);
+    render(<WorkerScreen id={ASHA.id} />);
+
+    const badilisha = await findButton("Badilisha");
+    // The network gone as the form opens, which reads it as it draws (useOnline). No "offline" event: TanStack's own
+    // network watcher would hear it and pause every later test's reads (worker-actions.test.tsx).
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    fireEvent.click(badilisha);
+
+    expect((button("Hifadhi") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("switches Hifadhi off while the fix is on its way, so a second tap sends nothing", async () => {
+    theServerHas(ASHA);
+    // The server holds its answer until the test lets it go.
+    let answerNow: () => void = () => undefined;
+    answer(
+      "PATCH",
+      ASHAS,
+      () =>
+        new Promise<Response>((resolve) => {
+          answerNow = () =>
+            resolve(
+              Response.json({ ...ASHA, job_title: "Muuzaji", version: 2 }),
+            );
+        }),
+    );
+    await openTheFix();
+
+    typeInto(box("Kazi"), "Muuzaji");
+    typeInto(box("Sababu"), WHY);
+    fireEvent.click(button("Hifadhi"));
+    await waitFor(() =>
+      expect((button("Hifadhi") as HTMLButtonElement).disabled).toBe(true),
+    );
+    fireEvent.click(button("Hifadhi"));
+    answerNow();
+
+    await screen.findByText("Taarifa za Asha zimehifadhiwa.");
+    expect(await fixesSent()).toHaveLength(1);
   });
 
   it("closes with Ghairi, shows the details again, and puts the keyboard back on Badilisha", async () => {
