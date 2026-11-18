@@ -31,7 +31,15 @@ from apps.core.models import ChangeOp
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, User
-from apps.people.services import add_staff, add_worker, change_worker, grant_permission, mark_left, suspend
+from apps.people.services import (
+    add_staff,
+    add_worker,
+    change_person,
+    change_worker,
+    grant_permission,
+    mark_left,
+    suspend,
+)
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from tests.change_log import lines_written
@@ -366,6 +374,19 @@ def test_a_phone_taken_at_the_same_moment_answers_as_taken(asha: StaffMember, st
     }
     assert (stored(staff_a2).user.phone, stored(staff_a2).version) == (None, 1)
     assert details_lines(staff_a2) == []
+
+
+def test_the_admin_doesnt_quietly_undo_a_fix(asha: StaffMember) -> None:
+    # The superuser opens Asha's page in the admin; Meneja fixes her phone on the workers' page meanwhile; the superuser
+    # then saves a new language. The admin writes only what its form changed, so Meneja's phone stays.
+    in_the_admin = User.objects.get(pk=asha.user_id)
+    fix(asha, phone="0712 345 678")
+
+    in_the_admin.language = "en"
+    change_person(in_the_admin, changed=["language"])
+
+    person = User.objects.get(pk=asha.user_id)
+    assert (person.language, person.phone) == ("en", "+255712345678")
 
 
 def test_a_worker_who_left_cant_be_fixed(asha: StaffMember) -> None:

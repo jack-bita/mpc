@@ -786,13 +786,19 @@ FIELDS_ON_STAFF_ROWS = frozenset({"full_name", *OWN_SETTINGS, "is_active"})
 
 
 def change_person(user: User, *, changed: Collection[str]) -> User:
-    """Save a person as the superuser changed them in the admin (apps/people/admin.py), with every field the form
-    holds, as the admin's own save does. `changed`: the fields the form changed. When one is a field a laptop shows
-    (FIELDS_ON_STAFF_ROWS), each shop where the person works gets a line for their job, in the same transaction:
-    `archive` when they are switched off, as no laptop may then show them, `upsert` otherwise (SYNC-15). Returns the
-    person as saved."""
+    """Save a person as the superuser changed them in the admin (apps/people/admin.py): only the fields the form
+    changed (`changed`). When one is a field a laptop shows (FIELDS_ON_STAFF_ROWS), each shop where the person works
+    gets a line for their job, in the same transaction: `archive` when they are switched off, as no laptop may then
+    show them, `upsert` otherwise (SYNC-15). Returns the person as saved."""
+    # Only what the form changed, never every column, as Django's own save would: the superuser opens Asha's page in
+    # the admin, Meneja fixes her phone on the workers' page meanwhile (PPL-10), and the superuser saves a new
+    # language. Saving every column would put the old phone back, quietly, with no line in any audit trail. A field the
+    # form holds that is no column of the person (their groups, their admin permissions) the admin saves itself.
+    columns = {column.name for column in User._meta.concrete_fields}
+    saved = [name for name in changed if name in columns]
     with transaction.atomic():
-        user.save()
+        if saved:
+            user.save(update_fields=saved)
         if FIELDS_ON_STAFF_ROWS & set(changed):
             _record_each_job(user)
     return user
