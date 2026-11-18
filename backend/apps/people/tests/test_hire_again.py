@@ -399,6 +399,22 @@ def test_no_phone_on_ongeza_on_the_demo(shop_a: Shop, meneja: StaffMember, setti
     assert User.objects.get(pk=juma.user_id).phone is None
 
 
+def test_a_visitors_worker_who_left_is_hired_again_on_the_demo(
+    shop_a: Shop, meneja: StaffMember, settings: Settings
+) -> None:
+    # Every visitor logs in as Meneja: a worker a visitor added, and marked left, can be hired again, as trying the page
+    # is the point (PPL-4: A). The seed's people are never marked left there (demo.people_fixed), so none of them can
+    # come back as a second job either.
+    settings.DEMO_SEED = True
+    with shop_context(shop_a):
+        juma = add_worker(shop=shop_a, full_name="Juma Mfano", display_name="Juma", started_on=FIRST_DAY, by=meneja)
+        mark_left(juma, left_on=LAST_DAY, by=meneja, reason="Amehamia Moshi")
+
+    back = hire(juma, display_name="Juma", by=meneja)
+
+    assert (back.user_id, back.status, back.created_by_id) == (juma.user_id, StaffStatus.ACTIVE, meneja.pk)
+
+
 @pytest.mark.django_db(transaction=True)
 def test_a_phone_taken_at_the_same_moment_answers_as_taken(shop_a: Shop) -> None:
     # Meneja adds Juma with a new phone while Baba adds Hamisi with the same one, in the same second: each check passes,
