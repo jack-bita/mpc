@@ -448,3 +448,19 @@ def test_another_shops_worker_is_not_found(baba: StaffMember, staff_b: StaffMemb
 
     assert hidden.status_code == 404
     assert status_of(staff_b) == "active"
+
+
+def test_a_create_sent_again_shows_no_worker_to_whoever_lacks_the_key(
+    shop_a: Shop, sides: dict[str, Side], baba: StaffMember, asha: StaffMember
+) -> None:
+    # PPL-4's review: every laptop knows each worker's id (the PIN tiles). Sent as a new worker's id by Asha, who holds
+    # no staff.manage, it found Baba and answered with his row, his Owner role among it. Now refused, as the list is.
+    dawa_only = job(shop_a, "Neema Mfano", "Neema")
+    with shop_context(shop_a):
+        grant_permission(dawa_only, Permission.STAFF_MANAGE, side=sides["D"], by=None)
+
+    for person in (asha, dawa_only):
+        refused = client_for(person).post(STAFF, new_worker(id=str(baba.pk)))
+        assert refused.status_code == 403, person.display_name
+        assert refused.json()["code"] == "permission_denied"
+        assert "Baba Mfano" not in refused.content.decode()

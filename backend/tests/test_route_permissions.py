@@ -137,8 +137,24 @@ class ManagedNoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, ShopV
     action_permissions = {"list": Permission.STAFF_MANAGE, "retrieve": Permission.STAFF_MANAGE}
 
 
+class ManagedNoteMakerViewSet(mixins.RetrieveModelMixin, CreateOnceMixin[Note]):
+    # Makes the whole shop's notes once, and shows one behind a key of its own, as the shop's workers are: a create
+    # sent again shows its row, so it must ask that key too, or it is a way round it (PPL-4's review).
+    model = Note
+    side_field = None
+    serializer_class = NoteSerializer
+    create_serializer_class = NoteCreateSerializer
+    action_permissions = {"create": Permission.STAFF_MANAGE, "retrieve": Permission.STAFF_MANAGE}
+
+    def create_row(self, data: dict[str, Any]) -> Note:
+        note = Note(id=data["id"], shop_id=self.actor.shop_id, text=data["text"])
+        note.save()
+        return note
+
+
 router = SimpleRouter()
 router.register("managed-notes", ManagedNoteViewSet, basename="managed-note")
+router.register("managed-note-makers", ManagedNoteMakerViewSet, basename="managed-note-maker")
 router.register("plain-note-makers", PlainNoteMakerViewSet, basename="plain-note-maker")
 router.register("guarded-notes", GuardedNoteViewSet, basename="guarded-note")
 router.register("retext-notes", RetextNoteViewSet, basename="retext-note")
@@ -936,3 +952,27 @@ def test_permissions_read_once_per_visit(
     owner = client_for(staff_a)
     keys, _ = permission_reads(lambda: owner.patch(f"{SIDES}{sides['D'].pk}/", {"name": "Dawa za Kuku", "version": 1}))
     assert keys == 2
+
+
+@pytest.mark.django_db
+@pytest.mark.urls(__name__)
+def test_a_create_sent_again_asks_the_key_to_read_its_row(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # PPL-4's review: a create that finds its id already stored answers with the stored row. On a route whose rows are
+    # read behind a key of their own, that answer is a read too: a seller who sends a worker's id must not get the
+    # worker back, when the list and the one row both refuse her. The create's own key is still not asked again.
+    with shop_context(shop_a):
+        note = Note.objects.create(shop=shop_a, text="Mshahara wa Juma")
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+
+    refused = client_for(staff_a).post("/api/v1/test/managed-note-makers/", {"id": str(note.pk), "text": "x"})
+
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    assert "Mshahara" not in refused.content.decode()
+
+    # Whoever may read it gets it back, as any lost answer is.
+    give_role(staff_a2, RoleTemplate.OWNER, None)
+    again = client_for(staff_a2).post("/api/v1/test/managed-note-makers/", {"id": str(note.pk), "text": "x"})
+    assert (again.status_code, again.json()["text"]) == (201, "Mshahara wa Juma")

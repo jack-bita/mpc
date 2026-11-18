@@ -265,7 +265,8 @@ class ShopViewSet[M: ShopScoped](GenericViewSet[M]):
         needed = self.permission_needed()
         if needed is SEES_THE_SIDE or self._replaying:
             # Only to see the side, which every read of the route already keeps to (get_queryset): a row handed out
-            # was found among the person's own sides. A create sent again is such a read too (_replay below).
+            # was found among the person's own sides. A create sent again is such a read too (_replay below), which
+            # asks a key of its own when the route reads its rows behind one.
             return
         if needed not in self.held.on(side_id):
             # English for the logs; the screens translate the code (ADR-0032).
@@ -323,6 +324,14 @@ class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
             self.check_object_permissions(request, row)
         finally:
             self._replaying = False
+        # And the key a read of the row needs, when the route shows its rows behind one: the answer is the row, so a
+        # repeat is a read. Without it, Asha, who may not read the shop's workers, could send Baba's id, which every
+        # laptop knows, as a new worker's, and get Baba's row back (PPL-4's review). The key the route names for one
+        # row (retrieve), else for its list; asked on the row's side, as a read of it is.
+        read = self.action_permissions.get("retrieve", self.action_permissions.get("list", SEES_THE_SIDE))
+        if read is not SEES_THE_SIDE and read not in self.held.on(self.side_of(row)):
+            # English for the logs; the screens translate the code (ADR-0032).
+            raise exceptions.PermissionDenied(f"This person may not {read} here.")
         return row
 
     def _create(self, request: Request) -> M:
