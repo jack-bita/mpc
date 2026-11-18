@@ -79,6 +79,10 @@ export function WorkerScreen({ id }: { id: string | null }) {
           )}
           {/* Badilisha, Simamisha, Rudisha and Ameondoka, as the worker's status allows (worker-actions.tsx). */}
           <WorkerActions
+            // A worker of its own: on another worker's page, as the browser's back and forward move the address, any
+            // form open on the last one closes, its boxes and its version with it, so Asha's boxes never go to
+            // Baraka; its unmount tells the page to show the details again (onEditing).
+            key={worker.data.id}
             worker={worker.data}
             me={who.data}
             demo={demo.data === true}

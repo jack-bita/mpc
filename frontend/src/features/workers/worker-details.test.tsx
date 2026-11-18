@@ -354,6 +354,29 @@ describe("Badilisha", () => {
     expect(await fixesSent()).toHaveLength(1);
   });
 
+  it("closes a form open on Asha when the page moves back to Baraka, so her boxes never go to him", async () => {
+    // The browser's back and forward move the address while the page stays: the same screen, another worker. Baraka
+    // was seen a moment ago, so his page shows at once from the store, with no wait to close Asha's form for it.
+    theServerHas(ASHA);
+    const baraka = worker({
+      full_name: "Baraka Mfano",
+      display_name: "Baraka",
+    });
+    answer("GET", `${STAFF}${baraka.id}/`, { status: 200, body: baraka });
+    const { rerender } = render(<WorkerScreen id={baraka.id} />);
+    expect(await screen.findByText("Baraka Mfano")).toBeTruthy();
+    rerender(<WorkerScreen id={ASHA.id} />);
+    fireEvent.click(await findButton("Badilisha"));
+    typeInto(box("Kazi"), "Muuzaji");
+
+    rerender(<WorkerScreen id={baraka.id} />);
+
+    expect(await screen.findByText("Baraka Mfano")).toBeTruthy();
+    expect(screen.queryByLabelText("Kazi")).toBeNull();
+    expect(button("Badilisha")).toBeTruthy();
+    expect(await fixesSent()).toEqual([]);
+  });
+
   it("closes with Ghairi, shows the details again, and puts the keyboard back on Badilisha", async () => {
     theServerHas(ASHA);
     await openTheFix();
