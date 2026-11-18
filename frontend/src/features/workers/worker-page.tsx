@@ -35,10 +35,9 @@ export function WorkerScreen({ id }: { id: string | null }) {
   const loginWords = useTranslations("login");
   const who = useWhoIsHere();
   const worker = useWorker(id);
-  // Until both answer the first time; with no id, nothing is asked, so nothing is waited for.
-  const waiting =
-    (who.isPending && who.failureCount === 0) ||
-    (id !== null && worker.isPending && worker.failureCount === 0);
+  // Until both answer the first time, through the store's own tries too, as on the list (workers-screen.tsx); with no
+  // id, nothing is asked, so nothing is waited for. The list's copy, shown at once, is no wait (useWorker).
+  const waiting = who.isPending || (id !== null && worker.isPending);
 
   return (
     <div className="grid max-w-2xl gap-6">

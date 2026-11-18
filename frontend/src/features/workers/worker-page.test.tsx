@@ -12,7 +12,7 @@ import { router } from "@/test/router";
 import { MANAGER, role, STAFF, worker } from "@/test/workers";
 
 import { WorkerScreen } from "./worker-page";
-import { WORKERS } from "./workers";
+import { workerKey, WORKERS } from "./workers";
 
 vi.mock("@/api/client", async (importOriginal) =>
   (await import("@/test/fake-server")).withFakeServer(await importOriginal()),
@@ -199,6 +199,31 @@ describe("a worker's own page", () => {
     expect(
       sent.filter((request) => request.url.endsWith(`${ASHA.id}/`)),
     ).toHaveLength(1);
+  });
+
+  it("says to wait through the store's own tries, so the page is never a title alone (PPL-6's review)", async () => {
+    // Opened from a link, with no list's copy: the first read finds no network, and the store asks again.
+    const store = makeQueryClient();
+    answer("GET", ME, { status: 200, body: MANAGER });
+    answer("GET", `${STAFF}${ASHA.id}/`, () => {
+      throw new TypeError("Failed to fetch");
+    });
+    render(
+      <QueryClientProvider client={store}>
+        <WorkerScreen id={ASHA.id} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(store.getQueryState(workerKey(ASHA.id))?.fetchFailureCount).toBe(
+        1,
+      ),
+    );
+    expect(screen.getByText("Subiri kidogo…").getAttribute("role")).toBe(
+      "status",
+    );
+    // The store's tries stop here, so none goes on after the test.
+    await store.cancelQueries();
   });
 
   it("says no worker was chosen, and asks nothing, with no id in the address", async () => {

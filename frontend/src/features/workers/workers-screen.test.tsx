@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { makeQueryClient } from "@/api/query-client";
 import type { components } from "@/api/schema";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
@@ -227,6 +228,29 @@ describe("the workers' page", () => {
     expect(sent.filter((request) => request.url.endsWith(STAFF))).toHaveLength(
       1,
     );
+  });
+
+  it("says to wait through the store's own tries, so the page is never empty (PPL-6's review)", async () => {
+    // The first read finds no network: the store asks again for some 3 seconds, with no answer and no error yet.
+    const store = makeQueryClient();
+    answer("GET", ME, { status: 200, body: MANAGER });
+    answer("GET", STAFF, () => {
+      throw new TypeError("Failed to fetch");
+    });
+    render(
+      <QueryClientProvider client={store}>
+        <WorkersScreen />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(store.getQueryState(WORKERS)?.fetchFailureCount).toBe(1),
+    );
+    expect(screen.getByText("Subiri kidogo…").getAttribute("role")).toBe(
+      "status",
+    );
+    // The store's tries stop here, so none goes on after the test.
+    await store.cancelQueries();
   });
 
   it("says to wait while it asks, so the page is never a title alone", () => {

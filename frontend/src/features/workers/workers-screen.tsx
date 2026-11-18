@@ -46,10 +46,10 @@ export function WorkersScreen() {
   const workers = useWorkers();
   // Until both answer the first time: "Subiri kidogo…", never a title with nothing under it. The line is on the
   // page from the start and only its words change, as one that comes with its words in it often goes unsaid
-  // (offline-banner.tsx).
-  const waiting =
-    (who.isPending && who.failureCount === 0) ||
-    (workers.isPending && workers.failureCount === 0);
+  // (offline-banner.tsx). Through the store's own tries too: a read that found no network, or a 5xx, is asked again
+  // for some 3 seconds before it fails for good, and is pending all that time, with no answer and no error yet, so
+  // a wait that counted only the first try left a page with nothing on it (PPL-6's review).
+  const waiting = who.isPending || workers.isPending;
 
   return (
     <div className="grid max-w-2xl gap-6">
