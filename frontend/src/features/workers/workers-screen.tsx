@@ -37,6 +37,7 @@ import {
   useRoleWords,
   useWorkers,
   type Worker,
+  workerPage,
   WORKERS,
 } from "./workers";
 
@@ -244,7 +245,7 @@ function WorkerRow({
             over it (after:absolute), so a finger on the roles or the status opens it too; a screen reader still
             hears one link, named by the names alone. */}
         <TextLink
-          href={`/workers/view/?id=${worker.id}`}
+          href={workerPage(worker.id)}
           className="after:absolute after:inset-0"
         >
           {t("names", {

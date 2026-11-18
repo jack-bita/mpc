@@ -48,7 +48,7 @@ import { shopToday } from "@/offline/rules";
 
 import { DetailsForm } from "./worker-details-form";
 import { WorkerForm } from "./worker-form";
-import { keepWorker, type Worker, WORKERS } from "./workers";
+import { keepWorker, type Worker, workerPage, WORKERS } from "./workers";
 
 type Action = "edit" | "suspend" | "unsuspend" | "leave" | "hireAgain";
 /** The three that change a worker's status, each with its own route. */
@@ -60,9 +60,6 @@ const OFFERED: Record<Worker["status"], Action[]> = {
   suspended: ["edit", "unsuspend", "leave"],
   left: ["hireAgain"],
 };
-
-/** A worker's own page, as the list links to it (workers-screen.tsx). */
-const pageOf = (id: string) => `/workers/view/?id=${id}`;
 
 /** The whole request's codes that are about one box: shown beside it, not above the buttons. The services raise them
  * with no field (apps/core/api/errors.py), as they check the reason and the day after the form's own checks. */
@@ -175,7 +172,7 @@ export function WorkerActions({
           again={worker}
           // He works on his new job now: its page. Its back arrow returns here when this page was reached inside the
           // app, else to the list (in-app-moves.tsx), as for any page.
-          onSaved={(back) => router.push(pageOf(back.id))}
+          onSaved={(back) => router.push(workerPage(back.id))}
           onCancel={() => cancelled("hireAgain")}
         />
       ) : open !== null ? (
@@ -199,7 +196,7 @@ export function WorkerActions({
         // Back already: the old job links to the new one in place of Mwajiri tena.
         <p>
           {t("back", { name: worker.display_name })}{" "}
-          <TextLink href={pageOf(worker.hired_again_as)}>
+          <TextLink href={workerPage(worker.hired_again_as)}>
             {t("backLink")}
           </TextLink>
         </p>
