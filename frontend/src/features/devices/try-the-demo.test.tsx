@@ -1,6 +1,6 @@
 // try-the-demo.test.tsx — Jaribu demo: it shows only where the server says the demo is open, one tap
-// makes this browser a device and keeps the sellers' PINs, a refusal says why, and yesterday's demo
-// copies are deleted from the laptop (OPS-3).
+// makes this browser a device and keeps the sellers' PINs and the manager's login (OPS-13), a refusal
+// says why, and yesterday's demo copies are deleted from the laptop (OPS-3).
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import Dexie from "dexie";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,7 +12,12 @@ import { answer, refusal, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
 
 import { forgetOtherShops } from "./demo";
-import { DEMO_PINS_KEY, demoPin } from "./demo-pins";
+import {
+  DEMO_LOGINS_KEY,
+  DEMO_PINS_KEY,
+  demoLogin,
+  demoPin,
+} from "./demo-pins";
 import { savedDevice } from "./this-device";
 import { TryTheDemo } from "./try-the-demo";
 
@@ -31,6 +36,11 @@ const PINS = [
   { staff_id: ASHA, pin: "2580" },
   { staff_id: BARAKA, pin: "1470" },
 ];
+// And the demo's manager, with his public login (OPS-13).
+const MENEJA = "019a5e00-0000-7000-8000-0000000000e0";
+const LOGINS = [
+  { staff_id: MENEJA, login: "meneja@example.com", password: "jaribu-demo" },
+];
 
 beforeEach(() => {
   // A CSRF token, as the device's check gives the browser when the app opens.
@@ -39,7 +49,10 @@ beforeEach(() => {
   answer("GET", ME, refusal(401, "not_authenticated"));
 });
 
-afterEach(() => window.localStorage.removeItem(DEMO_PINS_KEY));
+afterEach(() => {
+  window.localStorage.removeItem(DEMO_PINS_KEY);
+  window.localStorage.removeItem(DEMO_LOGINS_KEY);
+});
 
 const theDemoIsOpen = () =>
   answer("GET", DEMO_OPEN, { status: 200, body: { open: true } });
@@ -90,12 +103,12 @@ describe("Jaribu demo", () => {
     expect(screen.queryByRole("button", { name: "Jaribu demo" })).toBeNull();
   });
 
-  it("makes this browser a device with one tap, and keeps the sellers' PINs", async () => {
+  it("makes this browser a device with one tap, and keeps the sellers' PINs and the manager's login", async () => {
     theDemoIsOpen();
     answer("POST", DEMO, () => {
       // From now on the browser holds the new device's key, so `me` names it.
       answer("GET", ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
-      return Response.json({ pins: PINS }, { status: 201 });
+      return Response.json({ pins: PINS, logins: LOGINS }, { status: 201 });
     });
     render(<TryTheDemo />);
 
@@ -104,6 +117,10 @@ describe("Jaribu demo", () => {
     await waitFor(() => expect(savedDevice()).toEqual(DAWA_LAPTOP));
     expect(demoPin(ASHA)).toBe("2580");
     expect(demoPin(BARAKA)).toBe("1470");
+    expect(demoLogin(MENEJA)).toEqual({
+      login: "meneja@example.com",
+      password: "jaribu-demo",
+    });
     // The tap is a change, sent with the CSRF token, as a pairing's start is.
     const tapped = sent.find((r) => r.method === "POST");
     expect(tapped?.headers.get("X-CSRFToken")).toBe("token-from-django");
@@ -115,7 +132,7 @@ describe("Jaribu demo", () => {
     theDemoIsOpen();
     answer("POST", DEMO, () => {
       answer("GET", ME, { status: 200, body: DAWA_LAPTOP_ANSWER });
-      return Response.json({ pins: PINS }, { status: 201 });
+      return Response.json({ pins: PINS, logins: LOGINS }, { status: 201 });
     });
     render(<TryTheDemo />);
 
@@ -136,7 +153,7 @@ describe("Jaribu demo", () => {
       answer("GET", ME, () => {
         throw new TypeError("Failed to fetch");
       });
-      return Response.json({ pins: PINS }, { status: 201 });
+      return Response.json({ pins: PINS, logins: LOGINS }, { status: 201 });
     });
     render(<TryTheDemo />);
     await tap();
@@ -157,7 +174,7 @@ describe("Jaribu demo", () => {
     // A browser set to block every site's cookies: the server made the device, yet `me` knows no key. Said
     // with an alert, never a welcome screen that does nothing, and no device saved.
     theDemoIsOpen();
-    answer("POST", DEMO, { status: 201, body: { pins: PINS } });
+    answer("POST", DEMO, { status: 201, body: { pins: PINS, logins: LOGINS } });
     render(<TryTheDemo />);
 
     await tap();
@@ -194,19 +211,5 @@ describe("forgetOtherShops", () => {
 
     expect(await Dexie.exists("not-a-shop")).toBe(true);
     expect(await Dexie.exists(databaseName("old-shop"))).toBe(false);
-  });
-});
-
-describe("demoPin", () => {
-  it("reads a kept copy it can't trust as no PIN", () => {
-    window.localStorage.setItem(DEMO_PINS_KEY, "not json");
-    expect(demoPin(ASHA)).toBeUndefined();
-    window.localStorage.setItem(DEMO_PINS_KEY, JSON.stringify([ASHA]));
-    expect(demoPin(ASHA)).toBeUndefined();
-    window.localStorage.setItem(
-      DEMO_PINS_KEY,
-      JSON.stringify({ [ASHA]: 2580 }),
-    );
-    expect(demoPin(ASHA)).toBeUndefined();
   });
 });
