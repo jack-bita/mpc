@@ -420,6 +420,8 @@
       "jobTitleHint": "Optional. Like Drugs seller.",
       "firstDay": "First day",
       "firstDayHint": "The day they start work.",
+      "phone": "Phone",
+      "phoneHint": "Optional. Like 0712 345 678. Empty takes the number off.",
       "farDay": "{day} is far from today. If it is right, press Save again.",
       "save": "Save",
       "cancel": "Cancel"
@@ -428,16 +430,19 @@
       "title": "Worker",
       "noWorker": "No worker chosen. Go back to the list of workers.",
       "noJobTitle": "None",
+      "noPhone": "None",
       "status": "Status",
       "lastDay": "Last day",
       "roles": "Role",
       "extraKeys": "Extra permissions"
     },
     "actions": {
+      "edit": "Edit",
       "suspend": "Suspend",
       "unsuspend": "Bring back",
       "leave": "Mark as left",
       "title": {
+        "edit": "Edit {name}'s details",
         "suspend": "Suspend {name}",
         "unsuspend": "Bring {name} back to work",
         "leave": "{name} left work"
@@ -448,7 +453,10 @@
       "lastDayHint": "Their last day at work. It can't be a day ahead.",
       "save": "Save",
       "cancel": "Cancel",
+      "nothingChanged": "Nothing was changed.",
+      "changedMeanwhile": "Someone else changed {name}'s details before you. These are their details now: try again if something still needs fixing.",
       "done": {
+        "edit": "{name}'s details are saved.",
         "suspend": "{name} is suspended.",
         "unsuspend": "{name} is back at work.",
         "leave": "{name} has left. Their last day was {day}."

@@ -420,6 +420,8 @@
       "jobTitleHint": "Si lazima. Kama Muuzaji wa dawa.",
       "firstDay": "Siku ya kwanza",
       "firstDayHint": "Siku anayoanza kazi.",
+      "phone": "Simu",
+      "phoneHint": "Si lazima. Kama 0712 345 678. Ukiiacha tupu, namba inaondolewa.",
       "farDay": "{day} iko mbali na leo. Kama ni sahihi, bonyeza Hifadhi tena.",
       "save": "Hifadhi",
       "cancel": "Ghairi"
@@ -428,16 +430,19 @@
       "title": "Mfanyakazi",
       "noWorker": "Hakuna mfanyakazi aliyechaguliwa. Rudi kwenye orodha ya wafanyakazi.",
       "noJobTitle": "Hakuna",
+      "noPhone": "Hakuna",
       "status": "Hali",
       "lastDay": "Siku ya mwisho",
       "roles": "Cheo",
       "extraKeys": "Ruhusa za ziada"
     },
     "actions": {
+      "edit": "Badilisha",
       "suspend": "Simamisha",
       "unsuspend": "Rudisha",
       "leave": "Ameondoka",
       "title": {
+        "edit": "Badilisha taarifa za {name}",
         "suspend": "Simamisha {name}",
         "unsuspend": "Mrudishe {name} kazini",
         "leave": "{name} ameondoka kazini"
@@ -448,7 +453,10 @@
       "lastDayHint": "Siku yake ya mwisho kazini. Haiwezi kuwa siku ijayo.",
       "save": "Hifadhi",
       "cancel": "Ghairi",
+      "nothingChanged": "Hukubadilisha chochote.",
+      "changedMeanwhile": "Mtu mwingine amebadilisha taarifa za {name} kabla yako. Hizi ndizo taarifa zake sasa: jaribu tena kama bado kuna cha kurekebisha.",
       "done": {
+        "edit": "Taarifa za {name} zimehifadhiwa.",
         "suspend": "{name} amesimamishwa.",
         "unsuspend": "{name} amerudishwa kazini.",
         "leave": "{name} ameondoka. Siku yake ya mwisho ni {day}."

@@ -1,6 +1,6 @@
-// format.ts — money, stock, times of day and dates as people read them: "TSh 41,000", "mifuko 26 + kilo 35.5",
-// "07:55" and "13/11/2026" (03 §7.4). A rule's own values too (SHOP-5): an amount written exactly as saved, a
-// day with no time, "2026-12-01", and the part of the day of a clock time, "07:35".
+// format.ts — money, stock, times of day, dates and phones as people read them: "TSh 41,000", "mifuko 26 + kilo
+// 35.5", "07:55", "13/11/2026" and "0712 345 678" (03 §7.4). A rule's own values too (SHOP-5): an amount written
+// exactly as saved, a day with no time, "2026-12-01", and the part of the day of a clock time, "07:35".
 //
 // Every screen and slip writes numbers through here, so 41000 never shows as "41000.00" on one screen
 // and "TSh 41,000" on another. Writing never rounds: a value that would need rounding is refused, so
@@ -209,4 +209,15 @@ function partOfHour(hour: number): DayPart {
   if (hour >= 12 && hour < 16) return "afternoon";
   if (hour >= 16 && hour < 19) return "evening";
   return "night";
+}
+
+/**
+ * A phone as the shop writes and says it: "+255712345678", the one form the server stores (apps/core/phones.py), is
+ * "0712 345 678" on screen, the way the owner typed it in and the way a worker reads their own number back (PPL-10).
+ * The server takes it back in that form too, as it cleans whatever was typed. A number of another country keeps its
+ * stored form, its country code with it, as the leading 0 is Tanzania's own.
+ */
+export function formatPhone(phone: string): string {
+  const tanzanian = /^\+255(\d{3})(\d{3})(\d{3})$/.exec(phone);
+  return tanzanian ? `0${tanzanian[1]} ${tanzanian[2]} ${tanzanian[3]}` : phone;
 }

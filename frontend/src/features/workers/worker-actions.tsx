@@ -1,12 +1,14 @@
-// worker-actions.tsx — Simamisha, Rudisha and Ameondoka on a worker's own page (PPL-6, PPL-4): the owner stops a
-// worker for a while, brings them back, or records their last day, each with a reason, which the audit trail keeps
-// with who and when (rule 7).
+// worker-actions.tsx — Badilisha, Simamisha, Rudisha and Ameondoka on a worker's own page (PPL-10, PPL-6, PPL-4): the
+// owner fixes a worker's details, stops a worker for a while, brings them back, or records their last day, each with a
+// reason, which the audit trail keeps with who and when (rule 7).
 //
-// The worker's status decides which show: working, Simamisha and Ameondoka; suspended, Rudisha and Ameondoka; left,
-// none, as leaving is for good (a worker hired again comes back through Ongeza, PPL-11's row). On one's own page there
+// The worker's status decides which show: working, Badilisha, Simamisha and Ameondoka; suspended, Badilisha, Rudisha
+// and Ameondoka; left, none, as leaving is for good and a job that ended keeps what it said then (a worker hired again comes back through Ongeza, PPL-11's row). On one's own page there
 // is no button, and one line says why, in staff.own's sentence: nobody changes their own job (PPL-4).
 //
-// Each button opens its form in place of the buttons: Sababu, and for Ameondoka the last day, which starts at the
+// Badilisha opens its own form (worker-details-form.tsx) in place of the worker's details: the page hides them while it
+// is open (onEditing), as the same details are then in its boxes. The other buttons open their form in place of the
+// buttons: Sababu, and for Ameondoka the last day, which starts at the
 // shop's today and offers nothing after it (staff.left_in_future) nor before the first day (staff.left_before_start).
 // What the form can see is said at once, beside its box, and nothing is sent. The server's own refusals of who may
 // (staff.own, staff.more_keys, staff.superuser_only, demo.people_fixed…) show above the buttons; the three that say
@@ -37,14 +39,17 @@ import { formatDay } from "@/lib/format";
 import { useOnline } from "@/offline/network";
 import { shopToday } from "@/offline/rules";
 
+import { DetailsForm } from "./worker-details-form";
 import { keepWorker, type Worker, WORKERS } from "./workers";
 
-type Action = "suspend" | "unsuspend" | "leave";
+type Action = "edit" | "suspend" | "unsuspend" | "leave";
+/** The three that change a worker's status, each with its own route. */
+type StatusAction = Exclude<Action, "edit">;
 
-/** The buttons each status offers, in their order on the page. */
+/** The buttons each status offers, in their order on the page: the fix first, as the mildest. */
 const OFFERED: Record<Worker["status"], Action[]> = {
-  active: ["suspend", "leave"],
-  suspended: ["unsuspend", "leave"],
+  active: ["edit", "suspend", "leave"],
+  suspended: ["edit", "unsuspend", "leave"],
   left: [],
 };
 
@@ -69,9 +74,15 @@ type Checks = { reason?: string; left_on?: string };
 export function WorkerActions({
   worker,
   me,
+  demo = false,
+  onEditing,
 }: {
   worker: Worker;
   me: WhoIsHere;
+  /** This is the demo, where no worker gets a phone (worker-details-form.tsx). */
+  demo?: boolean;
+  /** Badilisha's form opened (true) or closed (false): the page hides the details while it is open. */
+  onEditing?: (editing: boolean) => void;
 }) {
   const t = useTranslations("workers.actions");
   const codes = useCodeWords();
@@ -93,15 +104,31 @@ export function WorkerActions({
     if (backTo.to === "news") newsLine.current?.focus();
     else buttons.current.get(backTo.to)?.focus();
   }, [backTo]);
+  // Gone from the page with Badilisha's form open, as at a new read's wait: the page shows the details again.
+  useEffect(() => () => onEditing?.(false), [onEditing]);
+
+  /** A form opens, or (null) closes: the page learns whether Badilisha's is the one open. */
+  function show(form: { action: Action; today: string } | null) {
+    setOpen(form);
+    onEditing?.(form?.action === "edit");
+  }
 
   // Nobody changes their own job (PPL-4): no button, and the server's own sentence says why.
   if (worker.id === me.staff.id)
     return <p>{codeMessage(codes, "staff.own")}</p>;
 
   function said(sentence: string) {
-    setOpen(null);
+    show(null);
     setNews(sentence);
     setBackTo({ to: "news" });
+  }
+
+  function cancelled(action: Action) {
+    setBackTo({ to: action });
+    show(null);
+    // Asked again: a send whose answer was lost may have changed the worker, and the page would go on showing
+    // Simamisha for a worker the server suspended (PPL-6's review), as Ongeza's Ghairi asks the list again.
+    void store.invalidateQueries({ queryKey: WORKERS });
   }
 
   return (
@@ -117,7 +144,20 @@ export function WorkerActions({
           {news ? <AlertDescription>{news}</AlertDescription> : null}
         </Alert>
       </div>
-      {open !== null ? (
+      {open?.action === "edit" ? (
+        <DetailsForm
+          worker={worker}
+          today={open.today}
+          demo={demo}
+          // The worker as the server answered: their nickname as it is now.
+          onDone={(changed) =>
+            said(t("done.edit", { name: changed.display_name }))
+          }
+          onNothingChanged={() => said(t("nothingChanged"))}
+          onChangedMeanwhile={said}
+          onCancel={() => cancelled("edit")}
+        />
+      ) : open !== null ? (
         <ActionForm
           action={open.action}
           worker={worker}
@@ -132,13 +172,7 @@ export function WorkerActions({
             )
           }
           onChangedMeanwhile={said}
-          onCancel={() => {
-            setBackTo({ to: open.action });
-            setOpen(null);
-            // Asked again: a send whose answer was lost may have changed the worker, and the page would go on showing
-            // Simamisha for a worker the server suspended (PPL-6's review), as Ongeza's Ghairi asks the list again.
-            void store.invalidateQueries({ queryKey: WORKERS });
-          }}
+          onCancel={() => cancelled(open.action)}
         />
       ) : OFFERED[worker.status].length > 0 ? (
         <div className="flex flex-wrap gap-3">
@@ -155,7 +189,7 @@ export function WorkerActions({
               onClick={() => {
                 setNews(null);
                 // The shop's today, read as the form opens: a page left open overnight starts on the new day.
-                setOpen({
+                show({
                   action,
                   today: shopToday(me.shop.timezone, Date.now()),
                 });
@@ -178,7 +212,7 @@ function ActionForm({
   onChangedMeanwhile,
   onCancel,
 }: {
-  action: Action;
+  action: StatusAction;
   worker: Worker;
   /** The shop's today: where the last day starts, and the latest it may be. */
   today: string;
