@@ -3,14 +3,16 @@ calls (PPL-4; 03 §5.10). What may and may not be done is the services'; these t
 
     GET   /api/v1/people/staff/        every worker the shop has had, those who left included
     GET   /api/v1/people/staff/{id}/   one worker
-    POST  /api/v1/people/staff/        a new worker: the person and their job in one step, with the app's own id
+    POST  /api/v1/people/staff/        a new worker: the person and their job in one step, with the app's own id;
+                                       or, with `hire_again`, a new job for a worker who left (PPL-11)
     PATCH /api/v1/people/staff/{id}/   fix their details, from the version the page read, with a reason (PPL-10)
     POST  /api/v1/people/staff/{id}/suspend/     stop a worker for a while, with a reason
     POST  /api/v1/people/staff/{id}/unsuspend/   bring them back, with a reason
     POST  /api/v1/people/staff/{id}/leave/       record their last day, with a reason
 
 Each worker comes with their full name, phone, nickname, job title, first day, status and leaving day, each role and
-extra key they were given, with its side (none: every side), and the version a fix sends back. Only for whoever
+extra key they were given, with its side (none: every side), the version a fix sends back, and, for a job that ended,
+the job the person came back as, once they are hired again (PPL-11). Only for whoever
 holds staff.manage on the whole shop (PPL-4's card): the page shows roles, and later pay (WAGE-2).
 
     shop     side          who          what they were given
@@ -143,6 +145,8 @@ def test_the_owner_lists_every_worker_the_shop_has_had(
         "switched_off": False,
         # The job's version, which a fix sends back: nobody has fixed her yet.
         "version": 1,
+        # Only a job that ended can have been come back from.
+        "hired_again_as": None,
         # A copied role's name is empty: the page shows its template's, translated (02 §5).
         "roles": [
             {
@@ -383,6 +387,153 @@ def test_the_service_asks_the_key_again(shop_a: Shop, sides: dict[str, Side], gi
         add_worker(shop=shop_a, full_name="Juma Hamisi Mfano", display_name="Juma", by=manager)
 
     assert not User.objects.filter(full_name="Juma Hamisi Mfano").exists()
+
+
+# --- A phone on Ongeza, and a worker who comes back (PPL-11)
+
+
+def test_the_owner_adds_a_worker_with_a_phone(baba: StaffMember) -> None:
+    body = client_for(baba).post(STAFF, new_worker(phone="0754 000 111")).json()
+
+    assert body["phone"] == "+255754000111"
+
+
+def test_the_phone_of_a_worker_who_left_names_him(shop_a: Shop, baba: StaffMember, juma: StaffMember) -> None:
+    # Baba types Juma's phone on Ongeza, forgetting he worked here: nobody is made, and the answer names Juma's old job,
+    # his full name and his last day, so the page offers Mwajiri tena. Never the phone.
+    User.objects.filter(pk=juma.user_id).update(phone="+255754000111")
+
+    refused = client_for(baba).post(STAFF, new_worker(phone="0754 000 111"))
+
+    assert refused.status_code == 400
+    body = refused.json()
+    assert (body["code"], body["params"]) == (
+        "staff.left_here",
+        {"staff": str(juma.pk), "full_name": "Juma Mfano", "left_on": "2026-09-30"},
+    )
+    assert "+255754000111" not in refused.content.decode()
+    assert [job.pk for job in jobs_named(shop_a, "Juma")] == [juma.pk]
+
+
+def test_a_phone_in_use_says_only_that(baba: StaffMember, staff_b: StaffMember) -> None:
+    # Shop B's worker's phone: in use, and nothing of whose, or where.
+    User.objects.filter(pk=staff_b.user_id).update(phone="+255754000111")
+
+    refused = client_for(baba).post(STAFF, new_worker(phone="0754 000 111"))
+
+    assert refused.status_code == 400
+    assert (refused.json()["fields"], refused.json()["params"]) == ({"phone": ["unique"]}, {})
+    assert "Staff Demo B" not in refused.content.decode()
+
+
+def hire_again(old: StaffMember, **changes: object) -> dict[str, object]:
+    # Mwajiri tena, as the page sends it: the old job's id, and the new job's own id, nickname, title and first day.
+    return {
+        "id": str(uuid.uuid7()),
+        "hire_again": str(old.pk),
+        "display_name": "Juma",
+        "job_title": "Mpima pumba",
+        "started_on": "2026-11-16",
+        **changes,
+    }
+
+
+def test_the_owner_hires_a_worker_again(shop_a: Shop, baba: StaffMember, juma: StaffMember) -> None:
+    sent = hire_again(juma)
+
+    answer = client_for(baba).post(STAFF, sent)
+
+    assert answer.status_code == 201
+    body = answer.json()
+    assert {key: body[key] for key in ("id", "full_name", "display_name", "started_on", "status", "left_on")} == {
+        "id": sent["id"],
+        "full_name": "Juma Mfano",
+        "display_name": "Juma",
+        "started_on": "2026-11-16",
+        "status": "active",
+        "left_on": None,
+    }
+    # The same person, with two jobs: the old one as it was.
+    old, new = sorted(jobs_named(shop_a, "Juma"), key=lambda job: job.started_on)
+    assert (old.pk, old.status, str(new.pk), new.user_id) == (juma.pk, "left", sent["id"], juma.user_id)
+    assert new.created_by_id == baba.pk
+
+
+def test_a_hire_again_sent_twice_is_one_job(shop_a: Shop, baba: StaffMember, juma: StaffMember) -> None:
+    # The answer was lost and the page sends again: the same id, so the same job, not "works here already".
+    sent = hire_again(juma)
+    owner = client_for(baba)
+
+    first = owner.post(STAFF, sent)
+    again = owner.post(STAFF, sent)
+
+    assert (first.status_code, again.status_code) == (201, 201)
+    assert again.json() == first.json()
+    assert len(jobs_named(shop_a, "Juma")) == 2
+
+
+def test_another_shops_job_is_not_found_for_a_hire_again(baba: StaffMember, staff_b: StaffMember) -> None:
+    refused = client_for(baba).post(STAFF, hire_again(staff_b))
+
+    assert refused.status_code == 400
+    assert refused.json()["fields"] == {"hire_again": ["does_not_exist"]}
+
+
+def test_a_hire_agains_refusals_reach_the_page(baba: StaffMember, asha: StaffMember, juma: StaffMember) -> None:
+    owner = client_for(baba)
+
+    assert owner.post(STAFF, hire_again(asha, display_name="Asha")).json()["code"] == "staff.not_left"
+    before = owner.post(STAFF, hire_again(juma, started_on="2026-09-29"))
+    assert before.json()["fields"] == {"started_on": ["staff.back_before_left"]}
+
+
+def test_a_full_name_is_needed_only_for_a_new_person(baba: StaffMember) -> None:
+    # A worker hired again keeps his own (Badilisha fixes it); a new one needs one.
+    sent = new_worker()
+    del sent["full_name"]
+
+    refused = client_for(baba).post(STAFF, sent)
+
+    assert refused.status_code == 400
+    assert refused.json()["fields"] == {"full_name": ["required"]}
+
+
+def test_hiring_again_needs_staff_manage(shop_a: Shop, asha: StaffMember, juma: StaffMember) -> None:
+    refused = client_for(asha).post(STAFF, hire_again(juma))
+
+    assert refused.status_code == 403
+    assert len(jobs_named(shop_a, "Juma")) == 1
+
+
+def test_the_old_job_says_who_he_came_back_as(baba: StaffMember, juma: StaffMember) -> None:
+    # Once he is back, his old job's page links to the new one, in place of Mwajiri tena (Jack: A, the old job stays
+    # under Walioondoka).
+    owner = client_for(baba)
+    assert owner.get(one(juma)).json()["hired_again_as"] is None
+
+    new = owner.post(STAFF, hire_again(juma)).json()
+
+    assert owner.get(one(juma)).json()["hired_again_as"] == new["id"]
+    rows = {row["id"]: row for row in owner.get(STAFF).json()["results"]}
+    assert (rows[str(juma.pk)]["hired_again_as"], rows[new["id"]]["hired_again_as"]) == (new["id"], None)
+
+
+def test_the_list_reads_who_came_back_in_the_same_few_queries(
+    shop_a: Shop, baba: StaffMember, juma: StaffMember
+) -> None:
+    # Who came back is read for the whole page at once, as the roles are: thirty workers who left ask as often as one.
+    owner = client_for(baba)
+    with CaptureQueriesContext(connection) as one_left:
+        owner.get(STAFF)
+    for number in range(3):
+        worker = job(shop_a, f"Mfanyakazi {number} Mfano", f"Mfanyakazi {number}")
+        with shop_context(shop_a):
+            mark_left(worker, left_on=date(2026, 9, 30), by=None, reason="Amehamia Moshi")
+    with CaptureQueriesContext(connection) as four_left:
+        answer = owner.get(STAFF)
+
+    assert len(answer.json()["results"]) == 5
+    assert len(four_left.captured_queries) == len(one_left.captured_queries)
 
 
 # --- Suspending, bringing back, marking left

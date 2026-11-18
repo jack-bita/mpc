@@ -45,7 +45,7 @@ export function role(
 }
 
 /** A worker as the list answers them: Juma, working since 2 Nov 2026 with no role and no phone yet, never fixed
- * since he was added (version 1), unless told otherwise. Each its own id. */
+ * since he was added (version 1), and never come back from, unless told otherwise. Each its own id. */
 export function worker(fields: Partial<Worker> = {}): Worker {
   made += 1;
   return {
@@ -61,6 +61,7 @@ export function worker(fields: Partial<Worker> = {}): Worker {
     roles: [],
     keys: [],
     version: 1,
+    hired_again_as: null,
     ...fields,
   };
 }

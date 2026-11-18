@@ -742,7 +742,12 @@
       "not_active": "This worker is already suspended.",
       "not_suspended": "This worker isn't suspended.",
       "left_in_future": "The last day can't be in the future.",
-      "left_before_start": "The last day is before the day they started."
+      "left_before_start": "The last day is before the day they started.",
+      "not_left": "This worker hasn't left.",
+      "already_member": "This person already works here.",
+      "works_elsewhere": "This person works at another shop now, so they can't be hired here again yet.",
+      "back_before_left": "The first day can't be before the last day of their previous job.",
+      "left_here": "This phone belongs to a worker who left here. Hire them again from their page."
     },
     "password": {
       "must_change": "Choose your own password before you go on.",

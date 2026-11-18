@@ -34,7 +34,8 @@ every visit (AUTH-4):
 
 And the device health page's read (SYNC-14, 03 §5.17): each laptop's offline periods of the last week, as it reported
 them (outages_this_week). And the workers' page's (PPL-4): every role and extra key each worker was given, for a whole
-page of workers at once (given_to).
+page of workers at once (given_to); and the job each person who left came back as, once hired again (PPL-11,
+current_jobs_of).
 """
 
 import uuid
@@ -307,6 +308,15 @@ def given_to(staff_ids: Collection[uuid.UUID]) -> dict[uuid.UUID, Given]:
     for row_id, staff_id, permission, side_id in grants.values_list("id", "staff_id", "permission", "side_id"):
         keys[staff_id].append(GivenKey(id=row_id, permission=permission, side=side_id))
     return {staff_id: Given(roles=roles[staff_id], keys=keys[staff_id]) for staff_id in staff_ids}
+
+
+def current_jobs_of(person_ids: Collection[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+    """Each of these people's current job at the open shop, one that isn't `left`, by person: what a job that ended
+    links to once its person is hired again (PPL-11). One query however many, as the workers' page lists them all at
+    once; a person with none is left out. Through the guarded manager, so only the open shop's jobs; one current job
+    per person per shop is a database rule (people_staffmember_one_current_job), so a person comes once."""
+    current = StaffMember.objects.filter(user_id__in=person_ids).exclude(status=StaffStatus.LEFT)
+    return dict(current.values_list("user_id", "id"))
 
 
 # How far back the health page looks for offline periods (SYNC-14): a week, as the card says, counted back from now
