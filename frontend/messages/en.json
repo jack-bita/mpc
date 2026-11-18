@@ -434,6 +434,27 @@
       "roles": "Role",
       "extraKeys": "Extra permissions"
     },
+    "actions": {
+      "suspend": "Suspend",
+      "unsuspend": "Bring back",
+      "leave": "Mark as left",
+      "title": {
+        "suspend": "Suspend {name}",
+        "unsuspend": "Bring {name} back to work",
+        "leave": "{name} left work"
+      },
+      "reason": "Reason",
+      "reasonHint": "Kept with your name and the time.",
+      "lastDay": "Last day",
+      "lastDayHint": "Their last day at work. It can't be a day ahead.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "done": {
+        "suspend": "{name} is suspended.",
+        "unsuspend": "{name} is back at work.",
+        "leave": "{name} has left. Their last day was {day}."
+      }
+    },
     "roles": {
       "owner": "Owner",
       "manager": "Manager",

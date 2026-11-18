@@ -434,6 +434,27 @@
       "roles": "Cheo",
       "extraKeys": "Ruhusa za ziada"
     },
+    "actions": {
+      "suspend": "Simamisha",
+      "unsuspend": "Rudisha",
+      "leave": "Ameondoka",
+      "title": {
+        "suspend": "Simamisha {name}",
+        "unsuspend": "Mrudishe {name} kazini",
+        "leave": "{name} ameondoka kazini"
+      },
+      "reason": "Sababu",
+      "reasonHint": "Itahifadhiwa pamoja na jina lako na muda.",
+      "lastDay": "Siku ya mwisho",
+      "lastDayHint": "Siku yake ya mwisho kazini. Haiwezi kuwa siku ijayo.",
+      "save": "Hifadhi",
+      "cancel": "Ghairi",
+      "done": {
+        "suspend": "{name} amesimamishwa.",
+        "unsuspend": "{name} amerudishwa kazini.",
+        "leave": "{name} ameondoka. Siku yake ya mwisho ni {day}."
+      }
+    },
     "roles": {
       "owner": "Mmiliki",
       "manager": "Meneja",

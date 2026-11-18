@@ -1,5 +1,5 @@
 // worker-page.tsx — one worker's own page, opened by tapping their name on Wafanyakazi (PPL-6): everything of theirs,
-// and, from the next step, the buttons that change them.
+// and under it the buttons that change them (worker-actions.tsx).
 //
 // As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Their full name, nickname, job
 // title and first day; their status, and their last day once they left; each role with its side; the keys given apart
@@ -23,6 +23,7 @@ import { PageHeader } from "@/components/design/page-header";
 import { useWhoIsHere, type WhoIsHere } from "@/features/people/who-is-here";
 import { formatDay } from "@/lib/format";
 
+import { WorkerActions } from "./worker-actions";
 import { useRoleWords, useWorker, type Worker } from "./workers";
 
 /** Where the back arrow leads when the person didn't come from inside the app. */
@@ -57,7 +58,11 @@ export function WorkerScreen({ id }: { id: string | null }) {
           why: a part that mounts on a failed read asks again, round and round). */}
       {who.data && !waiting ? <ApiErrorAlert error={worker.error} /> : null}
       {who.data && worker.data && !waiting ? (
-        <WorkerDetails worker={worker.data} me={who.data} />
+        <>
+          <WorkerDetails worker={worker.data} me={who.data} />
+          {/* Simamisha, Rudisha and Ameondoka, as the worker's status allows (worker-actions.tsx). */}
+          <WorkerActions worker={worker.data} me={who.data} />
+        </>
       ) : null}
     </div>
   );
