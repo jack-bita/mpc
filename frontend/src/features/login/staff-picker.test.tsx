@@ -255,7 +255,7 @@ describe("the staff picker", () => {
     expect((await tiles()).map((tile) => tile.textContent)).toEqual([
       "Asha Mfano Asha",
     ]);
-    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByRole("link", { name: /Neema/ })).toBeNull();
   });
 
   it("gives a suspended manager no tile, his login kept or not", async () => {
@@ -267,7 +267,50 @@ describe("the staff picker", () => {
     expect((await tiles()).map((tile) => tile.textContent)).toEqual([
       "Asha Mfano Asha",
     ]);
-    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByRole("link", { name: /Neema/ })).toBeNull();
+  });
+
+  it("offers the password button under a real shop's tiles", async () => {
+    // Baba, the owner, has a password and no PIN, so no tile: the button is his way in at the laptop (Jack,
+    // 8 Nov 2026, at UI-5's review).
+    await theLaptopKnows(ASHA, JUMA);
+    render(<StaffPicker onPick={vi.fn()} />);
+
+    const link = await screen.findByRole("link", {
+      name: "Ingia kwa nenosiri",
+    });
+    // The end slash comes from next.config.ts (trailingSlash), which a test doesn't read.
+    expect(link.getAttribute("href")).toMatch(/^\/login\/?$/);
+  });
+
+  it("offers it before the first sync, and on a shop with nobody yet", async () => {
+    // No tile at all yet: the owner still gets in, to add the staff.
+    const { unmount } = render(<StaffPicker onPick={vi.fn()} />);
+    expect(
+      await screen.findByRole("link", { name: "Ingia kwa nenosiri" }),
+    ).toBeDefined();
+    unmount();
+
+    await theLaptopKnows();
+    render(<StaffPicker onPick={vi.fn()} />);
+    expect(
+      await screen.findByRole("link", { name: "Ingia kwa nenosiri" }),
+    ).toBeDefined();
+  });
+
+  it("offers no password button on the demo, where the manager's tile does its job", async () => {
+    // Asha and Baraka have PINs, and Meneja his own tile: a second way to the same page would only make a
+    // visitor wonder which to take (Jack, OPS-13).
+    saveLogins([MENEJA_LOGIN]);
+    await theLaptopKnows(ASHA, MENEJA);
+    render(<StaffPicker onPick={vi.fn()} />);
+
+    await screen.findByRole("link", {
+      name: "Neema Mfano Neema Ingia kwa nenosiri",
+    });
+    expect(
+      screen.queryByRole("link", { name: "Ingia kwa nenosiri" }),
+    ).toBeNull();
   });
 
   it("speaks English on the demo manager's tile", async () => {

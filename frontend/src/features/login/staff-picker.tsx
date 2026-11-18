@@ -15,7 +15,12 @@
 // password login, never the PIN pad, which can't let in someone with no PIN: `/login/?as=<his id>`, whose
 // page starts with both boxes filled (password-login.tsx). A real shop's laptop keeps no demo login, so
 // there an owner or manager with no PIN still has no tile, and logs in by the password button under the
-// tiles (at-the-device.tsx).
+// tiles.
+//
+// That button, *Ingia kwa nenosiri* to `/login/`, is here, under the tiles, and only here: never under the
+// PIN pad, where the person picked logs in with their PIN (Jack, OPS-13). Not on the demo either, where the
+// manager's own tile does its job: two ways to one page would only make a visitor wonder. On a real shop
+// it stays, before the first sync and on a shop with nobody yet too, as the owner's way in to add them.
 //
 // A tile shows the full name in large letters with the nickname under it, until photos come (PPL-9; 02 §5).
 // On the demo, a seller's tile shows their PIN too, as Jaribu demo handed it over (OPS-3, demo-pins.ts):
@@ -147,6 +152,16 @@ export function StaffPicker({
             </li>
           ))}
         </ul>
+      )}
+      {people !== undefined && !people?.some(opensThePassword) && (
+        // The second kind, under the tiles, which are what the counter is for (Jack, 8 Nov 2026, at
+        // UI-5's review). A seller who taps it still needs a password. Not while the first read runs, so
+        // the demo's never flashes before the manager's tile comes.
+        <div>
+          <ButtonLink href="/login/" kind="second" size="normal">
+            {words("withPassword")}
+          </ButtonLink>
+        </div>
       )}
     </div>
   );

@@ -392,14 +392,8 @@ export function AtTheDevice({
             serverAway={noAnswer || logoutWaits}
             onOffline={arrivedOffline}
           />
-          {/* The way in for someone with a password and no PIN, as the owner may be: the password login
-              (/login/). The second kind, under the tiles, which are what the counter is for (Jack,
-              8 Nov 2026, at UI-5's review). A seller who taps it still needs a password. */}
-          <div>
-            <ButtonLink href="/login/" kind="second" size="normal">
-              {t("withPassword")}
-            </ButtonLink>
-          </div>
+          {/* The way in by password, for someone with a password and no PIN, sits under the tiles
+              themselves (staff-picker.tsx), never under the PIN pad (OPS-13). */}
         </>
       );
     // Nothing while `me` is on its way; the reason once it failed for another reason, a bug.
