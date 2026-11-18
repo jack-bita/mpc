@@ -104,6 +104,29 @@ def test_nickname_taken_in_shop_refused(asha: User, other_asha: User, shop_a: Sh
     assert [error.code for error in refused.value.error_dict["__all__"]] == ["staff.display_name_taken"]
 
 
+@pytest.mark.django_db(transaction=True)
+def test_a_nickname_taken_at_the_same_moment_answers_as_taken(asha: User, other_asha: User, shop_a: Shop) -> None:
+    # PPL-11's review: Meneja adds Asha as "Asha" while Baba adds, or hires again, the other Asha as "Asha", in the same
+    # second. Each check passes, as neither sees the other's save, not yet committed; the database's unique rule waits
+    # for the first and refuses the second. The second hears the nickname is taken, not a server error.
+    def the_second_add() -> object:
+        with shop_context(shop_a):
+            return add_staff(shop=shop_a, user=other_asha, display_name="Asha", by=None)
+
+    with shop_context(shop_a), transaction.atomic():
+        add_staff(shop=shop_a, user=asha, display_name="Asha", by=None)
+        other, ended = in_another_transaction(the_second_add)
+        wait_until_someone_waits_for_me()
+    other.join(timeout=5)
+    assert not other.is_alive(), "The second add still waits after the first committed."
+
+    refused = ended[0]
+    assert isinstance(refused, ValidationError)
+    assert [error.code for error in refused.error_dict["__all__"]] == ["staff.display_name_taken"]
+    with shop_context(shop_a):
+        assert not StaffMember.objects.filter(user=other_asha).exists()
+
+
 def test_nickname_free_in_another_shop_and_after_leaving(
     asha: User, other_asha: User, shop_a: Shop, shop_b: Shop
 ) -> None:

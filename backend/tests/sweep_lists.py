@@ -47,7 +47,7 @@ INFRASTRUCTURE = {
 # every office route shares, reads only the caller's own job and its shop, and for a PIN's session the device that
 # holds the key, each inside the shop its login door names, to refuse them if they may not act; whose save reads only
 # the caller's own jobs and writes their staff line in each of their shops' change logs, each inside the shop the
-# person's door names (SYNC-15, ADR-0042); and whose answer its own test proves holds nothing of a shop's.
+# person's door names (SYNC-15, ADR-0045); and whose answer its own test proves holds nothing of a shop's.
 NOT_SHOP_ROUTES: set[type] = {
     # The uptime check: no login, and no table at all (apps/core/api/views.py).
     HealthView,
@@ -107,11 +107,12 @@ HAND_BUILT_QUERIES = {
     # A route's description for the API's schema is made with no visit, so with no shop open: the route's rows
     # come from an empty query (.none()), which reads no row at all (CORE-6).
     "apps/core/api/base.py": "an empty query, .none(), for the API's description",
-    # A login must find the visit's shop before any is open, and a change to a person every shop where they work
-    # (SYNC-15): each door there reads only shops' ids, by what the request brings (a device's key's hash, a person's
-    # id), and the device or the job is then read through the guard, inside each shop. A test pins that each door reads
-    # shops' ids alone (Jack, AUTH-2, AUTH-3; ADR-0042; 03 §5.4).
-    "apps/people/login_doors.py": "the doors (ADR-0042): shops' ids of a key's device or a person's jobs, no more",
+    # A login must find the visit's shop before any is open, a change to a person every shop where they work
+    # (SYNC-15), and a hire again whether the person works at another shop (PPL-11): each door there reads only shops'
+    # ids, by what the request brings (a device's key's hash, a person's id), and the device or the job is then read
+    # through the guard, inside each shop. A test pins that each door reads shops' ids alone (Jack, AUTH-2, AUTH-3;
+    # ADR-0045; 03 §5.4).
+    "apps/people/login_doors.py": "the doors (ADR-0045): shops' ids of a key's device or a person's jobs, no more",
 }
 
 # App files that may run SQL by hand, `connection.cursor()` or `.raw()`, besides migrations, system jobs and tests,

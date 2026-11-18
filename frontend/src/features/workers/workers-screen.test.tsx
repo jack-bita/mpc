@@ -158,6 +158,39 @@ describe("the workers' page", () => {
     expect(within(gone).getByText("Ameondoka")).toBeTruthy();
   });
 
+  it("shows a worker hired again with those working, and his old job still under Walioondoka (PPL-11, Jack: A)", async () => {
+    // Baraka left on 12 Mar and came back: his new job is at the top, newest first, and the old one stays as the
+    // history it is, each linking to its own page.
+    const back = worker({ display_name: "Baraka", full_name: "Baraka Mfano" });
+    const old = worker({
+      display_name: "Baraka",
+      full_name: "Baraka Mfano",
+      started_on: "2025-01-02",
+      status: "left",
+      left_on: "2026-03-12",
+      hired_again_as: back.id,
+    });
+    theShopHas([back, old]);
+
+    render(<WorkersScreen />);
+
+    const [here] = await rowsHere();
+    const gone = screen.getByRole("region", { name: "Walioondoka" });
+    const now = within(here!).getByRole("link", {
+      name: "Baraka · Baraka Mfano",
+    });
+    const then = within(gone).getByRole("link", {
+      name: "Baraka · Baraka Mfano",
+    });
+    // The app is built with trailing slashes; Next.js's Link in a test drops them (text-link.test.tsx).
+    expect(now.getAttribute("href")).toMatch(
+      new RegExp(`^/workers/view/?\\?id=${back.id}$`),
+    );
+    expect(then.getAttribute("href")).toMatch(
+      new RegExp(`^/workers/view/?\\?id=${old.id}$`),
+    );
+  });
+
   it("says nobody left, when nobody has", async () => {
     theShopHas([worker()]);
 
@@ -395,5 +428,25 @@ describe("Ongeza on the workers' page", () => {
 
     await screen.findByRole("alert");
     expect(screen.queryByRole("button", { name: "Ongeza" })).toBeNull();
+  });
+
+  it("keeps Simu off on the demo, and says why (PPL-10, PPL-11: no phone there)", async () => {
+    theShopHas([asha]);
+    answer("GET", "/api/devices/v1/demo/open/", {
+      status: 200,
+      body: { open: true },
+    });
+    render(<WorkersScreen />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Ongeza" }));
+
+    await waitFor(() =>
+      expect((screen.getByLabelText("Simu") as HTMLInputElement).disabled).toBe(
+        true,
+      ),
+    );
+    expect(
+      screen.getByText(/Kwenye demo, wafanyakazi hawawekewi namba/),
+    ).toBeTruthy();
   });
 });

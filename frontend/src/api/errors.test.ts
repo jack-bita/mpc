@@ -139,6 +139,14 @@ const CODES_THE_API_SENDS = [
   "staff.not_suspended",
   "staff.left_in_future",
   "staff.left_before_start",
+  // A worker who comes back (PPL-11): hired again from a job that hasn't ended, by someone back already, by someone
+  // working at another shop now, from before the last day; and Ongeza's phone of a worker who left, which the form
+  // shows in its own words, with Mwajiri tena.
+  "staff.not_left",
+  "staff.already_member",
+  "staff.works_elsewhere",
+  "staff.back_before_left",
+  "staff.left_here",
   // Devices and pairing (AUTH-5).
   "device.name_blank",
   "device.name_taken",

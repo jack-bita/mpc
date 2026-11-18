@@ -18,8 +18,8 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
-from apps.people.models import OWN_SETTINGS, Device, DeviceOutage, PairingRequest, StaffMember, User
-from apps.people.selectors import Given, given_to
+from apps.people.models import OWN_SETTINGS, Device, DeviceOutage, PairingRequest, StaffMember, StaffStatus, User
+from apps.people.selectors import Given, current_jobs_of, given_to
 from apps.shops.api.fields import SideField
 from apps.shops.models import Shop, Side, SideBand
 
@@ -160,8 +160,17 @@ class StaffListSerializer(serializers.ListSerializer[StaffMember]):
     def to_representation(self, data: Any) -> Any:
         rows = list(data.all() if isinstance(data, models.Manager | models.QuerySet) else data)
         # cast: DRF types the context as read-only, but it is the plain dict each answer starts with.
-        cast(dict[str, Any], self.context)["given"] = given_to([row.pk for row in rows])
+        context = cast(dict[str, Any], self.context)
+        context["given"] = given_to([row.pk for row in rows])
+        # And who came back, of those who left, in one query too (PPL-11).
+        context["back_as"] = _back_as([row.user_id for row in rows if row.status == StaffStatus.LEFT])
         return super().to_representation(rows)
+
+
+def _back_as(person_ids: list[Any]) -> dict[Any, Any]:
+    # Each person's current job here, None for one who hasn't come back: every person asked is in the answer, so the
+    # serializer reads nobody twice.
+    return dict.fromkeys(person_ids) | current_jobs_of(person_ids)
 
 
 class StaffSerializer(serializers.ModelSerializer[StaffMember]):
@@ -179,6 +188,9 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
     switched_off = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
     keys = serializers.SerializerMethodField()
+    # For a job that ended: the person's current job here, once they are hired again (PPL-11), so the old job's page
+    # links to the new one in place of Mwajiri tena; else null. A job not ended is no one's to come back from.
+    hired_again_as = serializers.SerializerMethodField()
 
     class Meta:
         model = StaffMember
@@ -195,6 +207,7 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
             "roles",
             "keys",
             "version",
+            "hired_again_as",
         ]
         read_only_fields = fields
         list_serializer_class = StaffListSerializer
@@ -217,16 +230,49 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
     def get_keys(self, staff: StaffMember) -> Any:
         return GivenKeySerializer(self._given(staff).keys, many=True).data
 
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_hired_again_as(self, staff: StaffMember) -> str | None:
+        if staff.status != StaffStatus.LEFT:
+            return None
+        # From the page's read, for a list; read here for one worker shown alone.
+        back: dict[Any, Any] = cast(dict[str, Any], self.context).setdefault("back_as", {})
+        if staff.user_id not in back:
+            back.update(_back_as([staff.user_id]))
+        job = back[staff.user_id]
+        return None if job is None else str(job)
+
+
+# Described as the id it is: on a plain serializer, the schema can't read the field's type from a model.
+@extend_schema_field(serializers.UUIDField())
+class StaffField(serializers.PrimaryKeyRelatedField[StaffMember]):
+    # A worker's job, sent by its id: one of the visit's shop, or "not found" (does_not_exist), so the answer never
+    # tells that another shop's job exists (03 §5.4). The workers belong to the whole shop (StaffViewSet.side_field), so
+    # no side keeps any from the person acting, who holds staff.manage on the whole shop.
+
+    def get_queryset(self) -> models.QuerySet[StaffMember]:
+        # Read on each visit, inside the visit's open shop, through the guard, as SideField's sides are
+        # (apps/shops/api/fields.py): named in the arguments, the jobs would be asked for while the module loads.
+        return StaffMember.objects.all()
+
 
 class StaffAddSerializer(serializers.Serializer[Any]):
     # What the workers' page sends to add a worker (PPL-4): the job's id, made on the phone (ADR-0007), the person's
-    # full name, and the job's nickname, job title and first day. Spaces at either end are taken off, so spaces alone
-    # are a blank name, refused beside its box. The lengths are the tables' own. add_worker checks the rest: a nickname
-    # another current worker has (staff.display_name_taken).
+    # full name and phone, and the job's nickname, job title and first day. Or, to hire again a worker who left
+    # (PPL-11), from Mwajiri tena or from Ongeza once a phone found them: their old job's id in `hire_again`, with the
+    # new job's id, nickname, job title and first day; the person keeps their own full name and phone, so any sent are
+    # left aside. Spaces at either end are taken off, so spaces alone are a blank name, refused beside its box. The
+    # lengths are the tables' own. add_worker and hire_again check the rest: a nickname another current worker has
+    # (staff.display_name_taken), a phone (phone.invalid, unique, staff.left_here), a hire again (staff.not_left,
+    # staff.already_member, staff.works_elsewhere, staff.back_before_left).
     # Required, and a UUIDv7: without an id of its own, a send repeated would look like a second Juma. No unique check
     # of the id here: the route looks it up itself, first and again after any refusal (CreateOnceMixin).
     id = serializers.UUIDField(validators=[uuid7_only])
-    full_name = serializers.CharField(max_length=User._meta.get_field("full_name").max_length)
+    hire_again = StaffField(required=False, allow_null=True, default=None)
+    # Required for a new person, which validate() asks, as a worker hired again keeps his own.
+    full_name = serializers.CharField(max_length=User._meta.get_field("full_name").max_length, required=False)
+    # May be empty or left out: no phone. Cleaned by the person's own field (apps/core/phones.py), so a wrong one is
+    # phone.invalid, not a length's code: the length is only a bound on what is read, as for a fix.
+    phone = serializers.CharField(max_length=32, allow_blank=True, required=False)
     display_name = serializers.CharField(max_length=StaffMember._meta.get_field("display_name").max_length)
     # May be empty: many workers have no title beyond their role.
     job_title = serializers.CharField(
@@ -234,6 +280,14 @@ class StaffAddSerializer(serializers.Serializer[Any]):
     )
     # Today, in the shop's time, if none is sent (add_staff).
     started_on = serializers.DateField(required=False, allow_null=True, default=None)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        # A new person needs a name, said beside its box as the box's own `required` would.
+        if attrs["hire_again"] is None and "full_name" not in attrs:
+            raise serializers.ValidationError(
+                {"full_name": [self.fields["full_name"].error_messages["required"]]}, code="required"
+            )
+        return attrs
 
 
 class StaffReasonSerializer(serializers.Serializer[Any]):

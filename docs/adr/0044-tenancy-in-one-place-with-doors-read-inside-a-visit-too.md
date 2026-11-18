@@ -1,10 +1,11 @@
 ---
-status: accepted
+status: superseded
 date: 2026-11-18
 source: "PPL-10's review, in the plan Jack approved on 18 Nov 2026; supersedes ADR-0042 (03 §2 — AD8, §5.4)"
 standing: decided
 cost-to-change: medium
 revisit: "before a second real shop goes live (R3): switch on row-level security, and settle who may change a person who works at two shops (AUTH-7)"
+superseded-by: ADR-0045
 ---
 
 # ADR-0044 · Tenancy is enforced in one place, with named doors for a login and a person's change, read inside a shop's visit too; row-level security comes later

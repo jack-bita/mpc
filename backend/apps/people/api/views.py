@@ -16,7 +16,8 @@ And a shop's workers, for whoever holds staff.manage on the whole shop (PPL-4), 
 
     GET   /api/v1/people/staff/                             every worker the shop has had, with what each was given
     GET   /api/v1/people/staff/{id}/                        one worker
-    POST  /api/v1/people/staff/                             a new worker: the person and the job, in one step
+    POST  /api/v1/people/staff/                             a new worker: the person and the job, in one step;
+                                                            or, with hire_again, a new job for one who left (PPL-11)
     PATCH /api/v1/people/staff/{id}/                        fix their details, with the version read and a reason
     POST  /api/v1/people/staff/{id}/suspend/                stop a worker for a while, with a reason
     POST  /api/v1/people/staff/{id}/unsuspend/              bring them back, with a reason
@@ -94,6 +95,7 @@ from apps.people.services import (
     change_own_settings,
     change_worker,
     confirm_pairing,
+    hire_again,
     mark_left,
     pin_login,
     rename_device,
@@ -204,9 +206,9 @@ class StaffViewSet(
 ):
     # A shop's people, as the workers' page shows them (PPL-4, PPL-6): every worker the shop has had, those who left
     # included, each with every role and extra key they were given; a new worker, made once however often the page
-    # sends him; a worker's details fixed, from the copy the page read, with a reason (PATCH, PPL-10); a worker
-    # suspended, brought back or marked left, each with a reason; and a first or forgotten password, set face to face
-    # (ADR-0038). PPL-7 and PPL-8 add the roles and the PIN.
+    # sends him, or a new job for one who left, hired again (PPL-11); a worker's details fixed, from the copy the page
+    # read, with a reason (PATCH, PPL-10); a worker suspended, brought back or marked left, each with a reason; and a
+    # first or forgotten password, set face to face (ADR-0038). PPL-7 and PPL-8 add the roles and the PIN.
     model = StaffMember
     # A person's job belongs to the whole shop, whichever side they work on: a password opens them on every side, and a
     # suspension stops them on every side. So each key is asked on the whole shop, where a key for Dawa alone opens
@@ -234,15 +236,27 @@ class StaffViewSet(
         return super().base_rows().select_related("user")
 
     def create_row(self, data: dict[str, Any]) -> StaffMember:
-        # The app's id goes to the service, so a send repeated finds the job the first one made (CreateOnceMixin).
+        # The app's id goes to the service, so a send repeated finds the job the first one made (CreateOnceMixin): a new
+        # worker, or a new job for one who left, hired again as the same person (PPL-11), found in this shop by the old
+        # job's id (StaffField). Who may is each service's too.
+        if data["hire_again"] is not None:
+            return hire_again(
+                data["hire_again"],
+                display_name=data["display_name"],
+                job_title=data["job_title"],
+                started_on=data["started_on"],
+                staff_id=data["id"],
+                by=self._acting(),
+            )
         return add_worker(
-            shop=cast(StaffMember, self.actor).shop,
+            shop=self._acting().shop,
             full_name=data["full_name"],
             display_name=data["display_name"],
             job_title=data["job_title"],
             started_on=data["started_on"],
+            phone=data.get("phone"),
             staff_id=data["id"],
-            by=cast(StaffMember, self.actor),
+            by=self._acting(),
         )
 
     def edit_row(self, row: StaffMember, data: dict[str, Any]) -> StaffMember:
@@ -272,7 +286,8 @@ class StaffViewSet(
     @extend_schema(request=StaffLeaveSerializer, responses=StaffSerializer)
     @action(detail=True, methods=["post"])
     def leave(self, request: Request, pk: str | None = None) -> Response:
-        # Final: a worker who comes back is added again, as a new job, and the old one keeps its history (02 §5).
+        # Final: a worker who comes back is hired again, as a new job (the add, with `hire_again`), and the old one
+        # keeps its history (02 §5).
         sent = self._reason(request, StaffLeaveSerializer)
         return self._answer(
             mark_left(self._worker(), left_on=sent["left_on"], by=self._acting(), reason=sent["reason"])

@@ -1232,11 +1232,16 @@ export interface components {
             readonly roles: components["schemas"]["GivenRole"][];
             readonly keys: components["schemas"]["GivenKey"][];
             readonly version: number;
+            /** Format: uuid */
+            readonly hired_again_as: string | null;
         };
         StaffAddRequest: {
             /** Format: uuid */
             id: string;
-            full_name: string;
+            /** Format: uuid */
+            hire_again?: string | null;
+            full_name?: string;
+            phone?: string;
             display_name: string;
             /** @default  */
             job_title: string;

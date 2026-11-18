@@ -1,11 +1,15 @@
-// worker-actions.tsx — Badilisha, Simamisha, Rudisha and Ameondoka on a worker's own page (PPL-10, PPL-6, PPL-4): the
-// owner fixes a worker's details, stops a worker for a while, brings them back, or records their last day, each with a
-// reason, which the audit trail keeps with who and when (rule 7).
+// worker-actions.tsx — Badilisha, Simamisha, Rudisha, Ameondoka and Mwajiri tena on a worker's own page (PPL-10, PPL-6,
+// PPL-4, PPL-11): the owner fixes a worker's details, stops a worker for a while, brings them back, or records their last
+// day, each with a reason, which the audit trail keeps with who and when (rule 7); or hires one who left again.
 //
 // The worker's status decides which show: working, Badilisha, Simamisha and Ameondoka; suspended, Badilisha, Rudisha
-// and Ameondoka; left, none, as leaving is for good and a job that ended keeps what it said then (a worker hired again
-// comes back through Ongeza, PPL-11's row). On one's own page there is no button, and one line says why, in staff.own's
-// sentence: nobody changes their own job or details (PPL-4, PPL-10).
+// and Ameondoka; left, Mwajiri tena alone, as leaving is for good and a job that ended keeps what it said then: the
+// person comes back with a new job (PPL-11). Once they are back, the old job's page says so, with a link to the new
+// one's, in place of the button (Jack: A, the old job stays under Walioondoka). On one's own page there is no button,
+// and one line says why, in staff.own's sentence: nobody changes their own job or details (PPL-4, PPL-10).
+//
+// Mwajiri tena opens Ongeza's own form (worker-form.tsx), its boxes filled from the old job, under the buttons' place;
+// saved, the page moves to the new job's page, where the person now works.
 //
 // Badilisha opens its own form (worker-details-form.tsx) in place of the worker's details: the page hides them while it
 // is open (onEditing), as the same details are then in its boxes. The other buttons open their form in place of the
@@ -23,6 +27,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
@@ -33,6 +38,7 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Alert, AlertDescription } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
 import { Field } from "@/components/design/field";
+import { TextLink } from "@/components/design/text-link";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 import { aboutTheWholeRequest } from "@/features/settings/closures";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
@@ -41,17 +47,18 @@ import { useOnline } from "@/offline/network";
 import { shopToday } from "@/offline/rules";
 
 import { DetailsForm } from "./worker-details-form";
-import { keepWorker, type Worker, WORKERS } from "./workers";
+import { WorkerForm } from "./worker-form";
+import { keepWorker, type Worker, workerPage, WORKERS } from "./workers";
 
-type Action = "edit" | "suspend" | "unsuspend" | "leave";
+type Action = "edit" | "suspend" | "unsuspend" | "leave" | "hireAgain";
 /** The three that change a worker's status, each with its own route. */
-type StatusAction = Exclude<Action, "edit">;
+type StatusAction = Exclude<Action, "edit" | "hireAgain">;
 
 /** The buttons each status offers, in their order on the page: the fix first, as the mildest. */
 const OFFERED: Record<Worker["status"], Action[]> = {
   active: ["edit", "suspend", "leave"],
   suspended: ["edit", "unsuspend", "leave"],
-  left: [],
+  left: ["hireAgain"],
 };
 
 /** The whole request's codes that are about one box: shown beside it, not above the buttons. The services raise them
@@ -88,6 +95,7 @@ export function WorkerActions({
   const t = useTranslations("workers.actions");
   const codes = useCodeWords();
   const store = useQueryClient();
+  const router = useRouter();
   const [open, setOpen] = useState<{ action: Action; today: string } | null>(
     null,
   );
@@ -158,15 +166,24 @@ export function WorkerActions({
           onChangedMeanwhile={said}
           onCancel={() => cancelled("edit")}
         />
+      ) : open?.action === "hireAgain" ? (
+        <WorkerForm
+          today={open.today}
+          again={worker}
+          // He works on his new job now: its page. Its back arrow returns here when this page was reached inside the
+          // app, else to the list (in-app-moves.tsx), as for any page.
+          onSaved={(back) => router.push(workerPage(back.id))}
+          onCancel={() => cancelled("hireAgain")}
+        />
       ) : open !== null ? (
         <ActionForm
           action={open.action}
           worker={worker}
           today={open.today}
-          onDone={(changed) =>
+          onDone={(action, changed) =>
             // The worker as the server answered: a last day only once they left.
             said(
-              t(`done.${open.action}`, {
+              t(`done.${action}`, {
                 name: changed.display_name,
                 day: changed.left_on === null ? "" : formatDay(changed.left_on),
               }),
@@ -175,6 +192,14 @@ export function WorkerActions({
           onChangedMeanwhile={said}
           onCancel={() => cancelled(open.action)}
         />
+      ) : worker.hired_again_as !== null ? (
+        // Back already: the old job links to the new one in place of Mwajiri tena.
+        <p>
+          {t("back", { name: worker.display_name })}{" "}
+          <TextLink href={workerPage(worker.hired_again_as)}>
+            {t("backLink")}
+          </TextLink>
+        </p>
       ) : OFFERED[worker.status].length > 0 ? (
         <div className="flex flex-wrap gap-3">
           {OFFERED[worker.status].map((action) => (
@@ -217,7 +242,9 @@ function ActionForm({
   worker: Worker;
   /** The shop's today: where the last day starts, and the latest it may be. */
   today: string;
-  onDone: (worker: Worker) => void;
+  /** Done: which of the three, as a callback can't see the page's narrowing of its own `open.action`, and the worker
+   * as the server answered. */
+  onDone: (action: StatusAction, worker: Worker) => void;
   /** Someone else changed the worker first: what the server's code says. */
   onChangedMeanwhile: (sentence: string) => void;
   onCancel: () => void;
@@ -259,7 +286,7 @@ function ActionForm({
       // The worker as they are now, on their page and in the list at once, then both asked again (workers.ts).
       keepWorker(store, changed);
       void store.invalidateQueries({ queryKey: WORKERS });
-      onDone(changed);
+      onDone(action, changed);
     },
     onError: (error) => {
       // Someone else got there first: read the worker again, so the buttons fit them as they are now.

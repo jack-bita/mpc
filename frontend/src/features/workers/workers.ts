@@ -1,6 +1,6 @@
 // workers.ts — the shop's workers as the office reads them (PPL-6, 03 §5.10): the list's place in the store of
-// server answers, the reading of every page, one worker for their own page, a saved worker kept in both at once,
-// the key the page asks, and the words for each role and its side.
+// server answers, the reading of every page, one worker for their own page and its address, a saved worker kept in
+// both at once, the key the page asks, and the words for each role and its side.
 //
 // GET /api/v1/people/staff/ answers everyone the shop has had, those who left included, newest first, in pages of
 // 50 (CursorPage, PPL-4). A shop has tens of workers over the years, not hundreds, so one screen holds them all,
@@ -33,6 +33,12 @@ export const MANAGES_STAFF = "staff.manage";
 
 /** The list's place in the store of server answers. Ongeza and each change ask it again. */
 export const WORKERS = ["people", "staff"] as const;
+
+/** A worker's own page, by their job's id: a query string, as the app is plain files with no page per id (ADR-0016).
+ * The list's names link to it, and so do a job that ended and the page Mwajiri tena moves to (PPL-11). */
+export function workerPage(id: string): string {
+  return `/workers/view/?id=${id}`;
+}
 
 /** Whether the person may open the workers' page: staff.manage on the whole shop, not on one side, as a worker
  * belongs to the shop, not to a side. */

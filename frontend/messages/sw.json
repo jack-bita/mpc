@@ -422,6 +422,8 @@
       "firstDayHint": "Siku anayoanza kazi.",
       "phone": "Simu",
       "phoneHint": "Si lazima. Kama 0712 345 678. Ukiiacha tupu, namba inaondolewa.",
+      "newPhoneHint": "Si lazima. Kama 0712 345 678.",
+      "foundLeft": "Simu hii ni ya {name}, aliyeondoka {day}.",
       "farDay": "{day} iko mbali na leo. Kama ni sahihi, bonyeza Hifadhi tena.",
       "save": "Hifadhi",
       "cancel": "Ghairi"
@@ -441,11 +443,13 @@
       "suspend": "Simamisha",
       "unsuspend": "Rudisha",
       "leave": "Ameondoka",
+      "hireAgain": "Mwajiri tena",
       "title": {
         "edit": "Badilisha taarifa za {name}",
         "suspend": "Simamisha {name}",
         "unsuspend": "Mrudishe {name} kazini",
-        "leave": "{name} ameondoka kazini"
+        "leave": "{name} ameondoka kazini",
+        "hireAgain": "Mwajiri tena {name}"
       },
       "reason": "Sababu",
       "reasonHint": "Itahifadhiwa pamoja na jina lako na muda.",
@@ -460,7 +464,9 @@
         "suspend": "{name} amesimamishwa.",
         "unsuspend": "{name} amerudishwa kazini.",
         "leave": "{name} ameondoka. Siku yake ya mwisho ni {day}."
-      }
+      },
+      "back": "{name} amerudi kazini.",
+      "backLink": "Fungua ukurasa wake wa sasa"
     },
     "roles": {
       "owner": "Mmiliki",
@@ -742,7 +748,12 @@
       "not_active": "Mfanyakazi huyu tayari amesimamishwa.",
       "not_suspended": "Mfanyakazi huyu hajasimamishwa.",
       "left_in_future": "Siku ya mwisho ya kazi haiwezi kuwa siku ijayo.",
-      "left_before_start": "Siku ya mwisho iko kabla ya siku aliyoanza kazi."
+      "left_before_start": "Siku ya mwisho iko kabla ya siku aliyoanza kazi.",
+      "not_left": "Mfanyakazi huyu hajaondoka kazini.",
+      "already_member": "Mtu huyu tayari anafanya kazi hapa.",
+      "works_elsewhere": "Mtu huyu anafanya kazi katika duka jingine sasa, kwa hiyo bado hawezi kuajiriwa tena hapa.",
+      "back_before_left": "Siku ya kwanza haiwezi kuwa kabla ya siku yake ya mwisho ya kazi iliyopita.",
+      "left_here": "Simu hii ni ya mfanyakazi aliyeondoka hapa. Mwajiri tena kutoka ukurasa wake."
     },
     "password": {
       "must_change": "Chagua nenosiri lako mwenyewe kabla ya kuendelea.",

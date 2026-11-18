@@ -3856,11 +3856,18 @@
                     "version": {
                         "type": "integer",
                         "readOnly": true
+                    },
+                    "hired_again_as": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "readOnly": true
                     }
                 },
                 "required": [
                     "display_name",
                     "full_name",
+                    "hired_again_as",
                     "id",
                     "job_title",
                     "keys",
@@ -3880,10 +3887,19 @@
                         "type": "string",
                         "format": "uuid"
                     },
+                    "hire_again": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
                     "full_name": {
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 150
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 32
                     },
                     "display_name": {
                         "type": "string",
@@ -3903,7 +3919,6 @@
                 },
                 "required": [
                     "display_name",
-                    "full_name",
                     "id"
                 ]
             },
