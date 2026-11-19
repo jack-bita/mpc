@@ -1031,14 +1031,30 @@ def _check_giver(by: StaffMember | None, codes: Collection[str], side: Side | No
         raise PermissionDenied("Nobody gives a permission they don't hold on that side.")
 
 
-def _locked_receiver(staff: StaffMember) -> StaffMember:
-    # The person read again and locked (_locked), so a leaving recorded at the same moment either comes first, and is
-    # refused here, or waits until this is given. A person who has left gets nothing: a worker who comes back gets a
-    # new job (02 §5). A suspended one may: it counts once they are brought back.
-    staff = _locked(staff)
+def _check_receiver(staff: StaffMember) -> None:
+    # Asked of the person read again and locked (_locked), so a leaving recorded at the same moment either comes first,
+    # and is refused here, or waits until this is given. A person who has left gets nothing: a worker who comes back
+    # gets a new job (02 §5). A suspended one may: it counts once they are brought back.
     if staff.status == StaffStatus.LEFT:
         raise ValidationError("A person who has left can't be given a role or a permission.", code="staff.left")
-    return staff
+
+
+def _given_before[R: (RoleAssignment, PermissionGrant)](
+    model: type[R], given_id: uuid.UUID | None, staff: StaffMember
+) -> R | None:
+    # The row a give sent before made, if the app's id (ADR-0007) names one: a phone whose answer was lost sends the
+    # same give again, and gets what the first made, never role.already_given (PPL-7). Read with the person locked: of
+    # two copies of one give sent at the same moment, the second waits for the first's lock, then finds its row here.
+    # Looked for before any check, as CreateOnceMixin looks first: the row the first send made would fail the checks of
+    # its own repeat. Through the guarded manager, so another shop's row is not seen: its id clashes at the insert, and
+    # the route answers id.taken (StaffViewSet). A row of this shop given to someone else: the id is taken too, with the
+    # same answer, as nothing about that row is the business of this give.
+    if given_id is None:
+        return None
+    found = model.objects.filter(pk=given_id).first()
+    if found is not None and found.staff_id != staff.pk:
+        raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")})
+    return found
 
 
 def _check_no_open_temporary_password(staff: StaffMember, codes: Collection[str], side: Side | None) -> None:
@@ -1076,23 +1092,48 @@ def _check_no_open_temporary_password(staff: StaffMember, codes: Collection[str]
         )
 
 
-def assign_role(staff: StaffMember, role: Role, *, side: Side | None, by: StaffMember | None) -> RoleAssignment:
+def assign_role(
+    staff: StaffMember,
+    role: Role,
+    *,
+    side: Side | None,
+    by: StaffMember | None,
+    given_id: uuid.UUID | None = None,
+) -> RoleAssignment:
     """Give a person a role on one side, or on every side (`side=None`), a side added later included. `by`: who
-    gives it; None for the system or the superuser. Refused (staff.temporary_password_open) while a temporary password
-    someone without those keys set is still open."""
+    gives it; None for the system or the superuser. `given_id`: the id the app made for this give (ADR-0007), if it
+    made one: the same id sent again answers with the row the first send made. Refused (staff.temporary_password_open)
+    while a temporary password someone without those keys set is still open. The Owner role is the superuser's alone
+    to give (role.superuser_only, Jack, PPL-7: A). On the demo, the seed's people keep their roles
+    (demo.people_fixed)."""
     _check_shop(staff.shop_id, by)
     _check_same_shop(staff, role, side)
+    if by is not None:
+        # A visitor who gave Asha the Owner's keys, or more, would change her for every other visitor (OPS-3).
+        _check_people_fixed_on_demo(staff)
     with recording_changes(staff.shop_id):
-        staff = _locked_receiver(staff)
+        staff = _locked(staff)
+        sent_before = _given_before(RoleAssignment, given_id, staff)
+        if sent_before is not None:
+            return sent_before
+        _check_receiver(staff)
         # The role as stored, read again and locked: the giver's check compares its saved codes, never those of the
         # copy handed in, which may have been changed in memory and never saved (the Owner role made to say
         # "sale.write" would pass as a Seller's). An owner changing the role at the same moment waits until it is
         # given, or this waits for them. no_key, as every office row others link to (03 §5.5): this role's assignments
         # link to it.
         role = Role.objects.select_for_update(no_key=True).get(pk=role.pk)
+        if by is not None and role.template == RoleTemplate.OWNER:
+            # Whoever holds it can be suspended or changed only by the superuser (_check_may_act_as): a manager who held
+            # every key and gave himself, or a friend, the Owner role could no longer be stopped by the owner. Asked
+            # before the giver rule, so even an owner hears "ask the superuser", not a plain no (02 §5 v1.39).
+            raise ValidationError("Only the superuser gives the Owner role.", code="role.superuser_only")
         _check_giver(by, role.permissions, side)
         _check_no_open_temporary_password(staff, role.permissions, side)
         given = RoleAssignment(shop_id=staff.shop_id, staff=staff, role=role, side=side, created_by=by)
+        if given_id is not None:
+            # The app's id, not a new one: a repeat then finds this row (_given_before).
+            given.id = given_id
         # Every rule in Meta first: the same role twice on one side comes back as a code (role.already_given).
         given.full_clean()
         given.save()
@@ -1102,17 +1143,30 @@ def assign_role(staff: StaffMember, role: Role, *, side: Side | None, by: StaffM
 
 
 def grant_permission(
-    staff: StaffMember, permission: str, *, side: Side | None, by: StaffMember | None
+    staff: StaffMember,
+    permission: str,
+    *,
+    side: Side | None,
+    by: StaffMember | None,
+    granted_id: uuid.UUID | None = None,
 ) -> PermissionGrant:
     """Give a person one extra permission on one side, or on every side (`side=None`): Juma may count the stock on
-    Vyakula. Checked as a role is given (assign_role)."""
+    Vyakula. Checked as a role is given (assign_role), the app's id (`granted_id`) and the demo's people included."""
     _check_shop(staff.shop_id, by)
     _check_same_shop(staff, side)
-    _check_giver(by, [permission], side)
+    if by is not None:
+        _check_people_fixed_on_demo(staff)
     with recording_changes(staff.shop_id):
-        staff = _locked_receiver(staff)
+        staff = _locked(staff)
+        sent_before = _given_before(PermissionGrant, granted_id, staff)
+        if sent_before is not None:
+            return sent_before
+        _check_receiver(staff)
+        _check_giver(by, [permission], side)
         _check_no_open_temporary_password(staff, [permission], side)
         granted = PermissionGrant(shop_id=staff.shop_id, staff=staff, permission=permission, side=side, created_by=by)
+        if granted_id is not None:
+            granted.id = granted_id
         # A code from the list only (permission.unknown), and once per side (permission.already_given).
         granted.full_clean()
         granted.save()

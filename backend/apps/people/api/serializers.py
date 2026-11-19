@@ -1,13 +1,14 @@
 """apps/people/api/serializers.py — how the people tables look in the API (03 §5.10).
 
-Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a
-shop's devices on the office routes (AUTH-5): a device as the device list shows it, and as the health page shows it,
-with its last push's report and its offline periods (SYNC-14); what a manager sends to say yes to a waiting one, to
-rename one, and to block or unblock one; a shop's workers, each with what they were given, as the workers' page
-shows them (PPL-4); what the owner sends to set a temporary password (AUTH-6); what a device sends for a PIN login,
-and what `me` answers (AUTH-4); what a person sends to change their own language and font (UI-9); and the answers of
-the routes a device calls with its key (apps/people/api/views.py), the PIN screen's list of people among them (UI-4).
-A key, a key's hash or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
+Thin: they describe fields and their shape; every write goes through apps/people/services.py (ADR-0015). Today a shop's
+devices on the office routes (AUTH-5): a device as the device list shows it, and as the health page shows it, with its
+last push's report and its offline periods (SYNC-14); what a manager sends to say yes to a waiting one, to rename one,
+and to block or unblock one; a shop's workers, each with what they were given, as the workers' page shows them (PPL-4);
+what the page sends to give a worker a role or an extra key, or to take one away, and the shop's roles it lists to
+choose from (PPL-7); what the owner sends to set a temporary password (AUTH-6); what a device sends for a PIN login, and
+what `me` answers (AUTH-4); what a person sends to change their own language and font (UI-9); and the answers of the
+routes a device calls with its key (apps/people/api/views.py), the PIN screen's list of people among them (UI-4). A key,
+a key's hash or a PIN's hash is never among the fields: they never leave the server (03 §5.9).
 """
 
 from datetime import timedelta
@@ -18,7 +19,19 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
-from apps.people.models import OWN_SETTINGS, Device, DeviceOutage, PairingRequest, StaffMember, StaffStatus, User
+from apps.core.permissions import Permission
+from apps.people.models import (
+    OWN_SETTINGS,
+    Device,
+    DeviceOutage,
+    PairingRequest,
+    PermissionGrant,
+    Role,
+    RoleAssignment,
+    StaffMember,
+    StaffStatus,
+    User,
+)
 from apps.people.selectors import Given, current_jobs_of, given_to
 from apps.shops.api.fields import SideField
 from apps.shops.models import Shop, Side, SideBand
@@ -325,6 +338,86 @@ class StaffLeaveSerializer(StaffReasonSerializer):
     # What a leaving sends: why, and the worker's last day, which the page fills in as today for the owner to change. A
     # day ahead is the service's to refuse (staff.left_in_future), as leaving takes effect at once.
     left_on = serializers.DateField()
+
+
+# Giving and taking away roles and extra keys, from the worker's page (PPL-7, for PPL-8's Ongeza kazi and Ondoa).
+
+
+@extend_schema_field(serializers.UUIDField())
+class RoleField(serializers.PrimaryKeyRelatedField[Role]):
+    # One of the shop's roles, sent by its id: one of the visit's shop, or "not found" (does_not_exist), as StaffField.
+    def get_queryset(self) -> models.QuerySet[Role]:
+        return Role.objects.all()
+
+
+class _OfThisWorker[R: (RoleAssignment, PermissionGrant)](serializers.PrimaryKeyRelatedField[R]):
+    # A row given to the worker the address names (staff/{id}/...), sent by its id: any other row is "not found", one
+    # given to another worker of this shop as much as another shop's. Who may take it away is asked of the worker the
+    # address names (_locked_for_a_change); a row of another worker, sent on this one's page, would be taken from
+    # someone nobody asked about: a manager who may act on Juma could end the owner's role by sending its id on Juma's
+    # page. An ended row is found too, so its end answers role.already_ended, not "not found".
+    model: type[R]
+
+    def get_queryset(self) -> models.QuerySet[R]:
+        # Read on each visit, inside the visit's open shop, through the guard (as StaffField), by the address's worker.
+        return self.model.objects.filter(staff_id=self.context["view"].kwargs["pk"])
+
+
+@extend_schema_field(serializers.UUIDField())
+class GivenRoleField(_OfThisWorker[RoleAssignment]):
+    model = RoleAssignment
+
+
+@extend_schema_field(serializers.UUIDField())
+class GivenKeyField(_OfThisWorker[PermissionGrant]):
+    model = PermissionGrant
+
+
+# Described as the id it is, or null for every side: on a plain serializer, the schema can't read a side's type from a
+# model, as it does on a device's (DeviceConfirmSerializer).
+@extend_schema_field(serializers.UUIDField(allow_null=True))
+class GivenSideField(SideField):
+    pass
+
+
+class _GiveSerializer(serializers.Serializer[Any]):
+    # What both gives send: the give's id, made on the phone (ADR-0007), so a send repeated is one row (_given_before);
+    # and the side, empty for every side, a side added later included (02 §5). Required, and a UUIDv7, as an add's.
+    id = serializers.UUIDField(validators=[uuid7_only])
+    side = GivenSideField(required=False, allow_null=True, default=None)
+
+
+class GiveRoleSerializer(_GiveSerializer):
+    # Ongeza kazi, a role: which of the shop's roles. assign_role checks the rest: who may give (permission_denied), the
+    # Owner role (role.superuser_only), the same role twice (role.already_given), a worker who left (staff.left), an
+    # open temporary password (staff.temporary_password_open), the demo's people (demo.people_fixed).
+    role = RoleField()
+
+
+class GiveKeySerializer(_GiveSerializer):
+    # Ongeza kazi, one extra key: a choice of the codes, so the schema hands the page the list
+    # (apps/core/permissions.py). grant_permission checks the rest, as assign_role does (permission.already_given).
+    permission = serializers.ChoiceField(choices=Permission.choices)
+
+
+class EndRoleSerializer(StaffReasonSerializer):
+    # Ondoa beside a role, with Sababu: the row given to this worker, and why (staff.reason_required when blank).
+    role_given = GivenRoleField()
+
+
+class EndKeySerializer(StaffReasonSerializer):
+    # Ondoa beside an extra key, with Sababu.
+    key = GivenKeyField()
+
+
+class RoleSerializer(serializers.ModelSerializer[Role]):
+    # One of the shop's roles, as Ongeza kazi lists them (PPL-8): its template and name (a copied role's name is empty,
+    # and the page shows its template's, translated, 02 §5), and the codes it gives, so the page can show what each
+    # opens. The page sorts them as it shows them.
+    class Meta:
+        model = Role
+        fields = ["id", "template", "name", "permissions"]
+        read_only_fields = fields
 
 
 class TemporaryPasswordSerializer(serializers.Serializer[Any]):

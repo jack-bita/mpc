@@ -147,6 +147,13 @@ const CODES_THE_API_SENDS = [
   "staff.works_elsewhere",
   "staff.back_before_left",
   "staff.left_here",
+  // Giving and taking away roles and extra keys from the office (PPL-7): the same one twice on a side, one already
+  // taken away, and the Owner role, the superuser's alone. Who may take one away answers with the staff.* codes above.
+  "role.already_given",
+  "role.already_ended",
+  "role.superuser_only",
+  "permission.already_given",
+  "permission.already_ended",
   // Devices and pairing (AUTH-5).
   "device.name_blank",
   "device.name_taken",

@@ -37,7 +37,6 @@ from contextlib import ExitStack
 from functools import cached_property
 from typing import Any, ClassVar, cast
 
-import psycopg
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import IntegrityError, models, transaction
 from django.http import HttpRequest, HttpResponseBase
@@ -48,6 +47,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.core.acting import acting_as
+from apps.core.api.ids import id_taken
 from apps.core.models import Editable, ShopScoped
 from apps.core.permissions import HeldPermissions, Permission, Person
 from apps.core.tenancy import Actor, shop_context
@@ -364,7 +364,7 @@ class CreateOnceMixin[M: ShopScoped](ShopViewSet[M]):
                     raise ValidationError(
                         {"id": ValidationError("This id is already in use.", code="id.taken")}
                     ) from None
-            if isinstance(refusal, IntegrityError) and _id_taken(refusal, self.model):
+            if isinstance(refusal, IntegrityError) and id_taken(refusal, self.model):
                 # No twin, yet the id clashes: another row has it that this visit can't see, another shop's, or
                 # this shop's on a side the person doesn't see (get_queryset keeps to their sides). Every lookup here
                 # hides that row, and the answer says only that the id can't be used: nothing about that row, not
@@ -421,13 +421,3 @@ def _without_the_ids_clash(error: ValidationError, model: type[models.Model]) ->
     if others:
         rest[pk] = others
     return ValidationError(rest) if rest else None
-
-
-def _id_taken(error: IntegrityError, model: type[models.Model]) -> bool:
-    # True when the refused insert broke the table's primary key: its id was already taken. PostgreSQL
-    # names the broken rule, and it names a table's primary key "<table>_pkey".
-    cause = error.__cause__
-    return (
-        isinstance(cause, psycopg.errors.UniqueViolation)
-        and cause.diag.constraint_name == f"{model._meta.db_table}_pkey"
-    )

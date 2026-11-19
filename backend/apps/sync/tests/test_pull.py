@@ -32,10 +32,19 @@ from pytest_django import Settings
 from rest_framework.renderers import JSONRenderer
 
 from apps.core.changes import record_change, recording_changes
+from apps.core.permissions import ROLE_TEMPLATES, RoleTemplate
 from apps.core.settings_registry import LATE_FINE
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import StaffMember, User
-from apps.people.services import add_staff, change_person, mark_left, suspend
+from apps.people.services import (
+    add_staff,
+    assign_role,
+    change_person,
+    copy_role_templates,
+    end_role,
+    mark_left,
+    suspend,
+)
 from apps.shops.models import Setting, Shop, Side, StockLocation
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_side, rename_side, set_setting
@@ -220,6 +229,23 @@ def test_pull_sends_archive_ops(shop_a: Shop, dawa: Side) -> None:
         (start + 2, "staff", str(asha.pk), "archive"),
     ]
     assert [change["data"] for change in page["changes"]] == [None, None]
+
+
+def test_a_role_taken_away_leaves_the_laptop_at_its_next_pull(shop_a: Shop, dawa: Side) -> None:
+    # Done when (PPL-7): Baba takes Asha's Seller role on Dawa away. Her keys travel on her staff row (SYNC-15), so the
+    # end writes her line, and the next pull hands every laptop her row with none of the role's keys: the counter then
+    # refuses her a sale offline, as it would online.
+    asha = hire(shop_a, "Asha Mfano", "Asha")
+    with shop_context(shop_a):
+        given = assign_role(asha, copy_role_templates(shop_a)[RoleTemplate.SELLER], side=dawa, by=None)
+    before = pulled(shop_a, last_line(shop_a) - 1)["changes"][0]["data"]["permissions"]
+    assert before["sides"] == [{"side": str(dawa.pk), "permissions": sorted(ROLE_TEMPLATES[RoleTemplate.SELLER])}]
+    start = last_line(shop_a)
+    with shop_context(shop_a):
+        end_role(given, reason="Amehamia Vyakula", by=None)
+    page = pulled(shop_a, start)
+    assert each_change(page) == [(start + 1, "staff", str(asha.pk), "upsert")]
+    assert page["changes"][0]["data"]["permissions"] == {"every_side": [], "sides": []}
 
 
 def test_a_person_switched_off_goes_as_archive(shop_a: Shop, dawa: Side) -> None:

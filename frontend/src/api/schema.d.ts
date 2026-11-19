@@ -308,6 +308,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/people/roles/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["people_roles_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/staff/": {
         parameters: {
             query?: never;
@@ -338,6 +354,70 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["people_staff_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/people/staff/{id}/end-key/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["people_staff_end_key_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/people/staff/{id}/end-role/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["people_staff_end_role_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/people/staff/{id}/give-key/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["people_staff_give_key_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/people/staff/{id}/give-role/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["people_staff_give_role_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/people/staff/{id}/leave/": {
@@ -730,6 +810,16 @@ export interface components {
          * @enum {string}
          */
         DeviceStatusEnum: "active" | "blocked";
+        EndKeyRequest: {
+            reason: string;
+            /** Format: uuid */
+            key: string;
+        };
+        EndRoleRequest: {
+            reason: string;
+            /** Format: uuid */
+            role_given: string;
+        };
         /**
          * @description * `cash_difference` - Cash difference
          *     * `count_difference` - Count difference
@@ -763,6 +853,21 @@ export interface components {
          * @enum {string}
          */
         FontEnum: "default" | "second";
+        GiveKeyRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            side?: string | null;
+            permission: components["schemas"]["PermissionEnum"];
+        };
+        GiveRoleRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            side?: string | null;
+            /** Format: uuid */
+            role: string;
+        };
         GivenKey: {
             /** Format: uuid */
             readonly id: string;
@@ -883,6 +988,19 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Device"][];
         };
+        PaginatedRoleList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["Role"][];
+        };
         PaginatedSideList: {
             /**
              * Format: uri
@@ -942,6 +1060,48 @@ export interface components {
             readonly number: string;
             readonly sides: string[];
         };
+        /**
+         * @description * `sale.write` - Write a sale or an order
+         *     * `sale.take_payment` - Take a payment
+         *     * `sale.hand_over` - Hand the goods over
+         *     * `sale.bargain` - Lower a price, down to the floor
+         *     * `sale.below_floor_approve` - Approve a price below the floor
+         *     * `sale.jumla_switch` - Switch a sale to the jumla price
+         *     * `sale.cancel` - Cancel a sale
+         *     * `sale.refund` - Refund a sale
+         *     * `credit.give` - Sell on credit
+         *     * `credit.approve` - Approve credit over a limit
+         *     * `debt.view` - See the debts
+         *     * `debt.adjust` - Adjust or write off a debt
+         *     * `price.change` - Change a price
+         *     * `cost.view` - See buying prices and profit
+         *     * `product.manage` - Add and change products
+         *     * `contact.manage` - Add and change customers, suppliers and partners
+         *     * `stock.receive` - Complete a delivery, with its buying prices
+         *     * `stock.weigh` - Weigh goods as they arrive
+         *     * `stock.loss` - Record a loss
+         *     * `stock.count` - Count the stock
+         *     * `stock.count_approve` - Approve a stock count
+         *     * `stock.transfer` - Move stock from one place to another
+         *     * `money.expense` - Pay an expense
+         *     * `money.advance` - Give a worker an advance
+         *     * `money.withdraw` - Take money out of a drawer
+         *     * `drawer.count` - Count a drawer
+         *     * `drawer.confirm` - Confirm a counted drawer
+         *     * `drawer.approve` - Approve the day
+         *     * `staff.manage` - Add workers and give them roles
+         *     * `attendance.manage` - Fix attendance
+         *     * `pay.run` - Prepare the month's pay
+         *     * `pay.approve` - Approve the month's pay
+         *     * `settings.manage` - Change the shop's rules and rates
+         *     * `device.manage` - Register and block devices
+         *     * `flag.review` - Resolve or dismiss a side's flags
+         *     * `report.view` - See the reports
+         *     * `job.manage` - Run machine jobs
+         *     * `production.run` - Record a production run
+         * @enum {string}
+         */
+        PermissionEnum: "sale.write" | "sale.take_payment" | "sale.hand_over" | "sale.bargain" | "sale.below_floor_approve" | "sale.jumla_switch" | "sale.cancel" | "sale.refund" | "credit.give" | "credit.approve" | "debt.view" | "debt.adjust" | "price.change" | "cost.view" | "product.manage" | "contact.manage" | "stock.receive" | "stock.weigh" | "stock.loss" | "stock.count" | "stock.count_approve" | "stock.transfer" | "money.expense" | "money.advance" | "money.withdraw" | "drawer.count" | "drawer.confirm" | "drawer.approve" | "staff.manage" | "attendance.manage" | "pay.run" | "pay.approve" | "settings.manage" | "device.manage" | "flag.review" | "report.view" | "job.manage" | "production.run";
         PinLoginRequest: {
             /** Format: uuid */
             staff: string;
@@ -1038,6 +1198,13 @@ export interface components {
          * @enum {string}
          */
         PushedStatusEnum: "accepted" | "invalid";
+        Role: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly template: string;
+            readonly name: string;
+            readonly permissions: string[];
+        };
         RuleAnswer: {
             key: components["schemas"]["SettingKeyEnum"];
             kind: components["schemas"]["SettingKindEnum"];
@@ -1945,6 +2112,36 @@ export interface operations {
             };
         };
     };
+    people_roles_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedRoleList"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     people_staff_list: {
         parameters: {
             query?: {
@@ -2049,6 +2246,142 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["StaffEditRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_end_key_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndKeyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_end_role_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndRoleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_give_key_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GiveKeyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_give_role_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GiveRoleRequest"];
             };
         };
         responses: {

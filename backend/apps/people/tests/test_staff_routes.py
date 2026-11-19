@@ -9,6 +9,11 @@ calls (PPL-4; 03 §5.10). What may and may not be done is the services'; these t
     POST  /api/v1/people/staff/{id}/suspend/     stop a worker for a while, with a reason
     POST  /api/v1/people/staff/{id}/unsuspend/   bring them back, with a reason
     POST  /api/v1/people/staff/{id}/leave/       record their last day, with a reason
+    POST  /api/v1/people/staff/{id}/give-role/   give them a role, on a side or on all, with the app's own id (PPL-7)
+    POST  /api/v1/people/staff/{id}/give-key/    give them one extra key, the same way
+    POST  /api/v1/people/staff/{id}/end-role/    take a role of theirs away, with a reason
+    POST  /api/v1/people/staff/{id}/end-key/     take an extra key of theirs away, with a reason
+    GET   /api/v1/people/roles/                  the shop's roles, to choose from
 
 Each worker comes with their full name, phone, nickname, job title, first day, status and leaving day, each role and
 extra key they were given, with its side (none: every side), the version a fix sends back, and, for a job that ended,
@@ -26,6 +31,7 @@ Fake data only: the repo is public (03 §10).
 import uuid
 from collections.abc import Callable
 from datetime import date, timedelta
+from typing import Any
 
 import pytest
 from django.core.exceptions import PermissionDenied
@@ -36,8 +42,8 @@ from rest_framework.test import APIClient
 from apps.control.models import AuditAction, AuditEvent, EditEvent
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.api.views import StaffViewSet
-from apps.people.models import Role, StaffMember, User
+from apps.people.api.views import RoleViewSet, StaffViewSet
+from apps.people.models import PermissionGrant, Role, RoleAssignment, StaffMember, User
 from apps.people.services import add_staff, add_worker, grant_permission, mark_left, set_pin, suspend
 from apps.people.services import hire_again as services_hire_again
 from apps.shops.models import Shop, Side
@@ -116,8 +122,13 @@ def test_staff_routes_name_their_permissions() -> None:
         "suspend": Permission.STAFF_MANAGE,
         "unsuspend": Permission.STAFF_MANAGE,
         "leave": Permission.STAFF_MANAGE,
+        "give_role": Permission.STAFF_MANAGE,
+        "give_key": Permission.STAFF_MANAGE,
+        "end_role": Permission.STAFF_MANAGE,
+        "end_key": Permission.STAFF_MANAGE,
         "temporary_password": Permission.STAFF_MANAGE,
     }
+    assert RoleViewSet.action_permissions == {"list": Permission.STAFF_MANAGE}
 
 
 def test_the_owner_lists_every_worker_the_shop_has_had(
@@ -849,3 +860,240 @@ def test_a_person_the_superuser_switched_off_is_shown_so(baba: StaffMember, asha
     assert (rows["Asha"]["status"], rows["Asha"]["switched_off"]) == ("active", True)
     assert rows["Baba"]["switched_off"] is False
     assert client_for(baba).get(one(asha)).json()["switched_off"] is True
+
+
+# Roles and extra keys, given and taken away (PPL-7), as PPL-8's Ongeza kazi and Ondoa will call them.
+
+ROLES = "/api/v1/people/roles/"
+
+
+def act(staff: StaffMember, action: str) -> str:
+    return f"{one(staff)}{action}/"
+
+
+def role_of(shop: Shop, template: RoleTemplate) -> Role:
+    with shop_context(shop):
+        return Role.objects.get(template=template)
+
+
+# Any: the test client's answer, a response with .json(), whose type DRF's stubs keep private.
+def give_seller(by: StaffMember, staff: StaffMember, side: Side | None, **changes: object) -> Any:
+    sent = {
+        "id": str(uuid.uuid7()),
+        "role": str(role_of(by.shop, RoleTemplate.SELLER).pk),
+        "side": side and str(side.pk),
+    }
+    return client_for(by).post(act(staff, "give-role"), {**sent, **changes}, format="json")
+
+
+def give_key(by: StaffMember, staff: StaffMember, **changes: object) -> Any:
+    sent = {"id": str(uuid.uuid7()), "permission": Permission.STOCK_COUNT, "side": None}
+    return client_for(by).post(act(staff, "give-key"), {**sent, **changes}, format="json")
+
+
+def roles_given(shop: Shop, staff: StaffMember, *, open_only: bool = True) -> list[RoleAssignment]:
+    with shop_context(shop):
+        rows = RoleAssignment.objects.filter(staff=staff).order_by("id")
+        return list(rows.filter(ended_at__isnull=True) if open_only else rows)
+
+
+def test_baba_gives_asha_a_role_and_juma_a_key(
+    shop_a: Shop, sides: dict[str, Side], baba: StaffMember, asha: StaffMember
+) -> None:
+    # Done when #1: Baba gives Asha the Seller role on Vyakula, and Juma one extra key on every side. Each answer is the
+    # worker as now, with the new role or key in their lists, so the page needs no second read.
+    juma = job(shop_a, "Juma Hamisi Mfano", "Juma")
+    seller = role_of(shop_a, RoleTemplate.SELLER)
+
+    gave = give_seller(baba, asha, sides["F"])
+    keyed = give_key(baba, juma)
+
+    assert gave.status_code == 200
+    on_vyakula = [role for role in gave.json()["roles"] if role["side"] == str(sides["F"].pk)]
+    assert [(role["role"], role["template"]) for role in on_vyakula] == [(str(seller.pk), "seller")]
+    assert keyed.status_code == 200
+    assert [(key["permission"], key["side"]) for key in keyed.json()["keys"]] == [("stock.count", None)]
+
+
+def test_the_same_give_sent_twice_is_one_row(
+    shop_a: Shop, sides: dict[str, Side], baba: StaffMember, asha: StaffMember
+) -> None:
+    # Done when #1: the answer was lost, and the page sends the same give again, with the same id: the same answer,
+    # never role.already_given, and one row.
+    role_id, key_id = str(uuid.uuid7()), str(uuid.uuid7())
+    for _ in range(2):
+        assert give_seller(baba, asha, sides["F"], id=role_id).status_code == 200
+        assert give_key(baba, asha, id=key_id).status_code == 200
+    with shop_context(shop_a):
+        assert RoleAssignment.objects.filter(pk=role_id).count() == 1
+        assert PermissionGrant.objects.filter(pk=key_id).count() == 1
+        assert RoleAssignment.objects.filter(staff=asha, side=sides["F"]).count() == 1
+
+
+def test_baba_takes_ashas_role_away_and_gives_it_again(
+    shop_a: Shop, sides: dict[str, Side], baba: StaffMember, asha: StaffMember
+) -> None:
+    # Done when #2 and #3: Baba takes Asha's Seller role on Dawa away, with a reason. The answer shows her without it;
+    # the row stays, with who, when and why. Later he gives it to her again: a new row, and the old one stays as it was.
+    [seller_on_dawa] = roles_given(shop_a, asha)
+
+    ended = client_for(baba).post(
+        act(asha, "end-role"), {"role_given": str(seller_on_dawa.pk), "reason": "Amehamia Vyakula"}
+    )
+
+    assert ended.status_code == 200
+    assert ended.json()["roles"] == []
+    [kept] = roles_given(shop_a, asha, open_only=False)
+    assert (kept.ended_by_id, kept.end_reason) == (baba.pk, "Amehamia Vyakula") and kept.ended_at is not None
+
+    again = give_seller(baba, asha, sides["D"])
+
+    assert again.status_code == 200
+    [new] = roles_given(shop_a, asha)
+    assert new.pk != kept.pk
+    assert len(roles_given(shop_a, asha, open_only=False)) == 2
+
+
+def test_baba_takes_an_extra_key_away(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    with shop_context(shop_a):
+        [count] = PermissionGrant.objects.filter(staff=asha)
+
+    ended = client_for(baba).post(act(asha, "end-key"), {"key": str(count.pk), "reason": "Hahesabu tena"})
+
+    assert ended.status_code == 200
+    assert ended.json()["keys"] == []
+
+
+def test_an_end_needs_a_reason_and_is_refused_once_ended(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    [given] = roles_given(shop_a, asha)
+    address = act(asha, "end-role")
+
+    blank = client_for(baba).post(address, {"role_given": str(given.pk), "reason": "  "})
+    assert (blank.status_code, blank.json()["code"]) == (400, "staff.reason_required")
+
+    assert client_for(baba).post(address, {"role_given": str(given.pk), "reason": "Amehamia"}).status_code == 200
+    again = client_for(baba).post(address, {"role_given": str(given.pk), "reason": "Tena"})
+    assert (again.status_code, again.json()["code"]) == (400, "role.already_ended")
+
+
+def test_a_row_of_another_worker_is_not_found_on_this_workers_page(
+    shop_a: Shop, baba: StaffMember, asha: StaffMember, give_role: GiveRole
+) -> None:
+    # Who may is asked of the worker the address names. Meneja may act on Asha; were Baba's Owner role found on Asha's
+    # page, Meneja could end it there. So another worker's row is "not found", as another shop's is, and stays open.
+    meneja = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(meneja, RoleTemplate.MANAGER, None)
+    with shop_context(shop_a):
+        grant_permission(meneja, Permission.STAFF_MANAGE, side=None, by=None)
+    [owner_role] = roles_given(shop_a, baba)
+    with shop_context(shop_a):
+        [meneja_key] = PermissionGrant.objects.filter(staff=meneja)
+
+    role = client_for(meneja).post(act(asha, "end-role"), {"role_given": str(owner_role.pk), "reason": "Hila"})
+    key = client_for(baba).post(act(asha, "end-key"), {"key": str(meneja_key.pk), "reason": "Hila"})
+
+    assert (role.status_code, role.json()["fields"]) == (400, {"role_given": ["does_not_exist"]})
+    assert (key.status_code, key.json()["fields"]) == (400, {"key": ["does_not_exist"]})
+    assert roles_given(shop_a, baba) == [owner_role]
+
+
+def test_another_shops_role_side_or_id_reveals_nothing(
+    shop_a: Shop,
+    sides: dict[str, Side],
+    baba: StaffMember,
+    asha: StaffMember,
+    staff_b: StaffMember,
+    side_b: Side,
+    give_role: GiveRole,
+) -> None:
+    # Shop B's role and side are "not found", as an id no shop has. A give id shop B's row already holds is found only
+    # by the insert, and is answered as taken, with nothing more about that row (03 §5.4); nothing is given.
+    give_role(staff_b, RoleTemplate.OWNER, None)
+    their_role = role_of(staff_b.shop, RoleTemplate.SELLER)
+    [their_row] = roles_given(staff_b.shop, staff_b)
+
+    not_ours = give_seller(baba, asha, side_b, role=str(their_role.pk))
+    taken = give_seller(baba, asha, sides["F"], id=str(their_row.pk))
+    key_taken = give_key(baba, asha, id=str(their_row.pk))
+
+    assert not_ours.json()["fields"] == {"role": ["does_not_exist"], "side": ["does_not_exist"]}
+    assert (taken.status_code, taken.json()["fields"]) == (400, {"id": ["id.taken"]})
+    # A key's id lives in the keys' table, which shop B's role row is not in: a new id there, so the key is given.
+    assert key_taken.status_code == 200
+    assert len(roles_given(shop_a, asha)) == 1
+
+
+def test_an_id_another_shops_key_holds_is_taken(baba: StaffMember, asha: StaffMember, staff_b: StaffMember) -> None:
+    with shop_context(staff_b.shop_id):
+        their_key = grant_permission(staff_b, Permission.STOCK_COUNT, side=None, by=None)
+
+    taken = give_key(baba, asha, id=str(their_key.pk))
+
+    assert (taken.status_code, taken.json()["fields"]) == (400, {"id": ["id.taken"]})
+
+
+def test_a_key_is_one_of_the_codes(baba: StaffMember, asha: StaffMember) -> None:
+    refused = give_key(baba, asha, permission="sale.take_paymnt")
+
+    assert refused.json()["fields"] == {"permission": ["invalid_choice"]}
+
+
+def test_gives_and_ends_need_staff_manage(
+    shop_a: Shop, sides: dict[str, Side], asha: StaffMember, give_role: GiveRole
+) -> None:
+    # A manager the owner handed no staff.manage: each of the four is refused at the door, and nothing changes.
+    manager = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(manager, RoleTemplate.MANAGER, None)
+    [given] = roles_given(shop_a, asha)
+    with shop_context(shop_a):
+        [key] = PermissionGrant.objects.filter(staff=asha)
+
+    refusals = [
+        give_seller(manager, asha, sides["F"]),
+        give_key(manager, asha),
+        client_for(manager).post(act(asha, "end-role"), {"role_given": str(given.pk), "reason": "Hila"}),
+        client_for(manager).post(act(asha, "end-key"), {"key": str(key.pk), "reason": "Hila"}),
+    ]
+
+    for refused in refusals:
+        assert (refused.status_code, refused.json()["code"]) == (403, "permission_denied")
+    assert roles_given(shop_a, asha) == [given]
+    with shop_context(shop_a):
+        assert list(PermissionGrant.objects.filter(staff=asha, ended_at__isnull=True)) == [key]
+
+
+def test_who_may_reaches_the_roles_routes(shop_a: Shop, baba: StaffMember, give_role: GiveRole) -> None:
+    # The services' rules answer through the routes with their own codes: even Baba may not give the Owner role, and a
+    # manager with the key may not take the owner's away (Jack, PPL-7: A).
+    meneja = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(meneja, RoleTemplate.MANAGER, None)
+    with shop_context(shop_a):
+        grant_permission(meneja, Permission.STAFF_MANAGE, side=None, by=None)
+    [owner_role] = roles_given(shop_a, baba)
+
+    owner = give_seller(baba, meneja, None, role=str(role_of(shop_a, RoleTemplate.OWNER).pk))
+    take = client_for(meneja).post(act(baba, "end-role"), {"role_given": str(owner_role.pk), "reason": "Hila"})
+
+    assert (owner.status_code, owner.json()["code"]) == (400, "role.superuser_only")
+    assert (take.status_code, take.json()["code"]) == (400, "staff.superuser_only")
+    assert roles_given(shop_a, baba) == [owner_role]
+
+
+def test_another_shops_worker_is_not_found_for_roles(baba: StaffMember, staff_b: StaffMember) -> None:
+    assert give_key(baba, staff_b).status_code == 404
+
+
+def test_the_roles_list_answers_the_shops_six_roles(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # Done when #7: Ongeza kazi's list, each role with its template, name and codes; behind staff.manage, which Asha, a
+    # seller, lacks.
+    listed = client_for(baba).get(ROLES)
+
+    assert listed.status_code == 200
+    rows = listed.json()["results"]
+    assert sorted(row["template"] for row in rows) == sorted(RoleTemplate.values)
+    with shop_context(shop_a):
+        seller = Role.objects.get(template=RoleTemplate.SELLER)
+    [shown] = [row for row in rows if row["id"] == str(seller.pk)]
+    assert shown == {"id": str(seller.pk), "template": "seller", "name": "", "permissions": seller.permissions}
+    refused = client_for(asha).get(ROLES)
+    assert (refused.status_code, refused.json()["code"]) == (403, "permission_denied")
