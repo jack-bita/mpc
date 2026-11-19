@@ -4,8 +4,8 @@
 // As Jack pictured it (19 Nov 2026): Kiasi kwa siku, Kuanzia, Anachangia chakula? (Ndiyo, or Hapana, ni mpishi: the cook
 // pays no share of the meals, WAGE-7), Sababu (si lazima), then Hifadhi and Ghairi. A first rate starts on the worker's
 // first day, as Juma, hired on the 10th, is paid from the 10th though Baba types it on the 19th; a change starts today,
-// with the amount and the meals of the rate in force, so a raise to 12,000 is a change of one digit (WAGE-1's
-// defaults). The date box offers nothing before the worker's first day: a day gone by is fine, as the days before
+// or on the first day for a worker who hasn't started yet, with the amount and the meals of the rate in force, so a
+// raise to 12,000 is a change of one digit (WAGE-1's defaults). The date box offers nothing before the worker's first day: a day gone by is fine, as the days before
 // today are paid at the rate their own day had (rates_between), but no day before the job.
 //
 // A rate is never changed: a mistake is mended by a new rate for the same day, which counts, as the newest (rule 2).
@@ -93,8 +93,13 @@ export function PayRateForm({
   // The rate in force today, which a change starts from (see the top).
   const inForce = rates.rates.find((rate) => rate.id === rates.in_force);
   const [typed, setTyped] = useState(() => startingAmount(inForce));
+  // A first rate on the first day; a later one today, unless the worker hasn't started yet, as a rate never starts
+  // before the first day (pay_rate.before_first_day): Zawadi, starting on the 25th, gets her second rate from the 25th
+  // too, never a day the server would refuse. Days as text sort as days do.
   const [day, setDay] = useState(() =>
-    rates.rates.length === 0 ? worker.started_on : rates.today,
+    rates.rates.length === 0 || rates.today < worker.started_on
+      ? worker.started_on
+      : rates.today,
   );
   const [meals, setMeals] = useState(
     inForce?.shares_meals === false ? NO : YES,

@@ -167,6 +167,25 @@ describe("Badilisha malipo", () => {
     );
   });
 
+  it("starts a worker who hasn't started yet on their first day", async () => {
+    // Zawadi starts on the 25th and has her rate from then; Baba adds another on the 19th: the box starts on her first
+    // day, as one on today would be refused (pay_rate.before_first_day).
+    const zawadi = worker({ display_name: "Zawadi", started_on: "2026-11-25" });
+    const coming = payRate({ staff: zawadi.id, effective_from: "2026-11-25" });
+    answer("GET", ME, { status: 200, body: BABA });
+    answer("GET", `${STAFF}${zawadi.id}/`, { status: 200, body: zawadi });
+    answer("GET", PAY_RATES_ROUTE, {
+      status: 200,
+      body: payRates([coming], null),
+    });
+
+    render(<WorkerScreen id={zawadi.id} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Weka malipo" }));
+    await screen.findByRole("heading", { name: "Malipo mapya ya Zawadi" });
+
+    expect(box("Kuanzia").value).toBe("2026-11-25");
+  });
+
   it("asks about the meals again for each rate", async () => {
     const rate = payRate({ staff: JUMA.id });
     theServerHas(payRates([rate], rate));
