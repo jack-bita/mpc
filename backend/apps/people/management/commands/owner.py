@@ -121,8 +121,10 @@ class Command(BaseCommand):
         ask.say(f"New at {shop.code}: {full_name}, nickname {nickname}, phone {phone or 'none'}.")
         ask.say("They get: the Owner role on every side, and the PIN just typed.")
         if not phone:
-            # Jack, PPL-13: 3A. Allowed, as the PIN works without one; but a password logs in by phone or email, so the
-            # admin's temporary password, the runbook's next step, would be refused (password.no_login_name).
+            # Jack, PPL-13: 3A. Allowed, as the PIN works without one. But a password logs in by phone or email, and the
+            # admin's form, the runbook's next step, takes a temporary password all the same and asks for neither:
+            # he could never log in with it. The office's own route refuses that (password.no_login_name); the admin
+            # doesn't (PPL-13's review). So the warning comes here, before the yes.
             ask.say("No phone: they can't log in with a password until a phone or an email is added in the admin.")
         if not ask.yes("Make them the Owner?"):
             ask.say("Nothing written.")

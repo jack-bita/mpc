@@ -9,10 +9,13 @@ Thin, like a view (ADR-0043): what a shop gets is set_up_shop's (apps/people/ser
 its rules' (a taken code, two sides with one letter). This file asks, shows, and passes the answers on. It replaces the
 admin's Add shop, which saved the shop's row alone, with no sides, and so made a shop that couldn't work (parking lot
 item 16, SHOP-2). In `people`, not `shops`: set_up_shop is a `people` service, as it copies the roles in, and `shops`
-may not import `people` (ADR-0035).
+may not import `people` (ADR-0043, the layers).
 
-    python manage.py open_shop                     on a laptop, to try it
-    docker compose exec backend python manage.py open_shop     on the server (docs/runbooks/open-a-shop.md)
+    python manage.py open_shop      on a laptop, only on a database you then throw away: a live shop is never deleted
+                                    (rule 7), and the demo seed refuses a database that holds one
+    docker compose -f compose.prod.yml exec backend python manage.py open_shop      on the server
+
+The runbook says when and how: docs/runbooks/open-a-shop.md.
 """
 
 from typing import Any
