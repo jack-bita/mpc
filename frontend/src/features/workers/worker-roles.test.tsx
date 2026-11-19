@@ -101,8 +101,8 @@ function givesAreSaved(server: ReturnType<typeof theServerHas>) {
   });
 }
 
-/** What the app sent to the give routes, as the server would read it. */
-async function gives(): Promise<Record<string, unknown>[]> {
+/** What the app sent to the give and end routes, in order, as the server would read it. */
+async function posted(): Promise<Record<string, unknown>[]> {
   return Promise.all(
     sent
       .filter((request) => request.method === "POST")
@@ -174,7 +174,7 @@ describe("Ongeza kazi", () => {
     const line =
       "Juma amepewa Muuzaji (Dawa). Kompyuta za duka zitajua baada ya kusawazisha.";
     await waitFor(() => expect(document.activeElement?.textContent).toBe(line));
-    const [sentOnce] = await gives();
+    const [sentOnce] = await posted();
     expect(sentOnce).toEqual({
       id: expect.stringMatching(/^[0-9a-f-]{36}$/),
       role: SELLER_ROLE.id,
@@ -206,7 +206,7 @@ describe("Ongeza kazi", () => {
     await screen.findByText(
       "Juma amepewa Kuhesabu mzigo (Pande zote). Kompyuta za duka zitajua baada ya kusawazisha.",
     );
-    const [sentOnce] = await gives();
+    const [sentOnce] = await posted();
     expect(sentOnce).toEqual({
       id: expect.stringMatching(/^[0-9a-f-]{36}$/),
       permission: "stock.count",
@@ -247,7 +247,7 @@ describe("Ongeza kazi", () => {
       ),
     );
 
-    const [first, again, changed] = await gives();
+    const [first, again, changed] = await posted();
     // A give whose answer was lost, sent again, finds the row the first made (ADR-0007).
     expect(again?.id).toBe(first?.id);
     // Another side is another give: an old id with new choices would be id.taken (PPL-7's review).
@@ -286,7 +286,7 @@ describe("Ongeza kazi", () => {
     pick("Kuhesabu mzigo");
     await save(4);
 
-    const [dawa, vyakula, dawaAgain, key] = await gives();
+    const [dawa, vyakula, dawaAgain, key] = await posted();
     // Back on Dawa: Dawa's own id, so the row the first send may have made comes back, never role.already_given.
     expect(dawaAgain?.id).toBe(dawa?.id);
     expect(vyakula?.id).not.toBe(dawa?.id);
@@ -587,6 +587,28 @@ describe("Ongeza kazi", () => {
     );
   });
 
+  it("switches Hifadhi off while the give is on its way, so a second tap sends nothing", async () => {
+    theServerHas(JUMA);
+    // The server takes its time.
+    answer(
+      "POST",
+      `${STAFF}${JUMA.id}/give-role/`,
+      () => new Promise<Response>(() => undefined),
+    );
+
+    render(<WorkerScreen id={JUMA.id} />);
+    await openTheGive();
+    await pickRole("Muuzaji");
+    pick("Dawa");
+    fireEvent.click(button("Hifadhi"));
+
+    await waitFor(() =>
+      expect(button("Hifadhi").hasAttribute("disabled")).toBe(true),
+    );
+    fireEvent.click(button("Hifadhi"));
+    expect(sent.filter((request) => request.method === "POST")).toHaveLength(1);
+  });
+
   it("switches Hifadhi off offline", async () => {
     theServerHas(JUMA);
 
@@ -636,15 +658,6 @@ const JUMA_WITH_BOTH = {
   keys: [COUNT_ON_VYAKULA],
 };
 
-/** What the app sent to the end routes, as the server would read it. */
-async function ends(): Promise<Record<string, unknown>[]> {
-  return Promise.all(
-    sent
-      .filter((request) => request.method === "POST")
-      .map((request) => request.json() as Promise<Record<string, unknown>>),
-  );
-}
-
 describe("Ondoa", () => {
   it("takes Juma's role away with a reason, and it is gone from the page (the card's fourth Done when)", async () => {
     const server = theServerHas(JUMA_WITH_BOTH);
@@ -672,7 +685,7 @@ describe("Ondoa", () => {
     const line =
       "Umemwondolea Juma Muuzaji (Dawa). Kompyuta za duka zitajua baada ya kusawazisha.";
     await waitFor(() => expect(document.activeElement?.textContent).toBe(line));
-    expect(await ends()).toEqual([
+    expect(await posted()).toEqual([
       { role_given: SELLER_ON_DAWA.id, reason: "Amehamia Vyakula" },
     ]);
     expect(linesUnder("Cheo")).toEqual([]);
@@ -701,7 +714,7 @@ describe("Ondoa", () => {
     await screen.findByText(
       "Umemwondolea Juma Kuhesabu mzigo (Vyakula). Kompyuta za duka zitajua baada ya kusawazisha.",
     );
-    expect(await ends()).toEqual([
+    expect(await posted()).toEqual([
       { key: COUNT_ON_VYAKULA.id, reason: "Hesabu imeisha" },
     ]);
     expect(screen.getByText("Hana ruhusa za ziada")).toBeTruthy();
@@ -849,9 +862,43 @@ describe("Ondoa", () => {
     );
   });
 
-  it("names roles and keys in the three who-may sentences (PPL-7's note)", () => {
-    for (const code of ["staff.own", "staff.superuser_only", "staff.more_keys"])
+  it("names roles and keys in the three who-may sentences, in both books (PPL-7's note)", () => {
+    for (const code of [
+      "staff.own",
+      "staff.superuser_only",
+      "staff.more_keys",
+    ]) {
       expect(sentence(code), code).toContain("vyeo na ruhusa");
+      let english: unknown = MESSAGES.en.errors;
+      for (const part of code.split("."))
+        english = (english as Record<string, unknown>)[part];
+      expect(english, code).toContain("roles or permissions");
+    }
+  });
+
+  it("switches Hifadhi off while the end is on its way, so a second tap sends nothing", async () => {
+    theServerHas(JUMA_WITH_BOTH);
+    // The server takes its time.
+    answer(
+      "POST",
+      `${STAFF}${JUMA.id}/end-role/`,
+      () => new Promise<Response>(() => undefined),
+    );
+
+    render(<WorkerScreen id={JUMA.id} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
+    );
+    fireEvent.change(screen.getByLabelText("Sababu"), {
+      target: { value: "Amehamia Vyakula" },
+    });
+    fireEvent.click(button("Hifadhi"));
+
+    await waitFor(() =>
+      expect(button("Hifadhi").hasAttribute("disabled")).toBe(true),
+    );
+    fireEvent.click(button("Hifadhi"));
+    expect(sent.filter((request) => request.method === "POST")).toHaveLength(1);
   });
 
   it("closes on staff.left, says so, and reads Juma again", async () => {
