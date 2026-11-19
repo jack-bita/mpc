@@ -369,6 +369,20 @@ def _locked_for_a_change(staff: StaffMember, by: StaffMember | None) -> tuple[St
     return staff, by
 
 
+def lock_worker_for_a_change(staff: StaffMember, by: StaffMember | None) -> tuple[StaffMember, StaffMember | None]:
+    """The PIN's rule (02 §5), for a change another app makes to a worker, as setting their pay rate (WAGE-1): the
+    same lock and the same check as a suspension or a fix of their details, never a copy of them. Checks that both
+    jobs are of the shop open (T1), locks both, then asks who may on them as they are now; returns both as read under
+    the locks. `by` None: the system or the superuser, who may change anyone. Call it inside the transaction that writes
+    the change, so the locks hold until it commits. Refuses with the codes of a change to a worker (`staff.own`,
+    `staff.superuser_only`, `staff.more_keys`, `staff.left`; on the demo, `demo.people_fixed`), and 403 without
+    `staff.manage` on the whole shop."""
+    # Another app's door to the lock above: the people app owns who may change a worker, so a second copy of the rule
+    # elsewhere could drift from it. The shop check is the one each of this file's own services makes first.
+    _check_shop(staff.shop_id, by)
+    return _locked_for_a_change(staff, by)
+
+
 def _check_people_fixed_on_demo(staff: StaffMember) -> None:
     # On the demo every visitor logs in as Meneja (OPS-3), who holds staff.manage there, so a visitor can try the
     # workers' page (Jack, PPL-4: A). The people the seed made stay as made: a visitor who suspended Asha, or marked

@@ -11,8 +11,9 @@ review); and the sides stay as the seed made them, as the same key also switches
 (demo.sides_fixed). Meneja holds staff.manage on the whole shop too, so a visitor can try Wafanyakazi (Jack, PPL-4: A):
 add a worker, then suspend him or mark him left; the people the seed made stay as made (demo.people_fixed,
 apps/people/services.py), so no visitor takes Asha or Baraka off another visitor's PIN tiles. The shop starts with
-attendance switched on and two made-up fines (DEMO_RULES, ATT-2), and closed on the next three public holidays
-(PUBLIC_HOLIDAYS, ATT-8).
+attendance switched on and two made-up fines (DEMO_RULES, ATT-2), closed on the next three public holidays
+(PUBLIC_HOLIDAYS, ATT-8), and each of its people paid a made-up daily rate from their first day (DemoPerson.daily_rate,
+WAGE-1), which a visitor sees on Meneja's Wafanyakazi and can't change, as the seed's people stay as made.
 
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
@@ -54,6 +55,7 @@ login page has no rate limit yet (04 DATA-1, v1.8).
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -83,6 +85,8 @@ from apps.people.services import (
 from apps.shops.models import Closure, Setting, Shop, ShopKind, Side, SideBand
 from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide, add_closure, set_setting, switch_side
+from apps.staffpay.models import PayRate
+from apps.staffpay.services import set_pay_rate
 
 SHOP_NAME = "Duka la Mfano"
 SHOP_CODE = "DEMO"
@@ -105,7 +109,8 @@ class DemoPerson:
     # One person of the demo shop, as the seed makes them. `side`: the letter of the side their role is on, None for
     # every side, as a shop's manager is. `pin`: four digits the PIN rules allow (apps/people/pins.py), or None for
     # a person who logs in only with their password. `keys`: extra keys beyond the role's, each on the whole shop,
-    # given as an owner gives one (grant_permission).
+    # given as an owner gives one (grant_permission). `daily_rate`: their made-up pay for a day, in whole shillings,
+    # from their first day (set_pay_rate, WAGE-1), or None for one paid no day, as a shop's owner is.
     full_name: str
     display_name: str
     role: RoleTemplate
@@ -114,6 +119,7 @@ class DemoPerson:
     email: str | None = None
     password: str | None = None
     keys: tuple[Permission, ...] = ()
+    daily_rate: str | None = None
 
 
 PEOPLE = (
@@ -133,10 +139,12 @@ PEOPLE = (
         email=MANAGER_EMAIL,
         password=MANAGER_PASSWORD,
         keys=(Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE),
+        # Made-up amounts, as everything here is (rule 10): a manager paid a little more than a seller.
+        daily_rate="15000",
     ),
     # A seller on each side, with a PIN only: they log in at the shop's laptop, as a seller does.
-    DemoPerson("Asha Mfano", "Asha", RoleTemplate.SELLER, side="D", pin="2580"),
-    DemoPerson("Baraka Mfano", "Baraka", RoleTemplate.SELLER, side="F", pin="1470"),
+    DemoPerson("Asha Mfano", "Asha", RoleTemplate.SELLER, side="D", pin="2580", daily_rate="10000"),
+    DemoPerson("Baraka Mfano", "Baraka", RoleTemplate.SELLER, side="F", pin="1470", daily_rate="10000"),
 )
 
 # The side a one-tap demo device serves (OPS-3): Dawa, where Asha sells. Any seller can still log in on it.
@@ -219,6 +227,7 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
         and _holds_its_rules(shop)
         and _holds_its_closures(shop)
         and _holds_its_keys(shop)
+        and _holds_its_rates(shop)
     ):
         return Seeded.KEPT
     try:
@@ -318,6 +327,22 @@ def _holds_its_keys(shop: Shop) -> bool:
     return all(keys <= held.get(name, set()) for name, keys in wanted.items())
 
 
+def _holds_its_rates(shop: Shop) -> bool:
+    # Whether today's demo pays each of the seed's people the daily rate this seed gives them (DemoPerson.daily_rate),
+    # as the system set it: as for its rules, a deploy whose seed gives its people a rate must not keep a demo made that
+    # morning without one, or Wafanyakazi would show no pay until the next morning (WAGE-1). The person is found by
+    # their nickname among those the system made, as for the keys; the amount by its rows the system set. Nothing a
+    # visitor does changes a seed person's rate (demo.people_fixed), and a rate is never changed, only added to.
+    wanted = {(person.display_name, Decimal(person.daily_rate)) for person in PEOPLE if person.daily_rate is not None}
+    with shop_context(shop):
+        set_by_the_system = set(
+            PayRate.objects.filter(shop=shop, created_by__isnull=True, staff__created_by__isnull=True).values_list(
+                "staff__display_name", "daily_rate"
+            )
+        )
+    return wanted <= set_by_the_system
+
+
 def _holds_its_closures(shop: Shop) -> bool:
     # Whether today's demo holds every closure this seed adds, as the system added them: as for its rules, a deploy
     # whose seed adds a closure must not keep a demo made that morning without it (ATT-8). Known by its first day and
@@ -368,6 +393,10 @@ def _make_the_shop() -> Shop:
                 grant_permission(staff, key, side=None, by=None)
             if person.pin is not None:
                 set_pin(staff, person.pin, by=None)
+            # Their pay from their first day, today, as the system: a visitor sees it on the worker's page (WAGE-1),
+            # and the month page lists them by it (ATT-5). No laptop gets a rate, so it adds no line to this block.
+            if person.daily_rate is not None:
+                set_pay_rate(staff, daily_rate=Decimal(person.daily_rate), effective_from=staff.started_on, by=None)
     return shop
 
 

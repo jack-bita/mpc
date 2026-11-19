@@ -5,8 +5,9 @@
 // title, first day and phone; their status, and their last day once they left; and whether the superuser switched
 // them off. Badilisha turns the details into boxes, in their place (PPL-10, worker-details-form.tsx). Under the
 // buttons, Kuingia: whether they have a PIN, Weka PIN and Nenosiri la muda (PPL-12, worker-logins.tsx); then a card of
-// their roles and extra keys, each by its name and side (PPL-8, worker-roles.tsx). Later cards add here: the photo
-// (PPL-9), and the pay so far (WAGE-2), so the owner pays one who leaves at once.
+// their roles and extra keys, each by its name and side (PPL-8, worker-roles.tsx); under it, their daily pay rate and
+// its history, for whoever holds settings.manage and staff.manage (WAGE-1, worker-pay.tsx). Later cards add here: the photo (PPL-9), and
+// the pay so far (WAGE-2), so the owner pays one who leaves at once.
 //
 // At /workers/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address
 // (app/(office)/workers/view/page.tsx). It asks GET /api/v1/people/staff/{id}/, and shows the list's copy at once when
@@ -27,8 +28,10 @@ import { askDemoOpen, DEMO_OPEN } from "@/features/devices/demo";
 import { useWhoIsHere } from "@/features/people/who-is-here";
 import { formatDay, formatPhone } from "@/lib/format";
 
+import { maySeePay, usePayRates } from "./pay-rates";
 import { WorkerActions } from "./worker-actions";
 import { WorkerLogins } from "./worker-logins";
+import { WorkerPay } from "./worker-pay";
 import { WorkerRoles } from "./worker-roles";
 import { useRoles, useWorker, type Worker } from "./workers";
 
@@ -74,6 +77,15 @@ export function WorkerScreen({ id }: { id: string | null }) {
     error: rolesRead.error,
     isPending: rolesRead.isPending,
   };
+  // The worker's pay rates (WAGE-1), for whoever may see them: asked here, the part always on the page, and handed down
+  // by their values, as the roles are; asked for nobody else, as the server would refuse them.
+  const seesPay = who.data !== undefined && maySeePay(who.data);
+  const ratesRead = usePayRates(id, seesPay);
+  const rates = {
+    data: ratesRead.data,
+    error: ratesRead.error,
+    isPending: ratesRead.isPending,
+  };
   // Which card has a form open, if any (PPL-8's review): one form at a time on the page, so a person never meets two
   // Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other cards' buttons hide
   // meanwhile. Each card's own callback, kept the same between draws, as each says "closed" as it goes (its unmount).
@@ -88,6 +100,10 @@ export function WorkerScreen({ id }: { id: string | null }) {
   );
   const rolesForm = useCallback(
     (open: boolean) => setFormIn((now) => opened("roles", open, now)),
+    [],
+  );
+  const payForm = useCallback(
+    (open: boolean) => setFormIn((now) => opened("pay", open, now)),
     [],
   );
   /** Another card than this one has a form open: this one's buttons hide. */
@@ -148,6 +164,18 @@ export function WorkerScreen({ id }: { id: string | null }) {
             onForm={rolesForm}
             buttonsHidden={elsewhere("roles")}
           />
+          {/* Under the roles, as Jack pictured it (WAGE-1), for whoever may see a worker's pay. A worker of its own, as
+              the cards above: Asha's open form never goes on to Baraka's page. */}
+          {seesPay ? (
+            <WorkerPay
+              key={`${worker.data.id}-pay`}
+              worker={worker.data}
+              me={who.data}
+              rates={rates}
+              onForm={payForm}
+              buttonsHidden={elsewhere("pay")}
+            />
+          ) : null}
         </>
       ) : null}
     </div>
@@ -155,7 +183,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
 }
 
 /** The cards that open a form, each in its own place on the page. */
-type Card = "actions" | "logins" | "roles";
+type Card = "actions" | "logins" | "roles" | "pay";
 
 /** What a card's "opened" (true) or "closed" (false) makes of the card with a form open: a close of a card that holds
  * none changes nothing, as each card says "closed" as it goes. */

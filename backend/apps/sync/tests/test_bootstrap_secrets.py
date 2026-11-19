@@ -10,6 +10,8 @@ byte of it. So these never travel:
     the device's key, or its hash  the key is the laptop's login; its hash finds the device (AUTH-1, AUTH-2)
     a phone, an email              a person's own, not the next person's at the laptop (UI-4)
     a buying price                 not every seller may see it (02 §7); no table holds one yet, so the names catch it
+    a pay rate, a payslip          a worker's pay never sits on a shared device (03 §6.1, WAGE-1): no table sends one,
+                                   so the names catch it
 
 Three checks. The bootstrap's answer and a pull's page, as sent, hold none of a real person's secrets, and no name in
 them looks secret. Every field the registry sends, and every field a pull's page adds around a record, is checked by its
@@ -51,8 +53,11 @@ KEY_COOKIE = "device_key"
 # A word that marks a secret, as a whole word of a name, plural too: `pin_hash`, `password`, `unit_cost`, `phones`,
 # never `monkey` or `costume`. The same idea as SECRET_COLUMN (backend/tests/test_edit_history.py), with a seller's
 # secrets added: what a sale cost the shop (cost, buying, profit, margin: `cost.view`'s, 02 §5), a phone and an email;
-# and `key` kept apart, below.
-SECRET_WORD = re.compile(r"(^|_)(hash|password|secret|token|pepper|cost|buying|profit|margin|phone|email)(e?s)?(_|$)")
+# a worker's pay (rate, wage, salary, payslip: 03 §6.1, WAGE-1), never `rated` or `separate`; and `key` kept apart,
+# below.
+SECRET_WORD = re.compile(
+    r"(^|_)(hash|password|secret|token|pepper|cost|buying|profit|margin|phone|email|rate|wage|salary|payslip)(e?s)?(_|$)"
+)
 # `key` alone is a rule's name in the list in core ("attendance.late_fine"), which a setting's row must carry. Inside a
 # longer name it marks a secret: `key_hash`, `api_key`.
 KEY_WORD = re.compile(r"(^|_)key(_|$)")
@@ -244,6 +249,7 @@ class _Planted(serializers.Serializer[Any]):
     unit_costs = serializers.ListField(child=serializers.CharField())  # by a plural
     extras = _Inner(many=True)  # in a list of nested records
     profit_margin = serializers.CharField()  # by the words of what a sale cost the shop
+    daily_rate = serializers.CharField()  # by the words of a worker's pay
     # By what a link shows of its row, alone and in a many-link.
     owner = serializers.SlugRelatedField[Any](source="user", slug_field="password", read_only=True)
     batches = serializers.SlugRelatedField[Any](many=True, slug_field="unit_cost", read_only=True)
@@ -268,6 +274,8 @@ def test_secret_check_finds_what_it_must() -> None:
         "extras.api_key: reads api_key",
         "profit_margin: its name",
         "profit_margin: reads profit_margin",
+        "daily_rate: its name",
+        "daily_rate: reads daily_rate",
         "owner: shows password",
         "batches: shows unit_cost",
         "wrapped.api_key: its name",

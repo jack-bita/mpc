@@ -607,6 +607,35 @@
       "removeWhat": "Take away {what}",
       "title": "Take {what} away from {name}",
       "done": "{what} was taken away from {name}. The shop's laptops will know after their next sync."
+    },
+    "pay": {
+      "title": "Daily pay",
+      "now": "Now: {amount} a day · {meals}",
+      "none": "No daily pay yet.",
+      "history": "History",
+      "line": "From {day} · {amount} · {meals}",
+      "lineWithNote": "From {day} · {amount} · {meals} · {note}",
+      "meals": {
+        "yes": "pays a share of the meals",
+        "no": "pays no share of the meals (the cook)"
+      },
+      "set": "Set the pay",
+      "change": "Change the pay",
+      "saved": "{name}'s pay is saved: {amount} a day, from {day}.",
+      "form": {
+        "title": "New pay for {name}",
+        "amount": "Amount a day",
+        "amountHint": "Whole shillings, such as 10000.",
+        "from": "From",
+        "fromHint": "The first day of this pay. It can be a day gone by, but not before their first day at work.",
+        "meals": "Pays a share of the meals?",
+        "mealsYes": "Yes",
+        "mealsNo": "No, the cook",
+        "note": "Reason (optional)",
+        "noteHint": "Such as: A raise.",
+        "save": "Save",
+        "cancel": "Cancel"
+      }
     }
   },
   "attendance": {
@@ -888,9 +917,9 @@
       "other_shop": "This belongs to another shop.",
       "reason_required": "Write a reason.",
       "temporary_password_open": "This person still has a temporary password. This permission waits until they choose their own.",
-      "own": "You can't change your own work status, details, roles or permissions.",
-      "superuser_only": "Only the system admin can change this person's work status, details, roles or permissions.",
-      "more_keys": "This person has permissions you don't, so you can't change their work status, details, roles or permissions.",
+      "own": "You can't change your own work status, details, pay, roles or permissions.",
+      "superuser_only": "Only the system admin can change this person's work status, details, pay, roles or permissions.",
+      "more_keys": "This person has permissions you don't, so you can't change their work status, details, pay, roles or permissions.",
       "display_name_taken": "Another worker already has this nickname. Choose another.",
       "not_active": "This worker is already suspended.",
       "not_suspended": "This worker isn't suspended.",
@@ -947,7 +976,7 @@
       "closed": "The demo isn't open here.",
       "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in.",
       "sides_fixed": "On the demo, the sides stay as they are, so every visitor can try them.",
-      "people_fixed": "On the demo, the first workers stay as they are, so every visitor can log in. Add a new worker to try this.",
+      "people_fixed": "On the demo, the first workers stay as they are, so every visitor finds them the same. Add a new worker to try this.",
       "phones_fixed": "On the demo, workers get no phone number, so nobody's real number is shown to every visitor.",
       "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
       "no_note": "On the demo, notes aren't kept. Leave this box empty.",
@@ -962,6 +991,10 @@
       "reason_required": "Write the reason.",
       "started": "These days have already started. Change the last day instead.",
       "not_active": "This closure was already cancelled."
+    },
+    "pay_rate": {
+      "amount_invalid": "Type a whole number of shillings, above 0.",
+      "before_first_day": "A rate can't start before this worker's first day."
     },
     "attachment": {
       "not_found": "The server has no such photo.",

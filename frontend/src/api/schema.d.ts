@@ -650,6 +650,40 @@ export interface paths {
         patch: operations["shops_sides_partial_update"];
         trace?: never;
     };
+    "/api/v1/staffpay/pay-rates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        get: operations["staffpay_pay_rates_list"];
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_pay_rates_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1048,6 +1082,43 @@ export interface components {
             readonly code: string;
             /** Format: date-time */
             readonly expires_at: string;
+        };
+        PayRate: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly staff: string;
+            /** Format: decimal */
+            readonly daily_rate: string;
+            readonly shares_meals: boolean;
+            /** Format: date */
+            readonly effective_from: string;
+            readonly note: string;
+            readonly set_by: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        PayRateCreateRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            staff: string;
+            /** Format: decimal */
+            daily_rate: string;
+            shares_meals: boolean;
+            /** Format: date */
+            effective_from: string;
+            note?: string;
+        };
+        PayRatesAnswer: {
+            /** Format: date */
+            today: string;
+            /**
+             * Format: uuid
+             * @description The rate in force on the shop's today, or none.
+             */
+            in_force: string | null;
+            rates: components["schemas"]["PayRate"][];
         };
         PaymentAccountChange: {
             seq: number;
@@ -2890,6 +2961,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Side"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_pay_rates_list: {
+        parameters: {
+            query: {
+                /** @description The worker's job. */
+                staff: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayRatesAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_pay_rates_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayRateCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayRate"];
                 };
             };
             default: {

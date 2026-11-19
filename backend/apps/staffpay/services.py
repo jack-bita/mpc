@@ -1,4 +1,5 @@
-"""apps/staffpay/services.py — the writes of attendance and pay: the book of days (ATT-10; 02 §12).
+"""apps/staffpay/services.py — the writes of attendance and pay: the book of days (ATT-10; 02 §12), and each worker's
+daily pay rate (WAGE-1).
 
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
@@ -13,28 +14,38 @@ see go to review: a closed day with a tap (ATT-10); and a day with a tap in doub
 tap can come late from a laptop that was offline, a manager can void a tap (ATT-6), and a job's first or last day can be
 moved (PPL-10). ATT-5 asks for a month to show, WAGE-2 for a month to pay, ATT-7 each night. No route of its own, and no
 line in the change log: no laptop keeps a copy of the days.
+
+A pay rate is typed by a person, the owner (set_pay_rate): from 10 Nov, Juma earns 10,000 a day. Whoever sets it sets a
+worker's pay, so who may is the PIN's rule, asked by the people app (02 §5). No line in the change log either: a
+worker's pay never sits on a shared device (03 §6.1).
 """
 
 import datetime as dt
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, replace
+from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
 
 from apps.control.models import Flag, FlagKind
 from apps.core.acting import acting_as
 from apps.core.links import table_of
+from apps.core.permissions import Permission
 from apps.core.settings_registry import ATTENDANCE_ON
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
-from apps.people.models import StaffMember
+from apps.people.models import StaffMember, StaffStatus
+from apps.people.permissions import require
+from apps.people.services import lock_worker_for_a_change
 from apps.shops.models import Shop
 from apps.shops.selectors import closed_days, shop_settings_between, shop_today
 from apps.staffpay.calculations import NO_FINE, DayResult, Tap, shop_minute, work_out_day
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, TimeCheck
+from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, PayRate, TimeCheck
 from apps.staffpay.selectors import day_rules_between, rules_as_text
 
 # Sunday, as Python numbers the days of the week (Monday is 0). Always off, and not paid: Sunday work is a deal between
@@ -308,3 +319,83 @@ def _keep(answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], A
     if new:
         AttendanceDay.objects.bulk_create(new)
     return rows
+
+
+def set_pay_rate(
+    staff: StaffMember,
+    *,
+    daily_rate: Decimal,
+    effective_from: dt.date,
+    shares_meals: bool = True,
+    note: str = "",
+    rate_id: uuid.UUID | None = None,
+    by: StaffMember | None,
+) -> PayRate:
+    """Give a worker a daily pay rate from the day `effective_from` on: one new PayRate row (WAGE-1, 02 §12). A raise
+    is a new rate from its day; a rate typed wrong is mended by a new one for the same day, which counts, as the newest.
+    `shares_meals`: False for the cook, who pays no share of the meals (WAGE-7). `rate_id`: the id the client made for
+    the row (ADR-0007), if it made one. `by`: who sets it, under the PIN's rule and with settings.manage on the whole
+    shop; None for the system or the superuser. Refuses, all together, each beside its box: an amount of 0 or less, or
+    with cents (pay_rate.amount_invalid); a day before the job's first (pay_rate.before_first_day); and on the demo, a
+    person's note (demo.no_note). Returns the rate as saved."""
+    # Spaces around a note say nothing, and "  " is no note.
+    note = note.strip()
+    # One transaction: the lock below holds until the rate is saved, so who may is asked of the jobs as they are when it
+    # is written. Not a recording_changes block: a rate writes no line in the change log, as no laptop gets one.
+    with transaction.atomic():
+        # Both jobs locked, then who may asked on them as they are now, by the people app, which owns the rule (02 §5):
+        # whoever sets a rate sets a worker's pay, as whoever sets a PIN can act as them. So staff.manage on the whole
+        # shop, holding every key the worker was given; never one's own rate (a manager raising his own pay); an owner's
+        # only by the superuser. The same lock the book of days takes on every job (work_out_days), so a rate set while
+        # a manager opens the month waits a moment for it.
+        staff, by = lock_worker_for_a_change(staff, by)
+        # And the key that changes the shop's rules and rates, the owner's (spec §6): a manager handed staff.manage to
+        # reset PINs, or to add a loader, may not change anyone's pay with it (WAGE-1's card). Read afresh, after the
+        # lock, as the rule above reads its own key: a key taken away a moment ago counts.
+        if by is not None:
+            require(by, Permission.SETTINGS_MANAGE, None)
+        # A job that ended is history: its pay up to its last day is worked out with the rates it had. Asked of a person
+        # by the rule above already; here for the system too, as change_worker asks it.
+        if staff.status == StaffStatus.LEFT:
+            raise ValidationError("This person has already left.", code="staff.left")
+        # The boxes, all together, so a person who typed two wrong sees both at once, each beside its box. Each a code
+        # the page translates (ADR-0040).
+        errors: dict[str, list[ValidationError]] = {}
+        # More than nothing, in whole shillings (Jack, 16 Nov 2026), as the table's two rules hold: named here, beside
+        # the amount's box, where the table's own rules would name the whole row. to_integral_value() drops the places
+        # without rounding the check away: 10000.50 is not whole.
+        if daily_rate <= 0 or daily_rate != daily_rate.to_integral_value():
+            errors["daily_rate"] = [
+                ValidationError("A day's pay is a whole amount above 0.", code="pay_rate.amount_invalid")
+            ]
+        # Any day of the job, gone by or to come: Juma started on 10 Nov and Baba types his rate on the 19th, from the
+        # 10th, so those days are paid. Never before the job's first day, read under the lock: a day before it is not a
+        # day of this job to pay. A day in an approved month is WAGE-3's to refuse, once pay runs exist.
+        if effective_from < staff.started_on:
+            errors["effective_from"] = [
+                ValidationError("A rate can't start before the worker's first day.", code="pay_rate.before_first_day")
+            ]
+        # On the demo every visitor logs in as Meneja (OPS-3): a note would show to every visitor after them, signed by
+        # the shared manager, until the morning's seed, so a person's note isn't kept, as for a rule (demo.no_note,
+        # set_setting). The seed's people are already refused above (demo.people_fixed); a worker a visitor added can
+        # be given a rate, as trying that is the point. The system, as the seed acts, still may.
+        if settings.DEMO_SEED and by is not None and note:
+            errors["note"] = [ValidationError("On the demo, a note isn't kept.", code="demo.no_note")]
+        if errors:
+            raise ValidationError(errors)
+        rate = PayRate(
+            shop_id=staff.shop_id,
+            staff=staff,
+            daily_rate=daily_rate,
+            effective_from=effective_from,
+            shares_meals=shares_meals,
+            note=note,
+            created_by=by,
+        )
+        if rate_id is not None:
+            # The client's id, not a new one: a retry of the same request then finds the rate it made.
+            rate.id = rate_id
+        # The row's own checks last, as a guard on what the boxes above already asked: a note too long, an id taken.
+        rate.full_clean()
+        rate.save()
+    return rate

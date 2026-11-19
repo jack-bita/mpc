@@ -2120,6 +2120,98 @@
                     }
                 }
             }
+        },
+        "/api/v1/staffpay/pay-rates/": {
+            "get": {
+                "operationId": "staffpay_pay_rates_list",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "staff",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "The worker's job.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PayRatesAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "staffpay_pay_rates_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PayRateCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PayRate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -3354,6 +3446,122 @@
                 "required": [
                     "code",
                     "expires_at"
+                ]
+            },
+            "PayRate": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "daily_rate": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$",
+                        "readOnly": true
+                    },
+                    "shares_meals": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "effective_from": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    },
+                    "note": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "set_by": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "daily_rate",
+                    "effective_from",
+                    "id",
+                    "note",
+                    "set_by",
+                    "shares_meals",
+                    "staff"
+                ]
+            },
+            "PayRateCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "daily_rate": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "shares_meals": {
+                        "type": "boolean"
+                    },
+                    "effective_from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "note": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "daily_rate",
+                    "effective_from",
+                    "id",
+                    "shares_meals",
+                    "staff"
+                ]
+            },
+            "PayRatesAnswer": {
+                "type": "object",
+                "properties": {
+                    "today": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "in_force": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "description": "The rate in force on the shop's today, or none."
+                    },
+                    "rates": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PayRate"
+                        }
+                    }
+                },
+                "required": [
+                    "in_force",
+                    "rates",
+                    "today"
                 ]
             },
             "PaymentAccountChange": {

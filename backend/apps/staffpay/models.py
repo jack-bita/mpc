@@ -20,9 +20,17 @@ per day, which keeps each answer with the rules it used:
 
 The events are the truth and the days only answers worked out from them: a day is worked out again, from its taps and
 its date's rules, as often as it is asked, until its pay run is approved (WAGE-3).
+
+And each worker's daily pay rate, dated (PayRate, WAGE-1), a ledger like the events: a raise is a new row from its day,
+and the old one stays, so a month with a raise on the 15th pays each day at its own rate (WAGE-2):
+
+    who    from        rate        shares meals
+    Juma   10 Nov      10,000.00   yes
+    Juma   15 Nov      12,000.00   yes
 """
 
 from django.db import models
+from django.db.models.functions import Floor
 
 from apps.core.models import AppendOnly, CounterRecord, ShopScoped
 
@@ -275,3 +283,59 @@ class AttendanceDay(ShopScoped):
 
     def __str__(self) -> str:
         return f"{self.date:%Y-%m-%d} {self.status}"
+
+
+class PayRate(AppendOnly):
+    # One worker's pay for a day, from a day on (WAGE-1, 02 §12): "from 10 Nov, Juma earns 10,000 a day". A dated rule,
+    # so a ledger (rule 2), as a Setting is: a raise is a new row from its day and the old one stays, so a month with a
+    # raise on the 15th pays the 10th to the 14th at the old rate. AppendOnly (CORE-3) refuses a second save() and any
+    # delete() in Python, and the trigger in this table's migration refuses the same in PostgreSQL (ADR-0021). A rate
+    # typed wrong is mended by a new row for the same day: of two rows on one day the one written last counts, as for a
+    # setting (02 §4), and the slip stays in the history. Who set it is the row's `created_by` (ShopScoped).
+    # Never on a laptop: a worker's pay never sits on a shared device (03 §6.1), so the service writes no line in the
+    # change log, and no sync answer carries one. Written only by set_pay_rate (apps/staffpay/services.py), which asks
+    # who may; read for a span by rates_between (apps/staffpay/selectors.py).
+
+    # Whose rate: a job, not a person, as a day's `staff` is: a person who left and was hired again has a new job, and
+    # its rates start afresh (PPL-11). PROTECT: nothing is deleted. No index of its own: the lookup below leads with
+    # `shop`, then the job.
+    staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
+    # Money, so numeric(14,2) and a Decimal, never a float (rule 3, 03 §9); above 0 and in whole shillings, as the rules
+    # below hold.
+    daily_rate = models.DecimalField(max_digits=14, decimal_places=2)
+    # Whether the worker pays a share of the day's meals (WAGE-7): every worker does but the cook, who makes them. On
+    # the rate, as it is dated too: a worker who becomes the cook mid-month pays a share up to that day and none after.
+    shares_meals = models.BooleanField(default=True)
+    # The shop's day the rate starts on: a business date, not a moment (02 §1). Any day of the job, gone by or still to
+    # come; never before the job's first day, which the service checks, as the job's first day can be fixed (PPL-10).
+    effective_from = models.DateField()
+    # Why the rate changed, in the owner's own words ("Ameongezewa"); optional, as a first rate needs no reason.
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta(AppendOnly.Meta):
+        # Built on AppendOnly.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). Each rule
+        # carries the code the page translates (ADR-0032), as the model's own checks (full_clean) name it to the
+        # person who typed the amount; the database holds the same rules for whatever writes past them.
+        constraints = [
+            # A day's pay is more than nothing: a rate of 0 would pay a worker nothing while they came every day.
+            models.CheckConstraint(
+                condition=models.Q(daily_rate__gt=0),
+                name="staffpay_payrate_above_zero",
+                violation_error_code="pay_rate.amount_invalid",
+            ),
+            # Whole shillings, as every money rule is (Jack, 16 Nov 2026): 10,000.50 is a typo, and every screen writes
+            # money with formatMoney, which has no cents. FLOOR of a whole amount is the amount itself.
+            models.CheckConstraint(
+                condition=models.Q(daily_rate=Floor("daily_rate")),
+                name="staffpay_payrate_whole_shillings",
+                violation_error_code="pay_rate.amount_invalid",
+            ),
+        ]
+        indexes = [
+            # The reads a rate is asked by: a month of the shop's rates, job by job and day by day (rates_between), and
+            # one job's history, newest first (the worker's page). Leads with `shop`, as every index does (03 §9).
+            models.Index(fields=["shop", "staff", "effective_from"], name="staffpay_payrate_lookup"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.daily_rate} from {self.effective_from}"
