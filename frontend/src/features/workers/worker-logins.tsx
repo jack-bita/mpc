@@ -131,6 +131,8 @@ export function WorkerLogins({
           {open === "pin" ? (
             <PinForm
               worker={worker}
+              // What follows, true for every laptop: one with no network keeps its own lock and its own check of the old
+              // PIN until it syncs the new pin_changed_at (src/offline/pin.ts), so "now" is said only of those online.
               onDone={(changed) =>
                 said(t("pinDone", { name: changed.display_name }))
               }

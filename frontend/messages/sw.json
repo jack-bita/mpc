@@ -481,7 +481,7 @@
       "newPinHint": "Tarakimu nne.",
       "again": "Andika tena",
       "differ": "PIN hizi hazifanani.",
-      "pinDone": "PIN ya {name} imewekwa. Jina lake litaonekana kwenye kompyuta za duka baada ya kusawazisha. Kama alikuwa amefungiwa, sasa anaweza kuingia; PIN yake ya zamani haifanyi kazi tena.",
+      "pinDone": "PIN ya {name} imewekwa. Kila kompyuta ya duka itamwonyesha ikishasawazisha. Kwenye kompyuta yenye mtandao, kifungo chake kimeondoka na PIN yake ya zamani haifanyi kazi tena; isiyo na mtandao itajua ikishasawazisha.",
       "temporaryPassword": "Nenosiri la muda",
       "passwordTitle": "Nenosiri la muda la {name}",
       "passwordIntro": "Andika nenosiri, kisha mwambie {name} ana kwa ana. Atachagua lake mwenyewe akishaingia.",

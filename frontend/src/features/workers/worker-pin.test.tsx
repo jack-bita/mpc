@@ -161,7 +161,11 @@ describe("Weka PIN", () => {
     ashaTypes("4829");
     fireEvent.click(button("Hifadhi"));
 
-    const done = await screen.findByText(/^PIN ya Asha imewekwa\./);
+    // The whole line: a laptop with no network keeps its lock and the old PIN until it syncs (src/offline/pin.ts), so
+    // "now" is promised only where there is a network (PPL-12's review).
+    const done = await screen.findByText(
+      "PIN ya Asha imewekwa. Kila kompyuta ya duka itamwonyesha ikishasawazisha. Kwenye kompyuta yenye mtandao, kifungo chake kimeondoka na PIN yake ya zamani haifanyi kazi tena; isiyo na mtandao itajua ikishasawazisha.",
+    );
     // The keyboard goes to the line, as the button that opened the form may be gone.
     expect(done.closest("[tabindex='-1']")).toBe(document.activeElement);
     expect(await pinsSent()).toEqual([{ pin: "4829" }]);

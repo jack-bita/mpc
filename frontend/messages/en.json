@@ -481,7 +481,7 @@
       "newPinHint": "Four digits.",
       "again": "Type it again",
       "differ": "These PINs don't match.",
-      "pinDone": "{name}'s PIN is set. Their name shows on the shop's computers after they sync. If they were locked out, they can log in now; their old PIN no longer works.",
+      "pinDone": "{name}'s PIN is set. Each shop computer shows them once it syncs. On a computer with a network, any lock is lifted and their old PIN no longer works; one without a network learns it once it syncs.",
       "temporaryPassword": "Temporary password",
       "passwordTitle": "Temporary password for {name}",
       "passwordIntro": "Type a password, then tell it to {name} face to face. They choose their own once they log in.",
