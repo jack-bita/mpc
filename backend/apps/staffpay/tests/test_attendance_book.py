@@ -94,6 +94,24 @@ def test_a_day_fits_its_status(shop_a: Shop, staff_a: StaffMember, changes: dict
         _day(shop_a, staff_a, **changes).save()
 
 
+@pytest.mark.parametrize(
+    "changes",
+    [
+        # An off day reads no rule, so it keeps no copy of one.
+        {"status": DayStatus.OFF, "fine": Decimal("0.00"), "first_in": None, "first_out": None},
+        # Every other day was read by the rule, so it keeps its copy: a fix of it later reads its fine from there.
+        {"rules_used": {}},
+        {"status": DayStatus.ABSENT, "fine": Decimal("0.00"), "first_in": None, "first_out": None, "rules_used": {}},
+        {"status": DayStatus.NEEDS_REVIEW, "fine": Decimal("0.00"), "rules_used": {}},
+    ],
+)
+def test_only_an_off_day_keeps_no_rules(shop_a: Shop, staff_a: StaffMember, changes: dict[str, object]) -> None:
+    # The rules kept with a day exactly when the rule read them (T4): a bug that drops the copy, or gives an off day
+    # one, is refused before it reaches a payslip.
+    with pytest.raises(IntegrityError, match="rules_kept_unless_off"), transaction.atomic():
+        _day(shop_a, staff_a, **changes).save()
+
+
 def test_each_status_saves_as_it_should(shop_a: Shop, staff_a: StaffMember) -> None:
     # The rule's other side: every status, as the book writes it, is kept. A late day with a fine of 0, as a shop
     # starts with (ATT-2); the morning's half with a late arrival's fine (the owner, ATT-4); and a day for review with

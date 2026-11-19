@@ -197,8 +197,8 @@ class AttendanceDay(ShopScoped):
     # The day's rules as the rule read them (DayRules, apps/staffpay/calculations.py): the seven times and the two
     # fines, each as text ("07:35", "500.00"), so no amount ever passes through a float (rule 3). A copy (T4), never
     # read back as the rules: the rules are the settings, and their history is theirs. Empty on an off day, a Sunday or
-    # a closed day nobody tapped on, which reads no rule. A closed day with a tap keeps them, as it keeps its taps'
-    # minutes, for the owner or a manager who decides it (Jack, ATT-10).
+    # a closed day nobody tapped on, which reads no rule, and only there, as a rule below holds. A closed day with a
+    # tap keeps them, as it keeps its taps' minutes, for the owner or a manager who decides it (Jack, ATT-10).
     rules_used = models.JSONField(default=dict, blank=True)
 
     class Meta(ShopScoped.Meta):
@@ -235,6 +235,17 @@ class AttendanceDay(ShopScoped):
                     | models.Q(status=DayStatus.NEEDS_REVIEW, fine=0)
                 ),
                 name="staffpay_attendanceday_fits_its_status",
+            ),
+            # The rules kept with a day exactly when the rule read them: every day but an off one, a Sunday or a closed
+            # day nobody tapped on, which reads none. A day for review keeps them too, for whoever decides it (Jack,
+            # ATT-10). So a day that lost its copy, or an off day that gained one, is a bug the database refuses, as
+            # the copy is what a later fix of the day reads its fine from (T4, ATT-6). `{}` is JSON's empty object.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status=DayStatus.OFF, rules_used={})
+                    | (~models.Q(status=DayStatus.OFF) & ~models.Q(rules_used={}))
+                ),
+                name="staffpay_attendanceday_rules_kept_unless_off",
             ),
         ]
 
