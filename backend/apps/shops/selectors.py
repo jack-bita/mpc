@@ -1,8 +1,9 @@
 """apps/shops/selectors.py — reads of the shops tables that other code builds on (03 §5.2).
 
-Five so far. get_setting answers "what is this rule on this day?" for a shop, and for one of its sides
+Six so far. get_setting answers "what is this rule on this day?" for a shop, and for one of its sides
 when one is given (D13, ADR-0013). Every later card reads its rules through it: the attendance day reads
-the on-time cut-off and the late fine, a drawer count its tolerance, and so on. shop_today answers "which
+the on-time cut-off and the late fine, a drawer count its tolerance, and so on. shop_settings_between answers the
+same for the whole shop on each day of a span, in one read, for the book of days (ATT-10). shop_today answers "which
 day is it at this shop?", the day a rule's new value may start from at the earliest (SHOP-3). It lives
 here, with the shop, so `shops` can ask it too: `shops` sits below `people` and may not import it (ADR-0043).
 shop_rules lists every rule as the settings page shows it (SHOP-3): its value today, and its rows. closed_days answers
@@ -16,6 +17,7 @@ list of rules in core (apps/core/settings_registry.py): a new shop works with ev
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from django.db.models import QuerySet
@@ -66,6 +68,42 @@ def get_setting[T](key: SettingKey[T], shop: Shop, side: Side | None = None, *, 
         return key.default
     # The row holds text in its kind's one form; the kind turns it back into a Decimal, a time, and so on.
     return key.kind.parse(row.value)
+
+
+def shop_settings_between(
+    keys: Sequence[SettingKey[Any]], shop: Shop, first: date, last: date
+) -> dict[date, dict[str, Any]]:
+    """Each of `keys`, for the whole shop, on each day from `first` to `last`, both counted, as get_setting answers it
+    with no side on that day: {day: {key: value}}. One read for the span, where get_setting makes one per key per day:
+    a month of the day's ten attendance rules would be some 300 reads (ATT-10)."""
+    # The same three checks as get_setting, for the same reasons: a shop that is not the one open would answer the
+    # defaults without a word, and a datetime is a moment, not the shop's day (ADR-0022).
+    opened = current_shop()
+    if opened is not ALL_SHOPS and opened != shop.pk:
+        raise ShopMismatch("shop_settings_between was given a shop that is not the one open.")
+    if isinstance(first, datetime) or isinstance(last, datetime):
+        raise TypeError("shop_settings_between needs the shop's business dates, not datetimes.")
+    # The shop's own rows of these keys that have started by the span's last day, each key's newest first, in
+    # get_setting's order: on one day the row written last wins, as a fix is a new row (T2), then the id for two rows
+    # saved at the very same moment. Only the shop's rows (`side` empty), as get_setting reads with no side.
+    rows: dict[str, list[tuple[date, str]]] = {key.key: [] for key in keys}
+    for key_name, effective_from, value in (
+        Setting.objects.filter(shop=shop, side__isnull=True, key__in=list(rows), effective_from__lte=last)
+        .order_by("key", "-effective_from", "-created_at", "-id")
+        .values_list("key", "effective_from", "value")
+    ):
+        rows[key_name].append((effective_from, value))
+    answer: dict[date, dict[str, Any]] = {}
+    day = first
+    while day <= last:
+        # Each key's first row, newest first, that has started by this day; with none, the key's default. Parsed by
+        # the key's kind, as get_setting parses its row.
+        answer[day] = {
+            key.key: next((key.kind.parse(value) for start, value in rows[key.key] if start <= day), key.default)
+            for key in keys
+        }
+        day += timedelta(days=1)
+    return answer
 
 
 def shop_today(shop: Shop) -> date:

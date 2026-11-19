@@ -15,7 +15,7 @@ A side's own row beats the shop's row, and on one day the row written last wins,
 with one more row (T2). The value comes back as its kind: a Decimal for money, never text or a float.
 """
 
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -24,7 +24,7 @@ import pytest
 from apps.core.settings_registry import CASH_TOLERANCE, LATE_FINE, ON_TIME_UNTIL, SettingKey
 from apps.core.tenancy import NoShopSelected, ShopMismatch, shop_context, system_context
 from apps.shops.models import Setting, Shop, Side
-from apps.shops.selectors import get_setting
+from apps.shops.selectors import get_setting, shop_settings_between
 
 pytestmark = pytest.mark.django_db
 
@@ -180,3 +180,36 @@ def test_get_setting_refuses_wrong_arguments(shop_a: Shop, shop_b: Shop) -> None
         # it. A datetime is a kind of date in Python, so mypy lets it through: the check runs here.
         with pytest.raises(TypeError, match="business date"):
             get_setting(LATE_FINE, shop_a, on=datetime(2026, 10, 31, 22, 0, tzinfo=UTC))
+
+
+def test_settings_between_answers_as_get_setting_on_each_day(shop_a: Shop, shop_b: Shop, dawa: Side) -> None:
+    # The book of days reads a span's rules in one go (ATT-10): it must answer, day by day, exactly what get_setting
+    # answers with no side. The fine is 800 from 1 November, 1500 from 3 November, fixed to 1200 the same day (the
+    # row written last wins, T2). Dawa's own tolerance row and shop B's fine are not the shop's, so they never count;
+    # the on-time cut-off has no row, so it is its default every day.
+    add_row(shop_a, LATE_FINE, "800.00", NOV_1)
+    add_row(shop_a, LATE_FINE, "1500.00", NOV_3)
+    add_row(shop_a, LATE_FINE, "1200.00", NOV_3)
+    add_row(shop_a, CASH_TOLERANCE, "300.00", NOV_1)
+    add_row(shop_a, CASH_TOLERANCE, "500.00", NOV_1, side=dawa)
+    add_row(shop_b, LATE_FINE, "9000.00", NOV_1)
+    keys: list[SettingKey[Any]] = [LATE_FINE, CASH_TOLERANCE, ON_TIME_UNTIL]
+    first, last = OCT_31, NOV_3 + timedelta(days=2)
+    with shop_context(shop_a):
+        answer = shop_settings_between(keys, shop_a, first, last)
+        expected: dict[date, dict[str, Any]] = {
+            first + timedelta(days=n): {key.key: get_setting(key, shop_a, on=first + timedelta(days=n)) for key in keys}
+            for n in range((last - first).days + 1)
+        }
+    assert answer == expected
+    assert answer[NOV_3][LATE_FINE.key] == Decimal("1200.00")
+    assert answer[OCT_31][LATE_FINE.key] == Decimal("0.00")
+
+
+def test_settings_between_refuses_wrong_arguments(shop_a: Shop, shop_b: Shop) -> None:
+    # As get_setting: another shop than the one open, and a datetime in place of the shop's date, are bugs.
+    with shop_context(shop_a):
+        with pytest.raises(ShopMismatch):
+            shop_settings_between([LATE_FINE], shop_b, NOV_1, NOV_3)
+        with pytest.raises(TypeError):
+            shop_settings_between([LATE_FINE], shop_a, datetime(2026, 11, 1, tzinfo=UTC), NOV_3)
