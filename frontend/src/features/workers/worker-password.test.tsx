@@ -185,6 +185,21 @@ describe("Nenosiri la muda", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("shows the server's staff.reason_required beside Sababu, not above the buttons", async () => {
+    // The service raises it with no field (set_temporary_password), after the form's own check let a reason through.
+    theServerHas(ASHA);
+    answer("POST", ROUTE, refusal(400, "staff.reason_required"));
+    render(<WorkerScreen id={ASHA.id} />);
+
+    await babaTypes(TEMPORARY, WHY);
+    fireEvent.click(button("Hifadhi"));
+
+    await waitFor(() =>
+      expect(errorOf(reasonBox())).toBe(sentence("staff.reason_required")),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it.each([
     "password.own",
     "password.superuser_only",

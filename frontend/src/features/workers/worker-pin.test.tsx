@@ -262,6 +262,25 @@ describe("Weka PIN", () => {
     );
   });
 
+  it("keeps nothing of the PIN in the store once it is set, either (PPL-12's review)", async () => {
+    // The path most PINs take: the form closes on the server's yes, and the change is let go of at once (gcTime: 0).
+    const store = makeQueryClient();
+    theServerHas(ASHA);
+    answer("POST", PIN_ROUTE, () => Response.json({ ...ASHA, has_pin: true }));
+    render(
+      <QueryClientProvider client={store}>
+        <WorkerScreen id={ASHA.id} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await findButton("Weka PIN"));
+    ashaTypes("4829");
+    fireEvent.click(button("Hifadhi"));
+    await screen.findByText(/^PIN ya Asha imewekwa\./);
+
+    await waitFor(() => expect(store.getMutationCache().getAll()).toEqual([]));
+  });
+
   it("switches Hifadhi off while there is no network", async () => {
     theServerHas(ASHA);
     render(<WorkerScreen id={ASHA.id} />);
