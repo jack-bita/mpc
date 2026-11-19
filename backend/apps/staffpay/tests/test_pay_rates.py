@@ -22,7 +22,7 @@ from django.db import IntegrityError, connection, transaction
 from django.test.utils import CaptureQueriesContext
 
 from apps.core.models import AppendOnlyError
-from apps.core.tenancy import ShopMismatch, shop_context
+from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import StaffMember, User
 from apps.people.services import add_staff
 from apps.shops.models import Shop
@@ -192,13 +192,17 @@ def test_a_worker_with_no_rate_has_none_on_any_day(shop_a: Shop) -> None:
 
 
 def test_only_the_shops_own_rates(shop_a: Shop, shop_b: Shop) -> None:
-    # Shop B's worker and rate are never in shop A's answer (T1), even under a system job that opens every shop.
+    # Shop B's worker and rate are never in shop A's answer (T1), in a visit of shop A's, where the guard hides shop B's
+    # rows, and under a system job that opens every shop, as the night's job (ATT-7) and the pay (WAGE-2) may call it:
+    # there the guard hides nothing, and only the selector's own `shop=` keeps shop B's rates out.
     juma = _worker(shop_a, "Juma")
     _rate(juma, "10000.00", NOV_1)
     _rate(_worker(shop_b, "Juma"), "15000.00", NOV_1)
     with shop_context(shop_a):
-        rates = rates_between(shop_a, NOV_1, NOV_30)
-    assert {job for job, _ in rates} == {juma.pk}
+        in_the_visit = rates_between(shop_a, NOV_1, NOV_30)
+    with system_context():
+        in_a_system_job = rates_between(shop_a, NOV_1, NOV_30)
+    assert {job for job, _ in in_the_visit} == {job for job, _ in in_a_system_job} == {juma.pk}
 
 
 def test_a_month_is_one_read(shop_a: Shop) -> None:
