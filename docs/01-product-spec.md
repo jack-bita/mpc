@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.5 · 19 Nov 2026 · Portion 1 of the planning pack
+**Version:** 1.6 · 19 Nov 2026 · Portion 1 of the planning pack
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Open questions are collected in §14. Key decisions are recorded as ADRs in `docs/adr/`.
 
 **Changes in v1.1** (18 Oct 2026): applies the build plan's Appendix A (`04-build-plan.md`). Attendance (R1b) is built and switched on first, then the Drugs side (R1), then the Foods side (R2); every part lives in the one website and is switched on in settings (§7.8, §10, §11, §14 — 04 BP7, ADR-0033). §6 now states the side decision (02 D1, ADR-0001).
@@ -14,6 +14,8 @@
 **Changes in v1.4** (16 Nov 2026, from Jack, ATT-8): besides Sundays and public holidays, the owner may close the shop for days of his own, such as a family funeral: each closure runs from a first day to a last, which he may move, and nobody is paid on its days (§8.1; 02 v1.33, 04 v1.89). Marked **(v1.4)**.
 
 **Changes in v1.5** (19 Nov 2026, from Jack, ATT-3): §7.8, a clock-in's photo is decided, no longer a default, and a camera missing or broken never stops a tap. Marked **(v1.5)**.
+
+**Changes in v1.6** (19 Nov 2026, from the owner, through Jack, ATT-4): §8.1, a late arrival who leaves for the morning's half day is paid the half day less the fine of their arrival; the examples gain that row, and pay takes off each day's fine (02 v1.42, 04 v1.128). Marked **(v1.6)**.
 
 ---
 
@@ -219,13 +221,13 @@ In this order: a price list with in-stock status (browse by animal and problem) 
 ### 8.1 Attendance and pay
 - **On time:** arrives by 07:35 → full day.
 - **Late** **(v1.3)**: arrives after 07:35 and before 08:00 → full day minus the first fine; from 08:00 and before 08:30 → full day minus the second fine. Both fines are settings the owner types; this spec names no amount.
-- **Half day** **(v1.3)**: the morning (arrives on time or late, leaves from 13:00 to 13:30) or the afternoon (arrives from 12:00 to 13:00, leaves at closing, 18:40). Half-day pay = daily rate ÷ 2.
+- **Half day** **(v1.3)**: the morning (arrives on time or late, leaves from 13:00 to 13:30) or the afternoon (arrives from 12:00 to 13:00, leaves at closing, 18:40). Half-day pay = daily rate ÷ 2. A late arrival who leaves for the morning's half day loses the fine of their arrival too **(v1.6)**.
 - **Dharura** **(v1.3)**: any other arrival or leaving time, and a missing clock-out. The day needs review: a manager or the owner decides it.
 - **Sundays and public holidays** **(v1.3)**: the shop is closed and nobody is paid. Sunday work is a deal between the owner and the worker, outside the system.
 - **Other closed days** **(v1.4)**: the owner may close the shop for days of his own, such as a family funeral, from a first day to a last. Nobody is paid on them, as on a public holiday. If the shop opens again sooner, or stays closed longer, he moves the last day, with a reason.
 - **Absent:** office duty → paid; with permission → unpaid; no-show → unpaid.
 - **Meals** **(v1.2)**: the cook makes the workers' meals at the shop, and each worker pays for their own. Each day, the day's meal money is typed in and split equally among the workers who came that day, half days included; the cook pays no share. So a worker who came 10 days pays 10 days of meals, not a share of the whole month.
-- **Pay** = (full days × daily rate) + (half days × daily rate ÷ 2) − the late days' fines − meal shares − advances. Paid monthly. The daily rate is set per worker. Sundays are not paid.
+- **Pay** = (full days × daily rate) + (half days × daily rate ÷ 2) − each day's fine **(v1.6)** − meal shares − advances. Paid monthly. The daily rate is set per worker. Sundays are not paid.
 - **Leaving mid-month** **(v1.2)**: a worker who leaves is paid up to their last day. The system already holds that pay, worked out day by day, so the owner reads it and pays.
 
 Examples (these become automated tests):
@@ -239,6 +241,7 @@ Examples (these become automated tests):
 | Arrives 12:30, leaves at closing **(v1.3)** | Half day |
 | Arrives 13:30, leaves at closing | Dharura **(v1.3)** |
 | Arrives 07:20, leaves at 13:10 **(v1.3)** | Half day |
+| Arrives 07:50, leaves at 13:10 **(v1.6)** | Half day − the first fine |
 | Arrives 07:20, leaves at 12:00 | Dharura **(v1.3)** |
 | Arrives 07:20, leaves at 16:00 **(v1.3)** | Dharura |
 | Arrives 07:20, never clocks out **(v1.3)** | Dharura |

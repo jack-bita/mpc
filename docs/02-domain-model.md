@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.41 · 19 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.42 · 19 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -78,6 +78,7 @@
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
 
+**Changes in v1.42** (19 Nov 2026, from the owner, through Jack, ATT-4): §12, a late arrival who leaves for the morning's half day loses the fine of their arrival too, so §15's pay takes off each day's fine (01 v1.6, 04 v1.128). Marked **(v1.42)**.
 **Changes in v1.41** (19 Nov 2026, PPL-7's review): §5, a key given after a record made offline counts for it, as a slow laptop clock may put the record first, unless the same key had been taken away by then: given back after the record, it leaves a gap the record fell in, as a suspension and a return around it would (04 v1.124). Marked **(v1.41)**.
 **Changes in v1.40** (19 Nov 2026, ATT-3): §12, a clock-in's photo: an attachment pinned to the event, and a tap never refused for want of one, saved with `no_photo` and its reason (Jack). Marked **(v1.40)** below.
 
@@ -525,7 +526,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 
 **The day's rules** **(v1.32)** — the owner's (OWN-7, 16 Nov 2026), each a dated setting of the whole shop (§4). Each time is a minute on the shop's clock, as the counter shows it: a clock-in at 07:35:40 shows 07:35. "By" and "from" take their own minute; "before" and "after" don't.
 - **Arriving:** by `on_time_until` (07:35), on time. After it and before `second_fine_from` (08:00), late, with `late_fine`, the first fine. From `second_fine_from` and before `review_from` (08:30), late, with `second_fine`. From `review_from` and before `afternoon_from` (12:00), needs review. From `afternoon_from` to `midday` (13:00), the afternoon's half day, staying until `closing` (18:40). After `midday`, needs review.
-- **Leaving,** after a morning arrival: before `midday`, needs review. From `midday` to `morning_leave_until` (13:30), the morning's half day. After it and before `closing`, needs review. From `closing`, the full day, or the late one. No clock-out: needs review (§20, item 6).
+- **Leaving,** after a morning arrival: before `midday`, needs review. From `midday` to `morning_leave_until` (13:30), the morning's half day, less the fine of a late arrival (the owner, 19 Nov 2026) **(v1.42)**. After it and before `closing`, needs review. From `closing`, the full day, or the late one. No clock-out: needs review (§20, item 6).
 - The seven times keep this order, each after the one before it, on every day (`setting.out_of_order`, ATT-2), so no minute lands in two windows.
 - A day that needs review is the owner's *dharura*: a manager or the owner decides it (`override`).
 - The fines start at 0: a shop has no fine until its owner types one. This public repo names no real amount (rule 10).
@@ -620,7 +621,7 @@ stateDiagram-v2
 5. **Balance** = the sum of entries. **Open debt** = amount − allocations. **Age** = days since `occurred_at`.
 6. **Expected cash** = opening + cash payments − cash change given + money in − money out.
 7. **Mobile money expected** (account, day) = the sum of payments into it.
-8. **Pay** (spec §8.1) = (on-time + late + office-duty days) × rate + half days × rate ÷ 2 − late days × fine − meal shares **(v1.29)** − advances ± adjustments.
+8. **Pay** (spec §8.1) = (on-time + late + office-duty days) × rate + half days × rate ÷ 2 − each day's fine **(v1.42)** − meal shares **(v1.29)** − advances ± adjustments.
 9. **Line profit** = line total − base qty × unit cost (unknown if the cost is unknown). A period's profit also shows "unknown on N lines worth TZS X".
 10. **Open-bag difference** = loose kg sold between two openings − bag kg.
 11. **Loss %** (production, jobs) = (input kg − output kg) ÷ input kg.
