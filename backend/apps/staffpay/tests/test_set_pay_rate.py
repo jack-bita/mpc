@@ -31,7 +31,7 @@ from apps.core.models import Change
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, User
-from apps.people.services import add_staff, grant_permission, mark_left
+from apps.people.services import add_staff, grant_permission, mark_left, suspend
 from apps.shops.models import Shop, Side
 from apps.staffpay.models import PayRate
 from apps.staffpay.selectors import rates_between
@@ -201,6 +201,25 @@ def test_a_rate_needs_both_keys(shop_a: Shop, give_role: GiveRole, juma: StaffMe
     with pytest.raises(PermissionDenied):
         set_rate(juma, by=one_key)
     assert rates_of(juma) == 0
+
+
+def test_a_suspended_manager_sets_no_rate(meneja: StaffMember, juma: StaffMember) -> None:
+    # Meneja is suspended this morning: a suspended person holds no key (X2), so his two keys count for nothing, even in
+    # a tab still open from before. Asked of his job as it is now, after the lock, never of the copy he acts from.
+    with shop_context(meneja.shop_id):
+        suspend(meneja, by=None, reason="Uchunguzi")
+    with pytest.raises(PermissionDenied):
+        set_rate(juma, by=meneja)
+    assert rates_of(juma) == 0
+
+
+def test_a_suspended_worker_can_still_be_given_a_rate(baba: StaffMember, juma: StaffMember) -> None:
+    # Juma is suspended, not gone: the days he worked before it are paid, and he may come back, so Baba may still set
+    # his rate, as the worker's page offers it (worker-pay.tsx).
+    with shop_context(juma.shop_id):
+        suspend(juma, by=None, reason="Uchunguzi")
+    set_rate(juma, by=baba)
+    assert rates_of(juma) == 1
 
 
 def test_nobody_sets_their_own_rate(meneja: StaffMember) -> None:
