@@ -608,6 +608,65 @@ describe("the photo at each tap (ATT-3)", () => {
     expect(await db().attachment_files.count()).toBe(0);
   });
 
+  it("uses the photo just taken on a try after a save that failed", async () => {
+    // Asha taps; the laptop's disk is full, and the save fails. She taps again: the camera went off with her
+    // photo, and her second tap uses it, never "camera failed" for a camera that works (ATT-3's review).
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    theLaptopHasACamera();
+    await theScreen();
+    await theLivePicture();
+    vi.spyOn(db(), "transaction").mockRejectedValueOnce(
+      new DOMException("The disk is full.", "QuotaExceededError"),
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+    expect(
+      await screen.findByText(
+        "Haikuhifadhiwa. Jaribu tena; ikishindikana tena, mwambie meneja.",
+      ),
+    ).toBeDefined();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
+    const [tap] = await db().documents.toArray();
+    expect(tap?.payload).toMatchObject({
+      photo: { kind: "clock_photo", size: PHOTO.size },
+    });
+    expect(await db().attachment_files.count()).toBe(1);
+    // One photo taken, for both tries.
+    expect(shrinkFrame).toHaveBeenCalledTimes(1);
+  });
+
+  it("still says there is no camera on a try after a save that failed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await theScreen();
+    // Once the screen has read the laptop, so the full disk meets the save, not the screen's own reads.
+    const button = await screen.findByRole("button", { name: "Ingia kazini" });
+    await screen.findByText("Hakuna kamera: utaingia bila picha.");
+    vi.spyOn(db(), "transaction").mockRejectedValueOnce(
+      new DOMException("The disk is full.", "QuotaExceededError"),
+    );
+
+    fireEvent.click(button);
+    await screen.findByText(
+      "Haikuhifadhiwa. Jaribu tena; ikishindikana tena, mwambie meneja.",
+    );
+
+    expect(
+      screen.getByText("Hakuna kamera: utaingia bila picha."),
+    ).toBeDefined();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
+    const [tap] = await db().documents.toArray();
+    expect(tap?.payload).toMatchObject({ no_photo: "no_camera" });
+  });
+
   it("on the demo, shows the photo taken but keeps it on the laptop, never saved", async () => {
     // Every demo visitor shares Meneja's login, which opens clock-in photos: a visitor's face never
     // leaves their laptop (Jack, ATT-3: A).

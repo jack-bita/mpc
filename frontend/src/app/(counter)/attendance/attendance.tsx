@@ -121,6 +121,12 @@ export function AttendanceScreen() {
     if (kept === null) return;
     return () => URL.revokeObjectURL(kept);
   }, [kept]);
+  // What the camera gave a tap that couldn't be saved (a full disk, say): her photo of a moment ago, or why
+  // there was none. Her next try uses it: the camera went off with the first photo (use-camera.ts), and a
+  // retry taken as "no photo, camera failed" would tell the manager a working camera broke (ATT-3's review).
+  const [shotBefore, setShotBefore] = useState<Blob | CameraProblem | null>(
+    null,
+  );
 
   const row = person?.row;
   // Her last tap today on this laptop. Others' taps say nothing about her.
@@ -165,13 +171,15 @@ export function AttendanceScreen() {
     busy.current = true;
     setSaving(true);
     setProblem(null);
+    let shot: Blob | CameraProblem | null = null;
     try {
       // Read as the tap is saved, so it is the last one the laptop knew at the tap, not at the push. Before
       // the photo: a laptop not ready to save takes none.
       const lastServerTime = await readLastServerTime(db);
       if (lastServerTime === null) throw new NeverFilled();
-      // The photo, or why there is none; the camera goes off either way.
-      const shot = await take();
+      // The photo, or why there is none; the camera goes off either way. A try after a save that failed uses
+      // the first try's.
+      shot = shotBefore ?? (await take());
       const photo =
         demo || typeof shot === "string" ? null : await labelled(shot);
       const payload: ClockPayload = {
@@ -208,6 +216,8 @@ export function AttendanceScreen() {
         console.error("a clock tap was not saved", error);
         setProblem("failed");
       }
+      // The photo taken, or the camera's answer, kept for her next try.
+      if (shot !== null) setShotBefore(shot);
       // Ready for the next try. Not after a save: the button is gone for this visit.
       busy.current = false;
     } finally {
@@ -227,6 +237,14 @@ export function AttendanceScreen() {
       return null;
     }
   }
+
+  // Why a tap will go without a photo, said before it: the camera's own answer, or, on a try after a save
+  // that failed, the first try's, as the camera is off by then.
+  const cameraProblem: CameraProblem | null = isCameraProblem(cameraState)
+    ? cameraState
+    : typeof shotBefore === "string"
+      ? shotBefore
+      : null;
 
   // What the screen says: what this visit saved, else where she stands today. Nothing before the switch is
   // read, with the button: a line that came first could turn into "not started" a moment later.
@@ -290,8 +308,8 @@ export function AttendanceScreen() {
           browser by itself (autoPlay, muted), and inline on a phone, never full screen. A camera that
           can't says so in its place, and the tap still goes. */}
       {next &&
-        (isCameraProblem(cameraState) ? (
-          <p>{t(`camera.${cameraState}`, { kind: next })}</p>
+        (cameraProblem !== null ? (
+          <p>{t(`camera.${cameraProblem}`, { kind: next })}</p>
         ) : (
           cameraState !== "off" && (
             <video
