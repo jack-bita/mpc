@@ -5,7 +5,7 @@
 //
 // It works on a closure already begun too, where Ondoa no longer can: the days that change are the ones between the
 // old last day and the new, and none of them may be before today, as a past day may already be worked out and paid
-// (ATT-4). Moved earlier, the new last day may be yesterday at the earliest, which opens the shop from today; moved
+// (ATT-10). Moved earlier, the new last day may be yesterday at the earliest, which opens the shop from today; moved
 // later, every new day is after the old last day, which is today or later, as the list holds no closure already over.
 // So the box offers nothing before the later of the closure's first day and yesterday, and starts at its last day now.
 // A last day moved to yesterday ends the closure: it leaves the list, and the section says so.

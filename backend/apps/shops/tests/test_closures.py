@@ -9,7 +9,7 @@ The database itself keeps the closures true, whoever writes them: a last day bef
 active closures of one shop that share a day are each refused. These tests write rows straight to the table, past the
 services (ATT-8's later steps), so they prove the database's own rules; the services' checks have their own tests.
 
-closed_days answers ATT-4's question: which days in this span was the shop closed?
+closed_days answers ATT-10's question: which days in this span was the shop closed?
 """
 
 from datetime import date, datetime

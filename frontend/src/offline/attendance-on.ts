@@ -8,8 +8,8 @@
 // laptop knows it, so "on from 1 December" comes on that day by itself, offline too.
 //
 // It hides the way in, nothing more: the server still takes a clock-in that comes (ATT-2), as a laptop that
-// hadn't pulled the switch yet must not see its taps refused, and the day calculation counts days only from
-// the day it is on (ATT-4).
+// hadn't pulled the switch yet must not see its taps refused, and the book of days counts days only from
+// the day it is on (ATT-10).
 import type { components } from "@/api/schema";
 
 import { useRule } from "./reference";
