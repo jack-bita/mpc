@@ -204,6 +204,19 @@ def test_arrives_1230_leaves_1600_needs_review() -> None:
     assert day("12:30", "16:00") == dharura("12:30", "16:00")
 
 
+def test_arrives_1230_leaves_1310_needs_review() -> None:
+    # The morning's half-day window is for a morning arrival: Rehema, in at 12:30 for the afternoon, out at 13:10,
+    # worked forty minutes of neither half, so a manager decides.
+    assert day("12:30", "13:10") == dharura("12:30", "13:10")
+
+
+def test_a_late_day_sent_to_review_takes_no_fine() -> None:
+    # Juma is late at 07:50 and leaves at 16:00, or never taps Toka: the day goes to a manager with no fine, as they
+    # decide what it was (ATT-6); the late arrival stays on it for them to see.
+    assert day("07:50", "16:00") == dharura("07:50", "16:00")
+    assert day("07:50") == dharura("07:50", None)
+
+
 @pytest.mark.parametrize(
     ("leaves", "status"),
     [
@@ -275,3 +288,10 @@ def test_a_toka_before_the_ingia_ends_nothing() -> None:
     # A Toka at 07:00, before any Ingia, ends no day: the day hadn't started. The day runs from 07:20 to closing.
     taps = [Tap(ClockKind.OUT, at("07:00")), Tap(ClockKind.IN, at("07:20")), Tap(ClockKind.OUT, at(CLOSING))]
     assert work_out_day(taps, OWNERS_DAY) == DayResult(DayStatus.ON_TIME, NO_FINE, at("07:20"), at(CLOSING))
+
+
+def test_a_fine_is_a_decimal() -> None:
+    # Money is an exact Decimal, never a float (rule 3, ADR-0024): 500.0 == Decimal("500.00") in Python, so comparing
+    # values alone would not catch a float. Every kind of day, then, its fine's own type.
+    for result in (day("07:20", CLOSING), day("07:50", CLOSING), day("07:50", "13:10"), day("09:00"), day(None)):
+        assert type(result.fine) is Decimal
