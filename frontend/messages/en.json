@@ -490,6 +490,17 @@
     "savedOut": "Clocked out at {time}. Goodbye!",
     "firstSync": "Wait a moment: this laptop is still getting the shop's data for the first time. Try again shortly.",
     "failed": "Not saved. Try again; if it fails again, tell the manager.",
+    "camera": {
+      "live": "Camera: your face right now",
+      "no_camera": "No camera: you'll clock {kind, select, in {in} other {out}} without a photo.",
+      "blocked": "The camera is blocked: you'll clock {kind, select, in {in} other {out}} without a photo. Ask the manager to allow it.",
+      "failed": "The camera isn't working: you'll clock {kind, select, in {in} other {out}} without a photo. Tell the manager."
+    },
+    "photo": {
+      "kept": "Your photo, kept with your attendance",
+      "taken": "Your photo, just taken",
+      "demo": "This is the demo: your photo stays on this laptop and is never sent to the server."
+    },
     "list": {
       "title": "Today on this laptop",
       "empty": "Nobody has clocked in today yet.",
@@ -520,6 +531,10 @@
       "idTaken": "The server already has another record with this id.",
       "carriedFromUnknown": "This record says it came from a laptop that isn't another laptop of this shop.",
       "loadedByUnknown": "Whoever loaded this record's file doesn't work at this shop.",
+      "photoNotAnImage": "The server doesn't take this record's photo: it is neither a JPEG nor a WebP.",
+      "photoTooBig": "The server doesn't take this record's photo: it is over 1 MB.",
+      "photoEmpty": "The server doesn't take this record's photo: it is empty.",
+      "photoLabelBroken": "The server doesn't take this record's photo: its label is broken.",
       "other": "The server refused it. Code: {code}"
     }
   },
@@ -823,7 +838,9 @@
       "file_differs": "This photo isn't the one its record names. It may have been damaged on the way.",
       "file_waiting": "This photo hasn't reached the server yet. It comes once the laptop is online.",
       "file_removed": "This photo has been removed.",
-      "length_required": "The photo was sent without its size. It will be sent again."
+      "length_required": "The photo was sent without its size. It will be sent again.",
+      "empty": "This photo is empty.",
+      "sha256_invalid": "This photo's label is broken."
     },
     "password_too_short": "This password is too short.",
     "password_too_common": "This password is too common. Choose another.",

@@ -44,6 +44,15 @@ export default defineConfig({
     // a little time each run; a pass then leaves no files behind.
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    // A pretend camera (ATT-3): Chromium's own test picture in place of a webcam, which CI and a laptop's
+    // container have none of, and no "Allow camera?" question, which nobody is there to answer. The
+    // laptop's browser is given the camera too (the-shop.ts). Only the clock-in screen asks for it.
+    launchOptions: {
+      args: [
+        "--use-fake-device-for-media-stream",
+        "--use-fake-ui-for-media-stream",
+      ],
+    },
   },
   // Chromium only: the shop's laptops and phones run Chrome, or Edge, which is built on Chromium too.
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

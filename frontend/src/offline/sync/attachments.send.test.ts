@@ -115,6 +115,21 @@ const photosSent = () =>
 const bytesOf = (bytes: ArrayBuffer) => Array.from(new Uint8Array(bytes));
 
 describe("sending the photos", () => {
+  it("never sends a clock-in photo from a demo laptop, and drops the ones it kept", async () => {
+    // A demo laptop whose saved copy came from before ATT-3 took Asha's photo, then its check said "demo": the
+    // photo must never leave it (Jack, ATT-3: A; ATT-3's review), though its record is in and the server would answer.
+    const { photo } = await clockInWith();
+    await recordsAccepted();
+    keeps(photo);
+    saveDevice({ ...DAWA_LAPTOP, shop: { ...DAWA_LAPTOP.shop, demo: true } });
+
+    await sendAttachments(db, pagePlace);
+
+    expect(photosSent()).toEqual([]);
+    expect(await db.attachment_files.count()).toBe(0);
+    expect(await db.attachment_bytes.count()).toBe(0);
+  });
+
   it("sends a photo once its record is in, and takes it off the laptop", async () => {
     const { photo } = await clockInWith();
     await recordsAccepted();

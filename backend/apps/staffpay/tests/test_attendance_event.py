@@ -22,7 +22,7 @@ from django.utils import timezone
 from apps.core.models import AppendOnlyError, ShopScoped
 from apps.core.tenancy import NoShopSelected, shop_context
 from apps.people.models import StaffMember
-from apps.staffpay.models import AttendanceEvent, ClockKind, TimeCheck
+from apps.staffpay.models import AttendanceEvent, ClockKind, NoPhoto, TimeCheck
 
 pytestmark = pytest.mark.django_db
 
@@ -128,6 +128,9 @@ def test_a_void_says_who_and_why(
         # In or out, nothing else: a lunch break is two of these. Three letters, the column's length, so the rule is
         # what refuses it.
         ({"kind": "nap"}, "kind_known"),
+        # Why a tap has no photo: only the reasons there are, or none when its photo came (ATT-3). Short enough for
+        # the column, so the rule is what refuses it.
+        ({"no_photo": "lost"}, "no_photo_known"),
     ],
     ids=[
         "server_with_the_laptops_time",
@@ -138,6 +141,7 @@ def test_a_void_says_who_and_why(
         "unverified_with_a_time",
         "unknown_check",
         "unknown_kind",
+        "unknown_reason_for_no_photo",
     ],
 )
 def test_a_clock_in_must_make_sense(
@@ -157,6 +161,15 @@ def test_the_three_checks_each_fit_their_trusted_time(
     _event(shop_a, device_a, staff_a, device_seq=3, time_check=TimeCheck.UNVERIFIED, trusted_time=None).save()
     with shop_context(shop_a):
         assert AttendanceEvent.objects.count() == 3
+
+
+def test_each_reason_for_no_photo_is_kept(shop_a: Model, device_a: ShopScoped, staff_a: StaffMember) -> None:
+    # A tap whose photo came has no reason; one without names why (ATT-3). Each is a line the book keeps.
+    reasons = ["", *NoPhoto.values]
+    for device_seq, reason in enumerate(reasons, start=1):
+        _event(shop_a, device_a, staff_a, device_seq=device_seq, no_photo=reason).save()
+    with shop_context(shop_a):
+        assert sorted(AttendanceEvent.objects.values_list("no_photo", flat=True)) == sorted(reasons)
 
 
 def test_the_trusted_time_rule_holds_in_any_sessions_time_zone(

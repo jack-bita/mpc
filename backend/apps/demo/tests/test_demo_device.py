@@ -170,6 +170,8 @@ def test_one_tap_demo_makes_a_working_device(demo_shop: Shop) -> None:
     me = browser.get(ME)
     assert me.status_code == 200
     assert me.json()["shop"]["code"] == SHOP_CODE
+    # It knows it is the demo's, so its clock-in photos never leave it (Jack, ATT-3: A).
+    assert me.json()["shop"]["demo"] is True
     assert me.json()["home_side"]["code"] == "D"
     with shop_context(demo_shop):
         device = Device.objects.get()

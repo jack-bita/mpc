@@ -914,6 +914,7 @@ export interface components {
             readonly timezone: string;
             readonly currency: string;
             readonly default_language: components["schemas"]["LanguageEnum"];
+            readonly demo: boolean;
         };
         MeSide: {
             /** Format: uuid */

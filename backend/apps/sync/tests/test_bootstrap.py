@@ -149,9 +149,12 @@ def test_bootstrap_names_the_lowest_app_it_serves(paired: tuple[Device, str], se
     # reached the bootstrap before its update would otherwise fill the database with the old code, which has no drawer
     # for a list a newer release added, and set the cursor past that list's lines for good.
     _device, key = paired
-    assert a_browser(key).get(BOOTSTRAP).json()["min_app_version"] == 1
-    settings.MIN_APP_VERSION = 2
-    assert a_browser(key).get(BOOTSTRAP).json()["min_app_version"] == 2
+    # The server's own minimum, then one raised above it, read from the settings, so a release that raises it (ATT-3's
+    # 2) changes nothing here.
+    shipped = settings.MIN_APP_VERSION
+    assert a_browser(key).get(BOOTSTRAP).json()["min_app_version"] == shipped
+    settings.MIN_APP_VERSION = shipped + 1
+    assert a_browser(key).get(BOOTSTRAP).json()["min_app_version"] == shipped + 1
 
 
 def test_bootstrap_names_the_laptops_last_number(shop_a: Shop, paired: tuple[Device, str]) -> None:

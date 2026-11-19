@@ -14,6 +14,7 @@ a key's hash or a PIN's hash is never among the fields: they never leave the ser
 from datetime import timedelta
 from typing import Any, cast
 
+from django.conf import settings
 from django.db import models
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -475,10 +476,19 @@ class MeShopSerializer(serializers.ModelSerializer[Shop]):
     # as a rule starts on the shop's own day (02 §1); its currency, for amounts on screen; and its language, for screens
     # nobody has logged in to yet. Here, not in the bootstrap: a shop's own row has no line in the change log, so a copy
     # sent once would go stale, and a device asks this route again every 5 minutes (03 §5.9).
+    # And whether it is the demo's (ATT-3): there every visitor shares Meneja's login, which opens clock-in photos, so a
+    # visitor's face never leaves their laptop (Jack: A). The counter decides that offline, where it can ask nothing, so
+    # the laptop keeps it with its shop. The server's sign (DEMO_SEED), as every demo rule reads it: never set on the
+    # real server, where no shop is the demo's.
+    demo = serializers.SerializerMethodField()
+
     class Meta:
         model = Shop
-        fields = ["id", "name", "code", "timezone", "currency", "default_language"]
+        fields = ["id", "name", "code", "timezone", "currency", "default_language", "demo"]
         read_only_fields = fields
+
+    def get_demo(self, _shop: Shop) -> bool:
+        return bool(settings.DEMO_SEED)
 
 
 class DeviceMeSerializer(serializers.Serializer[Device]):
