@@ -44,7 +44,7 @@ from apps.demo.services import SHOP_CODE, PublicHoliday, Seeded, coming_public_h
 from apps.people.models import PermissionGrant, RoleAssignment, StaffMember, User
 from apps.people.permissions import effective_permissions
 from apps.people.pins import pin_matches
-from apps.people.services import add_worker, mark_left, suspend
+from apps.people.services import add_worker, end_permission, mark_left, suspend
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, ShopKind, Side
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
@@ -318,6 +318,21 @@ def test_seed_demo_makes_todays_shop_again_without_its_peoples_keys(monkeypatch:
         ).exists()
     # Then kept, as its people hold them all now.
     assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_makes_todays_shop_again_when_a_seed_persons_key_ended() -> None:
+    # A key taken away is no key (PPL-7): if one of the seed's people lost a key the seed gives them, which only the
+    # system can do there (demo.people_fixed), the demo is made again, so Meneja's page works for the next visitor.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    meneja = next(person for person in services.PEOPLE if person.keys)
+    with shop_context(made):
+        staff = StaffMember.objects.get(display_name=meneja.display_name)
+        [key] = PermissionGrant.objects.filter(staff=staff, permission=meneja.keys[0], side__isnull=True)
+        end_permission(key, reason="Jaribio la mfumo", by=None)
+
+    assert seed_demo() == Seeded.MADE
+    assert the_demo_shop() != made
 
 
 def test_seed_demo_keeps_a_shop_whose_closure_a_visitor_changed() -> None:
