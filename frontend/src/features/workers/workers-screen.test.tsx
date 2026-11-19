@@ -113,7 +113,7 @@ describe("the workers' page", () => {
   });
 
   it("counts the keys given apart from any role", async () => {
-    // Their names come with PPL-8, which gives them; until then the owner sees there are some.
+    // Counted on the list, so a row stays short; the worker's own page names each (PPL-8).
     let given = 0;
     const key = (permission: string) => {
       given += 1;

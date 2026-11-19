@@ -84,6 +84,8 @@ export function WorkerActions({
   me,
   demo = false,
   onEditing,
+  onForm,
+  buttonsHidden = false,
 }: {
   worker: Worker;
   me: WhoIsHere;
@@ -91,6 +93,11 @@ export function WorkerActions({
   demo?: boolean;
   /** Badilisha's form opened (true) or closed (false): the page hides the details while it is open. */
   onEditing?: (editing: boolean) => void;
+  /** Any of its forms opened (true) or closed (false): the page keeps one form open at a time (worker-page.tsx). */
+  onForm?: (open: boolean) => void;
+  /** Another card's form is open: its buttons stay off the page meanwhile, so one change is made at a time (PPL-8's
+   * review). */
+  buttonsHidden?: boolean;
 }) {
   const t = useTranslations("workers.actions");
   const codes = useCodeWords();
@@ -115,11 +122,14 @@ export function WorkerActions({
   }, [backTo]);
   // Gone from the page with Badilisha's form open, as at a new read's wait: the page shows the details again.
   useEffect(() => () => onEditing?.(false), [onEditing]);
+  // Gone from the page with a form open: the page lets the other card's buttons show again.
+  useEffect(() => () => onForm?.(false), [onForm]);
 
   /** A form opens, or (null) closes: the page learns whether Badilisha's is the one open. */
   function show(form: { action: Action; today: string } | null) {
     setOpen(form);
     onEditing?.(form?.action === "edit");
+    onForm?.(form !== null);
   }
 
   // Nobody changes their own job (PPL-4): no button, and the server's own sentence says why.
@@ -200,7 +210,7 @@ export function WorkerActions({
             {t("backLink")}
           </TextLink>
         </p>
-      ) : OFFERED[worker.status].length > 0 ? (
+      ) : !buttonsHidden && OFFERED[worker.status].length > 0 ? (
         <div className="flex flex-wrap gap-3">
           {OFFERED[worker.status].map((action) => (
             <Button

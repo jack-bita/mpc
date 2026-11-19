@@ -78,9 +78,9 @@
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
 
-**Changes in v1.44** (19 Nov 2026, ATT-10 built): §12, which days the book keeps: one per job and date, worked out again each time it is asked for, only once the day is over, while attendance is on and the job lasts (04 v1.136). Marked **(v1.44)**.
+**Changes in v1.44** (19 Nov 2026, ATT-10 built): §12, which days the book keeps: one per job and date, worked out again each time it is asked for, only once the day is over, while attendance is on and the job lasts (04 v1.139). Marked **(v1.44)**.
 
-**Changes in v1.43** (19 Nov 2026, from Jack, ATT-10): §12, a closed day on which a worker clocked in all the same needs review, and the owner or a manager decides whether it is paid (04 v1.135). Marked **(v1.43)**.
+**Changes in v1.43** (19 Nov 2026, from Jack, ATT-10): §12, a closed day on which a worker clocked in all the same needs review, and the owner or a manager decides whether it is paid (04 v1.138). Marked **(v1.43)**.
 
 **Changes in v1.42** (19 Nov 2026, from the owner, through Jack, ATT-4): §12, a late arrival who leaves for the morning's half day loses the fine of their arrival too, so §15's pay takes off each day's fine; and Toka ends the day, so a day keeps its first Toka, `first_out` (Jack, at ATT-4's review) (01 v1.6, 04 v1.128, v1.130). Marked **(v1.42)**.
 

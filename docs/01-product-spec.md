@@ -17,7 +17,7 @@
 
 **Changes in v1.6** (19 Nov 2026, from the owner, through Jack, ATT-4): §8.1, a late arrival who leaves for the morning's half day is paid the half day less the fine of their arrival; the examples gain that row, and pay takes off each day's fine; and Toka ends the day, as nobody taps out for lunch (from Jack, at ATT-4's review) (02 v1.42, 04 v1.128, v1.130). Marked **(v1.6)**.
 
-**Changes in v1.7** (19 Nov 2026, from Jack, ATT-10): §8.1, a worker who clocked in on a closed day all the same has a day that needs review, for the owner or a manager to decide (02 v1.43, 04 v1.135). Marked **(v1.7)**.
+**Changes in v1.7** (19 Nov 2026, from Jack, ATT-10): §8.1, a worker who clocked in on a closed day all the same has a day that needs review, for the owner or a manager to decide (02 v1.43, 04 v1.138). Marked **(v1.7)**.
 
 ---
 

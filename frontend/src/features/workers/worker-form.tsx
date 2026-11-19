@@ -21,8 +21,8 @@
 // gets the stored worker back, not a second Juma. A changed box gets a new id, as the server answers a repeated id
 // with the worker it stored, whatever the new send carries (closure-form.tsx).
 //
-// No role (PPL-7) or PIN (PPL-8) yet: a new worker can't log in until those cards, which the screen says once he is
-// added.
+// No role here: one is given on the worker's own page, with Ongeza kazi (PPL-8). No PIN yet (PPL-12): a new worker
+// can't log in at a laptop until he has one, which the screen says once he is added.
 //
 // Mwajiri tena: Baraka left on 12 March and comes back. He is the same person, so he keeps his own full name, and the
 // form has no Jina kamili box (Badilisha fixes it); his nickname and job title start as his old job's, and the first day

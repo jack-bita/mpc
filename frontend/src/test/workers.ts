@@ -1,12 +1,17 @@
 // workers.ts — made-up answers of GET /api/v1/people/staff/ for the workers' page's tests (PPL-6): a builder for a
-// worker and one for a role, the manager who may open the page, and a page of the list. Tests only.
+// worker and one for a role, the manager who may open the page, and a page of the list. Tests only. For Ongeza kazi
+// (PPL-8): the shop's roles as GET /api/v1/people/roles/ answers them, and two people who give: Baba, who holds every
+// key, and Neema, who holds the Seller's keys and staff.manage on Dawa alone.
 // Fake data: the made-up MPC of devices.ts, its Dawa and Vyakula sides, and made-up names.
 import type { components } from "@/api/schema";
+import { EVERY_KEY } from "@/features/workers/keys";
 
 import { DAWA, VYAKULA, whoIsHere } from "./devices";
 
 type Worker = components["schemas"]["Staff"];
 type GivenRole = components["schemas"]["GivenRole"];
+type Role = components["schemas"]["Role"];
+type WhoIsHere = components["schemas"]["WhoIsHere"];
 
 /** The list's address, as the tests answer it. */
 export const STAFF = "/api/v1/people/staff/";
@@ -73,3 +78,106 @@ export function staffPage(
 ): components["schemas"]["PaginatedStaffList"] {
   return { next, previous: null, results: workers };
 }
+
+/** The roles' address, as the tests answer it (PPL-7). */
+export const ROLES_ROUTE = "/api/v1/people/roles/";
+
+/** The Seller's codes, as permissions.py's template has them. */
+export const SELLER_CODES = [
+  "sale.write",
+  "sale.take_payment",
+  "sale.hand_over",
+  "sale.bargain",
+  "sale.refund",
+  "credit.give",
+  "debt.view",
+  "contact.manage",
+  "stock.count",
+  "stock.weigh",
+  "drawer.count",
+];
+
+/** The owner's own four, which the Manager's template leaves out (permissions.py). */
+const OWNERS_OWN = [
+  "drawer.approve",
+  "pay.approve",
+  "settings.manage",
+  "staff.manage",
+];
+
+/** One of the shop's roles, with its id and codes. */
+export function shopRole(
+  template: string,
+  permissions: string[],
+  fields: Partial<Role> = {},
+): Role {
+  made += 1;
+  return {
+    id: `019a8304-0000-7000-8000-${String(made).padStart(12, "0")}`,
+    template,
+    name: template,
+    permissions,
+    ...fields,
+  };
+}
+
+/** The made-up shop's roles, as copied from the templates, and one the owner made himself with no template. */
+export const OWNER_ROLE = shopRole("owner", [...EVERY_KEY]);
+export const MANAGER_ROLE = shopRole(
+  "manager",
+  EVERY_KEY.filter((code) => !OWNERS_OWN.includes(code)),
+);
+export const SELLER_ROLE = shopRole("seller", SELLER_CODES);
+export const CASHIER_ROLE = shopRole("cashier", [
+  "sale.take_payment",
+  "sale.write",
+  "debt.view",
+  "stock.weigh",
+  "drawer.count",
+]);
+export const LOADER_ROLE = shopRole("", ["sale.hand_over", "stock.weigh"], {
+  name: "Mbeba mizigo",
+});
+
+/** The roles as the server sends them: newest first, so the form must sort them. */
+export const SHOP_ROLES = [
+  LOADER_ROLE,
+  CASHIER_ROLE,
+  SELLER_ROLE,
+  MANAGER_ROLE,
+  OWNER_ROLE,
+];
+
+/** One page of the roles, the last. */
+export function rolesPage(
+  roles: Role[],
+): components["schemas"]["PaginatedRoleList"] {
+  return { next: null, previous: null, results: roles };
+}
+
+/** Baba, the owner: every key, on every side. */
+export const BABA: WhoIsHere = {
+  ...MANAGER,
+  permissions: {
+    whole_shop: [...EVERY_KEY],
+    sides: [
+      { ...DAWA, permissions: [...EVERY_KEY] },
+      { ...VYAKULA, permissions: [...EVERY_KEY] },
+    ],
+  },
+};
+
+/** Neema, a Dawa seller trusted with the workers: staff.manage on the whole shop, which the workers' routes ask there
+ * (PPL-4), so she can open the page at all, and the Seller's keys on Dawa alone. As `me` answers, staff.manage counts
+ * on every side too (HeldPermissions.on). So she may give the Seller's roles and keys on Dawa, and on every side or on
+ * Vyakula nothing but staff.manage itself (PPL-8's review). */
+export const NEEMA_ON_DAWA: WhoIsHere = {
+  ...MANAGER,
+  permissions: {
+    whole_shop: ["staff.manage"],
+    sides: [
+      { ...DAWA, permissions: ["staff.manage", ...SELLER_CODES] },
+      { ...VYAKULA, permissions: ["staff.manage"] },
+    ],
+  },
+};

@@ -2,11 +2,11 @@
 // and under it the buttons that change them (worker-actions.tsx).
 //
 // As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Their full name, nickname, job
-// title, first day and phone; their status, and their last day once they left; each role with its side; the keys
-// given apart from a role, counted (their names come with PPL-8); and whether the superuser switched them off.
-// Badilisha turns the details into boxes, in their place (PPL-10, worker-details-form.tsx). Later cards add here: the
-// roles' buttons and the PIN (PPL-8), the photo (PPL-9), and the pay so far (WAGE-2), so the owner pays one who leaves
-// at once.
+// title, first day and phone; their status, and their last day once they left; and whether the superuser switched
+// them off. Badilisha turns the details into boxes, in their place (PPL-10, worker-details-form.tsx). Under the
+// buttons, a card of their roles and extra keys, each by its name and side (PPL-8, worker-roles.tsx). Later cards add
+// here: the PIN and the temporary password (PPL-12), the photo (PPL-9), and the pay so far (WAGE-2), so the owner pays
+// one who leaves at once.
 //
 // At /workers/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address
 // (app/(office)/workers/view/page.tsx). It asks GET /api/v1/people/staff/{id}/, and shows the list's copy at once when
@@ -17,18 +17,19 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Card, CardContent } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
 import { askDemoOpen, DEMO_OPEN } from "@/features/devices/demo";
-import { useWhoIsHere, type WhoIsHere } from "@/features/people/who-is-here";
+import { useWhoIsHere } from "@/features/people/who-is-here";
 import { formatDay, formatPhone } from "@/lib/format";
 
 import { WorkerActions } from "./worker-actions";
-import { useRoleWords, useWorker, type Worker } from "./workers";
+import { WorkerRoles } from "./worker-roles";
+import { useRoles, useWorker, type Worker } from "./workers";
 
 /** Where the back arrow leads when the person didn't come from inside the app. */
 const THE_LIST = "/workers/";
@@ -54,6 +55,30 @@ export function WorkerScreen({ id }: { id: string | null }) {
     staleTime: Infinity,
     enabled: editing,
   });
+  // Ongeza kazi's form has opened (PPL-8): the shop's roles are asked from then on, here, the part always on the page,
+  // and handed down, as the demo's answer is. Opening a worker's page alone asks for none.
+  const [giving, setGiving] = useState(false);
+  // Each of its values read here, so the page draws again when any changes (RolesRead, workers.ts).
+  const rolesRead = useRoles(giving);
+  const roles = {
+    data: rolesRead.data,
+    error: rolesRead.error,
+    isPending: rolesRead.isPending,
+  };
+  // Which card has a form open, if any (PPL-8's review): one form at a time on the page, so a person never meets two
+  // Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other card's buttons hide meanwhile.
+  // Each card's own callback, kept the same between draws, as each says "closed" as it goes (its unmount).
+  const [formIn, setFormIn] = useState<"actions" | "roles" | null>(null);
+  const actionsForm = useCallback(
+    (open: boolean) =>
+      setFormIn((now) => (open ? "actions" : now === "actions" ? null : now)),
+    [],
+  );
+  const rolesForm = useCallback(
+    (open: boolean) =>
+      setFormIn((now) => (open ? "roles" : now === "roles" ? null : now)),
+    [],
+  );
 
   return (
     <div className="grid max-w-2xl gap-6">
@@ -74,9 +99,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
       {who.data && !waiting ? <ApiErrorAlert error={worker.error} /> : null}
       {who.data && worker.data && !waiting ? (
         <>
-          {editing ? null : (
-            <WorkerDetails worker={worker.data} me={who.data} />
-          )}
+          {editing ? null : <WorkerDetails worker={worker.data} />}
           {/* Badilisha, Simamisha, Rudisha and Ameondoka, as the worker's status allows (worker-actions.tsx). */}
           <WorkerActions
             // A worker of its own: on another worker's page, as the browser's back and forward move the address, any
@@ -87,6 +110,20 @@ export function WorkerScreen({ id }: { id: string | null }) {
             me={who.data}
             demo={demo.data === true}
             onEditing={setEditing}
+            onForm={actionsForm}
+            buttonsHidden={formIn === "roles"}
+          />
+          {/* Under the buttons, as Jack chose (PPL-8): each set of buttons beside what it changes. A worker of its own, as
+              WorkerActions: Asha's open form never goes on to Baraka's page. Its key apart from WorkerActions', as two
+              siblings with one key are one part to React, which then draws only one of them. */}
+          <WorkerRoles
+            key={`${worker.data.id}-roles`}
+            worker={worker.data}
+            me={who.data}
+            roles={roles}
+            onGiving={setGiving}
+            onForm={rolesForm}
+            buttonsHidden={formIn === "actions"}
           />
         </>
       ) : null}
@@ -95,9 +132,8 @@ export function WorkerScreen({ id }: { id: string | null }) {
 }
 
 /** Everything of the worker's, as label and value pairs: a description list, which a screen reader reads as pairs. */
-function WorkerDetails({ worker, me }: { worker: Worker; me: WhoIsHere }) {
+function WorkerDetails({ worker }: { worker: Worker }) {
   const t = useTranslations("workers");
-  const { roleOnSide } = useRoleWords(me);
 
   return (
     <Card>
@@ -122,25 +158,6 @@ function WorkerDetails({ worker, me }: { worker: Worker; me: WhoIsHere }) {
           </Pair>
           {worker.left_on !== null ? (
             <Pair label={t("view.lastDay")}>{formatDay(worker.left_on)}</Pair>
-          ) : null}
-          <Pair label={t("view.roles")}>
-            {worker.roles.length === 0 ? (
-              t("noRole")
-            ) : (
-              // One role a line: a manager on both sides reads each at a glance. role="list" written out, as Safari
-              // with VoiceOver stops calling a styled <ul> a list.
-              <ul role="list" className="grid gap-1">
-                {worker.roles.map((given) => (
-                  <li key={given.id}>{roleOnSide(given)}</li>
-                ))}
-              </ul>
-            )}
-          </Pair>
-          {/* Counted only: their names come with PPL-8, which gives them. */}
-          {worker.keys.length > 0 ? (
-            <Pair label={t("view.extraKeys")}>
-              {t("extraKeys", { count: worker.keys.length })}
-            </Pair>
           ) : null}
         </dl>
         {/* Apart from the job's status (PPL-4's review): switched off in the admin, on every shop at once. */}

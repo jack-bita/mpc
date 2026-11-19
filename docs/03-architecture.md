@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
 
-**Changes in v1.81** (19 Nov 2026, ATT-10): §6.6, how the book of days reads a span: the shop's midnights, the taps by their trusted time, the rules once per date, and one row per job and date, written only when it changes (04 v1.136). Marked **(v1.81)**.
+**Changes in v1.81** (19 Nov 2026, ATT-10): §6.6, how the book of days reads a span: the shop's midnights, the taps by their trusted time, the rules once per date, and one row per job and date, written only when it changes (04 v1.139). Marked **(v1.81)**.
 
 **Changes in v1.80** (19 Nov 2026, ATT-4): §6.6, how the day's rule reads a tap: its trusted time as a minute on the shop's clock, and the windows of 02 §12 up to the first Toka, on the server only (04 v1.129, v1.130). Marked **(v1.80)**.
 
