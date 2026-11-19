@@ -96,8 +96,9 @@ export function PinForm({
     change.mutate(pin);
   }
 
-  // Where each refusal shows: beside PIN mpya, the form's own first, then a strength code or the field's (a PIN too
-  // long for the route, `pin`); beside Andika tena, two that differ; everything else above the buttons.
+  // Where each refusal shows: beside PIN mpya, the form's own first, then a strength code, then the field's own code
+  // on `pin`, a safety net this form never meets, as its boxes take four characters and the route takes sixteen;
+  // beside Andika tena, two that differ; everything else above the buttons.
   const code =
     change.error instanceof ApiRefusal ? change.error.body.code : undefined;
   const aboutThePin = code !== undefined && ABOUT_THE_PIN.has(code);

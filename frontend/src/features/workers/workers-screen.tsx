@@ -7,7 +7,8 @@
 // the list a manager reads each day stays short as the years add names.
 //
 // Above the list, Ongeza opens the form for a new worker (worker-form.tsx); once he is added, one line says so, and
-// that his name reaches the shop's laptops once he has a PIN, set on his own page (PPL-12). On the demo, its Simu box is off (PPL-11).
+// that his name reaches the shop's laptops once he has a PIN, set on his own page (PPL-12). On the demo, its Simu box
+// is off (PPL-11).
 //
 // An office screen: it asks the server through the store of server answers (rule 5), and needs the internet,
 // which the office area says while it is gone. Its routes ask staff.manage on the whole shop (PPL-4); someone

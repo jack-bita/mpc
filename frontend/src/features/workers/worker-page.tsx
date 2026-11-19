@@ -4,9 +4,9 @@
 // As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Their full name, nickname, job
 // title, first day and phone; their status, and their last day once they left; and whether the superuser switched
 // them off. Badilisha turns the details into boxes, in their place (PPL-10, worker-details-form.tsx). Under the
-// buttons, Kuingia: whether they have a PIN, and Weka PIN (PPL-12, worker-logins.tsx); then a card of their roles and
-// extra keys, each by its name and side (PPL-8, worker-roles.tsx). Later cards add here: the photo (PPL-9), and the pay
-// so far (WAGE-2), so the owner pays one who leaves at once.
+// buttons, Kuingia: whether they have a PIN, Weka PIN and Nenosiri la muda (PPL-12, worker-logins.tsx); then a card of
+// their roles and extra keys, each by its name and side (PPL-8, worker-roles.tsx). Later cards add here: the photo
+// (PPL-9), and the pay so far (WAGE-2), so the owner pays one who leaves at once.
 //
 // At /workers/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address
 // (app/(office)/workers/view/page.tsx). It asks GET /api/v1/people/staff/{id}/, and shows the list's copy at once when
@@ -46,8 +46,8 @@ export function WorkerScreen({ id }: { id: string | null }) {
   const waiting = who.isPending || (id !== null && worker.isPending);
   // Badilisha's form is open: it holds the details in its boxes, so the page doesn't show them twice.
   const [editing, setEditing] = useState(false);
-  // Whether the page offers Weka PIN (PPL-12): a worker working or suspended, never one's own page, as the Kuingia
-  // card decides too (worker-logins.tsx).
+  // Whether the page offers Weka PIN and Nenosiri la muda (PPL-12): a worker working or suspended, never one's own
+  // page, as the Kuingia card decides too (worker-logins.tsx).
   const loginsOffered =
     who.data !== undefined &&
     worker.data !== undefined &&
