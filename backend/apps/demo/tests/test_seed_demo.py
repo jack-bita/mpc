@@ -48,6 +48,8 @@ from apps.people.services import add_worker, end_permission, mark_left, suspend
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, ShopKind, Side
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
+from apps.staffpay.models import PayRate
+from apps.staffpay.services import set_pay_rate
 from apps.sync.registry import REGISTRY
 from tests.change_log import lines_after
 
@@ -96,6 +98,12 @@ def what_the_shop_holds() -> dict[str, Any]:
                 (grant.permission, "every side" if grant.side_id is None else sides[grant.side_id])
                 for grant in PermissionGrant.objects.filter(staff=member)
             )
+            # Their daily rates (WAGE-1): the amount, whether they share the meals, and that each starts on their
+            # first day, set by the system.
+            rates = [
+                (str(rate.daily_rate), rate.shares_meals, rate.effective_from == member.started_on, rate.created_by_id)
+                for rate in PayRate.objects.filter(staff=member)
+            ]
             pin = PINS.get(member.display_name)
             people.append(
                 {
@@ -104,6 +112,7 @@ def what_the_shop_holds() -> dict[str, Any]:
                     "staff": user.is_staff,
                     "roles": roles,
                     "keys": keys,
+                    "rates": rates,
                     "pin works": pin is not None and pin_matches(pin, member.pin_hash, staff_id=member.pk),
                     "password works": user.check_password(MANAGER_PASSWORD),
                 }
@@ -209,6 +218,8 @@ def test_seed_demo_is_repeatable() -> None:
                 "staff": False,
                 "roles": [("seller", "D")],
                 "keys": [],
+                # A made-up rate from her first day, set by nobody (WAGE-1).
+                "rates": [("10000.00", True, True, None)],
                 "pin works": True,
                 "password works": False,
             },
@@ -218,6 +229,7 @@ def test_seed_demo_is_repeatable() -> None:
                 "staff": False,
                 "roles": [("seller", "F")],
                 "keys": [],
+                "rates": [("10000.00", True, True, None)],
                 "pin works": True,
                 "password works": False,
             },
@@ -229,6 +241,7 @@ def test_seed_demo_is_repeatable() -> None:
                 # The owner's key to the shop's rules, so a visitor can try Badilisha (SHOP-5); and to its workers, so a
                 # visitor can try Wafanyakazi (PPL-4).
                 "keys": [("settings.manage", "every side"), ("staff.manage", "every side")],
+                "rates": [("15000.00", True, True, None)],
                 "pin works": False,
                 "password works": True,
             },
@@ -317,6 +330,46 @@ def test_seed_demo_makes_todays_shop_again_without_its_peoples_keys(monkeypatch:
             staff=staff, permission=Permission.PAY_APPROVE, side__isnull=True
         ).exists()
     # Then kept, as its people hold them all now.
+    assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_makes_todays_shop_again_without_its_rates(monkeypatch: pytest.MonkeyPatch) -> None:
+    # As for its rules, closures and keys: a deploy whose seed pays one of its people a rate this morning's demo doesn't
+    # hold, as WAGE-1's first deploy gives everyone one, makes the shop again at once, so Wafanyakazi shows the pay the
+    # same day, and the month page (ATT-5) lists the workers.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    asha = next(person for person in services.PEOPLE if person.display_name == "Asha")
+    raised = replace(asha, daily_rate="11000")
+    monkeypatch.setattr(services, "PEOPLE", tuple(raised if person is asha else person for person in services.PEOPLE))
+
+    assert seed_demo() == Seeded.MADE
+    shop = the_demo_shop()
+    assert shop != made
+    with shop_context(shop):
+        assert PayRate.objects.get(staff__display_name="Asha").daily_rate == Decimal("11000.00")
+    # Then kept, as its people hold their rates now.
+    assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_keeps_its_peoples_rates_as_made() -> None:
+    # Every visitor logs in as Meneja, who holds both keys a rate needs, so a visitor can try Weka malipo on a worker
+    # they add (WAGE-1), with no note. The seed's people keep their rates: a visitor's 1 shilling for Asha would show to
+    # every visitor after, until the morning's seed (demo.people_fixed); and Meneja can't set his own (staff.own is
+    # never reached: his own login is the seed's too).
+    seed_demo(fresh=True)
+
+    with shop_context(the_demo_shop()):
+        meneja = StaffMember.objects.select_related("shop").get(display_name="Meneja")
+        for nickname in ("Asha", "Baraka", "Meneja"):
+            person = StaffMember.objects.get(display_name=nickname)
+            with pytest.raises(ValidationError) as setting:
+                set_pay_rate(person, daily_rate=Decimal("1"), effective_from=person.started_on, by=meneja)
+            assert setting.value.code == "demo.people_fixed", nickname
+        juma = add_worker(shop=meneja.shop, full_name="Juma Mfano", display_name="Juma", by=meneja)
+        rate = set_pay_rate(juma, daily_rate=Decimal("9000"), effective_from=juma.started_on, by=meneja)
+        assert rate.created_by_id == meneja.pk
+    # Still kept: the visitor's own worker's rate leaves the seed's as they were.
     assert seed_demo() == Seeded.KEPT
 
 
