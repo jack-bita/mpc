@@ -7,15 +7,15 @@ rule from that day's taps and that day's rules, and kept (ATT-10; 02 §12).
 
 First the rules the database keeps on a day (AttendanceDay, apps/staffpay/models.py): one per job and date, a day that
 fits its status, and never a delete. Then the book (work_out_days, apps/staffpay/services.py): which taps a day reads,
-on which date, with which rules, and how a day worked out again is kept. What a day was, from its taps, is the rule's,
-in test_attendance_day.py. Times are Arusha's, three hours ahead of UTC. The fines are the demo's made-up 500 and 1,500
-(rule 10). Fake data only: the repo is public.
+on which date, with which rules, and how a day worked out again is kept. Last, the taps in doubt (ATT-11), each sending
+its day to review. What a day was, from its taps, is the rule's, in test_attendance_day.py. Times are Arusha's, three
+hours ahead of UTC. The fines are the demo's made-up 500 and 1,500 (rule 10). Fake data only: the repo is public.
 """
 
 import datetime as dt
 import itertools
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -23,8 +23,11 @@ from django.db import IntegrityError, connection, transaction
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.control.models import EditEvent
+from apps.control.models import EditEvent, Flag, FlagKind
+from apps.control.services import dismiss_flag, raise_flag
 from apps.core.acting import acting_as
+from apps.core.links import table_of
+from apps.core.models import ShopScoped
 from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SettingKey
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import Device, StaffMember, User
@@ -623,3 +626,122 @@ def test_a_day_no_longer_counted_is_not_answered(shop_a: Shop, attendance_on: No
     assert sorted(date for _, date in days) == [NOV_11, NOV_12, NOV_13]
     with shop_context(shop_a):
         assert AttendanceDay.objects.count() == 5
+
+
+# The flagged taps (ATT-11): taps the book can't take as they are, each sending its day to a manager or the owner.
+
+
+def _line_of(event: AttendanceEvent) -> ShopScoped:
+    # The tap's line in the answer log, as the push writes it: its document_id is the event's own id, as
+    # test_suspended_worker_clock_in_flagged (apps/sync/tests/test_clock_in.py) finds the push keeps it. The answer log
+    # is a table of `sync`, a layer above `staffpay`, so it is named by its link code, never imported (ADR-0043), as the
+    # book reads it; Any, as the type checker can't know the columns of a table it may not import.
+    answer_log = cast(Any, table_of("pushed_document"))
+    with shop_context(event.shop_id):
+        return cast(
+            ShopScoped,
+            answer_log.objects.create(
+                shop_id=event.shop_id,
+                device=event.device,
+                device_seq=event.device_seq,
+                client_time=event.client_time,
+                received_at=event.received_at,
+                created_by=event.created_by,
+                document_id=event.pk,
+                type="clock",
+                schema_version=2,
+                status="accepted",
+            ),
+        )
+
+
+def _flag_its_line(event: AttendanceEvent) -> Flag:
+    # A flag about the tap's line, as the push raises one when the tap's maker wasn't working (SYNC-5, X2).
+    line = _line_of(event)
+    with shop_context(event.shop_id):
+        return raise_flag(kind=FlagKind.SUSPENDED_STAFF_ACTIVITY, subject=line, people=[event.staff], by=None)
+
+
+def test_a_suspended_workers_tap_needs_review(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Baba suspends Juma on Monday at 11:00. The Dawa laptop is offline and doesn't know, so on Tuesday its PIN check
+    # lets him in, at 07:20, out at 18:45. The push flags his Ingia on its line (X2), and his Tuesday needs review: the
+    # owner or a manager decides whether it is paid. Asha, on time beside him, is not touched.
+    ingia = tap(device_a, juma, ClockKind.IN, at(TUESDAY, 7, 20))
+    tap(device_a, juma, ClockKind.OUT, at(TUESDAY, 18, 45))
+    tap(device_a, asha, ClockKind.IN, at(TUESDAY, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, at(TUESDAY, 18, 45))
+    _flag_its_line(ingia)
+    days = _days(shop_a, TUESDAY, TUESDAY)
+    assert days[("Juma", TUESDAY)].status == DayStatus.NEEDS_REVIEW
+    assert days[("Asha", TUESDAY)].status == DayStatus.ON_TIME
+
+
+def test_a_gone_workers_tap_needs_review(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
+    # Neema's last day is Monday, and the owner records her leaving at 10:00 that morning: her PIN stops at once. The
+    # laptop, offline, lets her Toka through at 18:45, and the push flags it, as leaving counts as a suspension does
+    # (Jack, SYNC-5). Her Monday is still one of her days, but not one to pay unchecked.
+    neema = _worker(shop_a, "Neema")
+    tap(device_a, neema, ClockKind.IN, at(MONDAY, 7, 20))
+    toka = tap(device_a, neema, ClockKind.OUT, at(MONDAY, 18, 45))
+    with shop_context(shop_a):
+        mark_left(neema, left_on=MONDAY, by=None, reason="Amehamia mji mwingine")
+    _flag_its_line(toka)
+    assert _days(shop_a, MONDAY, MONDAY)[("Neema", MONDAY)].status == DayStatus.NEEDS_REVIEW
+
+
+def test_a_closed_suspension_flag_still_needs_review(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, juma: StaffMember
+) -> None:
+    # A manager looks at Juma's flag and closes it: "Baba let him back on Tuesday morning". The flag is about the tap,
+    # not the day: deciding whether his Tuesday is paid is ATT-6's override, so the day still needs review.
+    ingia = tap(device_a, juma, ClockKind.IN, at(TUESDAY, 7, 20))
+    tap(device_a, juma, ClockKind.OUT, at(TUESDAY, 18, 45))
+    flag = _flag_its_line(ingia)
+    with shop_context(shop_a):
+        dismiss_flag(flag, text="Baba alimrudisha Jumanne asubuhi", by=staff_a)
+    assert _days(shop_a, TUESDAY, TUESDAY)[("Juma", TUESDAY)].status == DayStatus.NEEDS_REVIEW
+
+
+def test_another_flag_on_the_line_sends_nothing(shop_a: Shop, device_a: Device, juma: StaffMember) -> None:
+    # Juma's Ingia came with a number the laptop skipped before it: a device_gap flag about its line, a record still
+    # missing. That says nothing of whether Juma came, so his Tuesday is on time.
+    ingia = tap(device_a, juma, ClockKind.IN, at(TUESDAY, 7, 20))
+    tap(device_a, juma, ClockKind.OUT, at(TUESDAY, 18, 45))
+    line = _line_of(ingia)
+    with shop_context(shop_a):
+        raise_flag(kind=FlagKind.DEVICE_GAP, subject=line, expected=Decimal(1), actual=Decimal(3), by=None)
+    assert _days(shop_a, TUESDAY, TUESDAY)[("Juma", TUESDAY)].status == DayStatus.ON_TIME
+
+
+def test_a_voided_flagged_tap_sends_nothing(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, juma: StaffMember
+) -> None:
+    # Juma's flagged Ingia is voided by a manager (T2, ATT-6): a voided tap counts for nothing, so it sends nothing
+    # either. With no tap left, his Tuesday is absent.
+    ingia = tap(
+        device_a,
+        juma,
+        ClockKind.IN,
+        at(TUESDAY, 7, 20),
+        voided_at=at(TUESDAY, 9, 0),
+        voided_by=staff_a,
+        void_reason="Alikuwa amesimamishwa",
+    )
+    _flag_its_line(ingia)
+    assert _days(shop_a, TUESDAY, TUESDAY)[("Juma", TUESDAY)].status == DayStatus.ABSENT
+
+
+def test_a_day_in_doubt_keeps_its_minutes_and_rules(shop_a: Shop, device_a: Device, juma: StaffMember) -> None:
+    # Juma, suspended, came at 07:50 and left at 18:45. The rule alone would call his Tuesday late, less 500; sent to
+    # review, it takes no fine until someone decides it, and keeps his minutes and the day's rules for whoever does,
+    # as a closed day with a tap does (ATT-10).
+    _rule(shop_a, "500.00", JAN_1)
+    ingia = tap(device_a, juma, ClockKind.IN, at(TUESDAY, 7, 50))
+    tap(device_a, juma, ClockKind.OUT, at(TUESDAY, 18, 45))
+    _flag_its_line(ingia)
+    day = _days(shop_a, TUESDAY, TUESDAY)[("Juma", TUESDAY)]
+    assert (day.status, day.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
+    assert (day.first_in, day.first_out) == (dt.time(7, 50), dt.time(18, 45))
+    assert day.rules_used["late_fine"] == "500.00"
