@@ -15,7 +15,7 @@
 
 **Changes in v1.5** (19 Nov 2026, from Jack, ATT-3): §7.8, a clock-in's photo is decided, no longer a default, and a camera missing or broken never stops a tap. Marked **(v1.5)**.
 
-**Changes in v1.6** (19 Nov 2026, from the owner, through Jack, ATT-4): §8.1, a late arrival who leaves for the morning's half day is paid the half day less the fine of their arrival; the examples gain that row, and pay takes off each day's fine (02 v1.42, 04 v1.128). Marked **(v1.6)**.
+**Changes in v1.6** (19 Nov 2026, from the owner, through Jack, ATT-4): §8.1, a late arrival who leaves for the morning's half day is paid the half day less the fine of their arrival; the examples gain that row, and pay takes off each day's fine; and Toka ends the day, as nobody taps out for lunch (from Jack, at ATT-4's review) (02 v1.42, 04 v1.128, v1.130). Marked **(v1.6)**.
 
 ---
 
@@ -222,6 +222,7 @@ In this order: a price list with in-stock status (browse by animal and problem) 
 - **On time:** arrives by 07:35 → full day.
 - **Late** **(v1.3)**: arrives after 07:35 and before 08:00 → full day minus the first fine; from 08:00 and before 08:30 → full day minus the second fine. Both fines are settings the owner types; this spec names no amount.
 - **Half day** **(v1.3)**: the morning (arrives on time or late, leaves from 13:00 to 13:30) or the afternoon (arrives from 12:00 to 13:00, leaves at closing, 18:40). Half-day pay = daily rate ÷ 2. A late arrival who leaves for the morning's half day loses the fine of their arrival too **(v1.6)**.
+- **Toka ends the day** **(v1.6)**: the day runs from the first clock-in to the first clock-out; nobody clocks out for lunch, and a clock-out tapped by mistake makes the day *dharura*.
 - **Dharura** **(v1.3)**: any other arrival or leaving time, and a missing clock-out. The day needs review: a manager or the owner decides it.
 - **Sundays and public holidays** **(v1.3)**: the shop is closed and nobody is paid. Sunday work is a deal between the owner and the worker, outside the system.
 - **Other closed days** **(v1.4)**: the owner may close the shop for days of his own, such as a family funeral, from a first day to a last. Nobody is paid on them, as on a public holiday. If the shop opens again sooner, or stays closed longer, he moves the last day, with a reason.

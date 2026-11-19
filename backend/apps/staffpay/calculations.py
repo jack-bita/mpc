@@ -1,4 +1,4 @@
-"""apps/staffpay/calculations.py — pure sums for attendance and pay: no database, no clock of their own (03 §5.1).
+"""apps/staffpay/calculations.py — pure sums for attendance and pay: no database, no clock of their own (03 §5.2).
 
 The time check (ATT-1, 02 §12): how far a clock-in's time can be trusted, from the evidence about the laptop's clock.
 A laptop's clock can be moved by anyone, and an offline clock-in carries only its time, so the server keeps that time
