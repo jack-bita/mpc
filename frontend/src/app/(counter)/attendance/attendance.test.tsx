@@ -94,12 +94,13 @@ async function switchedOffFrom(day: string): Promise<void> {
 /** The screen, inside the counter's frame, with Asha logged in at the home page before it opened. */
 async function theScreen() {
   arriveAtCounter(ASHA, 15, "server");
-  render(
+  const view = render(
     <CounterLayout>
       <AttendancePage />
     </CounterLayout>,
   );
   await screen.findByRole("heading", { level: 1, name: "Mahudhurio" });
+  return view;
 }
 
 // The pretend clock: the time and the timers only, and it still moves on its own. The test database
@@ -541,6 +542,23 @@ describe("the photo at each tap (ATT-3)", () => {
     expect(kept.src).toBe("blob:asha-0755");
     expect(light.stop).toHaveBeenCalled();
     expect(screen.queryByLabelText("Kamera: uso wako sasa hivi")).toBeNull();
+  });
+
+  it("frees the photo's place in the browser's memory when the screen closes", async () => {
+    // The photo shown after the tap lives in memory at its own address until it is freed: it goes with the
+    // screen, not when the tab closes (ATT-3's review).
+    theLaptopHasACamera();
+    const { unmount } = await theScreen();
+    await theLivePicture();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+    await screen.findByRole("img");
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:asha-0755");
   });
 
   it("says there is no camera, and saves the tap all the same, with why", async () => {

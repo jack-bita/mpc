@@ -190,6 +190,18 @@ def test_a_label_that_breaks_a_rule_refuses_the_whole_tap(
     assert _photos(shop_a) == []
 
 
+def test_a_tap_with_its_photo_sent_twice_keeps_one_row(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
+    # The laptop's first push got no answer (a line that dropped), so it sends the same tap again: the second is a
+    # duplicate, answered as the first was, and neither the line nor the photo's row is written twice (ATT-3's review).
+    tap = _tap(staff_a, photo=_label())
+    [first] = _push(device_a, [tap])
+    [again] = _push(device_a, [tap])
+
+    assert (first.status, again.status, again.first) == ("accepted", "duplicate", "accepted")
+    assert len(_events(shop_a)) == 1
+    assert len(_photos(shop_a)) == 1
+
+
 def test_a_photo_id_already_taken_is_id_taken(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
     # Two taps name one photo's id: the laptop's ids clash, which the push answers as any id taken (03 §5.4). The first
     # is kept with its photo; the second is set aside, its line not kept.
