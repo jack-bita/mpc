@@ -25,10 +25,10 @@ from django.test.utils import CaptureQueriesContext
 from apps.control.models import EditEvent
 from apps.core.acting import acting_as
 from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SettingKey
-from apps.core.tenancy import ShopMismatch, shop_context
+from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, change_worker, hire_again, mark_left
-from apps.shops.models import Closure, Setting, Shop
+from apps.shops.models import Closure, Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, TimeCheck
 from apps.staffpay.services import work_out_days
@@ -423,6 +423,28 @@ def test_two_jobs_on_one_day_read_their_own_taps(shop_a: Shop, device_a: Device,
         None,
         dt.time(18, 45),
     )
+
+
+def test_the_nights_job_keeps_another_shops_workers_out(
+    shop_a: Shop, shop_b: Shop, device_a: Device, side_b: Side, asha: StaffMember
+) -> None:
+    # The night's job opens every shop at once (system_context, ATT-7), so the guard shows every shop's rows, and only
+    # the book's own `shop=` keeps shop B out (T1). Bahati works at shop B and clocked in on Monday on B's laptop: shop
+    # A's book answers Asha alone, and keeps no day for Bahati, under either shop.
+    with shop_context(shop_b):
+        laptop_b = Device.objects.create(
+            shop=shop_b, home_side=side_b, name="Laptop ya Pembejeo", code=1, key_hash="b" * 64
+        )
+    bahati = _worker(shop_b, "Bahati")
+    tap(laptop_b, bahati, ClockKind.IN, at(MONDAY, 7, 20))
+    tap(laptop_b, bahati, ClockKind.OUT, at(MONDAY, 18, 45))
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    with system_context():
+        days = work_out_days(shop_a, MONDAY, MONDAY)
+        assert [(day.staff_id, day.status) for day in days] == [(asha.pk, DayStatus.LATE)]
+        assert not AttendanceDay.objects.filter(staff=bahati).exists()
+        assert not AttendanceDay.objects.filter(shop=shop_b).exists()
 
 
 def test_work_out_days_refuses_a_moment_or_another_shop(shop_a: Shop, shop_b: Shop) -> None:
