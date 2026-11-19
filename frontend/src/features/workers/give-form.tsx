@@ -30,11 +30,7 @@
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
-import {
-  type UseQueryResult,
-  useMutation,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
@@ -64,8 +60,9 @@ import {
   useKeyWords,
 } from "./keys";
 import {
+  aboutTheChange,
   keepWorker,
-  type Role,
+  type RolesRead,
   useOnSide,
   useRoleWords,
   type Worker,
@@ -97,7 +94,7 @@ export function GiveForm({
   worker: Worker;
   me: WhoIsHere;
   /** The shop's roles, asked by the page as this form opens (worker-page.tsx) and handed down. */
-  roles: UseQueryResult<Role[]>;
+  roles: RolesRead;
   /** Given: the line that says what, in the person's words. */
   onDone: (sentence: string) => void;
   /** Someone else changed the worker first: what the server's code says. */
@@ -153,6 +150,12 @@ export function GiveForm({
   const sideList = sidesOffered(me, worker, giving);
   const sideNow =
     side !== undefined && sideList.includes(side) ? side : undefined;
+  // Nothing the form could send yet (PPL-8's review): the roles on their way or not read, or no role or key
+  // left to give. The line on the form says which; Hifadhi waits meanwhile.
+  const waitingForRoles = kind === "role" && roles.isPending;
+  const nothingToPick =
+    (kind === "role" && (roles.data === undefined || roleList.length === 0)) ||
+    (kind === "key" && keyList.length === 0);
 
   const give = useMutation({
     mutationFn: (send: Send) => {
@@ -260,14 +263,16 @@ export function GiveForm({
         value={kind}
         onValueChange={(value) => setKind(value === "key" ? "key" : "role")}
       />
+      {/* The roles are asked as the form opens: a moment's wait, said as the office says it. Always on the form, empty
+          until then: a role="status" box is read when its words change, not when it appears with them (PPL-8's
+          review, offline-banner.tsx). */}
+      <p role="status" className={waitingForRoles ? undefined : "sr-only"}>
+        {waitingForRoles ? loginWords("waiting") : null}
+      </p>
+      {/* A read of the roles that failed: above the list if one came before (a refresh), else in its place. */}
+      {kind === "role" ? <ApiErrorAlert error={roles.error} /> : null}
       {kind === "role" ? (
-        roles.isPending ? (
-          // The roles are asked as the form opens: a moment's wait, said as the office says it.
-          <p role="status">{loginWords("waiting")}</p>
-        ) : roles.error ? (
-          // No network, or the server's own problem: the form can offer no role.
-          <ApiErrorAlert error={roles.error} />
-        ) : roleList.length === 0 ? (
+        roles.data === undefined ? null : roleList.length === 0 ? (
           <p>{t("noRole")}</p>
         ) : (
           <Choice
@@ -340,11 +345,24 @@ export function GiveForm({
         onValueChange={setPickedSide}
       />
       {/* Who may and what is already there (see the top), no network, the server's own problem. */}
-      <ApiErrorAlert error={aboutTheGive(give.error)} />
+      <ApiErrorAlert
+        error={
+          // staff.left closes the form instead (see the top).
+          give.error instanceof ApiRefusal &&
+          give.error.body.code === "staff.left"
+            ? null
+            : aboutTheChange(give.error)
+        }
+      />
       <div className="flex flex-wrap gap-3">
         {/* Switched off while it is sent, so a second tap sends nothing, and while offline, so nothing waits unsent
             while it looks done (setting-form.tsx). */}
-        <Button type="submit" disabled={give.isPending || !online}>
+        {/* And while there is nothing to pick, as the line above it says why: the roles on their way, their read
+            failed, or nothing left to give (PPL-8's review). */}
+        <Button
+          type="submit"
+          disabled={give.isPending || !online || nothingToPick}
+        >
           {workerWords("actions.save")}
         </Button>
         <Button kind="second" onClick={onCancel}>
@@ -353,22 +371,4 @@ export function GiveForm({
       </div>
     </form>
   );
-}
-
-/** What shows above the buttons. The give has no box of the server's own: a refusal of its fields alone (`invalid`,
- * as id.taken comes, on `id`, or a side no longer there) is about the whole give, so its first field's code shows in
- * the code's place. staff.left closes the form instead (see the top). */
-function aboutTheGive(error: unknown): unknown {
-  if (error instanceof ApiRefusal && error.body.code === "staff.left")
-    return null;
-  if (error instanceof ApiRefusal && error.body.code === "invalid") {
-    const [first] = Object.values(error.body.fields).flat();
-    if (first !== undefined)
-      return new ApiRefusal(error.status, {
-        ...error.body,
-        code: first,
-        fields: {},
-      });
-  }
-  return error;
 }

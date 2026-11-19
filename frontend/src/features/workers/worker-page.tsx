@@ -58,7 +58,13 @@ export function WorkerScreen({ id }: { id: string | null }) {
   // Ongeza kazi's form has opened (PPL-8): the shop's roles are asked from then on, here, the part always on the page,
   // and handed down, as the demo's answer is. Opening a worker's page alone asks for none.
   const [giving, setGiving] = useState(false);
-  const roles = useRoles(giving);
+  // Each of its values read here, so the page draws again when any changes (RolesRead, workers.ts).
+  const rolesRead = useRoles(giving);
+  const roles = {
+    data: rolesRead.data,
+    error: rolesRead.error,
+    isPending: rolesRead.isPending,
+  };
   // Which card has a form open, if any (PPL-8's review): one form at a time on the page, so a person never meets two
   // Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other card's buttons hide meanwhile.
   // Each card's own callback, kept the same between draws, as each says "closed" as it goes (its unmount).

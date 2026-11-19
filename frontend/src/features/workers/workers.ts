@@ -20,7 +20,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
-import { answerOf } from "@/api/refusal";
+import { answerOf, ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 
@@ -72,6 +72,29 @@ export function useWorkers() {
   return useQuery({ queryKey: WORKERS, queryFn: allWorkers });
 }
 
+/** What a roles form (give-form.tsx, end-form.tsx) shows above its buttons: the failure, with one more step than
+ * aboutTheWholeRequest (settings/closures.ts). A refusal of fields alone (`invalid`) names fields the form may have no
+ * box for, as id.taken comes on `id`, or a role or side no longer there on `role`, `role_given`, `key` or `side`: the
+ * first such field's code is about the whole change, so it shows in the code's place, never nowhere (PPL-8's review).
+ * A refusal of the form's own boxes (`boxes`) alone shows beside them instead: nothing above. */
+export function aboutTheChange(
+  error: unknown,
+  boxes: readonly string[] = [],
+): unknown {
+  if (!(error instanceof ApiRefusal) || error.body.code !== "invalid")
+    return error;
+  const field = Object.entries(error.body.fields).find(
+    ([name, codes]) => !boxes.includes(name) && codes.length > 0,
+  );
+  return field === undefined
+    ? null
+    : new ApiRefusal(error.status, {
+        ...error.body,
+        code: field[1][0] ?? error.body.code,
+        fields: {},
+      });
+}
+
 /** The shop's roles' place in the store: apart from the workers', as a change to a worker changes no role. */
 export const ROLES = ["people", "roles"] as const;
 
@@ -92,6 +115,16 @@ async function allRoles(): Promise<Role[]> {
   } while (cursor !== null);
   return roles;
 }
+
+/** The roles' read as the page hands it down: its three values, read by the page itself (worker-page.tsx). Never the
+ * query's whole result: TanStack draws a part again only when a value that part has read changes, so a result handed
+ * down and read only later, by a form that opened after the read had failed, kept showing it on its way (PPL-8's
+ * review). */
+export type RolesRead = {
+  data: Role[] | undefined;
+  error: unknown;
+  isPending: boolean;
+};
 
 /** The shop's roles, for Ongeza kazi (PPL-8): asked only once `enabled`, when the form opens, so opening a worker's
  * page costs no read of them. Asked by the page, the part always on the screen, and handed down (worker-page.tsx). */

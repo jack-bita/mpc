@@ -295,6 +295,62 @@ describe("Ongeza kazi", () => {
     expect(key?.id).not.toBe(vyakula?.id);
   });
 
+  it("switches Hifadhi off while the roles' read has failed, the alert saying why (PPL-8's review)", async () => {
+    theServerHas(JUMA, NEEMA_ON_DAWA);
+    // A refusal the server means (no retry by the store, query-client.ts): the read has failed for good.
+    answer("GET", ROLES_ROUTE, refusal(403, "permission_denied"));
+
+    render(<WorkerScreen id={JUMA.id} />);
+    await openTheGive();
+    pick("Cheo");
+
+    // The failed read says itself, in place of the list, and nothing can be sent meanwhile.
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(button("Hifadhi").hasAttribute("disabled")).toBe(true);
+    // A key needs no read of the roles: Hifadhi is on again, and asks for a pick if tapped too soon.
+    pick("Ruhusa moja ya ziada");
+    expect(button("Hifadhi").hasAttribute("disabled")).toBe(false);
+  });
+
+  it("switches Hifadhi off while there is no role left to give there, the line saying why", async () => {
+    theServerHas(JUMA, NEEMA_ON_DAWA);
+
+    render(<WorkerScreen id={JUMA.id} />);
+    await openTheGive();
+    pick("Vyakula");
+    pick("Cheo");
+
+    expect(
+      await screen.findByText("Hakuna cheo unachoweza kumpa."),
+    ).toBeTruthy();
+    expect(button("Hifadhi").hasAttribute("disabled")).toBe(true);
+  });
+
+  it("keeps the wait line on the form from the start, so a screen reader hears its words when they come", async () => {
+    theServerHas(JUMA);
+    // The roles take their time.
+    let answerRoles: (response: Response) => void = () => undefined;
+    answer(
+      "GET",
+      ROLES_ROUTE,
+      () => new Promise<Response>((settle) => (answerRoles = settle)),
+    );
+
+    render(<WorkerScreen id={JUMA.id} />);
+    await openTheGive();
+    const line = within(
+      screen
+        .getByRole("heading", { name: "Ongeza kazi kwa Juma" })
+        .closest("form") as HTMLElement,
+    ).getByRole("status");
+    expect(line.textContent).toBe("");
+    pick("Cheo");
+    await waitFor(() => expect(line.textContent).toBe("Subiri kidogo…"));
+    answerRoles(Response.json(rolesPage(SHOP_ROLES)));
+    expect(await screen.findByRole("radio", { name: "Muuzaji" })).toBeTruthy();
+    expect(line.textContent).toBe("");
+  });
+
   it("asks the shop's roles only once the form opens", async () => {
     theServerHas(JUMA);
 
@@ -769,6 +825,29 @@ describe("Ondoa", () => {
       expect(screen.getByLabelText("Sababu")).toBeTruthy();
     },
   );
+
+  it("shows a refusal of the row it names above the buttons, as the form has no box for it (PPL-8's review)", async () => {
+    // Juma's role, ended and given again elsewhere meanwhile: the server finds no such row of his.
+    theServerHas(JUMA_WITH_BOTH);
+    answer(
+      "POST",
+      `${STAFF}${JUMA.id}/end-role/`,
+      refusal(400, "invalid", {}, { role_given: ["does_not_exist"] }),
+    );
+
+    render(<WorkerScreen id={JUMA.id} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
+    );
+    fireEvent.change(screen.getByLabelText("Sababu"), {
+      target: { value: "Amehamia Vyakula" },
+    });
+    fireEvent.click(button("Hifadhi"));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      sentence("does_not_exist"),
+    );
+  });
 
   it("names roles and keys in the three who-may sentences (PPL-7's note)", () => {
     for (const code of ["staff.own", "staff.superuser_only", "staff.more_keys"])

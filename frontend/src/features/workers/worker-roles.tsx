@@ -27,7 +27,7 @@
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
 
-import { type UseQueryResult, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
@@ -40,7 +40,7 @@ import { EndForm, type Ending } from "./end-form";
 import { GiveForm } from "./give-form";
 import { isOwnerRole } from "./giving";
 import { EVERY_KEY, type GivenKey, isPermission, useKeyWords } from "./keys";
-import { type Role, useRoleWords, type Worker, WORKERS } from "./workers";
+import { type RolesRead, useRoleWords, type Worker, WORKERS } from "./workers";
 
 /** The form open, if any: Ongeza kazi, or Ondoa of one role or key. */
 type Open = { form: "give" } | { form: "end"; ending: Ending };
@@ -59,7 +59,7 @@ export function WorkerRoles({
   worker: Worker;
   me: WhoIsHere;
   /** The shop's roles, asked by the page once Ongeza kazi opens (onGiving) and handed down (worker-page.tsx). */
-  roles: UseQueryResult<Role[]>;
+  roles: RolesRead;
   /** Ongeza kazi's form opened (true): the page asks the shop's roles from then on. */
   onGiving?: (giving: boolean) => void;
   /** A form opened (true) or closed (false): the page keeps one form open at a time (worker-page.tsx). */

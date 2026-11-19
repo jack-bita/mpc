@@ -32,11 +32,10 @@ import { answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button } from "@/components/design/button";
 import { Field } from "@/components/design/field";
-import { aboutTheWholeRequest } from "@/features/settings/closures";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { useOnline } from "@/offline/network";
 
-import { keepWorker, type Worker, WORKERS } from "./workers";
+import { aboutTheChange, keepWorker, type Worker, WORKERS } from "./workers";
 
 /** What goes: one of the worker's roles or keys, by the id of its row, and its words with its side. */
 export type Ending = { kind: "role" | "key"; id: string; words: string };
@@ -132,7 +131,9 @@ export function EndForm({
   const closes =
     code !== undefined && (ENDED_ALREADY.has(code) || code === "staff.left");
   const besideBox = code === REASON_REQUIRED;
-  const above = closes || besideBox ? null : aboutTheWholeRequest(end.error);
+  // A field's refusal the form has no box for (`role_given`, `key`) shows above, never nowhere (aboutTheChange).
+  const above =
+    closes || besideBox ? null : aboutTheChange(end.error, ["reason"]);
 
   return (
     // noValidate: the browser's own checks would speak its language, not the shop's.
