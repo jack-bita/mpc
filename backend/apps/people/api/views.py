@@ -11,8 +11,8 @@ under /api/v1/people/ (apps/people/api/urls.py). Today a shop's devices (AUTH-5)
     POST  /api/v1/people/devices/{id}/block/     a manager stops it at once, with a reason
     POST  /api/v1/people/devices/{id}/unblock/   a manager lets it work again, with a reason
 
-And a shop's workers, for whoever holds staff.manage on the whole shop (PPL-4), and a worker's temporary password
-(AUTH-6):
+And a shop's workers, for whoever holds staff.manage on the whole shop (PPL-4), with their roles and extra keys (PPL-7),
+and a worker's temporary password (AUTH-6):
 
     GET   /api/v1/people/staff/                             every worker the shop has had, with what each was given
     GET   /api/v1/people/staff/{id}/                        one worker
@@ -22,7 +22,12 @@ And a shop's workers, for whoever holds staff.manage on the whole shop (PPL-4), 
     POST  /api/v1/people/staff/{id}/suspend/                stop a worker for a while, with a reason
     POST  /api/v1/people/staff/{id}/unsuspend/              bring them back, with a reason
     POST  /api/v1/people/staff/{id}/leave/                  record their last day, with a reason
+    POST  /api/v1/people/staff/{id}/give-role/            give them one of the shop's roles, on a side or on all
+    POST  /api/v1/people/staff/{id}/give-key/             give them one extra key, on a side or on all
+    POST  /api/v1/people/staff/{id}/end-role/             take a role of theirs away, with a reason
+    POST  /api/v1/people/staff/{id}/end-key/              take an extra key of theirs away, with a reason
     POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
+    GET   /api/v1/people/roles/                           the shop's roles, to choose from when giving one
 
 And the routes a device calls with its key, built on DeviceView (apps/people/api/base.py), under /api/devices/v1/
 (apps/people/api/device_urls.py) and, for PIN login, /api/auth/ (apps/people/api/auth_urls.py):
@@ -45,7 +50,9 @@ from collections.abc import Callable
 from typing import Any, cast
 
 from django.contrib.auth import logout
-from django.db.models import QuerySet
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
+from django.db.models import Model, QuerySet
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -57,10 +64,12 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.serializers import Serializer
 from rest_framework.throttling import BaseThrottle
 from rest_framework.views import APIView
 
 from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin, ShopViewSet
+from apps.core.api.ids import id_taken
 from apps.core.permissions import Permission
 from apps.people.api.authentication import set_key_cookie
 from apps.people.api.base import DeviceView
@@ -73,10 +82,15 @@ from apps.people.api.serializers import (
     DeviceMeSerializer,
     DeviceReasonSerializer,
     DeviceSerializer,
+    EndKeySerializer,
+    EndRoleSerializer,
+    GiveKeySerializer,
+    GiveRoleSerializer,
     OwnSettingsAnswerSerializer,
     OwnSettingsSerializer,
     PairingStartSerializer,
     PinLoginSerializer,
+    RoleSerializer,
     StaffAddSerializer,
     StaffEditSerializer,
     StaffLeaveSerializer,
@@ -88,13 +102,17 @@ from apps.people.api.serializers import (
 from apps.people.api.staff_session import MeSessionAuthentication, StaffSessionAuthentication
 from apps.people.api.throttles import PairingConfirmThrottle, PairingStartThrottle, PinLoginThrottle
 from apps.people.device_keys import DEVICE_KEY_COOKIE
-from apps.people.models import Device, StaffMember, User
+from apps.people.models import Device, PermissionGrant, Role, RoleAssignment, StaffMember, User
 from apps.people.selectors import LoginRefused, idle_lock_minutes, outages_this_week, who_is_here
 from apps.people.services import (
     add_worker,
+    assign_role,
     change_own_settings,
     change_worker,
     confirm_pairing,
+    end_permission,
+    end_role,
+    grant_permission,
     hire_again,
     mark_left,
     pin_login,
@@ -208,7 +226,8 @@ class StaffViewSet(
     # included, each with every role and extra key they were given; a new worker, made once however often the page
     # sends him, or a new job for one who left, hired again (PPL-11); a worker's details fixed, from the copy the page
     # read, with a reason (PATCH, PPL-10); a worker suspended, brought back or marked left, each with a reason; and a
-    # first or forgotten password, set face to face (ADR-0038). PPL-7 and PPL-8 add the roles and the PIN.
+    # first or forgotten password, set face to face (ADR-0038); a role or an extra key given, or taken away with a
+    # reason (PPL-7). PPL-8 adds the PIN.
     model = StaffMember
     # A person's job belongs to the whole shop, whichever side they work on: a password opens them on every side, and a
     # suspension stops them on every side. So each key is asked on the whole shop, where a key for Dawa alone opens
@@ -225,6 +244,10 @@ class StaffViewSet(
         "suspend": Permission.STAFF_MANAGE,
         "unsuspend": Permission.STAFF_MANAGE,
         "leave": Permission.STAFF_MANAGE,
+        "give_role": Permission.STAFF_MANAGE,
+        "give_key": Permission.STAFF_MANAGE,
+        "end_role": Permission.STAFF_MANAGE,
+        "end_key": Permission.STAFF_MANAGE,
         "temporary_password": Permission.STAFF_MANAGE,
     }
     serializer_class = StaffSerializer
@@ -274,13 +297,13 @@ class StaffViewSet(
     def suspend(self, request: Request, pk: str | None = None) -> Response:
         # A worker who stopped coming, stopped at once: their PIN opens nothing from their next request (AUTH-4), and
         # each laptop hears of it at its next sync (X2). Who may is the service's (_locked_for_a_change).
-        sent = self._reason(request, StaffReasonSerializer)
+        sent = self._sent(request, StaffReasonSerializer)
         return self._answer(suspend(self._worker(), by=self._acting(), reason=sent["reason"]))
 
     @extend_schema(request=StaffReasonSerializer, responses=StaffSerializer)
     @action(detail=True, methods=["post"])
     def unsuspend(self, request: Request, pk: str | None = None) -> Response:
-        sent = self._reason(request, StaffReasonSerializer)
+        sent = self._sent(request, StaffReasonSerializer)
         return self._answer(unsuspend(self._worker(), by=self._acting(), reason=sent["reason"]))
 
     @extend_schema(request=StaffLeaveSerializer, responses=StaffSerializer)
@@ -288,10 +311,74 @@ class StaffViewSet(
     def leave(self, request: Request, pk: str | None = None) -> Response:
         # Final: a worker who comes back is hired again, as a new job (the add, with `hire_again`), and the old one
         # keeps its history (02 §5).
-        sent = self._reason(request, StaffLeaveSerializer)
+        sent = self._sent(request, StaffLeaveSerializer)
         return self._answer(
             mark_left(self._worker(), left_on=sent["left_on"], by=self._acting(), reason=sent["reason"])
         )
+
+    # Ongeza kazi and Ondoa (PPL-7, for PPL-8's page). staff.manage on the whole shop opens the route, as for every
+    # action here; each service asks who may again, with the rest of its rule: the giver rule for a give (02 §5), the
+    # rule of Simamisha for an end (Jack: A). Each answers with the worker as they are now, with their roles and keys.
+    @extend_schema(request=GiveRoleSerializer, responses=StaffSerializer)
+    @action(detail=True, methods=["post"], url_path="give-role")
+    def give_role(self, request: Request, pk: str | None = None) -> Response:
+        worker = self._worker()
+        sent = self._sent(request, GiveRoleSerializer)
+        return self._given(
+            RoleAssignment,
+            lambda: assign_role(worker, sent["role"], side=sent["side"], by=self._acting(), given_id=sent["id"]),
+            worker,
+        )
+
+    @extend_schema(request=GiveKeySerializer, responses=StaffSerializer)
+    @action(detail=True, methods=["post"], url_path="give-key")
+    def give_key(self, request: Request, pk: str | None = None) -> Response:
+        worker = self._worker()
+        sent = self._sent(request, GiveKeySerializer)
+        return self._given(
+            PermissionGrant,
+            lambda: grant_permission(
+                worker, sent["permission"], side=sent["side"], by=self._acting(), granted_id=sent["id"]
+            ),
+            worker,
+        )
+
+    @extend_schema(request=EndRoleSerializer, responses=StaffSerializer)
+    @action(detail=True, methods=["post"], url_path="end-role")
+    def end_role(self, request: Request, pk: str | None = None) -> Response:
+        worker = self._worker()
+        sent = self._sent(request, EndRoleSerializer)
+        end_role(sent["role_given"], reason=sent["reason"], by=self._acting())
+        return self._answer(worker)
+
+    @extend_schema(request=EndKeySerializer, responses=StaffSerializer)
+    @action(detail=True, methods=["post"], url_path="end-key")
+    def end_key(self, request: Request, pk: str | None = None) -> Response:
+        worker = self._worker()
+        sent = self._sent(request, EndKeySerializer)
+        end_permission(sent["key"], reason=sent["reason"], by=self._acting())
+        return self._answer(worker)
+
+    def _given(self, model: type[Model], give: Callable[[], object], worker: StaffMember) -> Response:
+        # The give, with the app's id. Sent before, the service answers with what the first send made (_given_before).
+        # An id another shop's row holds is found only by the insert, which PostgreSQL refuses on the table's primary
+        # key: answered as the id taken, and nothing more about that row (03 §5.4), as CreateOnceMixin does. The
+        # service's block rolled back with the refusal, so nothing was given.
+        try:
+            give()
+        except IntegrityError as refusal:
+            if id_taken(refusal, model):
+                raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")}) from None
+            raise
+        return self._answer(worker)
+
+    def _sent(self, request: Request, form: type[Serializer[Any]]) -> dict[str, Any]:
+        # What was sent, checked. Read after initial() has found the worker, so another shop's is "not found" first.
+        # With the view in its context: a role or a key to end is found among this worker's rows alone
+        # (_OfThisWorker), and a side among the shop's (SideField).
+        sent = form(data=request.data, context=self.get_serializer_context())
+        sent.is_valid(raise_exception=True)
+        return cast(dict[str, Any], sent.validated_data)
 
     def _worker(self) -> StaffMember:
         # The worker, found in the visit's shop and checked for the action's key (get_object; initial() already ran it
@@ -301,12 +388,6 @@ class StaffViewSet(
     def _acting(self) -> StaffMember:
         # cast: the login leaves the staff member acting in `request.auth`, which mypy reads as an Actor.
         return cast(StaffMember, self.actor)
-
-    def _reason(self, request: Request, form: type[StaffReasonSerializer]) -> dict[str, Any]:
-        # What was sent, checked. Read after initial() has found the worker, so another shop's is "not found" first.
-        sent = form(data=request.data)
-        sent.is_valid(raise_exception=True)
-        return cast(dict[str, Any], sent.validated_data)
 
     def _answer(self, staff: StaffMember) -> Response:
         return Response(self.get_serializer(staff).data)
@@ -331,6 +412,19 @@ class StaffViewSet(
         )
         # Nothing to answer with, on purpose: once sent, the password is never shown again (ADR-0038).
         return Response(status=204)
+
+
+class RoleViewSet(mixins.ListModelMixin, ShopViewSet[Role]):
+    # The shop's roles, for Ongeza kazi (PPL-7, PPL-8): each with its template, name and the codes it gives. Its own
+    # route, not an action of the workers', as a role belongs to no worker. Only a list: a role is changed by no card
+    # yet (parking lot item 26).
+    model = Role
+    # A role belongs to the whole shop, as a worker does: asked on the whole shop, as the workers' list is (PPL-4).
+    side_field = None
+    # For whoever gives roles: the codes each role gives are what the worker's page shows beside it, and they are the
+    # owner's business, as the workers' roles are (the workers' list, PPL-4's card, default).
+    action_permissions = {"list": Permission.STAFF_MANAGE}
+    serializer_class = RoleSerializer
 
 
 class PinLoginView(DeviceView):

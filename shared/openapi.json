@@ -911,6 +911,52 @@
                 }
             }
         },
+        "/api/v1/people/roles/": {
+            "get": {
+                "operationId": "people_roles_list",
+                "parameters": [
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "description": "The pagination cursor value.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedRoleList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/people/staff/": {
             "get": {
                 "operationId": "people_staff_list",
@@ -1068,6 +1114,234 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/StaffEditRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Staff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/staff/{id}/end-key/": {
+            "post": {
+                "operationId": "people_staff_end_key_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this staff member.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EndKeyRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Staff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/staff/{id}/end-role/": {
+            "post": {
+                "operationId": "people_staff_end_role_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this staff member.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EndRoleRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Staff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/staff/{id}/give-key/": {
+            "post": {
+                "operationId": "people_staff_give_key_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this staff member.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GiveKeyRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Staff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/staff/{id}/give-role/": {
+            "post": {
+                "operationId": "people_staff_give_role_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this staff member.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GiveRoleRequest"
                             }
                         }
                     },
@@ -2401,6 +2675,40 @@
                 "type": "string",
                 "description": "* `active` - Active\n* `blocked` - Blocked"
             },
+            "EndKeyRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 500
+                    },
+                    "key": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "key",
+                    "reason"
+                ]
+            },
+            "EndRoleRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 500
+                    },
+                    "role_given": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "reason",
+                    "role_given"
+                ]
+            },
             "FlagKindEnum": {
                 "enum": [
                     "cash_difference",
@@ -2448,6 +2756,49 @@
                 ],
                 "type": "string",
                 "description": "* `default` - Default\n* `second` - Second, easy to read"
+            },
+            "GiveKeyRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "side": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "permission": {
+                        "$ref": "#/components/schemas/PermissionEnum"
+                    }
+                },
+                "required": [
+                    "id",
+                    "permission"
+                ]
+            },
+            "GiveRoleRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "side": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "role": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "id",
+                    "role"
+                ]
             },
             "GivenKey": {
                 "type": "object",
@@ -2852,6 +3203,32 @@
                     }
                 }
             },
+            "PaginatedRoleList": {
+                "type": "object",
+                "required": [
+                    "results"
+                ],
+                "properties": {
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?cursor=cD00ODY%3D\""
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?cursor=cj0xJnA9NDg3"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Role"
+                        }
+                    }
+                }
+            },
             "PaginatedSideList": {
                 "type": "object",
                 "required": [
@@ -3010,6 +3387,50 @@
                     "provider",
                     "sides"
                 ]
+            },
+            "PermissionEnum": {
+                "enum": [
+                    "sale.write",
+                    "sale.take_payment",
+                    "sale.hand_over",
+                    "sale.bargain",
+                    "sale.below_floor_approve",
+                    "sale.jumla_switch",
+                    "sale.cancel",
+                    "sale.refund",
+                    "credit.give",
+                    "credit.approve",
+                    "debt.view",
+                    "debt.adjust",
+                    "price.change",
+                    "cost.view",
+                    "product.manage",
+                    "contact.manage",
+                    "stock.receive",
+                    "stock.weigh",
+                    "stock.loss",
+                    "stock.count",
+                    "stock.count_approve",
+                    "stock.transfer",
+                    "money.expense",
+                    "money.advance",
+                    "money.withdraw",
+                    "drawer.count",
+                    "drawer.confirm",
+                    "drawer.approve",
+                    "staff.manage",
+                    "attendance.manage",
+                    "pay.run",
+                    "pay.approve",
+                    "settings.manage",
+                    "device.manage",
+                    "flag.review",
+                    "report.view",
+                    "job.manage",
+                    "production.run"
+                ],
+                "type": "string",
+                "description": "* `sale.write` - Write a sale or an order\n* `sale.take_payment` - Take a payment\n* `sale.hand_over` - Hand the goods over\n* `sale.bargain` - Lower a price, down to the floor\n* `sale.below_floor_approve` - Approve a price below the floor\n* `sale.jumla_switch` - Switch a sale to the jumla price\n* `sale.cancel` - Cancel a sale\n* `sale.refund` - Refund a sale\n* `credit.give` - Sell on credit\n* `credit.approve` - Approve credit over a limit\n* `debt.view` - See the debts\n* `debt.adjust` - Adjust or write off a debt\n* `price.change` - Change a price\n* `cost.view` - See buying prices and profit\n* `product.manage` - Add and change products\n* `contact.manage` - Add and change customers, suppliers and partners\n* `stock.receive` - Complete a delivery, with its buying prices\n* `stock.weigh` - Weigh goods as they arrive\n* `stock.loss` - Record a loss\n* `stock.count` - Count the stock\n* `stock.count_approve` - Approve a stock count\n* `stock.transfer` - Move stock from one place to another\n* `money.expense` - Pay an expense\n* `money.advance` - Give a worker an advance\n* `money.withdraw` - Take money out of a drawer\n* `drawer.count` - Count a drawer\n* `drawer.confirm` - Confirm a counted drawer\n* `drawer.approve` - Approve the day\n* `staff.manage` - Add workers and give them roles\n* `attendance.manage` - Fix attendance\n* `pay.run` - Prepare the month's pay\n* `pay.approve` - Approve the month's pay\n* `settings.manage` - Change the shop's rules and rates\n* `device.manage` - Register and block devices\n* `flag.review` - Resolve or dismiss a side's flags\n* `report.view` - See the reports\n* `job.manage` - Run machine jobs\n* `production.run` - Record a production run"
             },
             "PinLoginRequest": {
                 "type": "object",
@@ -3258,6 +3679,38 @@
                 ],
                 "type": "string",
                 "description": "* `accepted` - Accepted\n* `invalid` - Invalid"
+            },
+            "Role": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "template": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 40
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "permissions",
+                    "template"
+                ]
             },
             "RuleAnswer": {
                 "type": "object",

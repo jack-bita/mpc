@@ -770,6 +770,15 @@
       "back_before_left": "The first day can't be before the last day of their previous job.",
       "left_here": "This phone belongs to a worker who left here. Hire them again from their page."
     },
+    "role": {
+      "already_given": "This person already has this role on this side.",
+      "already_ended": "This role was already taken away.",
+      "superuser_only": "Only the system admin can give or take away the Owner role."
+    },
+    "permission": {
+      "already_given": "This person already has this permission on this side.",
+      "already_ended": "This permission was already taken away."
+    },
     "password": {
       "must_change": "Choose your own password before you go on.",
       "own": "You can't set your own password here.",

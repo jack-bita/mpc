@@ -570,10 +570,12 @@ def test_a_key_the_setter_lacks_waits_for_the_persons_own_password(
     assert code_of_giving(juma, by=baba) == "staff.temporary_password_open"
     with shop_context(shop_a):
         assert given_permissions(juma) == HeldPermissions()
-        # A whole role is held back the same way, by the keys in it Meneja lacks.
-        owner_role = Role.objects.get(template=RoleTemplate.OWNER)
+        # A whole role is held back the same way, by the keys in it Meneja lacks: here a role the owner made himself,
+        # as the Owner role is the superuser's alone to give (PPL-7).
+        payer = Role(shop=shop_a, name="Mhasibu", permissions=[Permission.PAY_APPROVE])
+        payer.save()
         with pytest.raises(ValidationError) as refused:
-            assign_role(juma, owner_role, side=None, by=baba)
+            assign_role(juma, payer, side=None, by=baba)
     assert refused.value.code == "staff.temporary_password_open"
 
     # Once Juma has chosen his own, Meneja knows nothing, and the key can be given.
