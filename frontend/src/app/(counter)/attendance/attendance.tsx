@@ -225,15 +225,17 @@ export function AttendanceScreen() {
     }
   }
 
-  // The label of the photo just taken (attachments.ts), or none when it can't be saved: a photo labelPhoto
-  // refuses (over 1 MB, or no JPEG by its bytes) is a bug in the camera's code, never her fault, so the tap
-  // goes on without it, as failed, and the console says why.
+  // The label of the photo just taken (attachments.ts), or none when it can't be made: a photo labelPhoto
+  // refuses (BrokenPhoto: over 1 MB, or no JPEG by its bytes) is a bug in the camera's code, and a browser
+  // that can't read the photo or work out its SHA-256 is the laptop's trouble; never her fault either way.
+  // So the tap goes on without the photo, as failed, and the console says why: a photo's problem never
+  // stops a tap (Jack: A; ATT-3's review).
   async function labelled(shot: Blob) {
     try {
       return await labelPhoto(shot, "clock_photo");
     } catch (error) {
-      if (!(error instanceof BrokenPhoto)) throw error;
-      console.error("a clock-in photo was not kept", error);
+      const why = error instanceof BrokenPhoto ? error.problem : "unreadable";
+      console.error(`a clock-in photo was not kept (${why})`, error);
       return null;
     }
   }

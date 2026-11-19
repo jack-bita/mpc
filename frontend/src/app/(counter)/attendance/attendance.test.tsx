@@ -608,6 +608,44 @@ describe("the photo at each tap (ATT-3)", () => {
     expect(await db().attachment_files.count()).toBe(0);
   });
 
+  it.each([
+    [
+      // The shrinking gave something that isn't a JPEG: labelPhoto refuses it, a bug in the camera's code.
+      "a photo labelPhoto refuses",
+      () =>
+        vi
+          .mocked(shrinkFrame)
+          .mockResolvedValue(
+            new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])]),
+          ),
+    ],
+    [
+      // The browser couldn't work out the photo's SHA-256: the laptop's trouble.
+      "a photo the browser can't read",
+      () =>
+        vi
+          .spyOn(crypto.subtle, "digest")
+          .mockRejectedValueOnce(new Error("no digest")),
+    ],
+  ])("saves the tap without %s, as failed", async (_what, goesWrong) => {
+    // A photo's problem never stops a tap (Jack: A; ATT-3's review).
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    goesWrong();
+    theLaptopHasACamera();
+    await theScreen();
+    await theLivePicture();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
+    const [tap] = await db().documents.toArray();
+    expect(tap?.payload).toMatchObject({ no_photo: "failed" });
+    expect(await db().attachment_files.count()).toBe(0);
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
   it("uses the photo just taken on a try after a save that failed", async () => {
     // Asha taps; the laptop's disk is full, and the save fails. She taps again: the camera went off with her
     // photo, and her second tap uses it, never "camera failed" for a camera that works (ATT-3's review).
