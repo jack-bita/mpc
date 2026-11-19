@@ -280,7 +280,7 @@ describe("Ongeza kazi", () => {
   });
 
   it("offers Neema only what she may give, and only where (the card's third Done when)", async () => {
-    // A Dawa seller trusted with staff.manage on Dawa alone.
+    // A Dawa seller trusted with the workers: staff.manage on the whole shop, the Seller's keys on Dawa alone.
     theServerHas(JUMA, NEEMA_ON_DAWA);
 
     render(<WorkerScreen id={JUMA.id} />);
@@ -305,17 +305,46 @@ describe("Ongeza kazi", () => {
 
     render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
-    // Vyakula first: Neema holds nothing there, so there is nothing to give her worker there.
+    // Vyakula first: Neema holds only staff.manage there, which no role is made of alone.
     pick("Vyakula");
     pick("Cheo");
     expect(
       await screen.findByText("Hakuna cheo unachoweza kumpa."),
     ).toBeTruthy();
+    // Of the keys, staff.manage alone, under its group.
     pick("Ruhusa moja ya ziada");
-    expect(screen.getByText("Hakuna ruhusa unayoweza kumpa.")).toBeTruthy();
-    // Dawa: the lists come back.
+    expect(
+      within(screen.getByRole("group", { name: "Ruhusa gani?" }))
+        .getAllByRole("radio")
+        .map((each) => each.closest("label")?.textContent),
+    ).toEqual(["Kuongeza wafanyakazi na kuwapa vyeo"]);
+    // Dawa: the Seller's keys come back.
     pick("Dawa");
     expect(radio("Kuhesabu mzigo")).toBeTruthy();
+  });
+
+  it("says there is nothing to give where the worker holds all the giver may give there", async () => {
+    // Juma holds staff.manage on Vyakula already: there, Neema has nothing left to give him.
+    theServerHas(
+      {
+        ...JUMA,
+        keys: [
+          {
+            id: "019a8303-0000-7000-8000-000000000201",
+            permission: "staff.manage",
+            side: VYAKULA.id,
+          },
+        ],
+      },
+      NEEMA_ON_DAWA,
+    );
+
+    render(<WorkerScreen id={JUMA.id} />);
+    await openTheGive();
+    pick("Vyakula");
+    pick("Ruhusa moja ya ziada");
+
+    expect(screen.getByText("Hakuna ruhusa unayoweza kumpa.")).toBeTruthy();
   });
 
   it("leaves out the side where the worker already holds the pick", async () => {

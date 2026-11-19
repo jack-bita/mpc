@@ -30,9 +30,10 @@ const JUMA = worker();
 
 describe("the giver rule", () => {
   it("reads every side from the whole shop's codes, and a side from that side's", () => {
-    expect(heldOn(NEEMA_ON_DAWA, null).size).toBe(0);
+    // Every side: the whole shop's codes alone, staff.manage. Dawa: those, and the Seller's.
+    expect([...heldOn(NEEMA_ON_DAWA, null)]).toEqual(["staff.manage"]);
     expect(heldOn(NEEMA_ON_DAWA, DAWA.id).has("stock.count")).toBe(true);
-    expect(heldOn(NEEMA_ON_DAWA, VYAKULA.id).size).toBe(0);
+    expect([...heldOn(NEEMA_ON_DAWA, VYAKULA.id)]).toEqual(["staff.manage"]);
     // A side `me` doesn't name holds nothing.
     expect(heldOn(BABA, "019a0000-0000-7000-8000-000000000000").size).toBe(0);
   });
@@ -46,7 +47,8 @@ describe("the giver rule", () => {
     expect(mayGive(NEEMA_ON_DAWA, ["stock.count", "pay.run"], DAWA.id)).toBe(
       false,
     );
-    // Without staff.manage there, nothing at all, though she holds the code.
+    // Without staff.manage there, nothing at all, though she holds the code. The rule's own branch: a person who could
+    // open the page holds staff.manage on every side, so the form never meets this, but the server's rule has it.
     const noManage = {
       ...NEEMA_ON_DAWA,
       permissions: {
@@ -146,7 +148,11 @@ describe("the keys offered", () => {
         ["staff.manage", ...SELLER_ROLE.permissions].includes(code),
       ),
     );
-    expect(keysOffered(NEEMA_ON_DAWA, JUMA, null)).toEqual([]);
+    // On every side, only what she holds there: staff.manage itself.
+    expect(keysOffered(NEEMA_ON_DAWA, JUMA, null)).toEqual(["staff.manage"]);
+    expect(keysOffered(NEEMA_ON_DAWA, JUMA, VYAKULA.id)).toEqual([
+      "staff.manage",
+    ]);
   });
 
   it("leaves out a key the worker already holds on that very side", () => {

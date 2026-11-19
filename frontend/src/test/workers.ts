@@ -167,15 +167,17 @@ export const BABA: WhoIsHere = {
   },
 };
 
-/** Neema, a Dawa seller trusted with staff.manage on Dawa alone: she holds nothing on every side, and nothing on
- * Vyakula. */
+/** Neema, a Dawa seller trusted with the workers: staff.manage on the whole shop, which the workers' routes ask there
+ * (PPL-4), so she can open the page at all, and the Seller's keys on Dawa alone. As `me` answers, staff.manage counts
+ * on every side too (HeldPermissions.on). So she may give the Seller's roles and keys on Dawa, and on every side or on
+ * Vyakula nothing but staff.manage itself (PPL-8's review). */
 export const NEEMA_ON_DAWA: WhoIsHere = {
   ...MANAGER,
   permissions: {
-    whole_shop: [],
+    whole_shop: ["staff.manage"],
     sides: [
       { ...DAWA, permissions: ["staff.manage", ...SELLER_CODES] },
-      { ...VYAKULA, permissions: [] },
+      { ...VYAKULA, permissions: ["staff.manage"] },
     ],
   },
 };
