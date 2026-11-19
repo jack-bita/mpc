@@ -4,14 +4,15 @@
 // login, which opens clock-in photos.
 //
 // Two things only a real browser can prove, which the unit tests' jsdom can't: the camera's live picture,
-// and the shrinking's drawing (shrink-photo.ts): the photo is a JPEG, at most 1,600 px on its longest side,
-// under 1 MB, with none of a camera's hidden data (no Exif block). The camera is Chromium's pretend one
-// (playwright.config.ts), its picture made up, never a face.
+// and the shrinking's drawing (shrink-photo.ts): the photo comes out a JPEG under 1 MB with none of a camera's
+// hidden data (no Exif block). The camera is Chromium's pretend one (playwright.config.ts), its picture made
+// up, never a face, and smaller than 1,600 px: so the photo is never brought down here, and its longest side
+// within 1,600 px only shows nothing grew; bringing a bigger frame down is fitWithin's, in shrink-photo.test.ts.
 //
 // Honest limit: on the demo no photo goes up, so the upload road (the label in the push, the file after it)
 // is proven by the server's tests (apps/sync/tests/test_clock_photo.py, CTRL-3's test_attachment_route.py),
-// the laptop's (attendance.test.tsx, sync/attachments.test.ts), and Jack's hand test on a laptop that isn't
-// the demo.
+// the laptop's (attendance.test.tsx, sync/attachments.send.test.ts), and Jack's hand test on a laptop that
+// isn't the demo.
 import sw from "../messages/sw.json";
 import type { components } from "../src/api/schema";
 
@@ -114,7 +115,8 @@ test("a clock-in's photo is taken and shown, and on the demo never leaves the la
       .click();
     await expect(photo).toBeVisible();
     await expect(counter.getByText(sw.attendance.photo.demo)).toBeVisible();
-    // The live picture is gone with the button: the camera's light is off.
+    // The live picture is gone with the button. That the camera's light is off, its tracks stopped, is the
+    // camera hook's own tests' (use-camera.test.ts): a page can't see the light.
     await expect(live).toHaveCount(0);
   });
 

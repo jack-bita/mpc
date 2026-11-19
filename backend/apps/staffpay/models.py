@@ -35,10 +35,8 @@ class NoPhoto(models.TextChoices):
     NO_CAMERA = "no_camera", "No camera"  # the laptop has none, or the browser found none
     BLOCKED = "blocked", "Camera blocked"  # someone told the browser to block it: a manager may want to ask who
     FAILED = "failed", "Camera failed"  # it started and broke, or the photo couldn't be made: a bug or a broken camera
-    OLD_APP = (
-        "old_app",
-        "App before photos",
-    )  # version 1 of the clock-in, from an app with no camera yet: never a choice
+    # Version 1 of the clock-in, from an app with no camera yet: the server's word, never a laptop's choice.
+    OLD_APP = "old_app", "App before photos"
     DEMO = "demo", "Demo"  # on the demo a visitor's face never leaves their laptop (Jack: A)
 
 

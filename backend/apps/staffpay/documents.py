@@ -173,7 +173,9 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
             # The photo's row, pinned to the line, in the push's own transaction for this tap: kept with the line or
             # not at all, so a file that comes later always finds its row, and a refused label leaves no line behind
             # whose photo could never come (CTRL-3). After the line, as a row's record must be saved first. Taken by
-            # the worker who tapped, on this laptop. No change line: no laptop keeps a copy of photos' rows.
+            # the worker who tapped, and named by the line's own laptop, the one whose key sent the push: for a tap
+            # carried in a rescue file (SYNC-12), the laptop that loaded it, not the one that took the photo, as the
+            # line names it too. No change line: no laptop keeps a copy of photos' rows.
             try:
                 expect_attachment(
                     id=photo["id"],
