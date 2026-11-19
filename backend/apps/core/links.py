@@ -54,6 +54,9 @@ LINK_TYPES: dict[str, str] = {
     # A tap of Ingia or Toka: the unverified_time flag about it, and the change log's line about it (ATT-1). A
     # ledger, so it has no edit history to name it.
     "attendance_event": "staffpay.AttendanceEvent",
+    # One worker's day in the book of days: the history of its edits, as a day is worked out again when a tap comes
+    # late or a rule changes for days past (ATT-10).
+    "attendance_day": "staffpay.AttendanceDay",
     # Days the shop is closed, such as a funeral: the history of its edits, and the audit trail's lines about cancelling
     # it and moving its last day (ATT-8).
     "closure": "shops.Closure",

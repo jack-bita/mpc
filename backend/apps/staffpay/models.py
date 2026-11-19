@@ -10,12 +10,21 @@ changed or deleted, only voided once, with who and why (T2, ADR-0021). A late fi
 (ATT-4), so each keeps the laptop's own time, the evidence about it, and the time the server trusts.
 
 It also owns the names of what a day was (DayStatus): on time, late, half, absent, off or needs review, which the
-day's rule answers (apps/staffpay/calculations.py) and ATT-10's book of days will keep.
+day's rule answers (apps/staffpay/calculations.py); and the book of days (AttendanceDay, ATT-10), one row per worker
+per day, which keeps each answer with the rules it used:
+
+    who    date        status        fine    in     out
+    Asha   Mon 16 Nov  late          500.00  07:50  18:45
+    Asha   Sun 22 Nov  off           0.00    —      —
+    Juma   Mon 16 Nov  needs_review  0.00    07:20  —
+
+The events are the truth and the days only answers worked out from them: a day is worked out again, from its taps and
+its date's rules, as often as it is asked, until its pay run is approved (WAGE-3).
 """
 
 from django.db import models
 
-from apps.core.models import AppendOnly, CounterRecord
+from apps.core.models import AppendOnly, CounterRecord, ShopScoped
 
 
 class ClockKind(models.TextChoices):
@@ -45,8 +54,7 @@ class NoPhoto(models.TextChoices):
 
 class DayStatus(models.TextChoices):
     # What one worker's day was (02 §12). ATT-4's rule gives every one but `off` (apps/staffpay/calculations.py);
-    # ATT-10's book gives `off` and keeps each day in a table whose status takes these as they are. No table yet, so
-    # no migration: a list of choices is no column until a model names it.
+    # the book of days (AttendanceDay, below) gives `off`, and keeps each day's status as one of these.
     ON_TIME = "on_time", "On time"  # a full day
     LATE = "late", "Late"  # a full day, less the fine of its arrival
     HALF = "half", "Half day"  # half the day's pay, less the fine of a late morning arrival (the owner, ATT-4)
@@ -64,8 +72,8 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
 
     # Whose attendance it is: today always the one who tapped. A column of its own all the same, as a manager
     # entering a missed clock-in for someone (ATT-6) writes a line about another person, and a ledger's lines can't
-    # be filled in later. PROTECT: nothing is deleted (rule 7). No index of its own: indexes lead with `shop`, and
-    # ATT-10 adds the one it reads a month by.
+    # be filled in later. PROTECT: nothing is deleted (rule 7). No index of its own: indexes lead with `shop`, and the
+    # one the book of days reads a month by is below (Meta).
     staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
     kind = models.CharField(max_length=3, choices=ClockKind)
     # The time the server trusts, and how far (TimeCheck): for a clock-in sent at once, the server's time of the tap,
@@ -137,6 +145,94 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
                 condition=models.Q(no_photo__in=["", *NoPhoto.values]), name="staffpay_attendanceevent_no_photo_known"
             ),
         ]
+        # How the book of days finds a month of taps (ATT-10): the shop's lines by the time the server trusts, from
+        # the shop's midnight starting the month to the one ending it. Without it, that read would search every
+        # shop's lines. Leads with `shop`, as every index does. The few with no trusted time (`unverified`) are read
+        # by the laptop's time instead, the only one they have; they are rare, so they need no index of their own.
+        indexes = [models.Index(fields=["shop", "trusted_time"], name="staffpay_event_by_trusted_time")]
 
     def __str__(self) -> str:
         return f"{self.kind} {self.client_time:%Y-%m-%d %H:%M}"
+
+
+class AttendanceDay(ShopScoped):
+    # One worker's day, as the book keeps it (ATT-10, 02 §12): what ATT-4's rule answered from that day's taps and
+    # that day's rules, with the rules copied (T4), so a fine the owner raises next month leaves this month's days as
+    # they were. ShopScoped (CORE-2) gives `id`, `shop`, `created_at`, `created_by` and the guard on reads;
+    # `created_by` is always empty, as only the book writes a day, and the book is the system, not a person.
+    #
+    # Not a ledger: a day is worked out again freely until its pay run is approved (WAGE-3), as a tap can come late,
+    # from a laptop that was offline, and the owner can change a rule for days already past. So its row changes, and
+    # the edit history's trigger in this table's migration keeps each change (ADR-0036): Asha's 16 Nov went from
+    # on time to late, the day her late tap arrived. The trigger writes nothing when a day comes out the same.
+    # Not Editable: no screen types over a day, so no version is needed to keep two people's edits apart; a manager's
+    # decision on a day is ATT-6's `override`, beside what the book worked out, which stays visible (A2).
+    # Never deleted (rule 7): nothing links to a day yet, so PROTECT can't keep it, and a trigger in the same migration
+    # refuses a DELETE instead. A day that no longer counts, as its job's first day was moved later (PPL-10), keeps its
+    # row, and the book no longer answers it.
+    # Not on the laptops: no laptop works out a day (03 §6.6), and a worker's pay never sits on a shared device
+    # (03 §6.1), so the book writes no line in the change log.
+    #
+    # Later cards add their columns, each with its migration: `override` and `absence_type` (ATT-6), `meal_share`
+    # (WAGE-7), and the lock of an approved pay run (WAGE-3).
+
+    # Whose day it is: a job, not a person, as an event's `staff` is. A person who left and is hired again the same day
+    # has two jobs, so two days on that date, each read from its own taps (PPL-11). PROTECT: nothing is deleted.
+    # No index of its own: the one-day-per-job rule below is one, and leads with `shop`.
+    staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
+    # The day, on the shop's own calendar (02 §1), never a UTC date: Asha's tap at 21:30 UTC on Monday is Tuesday's.
+    date = models.DateField()
+    status = models.CharField(max_length=12, choices=DayStatus)
+    # Taken off the day's pay: a late arrival's fine, copied from the rule's answer, never worked out here. Money, so
+    # numeric(14,2) (rule 3, 03 §9).
+    fine = models.DecimalField(max_digits=14, decimal_places=2)
+    # The two taps the rule read: the first Ingia, and the first Toka after it, which ends the day (ATT-4). Minutes on
+    # the shop's clock, with no seconds, as the counter showed them; empty when there was none, or none with a time
+    # the server trusts. For a manager to see beside the day (ATT-5), not facts: the taps themselves are the events.
+    first_in = models.TimeField(null=True, blank=True)
+    first_out = models.TimeField(null=True, blank=True)
+    # The day's rules as the rule read them (DayRules, apps/staffpay/calculations.py): the seven times and the two
+    # fines, each as text ("07:35", "500.00"), so no amount ever passes through a float (rule 3). A copy (T4), never
+    # read back as the rules: the rules are the settings, and their history is theirs. Empty on a day the rule never
+    # read: an off day, and a closed day sent to review for its taps (Jack, ATT-10).
+    rules_used = models.JSONField(default=dict, blank=True)
+
+    class Meta(ShopScoped.Meta):
+        # Built on ShopScoped.Meta, so `objects`, with the guard, stays the default manager (CORE-2). No error codes on
+        # these rules: only the book writes a day, so a broken rule is a bug in our code, a server error and a log
+        # line, never a person's mistake (ADR-0032).
+        constraints = [
+            # One day per job and date, however often the book runs: two managers opening the month at once, or the
+            # night's job beside them, end with the same row (an upsert keyed by these three). Leads with `shop`, then
+            # `date`, so it is also the index a month of the shop's days is read by.
+            models.UniqueConstraint(
+                fields=["shop", "date", "staff"], name="staffpay_attendanceday_one_per_job_and_date"
+            ),
+            # The day fits its status, and only the statuses there are, as each branch names its own. Off or absent:
+            # no fine and no tap read. On time: no fine, and both taps. Late or half: both taps, and a fine of 0 or
+            # more (a shop starts with no fine, ATT-2; the morning's half keeps a late arrival's fine, the owner).
+            # Needs review: no fine, as a manager decides the day (ATT-6), with or without taps. A fine is never empty
+            # (NOT NULL), so no comparison here meets an empty value, which a database rule lets pass.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status__in=[DayStatus.OFF, DayStatus.ABSENT],
+                        fine=0,
+                        first_in__isnull=True,
+                        first_out__isnull=True,
+                    )
+                    | models.Q(status=DayStatus.ON_TIME, fine=0, first_in__isnull=False, first_out__isnull=False)
+                    | models.Q(
+                        status__in=[DayStatus.LATE, DayStatus.HALF],
+                        fine__gte=0,
+                        first_in__isnull=False,
+                        first_out__isnull=False,
+                    )
+                    | models.Q(status=DayStatus.NEEDS_REVIEW, fine=0)
+                ),
+                name="staffpay_attendanceday_fits_its_status",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.date:%Y-%m-%d} {self.status}"
