@@ -2617,12 +2617,17 @@
                             }
                         ],
                         "readOnly": true
+                    },
+                    "demo": {
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 },
                 "required": [
                     "code",
                     "currency",
                     "default_language",
+                    "demo",
                     "id",
                     "name",
                     "timezone"

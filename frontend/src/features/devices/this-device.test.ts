@@ -7,6 +7,7 @@ import { DAWA_LAPTOP } from "@/test/devices";
 
 import {
   DEVICE_STORAGE_KEY,
+  isTheDemo,
   saveBlocked,
   savedBlocked,
   saveDevice,
@@ -109,6 +110,25 @@ describe("the device's saved copy", () => {
 
     expect(savedDevice()).toEqual(oldCopy);
     expect(savedDevice()?.homeSide.band).toBeUndefined();
+  });
+
+  it("knows the demo's laptop, and reads a copy from before ATT-3 as a real shop's", () => {
+    // On the demo no visitor's clock-in photo leaves their laptop (Jack, ATT-3: A), so the counter asks
+    // the saved copy, offline too. A copy saved before ATT-3 says nothing: still this device, a real
+    // shop's, whose photos must go, until the next check says otherwise.
+    const oldShop: Record<string, unknown> = { ...DAWA_LAPTOP.shop };
+    delete oldShop.demo;
+    window.localStorage.setItem(
+      DEVICE_STORAGE_KEY,
+      stored({ ...DAWA_LAPTOP, shop: oldShop }),
+    );
+    expect(savedDevice()?.id).toBe(DAWA_LAPTOP.id);
+    expect(isTheDemo(savedDevice())).toBe(false);
+
+    saveDevice({ ...DAWA_LAPTOP, shop: { ...DAWA_LAPTOP.shop, demo: true } });
+    expect(isTheDemo(savedDevice())).toBe(true);
+    // No device at all is no demo either.
+    expect(isTheDemo(null)).toBe(false);
   });
 
   it("keeps the block of a copy whose device it can't read", () => {

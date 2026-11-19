@@ -42,6 +42,9 @@ export interface ThisDevice {
     timezone: string;
     currency: string;
     language: Language;
+    /** Whether the shop is the demo's (ATT-3): there no visitor's clock-in photo leaves their laptop
+     * (Jack: A). Optional, as a copy from before ATT-3 has none: read it through `isTheDemo`. */
+    demo?: boolean;
   };
   /** The side it mostly serves, which the counter screens open on, with the band its top bar draws before
    * anyone logs in (SHOP-4). None in a copy from before the band, or whose band the bar can't draw
@@ -142,6 +145,15 @@ function isThisDevice(value: unknown): value is ThisDevice {
     typeof homeSide.name === "string"
     // The band decides nothing here: withABandItCanDraw (below) reads it.
   );
+}
+
+/**
+ * Whether this laptop belongs to the demo, from its saved copy, offline too (ATT-3). Only a check that said
+ * so: a copy from before ATT-3 says nothing, and reads as a real shop's, whose photos must go; on the demo
+ * that lasts until the next check, at the app's start, and the server keeps no photo there anyway.
+ */
+export function isTheDemo(device: ThisDevice | null | undefined): boolean {
+  return device?.shop.demo === true;
 }
 
 // The home side's band, kept only when it is a look the bar draws (SHOP-4). No band is a copy from before

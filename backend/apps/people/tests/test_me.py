@@ -219,6 +219,7 @@ def test_me_names_who_and_where(asha: StaffMember, laptop: Device, laptop_key: s
         "timezone": "Africa/Dar_es_Salaam",
         "currency": "TZS",
         "default_language": "sw",
+        "demo": False,
     }
     assert data["device"] == {"id": str(laptop.pk), "name": laptop.name, "code": laptop.code, "status": "active"}
     assert data["home_side"] == {"id": str(side_a.pk), "code": side_a.code, "name": side_a.name, "band": "blue"}

@@ -62,6 +62,8 @@ function fromAnswer(me: DeviceMe): ThisDevice {
       timezone: me.shop.timezone,
       currency: me.shop.currency,
       language: me.shop.default_language,
+      // Whether the shop is the demo's, kept so the counter knows it offline (ATT-3).
+      demo: me.shop.demo,
     },
     homeSide: {
       id: me.home_side.id,
