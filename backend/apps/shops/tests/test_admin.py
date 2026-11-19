@@ -1,8 +1,9 @@
 """apps/shops/tests/test_admin.py — the Django admin page for shops (apps/shops/admin.py).
 
-The superuser adds MPC and the demo shop here before any office screen exists. These tests drive the
-page like a browser would, through Django's test client, logged in as a fake superuser (the
-`superuser` and `superuser_client` fixtures, in backend/conftest.py).
+The superuser looks after a shop here before any office screen exists: he edits it, but never adds or
+deletes one. A shop is opened with `manage.py open_shop` (PPL-13), which makes its sides and roles too.
+These tests drive the page like a browser would, through Django's test client, logged in as a fake
+superuser (the `superuser` and `superuser_client` fixtures, in backend/conftest.py).
 """
 
 import pytest
@@ -33,15 +34,16 @@ def form_data(**changes: str) -> dict[str, str]:
     return {**data, **changes}
 
 
-def test_admin_adds_a_shop(superuser_client: Client) -> None:
-    # Typed in small letters: the form cleans it the same way as everywhere else (Shop.clean). And a
-    # status sent with it, as a changed page or a hand-made request could send it.
-    response = superuser_client.post(f"{SHOPS}add/", form_data(code="mfano", status="suspended"))
+def test_admin_adds_no_shop(superuser_client: Client) -> None:
+    # Parking lot item 16 (Jack: A, PPL-13). The add page saved the Shop row alone: no sides, stock
+    # places, cash drawers or roles, so nobody could work there (SHOP-2). open_shop makes all of it.
+    # Refused whether the page is opened or its form sent by hand.
+    assert superuser_client.get(f"{SHOPS}add/").status_code == 403
+    assert superuser_client.post(f"{SHOPS}add/", form_data()).status_code == 403
+    assert not Shop.objects.exists()
 
-    assert response.status_code == 302  # saved, and sent on to the next page
-    shop = Shop.objects.get()
-    assert shop.code == "MFANO"
-    assert shop.status == "active"  # every new shop starts active; the page doesn't take a status
+    # Nor is there an add button on the list page, which reads the same answer.
+    assert superuser_client.get(SHOPS).context["has_add_permission"] is False
 
 
 def test_admin_shows_id_read_only(superuser_client: Client) -> None:
@@ -74,6 +76,18 @@ def test_admin_kind_and_status_fixed_on_edit(superuser_client: Client) -> None:
     assert shop.kind == "live"
     assert shop.practice_of is None
     assert shop.status == "active"
+
+
+def test_admin_stores_a_code_fixed_on_edit_in_capitals(superuser_client: Client) -> None:
+    # A typo fixed on the edit page (MCP for MPC), typed in small letters with spaces: the form cleans it
+    # as everywhere else (Shop.clean). The add page's test proved this until the add page went (PPL-13).
+    shop = Shop.objects.create(name=NAME, code="MCP")
+
+    response = superuser_client.post(f"{SHOPS}{shop.pk}/change/", form_data(code=" mfano "))
+
+    assert response.status_code == 302
+    shop.refresh_from_db()
+    assert shop.code == "MFANO"
 
 
 def test_admin_currency_fixed_on_edit(superuser_client: Client) -> None:
