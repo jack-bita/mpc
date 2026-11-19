@@ -366,7 +366,8 @@ class Role(Editable):
 # An end is whole or not there at all (PPL-7), on both tables below: open, with all three empty; or ended, with a time
 # and a reason, as a void is on staffpay's rows (T3). Who ended it may be empty when it ended: the superuser, who is
 # nobody's staff. A reason holds at least one letter, figure or sign: spaces alone are no reason (ATT-1's review). No
-# code: end_role and end_permission always write all of it, so only a bug breaks this rule (ADR-0032).
+# code: end_role and end_permission (apps/people/services.py) always write all of it, so only a bug breaks this rule
+# (ADR-0032).
 END_IS_WHOLE = models.Q(ended_at__isnull=True, ended_by__isnull=True, end_reason="") | models.Q(
     ended_at__isnull=False, end_reason__regex=r"\S"
 )

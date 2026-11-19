@@ -1,5 +1,5 @@
-"""apps/people/tests/test_who_changes_a_worker.py — who may suspend a person, bring them back, mark them left or fix
-their details (PPL-4, PPL-10; 02 §5).
+"""apps/people/tests/test_who_changes_a_worker.py — who may suspend a person, bring them back, mark them left, fix
+their details, or take a role or a key away from them (PPL-4, PPL-10, PPL-7; 02 §5).
 
 A suspension stops a person working at once, and a leaving is final; a fix may change a person's phone, which is a
 login name, so whoever sets it could then set a temporary password and log in as them. So the rule is the one for
@@ -22,6 +22,9 @@ acting on oneself, for the three that can be tried on oneself (bringing oneself 
 person holds no keys), and acting on an admin person, for a suspension alone. Each action that goes through writes its
 one audit line.
 
+Taking a role or a key away follows the same rule (Jack, PPL-7: A), with one more: a worker who left keeps theirs, even
+from the superuser, as history.
+
 On the demo, where every visitor logs in as Meneja, the people the seed made stay as made (demo.people_fixed); a worker
 a visitor added can be changed (Jack, PPL-4: A).
 
@@ -31,6 +34,7 @@ Fake data only: the repo is public (03 §10).
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import cast
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -41,11 +45,14 @@ from pytest_django import Settings
 from apps.control.models import AuditEvent
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import StaffMember, StaffStatus, User
+from apps.people.models import PermissionGrant, Role, RoleAssignment, StaffMember, StaffStatus, User
 from apps.people.services import (
     add_staff,
     add_worker,
+    assign_role,
     change_worker,
+    end_permission,
+    end_role,
     grant_permission,
     mark_left,
     suspend,
@@ -351,3 +358,191 @@ def test_the_system_still_changes_the_seeds_people_on_the_demo(asha: StaffMember
     do(SUSPEND, asha, by=None)
 
     assert status_of(asha) == StaffStatus.SUSPENDED
+
+
+# Taking a role or a key away (PPL-7): the rule of Simamisha, as for the four actions above (Jack: A). An end changes no
+# status and writes no audit line: what proves it is the row, ended or still open.
+
+
+@dataclass(frozen=True)
+class TakeAway:
+    # One of the two ends: what it takes away (a row given to the person by the system first), and the end itself.
+    give: Callable[[StaffMember], RoleAssignment | PermissionGrant]
+    end: Callable[[RoleAssignment | PermissionGrant, StaffMember | None], object]
+
+
+def a_role(staff: StaffMember) -> RoleAssignment:
+    # The Worker role on every side, which every manager here holds the keys of.
+    with shop_context(staff.shop_id):
+        return assign_role(staff, Role.objects.get(template=RoleTemplate.WORKER), side=None, by=None)
+
+
+def a_key(staff: StaffMember) -> PermissionGrant:
+    with shop_context(staff.shop_id):
+        return grant_permission(staff, Permission.STOCK_COUNT, side=None, by=None)
+
+
+def _end_role(row: RoleAssignment | PermissionGrant, by: StaffMember | None) -> object:
+    return end_role(cast(RoleAssignment, row), reason="Amehamia Vyakula", by=by)
+
+
+def _end_key(row: RoleAssignment | PermissionGrant, by: StaffMember | None) -> object:
+    return end_permission(cast(PermissionGrant, row), reason="Amehamia Vyakula", by=by)
+
+
+END_ROLE = TakeAway(a_role, _end_role)
+END_KEY = TakeAway(a_key, _end_key)
+EACH_END = pytest.mark.parametrize("take_away", [pytest.param(END_ROLE, id="role"), pytest.param(END_KEY, id="key")])
+
+
+def end(take_away: TakeAway, row: RoleAssignment | PermissionGrant, *, by: StaffMember | None) -> None:
+    with shop_context(row.shop_id):
+        take_away.end(row, by)
+
+
+def is_ended(row: RoleAssignment | PermissionGrant) -> bool:
+    with shop_context(row.shop_id):
+        return type(row).objects.get(pk=row.pk).ended_at is not None
+
+
+def code_of_ending(take_away: TakeAway, row: RoleAssignment | PermissionGrant, *, by: StaffMember | None) -> str:
+    # The refusal's code, and the row still open: a refused end changes nothing.
+    with pytest.raises(ValidationError) as refused:
+        end(take_away, row, by=by)
+    assert not is_ended(row)
+    return str(refused.value.code)
+
+
+@EACH_END
+def test_manager_or_owner_with_the_key_takes_one_away(
+    take_away: TakeAway, meneja: StaffMember, baba: StaffMember, asha: StaffMember
+) -> None:
+    for acting in (meneja, baba):
+        row = take_away.give(asha)
+        end(take_away, row, by=acting)
+        assert is_ended(row)
+
+
+@EACH_END
+def test_taking_one_away_needs_the_key_on_the_whole_shop(
+    take_away: TakeAway, shop_a: Shop, side_a: Side, give_role: GiveRole, asha: StaffMember
+) -> None:
+    # A plain manager, handed no staff.manage; and one handed it for Dawa alone, as a person's job belongs to the whole
+    # shop.
+    plain = job(shop_a, "Plain")
+    give_role(plain, RoleTemplate.MANAGER, None)
+    dawa_only = job(shop_a, "Dawa")
+    with shop_context(shop_a):
+        grant_permission(dawa_only, Permission.STAFF_MANAGE, side=side_a, by=None)
+    row = take_away.give(asha)
+
+    for acting in (plain, dawa_only):
+        with pytest.raises(PermissionDenied):
+            end(take_away, row, by=acting)
+    assert not is_ended(row)
+
+
+@EACH_END
+def test_nobody_takes_their_own_away(take_away: TakeAway, meneja: StaffMember) -> None:
+    # A manager who took away his own role by a slip of the finger would lock himself out.
+    assert code_of_ending(take_away, take_away.give(meneja), by=meneja) == "staff.own"
+
+
+@EACH_END
+def test_nobody_at_the_shop_takes_the_owners_away(
+    take_away: TakeAway, baba: StaffMember, meneja: StaffMember, shop_a: Shop, give_role: GiveRole
+) -> None:
+    # Not a manager handed staff.manage, so he can't take the Owner's role away; nor a second owner. The Owner role
+    # itself included: the superuser's alone, to take away as to give (Jack: A).
+    second_owner = job(shop_a, "Mama")
+    give_role(second_owner, RoleTemplate.OWNER, None)
+    with shop_context(shop_a):
+        [owner_role] = RoleAssignment.objects.filter(staff=baba)
+    row = take_away.give(baba)
+    for acting in (meneja, second_owner):
+        assert code_of_ending(take_away, row, by=acting) == "staff.superuser_only"
+        assert code_of_ending(END_ROLE, owner_role, by=acting) == "staff.superuser_only"
+
+
+@EACH_END
+def test_nobody_at_the_shop_takes_an_admin_persons_away(take_away: TakeAway, meneja: StaffMember, shop_a: Shop) -> None:
+    person = job(shop_a, "Admin")
+    User.objects.filter(pk=person.user_id).update(is_staff=True)
+
+    assert code_of_ending(take_away, take_away.give(person), by=meneja) == "staff.superuser_only"
+
+
+@EACH_END
+def test_manager_cannot_take_from_a_stronger_person(take_away: TakeAway, meneja: StaffMember, shop_a: Shop) -> None:
+    # Neema holds the owner's pay approval, which Meneja lacks: whoever may weaken her may hold back what it does.
+    neema = job(shop_a, "Neema")
+    with shop_context(shop_a):
+        grant_permission(neema, Permission.PAY_APPROVE, side=None, by=None)
+
+    assert code_of_ending(take_away, take_away.give(neema), by=meneja) == "staff.more_keys"
+
+
+@EACH_END
+def test_a_worker_who_left_keeps_theirs(take_away: TakeAway, meneja: StaffMember, asha: StaffMember) -> None:
+    # As history, even for the superuser (02 §5): their job is over, so an end would change nothing they may do.
+    row = take_away.give(asha)
+    do(LEAVE, asha, by=None)
+
+    for acting in (meneja, None):
+        assert code_of_ending(take_away, row, by=acting) == "staff.left"
+
+
+@EACH_END
+def test_a_suspended_worker_may_lose_one(take_away: TakeAway, meneja: StaffMember, asha: StaffMember) -> None:
+    # Suspended, she holds nothing now, but would hold it all once brought back: so it may be taken away meanwhile.
+    row = take_away.give(asha)
+    do(SUSPEND, asha, by=None)
+
+    end(take_away, row, by=meneja)
+
+    assert is_ended(row)
+
+
+@EACH_END
+def test_the_superuser_takes_anyones_away(take_away: TakeAway, baba: StaffMember) -> None:
+    # `by` None: the one way an owner loses a role or a key, their Owner role included.
+    with shop_context(baba.shop_id):
+        [owner_role] = RoleAssignment.objects.filter(staff=baba)
+    row = take_away.give(baba)
+
+    end(take_away, row, by=None)
+    end(END_ROLE, owner_role, by=None)
+
+    assert is_ended(row) and is_ended(owner_role)
+
+
+@EACH_END
+def test_an_end_locks_both_jobs_then_the_row(take_away: TakeAway, meneja: StaffMember, asha: StaffMember) -> None:
+    # The card's Watch out, pinned in what is sent to PostgreSQL: both jobs first, lightly and in id order, as every
+    # change of a person locks them (_locked_for_a_change), then the row being ended. Two managers acting on each other
+    # and on each other's rows then take turns, and never wait for each other in a circle.
+    row = take_away.give(asha)
+
+    with CaptureQueriesContext(connection) as queries:
+        end(take_away, row, by=meneja)
+
+    locks = [query["sql"] for query in queries.captured_queries if re.search(r"FOR (NO KEY )?UPDATE", query["sql"])]
+    assert 'FROM "people_staffmember"' in locks[0]
+    assert 'ORDER BY "people_staffmember"."id" ASC' in locks[0] and "FOR NO KEY UPDATE" in locks[0]
+    assert f'FROM "{row._meta.db_table}"' in locks[1]
+
+
+@EACH_END
+def test_demo_people_keep_their_roles_and_keys(
+    take_away: TakeAway, shop_a: Shop, meneja: StaffMember, asha: StaffMember, settings: Settings
+) -> None:
+    # A visitor who took Meneja's Manager role away would stop every tap until the next reset (OPS-3): the seed's people
+    # keep theirs. A worker the visitor added may lose one.
+    settings.DEMO_SEED = True
+    assert code_of_ending(take_away, take_away.give(asha), by=meneja) == "demo.people_fixed"
+
+    with shop_context(shop_a):
+        juma = add_worker(shop=shop_a, full_name="Juma Mfano", display_name="Juma", by=meneja)
+    row = take_away.give(juma)
+    end(take_away, row, by=meneja)
+    assert is_ended(row)

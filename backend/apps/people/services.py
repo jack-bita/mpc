@@ -1121,6 +1121,55 @@ def grant_permission(
     return granted
 
 
+def end_role(given: RoleAssignment, *, reason: str, by: StaffMember | None) -> RoleAssignment:
+    """Take a role away from a person (02 §5, PPL-7): from now on it opens nothing, and the row stays, ended, with who,
+    when and why. Who may is the rule of Simamisha (Jack: A), as for suspend (_locked_for_a_change): staff.manage on the
+    whole shop, never one's own, never from someone who holds a key the one acting lacks, never an owner's or an admin
+    person's but by the superuser (`by` None). A worker who left keeps theirs, as history. Refused
+    (role.already_ended) if someone ended it first."""
+    return _end(given, reason=reason, by=by, code="role.already_ended")
+
+
+def end_permission(granted: PermissionGrant, *, reason: str, by: StaffMember | None) -> PermissionGrant:
+    """Take an extra key away from a person, as end_role takes a role (permission.already_ended)."""
+    return _end(granted, reason=reason, by=by, code="permission.already_ended")
+
+
+def _end[R: (RoleAssignment, PermissionGrant)](row: R, *, reason: str, by: StaffMember | None, code: str) -> R:
+    # The one way a role or a key ends, for both tables: an edit of the row, never a delete (rule 7).
+    _check_shop(row.shop_id, by)
+    # Every end asks why (02 §5): checked before anything is locked, as for a suspension.
+    _check_reason(reason)
+    with recording_changes(row.shop_id):
+        # Reused, never copied (the card's Watch out): both jobs locked lightly, in id order, then who may asked on them
+        # as they are now, so of a manager ending Asha's role while the owner suspends that manager, one waits for the
+        # other, and the second reads what the first wrote. The demo's seed people stay as made there too.
+        staff, by = _locked_for_a_change(row.staff, by)
+        # A worker who left keeps theirs as they were, as history, even for the superuser: _locked_for_a_change asks
+        # this of a person at the shop only. Their job is over, so the end would change nothing they may do.
+        if staff.status == StaffStatus.LEFT:
+            raise ValidationError("This person has left.", code="staff.left")
+        # The row itself, read again and locked after both jobs, in the order every change of a person keeps: of two
+        # managers ending it at once, the second waits, then finds it ended. The jobs' locks already make two ends of
+        # one person's rows take turns; this lock holds the row for its own sake. A full lock: nothing links to it.
+        row = type(row).objects.select_for_update().get(pk=row.pk)
+        if row.ended_at is not None:
+            raise ValidationError("This was already taken away.", code=code)
+        row.ended_at = timezone.now()
+        row.ended_by = by
+        # Trimmed, as audit() keeps a reason: the rule in Meta refuses a reason of spaces alone, which _check_reason
+        # caught first.
+        row.end_reason = reason.strip()
+        row.full_clean()
+        # `by` told to PostgreSQL for the save, so the edit history's line names who ended it, before and after
+        # (ADR-0036). No audit line: the row and its history keep who, when and why (PPL-7's card, default).
+        with acting_as(by) if by is not None else nullcontext():
+            row.save(update_fields=["ended_at", "ended_by", "end_reason"])
+        # The person's keys travel on their staff row (SYNC-15): their laptop drops the key at its next sync.
+        record_change(staff)
+    return row
+
+
 @dataclass(frozen=True)
 class NewPairing:
     # What a device that asks to join gets back (start_pairing): its waiting request, whose `code` it shows on screen,
