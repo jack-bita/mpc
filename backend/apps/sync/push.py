@@ -488,10 +488,12 @@ def _maker_breaks(device: Device, kind: DocumentType, maker: StaffMember, *, mad
     # suspension's flag, not a second one saying they hold no key. As they were when the record was made, by the
     # laptop's clock, as the status below is (PPL-7): Asha's sale made before Baba took her role away, and synced after,
     # breaks no rule. A note for SALE-2: a sale that names its own side is checked on the laptop's side all the same,
-    # until that card says otherwise. A type that names no key, a clock-in, has nothing to check here (Jack, ATT-1).
-    held_then = given_permissions(maker, at=made_at)
-    if kind.permission is not None and kind.permission not in held_then.on(device.home_side_id):
-        broken.append(FlagKind.PERMISSION_BREAK)
+    # until that card says otherwise. A type that names no key, a clock-in, has nothing to check here (Jack, ATT-1), and
+    # reads no keys: a laptop pushes one per worker at each arrival and departure (PPL-7's review).
+    if kind.permission is not None:
+        held_then = given_permissions(maker, at=made_at)
+        if kind.permission not in held_then.on(device.home_side_id):
+            broken.append(FlagKind.PERMISSION_BREAK)
     # Working here when they made it (X2)? A laptop offline when Baba suspended Juma doesn't know, so its PIN check
     # still lets him in. By the laptop's clock, the one time the record carries: Juma's sale made at 09:00 is his,
     # though Baba suspended him at 11:00, before the laptop synced. Leaving counts too (Jack, SYNC-5): a person's keys

@@ -171,6 +171,23 @@ def test_a_type_that_needs_no_key_raises_no_key_flag(
     assert _flags(shop_a, FlagKind.PERMISSION_BREAK) == []
 
 
+def test_a_type_that_needs_no_key_reads_no_keys(
+    device_a: Device, staff_a: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A clock-in names no key, so the maker's roles and keys aren't read at all: a laptop pushes one for each worker at
+    # each arrival and each departure, and two wasted reads each would add up (PPL-7's review).
+    monkeypatch.setitem(DOCUMENT_TYPES, ("ticket", 1), dataclasses.replace(TICKET, permission=None))
+    with CaptureQueriesContext(connection) as queries:
+        _push(device_a, [_sent(1, staff_a)])
+    keys_read = [
+        query["sql"]
+        for query in queries.captured_queries
+        if query["sql"].startswith("SELECT")
+        and any(table in query["sql"] for table in ("people_roleassignment", "people_permissiongrant"))
+    ]
+    assert keys_read == []
+
+
 def test_permission_break_raised_once(shop_a: Model, device_a: Device, staff_a: StaffMember) -> None:
     # The same sale sent again, after a lost answer: the first answer again, and no second flag.
     sent = _sent(1, staff_a)
