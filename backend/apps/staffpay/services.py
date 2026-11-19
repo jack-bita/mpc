@@ -86,8 +86,12 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         # a PIN or a fix (PPL-10), waits for the run, a moment.
         jobs = list(StaffMember.objects.filter(shop=shop).order_by("pk").select_for_update(no_key=True))
         taps = _taps(shop, first, last, zone)
+        # The days kept before, each with its job read in the same query: the month page (ATT-5) names each day's
+        # worker, and a day answered as it was kept would otherwise read its job alone, one query per day, some 600 for
+        # a month of 20 workers. A day kept for the first time carries its job already.
         kept = {
-            (row.staff_id, row.date): row for row in AttendanceDay.objects.filter(shop=shop, date__range=(first, last))
+            (row.staff_id, row.date): row
+            for row in AttendanceDay.objects.filter(shop=shop, date__range=(first, last)).select_related("staff")
         }
         # The days the whole shop is closed (ATT-8): a public holiday, a family funeral. The attendance switch on each
         # day, and the day's rules on each day (A1). One read each for the whole span, never one per day.

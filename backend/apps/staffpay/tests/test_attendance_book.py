@@ -378,6 +378,19 @@ def test_a_month_is_read_in_a_few_queries(shop_a: Shop, device_a: Device, asha: 
     assert len(queries) <= 12
 
 
+def test_each_day_comes_with_its_worker(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
+    # The month page names each day's worker (ATT-5). A month asked for again answers the days as kept, and each comes
+    # with its job, so reading every worker's name takes no query at all.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))
+    with shop_context(shop_a):
+        work_out_days(shop_a, MONDAY, TUESDAY)
+        again = work_out_days(shop_a, MONDAY, TUESDAY)
+        with CaptureQueriesContext(connection) as queries:
+            names = sorted(day.staff.display_name for day in again)
+    assert names == ["Asha", "Asha", "Juma", "Juma"]
+    assert len(queries) == 0
+
+
 def test_working_out_twice_keeps_one_row(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
     # A month asked for again, by the next manager to open it: each job keeps one row per date, under its first id.
     tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))
