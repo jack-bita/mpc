@@ -40,6 +40,18 @@ class NoPhoto(models.TextChoices):
     DEMO = "demo", "Demo"  # on the demo a visitor's face never leaves their laptop (Jack: A)
 
 
+class DayStatus(models.TextChoices):
+    # What one worker's day was (02 §12). ATT-4's rule gives every one but `off` (apps/staffpay/calculations.py);
+    # ATT-10's book gives `off` and keeps each day in a table whose status takes these as they are. No table yet, so
+    # no migration: a list of choices is no column until a model names it.
+    ON_TIME = "on_time", "On time"  # a full day
+    LATE = "late", "Late"  # a full day, less the fine of its arrival
+    HALF = "half", "Half day"  # half the day's pay
+    ABSENT = "absent", "Absent"  # no tap: unpaid, unless a manager marks office duty (ATT-6)
+    OFF = "off", "Off"  # a Sunday or a closed day: the shop is shut, nobody is paid (ATT-8)
+    NEEDS_REVIEW = "needs_review", "Needs review"  # the owner's dharura: a manager or the owner decides it (ATT-6)
+
+
 # The type checker's Django plugin calls the two bases' get_next_by_created_at() a clash, as on PushedDocument
 # (apps/sync/models.py): one and the same method, from ShopScoped. Ignored on this line only.
 class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
@@ -50,7 +62,7 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
     # Whose attendance it is: today always the one who tapped. A column of its own all the same, as a manager
     # entering a missed clock-in for someone (ATT-6) writes a line about another person, and a ledger's lines can't
     # be filled in later. PROTECT: nothing is deleted (rule 7). No index of its own: indexes lead with `shop`, and
-    # ATT-4 adds the one it reads a month by.
+    # ATT-10 adds the one it reads a month by.
     staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
     kind = models.CharField(max_length=3, choices=ClockKind)
     # The time the server trusts, and how far (TimeCheck): for a clock-in sent at once, the server's time of the tap,
