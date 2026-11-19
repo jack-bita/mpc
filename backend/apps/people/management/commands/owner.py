@@ -17,8 +17,8 @@ So he types it on the server, one subcommand for each thing done:
   (AUTH-4). For any current worker of the shop (the card's default): the superuser may help anyone when no manager is
   there, and only he may set an owner's (set_pin: pin.superuser_only).
 - `take` asks the reason, and ends every Owner role the person holds (end_role), together, with that one reason (Jack,
-  PPL-13: 4A). Taking the last working Owner's asks once more, as the shop is then left with nobody holding the owner's
-  four keys (the card's default).
+  PPL-13: 4A). When no other Owner is working there, it asks once more (the card's default): only the superuser can
+  make one again, and the owner's four keys stay only with someone given them one by one.
 
 Thin, like a view (ADR-0043): it asks, shows, and calls the services as they are; every rule is theirs (the card's
 Watch out). The superuser acts as `by=None`, as the system does: each service's rules for the superuser hold (a taken
@@ -171,7 +171,7 @@ class Command(BaseCommand):
         ask.say(f"{staff.user.full_name}, {staff.display_name} at {shop.code}, is Owner on: {sides}.")
         # Rule 7: an end is always kept with who, when and why. Blank is asked again; end_role refuses it too.
         reason = ask.text("Why is it taken away")
-        if not _another_owner_working(staff) and not self._last_owner_agreed(ask, shop, staff):
+        if not _another_owner_working(staff) and not self._last_owner_agreed(ask, shop):
             ask.say("Nothing written.")
             return
         try:
@@ -185,12 +185,15 @@ class Command(BaseCommand):
         ask.say(f"{staff.display_name} no longer holds the Owner role at {shop.code}; their job and PIN stay.")
         ask.say("Their laptops drop the Owner's keys at their next sync.")
 
-    def _last_owner_agreed(self, ask: Asker, shop: Shop, staff: StaffMember) -> bool:
-        # Asked once more (the card's default): with no Owner working, nobody at the shop holds the owner's four keys
-        # (the day's final approval, the pay, the shop's rules, who works there; spec §6), and nobody there may give
-        # the role again: only the superuser can (role.superuser_only).
-        ask.say(f"{staff.display_name} is the last Owner working at {shop.code}.")
-        ask.say("Once taken, nobody there approves the day or the pay, or changes the rules or the staff.")
+    def _last_owner_agreed(self, ask: Asker, shop: Shop) -> bool:
+        # Asked once more (the card's default). With no other Owner working, nobody there may give the role again: only
+        # the superuser can (role.superuser_only). And the owner's four keys (the day's final approval, the pay, the
+        # shop's rules, who works there; spec §6) stay only with someone given them one by one, as a manager may be
+        # (apps/core/permissions.py): so the words claim no more than that. "No other": true whether the person taken
+        # is working or suspended (PPL-13's review).
+        ask.say(f"No other Owner is working at {shop.code}.")
+        ask.say("Once taken, only the superuser can make one again,")
+        ask.say("and the owner's four keys stay only with someone given them one by one.")
         return ask.yes("Take it all the same?")
 
 

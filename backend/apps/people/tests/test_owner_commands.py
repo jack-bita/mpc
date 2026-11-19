@@ -434,7 +434,7 @@ def test_taking_the_last_owner_asks_once_more(mfano: Shop, keyboard: Keyboard, a
 
     said = owner("take", "--shop", "MFANO", "--nickname", "Baba")
 
-    assert "Baba is the last Owner working at MFANO." in said
+    assert "No other Owner is working at MFANO." in said
     assert keyboard.asked[-1] == "Take it all the same? [y/N]: "
     assert owner_rows(baba) == ([] if taken else [(RoleTemplate.OWNER, None, None)])
     assert ("Nothing written." in said) is not taken
@@ -451,7 +451,23 @@ def test_a_suspended_owner_is_not_another_owner(mfano: Shop, keyboard: Keyboard)
 
     said = owner("take", "--shop", "MFANO", "--nickname", "Baba")
 
-    assert "Baba is the last Owner working at MFANO." in said
+    assert "No other Owner is working at MFANO." in said
+    assert owner_rows(baba) == []
+
+
+def test_a_suspended_owner_taken_hears_no_untrue_words(mfano: Shop, keyboard: Keyboard) -> None:
+    # Baba himself is suspended, and nobody else is Owner: the words must not call him "working" (PPL-13's review),
+    # nor claim nobody holds the owner's keys, as a manager may hold them one by one.
+    baba = an_owner(mfano, "Baba")
+    with shop_context(mfano):
+        suspend(baba, by=None, reason="Away for a month")
+    keyboard.type("Sold the shop", "y")
+
+    said = owner("take", "--shop", "MFANO", "--nickname", "Baba")
+
+    assert "No other Owner is working at MFANO." in said
+    assert "only with someone given them one by one" in said
+    assert "Baba is" not in said and "nobody there approves" not in said
     assert owner_rows(baba) == []
 
 
