@@ -430,6 +430,8 @@ def test_every_page_carries_the_server_time_and_the_oldest_app_allowed(
     assert (page["changes"], page["has_more"]) == ([], False)
     assert page["server_time"].endswith("Z")
     assert before <= datetime.fromisoformat(page["server_time"]) <= after
-    assert page["min_app_version"] == 1
-    settings.MIN_APP_VERSION = 2
-    assert pulled(shop_a, 0)["min_app_version"] == 2
+    # The server's own minimum, then one raised above it, read from the settings (ATT-3 raised it to 2).
+    shipped = settings.MIN_APP_VERSION
+    assert page["min_app_version"] == shipped
+    settings.MIN_APP_VERSION = shipped + 1
+    assert pulled(shop_a, 0)["min_app_version"] == shipped + 1

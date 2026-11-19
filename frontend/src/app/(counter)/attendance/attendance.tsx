@@ -23,6 +23,15 @@
 // (todays-list.tsx), read from the same taps; then how many records wait to be sent, with Tuma sasa
 // (send-now.tsx).
 //
+// A photo at each tap (ATT-3, 03 §5.13), so a PIN alone can't clock someone in: the camera is on while the
+// button is there, her face live above it (use-camera.ts); the tap takes the photo, shrunk to about 150 KB
+// (shrink-photo.ts), labels it (labelPhoto) and saves it with the tap in the same transaction, the payload
+// naming it; the photo goes up by itself after the tap is in (sync/attachments.ts). After the tap she sees
+// the photo kept. A camera missing, blocked or broken never stops a tap (Jack: A): the screen says so before
+// the tap, and the tap goes without a photo, its payload saying why (`no_photo`). On the demo the photo is
+// taken and shown, but never kept: every visitor shares Meneja's login, which opens clock-in photos, so a
+// visitor's face never leaves their laptop (Jack: A); the tap says `demo`.
+//
 // Times as "07:55", 24 hours, in the shop's zone, and in Swahili with the part of the day, "saa 07:55
 // asubuhi", so nobody reads them as Swahili time (formatTime, dayPart; Jack, SYNC-11).
 //
@@ -35,18 +44,21 @@
 // "use client": it asks use-intl for words, and reads and writes the laptop's database, in the browser only.
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Alert, AlertDescription } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
 import { PageHeader } from "@/components/design/page-header";
-import { useThisDevice } from "@/features/devices/this-device";
+import { type CameraProblem, useCamera } from "@/features/camera/use-camera";
+import { isTheDemo, useThisDevice } from "@/features/devices/this-device";
 import {
   askToLeave,
   usePersonAtCounter,
 } from "@/features/login/at-the-counter";
 import { dayPart, formatTime } from "@/lib/format";
+import { BrokenPhoto, labelPhoto } from "@/offline/attachments";
 import { useAttendanceOn } from "@/offline/attendance-on";
 import {
   CLOCK,
@@ -76,11 +88,24 @@ interface Saved {
 /** Why a tap saved nothing: the laptop isn't ready yet, or something failed. */
 type Problem = "firstSync" | "failed";
 
+/** The camera's problems, each with its line before the tap: the tap still goes, with no photo. */
+const CAMERA_PROBLEMS: readonly string[] = [
+  "no_camera",
+  "blocked",
+  "failed",
+] satisfies CameraProblem[];
+
+function isCameraProblem(state: string): state is CameraProblem {
+  return CAMERA_PROBLEMS.includes(state);
+}
+
 export function AttendanceScreen() {
   const t = useTranslations("attendance");
   const person = usePersonAtCounter();
   const db = useShopDatabase();
-  const timezone = useThisDevice()?.shop.timezone;
+  const device = useThisDevice();
+  const timezone = device?.shop.timezone;
+  const demo = isTheDemo(device);
   const today = useTodaysTaps();
   const attendanceOn = useAttendanceOn();
   const [saved, setSaved] = useState<Saved | null>(null);
@@ -89,6 +114,13 @@ export function AttendanceScreen() {
   // the second must see the first.
   const busy = useRef(false);
   const [saving, setSaving] = useState(false);
+  // The photo this visit's tap took, as an address the <img> can show, freed when it changes or the
+  // screen closes: its bytes live in the browser's memory until then.
+  const [kept, setKept] = useState<string | null>(null);
+  useEffect(() => {
+    if (kept === null) return;
+    return () => URL.revokeObjectURL(kept);
+  }, [kept]);
 
   const row = person?.row;
   // Her last tap today on this laptop. Others' taps say nothing about her.
@@ -101,6 +133,18 @@ export function AttendanceScreen() {
           part: dayPart(at, timezone),
         })
       : "";
+
+  // The one button that fits: none before her taps and the switch are read, and none once this visit saved one.
+  const next: ClockKind | null =
+    row === undefined || today === undefined || attendanceOn !== true || saved
+      ? null
+      : last?.kind === "in"
+        ? "out"
+        : "in";
+  // The camera, on while there is a button to tap: off before the screen knows which, off once the tap is
+  // saved, and off when she leaves the screen (use-camera.ts).
+  // Its three parts by name: React's lint reads an object that carries a ref as a ref, all of it.
+  const { state: cameraState, videoRef, take } = useCamera(next !== null);
 
   // After Toka kazini: the goodbye, then the logout, as her own Toka would. She is leaving the shop, so the
   // screen going during the goodbye logs her out at once: Back in the browser, or any other way off it,
@@ -122,17 +166,40 @@ export function AttendanceScreen() {
     setSaving(true);
     setProblem(null);
     try {
-      // Read as the tap is saved, so it is the last one the laptop knew at the tap, not at the push.
+      // Read as the tap is saved, so it is the last one the laptop knew at the tap, not at the push. Before
+      // the photo: a laptop not ready to save takes none.
       const lastServerTime = await readLastServerTime(db);
       if (lastServerTime === null) throw new NeverFilled();
-      const payload: ClockPayload = { kind, last_server_time: lastServerTime };
-      const document = await saveDocument(db, {
-        type: CLOCK,
-        schema_version: CLOCK_VERSION,
-        created_by: row.id,
-        payload,
-      });
+      // The photo, or why there is none; the camera goes off either way.
+      const shot = await take();
+      const photo =
+        demo || typeof shot === "string" ? null : await labelled(shot);
+      const payload: ClockPayload = {
+        kind,
+        last_server_time: lastServerTime,
+        ...(photo !== null
+          ? { photo: photo.label }
+          : {
+              no_photo:
+                typeof shot === "string" ? shot : demo ? "demo" : "failed",
+            }),
+      };
+      // The tap and its photo in one transaction: never a tap naming a photo the laptop lost (CTRL-6).
+      const document = await saveDocument(
+        db,
+        {
+          type: CLOCK,
+          schema_version: CLOCK_VERSION,
+          created_by: row.id,
+          payload,
+        },
+        [],
+        photo === null ? [] : [photo],
+      );
       setSaved({ kind, at: document.client_time });
+      // She sees the photo kept with her tap; on the demo, the one taken, kept nowhere.
+      if (typeof shot !== "string" && (photo !== null || demo))
+        setKept(URL.createObjectURL(shot));
     } catch (error) {
       if (error instanceof NeverFilled) setProblem("firstSync");
       else {
@@ -145,6 +212,19 @@ export function AttendanceScreen() {
       busy.current = false;
     } finally {
       setSaving(false);
+    }
+  }
+
+  // The label of the photo just taken (attachments.ts), or none when it can't be saved: a photo labelPhoto
+  // refuses (over 1 MB, or no JPEG by its bytes) is a bug in the camera's code, never her fault, so the tap
+  // goes on without it, as failed, and the console says why.
+  async function labelled(shot: Blob) {
+    try {
+      return await labelPhoto(shot, "clock_photo");
+    } catch (error) {
+      if (!(error instanceof BrokenPhoto)) throw error;
+      console.error("a clock-in photo was not kept", error);
+      return null;
     }
   }
 
@@ -161,14 +241,6 @@ export function AttendanceScreen() {
         : today
           ? t("notInYet")
           : null;
-  // The one button that fits: none before her taps and the switch are read, and none once this visit saved one.
-  const next: ClockKind | null =
-    row === undefined || today === undefined || attendanceOn !== true || saved
-      ? null
-      : last?.kind === "in"
-        ? "out"
-        : "in";
-
   // Attendance switched off at this shop: the way back, why there is nothing to tap, and the taps already on
   // the laptop. Not once this visit saved one: the switch turned off by a pull a moment after her tap, she
   // still reads that her time was kept.
@@ -192,6 +264,21 @@ export function AttendanceScreen() {
       <p role="status" className={status ? "text-lg" : "sr-only"}>
         {status}
       </p>
+      {/* The photo kept with her tap, small, under the line that says it was saved (Jack, ATT-3). Through
+          Next's Image, as every picture of the app is; never resized by a server, as the app has none
+          (images.unoptimized). */}
+      {kept && (
+        <div className="grid gap-2">
+          <Image
+            src={kept}
+            alt={t("photo.kept")}
+            width={1600}
+            height={900}
+            className="h-auto w-40 rounded-lg"
+          />
+          {demo && <p className="text-muted-foreground">{t("photo.demo")}</p>}
+        </div>
+      )}
       {problem && (
         <Alert kind="danger">
           <AlertDescription>{t(problem)}</AlertDescription>
@@ -199,6 +286,24 @@ export function AttendanceScreen() {
       )}
       {/* A tap the server refused, above the button: she sees why before she taps again (SYNC-11). */}
       <NeedsAttention />
+      {/* Her face, live, above the button: she sees the camera sees her before she taps. Played by the
+          browser by itself (autoPlay, muted), and inline on a phone, never full screen. A camera that
+          can't says so in its place, and the tap still goes. */}
+      {next &&
+        (isCameraProblem(cameraState) ? (
+          <p>{t(`camera.${cameraState}`, { kind: next })}</p>
+        ) : (
+          cameraState !== "off" && (
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              aria-label={t("camera.live")}
+              className="aspect-video w-full rounded-lg bg-muted object-cover"
+            />
+          )
+        ))}
       {next && (
         // The main kind and the big size: the one thing this screen is for, easy to hit on a phone too.
         <Button size="big" disabled={saving} onClick={() => void tap(next)}>

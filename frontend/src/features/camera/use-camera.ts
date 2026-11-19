@@ -146,8 +146,10 @@ export function useCamera(on: boolean): Camera {
       console.error("the camera's photo was not taken", error);
       return "failed";
     } finally {
-      // The photo is taken, or never will be: the light goes off now, not when the screen closes.
+      // The photo is taken, or never will be: the light goes off now, not when the screen closes. A second
+      // take, as after a save that failed, finds the camera off, and goes on without a photo.
       stop();
+      outcome.current = Promise.resolve("off");
       setFound("off");
     }
   }, [stop]);

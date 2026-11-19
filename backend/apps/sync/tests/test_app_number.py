@@ -29,6 +29,8 @@ PULL_FILE = FRONTEND / "offline" / "sync" / "pull.ts"
 # MIN_APP_VERSION, and writes its number's lists here: 2 for CAT-6, say, with "product" and the rest at their places.
 LISTS_BY_APP_NUMBER = {
     1: ["side", "payment_account", "staff", "setting"],
+    # ATT-3: no new list, only the clock-in's version 2, which older apps never write.
+    2: ["side", "payment_account", "staff", "setting"],
 }
 
 
@@ -87,9 +89,10 @@ def test_the_app_has_a_drawer_for_each_list_of_its_number() -> None:
 
 
 def test_the_guard_catches_a_list_added_without_a_new_number() -> None:
-    # The check above, shown to fail: CAT-6's products added, the number still 1.
+    # The check above, shown to fail: CAT-6's products added, the number still 1; and a number raised with no lists
+    # written for it.
     assert _lists_out_of_step([*LISTS_BY_APP_NUMBER[1], "product"], 1) is not None
-    assert _lists_out_of_step(LISTS_BY_APP_NUMBER[1], 2) is not None
+    assert _lists_out_of_step(LISTS_BY_APP_NUMBER[1], max(LISTS_BY_APP_NUMBER) + 1) is not None
 
 
 def test_the_drawers_are_read_however_prettier_lays_them_out() -> None:

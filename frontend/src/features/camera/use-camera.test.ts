@@ -190,6 +190,13 @@ describe("useCamera", () => {
     expect(shrinkFrame).toHaveBeenCalledWith(video, 1280, 720);
     expect(track.stop).toHaveBeenCalled();
     expect(result.current.state).toBe("off");
+    // A second take, as after a save that failed, finds the camera off: no photo, and no stale frame.
+    let again: Blob | string = "";
+    await act(async () => {
+      again = await result.current.take();
+    });
+    expect(again).toBe("failed");
+    expect(shrinkFrame).toHaveBeenCalledTimes(1);
   });
 
   it("waits for a camera still starting when she taps", async () => {

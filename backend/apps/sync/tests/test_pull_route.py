@@ -19,6 +19,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from django.conf import settings
 from rest_framework.test import APIClient
 
 from apps.core.permissions import RoleTemplate
@@ -100,8 +101,8 @@ def test_every_page_carries_the_server_time(shop_a: Shop, paired: tuple[Device, 
     page = a_browser(key).get(PULL, {"cursor": last_line(shop_a)}).json()
     assert page["changes"] == []
     assert page["server_time"].endswith("Z")
-    # A number, never null or text: the laptop compares it with its own (SYNC-13).
-    assert page["min_app_version"] == 1
+    # A number, never null or text: the laptop compares it with its own (SYNC-13). The server's own, as it ships.
+    assert page["min_app_version"] == settings.MIN_APP_VERSION
 
 
 def test_a_pull_with_no_cursor_starts_from_the_beginning(shop_a: Shop, paired: tuple[Device, str]) -> None:

@@ -28,5 +28,8 @@ export const APP_VERSION = shortVersion(process.env.NEXT_PUBLIC_APP_VERSION);
  *
  * The shape itself leaves the server's list only in a later release. An app below the minimum sends its
  * outbox first, in the shapes it wrote: in the same release the server would refuse those records, Asha's
- * waiting clock-in among them, and set them aside for a manager. */
-export const APP_NUMBER = 1;
+ * waiting clock-in among them, and set them aside for a manager.
+ *
+ * 1: SYNC-13, the first. 2: ATT-3, whose apps write the clock-in's version 2, with its photo, and no
+ * longer version 1, which the server still takes until a later release drops it. */
+export const APP_NUMBER = 2;

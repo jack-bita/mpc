@@ -39,6 +39,12 @@ const REASONS = {
   "document.carried_from_unknown": "carriedFromUnknown",
   "document.loaded_by_unknown": "loadedByUnknown",
   "id.taken": "idTaken",
+  // A clock-in whose photo's label the server's photo row refused (ATT-3): a bug in the camera's code, as
+  // labelPhoto refuses the same at the counter, so the tap waits for a manager like any other refused.
+  "attachment.not_an_image": "photoNotAnImage",
+  "attachment.too_big": "photoTooBig",
+  "attachment.empty": "photoEmpty",
+  "attachment.sha256_invalid": "photoLabelBroken",
 } as const;
 
 function knownReason(code: string): code is keyof typeof REASONS {
