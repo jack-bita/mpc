@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.45 · 19 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.46 · 19 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.46** (19 Nov 2026, from Jack, ATT-11): §12, a day needs review when one of its taps is in doubt: made while its worker was suspended or gone, disagreed with by a later tap's time, or outside the job's first and last day (04 v1.142). Marked **(v1.46)**.
 
 **Changes in v1.45** (19 Nov 2026, ATT-10's review): §12, the book keeps a day for every job, the owner's too; who is shown or paid is the month page's and the pay run's, by the daily pay rate (Jack: A; 04 v1.140). Marked **(v1.45)**.
 
@@ -532,6 +534,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - `meal_share` **(v1.29)**: the worker's part of the day's meal money (§15, 14), worked out with the day, so the pay up to any day is a sum of days already worked out. It follows the day's status: a day that needs review has none until a manager decides it.
 - Locked once its pay run is approved.
 - **Which days** **(v1.44)**: one per job and date, worked out again from its taps and its date's rules each time it is asked for, until its pay run is approved; kept only once the day is over (today is not), while `attendance.enabled` is on, and from the job's first day to its last. A person hired again the same day they left has two jobs, so two days, each read from its own taps. A day that no longer counts, its job's first day moved later, keeps its row and is no longer read (ATT-10). Every job has its days, the owner's too, absent every working day as he never clocks in: the month page and the pay show only workers with a daily pay rate (Jack, ATT-10's review) **(v1.45)**.
+- **A tap in doubt** **(v1.46)**: a day needs review, whatever the rule says, when one of its taps was made while its worker was suspended or gone (the push's `suspended_staff_activity` flag, X2), when a later tap's time disagrees with it (a record before with a later time, as the time trusted says: either clock can be the wrong one), or when it falls before the job's first day or after its last, as a first day moved later leaves it (Jack, ATT-11). Its minutes and its rules are kept for whoever decides it, and it takes no fine. A day outside the job with no tap is still not read.
 
 **The day's rules** **(v1.32)** — the owner's (OWN-7, 16 Nov 2026), each a dated setting of the whole shop (§4). Each time is a minute on the shop's clock, as the counter shows it: a clock-in at 07:35:40 shows 07:35. "By" and "from" take their own minute; "before" and "after" don't.
 - **Arriving:** by `on_time_until` (07:35), on time. After it and before `second_fine_from` (08:00), late, with `late_fine`, the first fine. From `second_fine_from` and before `review_from` (08:30), late, with `second_fine`. From `review_from` and before `afternoon_from` (12:00), needs review. From `afternoon_from` to `midday` (13:00), the afternoon's half day, staying until `closing` (18:40). After `midday`, needs review.
