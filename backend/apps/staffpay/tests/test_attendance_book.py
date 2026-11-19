@@ -30,7 +30,8 @@ from apps.people.services import add_staff, change_worker, hire_again, mark_left
 from apps.shops.models import Closure, Setting, Shop
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, TimeCheck
-from apps.staffpay.services import _keep, work_out_days
+from apps.staffpay.services import work_out_days
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -348,29 +349,37 @@ def test_a_day_that_comes_out_the_same_is_not_written_again(shop_a: Shop, device
 
 
 def test_working_out_twice_keeps_one_row(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
-    # Two runs at once (two managers open the month, or the night's job beside them): each reads no day kept, then
-    # keeps its own. The second finds the first's rows by the rule of one day per job and date, and writes over them,
-    # with the same answer, so one row stays per job and date, under its first id. _keep is handed no day kept, as the
-    # second run read none.
+    # A month asked for again, by the next manager to open it: each job keeps one row per date, under its first id.
     tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))
     first = _days(shop_a, MONDAY, TUESDAY)
-    again = [
-        AttendanceDay(
-            shop=shop_a,
-            staff=day.staff,
-            date=day.date,
-            status=day.status,
-            fine=day.fine,
-            first_in=day.first_in,
-            first_out=day.first_out,
-            rules_used=day.rules_used,
-        )
-        for day in first.values()
-    ]
+    again = _days(shop_a, MONDAY, TUESDAY)
     with shop_context(shop_a):
-        kept = _keep(again, {})
         assert AttendanceDay.objects.count() == 4
-    assert sorted(day.pk for day in kept) == sorted(day.pk for day in first.values())
+    assert {key: day.pk for key, day in again.items()} == {key: day.pk for key, day in first.items()}
+
+
+def _statuses_in_another_run(shop: Shop, day: dt.date) -> dict[str, str]:
+    # The book run in its own transaction, as a second manager's visit would run it, on its own connection: its answer,
+    # as the nickname and the status of each day, plain values the test reads once the thread has ended.
+    with shop_context(shop):
+        return {row.staff.display_name: row.status for row in work_out_days(shop, day, day)}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_second_run_waits_for_the_first(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Two managers open November at once. The first run holds the shop's jobs, and meanwhile Asha's Toka arrives from
+    # a laptop that was offline. The second run must wait for the first to commit, then read the taps as they are
+    # then: her Toka is there, so her Monday is on time, never the first run's older "needs review". Here the test
+    # holds the jobs' lock itself, as the first run would, so it can let the Toka in before it lets the second run go.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    with shop_context(shop_a), transaction.atomic():
+        list(StaffMember.objects.filter(shop=shop_a).order_by("pk").select_for_update(no_key=True))
+        second, ended = in_another_transaction(lambda: _statuses_in_another_run(shop_a, MONDAY))
+        # The second run truly waits on the lock: without it, this fails, as nobody ever waits.
+        wait_until_someone_waits_for_me()
+        tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    second.join(timeout=10)
+    assert ended == [{"Asha": DayStatus.ON_TIME}]
 
 
 def test_two_jobs_on_one_day_read_their_own_taps(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:

@@ -62,12 +62,19 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
     if last < first:
         return []
     dates = [first + dt.timedelta(days=n) for n in range((last - first).days + 1)]
-    # One transaction, so what the book answers is what it kept: the taps, the days kept and the writes read one
-    # moment of the database's.
+    # One transaction: the span's days are kept all together, or none of them. It is not one moment of the database:
+    # PostgreSQL, as Django runs it (READ COMMITTED), lets each read see what was committed when that read began, so a
+    # tap committed between two reads is seen by the second alone. The lock below is what keeps two runs apart.
     with transaction.atomic():
-        # Every job, in the order of their ids, so two runs at once write their rows in the same order and never wait
-        # for each other's: one per job, as a person who left and is hired again the same day has two (PPL-11).
-        jobs = list(StaffMember.objects.filter(shop=shop).order_by("pk"))
+        # Every job, one per row, as a person who left and is hired again the same day has two (PPL-11), each locked
+        # until this run commits: one run of the book per shop at a time. Two managers open November at once, or the
+        # night's job runs beside them: the second waits here for the first to commit, then reads the taps and the days
+        # as the first left them, so it never writes an older answer over a newer one (Asha's Toka came between the
+        # two). Locked in the order of their ids, as every run locks them, so two runs never each hold a job the other
+        # waits for (a deadlock). FOR NO KEY UPDATE, the light lock (backend rules): a tap pushed meanwhile still saves,
+        # as its link to the job takes only a KEY SHARE lock, which this one lets through; a change to a job's own row,
+        # a PIN or a fix (PPL-10), waits for the run, a moment.
+        jobs = list(StaffMember.objects.filter(shop=shop).order_by("pk").select_for_update(no_key=True))
         taps = _taps(shop, first, last, zone)
         kept = {
             (row.staff_id, row.date): row for row in AttendanceDay.objects.filter(shop=shop, date__range=(first, last))
@@ -194,27 +201,12 @@ def _keep(answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], A
             changed.append(old)
         rows.append(old)
     # A day kept before: an UPDATE by its id, which the edit history's trigger writes down (ADR-0036), Asha's Monday
-    # from needs review to on time. In the order the days were worked out, as every run writes them.
+    # from needs review to on time.
     if changed:
         AttendanceDay.objects.bulk_update(changed, WORKED_OUT)
-    # A day kept for the first time: an INSERT, or, when another run kept the same day a moment before (two managers
-    # open the month at once), an UPDATE of that row instead, by the rule of one day per job and date. Both runs worked
-    # out the same answer, so they end with the same row (an upsert).
+    # A day kept for the first time: an INSERT. No other run of the book can keep the same day meanwhile, as the jobs'
+    # lock lets one run per shop at a time (work_out_days). Should a bug write a day twice all the same, the rule of
+    # one day per job and date refuses the second, loudly, a server error, never a second row.
     if new:
-        AttendanceDay.objects.bulk_create(
-            new, update_conflicts=True, unique_fields=["shop", "date", "staff"], update_fields=WORKED_OUT
-        )
-        # Then those rows are read back, as stored: after an UPDATE in place of the INSERT, the row kept is the other
-        # run's, with its own id, while Django leaves on each day the id it made for it, which no row has. Read only
-        # when a day was kept for the first time, the first time a month is asked for. A row of this span that is
-        # none of these days (another job's, another date's) is left out by the lookup.
-        stored = {
-            (row.staff_id, row.date): row
-            for row in AttendanceDay.objects.filter(
-                shop_id=new[0].shop_id,
-                date__in={day.date for day in new},
-                staff_id__in={day.staff_id for day in new},
-            )
-        }
-        rows = [stored.get((row.staff_id, row.date), row) for row in rows]
+        AttendanceDay.objects.bulk_create(new)
     return rows
