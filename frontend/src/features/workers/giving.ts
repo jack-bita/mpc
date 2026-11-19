@@ -55,8 +55,9 @@ export function heldOn(me: WhoIsHere, side: Side): ReadonlySet<string> {
 }
 
 /** Whether the person may give these codes on that side: staff.manage there, and every code (_check_giver). Every
- * code, a code this app doesn't know included: the server compares only codes it knows, so a newer code is held to
- * the stricter rule here, and the form offers less, never more. */
+ * code, a code this app doesn't know included. A role's codes come from the server, so such a code is one a newer
+ * server knows and compares too: the same rule, which this app can only meet by the codes `me` lists, never assume.
+ * So the form offers less, never more. */
 export function mayGive(
   me: WhoIsHere,
   codes: readonly string[],

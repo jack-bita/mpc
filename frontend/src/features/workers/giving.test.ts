@@ -59,7 +59,7 @@ describe("the giver rule", () => {
     expect(mayGive(noManage, ["stock.count"], DAWA.id)).toBe(false);
   });
 
-  it("holds a code this app doesn't know to the stricter rule", () => {
+  it("asks a code this app doesn't know of the giver too, never assumes it", () => {
     // A newer server's code in a role: offered only if the giver holds it, never assumed.
     expect(mayGive(BABA, ["seed.sow"], null)).toBe(false);
   });
