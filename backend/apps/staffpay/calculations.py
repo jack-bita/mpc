@@ -150,6 +150,13 @@ class Tap:
     kind: ClockKind
     minute: dt.time | None
 
+    def __post_init__(self) -> None:
+        # A minute with seconds is later than its minute: 07:35:40 is after 07:35, so Asha would lose the first fine
+        # though the counter showed 07:35. shop_minute drops them; a tap built without it is a bug in our code, so it
+        # fails loudly here, as shop_minute does for a time with no zone, before any fine is worked out.
+        if self.minute is not None and (self.minute.second or self.minute.microsecond):
+            raise ValueError("A tap's minute has no seconds: read it with shop_minute.")
+
 
 @dataclass(frozen=True)
 class DayResult:

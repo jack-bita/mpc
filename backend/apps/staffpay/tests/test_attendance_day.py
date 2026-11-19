@@ -90,6 +90,15 @@ def test_shop_minute_refuses_a_time_with_no_zone() -> None:
         shop_minute(dt.datetime(2026, 11, 10, 7, 35), ARUSHA)
 
 
+def test_a_tap_with_seconds_refused() -> None:
+    # 07:35:40 is after 07:35, so a tap that kept its seconds would fine Asha though the counter showed 07:35. A tap's
+    # minute comes from shop_minute, which drops them; one built without it is a bug in our code, so it fails loudly.
+    with pytest.raises(ValueError):
+        Tap(ClockKind.IN, dt.time(7, 35, 40))
+    with pytest.raises(ValueError):
+        Tap(ClockKind.OUT, dt.time(18, 40, 0, 1))
+
+
 # The owner's table, spec §8.1: the arrivals, each leaving at closing.
 
 
