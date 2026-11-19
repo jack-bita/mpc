@@ -4,6 +4,10 @@ Nobody in a shop may make someone Owner or set the Owner's PIN (PPL-7), so the s
 
     owner add --shop MFANO: Baba, Baba Mfano, 0712 345 678, PIN twice (unseen), yes
         → Baba works at MFANO, holds the Owner role on every side, and has his PIN: his tile reaches the laptops
+    owner set-pin --shop MFANO --nickname Baba: PIN twice (unseen)
+        → a new PIN; his lock from wrong tries is lifted on every device
+    owner take --shop MFANO --nickname Baba: the reason (and a yes, if he is the last working Owner)
+        → every Owner row of his ended, with that reason; his job and PIN stay
 
 Each test types its answers in through the `keyboard` fixture (conftest.py), PINs apart, as getpass reads them. Fake
 shops and people only: the repo is public.
@@ -12,17 +16,21 @@ shops and people only: the repo is public.
 from io import StringIO
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.utils import timezone
 from pytest_django import Settings
 
+from apps.core.changes import recording_changes
 from apps.core.permissions import RoleTemplate
-from apps.core.tenancy import shop_context, system_context
-from apps.people.models import RoleAssignment, StaffMember, User
-from apps.people.pins import pin_matches
-from apps.people.services import add_worker, set_up_shop
+from apps.core.tenancy import shop_context
+from apps.people.models import Device, PinLock, Role, RoleAssignment, StaffMember, User
+from apps.people.pins import PIN_TRIES, pin_matches
+from apps.people.services import add_worker, assign_role, check_pin, mark_left, set_pin, set_up_shop, suspend
 from apps.people.tests.conftest import Keyboard
-from apps.shops.models import Shop
+from apps.shops.models import Shop, Side
+from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide
 from tests.change_log import lines_written
 
@@ -43,6 +51,16 @@ def owner(*args: str) -> str:
     out = StringIO()
     call_command("owner", *args, stdout=out)
     return out.getvalue()
+
+
+def an_owner(shop: Shop, nickname: str, *, pin: str | None = None) -> StaffMember:
+    # Someone the superuser made Owner on every side earlier, as owner add does, through the same services.
+    with shop_context(shop), recording_changes(shop):
+        staff = add_worker(shop=shop, full_name=f"{nickname} Mfano", display_name=nickname, by=None)
+        assign_role(staff, Role.objects.get(template=RoleTemplate.OWNER), side=None, by=None)
+        if pin is not None:
+            set_pin(staff, pin, by=None)
+    return staff
 
 
 def owner_rows(staff: StaffMember) -> list[tuple[str, object, object]]:
@@ -99,10 +117,11 @@ def test_owner_add_shows_everything_before_the_yes_but_the_pin(
     assert PIN not in said + screen.out + screen.err
 
 
-def test_the_pin_is_never_an_argument(mfano: Shop, keyboard: Keyboard) -> None:
+@pytest.mark.parametrize("action", [("add",), ("set-pin", "--nickname", "Baba")])
+def test_the_pin_is_never_an_argument(mfano: Shop, keyboard: Keyboard, action: tuple[str, ...]) -> None:
     # An argument stays in the shell's history and shows in the server's list of running programs (the card's default).
     with pytest.raises(CommandError, match="unrecognized arguments: --pin"):
-        owner("add", "--shop", "MFANO", "--pin", PIN)
+        owner(*action, "--shop", "MFANO", "--pin", PIN)
 
 
 @pytest.mark.parametrize("answer", ["n", ""])
@@ -220,13 +239,192 @@ def test_an_unknown_shop_is_refused(mfano: Shop, keyboard: Keyboard) -> None:
         owner("add", "--shop", "nope")
 
 
-def test_owner_add_is_refused_on_the_demo(mfano: Shop, keyboard: Keyboard, settings: Settings) -> None:
-    # The demo's seed makes its own people, and keeps them as made (DATA-1). Refused before anything is asked.
+@pytest.mark.parametrize("action", [("add",), ("set-pin", "--nickname", "Baba"), ("take", "--nickname", "Baba")])
+def test_owner_is_refused_on_the_demo(
+    mfano: Shop, keyboard: Keyboard, settings: Settings, action: tuple[str, ...]
+) -> None:
+    # The demo's seed makes its own people, and keeps them as made (DATA-1). Refused before anything is asked or read.
+    baba = an_owner(mfano, "Baba", pin=PIN)
     settings.DEMO_SEED = True
 
     with pytest.raises(CommandError, match="Refused on the demo"):
-        owner("add", "--shop", "MFANO")
+        owner(*action, "--shop", "MFANO")
 
     assert keyboard.asked == []
-    with system_context():
-        assert not StaffMember.objects.exists()
+    with shop_context(mfano):
+        assert StaffMember.objects.get() == baba
+        assert pin_matches(PIN, StaffMember.objects.get().pin_hash)
+    assert owner_rows(baba) == [(RoleTemplate.OWNER, None, None)]
+
+
+def test_owner_add_points_a_worker_with_no_pin_to_set_pin(mfano: Shop, keyboard: Keyboard) -> None:
+    # No PIN, no tile on the shop's laptops: the command names the next one to run.
+    with shop_context(mfano):
+        add_worker(shop=mfano, full_name="Juma Mfano", display_name="Juma", by=None)
+    keyboard.type("Juma", "y")
+
+    said = owner("add", "--shop", "MFANO")
+
+    assert "No PIN yet: python manage.py owner set-pin --shop MFANO --nickname Juma" in said
+
+
+# --- set-pin
+
+
+def test_owner_set_pin_gives_a_new_pin_and_lifts_the_lock(mfano: Shop, keyboard: Keyboard) -> None:
+    # Baba forgot his PIN, and his wrong tries locked him out of the Dawa laptop (AUTH-4). The new PIN logs him in at
+    # once there: set_pin lifts every lock, and moves his PIN's time, which ends the logins made with the old one.
+    baba = an_owner(mfano, "Baba", pin=PIN)
+    with shop_context(mfano):
+        laptop = Device.objects.create(
+            shop=mfano, home_side=Side.objects.get(code="D"), name="Laptop ya Dawa", code=1, key_hash="a" * 64
+        )
+        for _ in range(PIN_TRIES):
+            with pytest.raises(ValidationError):
+                check_pin(baba, laptop, "9157", at=timezone.now())
+        assert PinLock.objects.get(staff=baba).locked_until is not None
+        # Read again: set_pin saved the time on its own copy of the row, not on the one an_owner handed back.
+        before = StaffMember.objects.get(pk=baba.pk).pin_changed_at
+    keyboard.type_pins("3907", "3907")
+
+    with lines_written(mfano) as lines:
+        said = owner("set-pin", "--shop", "MFANO", "--nickname", "baba")
+
+    with shop_context(mfano):
+        baba = StaffMember.objects.get(pk=baba.pk)
+        lock = PinLock.objects.get(staff=baba)
+    assert pin_matches("3907", baba.pin_hash)
+    assert not pin_matches(PIN, baba.pin_hash)
+    assert baba.pin_changed_at is not None and before is not None and baba.pin_changed_at > before
+    assert (lock.wrong_tries, lock.locked_until) == (0, None)
+    # His staff line: each laptop drops its offline check of the old PIN at its next sync (SYNC-15).
+    assert lines == [("staff", baba.pk, "upsert")]
+    assert "A new PIN for Baba Mfano, Baba at MFANO (active)." in said
+    assert "Any lock from wrong tries is lifted, on every device." in said
+    assert "3907" not in said
+
+
+def test_owner_set_pin_serves_any_current_worker(mfano: Shop, keyboard: Keyboard) -> None:
+    # The card's default: the superuser may help anyone when no manager is there, a suspended worker too, who needs it
+    # once brought back. Two PINs that differ, and one too easy, are asked again here as in `add`.
+    with shop_context(mfano):
+        juma = add_worker(shop=mfano, full_name="Juma Mfano", display_name="Juma", by=None)
+        suspend(juma, by=None, reason="Away for a month")
+    keyboard.type_pins("3907", "3970", "1111", "1111", "3907", "3907")
+
+    said = owner("set-pin", "--shop", "MFANO", "--nickname", "Juma")
+
+    assert "The two PINs differ." in said
+    assert "pin.too_easy: " in said
+    with shop_context(mfano):
+        assert pin_matches("3907", StaffMember.objects.get(pk=juma.pk).pin_hash)
+
+
+@pytest.mark.parametrize("action", ["set-pin", "take"])
+def test_nobody_is_found_by_a_nickname_of_one_who_left(mfano: Shop, keyboard: Keyboard, action: str) -> None:
+    # One who left is history: set_pin and end_role would refuse them (staff.left), so they aren't even found, and
+    # nothing is asked.
+    baba = an_owner(mfano, "Baba", pin=PIN)
+    with shop_context(mfano):
+        mark_left(baba, left_on=shop_today(mfano), by=None, reason="Sold the shop")
+
+    with pytest.raises(CommandError, match="Nobody working at MFANO has the nickname Baba."):
+        owner(action, "--shop", "MFANO", "--nickname", "Baba")
+
+
+# --- take
+
+
+def test_owner_take_ends_the_owner_role_with_its_reason(mfano: Shop, keyboard: Keyboard) -> None:
+    # Two Owners working: Baba's role is taken with a reason, and Mama, still Owner, means nothing more is asked.
+    baba = an_owner(mfano, "Baba", pin=PIN)
+    mama = an_owner(mfano, "Mama")
+    keyboard.type("Handed the shop to Mama")
+
+    with lines_written(mfano) as lines:
+        said = owner("take", "--shop", "MFANO", "--nickname", "Baba")
+
+    with shop_context(mfano):
+        row = RoleAssignment.objects.get(staff=baba)
+        baba = StaffMember.objects.get(pk=baba.pk)
+    # Ended, never deleted (rule 7), with when and why, by the superuser, whom nobody names.
+    assert (row.end_reason, row.ended_by_id) == ("Handed the shop to Mama", None)
+    assert row.ended_at is not None
+    assert owner_rows(mama) == [(RoleTemplate.OWNER, None, None)]
+    # His job and PIN stay: he may still work there, and the owner gives him another role if he does.
+    assert (baba.status, pin_matches(PIN, baba.pin_hash)) == ("active", True)
+    assert lines == [("staff", baba.pk, "upsert")]
+    assert "Baba Mfano, Baba at MFANO, is Owner on: every side." in said
+    assert keyboard.asked == ["Why is it taken away: "]
+
+
+def test_owner_take_ends_every_owner_row_of_that_person(mfano: Shop, keyboard: Keyboard) -> None:
+    # Jack, PPL-13: 4A. Baba is Owner on every side and on Dawa too: both end, together, with the one reason, so nothing
+    # of the Owner's is left behind. One staff line, as one block holds both ends.
+    baba = an_owner(mfano, "Baba")
+    an_owner(mfano, "Mama")
+    with shop_context(mfano):
+        assign_role(baba, Role.objects.get(template=RoleTemplate.OWNER), side=Side.objects.get(code="D"), by=None)
+    keyboard.type("Handed the shop to Mama")
+
+    with lines_written(mfano) as lines:
+        said = owner("take", "--shop", "MFANO", "--nickname", "Baba")
+
+    assert "is Owner on: every side, Dawa." in said
+    assert owner_rows(baba) == []
+    with shop_context(mfano):
+        assert set(RoleAssignment.objects.filter(staff=baba).values_list("end_reason", flat=True)) == {
+            "Handed the shop to Mama"
+        }
+    assert lines == [("staff", baba.pk, "upsert")]
+
+
+@pytest.mark.parametrize(("answer", "taken"), [("y", True), ("n", False), ("", False)])
+def test_taking_the_last_owner_asks_once_more(mfano: Shop, keyboard: Keyboard, answer: str, taken: bool) -> None:
+    # The card's default: with no Owner working, nobody at the shop holds the owner's four keys, and nobody there can
+    # give the role again. So a yes is asked, and only y or yes takes it.
+    baba = an_owner(mfano, "Baba")
+    keyboard.type("Sold the shop", answer)
+
+    said = owner("take", "--shop", "MFANO", "--nickname", "Baba")
+
+    assert "Baba is the last Owner working at MFANO." in said
+    assert keyboard.asked[-1] == "Take it all the same? [y/N]: "
+    assert owner_rows(baba) == ([] if taken else [(RoleTemplate.OWNER, None, None)])
+    assert ("Nothing written." in said) is not taken
+
+
+def test_a_suspended_owner_is_not_another_owner(mfano: Shop, keyboard: Keyboard) -> None:
+    # Jack, PPL-13: 4A. Mama is Owner but suspended: she holds nothing until brought back, so Baba is the last working
+    # Owner, and the yes is asked.
+    baba = an_owner(mfano, "Baba")
+    mama = an_owner(mfano, "Mama")
+    with shop_context(mfano):
+        suspend(mama, by=None, reason="Away for a month")
+    keyboard.type("Sold the shop", "y")
+
+    said = owner("take", "--shop", "MFANO", "--nickname", "Baba")
+
+    assert "Baba is the last Owner working at MFANO." in said
+    assert owner_rows(baba) == []
+
+
+def test_a_blank_reason_is_asked_again(mfano: Shop, keyboard: Keyboard) -> None:
+    # Rule 7: an end is always kept with its why. end_role refuses a blank one too; the command asks again first.
+    baba = an_owner(mfano, "Baba")
+    an_owner(mfano, "Mama")
+    keyboard.type("  ", "Handed the shop to Mama")
+
+    said = owner("take", "--shop", "MFANO", "--nickname", "Baba")
+
+    assert "An answer is needed." in said
+    assert owner_rows(baba) == []
+
+
+def test_owner_take_refuses_someone_with_no_owner_role(mfano: Shop, keyboard: Keyboard) -> None:
+    # Juma works there, as a worker: there is nothing of the Owner's to take, and nothing is asked.
+    with shop_context(mfano):
+        add_worker(shop=mfano, full_name="Juma Mfano", display_name="Juma", by=None)
+
+    with pytest.raises(CommandError, match="Juma holds no Owner role at MFANO."):
+        owner("take", "--shop", "MFANO", "--nickname", "Juma")
