@@ -23,6 +23,7 @@ from django.db import IntegrityError, connection, transaction
 from django.test.utils import CaptureQueriesContext
 
 from apps.control.models import EditEvent
+from apps.core.acting import acting_as
 from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SettingKey
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember, User
@@ -334,6 +335,23 @@ def test_a_day_follows_a_tap_that_came_late(shop_a: Shop, device_a: Device, asha
     assert _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)].status == DayStatus.NEEDS_REVIEW
     tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
     assert _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)].status == DayStatus.ON_TIME
+
+
+def test_the_book_writes_as_nobody(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
+    # Juma, a manager, opens the month in his visit, from the Dawa laptop: Asha's Monday changes, as her Toka came late,
+    # and the edit history says the system changed it, from no device, never Juma (ADR-0036). His visit's note is his
+    # again after the book: a row he changes himself still names him.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    with shop_context(shop_a), acting_as(juma, device=device_a):
+        monday = work_out_days(shop_a, MONDAY, MONDAY)[0]
+        tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+        work_out_days(shop_a, MONDAY, MONDAY)
+        edit = EditEvent.objects.get(subject_type="attendance_day", subject_id=monday.pk)
+        assert (edit.before["status"], edit.after["status"]) == (DayStatus.NEEDS_REVIEW, DayStatus.ON_TIME)
+        assert (edit.created_by_id, edit.device_id) == (None, None)
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_setting('mpc.staff_id', true)")
+            assert cursor.fetchone() == (str(juma.pk),)
 
 
 def test_a_day_that_comes_out_the_same_is_not_written_again(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:

@@ -16,12 +16,13 @@ keeps a copy of the days.
 import datetime as dt
 import uuid
 from collections import defaultdict
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.db.models import Q
 
+from apps.core.acting import acting_as
 from apps.core.settings_registry import ATTENDANCE_ON
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.people.models import StaffMember
@@ -34,6 +35,15 @@ from apps.staffpay.selectors import day_rules, rules_as_text
 # Sunday, as Python numbers the days of the week (Monday is 0). Always off, and not paid: Sunday work is a deal between
 # the owner and the worker, outside the system (01 §8.1), so a shop has no setting for it.
 SUNDAY = 6
+
+
+@dataclass(frozen=True)
+class _TheBook:
+    # The book as it acts (an Actor, apps/core/tenancy.py): the shop it works for, and no staff member, as the system
+    # acts, as a nightly job does.
+    shop_id: uuid.UUID
+    staff_id: uuid.UUID | None = None
+
 
 # What the book works out on a day, and so what it writes again when a day comes out otherwise. Not the job, the date
 # or the shop, which say which day it is; nor `created_at`, which says when the day was first kept.
@@ -117,7 +127,14 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
                     # minutes stay, which the rule read, to show when she came; the rules too, for whoever decides.
                     result = replace(result, status=DayStatus.NEEDS_REVIEW, fine=NO_FINE)
                 answered.append(_worked_out(shop, job, day, result, rules_used))
-        return _keep(answered, kept)
+        # Kept as the book, never as the person whose visit asked for the month. The edit history's trigger names
+        # whoever the visit's note says acts (apps/core/acting.py): Meneja opens November (ATT-5), and Asha's Monday,
+        # changed by the Toka that came late, would read "Meneja changed it", though nobody did. So the book tells
+        # PostgreSQL the system acts, from no device, for its own writes only (ADR-0036: a row the system writes names
+        # nobody); the visit's note comes back as the block ends. And the trigger refuses a row of any shop but this
+        # one (T1).
+        with acting_as(_TheBook(shop.pk), device=None):
+            return _keep(answered, kept)
 
 
 def _off(shop: Shop, job: StaffMember, day: dt.date) -> AttendanceDay:
