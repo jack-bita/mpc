@@ -579,6 +579,12 @@
       "side": "Upande",
       "sideHint": "Pande zote ni kila upande, hata utakaoongezwa baadaye.",
       "done": "{name} amepewa {what}. Kompyuta za duka zitajua baada ya kusawazisha."
+    },
+    "ending": {
+      "remove": "Ondoa",
+      "removeWhat": "Ondoa {what}",
+      "title": "Ondoa {what} kwa {name}",
+      "done": "Umemwondolea {name} {what}. Kompyuta za duka zitajua baada ya kusawazisha."
     }
   },
   "attendance": {
@@ -860,9 +866,9 @@
       "other_shop": "Hiki ni cha duka jingine.",
       "reason_required": "Andika sababu.",
       "temporary_password_open": "Mtu huyu bado ana nenosiri la muda. Ruhusa hii itasubiri hadi achague nenosiri lake.",
-      "own": "Huwezi kubadilisha hali yako ya kazi wala taarifa zako mwenyewe.",
-      "superuser_only": "Hali ya kazi na taarifa za mtu huyu zinabadilishwa na msimamizi wa mfumo tu.",
-      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kubadilisha hali yake ya kazi wala taarifa zake.",
+      "own": "Huwezi kubadilisha hali yako ya kazi, taarifa zako, wala vyeo na ruhusa zako mwenyewe.",
+      "superuser_only": "Hali ya kazi, taarifa, vyeo na ruhusa za mtu huyu zinabadilishwa na msimamizi wa mfumo tu.",
+      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kubadilisha hali yake ya kazi, taarifa zake, wala vyeo na ruhusa zake.",
       "display_name_taken": "Mfanyakazi mwingine tayari ana jina hili la kuitwa. Chagua jingine.",
       "not_active": "Mfanyakazi huyu tayari amesimamishwa.",
       "not_suspended": "Mfanyakazi huyu hajasimamishwa.",

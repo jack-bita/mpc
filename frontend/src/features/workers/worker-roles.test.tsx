@@ -1,7 +1,9 @@
 // worker-roles.test.tsx — a worker's roles and extra keys on their page, and the buttons that change them (PPL-8).
 // Ongeza kazi: a role on a side and a key on every side, each shown at once; the same id for a try of the same choices
 // and a new one for a change; only what the person may give, never Mmiliki; a side narrowing the lists; what the form
-// says itself; each refusal of the server's; who sees the button; offline; Ghairi.
+// says itself; each refusal of the server's; who sees the button; offline; Ghairi. Ondoa: a role and a key taken away
+// with a reason; an end sent again after a lost answer taken as done; no reason, no send; each refusal; never beside
+// Mmiliki.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -128,9 +130,12 @@ function pick(name: string) {
 /** The lines under one of the card's headings (worker-page.test.tsx). */
 function linesUnder(heading: string): string[] {
   const section = screen.getByRole("region", { name: heading });
-  return within(section)
-    .queryAllByRole("listitem")
-    .map((item) => item.textContent ?? "");
+  return (
+    within(section)
+      .queryAllByRole("listitem")
+      // The words alone: the item's first part, before its Ondoa (worker-roles.tsx).
+      .map((item) => item.firstElementChild?.textContent ?? "")
+  );
 }
 
 /** Opens Ongeza kazi once the page has drawn. */
@@ -455,6 +460,305 @@ describe("Ongeza kazi", () => {
   });
 });
 
+/** Juma as a seller on Dawa, with the stock count on Vyakula: something to take away. */
+const SELLER_ON_DAWA = role("seller", DAWA.id, { role: SELLER_ROLE.id });
+const COUNT_ON_VYAKULA = {
+  id: "019a8303-0000-7000-8000-000000000101",
+  permission: "stock.count",
+  side: VYAKULA.id,
+};
+const JUMA_WITH_BOTH = {
+  ...JUMA,
+  roles: [SELLER_ON_DAWA],
+  keys: [COUNT_ON_VYAKULA],
+};
+
+/** What the app sent to the end routes, as the server would read it. */
+async function ends(): Promise<Record<string, unknown>[]> {
+  return Promise.all(
+    sent
+      .filter((request) => request.method === "POST")
+      .map((request) => request.json() as Promise<Record<string, unknown>>),
+  );
+}
+
+describe("Ondoa", () => {
+  it("takes Juma's role away with a reason, and it is gone from the page (the card's fourth Done when)", async () => {
+    const server = theServerHas(JUMA_WITH_BOTH);
+    answer("POST", `${STAFF}${JUMA.id}/end-role/`, () => {
+      const changed = { ...JUMA_WITH_BOTH, roles: [] };
+      server.now(changed);
+      return Response.json(changed);
+    });
+
+    render(<WorkerScreen id={JUMA.id} />);
+    // Its name says what goes, as every row's button reads Ondoa.
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Ondoa Muuzaji (Dawa) kwa Juma" }),
+    ).toBeTruthy();
+    // The keyboard starts in Sababu.
+    expect(document.activeElement).toBe(screen.getByLabelText("Sababu"));
+    fireEvent.change(screen.getByLabelText("Sababu"), {
+      target: { value: "  Amehamia Vyakula  " },
+    });
+    fireEvent.click(button("Hifadhi"));
+
+    const line =
+      "Umemwondolea Juma Muuzaji (Dawa). Kompyuta za duka zitajua baada ya kusawazisha.";
+    await waitFor(() => expect(document.activeElement?.textContent).toBe(line));
+    expect(await ends()).toEqual([
+      { role_given: SELLER_ON_DAWA.id, reason: "Amehamia Vyakula" },
+    ]);
+    expect(linesUnder("Cheo")).toEqual([]);
+    expect(screen.getByText("Hana cheo bado")).toBeTruthy();
+  });
+
+  it("takes an extra key away with a reason", async () => {
+    const server = theServerHas(JUMA_WITH_BOTH);
+    answer("POST", `${STAFF}${JUMA.id}/end-key/`, () => {
+      const changed = { ...JUMA_WITH_BOTH, keys: [] };
+      server.now(changed);
+      return Response.json(changed);
+    });
+
+    render(<WorkerScreen id={JUMA.id} />);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Ondoa Kuhesabu mzigo (Vyakula)",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Sababu"), {
+      target: { value: "Hesabu imeisha" },
+    });
+    fireEvent.click(button("Hifadhi"));
+
+    await screen.findByText(
+      "Umemwondolea Juma Kuhesabu mzigo (Vyakula). Kompyuta za duka zitajua baada ya kusawazisha.",
+    );
+    expect(await ends()).toEqual([
+      { key: COUNT_ON_VYAKULA.id, reason: "Hesabu imeisha" },
+    ]);
+    expect(screen.getByText("Hana ruhusa za ziada")).toBeTruthy();
+  });
+
+  it.each([
+    [
+      "role.already_ended",
+      "end-role",
+      "Ondoa Muuzaji (Dawa)",
+      "Muuzaji (Dawa)",
+    ],
+    [
+      "permission.already_ended",
+      "end-key",
+      "Ondoa Kuhesabu mzigo (Vyakula)",
+      "Kuhesabu mzigo (Vyakula)",
+    ],
+  ])(
+    "takes %s as done: it reads Juma again and says the done line (the card's fourth Done when)",
+    async (code, route, buttonName, what) => {
+      // The first end reached the server, its answer lost; the one sent again hears that it is ended already.
+      const server = theServerHas(JUMA_WITH_BOTH);
+      answer("POST", `${STAFF}${JUMA.id}/${route}/`, () => {
+        server.now(
+          route === "end-role"
+            ? { ...JUMA_WITH_BOTH, roles: [] }
+            : { ...JUMA_WITH_BOTH, keys: [] },
+        );
+        return Response.json(
+          { code, message: code, fields: {}, params: {} },
+          { status: 400 },
+        );
+      });
+
+      render(<WorkerScreen id={JUMA.id} />);
+      fireEvent.click(await screen.findByRole("button", { name: buttonName }));
+      fireEvent.change(screen.getByLabelText("Sababu"), {
+        target: { value: "Amehamia Vyakula" },
+      });
+      fireEvent.click(button("Hifadhi"));
+
+      await screen.findByText(
+        `Umemwondolea Juma ${what}. Kompyuta za duka zitajua baada ya kusawazisha.`,
+      );
+      // No refusal on show: it is done.
+      expect(screen.queryByRole("alert")).toBeNull();
+      // Read again: gone from the page.
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: buttonName })).toBeNull(),
+      );
+      expect(screen.queryByText(what, { selector: "span" })).toBeNull();
+    },
+  );
+
+  it("says at once that Sababu is needed, and sends nothing", async () => {
+    theServerHas(JUMA_WITH_BOTH);
+
+    render(<WorkerScreen id={JUMA.id} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
+    );
+    // Spaces alone are no reason.
+    fireEvent.change(screen.getByLabelText("Sababu"), {
+      target: { value: "   " },
+    });
+    fireEvent.click(button("Hifadhi"));
+
+    // The server's own sentence for it, staff.reason_required, as it never sends `blank` here (StaffReasonSerializer).
+    expect(screen.getByText(sentence("staff.reason_required"))).toBeTruthy();
+    expect(sent.filter((request) => request.method === "POST")).toHaveLength(0);
+  });
+
+  it("shows the server's staff.reason_required beside Sababu", async () => {
+    theServerHas(JUMA_WITH_BOTH);
+    answer(
+      "POST",
+      `${STAFF}${JUMA.id}/end-role/`,
+      refusal(400, "staff.reason_required"),
+    );
+
+    render(<WorkerScreen id={JUMA.id} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
+    );
+    fireEvent.change(screen.getByLabelText("Sababu"), {
+      target: { value: "x" },
+    });
+    fireEvent.click(button("Hifadhi"));
+
+    const box = screen.getByLabelText("Sababu");
+    await waitFor(() => expect(box.getAttribute("aria-invalid")).toBe("true"));
+    expect(screen.getByText(sentence("staff.reason_required"))).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it.each([
+    ["staff.own", 400],
+    ["staff.superuser_only", 400],
+    ["staff.more_keys", 400],
+    ["demo.people_fixed", 400],
+    ["permission_denied", 403],
+  ])(
+    "shows %s above the buttons, and keeps the form (the card's fifth Done when)",
+    async (code, status) => {
+      theServerHas(JUMA_WITH_BOTH);
+      answer("POST", `${STAFF}${JUMA.id}/end-role/`, refusal(status, code));
+
+      render(<WorkerScreen id={JUMA.id} />);
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
+      );
+      fireEvent.change(screen.getByLabelText("Sababu"), {
+        target: { value: "Amehamia Vyakula" },
+      });
+      fireEvent.click(button("Hifadhi"));
+
+      expect((await screen.findByRole("alert")).textContent).toContain(
+        sentence(code),
+      );
+      expect(screen.getByLabelText("Sababu")).toBeTruthy();
+    },
+  );
+
+  it("names roles and keys in the three who-may sentences (PPL-7's note)", () => {
+    for (const code of ["staff.own", "staff.superuser_only", "staff.more_keys"])
+      expect(sentence(code), code).toContain("vyeo na ruhusa");
+  });
+
+  it("closes on staff.left, says so, and reads Juma again", async () => {
+    const server = theServerHas(JUMA_WITH_BOTH);
+    answer("POST", `${STAFF}${JUMA.id}/end-role/`, () => {
+      server.now({ ...JUMA_WITH_BOTH, status: "left", left_on: "2026-11-18" });
+      return Response.json(
+        { code: "staff.left", message: "", fields: {}, params: {} },
+        { status: 400 },
+      );
+    });
+
+    render(<WorkerScreen id={JUMA.id} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
+    );
+    fireEvent.change(screen.getByLabelText("Sababu"), {
+      target: { value: "Amehamia Vyakula" },
+    });
+    fireEvent.click(button("Hifadhi"));
+
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toBe(sentence("staff.left")),
+    );
+    // A worker who left keeps the role as history, with no Ondoa beside it.
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
+      ).toBeNull(),
+    );
+    expect(linesUnder("Cheo")).toEqual(["Muuzaji (Dawa)"]);
+  });
+
+  it("switches Hifadhi off offline", async () => {
+    theServerHas(JUMA_WITH_BOTH);
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+
+    render(<WorkerScreen id={JUMA.id} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
+    );
+
+    expect(button("Hifadhi").hasAttribute("disabled")).toBe(true);
+  });
+
+  it("gives the keyboard back to its Ondoa on Ghairi, and shows the other buttons again", async () => {
+    theServerHas(JUMA_WITH_BOTH);
+
+    render(<WorkerScreen id={JUMA.id} />);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Ondoa Kuhesabu mzigo (Vyakula)",
+      }),
+    );
+    // One change at a time: no other button while the form is open.
+    expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
+    ).toBeNull();
+    fireEvent.click(button("Ghairi"));
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        button("Ondoa Kuhesabu mzigo (Vyakula)"),
+      ),
+    );
+    expect(button("Ongeza kazi")).toBeTruthy();
+  });
+
+  it("never shows Ondoa beside Mmiliki, which only the superuser takes away", async () => {
+    // Asha holds the Owner role and a seller's on Vyakula: Ondoa beside the second only.
+    const asha = {
+      ...JUMA,
+      display_name: "Asha",
+      roles: [
+        role("owner", null),
+        role("seller", VYAKULA.id, { role: SELLER_ROLE.id }),
+      ],
+    };
+    theServerHas(asha);
+
+    render(<WorkerScreen id={asha.id} />);
+
+    expect(
+      await screen.findByRole("button", { name: "Ondoa Muuzaji (Vyakula)" }),
+    ).toBeTruthy();
+    expect(linesUnder("Cheo")[0]).toBe("Mmiliki (Pande zote)");
+    expect(
+      screen.queryByRole("button", { name: "Ondoa Mmiliki (Pande zote)" }),
+    ).toBeNull();
+  });
+});
+
 describe("a move to another worker", () => {
   it("closes a give open on Juma when the page moves to Baraka, so his choices never go to Baraka", async () => {
     // The browser's back and forward move the address while the page stays: the same screen, another worker
@@ -506,15 +810,25 @@ describe("who sees the buttons", () => {
     await screen.findByRole("button", { name: "Mwajiri tena" });
     expect(linesUnder("Cheo")).toEqual(["Muuzaji (Dawa)"]);
     expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
+    ).toBeNull();
   });
 
   it("offers nothing on one's own page, where staff.own's line says why", async () => {
-    const own = { ...JUMA, id: BABA.staff.id, display_name: "Neema" };
+    // With a role on show, so no Ondoa beside it proves something.
+    const own = {
+      ...JUMA,
+      id: BABA.staff.id,
+      display_name: "Neema",
+      roles: [role("manager", null)],
+    };
     theServerHas(own);
 
     render(<WorkerScreen id={own.id} />);
 
     await screen.findByText(sentence("staff.own"));
     expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Ondoa/ })).toBeNull();
   });
 });

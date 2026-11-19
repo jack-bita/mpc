@@ -14,9 +14,14 @@
 // they are back (PPL-7); none for one who left, whose roles stay as history; none on one's own page, where the status
 // buttons' line already says why (staff.own, worker-actions.tsx), as nobody changes their own job.
 //
-// After a give, one line says what it did, and that the shop's laptops learn it at their next sync, as a worker's keys
-// travel on their staff row (SYNC-15); the keyboard goes to it, as after the status buttons. Ghairi gives the keyboard
-// back to the button, and reads the worker again: a give whose answer was lost may have been made.
+// Beside each role and each key, Ondoa opens its form under the lists (end-form.tsx), its title naming what goes; never
+// beside Mmiliki, which only the superuser takes away (PPL-7, PPL-13). Shown for the same workers as Ongeza kazi. While
+// a form is open, no other button shows, so one change is made at a time.
+//
+// After a change, one line says what it did, and that the shop's laptops learn it at their next sync, as a worker's
+// keys travel on their staff row (SYNC-15); the keyboard goes to it, as after the status buttons. Ghairi gives the
+// keyboard back to the button that opened the form, and reads the worker again: a change whose answer was lost may
+// have been made.
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
@@ -30,12 +35,17 @@ import { Button } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 
+import { EndForm, type Ending } from "./end-form";
 import { GiveForm } from "./give-form";
+import { isOwnerRole } from "./giving";
 import { EVERY_KEY, type GivenKey, isPermission, useKeyWords } from "./keys";
 import { type Role, useRoleWords, type Worker, WORKERS } from "./workers";
 
-/** The form open, if any. */
-type Open = { form: "give" };
+/** The form open, if any: Ongeza kazi, or Ondoa of one role or key. */
+type Open = { form: "give" } | { form: "end"; ending: Ending };
+
+/** Ongeza kazi's place among the buttons the keyboard goes back to; each Ondoa's is its row's id. */
+const ADD = "add";
 
 export function WorkerRoles({
   worker,
@@ -60,19 +70,21 @@ export function WorkerRoles({
   // The line that says what the last change did, or that someone else changed the worker first.
   const [news, setNews] = useState<string | null>(null);
 
-  // Where the keyboard goes when a form closes (worker-actions.tsx): Ghairi, back to Ongeza kazi; a change, to the
-  // line that says what happened. A new object each time, so each close moves it.
-  const addButton = useRef<HTMLButtonElement>(null);
+  // Where the keyboard goes when a form closes (worker-actions.tsx): Ghairi, back to the button that opened it; a
+  // change, to the line that says what happened, as an Ondoa's row is gone. A new object each time, so each close
+  // moves it.
+  const buttons = useRef(new Map<string, HTMLButtonElement>());
   const newsLine = useRef<HTMLDivElement>(null);
-  const [backTo, setBackTo] = useState<{ to: "add" | "news" } | null>(null);
+  const [backTo, setBackTo] = useState<{ to: string } | null>(null);
   useEffect(() => {
     if (backTo === null) return;
     if (backTo.to === "news") newsLine.current?.focus();
-    else addButton.current?.focus();
+    else buttons.current.get(backTo.to)?.focus();
   }, [backTo]);
 
-  // Who may see the buttons (see the top).
+  // Who may see the buttons (see the top); none while a form is open.
   const mayChange = worker.status !== "left" && worker.id !== me.staff.id;
+  const showButtons = mayChange && open === null;
 
   function said(sentence: string) {
     setOpen(null);
@@ -80,11 +92,34 @@ export function WorkerRoles({
     setBackTo({ to: "news" });
   }
 
-  function cancelled() {
+  function cancelled(button: string) {
     setOpen(null);
-    setBackTo({ to: "add" });
-    // Asked again: a give whose answer was lost may have been made (worker-actions.tsx).
+    setBackTo({ to: button });
+    // Asked again: a change whose answer was lost may have been made (worker-actions.tsx).
     void store.invalidateQueries({ queryKey: WORKERS });
+  }
+
+  /** Ondoa beside a role or a key: its name for a screen reader says what goes, "Ondoa Muuzaji (Dawa)", as every row's
+   * button reads "Ondoa"; the words seen are inside it, so a person who says "Ondoa" to their computer finds it. */
+  function removeButton(ending: Ending) {
+    return (
+      <Button
+        ref={(button) => {
+          // Its place among the buttons, for the keyboard to come back to (worker-actions.tsx).
+          if (button) buttons.current.set(ending.id, button);
+          else buttons.current.delete(ending.id);
+        }}
+        kind="second"
+        size="normal"
+        aria-label={t("ending.removeWhat", { what: ending.words })}
+        onClick={() => {
+          setNews(null);
+          setOpen({ form: "end", ending });
+        }}
+      >
+        {t("ending.remove")}
+      </Button>
+    );
   }
 
   return (
@@ -99,9 +134,19 @@ export function WorkerRoles({
           ) : (
             // One a line: a manager on both sides reads each at a glance. role="list" written out, as Safari with
             // VoiceOver stops calling a styled <ul> a list.
-            <ul role="list" className="grid gap-1">
+            <ul role="list" className="grid gap-2">
               {worker.roles.map((given) => (
-                <li key={given.id}>{roleOnSide(given)}</li>
+                <li key={given.id} className={ROW}>
+                  <span>{roleOnSide(given)}</span>
+                  {/* Never beside Mmiliki: the superuser's alone to take away (PPL-7). */}
+                  {showButtons && !isOwnerRole(given)
+                    ? removeButton({
+                        kind: "role",
+                        id: given.id,
+                        words: roleOnSide(given),
+                      })
+                    : null}
+                </li>
               ))}
             </ul>
           )}
@@ -113,9 +158,18 @@ export function WorkerRoles({
           {worker.keys.length === 0 ? (
             <p>{t("view.noExtraKeys")}</p>
           ) : (
-            <ul role="list" className="grid gap-1">
+            <ul role="list" className="grid gap-2">
               {inTheServersOrder(worker.keys).map((given) => (
-                <li key={given.id}>{keyOnSide(given)}</li>
+                <li key={given.id} className={ROW}>
+                  <span>{keyOnSide(given)}</span>
+                  {showButtons
+                    ? removeButton({
+                        kind: "key",
+                        id: given.id,
+                        words: keyOnSide(given),
+                      })
+                    : null}
+                </li>
               ))}
             </ul>
           )}
@@ -138,12 +192,24 @@ export function WorkerRoles({
             roles={roles}
             onDone={said}
             onChangedMeanwhile={said}
-            onCancel={cancelled}
+            onCancel={() => cancelled(ADD)}
+          />
+        ) : open?.form === "end" ? (
+          <EndForm
+            worker={worker}
+            ending={open.ending}
+            onDone={said}
+            onChangedMeanwhile={said}
+            onCancel={() => cancelled(open.ending.id)}
           />
         ) : (
           <div>
             <Button
-              ref={addButton}
+              ref={(button) => {
+                // Its place among the buttons, for the keyboard to come back to (worker-actions.tsx).
+                if (button) buttons.current.set(ADD, button);
+                else buttons.current.delete(ADD);
+              }}
               kind="second"
               onClick={() => {
                 setNews(null);
@@ -159,6 +225,9 @@ export function WorkerRoles({
     </Card>
   );
 }
+
+/** A role's or a key's line: its words, and Ondoa at the far end, which wraps under them on a narrow phone. */
+const ROW = "flex flex-wrap items-center justify-between gap-x-3 gap-y-1";
 
 /** The keys in the order permissions.py lists their codes, so selling's come first and the page reads the same each
  * time; one code on two sides keeps the server's order between them. A code this app doesn't know yet comes last. */

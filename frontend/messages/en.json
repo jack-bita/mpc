@@ -579,6 +579,12 @@
       "side": "Side",
       "sideHint": "All sides means every side, even one added later.",
       "done": "{name} has been given {what}. The shop's laptops will know after their next sync."
+    },
+    "ending": {
+      "remove": "Take away",
+      "removeWhat": "Take away {what}",
+      "title": "Take {what} away from {name}",
+      "done": "{what} was taken away from {name}. The shop's laptops will know after their next sync."
     }
   },
   "attendance": {
@@ -860,9 +866,9 @@
       "other_shop": "This belongs to another shop.",
       "reason_required": "Write a reason.",
       "temporary_password_open": "This person still has a temporary password. This permission waits until they choose their own.",
-      "own": "You can't change your own work status or details.",
-      "superuser_only": "Only the system admin can change this person's work status or details.",
-      "more_keys": "This person has permissions you don't, so you can't change their work status or details.",
+      "own": "You can't change your own work status, details, roles or permissions.",
+      "superuser_only": "Only the system admin can change this person's work status, details, roles or permissions.",
+      "more_keys": "This person has permissions you don't, so you can't change their work status, details, roles or permissions.",
       "display_name_taken": "Another worker already has this nickname. Choose another.",
       "not_active": "This worker is already suspended.",
       "not_suspended": "This worker isn't suspended.",

@@ -43,7 +43,8 @@ function linesUnder(heading: string): string[] {
   const section = screen.getByRole("region", { name: heading });
   const items = within(section).queryAllByRole("listitem");
   return items.length > 0
-    ? items.map((item) => item.textContent ?? "")
+    ? // The words alone: the item's first part, before its Ondoa (PPL-8).
+      items.map((item) => item.firstElementChild?.textContent ?? "")
     : within(section)
         .getAllByText(/.+/, { selector: "p" })
         .map((line) => line.textContent ?? "");
