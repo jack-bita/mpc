@@ -380,7 +380,7 @@ def add_closure(
         row.id = closure_id
     errors: dict[str, list[ValidationError]] = {}
     # Never before the shop's today, as for a rule's new value (set_setting): a past day may already be worked out and
-    # paid (ATT-4), and closing it now would change that. Today is still open, so a funeral closes the shop the same
+    # paid (ATT-10), and closing it now would change that. Today is still open, so a funeral closes the shop the same
     # morning. The shop's today, not the server's, which runs in UTC.
     today = shop_today(shop)
     if first_day < today:
@@ -517,7 +517,7 @@ def _check_closure_changes_from(
     first_changed: date, today: date, by: Actor | None, *, started_code: str = "closure.date_past"
 ) -> None:
     # A change to a closure opens or closes days from `first_changed` on. Never a day before today: the attendance may
-    # already have worked that day out and paid it (ATT-4). `started_code` names the refusal in the action's own words:
+    # already have worked that day out and paid it (ATT-10). `started_code` names the refusal in the action's own words:
     # a cancel of a closure that has begun says it has started.
     if first_changed < today:
         raise ValidationError("This change touches a day before today.", code=started_code)

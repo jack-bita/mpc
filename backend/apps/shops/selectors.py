@@ -6,7 +6,7 @@ the on-time cut-off and the late fine, a drawer count its tolerance, and so on. 
 day is it at this shop?", the day a rule's new value may start from at the earliest (SHOP-3). It lives
 here, with the shop, so `shops` can ask it too: `shops` sits below `people` and may not import it (ADR-0043).
 shop_rules lists every rule as the settings page shows it (SHOP-3): its value today, and its rows. closed_days answers
-"which days in this span was the shop closed?" (ATT-8), for the attendance day (ATT-4), and coming_closures lists the
+"which days in this span was the shop closed?" (ATT-8), for the attendance days (ATT-10), and coming_closures lists the
 closures the settings page shows (ATT-9).
 
 The answer comes from the shop's Setting rows (apps/shops/models.py), or, when there is no row, from the

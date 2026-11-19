@@ -3,7 +3,7 @@
 Baba adds "Msiba wa bibi" on the morning of the funeral, from today to four days on: saved. The service refuses, each
 with its code beside its box, and all at once:
 
-    first day yesterday             → closure.date_past             (a day ATT-4 may have worked out already)
+    first day yesterday             → closure.date_past             (a day ATT-10 may have worked out already)
     last day before the first       → closure.ends_before_it_starts
     a name of spaces                → closure.name_blank
     a day another closure has       → closure.overlaps               (the database's own rule, asked first)
