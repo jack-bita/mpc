@@ -1040,19 +1040,24 @@ def _check_receiver(staff: StaffMember) -> None:
 
 
 def _given_before[R: (RoleAssignment, PermissionGrant)](
-    model: type[R], given_id: uuid.UUID | None, staff: StaffMember
+    model: type[R], given_id: uuid.UUID | None, staff: StaffMember, **what: object
 ) -> R | None:
     # The row a give sent before made, if the app's id (ADR-0007) names one: a phone whose answer was lost sends the
     # same give again, and gets what the first made, never role.already_given (PPL-7). Read with the person locked: of
     # two copies of one give sent at the same moment, the second waits for the first's lock, then finds its row here.
-    # Looked for before any check, as CreateOnceMixin looks first: the row the first send made would fail the checks of
-    # its own repeat. Through the guarded manager, so another shop's row is not seen: its id clashes at the insert, and
-    # the route answers id.taken (StaffViewSet). A row of this shop given to someone else: the id is taken too, with the
-    # same answer, as nothing about that row is the business of this give.
+    # Looked for before the receiver's, the Owner role's and the giver's checks, as CreateOnceMixin looks first: the
+    # row the first send made would fail the checks of its own repeat (the shop's and the demo's come first: they hold
+    # for a repeat too). Through the guarded manager, so another shop's row is not seen: its id clashes at the insert,
+    # and the route answers id.taken (StaffViewSet). A row of this shop that is not this give, given to someone else
+    # or naming another role, key or side (`what`, by the row's own field names): the id is taken too, with the same
+    # answer, as nothing about that row is the business of this give, and a page that sent an old id with a new choice
+    # must hear that nothing was given, not get the old row back as if it were (PPL-7's review).
     if given_id is None:
         return None
     found = model.objects.filter(pk=given_id).first()
-    if found is not None and found.staff_id != staff.pk:
+    if found is not None and (
+        found.staff_id != staff.pk or any(getattr(found, field) != value for field, value in what.items())
+    ):
         raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")})
     return found
 
@@ -1113,7 +1118,9 @@ def assign_role(
         _check_people_fixed_on_demo(staff)
     with recording_changes(staff.shop_id):
         staff = _locked(staff)
-        sent_before = _given_before(RoleAssignment, given_id, staff)
+        sent_before = _given_before(
+            RoleAssignment, given_id, staff, role_id=role.pk, side_id=None if side is None else side.pk
+        )
         if sent_before is not None:
             return sent_before
         _check_receiver(staff)
@@ -1158,7 +1165,9 @@ def grant_permission(
         _check_people_fixed_on_demo(staff)
     with recording_changes(staff.shop_id):
         staff = _locked(staff)
-        sent_before = _given_before(PermissionGrant, granted_id, staff)
+        sent_before = _given_before(
+            PermissionGrant, granted_id, staff, permission=permission, side_id=None if side is None else side.pk
+        )
         if sent_before is not None:
             return sent_before
         _check_receiver(staff)

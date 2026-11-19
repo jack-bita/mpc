@@ -284,6 +284,28 @@ def test_an_id_another_worker_holds_is_taken(
         assert not RoleAssignment.objects.filter(staff=staff_a2).exists()
 
 
+def test_an_id_sent_again_with_another_choice_is_taken(
+    shop_a: Shop, side_a: Side, staff_a: StaffMember, roles_a: dict[str, Role]
+) -> None:
+    # A page that sends an old give's id with a new role, key or side must hear that nothing was given (PPL-7's
+    # review), not get the old row back as if the new choice were saved.
+    role_id, key_id = uuid.uuid7(), uuid.uuid7()
+    with shop_context(shop_a):
+        assign_role(staff_a, roles_a[RoleTemplate.SELLER], side=side_a, by=None, given_id=role_id)
+        grant_permission(staff_a, Permission.STOCK_COUNT, side=side_a, by=None, granted_id=key_id)
+        for give in (
+            lambda: assign_role(staff_a, roles_a[RoleTemplate.CASHIER], side=side_a, by=None, given_id=role_id),
+            lambda: assign_role(staff_a, roles_a[RoleTemplate.SELLER], side=None, by=None, given_id=role_id),
+            lambda: grant_permission(staff_a, Permission.SALE_BARGAIN, side=side_a, by=None, granted_id=key_id),
+            lambda: grant_permission(staff_a, Permission.STOCK_COUNT, side=None, by=None, granted_id=key_id),
+        ):
+            with pytest.raises(ValidationError) as refused:
+                give()
+            assert [error.code for error in refused.value.error_dict["id"]] == ["id.taken"]
+        assert RoleAssignment.objects.filter(staff=staff_a).count() == 1
+        assert PermissionGrant.objects.filter(staff=staff_a).count() == 1
+
+
 @pytest.mark.django_db(transaction=True)
 def test_two_copies_of_one_give_at_once_make_one_row(
     shop_a: Shop, side_a: Side, staff_a: StaffMember, roles_a: dict[str, Role]
