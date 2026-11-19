@@ -288,7 +288,8 @@ class GivenKey:
 @dataclass(frozen=True)
 class Given:
     # Everything one worker was given, whatever their status: a suspended worker holds none of it now, but holds it all
-    # again once brought back, so the page shows it (02 §5).
+    # again once brought back, so the page shows it (02 §5). Not what was taken away (PPL-7): an ended row counts
+    # nowhere, so the page shows only what would open a door.
     roles: list[GivenRole]
     keys: list[GivenKey]
 
@@ -296,15 +297,16 @@ class Given:
 def given_to(staff_ids: Collection[uuid.UUID]) -> dict[uuid.UUID, Given]:
     """Every role and extra key each of these workers was given, by their job's id, in the order given (ids are
     UUIDv7): two queries however many workers, as the workers' page lists them all at once (PPL-4). A worker given
-    nothing is there too, with nothing. Through the guarded managers, so only the open shop's rows are read."""
+    nothing is there too, with nothing; one whose every role was taken away too, as an ended row is left out (PPL-7).
+    Through the guarded managers, so only the open shop's rows are read."""
     roles: defaultdict[uuid.UUID, list[GivenRole]] = defaultdict(list)
     keys: defaultdict[uuid.UUID, list[GivenKey]] = defaultdict(list)
-    assignments = RoleAssignment.objects.filter(staff_id__in=staff_ids).order_by("id")
+    assignments = RoleAssignment.objects.filter(staff_id__in=staff_ids, ended_at__isnull=True).order_by("id")
     for row_id, staff_id, role_id, template, name, side_id in assignments.values_list(
         "id", "staff_id", "role_id", "role__template", "role__name", "side_id"
     ):
         roles[staff_id].append(GivenRole(id=row_id, role=role_id, template=template, name=name, side=side_id))
-    grants = PermissionGrant.objects.filter(staff_id__in=staff_ids).order_by("id")
+    grants = PermissionGrant.objects.filter(staff_id__in=staff_ids, ended_at__isnull=True).order_by("id")
     for row_id, staff_id, permission, side_id in grants.values_list("id", "staff_id", "permission", "side_id"):
         keys[staff_id].append(GivenKey(id=row_id, permission=permission, side=side_id))
     return {staff_id: Given(roles=roles[staff_id], keys=keys[staff_id]) for staff_id in staff_ids}

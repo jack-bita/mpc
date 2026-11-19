@@ -483,13 +483,17 @@ def _maker_breaks(device: Device, kind: DocumentType, maker: StaffMember, *, mad
     # refuses the record (accept, then flag). `device` is the laptop the record was made on: for a carried record, not
     # the one that sent it (SYNC-12).
     broken = []
-    # The key for this type, on the laptop's own side, as its counter asks (X1): a seller of Vyakula holds no key on
-    # the Dawa laptop. Among the keys the person was given, whatever their status: a suspended maker's sale is the
-    # suspension's flag, not a second one saying they hold no key. A note for SALE-2: a sale that names its own side is
-    # checked on the laptop's side all the same, until that card says otherwise. A type that names no key, a clock-in,
-    # has nothing to check here (Jack, ATT-1).
-    if kind.permission is not None and kind.permission not in given_permissions(maker).on(device.home_side_id):
-        broken.append(FlagKind.PERMISSION_BREAK)
+    # The key for this type, on the laptop's own side, as its counter asks (X1): a seller of Vyakula holds no key on the
+    # Dawa laptop. Among the keys the person was given, whatever their status: a suspended maker's sale is the
+    # suspension's flag, not a second one saying they hold no key. As they were when the record was made, by the
+    # laptop's clock, as the status below is (PPL-7): Asha's sale made before Baba took her role away, and synced after,
+    # breaks no rule. A note for SALE-2: a sale that names its own side is checked on the laptop's side all the same,
+    # until that card says otherwise. A type that names no key, a clock-in, has nothing to check here (Jack, ATT-1), and
+    # reads no keys: a laptop pushes one per worker at each arrival and departure (PPL-7's review).
+    if kind.permission is not None:
+        held_then = given_permissions(maker, at=made_at)
+        if kind.permission not in held_then.on(device.home_side_id):
+            broken.append(FlagKind.PERMISSION_BREAK)
     # Working here when they made it (X2)? A laptop offline when Baba suspended Juma doesn't know, so its PIN check
     # still lets him in. By the laptop's clock, the one time the record carries: Juma's sale made at 09:00 is his,
     # though Baba suspended him at 11:00, before the laptop synced. Leaving counts too (Jack, SYNC-5): a person's keys
@@ -505,7 +509,8 @@ def _loader_breaks(loader: StaffMember, device: Device, *, at: datetime) -> list
     # and whether they were working here, as a maker's is checked (X2), or a manager suspended while the laptop was
     # offline could still load a file edited by hand (SYNC-12's second review). The load has no time of its own the
     # server could trust, so it is checked at the push's arrival, the latest it can have been: a manager suspended
-    # between loading and the push is flagged too, for a person to look at.
+    # between loading and the push is flagged too, for a person to look at, and so is one whose device.manage was taken
+    # away in between (PPL-7), as the keys are read as they are at that moment.
     broken = []
     if Permission.DEVICE_MANAGE not in given_permissions(loader).on(device.home_side_id):
         broken.append(FlagKind.PERMISSION_BREAK)

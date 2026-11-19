@@ -17,11 +17,12 @@ Every test works inside shop_context(shop), as a visit will: the services and th
 """
 
 import pytest
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.utils import timezone
 
 from apps.core.permissions import ROLE_TEMPLATES, HeldPermissions, Permission, Person, RoleTemplate
 from apps.core.tenancy import ShopMismatch, shop_context
-from apps.people.models import Role, StaffMember
+from apps.people.models import PermissionGrant, Role, RoleAssignment, StaffMember
 from apps.people.permissions import (
     UnknownPermission,
     effective_permissions,
@@ -29,6 +30,7 @@ from apps.people.permissions import (
     held_permissions,
     require,
 )
+from apps.people.selectors import given_to
 from apps.people.services import assign_role, copy_role_templates, grant_permission, mark_left, suspend, unsuspend
 from apps.shops.models import Shop, Side
 from apps.shops.services import add_side
@@ -218,3 +220,62 @@ def test_given_permissions_read_only_the_open_shop(staff_a: StaffMember, shop_b:
     # would hide the bug in the calling code. Here it would also let someone look stronger than they are.
     with shop_context(shop_b), pytest.raises(ShopMismatch):
         given_permissions(staff_a)
+
+
+def end(row: RoleAssignment | PermissionGrant) -> None:
+    # The row ended, with when and why, as end_role and end_permission write it (PPL-7): here by hand, as these tests
+    # are about what an ended row counts for, not about who may end it (test_who_changes_a_worker.py).
+    type(row).objects.filter(pk=row.pk).update(ended_at=timezone.now(), end_reason="Amehamia Vyakula")
+
+
+def test_an_ended_role_or_key_counts_nowhere(
+    shop_a: Shop, side_a: Side, staff_a: StaffMember, roles_a: dict[str, Role]
+) -> None:
+    # Taken away, at once (02 §5, PPL-7): not in what the person holds now, nor in what they were given, which a check
+    # of who is stronger reads. The row stays, as history, and what was not taken away still counts.
+    with shop_context(shop_a):
+        seller = assign_role(staff_a, roles_a[RoleTemplate.SELLER], side=side_a, by=None)
+        count = grant_permission(staff_a, Permission.STOCK_COUNT, side=side_a, by=None)
+        kept = grant_permission(staff_a, Permission.SALE_BARGAIN, side=None, by=None)
+        end(seller)
+        end(count)
+        only_kept = HeldPermissions(every_side=frozenset({Permission.SALE_BARGAIN}))
+        assert held_permissions(staff_a) == only_kept
+        assert given_permissions(staff_a) == only_kept
+        assert effective_permissions(staff_a, side_a) == {Permission.SALE_BARGAIN}
+        assert kept.pk in PermissionGrant.objects.values_list("pk", flat=True)
+
+
+def test_an_owner_whose_role_ended_is_no_longer_the_superusers_alone(
+    shop_a: Shop, staff_a: StaffMember, staff_a2: StaffMember, roles_a: dict[str, Role]
+) -> None:
+    # Only the superuser acts on someone who holds the Owner role (_check_may_act_as, ADR-0038). Once it is taken away,
+    # they are a worker like any other: a manager with staff.manage may suspend them, as the read of the Owner role
+    # skips a row that ended.
+    with shop_context(shop_a):
+        owner = assign_role(staff_a, roles_a[RoleTemplate.OWNER], side=None, by=None)
+        assign_role(staff_a2, roles_a[RoleTemplate.MANAGER], side=None, by=None)
+        grant_permission(staff_a2, Permission.STAFF_MANAGE, side=None, by=None)
+        with pytest.raises(ValidationError) as refused:
+            suspend(staff_a, by=staff_a2, reason="Uchunguzi")
+        assert refused.value.code == "staff.superuser_only"
+
+        end(owner)
+        suspend(staff_a, by=staff_a2, reason="Uchunguzi")
+
+
+def test_the_workers_list_leaves_out_what_ended(
+    shop_a: Shop, side_a: Side, staff_a: StaffMember, roles_a: dict[str, Role]
+) -> None:
+    # The workers' page shows what each one holds once working (given_to, PPL-4): an ended row is gone from it, and
+    # what still counts stays.
+    with shop_context(shop_a):
+        ended_role = assign_role(staff_a, roles_a[RoleTemplate.SELLER], side=side_a, by=None)
+        kept_role = assign_role(staff_a, roles_a[RoleTemplate.WORKER], side=None, by=None)
+        ended_key = grant_permission(staff_a, Permission.STOCK_COUNT, side=side_a, by=None)
+        kept_key = grant_permission(staff_a, Permission.SALE_BARGAIN, side=None, by=None)
+        end(ended_role)
+        end(ended_key)
+        shown = given_to([staff_a.pk])[staff_a.pk]
+    assert [role.id for role in shown.roles] == [kept_role.pk]
+    assert [key.id for key in shown.keys] == [kept_key.pk]

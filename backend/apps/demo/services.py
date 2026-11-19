@@ -300,14 +300,15 @@ def _holds_its_keys(shop: Shop) -> bool:
     # the whole shop, as the seed gives them: as for its rules, a deploy whose seed gives a person a new key must not
     # keep a demo made that morning without it. PPL-4's deploy kept a Meneja with no staff.manage, so the workers' page
     # stayed out of every visitor's reach until the next morning (#275). The person is found by their nickname among
-    # those the system made (created_by empty): a visitor's own workers never count. Nothing a visitor does takes a
-    # seed person's key away, as no route takes a key away yet (PPL-7) and the seed's people stay as made
-    # (demo.people_fixed).
+    # those the system made (created_by empty): a visitor's own workers never count. Only keys that still count: one
+    # taken away (PPL-7) is no key, so a seed that finds one ended makes the demo again. Nothing a visitor does takes a
+    # seed person's key away, as the seed's people stay as made (demo.people_fixed).
     wanted = {person.display_name: set(person.keys) for person in PEOPLE if person.keys}
     with shop_context(shop):
         given = PermissionGrant.objects.filter(
             shop=shop,
             side__isnull=True,
+            ended_at__isnull=True,
             staff__created_by__isnull=True,
             staff__display_name__in=wanted,
         ).values_list("staff__display_name", "permission")

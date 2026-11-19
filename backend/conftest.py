@@ -106,11 +106,12 @@ def give_role() -> Callable[[StaffMember, RoleTemplate, Side | None], None]:
     # copies the six templates in; later ones reuse that copy, as a shop never has two (role.template_taken).
     # Given by the system (by=None), as a shop's first owner is: the giver's own check is PPL-3's to test. Given once:
     # a test may ask again for a role a fixture already gave, as the sweep's devices and the staff clients both give
-    # their shop's owner the Owner role (AUTH-2); a second assign_role would be refused (role.already_given).
+    # their shop's owner the Owner role (AUTH-2); a second assign_role would be refused (role.already_given). A role
+    # taken away (PPL-7) is given again, as a new row.
     def give(staff: StaffMember, template: RoleTemplate, side: Side | None) -> None:
         with shop_context(staff.shop_id):
             role = Role.objects.filter(template=template).first() or copy_role_templates(staff.shop)[template]
-            if not RoleAssignment.objects.filter(staff=staff, role=role, side=side).exists():
+            if not RoleAssignment.objects.filter(staff=staff, role=role, side=side, ended_at__isnull=True).exists():
                 assign_role(staff, role, side=side, by=None)
 
     return give

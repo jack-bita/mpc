@@ -770,6 +770,15 @@
       "back_before_left": "Siku ya kwanza haiwezi kuwa kabla ya siku yake ya mwisho ya kazi iliyopita.",
       "left_here": "Simu hii ni ya mfanyakazi aliyeondoka hapa. Mwajiri tena kutoka ukurasa wake."
     },
+    "role": {
+      "already_given": "Mtu huyu tayari ana cheo hiki upande huu.",
+      "already_ended": "Cheo hiki kimeshaondolewa.",
+      "superuser_only": "Cheo cha Mmiliki hutolewa na kuondolewa na msimamizi wa mfumo tu."
+    },
+    "permission": {
+      "already_given": "Mtu huyu tayari ana ruhusa hii upande huu.",
+      "already_ended": "Ruhusa hii imeshaondolewa."
+    },
     "password": {
       "must_change": "Chagua nenosiri lako mwenyewe kabla ya kuendelea.",
       "own": "Huwezi kuweka nenosiri lako mwenyewe hapa.",
