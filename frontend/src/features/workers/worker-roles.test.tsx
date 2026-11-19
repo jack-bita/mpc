@@ -255,6 +255,46 @@ describe("Ongeza kazi", () => {
     expect(changed?.side).toBe(VYAKULA.id);
   });
 
+  it("sends choices sent before under their first id, and a change of kind under a new one (PPL-8's review)", async () => {
+    // Every answer lost: Seller on Dawa, then Vyakula, then Dawa again, then a key on Dawa.
+    theServerHas(JUMA);
+    answer("POST", `${STAFF}${JUMA.id}/give-role/`, () => {
+      throw new TypeError("Failed to fetch");
+    });
+    answer("POST", `${STAFF}${JUMA.id}/give-key/`, () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const posts = () => sent.filter((request) => request.method === "POST");
+    async function save(count: number) {
+      fireEvent.click(button("Hifadhi"));
+      await waitFor(() => expect(posts()).toHaveLength(count));
+      await waitFor(() =>
+        expect(button("Hifadhi").hasAttribute("disabled")).toBe(false),
+      );
+    }
+
+    render(<WorkerScreen id={JUMA.id} />);
+    await openTheGive();
+    await pickRole("Muuzaji");
+    pick("Dawa");
+    await save(1);
+    pick("Vyakula");
+    await save(2);
+    pick("Dawa");
+    await save(3);
+    pick("Ruhusa moja ya ziada");
+    pick("Kuhesabu mzigo");
+    await save(4);
+
+    const [dawa, vyakula, dawaAgain, key] = await gives();
+    // Back on Dawa: Dawa's own id, so the row the first send may have made comes back, never role.already_given.
+    expect(dawaAgain?.id).toBe(dawa?.id);
+    expect(vyakula?.id).not.toBe(dawa?.id);
+    // Another kind is another give, though on the same side.
+    expect(key?.id).not.toBe(dawa?.id);
+    expect(key?.id).not.toBe(vyakula?.id);
+  });
+
   it("asks the shop's roles only once the form opens", async () => {
     theServerHas(JUMA);
 

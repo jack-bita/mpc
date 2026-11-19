@@ -14,8 +14,10 @@
 //
 // The give sends an id the app made (ADR-0007): the same id for a try of the same choices, so a give whose answer the
 // network lost, sent again, finds the row the first made and answers as now, never a second row nor
-// role.already_given; a new id once any choice changed, as the server answers an old id with new choices id.taken
-// (PPL-7's review). `side` null is every side.
+// role.already_given; a new id for choices not sent before, as the server answers an old id with new choices id.taken
+// (PPL-7's review). Each set of choices keeps its id for as long as the form is open, not only the last one (PPL-8's
+// review): Seller on Dawa sent, its answer lost; Vyakula tried; then Dawa again goes under Dawa's first id, and gets
+// the row back, where a new id would hear role.already_given for the person's own give. `side` null is every side.
 //
 // What the form sees itself is said at once, beside its question, and nothing is sent: a question with no answer
 // (`required`). The server's refusals show above the buttons, each in its sentence: role.already_given and
@@ -119,8 +121,8 @@ export function GiveForm({
   // EVERY_SIDE or a side's id; null: none picked yet.
   const [pickedSide, setPickedSide] = useState<string | null>(null);
   const [own, setOwn] = useState<Checks>({});
-  // The id of the last send, with the choices it carried (closure-form.tsx).
-  const lastSend = useRef<{ id: string; carried: string } | null>(null);
+  // The id each set of choices was sent under, by those choices (see the top). A handful at most: a form is short-lived.
+  const sentIds = useRef(new Map<string, string>());
 
   // The title takes the keyboard as the form opens, so a screen reader says what opened where the button was.
   const title = useRef<HTMLHeadingElement>(null);
@@ -199,18 +201,18 @@ export function GiveForm({
     if (sideNow === undefined) checks.side = "required";
     setOwn(checks);
     if (giving === undefined || sideNow === undefined) return;
-    // The same id for a try of the same choices; a new one once any changed (see the top).
+    // The same id for choices sent before, whenever; a new one for choices never sent (see the top).
     const carried = JSON.stringify([
       giving.kind,
       giving.kind === "role" ? giving.role.id : giving.key,
       sideNow,
     ]);
-    if (lastSend.current?.carried !== carried)
-      lastSend.current = { id: newId(), carried };
+    const id = sentIds.current.get(carried) ?? newId();
+    sentIds.current.set(carried, id);
     const what =
       giving.kind === "role" ? roleName(giving.role) : keyName(giving.key);
     give.mutate({
-      id: lastSend.current.id,
+      id,
       giving,
       side: sideNow,
       done: t("done", {
