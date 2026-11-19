@@ -7,12 +7,14 @@
     Juma   in      Laptop ya Dawa  07:30          —             unverified   a sign the clock moved: a manager decides
 
 These tests pin the rules the database keeps on it (AttendanceEvent, apps/staffpay/models.py): a line is never changed
-or deleted, only voided once, with who and why; its trusted time fits its check; and the shop guard. How a clock-in's
+or deleted, only voided once, with who and why; its trusted time fits its check; only an unverified one names the
+record its time disagrees with; and the shop guard. How a clock-in's
 time is checked is test_time_check.py's, and how the push saves one is the clock document's tests'. Fake data only:
 the repo is public.
 """
 
 import datetime as dt
+import uuid
 
 import pytest
 from django.db import IntegrityError, connection, transaction
@@ -170,6 +172,36 @@ def test_each_reason_for_no_photo_is_kept(shop_a: Model, device_a: ShopScoped, s
         _event(shop_a, device_a, staff_a, device_seq=device_seq, no_photo=reason).save()
     with shop_context(shop_a):
         assert sorted(AttendanceEvent.objects.values_list("no_photo", flat=True)) == sorted(reasons)
+
+
+def test_only_an_unverified_tap_disagrees(shop_a: Model, device_a: ShopScoped, staff_a: StaffMember) -> None:
+    # Juma's Toka says 18:45, then Asha's says 18:30: her tap keeps the id of his, the record its time disagrees with,
+    # and no time is trusted for it (ATT-11). A tap whose time is trusted disagrees with nothing, so a line naming a
+    # record and keeping a time, as a bug in the saving code could write it, is refused.
+    jumas_toka = uuid.uuid7()
+    with (
+        pytest.raises(IntegrityError, match="staffpay_attendanceevent_disagrees_only_unverified"),
+        transaction.atomic(),
+    ):
+        _event(shop_a, device_a, staff_a, device_seq=1, disagrees_with=jumas_toka).save()
+    ashas = _event(
+        shop_a,
+        device_a,
+        staff_a,
+        device_seq=2,
+        time_check=TimeCheck.UNVERIFIED,
+        trusted_time=None,
+        disagrees_with=jumas_toka,
+    )
+    ashas.save()
+    # Written once, with the line, as the rest of it is: the void rule keeps it as it was (ADR-0021), so nobody can
+    # later take Juma's day out of review by clearing it.
+    with (
+        shop_context(shop_a),
+        pytest.raises(IntegrityError, match="only the void stamp may change"),
+        transaction.atomic(),
+    ):
+        AttendanceEvent.objects.filter(pk=ashas.pk).update(disagrees_with=None)
 
 
 def test_the_trusted_time_rule_holds_in_any_sessions_time_zone(

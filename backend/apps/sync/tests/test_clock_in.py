@@ -4,13 +4,15 @@ the attendance book (ATT-1; 02 §12, 03 §6.3, §6.6).
     sent at once                         → saved with the server's time                     server
     sent later, and the evidence agrees  → saved with the laptop's time                     device_ok
     sent later, and the clock moved back → saved with no trusted time, and a flag           unverified + unverified_time
+                                           and the record its time disagrees with (ATT-11)  + disagrees_with
     by a worker suspended meanwhile      → saved, and flagged by the push (SYNC-5)          + suspended_staff_activity
     by anyone working here, any laptop   → no key needed (Jack, ATT-1)
 
 Through the push service, as the route runs it, so each test meets the whole path: the list of document types, the
-push's own checks, the saving code (apps/staffpay/documents.py) and the time check (apps/staffpay/calculations.py).
-Here in `sync`, not `staffpay`, as only the layer above may call the push (ADR-0043). The time check's every case is
-apps/staffpay/tests/test_time_check.py's. Fake data only: the repo is public.
+push's own checks, the saving code (apps/staffpay/documents.py) and the time check (apps/staffpay/calculations.py). Here
+in `sync`, not `staffpay`, as only the layer above may call the push (ADR-0043); last, two taps from the push to the
+book of days (ATT-11). The time check's every case is apps/staffpay/tests/test_time_check.py's. Fake data only: the repo
+is public.
 """
 
 import dataclasses
@@ -22,15 +24,18 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from django.db.models import Model
+from django.utils import timezone
 
 from apps.control.models import Flag, FlagKind, FlagPerson
 from apps.core.permissions import RoleTemplate
+from apps.core.settings_registry import ATTENDANCE_ON
 from apps.core.tenancy import shop_context
-from apps.people.models import Device, StaffMember
-from apps.people.services import suspend
-from apps.shops.models import Shop, Side
+from apps.people.models import Device, StaffMember, User
+from apps.people.services import add_staff, suspend
+from apps.shops.models import Setting, Shop, Side
 from apps.shops.services import add_side
-from apps.staffpay.models import AttendanceEvent, TimeCheck
+from apps.staffpay.models import AttendanceEvent, DayStatus, TimeCheck
+from apps.staffpay.services import work_out_days
 from apps.sync.models import PushedDocument
 from apps.sync.push import Answer, Sent, push
 
@@ -197,6 +202,37 @@ def test_a_clock_moved_forward_names_both_workers(
     assert (flag.subject_id, _named(flag)) == (ashas.pk, [staff_a.pk, staff_a2.pk])
 
 
+def test_a_clock_in_keeps_the_record_it_disagrees_with(
+    shop_a: Model, device_a: Device, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # Juma's Toka says 17:00, then Asha's, the record after it, says 16:00. The flag about hers names him too, but a
+    # flag names people, not records: so her tap keeps the id of his, the record its time disagrees with, for the book
+    # to send his day to review as well (Jack, ATT-11: A). His own tap disagrees with nothing.
+    jumas_toka = _clock(1, staff_a2, arusha(17, 0), kind="out")
+    taps = [jumas_toka, _clock(2, staff_a, arusha(16, 0), kind="out")]
+    _push(device_a, taps, sent_at=arusha(18, 0), received_at=arusha(18, 0))
+    jumas, ashas = _events(shop_a)
+    assert (ashas.time_check, ashas.disagrees_with) == (TimeCheck.UNVERIFIED, jumas_toka.id)
+    assert (jumas.time_check, jumas.disagrees_with) == (TimeCheck.DEVICE_OK, None)
+
+
+def test_another_sign_keeps_no_record(
+    shop_a: Model, device_a: Device, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # Neema taps Toka at 14:00. Then Juma takes the laptop off the network, sets it to 17:00, taps Toka, and sets it
+    # back; it sends at 15:01. His Toka is unverified for being after the laptop's own clock as it sent, not for
+    # disagreeing with Neema's, which came before it with an earlier time: so it keeps no record, and Neema's day is
+    # not sent to review for his trick.
+    taps = [
+        _clock(1, staff_a2, arusha(14, 0), kind="out", last_server_time=arusha(13, 0)),
+        _clock(2, staff_a, arusha(17, 0), kind="out", last_server_time=arusha(14, 0)),
+    ]
+    _push(device_a, taps, sent_at=arusha(15, 1), received_at=arusha(15, 1))
+    neemas, jumas = _events(shop_a)
+    assert (neemas.time_check, jumas.time_check) == (TimeCheck.DEVICE_OK, TimeCheck.UNVERIFIED)
+    assert (neemas.disagrees_with, jumas.disagrees_with) == (None, None)
+
+
 def test_a_record_before_by_nobody_known_names_only_the_worker(
     shop_a: Model, device_a: Device, staff_a: StaffMember
 ) -> None:
@@ -316,3 +352,61 @@ def test_a_clock_in_id_another_shop_holds_is_refused(
     assert _events(shop_a) == []
     [kept] = _events(shop_b)
     assert (kept.staff_id, kept.client_time) == (staff_b.pk, arusha(7, 20))
+
+
+# From the push to the book of days (ATT-11): the push's two halves the book reads, the suspension's flag on a line in
+# the answer log and the record a tap keeps, proven to join, as the book's own tests build each half by hand.
+
+
+def _worker_since_january(shop: Shop, name: str) -> StaffMember:
+    # A worker whose first day was long ago, and attendance switched on long ago (ADR-0033), so 10 November is one of
+    # their days: staff_a's first day is today, and every tap before it would need review for that reason alone.
+    with shop_context(shop):
+        if not Setting.objects.filter(key=ATTENDANCE_ON.key).exists():
+            switch = Setting(shop=shop, key=ATTENDANCE_ON.key, value="true", effective_from=dt.date(2026, 1, 1))
+            switch.full_clean()
+            switch.save()
+        user = User.objects.create_user(full_name=f"{name} Demo")
+        return add_staff(shop=shop, user=user, display_name=name, started_on=dt.date(2026, 1, 1), by=None)
+
+
+def _book(shop: Shop, day: dt.date) -> dict[str, str]:
+    # Each worker's status on `day`, as the book works it out, by nickname.
+    with shop_context(shop):
+        return {kept.staff.display_name: kept.status for kept in work_out_days(shop, day, day)}
+
+
+def test_a_suspended_workers_pushed_tap_sends_its_day_to_review(
+    shop_a: Shop, device_a: Device, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Baba suspends Juma on Monday 9 November at 11:00, by the server's clock, which the audit trail stamps (fixed here
+    # to that hour). The Dawa laptop, offline, doesn't know: on Tuesday Juma clocks in at 07:20 and out at 18:45, a
+    # full day on time by the rule. The push flags the taps on their lines; the book reads those flags, and his Tuesday
+    # needs review.
+    juma = _worker_since_january(shop_a, "Juma")
+    with monkeypatch.context() as clock:
+        clock.setattr(timezone, "now", lambda: dt.datetime(2026, 11, 9, 11, 0, tzinfo=ARUSHA))
+        with shop_context(shop_a):
+            suspend(juma, by=None, reason="Uchunguzi wa droo")
+    taps = [_clock(1, juma, arusha(7, 20)), _clock(2, juma, arusha(18, 45), kind="out")]
+    _push(device_a, taps, sent_at=arusha(19, 0), received_at=arusha(19, 0))
+    assert [event.time_check for event in _events(shop_a)] == [TimeCheck.DEVICE_OK, TimeCheck.DEVICE_OK]
+    assert _book(shop_a, arusha(0, 0).date()) == {"Juma": DayStatus.NEEDS_REVIEW}
+
+
+def test_two_pushed_taps_that_disagree_send_both_days_to_review(shop_a: Shop, device_a: Device) -> None:
+    # Tuesday 10 November on the Dawa laptop, offline all day, sent at 19:00. Juma and Asha come at 07:20 and 07:25.
+    # Juma's Toka says 18:45, then Asha's, the laptop's next record, says 18:30: a clock moved, and nobody knows
+    # whose. Hers has no trusted time; his keeps the laptop's, and alone would be a full day. Her tap keeps his id, and
+    # the book sends both days to review (Jack, ATT-11: A).
+    juma, asha = _worker_since_january(shop_a, "Juma"), _worker_since_january(shop_a, "Asha")
+    taps = [
+        _clock(1, juma, arusha(7, 20)),
+        _clock(2, asha, arusha(7, 25)),
+        _clock(3, juma, arusha(18, 45), kind="out"),
+        _clock(4, asha, arusha(18, 30), kind="out"),
+    ]
+    _push(device_a, taps, sent_at=arusha(19, 0), received_at=arusha(19, 0))
+    jumas_toka, ashas_toka = _events(shop_a)[2:]
+    assert (jumas_toka.time_check, ashas_toka.disagrees_with) == (TimeCheck.DEVICE_OK, jumas_toka.pk)
+    assert _book(shop_a, arusha(0, 0).date()) == {"Asha": DayStatus.NEEDS_REVIEW, "Juma": DayStatus.NEEDS_REVIEW}

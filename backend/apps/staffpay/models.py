@@ -87,6 +87,14 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
     # was as it sent the push (its clock minus the server's: 40 minutes slow is minus 40 minutes).
     last_server_time = models.DateTimeField()
     clock_error = models.DurationField()
+    # The record this tap's time disagrees with (ATT-11): the laptop's record numbered just before it, whose time is
+    # later. Juma's Toka says 18:45, then Asha's says 18:30: a clock moved between the two, and the server can't tell
+    # whose, so hers is `unverified`, and its flag names him too (ATT-1's review). A flag names people, not records, so
+    # the tap keeps that record's id here, for the book to send his day to review as well (Jack, ATT-11: A). The
+    # record's own id, as the laptop made it, not its line's in the answer log: a tap's id when it is one, but it can
+    # be any record the laptop made, a sale once SALE-2 comes, so no foreign key, and only a tap's id sends a day.
+    # Empty for every other tap, and for those saved before ATT-11, as a ledger's lines are never filled in later.
+    disagrees_with = models.UUIDField(null=True, blank=True)
     # Why the tap has no photo, or empty when its photo came (NoPhoto, ATT-3). Written once with the line, as the rest
     # of it is: a photo that arrives late changes nothing here, as its row is the one that waits (CTRL-3).
     no_photo = models.CharField(max_length=9, choices=NoPhoto, blank=True)
@@ -139,6 +147,12 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
                 ),
                 name="staffpay_attendanceevent_void_complete",
             ),
+            # Only a tap whose time isn't trusted names a record it disagrees with (ATT-11): a tap with a trusted time
+            # naming one would be a bug in the saving code, which keeps the record only for that sign.
+            models.CheckConstraint(
+                condition=models.Q(disagrees_with__isnull=True) | models.Q(time_check=TimeCheck.UNVERIFIED),
+                name="staffpay_attendanceevent_disagrees_only_unverified",
+            ),
             # Only the reasons there are, or none (ATT-3). Whether a photo came can't be a rule here: its row is in
             # another table, and comes in the same transaction, after the line it is pinned to.
             models.CheckConstraint(
@@ -149,7 +163,17 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
         # the shop's midnight starting the month to the one ending it. Without it, that read would search every
         # shop's lines. Leads with `shop`, as every index does. The few with no trusted time (`unverified`) are read
         # by the laptop's time instead, the only one they have; they are rare, so they need no index of their own.
-        indexes = [models.Index(fields=["shop", "trusted_time"], name="staffpay_event_by_trusted_time")]
+        indexes = [
+            models.Index(fields=["shop", "trusted_time"], name="staffpay_event_by_trusted_time"),
+            # How the book finds, for each tap of a month, whether a later tap disagrees with it (ATT-11): the shop's
+            # lines by the record they disagree with. Only the lines that keep one, as few do (a laptop's clock that
+            # moved), so the index stays small however many taps the shop keeps.
+            models.Index(
+                fields=["shop", "disagrees_with"],
+                name="staffpay_event_by_disagreement",
+                condition=models.Q(disagrees_with__isnull=False),
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.kind} {self.client_time:%Y-%m-%d %H:%M}"

@@ -317,6 +317,38 @@ def test_a_carried_clock_in_waits_for_a_manager_naming_only_its_worker(
     assert named == [staff_a.pk]
 
 
+def test_a_carried_clock_in_keeps_no_record_it_disagrees_with(
+    shop_a: Model, device_a: Device, vyakula_laptop: Device, staff_a: StaffMember, neema: StaffMember
+) -> None:
+    # Neema's Toka on Dawa at 08:00 reached the server; then Dawa died, and Asha's tap, its #2, says 07:30. Sent from
+    # Dawa, that would be a later record with an earlier time, and Asha's tap would keep Neema's as the one it
+    # disagrees with (ATT-11). Rescued and sent by Vyakula, its time came from a file, and is checked against no
+    # record before (SYNC-12's review): it keeps none, so Neema's day is not sent to review for a file.
+    def clock(seq: int, maker: StaffMember, tapped: dt.datetime, kind: str, carried: Carried | None) -> Sent:
+        return Sent(
+            id=uuid.uuid7(),
+            type="clock",
+            schema_version=1,
+            device_seq=seq,
+            client_time=tapped,
+            created_by=maker.pk,
+            payload={"kind": kind, "last_server_time": "2026-11-10T03:50:00Z"},
+            carried_from=carried,
+        )
+
+    def send(laptop: Device, sent: Sent, at: dt.datetime) -> None:
+        with shop_context(laptop.shop_id):
+            push(laptop, [sent], received_at=at, sent_at=at, unsent_count=0, app_version="2026.11.1", outages=[])
+
+    eight = dt.datetime(2026, 11, 10, 5, 0, tzinfo=dt.UTC)
+    send(device_a, clock(1, neema, eight, "out", None), eight + dt.timedelta(hours=1))
+    rescued = clock(1, staff_a, eight - dt.timedelta(minutes=30), "in", Carried(device_a.pk, 2, neema.pk))
+    send(vyakula_laptop, rescued, eight + dt.timedelta(hours=2))
+    with shop_context(shop_a):
+        event = AttendanceEvent.objects.get(pk=rescued.id)
+    assert (event.time_check, event.disagrees_with) == (TimeCheck.UNVERIFIED, None)
+
+
 def test_a_loader_who_was_suspended_is_flagged_and_the_record_kept(
     shop_a: Model, device_a: Device, vyakula_laptop: Device, staff_a: StaffMember, neema: StaffMember
 ) -> None:

@@ -3,33 +3,38 @@
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
     Juma   Mon 16 Nov  needs_review  0.00    07:20  —          no Toka: a manager decides (ATT-6)
+    Juma   Tue 17 Nov  needs_review  0.00    07:20  18:45      suspended on Monday: a tap in doubt (ATT-11)
     Asha   Sun 22 Nov  off           0.00    —      —          the shop is shut on Sundays and closed days
 
 The day's rule (work_out_day, apps/staffpay/calculations.py) says what one day was; the book finds each day's taps and
-rules, hands them in, and keeps the answer, one row per job and date (AttendanceDay). Nothing here is typed by a person:
-the days are answers, worked out again each time they are asked for, as a tap can come late from a laptop that was
-offline, a manager can void a tap (ATT-6), and a job's first or last day can be moved (PPL-10). ATT-5 asks for a month
-to show, WAGE-2 for a month to pay, ATT-7 each night. No route of its own, and no line in the change log: no laptop
-keeps a copy of the days.
+rules, hands them in, and keeps the answer, one row per job and date (AttendanceDay). Three kinds of day the rule can't
+see go to review: a closed day with a tap (ATT-10); and a day with a tap in doubt, or outside a job's days with a tap
+(ATT-11). Nothing here is typed by a person: the days are answers, worked out again each time they are asked for, as a
+tap can come late from a laptop that was offline, a manager can void a tap (ATT-6), and a job's first or last day can be
+moved (PPL-10). ATT-5 asks for a month to show, WAGE-2 for a month to pay, ATT-7 each night. No route of its own, and no
+line in the change log: no laptop keeps a copy of the days.
 """
 
 import datetime as dt
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, replace
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 
+from apps.control.models import Flag, FlagKind
 from apps.core.acting import acting_as
+from apps.core.links import table_of
 from apps.core.settings_registry import ATTENDANCE_ON
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.people.models import StaffMember
 from apps.shops.models import Shop
 from apps.shops.selectors import closed_days, shop_settings_between, shop_today
 from apps.staffpay.calculations import NO_FINE, DayResult, Tap, shop_minute, work_out_day
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus
+from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, TimeCheck
 from apps.staffpay.selectors import day_rules_between, rules_as_text
 
 # Sunday, as Python numbers the days of the week (Monday is 0). Always off, and not paid: Sunday work is a deal between
@@ -49,12 +54,18 @@ class _TheBook:
 # or the shop, which say which day it is; nor `created_at`, which says when the day was first kept.
 WORKED_OUT = ["status", "fine", "first_in", "first_out", "rules_used"]
 
+# The answer log's link code (apps/core/links.py): the push keeps a line there for each document a laptop sends, and
+# flags a suspended or gone worker's tap on that line (X2), not on the tap. The log is a table of `sync`, a layer above
+# `staffpay`, so the book names it by its code and asks Django for the table at run time, never importing it
+# (ADR-0043). A code that named no table would fail loudly at the first read (UnknownLinkType).
+ANSWER_LOG = "pushed_document"
+
 
 def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceDay]:
     """Work out and keep each job's day from `first` to `last`, both counted, and answer them, date by date. Only the
     days that count: while attendance is switched on, from each job's first day to its last, and before the shop's
-    today. A day that comes out as it was kept is not written again. The shop must be open: the visit's own, or a
-    system job's."""
+    today; and a day outside a job's days that it tapped on, for a person to decide (ATT-11). A day that comes out as
+    it was kept is not written again. The shop must be open: the visit's own, or a system job's."""
     # A shop must be open, and be this one, as for get_setting and closed_days: through the guard, another shop's taps
     # would be hidden, and its workers' days kept as absent without a word. So fail closed (ADR-0022).
     opened = current_shop()
@@ -85,7 +96,7 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         # as its link to the job takes only a KEY SHARE lock, which this one lets through; a change to a job's own row,
         # a PIN or a fix (PPL-10), waits for the run, a moment.
         jobs = list(StaffMember.objects.filter(shop=shop).order_by("pk").select_for_update(no_key=True))
-        taps = _taps(shop, first, last, zone)
+        taps, in_doubt = _taps(shop, first, last, zone)
         # The days kept before, each with its job read in the same query: the month page (ATT-5) names each day's
         # worker, and a day answered as it was kept would otherwise read its job alone, one query per day, some 600 for
         # a month of 20 workers. A day kept for the first time carries its job already.
@@ -105,36 +116,44 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
             # not even an off one.
             if not switched_on[day][ATTENDANCE_ON.key]:
                 continue
-            # Only the jobs that ran on that date: from the first day to the last, both counted (02 §5). A worker
-            # added on the 10th has no absent days before it; one who left on Friday has none after. The first day as
-            # it is now, as PPL-10 can fix it: a day kept before a first day moved later is no longer answered, and its
-            # row stays (rule 7), counted nowhere (ATT-11 decides what such a day shows).
-            working = [job for job in jobs if job.started_on <= day and (job.left_on is None or day <= job.left_on)]
-            # Sunday is off for every job, whatever its taps: the shop is shut, and Sunday work is paid outside the
-            # system (01 §8.1). No rule is read for it.
+            # Sunday is off for every job that ran on it, whatever its taps, in doubt or not: the shop is shut, and
+            # Sunday work is paid outside the system (01 §8.1). No rule is read for it. A job outside its days keeps
+            # no Sunday at all: off pays nothing, so there is nothing for anyone to decide.
             if day.weekday() == SUNDAY:
-                answered.extend(_off(shop, job, day) for job in working)
+                answered.extend(_off(shop, job, day) for job in jobs if _ran_on(job, day))
                 continue
             # The day's rules, the same for every job (A1).
             rules = rules_by_day[day]
             rules_used = rules_as_text(rules)
-            for job in working:
+            for job in jobs:
                 # Only the job's own taps: Asha's on Asha's day, even on a laptop Juma used too. With none, the rule
-                # answers absent. Each tap as it is, a suspended or gone worker's too: the push flags such a clock-in
-                # on its line in the answer log (suspended_staff_activity, X2), not on the event, so until ATT-11 reads
-                # those flags, Juma's tap the morning after his suspension counts as any other. Nothing is paid from
-                # the book before then: WAGE-2 comes after ATT-11.
+                # answers absent.
                 job_taps = taps.get((job.pk, day), [])
+                # Outside the job's days, before its first or after its last (02 §5): a worker added on the 10th has
+                # no absent days before it; one who left on Friday has none after. The days as they are now, as PPL-10
+                # can move them: a day kept before a first day moved later is no longer answered, and its row stays
+                # (rule 7), counted nowhere. Unless the job tapped on it: Neema, added from the 10th, came on the 10th
+                # and the 11th, and a manager then moved her first day to the 12th. Her taps say she came, her first
+                # day says she didn't, so a person decides (Jack, ATT-11: A), below.
+                outside = not _ran_on(job, day)
+                if outside and not job_taps:
+                    continue
                 if day in closed and not job_taps:
                     # A closed day is off, and not paid, like Sunday (ATT-8).
                     answered.append(_off(shop, job, day))
                     continue
                 result = work_out_day(job_taps, rules)
-                if day in closed:
-                    # But a worker tapped on it all the same: the owner closed the shop at 10:00 for a funeral, and
-                    # Asha had clocked in at 07:20. Nobody can tell from the taps whether her morning is paid, so the
-                    # owner or a manager decides (Jack, ATT-10; ATT-6), and the day takes no fine until then. Her taps'
-                    # minutes stay, which the rule read, to show when she came; the rules too, for whoever decides.
+                # Three kinds of day the rule can't see, as each depends on more than the taps' kinds and minutes.
+                # Each goes to the owner or a manager (ATT-6), and takes no fine until then. Its taps' minutes stay,
+                # which the rule read, to show when the worker came; the rules too, for whoever decides.
+                # - A closed day a worker tapped on all the same: the owner closed the shop at 10:00 for a funeral, and
+                #   Asha had clocked in at 07:20. Nobody can tell from the taps whether her morning is paid (Jack,
+                #   ATT-10).
+                # - A day with a tap in doubt (ATT-11): Juma's, made the morning after Baba suspended him, on a laptop
+                #   offline that didn't know yet (X2), or the one Asha's later tap disagrees with. His tap is real, but
+                #   whether to pay for it is a person's call.
+                # - A day outside the job's days that it tapped on, as above (ATT-11).
+                if day in closed or (job.pk, day) in in_doubt or outside:
                     result = replace(result, status=DayStatus.NEEDS_REVIEW, fine=NO_FINE)
                 answered.append(_worked_out(shop, job, day, result, rules_used))
         # Kept as the book, never as the person whose visit asked for the month. The edit history's trigger names
@@ -145,6 +164,11 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         # one (T1).
         with acting_as(_TheBook(shop.pk), device=None):
             return _keep(answered, kept)
+
+
+def _ran_on(job: StaffMember, day: dt.date) -> bool:
+    # Whether `day` is one of the job's days: from its first day to its last, both counted (02 §5), as they are now.
+    return job.started_on <= day and (job.left_on is None or day <= job.left_on)
 
 
 def _off(shop: Shop, job: StaffMember, day: dt.date) -> AttendanceDay:
@@ -179,14 +203,52 @@ def _worked_out(
     )
 
 
-def _taps(shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo) -> dict[tuple[uuid.UUID, dt.date], list[Tap]]:
-    # Each job's taps on each date from `first` to `last`, as the rule reads them. A day's edges are the shop's own
-    # midnights, not UTC's: Asha's tap at 21:30 UTC on Monday is Tuesday's, at 00:30 in Arusha. So the span is read from
-    # the midnight starting its first day to the one ending its last, each a moment with its zone.
+def _answer_log() -> Any:
+    # The answer log's table, asked of Django by its link code. Any, not its model: to know the table's columns, the
+    # type checker would have to import `sync`'s model, which the layers forbid (ADR-0043). So its `document_id` is
+    # proven by the tests instead: the book's (test_a_suspended_workers_tap_needs_review) and the push's own, which
+    # finds a clock-in's line by it (test_suspended_worker_clock_in_flagged, apps/sync/tests/test_clock_in.py).
+    return table_of(ANSWER_LOG)
+
+
+# A day of a job: the job's id and the shop's date.
+type _JobDay = tuple[uuid.UUID, dt.date]
+
+
+def _taps(shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo) -> tuple[dict[_JobDay, list[Tap]], set[_JobDay]]:
+    # Each job's taps on each date from `first` to `last`, as the rule reads them, and the days with a tap in doubt,
+    # which a person must decide (ATT-11). A day's edges are the shop's own midnights, not UTC's: Asha's tap at 21:30
+    # UTC on Monday is Tuesday's, at 00:30 in Arusha. So the span is read from the midnight starting its first day to
+    # the one ending its last, each a moment with its zone.
     start = dt.datetime.combine(first, dt.time.min, tzinfo=zone)
     end = dt.datetime.combine(last + dt.timedelta(days=1), dt.time.min, tzinfo=zone)
+    # A tap whose maker wasn't working when they made it: Baba suspended Juma at 11:00, and the laptop, offline, let his
+    # Ingia through the next morning. The push flags it on the tap's line in the answer log (suspended_staff_activity,
+    # X2), not on the tap, whose own time check can be `server` or `device_ok`, so the tap alone looks like any other.
+    # Its line is the one whose document_id is the tap's own id. Whatever the flag's status: a manager who closes it has
+    # looked at the tap, not decided the day, which is ATT-6's override. Only that kind: a device_gap flag on the same
+    # line, a record still missing, says nothing of whether the worker came. Asked inside the taps' own read (EXISTS),
+    # so a month still takes one query for its taps, whatever their number; through the guard, as every read is
+    # (ADR-0022), and through the log's one-line-per-document rule, which leads with `shop`, so each tap's line is one
+    # lookup. The flags are read once per run, not once per tap: every flag of the shop, kept or not by its kind, as no
+    # index has the kind. A shop raises a few a day, so a month's run reads some hundreds, which is cheap; an index on
+    # the kind can come should a shop raise many more (03 §6.6).
+    suspension_flags = Flag.objects.filter(
+        shop=shop, kind=FlagKind.SUSPENDED_STAFF_ACTIVITY, subject_type=ANSWER_LOG
+    ).values("subject_id")
+    maker_not_working = Exists(
+        _answer_log()._default_manager.filter(shop=shop, document_id=OuterRef("pk")).filter(pk__in=suspension_flags)
+    )
+    # A tap a later one's time disagrees with: Juma's Toka says 18:45, then Asha's, the laptop's next record, says
+    # 18:30. A clock moved between the two, and nobody knows whose, so hers has no trusted time, and keeps his id
+    # (`disagrees_with`, ATT-11): his time can be the wrong one too (Jack: A). Any tap of the shop that keeps his id,
+    # wherever it fell: hers can fall on another day, or another month, by the laptop's clock, the only time it has.
+    # Voided or not: a void says a tap counts for nothing, not that the laptop's clock was right. Through the small
+    # index of the taps that keep a record (staffpay_event_by_disagreement), each tap's question one lookup.
+    disagreed_with = Exists(AttendanceEvent.objects.filter(shop=shop, disagrees_with=OuterRef("pk")))
     lines = (
-        # A voided tap counts for nothing (T2): a clock-in tapped twice by mistake, voided by a manager (ATT-6).
+        # A voided tap counts for nothing (T2): a clock-in tapped twice by mistake, voided by a manager (ATT-6). Nor
+        # does it send its day to review: Juma's flagged tap, once voided, leaves his day absent.
         AttendanceEvent.objects.filter(shop=shop, voided_at__isnull=True)
         .filter(
             # By the time the server trusts, never the laptop's, whose clock anyone can move (ATT-1): through the
@@ -195,17 +257,26 @@ def _taps(shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo) -> dict[tup
             Q(trusted_time__gte=start, trusted_time__lt=end)
             | Q(trusted_time__isnull=True, client_time__gte=start, client_time__lt=end)
         )
-        .values_list("staff_id", "kind", "trusted_time", "client_time")
+        .annotate(maker_not_working=maker_not_working, disagreed_with=disagreed_with)
+        .values_list(
+            "staff_id", "kind", "trusted_time", "client_time", "time_check", "maker_not_working", "disagreed_with"
+        )
     )
-    taps: dict[tuple[uuid.UUID, dt.date], list[Tap]] = defaultdict(list)
-    for staff_id, kind, trusted_time, client_time in lines:
+    taps: dict[_JobDay, list[Tap]] = defaultdict(list)
+    in_doubt: set[_JobDay] = set()
+    for staff_id, kind, trusted_time, client_time, time_check, not_working, disputed in lines:
         # Its date on the shop's calendar, by its trusted time, or by the laptop's for one with none.
         day = (trusted_time if trusted_time is not None else client_time).astimezone(zone).date()
         # Its minute on the shop's clock, its seconds dropped, as the counter showed it (shop_minute): 07:35:40 is
         # 07:35, on time. None for a tap with no trusted time, which sends the day to review (ATT-4).
         minute = shop_minute(trusted_time, zone) if trusted_time is not None else None
         taps[(staff_id, day)].append(Tap(ClockKind(kind), minute))
-    return taps
+        # In doubt: made while its worker wasn't working, or timed by a laptop clock a later tap disagrees with. Only
+        # by the laptop's clock (`device_ok`): a tap sent at once has the server's time, which no laptop's clock can
+        # make wrong, and one with no trusted time sends its day to review already (ATT-4).
+        if not_working or (disputed and time_check == TimeCheck.DEVICE_OK):
+            in_doubt.add((staff_id, day))
+    return taps, in_doubt
 
 
 def _keep(answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], AttendanceDay]) -> list[AttendanceDay]:

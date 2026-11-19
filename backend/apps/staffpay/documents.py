@@ -53,6 +53,8 @@ class Pushed(Protocol):
     @property
     def made_before_by(self) -> uuid.UUID | None: ...
     @property
+    def record_before(self) -> uuid.UUID | None: ...
+    @property
     def created_by(self) -> StaffMember: ...
     @property
     def carried(self) -> bool: ...
@@ -148,6 +150,11 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
             carried=document.carried,
         )
     )
+    # Its time later than this tap's, the record before it says a clock moved between the two (sign 1), not whose: so
+    # the tap keeps that record's id, and the book sends the day of that record, a tap of Juma's, to review as well
+    # (Jack, ATT-11: A). Only for that sign: unverified for another, Juma's Toka timed after the laptop sent it, the
+    # tap disagrees with no record, and Neema's day before it stays as it was.
+    disagrees_with = document.record_before if Sign.RECORD_BEFORE_IS_LATER in checked.signs else None
     with recording_changes(shop_id):
         event = AttendanceEvent(
             id=document.id,
@@ -163,6 +170,7 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
             time_check=checked.time_check,
             last_server_time=payload["last_server_time"],
             clock_error=checked.clock_error,
+            disagrees_with=disagrees_with,
             no_photo=no_photo,
         )
         # An INSERT, never an UPDATE: the id comes from the laptop, and one another shop already holds must clash on

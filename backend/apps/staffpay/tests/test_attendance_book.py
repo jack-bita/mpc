@@ -7,15 +7,15 @@ rule from that day's taps and that day's rules, and kept (ATT-10; 02 §12).
 
 First the rules the database keeps on a day (AttendanceDay, apps/staffpay/models.py): one per job and date, a day that
 fits its status, and never a delete. Then the book (work_out_days, apps/staffpay/services.py): which taps a day reads,
-on which date, with which rules, and how a day worked out again is kept. What a day was, from its taps, is the rule's,
-in test_attendance_day.py. Times are Arusha's, three hours ahead of UTC. The fines are the demo's made-up 500 and 1,500
-(rule 10). Fake data only: the repo is public.
+on which date, with which rules, and how a day worked out again is kept. Last, the taps in doubt (ATT-11), each sending
+its day to review. What a day was, from its taps, is the rule's, in test_attendance_day.py. Times are Arusha's, three
+hours ahead of UTC. The fines are the demo's made-up 500 and 1,500 (rule 10). Fake data only: the repo is public.
 """
 
 import datetime as dt
 import itertools
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -23,8 +23,11 @@ from django.db import IntegrityError, connection, transaction
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.control.models import EditEvent
+from apps.control.models import EditEvent, Flag, FlagKind
+from apps.control.services import dismiss_flag, raise_flag
 from apps.core.acting import acting_as
+from apps.core.links import table_of
+from apps.core.models import ShopScoped
 from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SettingKey
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import Device, StaffMember, User
@@ -614,7 +617,8 @@ def test_today_is_the_shops_today_not_utcs(
 def test_a_day_no_longer_counted_is_not_answered(shop_a: Shop, attendance_on: None) -> None:
     # Neema was added with her first day on Monday 9th, and her days were kept. Then a manager fixes it to Wednesday
     # 11th, the day she really started (PPL-10): worked out again, Monday and Tuesday are no longer hers to answer.
-    # Their rows stay, as nothing is deleted (rule 7), counted nowhere (ATT-11 decides what such a day shows).
+    # Their rows stay, as nothing is deleted (rule 7), counted nowhere: she tapped on neither, or each would need
+    # review (ATT-11, test_a_tap_before_the_first_day_needs_review).
     neema = _worker(shop_a, "Neema", started_on=NOV_9)
     assert len(_days(shop_a, NOV_9, NOV_13)) == 5
     with shop_context(shop_a):
@@ -623,3 +627,303 @@ def test_a_day_no_longer_counted_is_not_answered(shop_a: Shop, attendance_on: No
     assert sorted(date for _, date in days) == [NOV_11, NOV_12, NOV_13]
     with shop_context(shop_a):
         assert AttendanceDay.objects.count() == 5
+
+
+# The flagged taps (ATT-11): taps the book can't take as they are, each sending its day to a manager or the owner.
+
+
+def _line_of(event: AttendanceEvent) -> ShopScoped:
+    # The tap's line in the answer log, as the push writes it: its document_id is the event's own id, as
+    # test_suspended_worker_clock_in_flagged (apps/sync/tests/test_clock_in.py) finds the push keeps it. The answer log
+    # is a table of `sync`, a layer above `staffpay`, so it is named by its link code, never imported (ADR-0043), as the
+    # book reads it; Any, as the type checker can't know the columns of a table it may not import.
+    answer_log = cast(Any, table_of("pushed_document"))
+    with shop_context(event.shop_id):
+        return cast(
+            ShopScoped,
+            answer_log.objects.create(
+                shop_id=event.shop_id,
+                device=event.device,
+                device_seq=event.device_seq,
+                client_time=event.client_time,
+                received_at=event.received_at,
+                created_by=event.created_by,
+                document_id=event.pk,
+                type="clock",
+                schema_version=2,
+                status="accepted",
+            ),
+        )
+
+
+def _flag_its_line(event: AttendanceEvent) -> Flag:
+    # A flag about the tap's line, as the push raises one when the tap's maker wasn't working (SYNC-5, X2).
+    line = _line_of(event)
+    with shop_context(event.shop_id):
+        return raise_flag(kind=FlagKind.SUSPENDED_STAFF_ACTIVITY, subject=line, people=[event.staff], by=None)
+
+
+def test_a_suspended_workers_tap_needs_review(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Baba suspends Juma on Monday at 11:00. The Dawa laptop is offline and doesn't know, so on Tuesday its PIN check
+    # lets him in, at 07:20, out at 18:45. The push flags his Ingia on its line (X2), and his Tuesday needs review: the
+    # owner or a manager decides whether it is paid. Asha, on time beside him, is not touched.
+    ingia = tap(device_a, juma, ClockKind.IN, at(TUESDAY, 7, 20))
+    tap(device_a, juma, ClockKind.OUT, at(TUESDAY, 18, 45))
+    tap(device_a, asha, ClockKind.IN, at(TUESDAY, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, at(TUESDAY, 18, 45))
+    _flag_its_line(ingia)
+    days = _days(shop_a, TUESDAY, TUESDAY)
+    assert days[("Juma", TUESDAY)].status == DayStatus.NEEDS_REVIEW
+    assert days[("Asha", TUESDAY)].status == DayStatus.ON_TIME
+
+
+def test_a_gone_workers_tap_needs_review(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
+    # Neema's last day is Monday, and the owner records her leaving at 10:00 that morning: her PIN stops at once. The
+    # laptop, offline, lets her Toka through at 18:45, and the push flags it, as leaving counts as a suspension does
+    # (Jack, SYNC-5). Her Monday is still one of her days, but not one to pay unchecked.
+    neema = _worker(shop_a, "Neema")
+    tap(device_a, neema, ClockKind.IN, at(MONDAY, 7, 20))
+    toka = tap(device_a, neema, ClockKind.OUT, at(MONDAY, 18, 45))
+    with shop_context(shop_a):
+        mark_left(neema, left_on=MONDAY, by=None, reason="Amehamia mji mwingine")
+    _flag_its_line(toka)
+    assert _days(shop_a, MONDAY, MONDAY)[("Neema", MONDAY)].status == DayStatus.NEEDS_REVIEW
+
+
+def test_a_closed_suspension_flag_still_needs_review(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, juma: StaffMember
+) -> None:
+    # A manager looks at Juma's flag and closes it: "Baba let him back on Tuesday morning". The flag is about the tap,
+    # not the day: deciding whether his Tuesday is paid is ATT-6's override, so the day still needs review.
+    ingia = tap(device_a, juma, ClockKind.IN, at(TUESDAY, 7, 20))
+    tap(device_a, juma, ClockKind.OUT, at(TUESDAY, 18, 45))
+    flag = _flag_its_line(ingia)
+    with shop_context(shop_a):
+        dismiss_flag(flag, text="Baba alimrudisha Jumanne asubuhi", by=staff_a)
+    assert _days(shop_a, TUESDAY, TUESDAY)[("Juma", TUESDAY)].status == DayStatus.NEEDS_REVIEW
+
+
+def test_another_flag_on_the_line_sends_nothing(shop_a: Shop, device_a: Device, juma: StaffMember) -> None:
+    # Juma's Ingia came with a number the laptop skipped before it: a device_gap flag about its line, a record still
+    # missing. That says nothing of whether Juma came, so his Tuesday is on time.
+    ingia = tap(device_a, juma, ClockKind.IN, at(TUESDAY, 7, 20))
+    tap(device_a, juma, ClockKind.OUT, at(TUESDAY, 18, 45))
+    line = _line_of(ingia)
+    with shop_context(shop_a):
+        raise_flag(kind=FlagKind.DEVICE_GAP, subject=line, expected=Decimal(1), actual=Decimal(3), by=None)
+    assert _days(shop_a, TUESDAY, TUESDAY)[("Juma", TUESDAY)].status == DayStatus.ON_TIME
+
+
+def test_a_voided_flagged_tap_sends_nothing(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, juma: StaffMember
+) -> None:
+    # Juma's flagged Ingia is voided by a manager (T2, ATT-6): a voided tap counts for nothing, so it sends nothing
+    # either. With no tap left, his Tuesday is absent.
+    ingia = tap(
+        device_a,
+        juma,
+        ClockKind.IN,
+        at(TUESDAY, 7, 20),
+        voided_at=at(TUESDAY, 9, 0),
+        voided_by=staff_a,
+        void_reason="Alikuwa amesimamishwa",
+    )
+    _flag_its_line(ingia)
+    assert _days(shop_a, TUESDAY, TUESDAY)[("Juma", TUESDAY)].status == DayStatus.ABSENT
+
+
+def test_a_day_in_doubt_keeps_its_minutes_and_rules(shop_a: Shop, device_a: Device, juma: StaffMember) -> None:
+    # Juma, suspended, came at 07:50 and left at 18:45. The rule alone would call his Tuesday late, less 500; sent to
+    # review, it takes no fine until someone decides it, and keeps his minutes and the day's rules for whoever does,
+    # as a closed day with a tap does (ATT-10).
+    _rule(shop_a, "500.00", JAN_1)
+    ingia = tap(device_a, juma, ClockKind.IN, at(TUESDAY, 7, 50))
+    tap(device_a, juma, ClockKind.OUT, at(TUESDAY, 18, 45))
+    _flag_its_line(ingia)
+    day = _days(shop_a, TUESDAY, TUESDAY)[("Juma", TUESDAY)]
+    assert (day.status, day.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
+    assert (day.first_in, day.first_out) == (dt.time(7, 50), dt.time(18, 45))
+    assert day.rules_used["late_fine"] == "500.00"
+
+
+def test_the_tap_a_later_one_disagrees_with_needs_review(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # The Dawa laptop's clock goes wrong. Juma's Toka says 18:45, then Asha's, the record after it, says 18:30: one of
+    # the two times is wrong, and nobody knows which. Hers has no trusted time, so her day needs review (ATT-4); his
+    # keeps the laptop's, and alone would be a full day. Her tap keeps his id (`disagrees_with`, ATT-11), so his Monday
+    # needs review too (Jack: A), with his minutes kept for whoever decides.
+    tap(device_a, juma, ClockKind.IN, at(MONDAY, 7, 20))
+    jumas_toka = tap(device_a, juma, ClockKind.OUT, at(MONDAY, 18, 45))
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 30), check=TimeCheck.UNVERIFIED, disagrees_with=jumas_toka.pk)
+    days = _days(shop_a, MONDAY, MONDAY)
+    jumas_monday = days[("Juma", MONDAY)]
+    assert (jumas_monday.status, jumas_monday.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
+    assert (jumas_monday.first_in, jumas_monday.first_out) == (dt.time(7, 20), dt.time(18, 45))
+    assert days[("Asha", MONDAY)].status == DayStatus.NEEDS_REVIEW
+
+
+def test_a_disagreement_reaches_another_day(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Juma clocks in on Tuesday at 07:30. Then someone sets the laptop back a day, and Asha's Ingia says Monday 18:50,
+    # after his on the laptop's numbers. Her tap falls on Monday, by the laptop's clock, the only time it has; his on
+    # Tuesday. So the book, asked for Tuesday alone, still finds the tap that disagrees with his, wherever it fell.
+    jumas_ingia = tap(device_a, juma, ClockKind.IN, at(TUESDAY, 7, 30))
+    tap(device_a, juma, ClockKind.OUT, at(TUESDAY, 18, 45))
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 18, 50), check=TimeCheck.UNVERIFIED, disagrees_with=jumas_ingia.pk)
+    assert _days(shop_a, TUESDAY, TUESDAY)[("Juma", TUESDAY)].status == DayStatus.NEEDS_REVIEW
+
+
+def test_a_tap_timed_by_the_server_is_not_in_doubt(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Juma's Toka was sent at once, so its time is the server's, 18:45, whatever the laptop's clock said (ATT-1): it
+    # can't be the wrong one. Asha's tap after it says 18:30 by a laptop clock that moved, so hers alone is in doubt,
+    # and his Monday is the full day it was.
+    tap(device_a, juma, ClockKind.IN, at(MONDAY, 7, 20))
+    jumas_toka = tap(
+        device_a, juma, ClockKind.OUT, at(MONDAY, 19, 0), check=TimeCheck.SERVER, server_time=at(MONDAY, 18, 45)
+    )
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 30), check=TimeCheck.UNVERIFIED, disagrees_with=jumas_toka.pk)
+    assert _days(shop_a, MONDAY, MONDAY)[("Juma", MONDAY)].status == DayStatus.ON_TIME
+
+
+def test_a_voided_tap_disagreed_with_sends_nothing(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Juma's Toka, the one Asha's disagrees with, was a second Toka tapped by mistake, voided by a manager (T2): it
+    # counts for nothing, so it sends nothing either. His Monday ends at his first Toka, on time.
+    tap(device_a, juma, ClockKind.IN, at(MONDAY, 7, 20))
+    tap(device_a, juma, ClockKind.OUT, at(MONDAY, 18, 40))
+    second = tap(
+        device_a,
+        juma,
+        ClockKind.OUT,
+        at(MONDAY, 18, 45),
+        voided_at=at(MONDAY, 19, 0),
+        voided_by=staff_a,
+        void_reason="Alitoka mara mbili",
+    )
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 30), check=TimeCheck.UNVERIFIED, disagrees_with=second.pk)
+    assert _days(shop_a, MONDAY, MONDAY)[("Juma", MONDAY)].status == DayStatus.ON_TIME
+
+
+def test_another_shops_taps_never_send_this_shops_day(
+    shop_a: Shop, shop_b: Shop, device_a: Device, side_b: Side, asha: StaffMember
+) -> None:
+    # Shop B's laptop sends a document whose id is Asha's Ingia at shop A: it is set aside (`id.taken`, 03 §5.4) and
+    # keeps a line in B's answer log all the same, named by that id. B's push could flag that line, and B's next
+    # clock-in, its time earlier, keeps that id as the record it disagrees with. The night's job opens every shop at
+    # once (system_context, ATT-7), so the guard filters nothing, and only the book's own `shop=` keeps B's line, its
+    # flag and its tap away from Asha's day (T1). Her Monday stays on time.
+    with shop_context(shop_b):
+        laptop_b = Device.objects.create(
+            shop=shop_b, home_side=side_b, name="Laptop ya Pembejeo", code=1, key_hash="b" * 64
+        )
+    bahati = _worker(shop_b, "Bahati")
+    ingia = tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    answer_log = cast(Any, table_of("pushed_document"))
+    with shop_context(shop_b):
+        line_b = answer_log.objects.create(
+            shop_id=shop_b.pk,
+            device=laptop_b,
+            device_seq=1,
+            client_time=at(MONDAY, 8, 0),
+            received_at=at(MONDAY, 9, 0),
+            created_by=None,
+            document_id=ingia.pk,
+            type="clock",
+            schema_version=2,
+            status="invalid",
+            reason="id.taken",
+        )
+        raise_flag(kind=FlagKind.SUSPENDED_STAFF_ACTIVITY, subject=line_b, by=None)
+    tap(laptop_b, bahati, ClockKind.IN, at(MONDAY, 7, 50), check=TimeCheck.UNVERIFIED, disagrees_with=ingia.pk)
+    with system_context():
+        days = work_out_days(shop_a, MONDAY, MONDAY)
+    assert [(day.staff_id, day.status) for day in days] == [(asha.pk, DayStatus.ON_TIME)]
+
+
+def _came(device: Device, staff: StaffMember, *days: dt.date) -> None:
+    # A full day on each date: in at 07:20, out at 18:45.
+    for day in days:
+        tap(device, staff, ClockKind.IN, at(day, 7, 20))
+        tap(device, staff, ClockKind.OUT, at(day, 18, 45))
+
+
+def test_a_tap_before_the_first_day_needs_review(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
+    # Neema is added with a first day of Tuesday 10th, and comes on the 10th and the 11th. A manager then moves her
+    # first day to Thursday 12th (PPL-10): her taps now fall before it. They say she came, her first day says she
+    # didn't, so those two days need review (Jack, ATT-11: A): the manager puts her first day back, or decides whether
+    # they are paid. Her minutes stay, for whoever decides. Monday 9th, with no tap, is still not one of hers.
+    neema = _worker(shop_a, "Neema", started_on=NOV_10)
+    _came(device_a, neema, NOV_10, NOV_11)
+    with shop_context(shop_a):
+        change_worker(neema, version=neema.version, reason="Alianza Alhamisi", by=None, started_on=NOV_12)
+    days = _days(shop_a, NOV_9, NOV_13)
+    assert {date: day.status for (_, date), day in days.items()} == {
+        NOV_10: DayStatus.NEEDS_REVIEW,
+        NOV_11: DayStatus.NEEDS_REVIEW,
+        NOV_12: DayStatus.ABSENT,
+        NOV_13: DayStatus.ABSENT,
+    }
+    assert (days[("Neema", NOV_10)].first_in, days[("Neema", NOV_10)].fine) == (dt.time(7, 20), Decimal("0.00"))
+
+
+def test_a_tap_after_the_last_day_needs_review(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
+    # Neema's last day is Tuesday 10th, recorded on Thursday: the laptop, offline, still let her clock in on Wednesday.
+    # Her tap after her last day is a day to decide, as one before her first is; Thursday, with no tap, is not hers.
+    neema = _worker(shop_a, "Neema", started_on=NOV_9)
+    _came(device_a, neema, NOV_11)
+    with shop_context(shop_a):
+        mark_left(neema, left_on=NOV_10, by=None, reason="Amehamia mji mwingine")
+    days = _days(shop_a, NOV_9, NOV_12)
+    assert {date: day.status for (_, date), day in days.items()} == {
+        NOV_9: DayStatus.ABSENT,
+        NOV_10: DayStatus.ABSENT,
+        NOV_11: DayStatus.NEEDS_REVIEW,
+    }
+
+
+def test_a_kept_day_before_a_moved_first_day_turns_to_review(
+    shop_a: Shop, device_a: Device, attendance_on: None
+) -> None:
+    # Neema's Tuesday 10th was kept as on time, then her first day was moved to Thursday 12th. Worked out again, the
+    # same row says needs review, and the edit history says so, as the book's own change: never a second row, never a
+    # delete (rule 7). Monday 9th, kept as absent with no tap, stays as it was, and is no longer answered (ATT-10).
+    neema = _worker(shop_a, "Neema", started_on=NOV_9)
+    _came(device_a, neema, NOV_10)
+    kept = _days(shop_a, NOV_9, NOV_10)
+    assert (kept[("Neema", NOV_9)].status, kept[("Neema", NOV_10)].status) == (DayStatus.ABSENT, DayStatus.ON_TIME)
+    with shop_context(shop_a):
+        change_worker(neema, version=neema.version, reason="Alianza Alhamisi", by=None, started_on=NOV_12)
+    again = _days(shop_a, NOV_9, NOV_10)
+    assert list(again) == [("Neema", NOV_10)]
+    tuesday = again[("Neema", NOV_10)]
+    assert (tuesday.pk, tuesday.status) == (kept[("Neema", NOV_10)].pk, DayStatus.NEEDS_REVIEW)
+    with shop_context(shop_a):
+        assert AttendanceDay.objects.get(pk=kept[("Neema", NOV_9)].pk).status == DayStatus.ABSENT
+        assert AttendanceDay.objects.count() == 2
+        change = EditEvent.objects.get(subject_type="attendance_day", subject_id=tuesday.pk)
+    assert (change.created_by_id, change.after["status"]) == (None, DayStatus.NEEDS_REVIEW)
+
+
+def test_a_sunday_tap_in_doubt_is_still_off(
+    shop_a: Shop, device_a: Device, attendance_on: None, juma: StaffMember
+) -> None:
+    # Sunday work is a deal outside the system (01 §8.1), so a Sunday stays off whatever its taps: Juma's, flagged as
+    # made while he was suspended, and Neema's, made before a first day moved to Monday, which keeps no Sunday at all.
+    ingia = tap(device_a, juma, ClockKind.IN, at(SUNDAY, 7, 20))
+    _flag_its_line(ingia)
+    neema = _worker(shop_a, "Neema", started_on=SUNDAY - dt.timedelta(days=7))
+    _came(device_a, neema, SUNDAY)
+    with shop_context(shop_a):
+        change_worker(neema, version=neema.version, reason="Alianza Jumatatu", by=None, started_on=MONDAY)
+    days = _days(shop_a, SUNDAY, SUNDAY)
+    assert days[("Juma", SUNDAY)].status == DayStatus.OFF
+    assert ("Neema", SUNDAY) not in days
