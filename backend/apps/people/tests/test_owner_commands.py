@@ -234,6 +234,41 @@ def test_an_owner_already_is_refused_by_the_roles_own_rule(mfano: Shop, keyboard
         owner("add", "--shop", "MFANO")
 
 
+def test_owner_add_never_finds_another_shops_worker(mfano: Shop, keyboard: Keyboard) -> None:
+    # T1, rule 1. Baba is the Owner of PILI, the shop next door. At MFANO he is nobody: the nickname is looked for
+    # inside MFANO's shop_context, where the tenancy guard shows MFANO's rows alone, so a new person is asked for, and
+    # PILI's Baba is never given MFANO's role. No other test pins this: a lookup through every shop would pass them all.
+    pili = set_up_shop(name="Duka la Pili", code="PILI", sides=[NewSide("D", "Dawa")])
+    pilis_baba = an_owner(pili, "Baba", pin=PIN)
+    keyboard.type("Baba", "Baba Mfano", PHONE, "y")
+    keyboard.type_pins("3907", "3907")
+
+    said = owner("add", "--shop", "MFANO")
+
+    assert "already works" not in said
+    with shop_context(mfano):
+        baba = StaffMember.objects.get(display_name="Baba")
+    assert baba.user_id != pilis_baba.user_id
+    # PILI's Baba is as he was: PILI's Owner, with his own PIN.
+    assert owner_rows(pilis_baba) == [(RoleTemplate.OWNER, None, None)]
+    with shop_context(pili):
+        assert pin_matches(PIN, StaffMember.objects.get(pk=pilis_baba.pk).pin_hash)
+
+
+@pytest.mark.parametrize("action", ["set-pin", "take"])
+def test_set_pin_and_take_never_find_another_shops_worker(mfano: Shop, keyboard: Keyboard, action: str) -> None:
+    # The same for a change: MFANO's command can't set PILI's Owner's PIN, nor take his role. Nothing is asked.
+    pili = set_up_shop(name="Duka la Pili", code="PILI", sides=[NewSide("D", "Dawa")])
+    pilis_baba = an_owner(pili, "Baba", pin=PIN)
+
+    with pytest.raises(CommandError, match="Nobody working at MFANO has the nickname Baba."):
+        owner(action, "--shop", "MFANO", "--nickname", "Baba")
+
+    assert owner_rows(pilis_baba) == [(RoleTemplate.OWNER, None, None)]
+    with shop_context(pili):
+        assert pin_matches(PIN, StaffMember.objects.get(pk=pilis_baba.pk).pin_hash)
+
+
 def test_an_unknown_shop_is_refused(mfano: Shop, keyboard: Keyboard) -> None:
     with pytest.raises(CommandError, match="No shop has the code NOPE."):
         owner("add", "--shop", "nope")
