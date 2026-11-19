@@ -304,9 +304,10 @@ class StaffAddSerializer(serializers.Serializer[Any]):
 
 
 class StaffReasonSerializer(serializers.Serializer[Any]):
-    # What a suspension or a bringing back sends: why, kept in its audit line with who and when (rule 7). A blank reason
-    # is let through, so the service refuses it with its own code, staff.reason_required, which the screen translates;
-    # one left out is the form's own `required`. 500 characters at most, as the audit line keeps (control.AuditEvent).
+    # What a suspension, a bringing back or an end of a role or a key sends: why, kept with who and when (rule 7), in
+    # the action's audit line, or in the ended row's own end_reason (PPL-7). A blank reason is let through, so the
+    # service refuses it with its own code, staff.reason_required, which the screen translates; one left out is the
+    # form's own `required`. 500 characters at most, as the audit line keeps (control.AuditEvent).
     reason = serializers.CharField(max_length=500, allow_blank=True)
 
 

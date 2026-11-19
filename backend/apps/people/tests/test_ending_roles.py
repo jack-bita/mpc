@@ -11,7 +11,7 @@ from collections.abc import Callable
 
 import pytest
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 
 from apps.control.models import EditEvent
@@ -67,10 +67,12 @@ def code_of(give: Callable[[], object]) -> str:
 
 def test_a_role_or_a_key_is_never_deleted(shop_a: Shop, side_a: Side, staff_a: StaffMember, seller: Role) -> None:
     # Rule 7: nothing links to these rows, so PROTECT never stops a delete, and the edit history's trigger ignores one.
-    # The no-delete trigger refuses it, however it is sent: a bulk delete() here, or SQL typed by hand.
+    # The no-delete trigger refuses it, however it is sent: a bulk delete() through the guard, or SQL typed by hand.
     for row in given(staff_a, seller, side_a):
         with shop_context(shop_a), pytest.raises(IntegrityError), transaction.atomic():
             type(row).objects.filter(pk=row.pk).delete()
+        with pytest.raises(IntegrityError), transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute(f'DELETE FROM "{row._meta.db_table}" WHERE id = %s', [row.pk])
         with shop_context(shop_a):
             assert type(row).objects.filter(pk=row.pk).exists()
 
@@ -224,7 +226,7 @@ def test_an_end_is_in_the_edit_history(
 
 @pytest.mark.django_db(transaction=True)
 def test_of_two_ends_at_once_the_second_hears_it_ended(
-    shop_a: Shop, side_a: Side, staff_a: StaffMember, seller: Role, baba: StaffMember, staff_b: StaffMember
+    shop_a: Shop, side_a: Side, staff_a: StaffMember, seller: Role, baba: StaffMember
 ) -> None:
     # Baba and the superuser take Asha's role away in the same second. The first locks her job; the second waits for it,
     # then reads the row as the first left it, and hears it ended: one end, with the first one's who and why.

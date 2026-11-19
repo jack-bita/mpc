@@ -509,7 +509,8 @@ def _loader_breaks(loader: StaffMember, device: Device, *, at: datetime) -> list
     # and whether they were working here, as a maker's is checked (X2), or a manager suspended while the laptop was
     # offline could still load a file edited by hand (SYNC-12's second review). The load has no time of its own the
     # server could trust, so it is checked at the push's arrival, the latest it can have been: a manager suspended
-    # between loading and the push is flagged too, for a person to look at.
+    # between loading and the push is flagged too, for a person to look at, and so is one whose device.manage was taken
+    # away in between (PPL-7), as the keys are read as they are at that moment.
     broken = []
     if Permission.DEVICE_MANAGE not in given_permissions(loader).on(device.home_side_id):
         broken.append(FlagKind.PERMISSION_BREAK)
