@@ -130,8 +130,9 @@ function isTemplate(code: string): code is RoleTemplate {
   return (ROLE_TEMPLATES as readonly string[]).includes(code);
 }
 
-/** How the page writes each role a worker holds, with its side: "Muuzaji (Dawa)", "Meneja (Pande zote)". */
-export function useRoleWords(me: WhoIsHere) {
+/** How the page writes a role or a key on its side (PPL-8): "Muuzaji (Dawa)", "Meneja (Pande zote)". One rule for
+ * both, so a role and a key on the same side read alike. */
+export function useOnSide(me: WhoIsHere) {
   const t = useTranslations("workers");
   // The sides' names, from `me`: whoever opens this page holds staff.manage on the whole shop, which the server
   // counts on every side, so `me` names every side a role can be on (MePermissionsSerializer).
@@ -139,24 +140,33 @@ export function useRoleWords(me: WhoIsHere) {
     me.permissions.sides.map((side) => [side.id, side.name]),
   );
 
+  /** A name with its side. No side is every side. A side `me` doesn't name, which the key above rules out, shows
+   * the name alone rather than an id. */
+  return function onSide(name: string, sideId: string | null): string {
+    if (sideId === null) {
+      return t("roleOnSide", { role: name, side: t("allSides") });
+    }
+    const side = sideNames.get(sideId);
+    return side === undefined ? name : t("roleOnSide", { role: name, side });
+  };
+}
+
+/** How the page writes each role a worker holds, with its side: "Muuzaji (Dawa)", "Meneja (Pande zote)". */
+export function useRoleWords(me: WhoIsHere) {
+  const t = useTranslations("workers");
+  const onSide = useOnSide(me);
+
   /** A role's own name: its template's words in the person's language (ADR-0032), else the name the shop gave
    * it, as a role the owner made himself, or a template a newer server knows and this app doesn't yet. */
-  function roleName(given: GivenRole): string {
+  function roleName(given: { template: string; name: string }): string {
     return isTemplate(given.template)
       ? t(`roles.${given.template}`)
       : given.name;
   }
 
-  /** The role with its side. No side is every side. A side `me` doesn't name, which the key above rules out,
-   * shows the role alone rather than an id. */
+  /** The role with its side. */
   function roleOnSide(given: GivenRole): string {
-    if (given.side === null) {
-      return t("roleOnSide", { role: roleName(given), side: t("allSides") });
-    }
-    const side = sideNames.get(given.side);
-    return side === undefined
-      ? roleName(given)
-      : t("roleOnSide", { role: roleName(given), side });
+    return onSide(roleName(given), given.side);
   }
 
   return { roleName, roleOnSide };

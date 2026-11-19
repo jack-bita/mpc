@@ -106,7 +106,16 @@ test("the demo's manager adds a worker and suspends him", async ({
     await expect(valueOf(phone, WORKERS.view.status)).toHaveText(
       WORKERS.status.active,
     );
-    await expect(valueOf(phone, WORKERS.view.roles)).toHaveText(WORKERS.noRole);
+    // His roles and keys, in their own card under the buttons (PPL-8): none of either yet.
+    await expect(
+      phone.getByRole("region", { name: WORKERS.view.roles, exact: true }),
+    ).toContainText(WORKERS.noRole);
+    await expect(
+      phone.getByRole("region", {
+        name: WORKERS.view.extraKeys,
+        exact: true,
+      }),
+    ).toContainText(WORKERS.view.noExtraKeys);
   });
 
   await test.step("Simamisha, with a reason: he is suspended, and Rudisha takes its place", async () => {

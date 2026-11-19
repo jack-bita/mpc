@@ -137,9 +137,9 @@ describe("the buttons on a worker's page", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     fireEvent.click(await findButton("Simamisha"));
-    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe(
-      "Simamisha Asha",
-    );
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Simamisha Asha" }),
+    ).toBeTruthy();
     // The keyboard starts in Sababu, where the button was.
     expect(document.activeElement).toBe(reasonBox());
     typeInto(reasonBox(), "  Hakuja siku tatu bila ruhusa ");
@@ -167,9 +167,9 @@ describe("the buttons on a worker's page", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     fireEvent.click(await findButton("Rudisha"));
-    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe(
-      "Mrudishe Asha kazini",
-    );
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Mrudishe Asha kazini" }),
+    ).toBeTruthy();
     typeInto(reasonBox(), "Ameomba radhi");
     fireEvent.click(button("Hifadhi"));
 
@@ -470,9 +470,9 @@ describe("Mwajiri tena", () => {
 
     fireEvent.click(await findButton("Mwajiri tena"));
 
-    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe(
-      "Mwajiri tena Baraka",
-    );
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Mwajiri tena Baraka" }),
+    ).toBeTruthy();
     expect(
       (screen.getByLabelText("Jina la kuitwa") as HTMLInputElement).value,
     ).toBe("Baraka");

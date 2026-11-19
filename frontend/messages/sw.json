@@ -436,7 +436,8 @@
       "status": "Hali",
       "lastDay": "Siku ya mwisho",
       "roles": "Cheo",
-      "extraKeys": "Ruhusa za ziada"
+      "extraKeys": "Ruhusa za ziada",
+      "noExtraKeys": "Hana ruhusa za ziada"
     },
     "actions": {
       "edit": "Badilisha",
@@ -475,6 +476,94 @@
       "order_writer": "Mwandishi wa oda",
       "cashier": "Keshia",
       "worker": "Mfanyakazi"
+    },
+    "keys": {
+      "sale": {
+        "write": "Kuandika mauzo au oda",
+        "take_payment": "Kupokea malipo",
+        "hand_over": "Kukabidhi bidhaa",
+        "bargain": "Kupunguza bei, hadi bei ya chini kabisa",
+        "below_floor_approve": "Kukubali bei iliyo chini ya bei ya chini kabisa",
+        "jumla_switch": "Kubadili mauzo kuwa bei ya jumla",
+        "cancel": "Kughairi mauzo",
+        "refund": "Kurudisha pesa ya mauzo"
+      },
+      "credit": {
+        "give": "Kuuza kwa mkopo",
+        "approve": "Kukubali mkopo unaozidi kikomo"
+      },
+      "debt": {
+        "view": "Kuona madeni",
+        "adjust": "Kurekebisha au kusamehe deni"
+      },
+      "price": {
+        "change": "Kubadilisha bei"
+      },
+      "cost": {
+        "view": "Kuona bei za kununulia na faida"
+      },
+      "product": {
+        "manage": "Kuongeza na kubadilisha bidhaa"
+      },
+      "contact": {
+        "manage": "Kuongeza na kubadilisha wateja, wasambazaji na washirika"
+      },
+      "stock": {
+        "receive": "Kukamilisha mzigo uliofika, na bei zake za kununulia",
+        "weigh": "Kupima mzigo unapofika",
+        "loss": "Kuandika upotevu",
+        "count": "Kuhesabu mzigo",
+        "count_approve": "Kuidhinisha hesabu ya mzigo",
+        "transfer": "Kuhamisha mzigo kutoka sehemu moja kwenda nyingine"
+      },
+      "money": {
+        "expense": "Kulipa matumizi",
+        "advance": "Kumpa mfanyakazi advansi",
+        "withdraw": "Kutoa pesa kwenye droo"
+      },
+      "drawer": {
+        "count": "Kuhesabu droo",
+        "confirm": "Kuthibitisha droo iliyohesabiwa",
+        "approve": "Kuidhinisha siku"
+      },
+      "staff": {
+        "manage": "Kuongeza wafanyakazi na kuwapa vyeo"
+      },
+      "attendance": {
+        "manage": "Kurekebisha mahudhurio"
+      },
+      "pay": {
+        "run": "Kuandaa mishahara ya mwezi",
+        "approve": "Kuidhinisha mishahara ya mwezi"
+      },
+      "settings": {
+        "manage": "Kubadilisha sheria na viwango vya duka"
+      },
+      "device": {
+        "manage": "Kusajili na kuzuia vifaa"
+      },
+      "flag": {
+        "review": "Kutatua au kuacha tofauti za upande"
+      },
+      "report": {
+        "view": "Kuona ripoti"
+      },
+      "job": {
+        "manage": "Kuendesha kazi za mashine"
+      },
+      "production": {
+        "run": "Kuandika uzalishaji"
+      }
+    },
+    "keyGroups": {
+      "selling": "Mauzo",
+      "credit": "Mkopo na madeni",
+      "products": "Bidhaa, bei na wateja",
+      "stock": "Mzigo",
+      "money": "Pesa na droo",
+      "staff": "Wafanyakazi, mahudhurio na mishahara",
+      "shop": "Duka lenyewe",
+      "production": "Kazi za mashine na uzalishaji"
     }
   },
   "attendance": {
