@@ -24,6 +24,7 @@ from pytest_django import Settings
 from apps.control.models import Attachment, AttachmentKind
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember
+from apps.shops.models import Shop, Side
 from apps.staffpay.models import AttendanceEvent, NoPhoto
 from apps.sync.push import Answer, Sent, push
 
@@ -197,3 +198,30 @@ def test_a_photo_id_already_taken_is_id_taken(shop_a: Model, device_a: Device, s
     assert [(answer.status, answer.code) for answer in answers] == [("accepted", ""), ("invalid", "id.taken")]
     assert len(_events(shop_a)) == 1
     assert len(_photos(shop_a)) == 1
+
+
+@pytest.fixture
+def device_b(shop_b: Shop, side_b: Side) -> Device:
+    # A laptop of the second shop. Only the row, as device_a is (backend/conftest.py).
+    with shop_context(shop_b):
+        return Device.objects.create(shop=shop_b, home_side=side_b, name="Laptop B", code=1, key_hash="b" * 64)
+
+
+def test_a_photo_id_another_shop_holds_is_id_taken(
+    shop_a: Model, shop_b: Shop, device_a: Device, device_b: Device, staff_a: StaffMember, staff_b: StaffMember
+) -> None:
+    # Shop B's clock-in photo has this id already. Shop A's laptop names the same id for Asha's photo: the shop guard
+    # hides B's row from the row's own checks, so the INSERT clashes on the table's key, and the push answers as for any
+    # id another shop holds, `id.taken`, telling nothing of B's photo (03 §5.4, the sync rule; ATT-3's review). Asha's
+    # line goes with it, and B's photo stays as it was.
+    label = _label()
+    [theirs] = _push(device_b, [_tap(staff_b, photo=label)])
+    assert theirs.status == "accepted"
+
+    [answer] = _push(device_a, [_tap(staff_a, photo=label)])
+
+    assert (answer.status, answer.code, answer.fields) == ("invalid", "id.taken", {})
+    assert _events(shop_a) == []
+    assert _photos(shop_a) == []
+    [kept] = _photos(shop_b)
+    assert (kept.id, kept.shop_id, kept.created_by_id) == (uuid.UUID(label["id"]), shop_b.pk, staff_b.pk)
