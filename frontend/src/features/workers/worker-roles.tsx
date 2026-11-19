@@ -16,7 +16,8 @@
 //
 // Beside each role and each key, Ondoa opens its form under the lists (end-form.tsx), its title naming what goes; never
 // beside Mmiliki, which only the superuser takes away (PPL-7, PPL-13). Shown for the same workers as Ongeza kazi. While
-// a form is open, no other button shows, so one change is made at a time.
+// a form is open, no other button shows, on this card or the status buttons' (worker-page.tsx), so one change is made
+// at a time.
 //
 // After a change, one line says what it did, and that the shop's laptops learn it at their next sync, as a worker's
 // keys travel on their staff row (SYNC-15); the keyboard goes to it, as after the status buttons. Ghairi gives the
@@ -52,6 +53,8 @@ export function WorkerRoles({
   me,
   roles,
   onGiving,
+  onForm,
+  buttonsHidden = false,
 }: {
   worker: Worker;
   me: WhoIsHere;
@@ -59,6 +62,10 @@ export function WorkerRoles({
   roles: UseQueryResult<Role[]>;
   /** Ongeza kazi's form opened (true): the page asks the shop's roles from then on. */
   onGiving?: (giving: boolean) => void;
+  /** A form opened (true) or closed (false): the page keeps one form open at a time (worker-page.tsx). */
+  onForm?: (open: boolean) => void;
+  /** Another card's form is open: this card's buttons stay off the page meanwhile (PPL-8's review). */
+  buttonsHidden?: boolean;
 }) {
   const t = useTranslations("workers");
   const store = useQueryClient();
@@ -66,7 +73,14 @@ export function WorkerRoles({
   const { keyOnSide } = useKeyWords(me);
   const rolesId = useId();
   const keysId = useId();
-  const [open, setOpen] = useState<Open | null>(null);
+  const [open, setOpenHere] = useState<Open | null>(null);
+  /** A form opens, or (null) closes: the page learns, for the other card's buttons. */
+  function setOpen(form: Open | null) {
+    setOpenHere(form);
+    onForm?.(form !== null);
+  }
+  // Gone from the page with a form open: the page lets the other card's buttons show again.
+  useEffect(() => () => onForm?.(false), [onForm]);
   // The line that says what the last change did, or that someone else changed the worker first.
   const [news, setNews] = useState<string | null>(null);
 
@@ -84,7 +98,7 @@ export function WorkerRoles({
 
   // Who may see the buttons (see the top); none while a form is open.
   const mayChange = worker.status !== "left" && worker.id !== me.staff.id;
-  const showButtons = mayChange && open === null;
+  const showButtons = mayChange && open === null && !buttonsHidden;
 
   function said(sentence: string) {
     setOpen(null);
@@ -202,7 +216,7 @@ export function WorkerRoles({
             onChangedMeanwhile={said}
             onCancel={() => cancelled(open.ending.id)}
           />
-        ) : (
+        ) : !showButtons ? null : (
           <div>
             <Button
               ref={(button) => {

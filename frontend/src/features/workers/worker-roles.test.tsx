@@ -853,6 +853,32 @@ describe("a move to another worker", () => {
   });
 });
 
+describe("one form at a time on the page", () => {
+  it("hides the roles' buttons while a status form is open, and the status buttons while a give is", async () => {
+    // Two Hifadhi on one page would leave a person, or a screen reader, unsure which one saves what (PPL-8's review).
+    theServerHas(JUMA_WITH_BOTH);
+
+    render(<WorkerScreen id={JUMA.id} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Simamisha" }));
+    expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Ondoa/ })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Hifadhi" })).toHaveLength(1);
+    fireEvent.click(button("Ghairi"));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Ongeza kazi" }));
+    expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Badilisha" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Hifadhi" })).toHaveLength(1);
+    fireEvent.click(button("Ghairi"));
+
+    // Closed: both sets back.
+    expect(
+      await screen.findByRole("button", { name: "Simamisha" }),
+    ).toBeTruthy();
+    expect(button("Ongeza kazi")).toBeTruthy();
+  });
+});
+
 describe("who sees the buttons", () => {
   it("offers Ongeza kazi for a suspended worker, whose role counts once they are back", async () => {
     theServerHas({ ...JUMA, status: "suspended" });

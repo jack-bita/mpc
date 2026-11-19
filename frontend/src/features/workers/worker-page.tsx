@@ -17,7 +17,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -59,6 +59,20 @@ export function WorkerScreen({ id }: { id: string | null }) {
   // and handed down, as the demo's answer is. Opening a worker's page alone asks for none.
   const [giving, setGiving] = useState(false);
   const roles = useRoles(giving);
+  // Which card has a form open, if any (PPL-8's review): one form at a time on the page, so a person never meets two
+  // Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other card's buttons hide meanwhile.
+  // Each card's own callback, kept the same between draws, as each says "closed" as it goes (its unmount).
+  const [formIn, setFormIn] = useState<"actions" | "roles" | null>(null);
+  const actionsForm = useCallback(
+    (open: boolean) =>
+      setFormIn((now) => (open ? "actions" : now === "actions" ? null : now)),
+    [],
+  );
+  const rolesForm = useCallback(
+    (open: boolean) =>
+      setFormIn((now) => (open ? "roles" : now === "roles" ? null : now)),
+    [],
+  );
 
   return (
     <div className="grid max-w-2xl gap-6">
@@ -90,6 +104,8 @@ export function WorkerScreen({ id }: { id: string | null }) {
             me={who.data}
             demo={demo.data === true}
             onEditing={setEditing}
+            onForm={actionsForm}
+            buttonsHidden={formIn === "roles"}
           />
           {/* Under the buttons, as Jack chose (PPL-8): each set of buttons beside what it changes. A worker of its own, as
               WorkerActions: Asha's open form never goes on to Baraka's page. Its key apart from WorkerActions', as two
@@ -100,6 +116,8 @@ export function WorkerScreen({ id }: { id: string | null }) {
             me={who.data}
             roles={roles}
             onGiving={setGiving}
+            onForm={rolesForm}
+            buttonsHidden={formIn === "actions"}
           />
         </>
       ) : null}
