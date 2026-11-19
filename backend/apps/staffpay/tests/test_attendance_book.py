@@ -812,6 +812,43 @@ def test_a_voided_tap_disagreed_with_sends_nothing(
     assert _days(shop_a, MONDAY, MONDAY)[("Juma", MONDAY)].status == DayStatus.ON_TIME
 
 
+def test_another_shops_taps_never_send_this_shops_day(
+    shop_a: Shop, shop_b: Shop, device_a: Device, side_b: Side, asha: StaffMember
+) -> None:
+    # Shop B's laptop sends a document whose id is Asha's Ingia at shop A: it is set aside (`id.taken`, 03 §5.4) and
+    # keeps a line in B's answer log all the same, named by that id. B's push could flag that line, and B's next
+    # clock-in, its time earlier, keeps that id as the record it disagrees with. The night's job opens every shop at
+    # once (system_context, ATT-7), so the guard filters nothing, and only the book's own `shop=` keeps B's line, its
+    # flag and its tap away from Asha's day (T1). Her Monday stays on time.
+    with shop_context(shop_b):
+        laptop_b = Device.objects.create(
+            shop=shop_b, home_side=side_b, name="Laptop ya Pembejeo", code=1, key_hash="b" * 64
+        )
+    bahati = _worker(shop_b, "Bahati")
+    ingia = tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    answer_log = cast(Any, table_of("pushed_document"))
+    with shop_context(shop_b):
+        line_b = answer_log.objects.create(
+            shop_id=shop_b.pk,
+            device=laptop_b,
+            device_seq=1,
+            client_time=at(MONDAY, 8, 0),
+            received_at=at(MONDAY, 9, 0),
+            created_by=None,
+            document_id=ingia.pk,
+            type="clock",
+            schema_version=2,
+            status="invalid",
+            reason="id.taken",
+        )
+        raise_flag(kind=FlagKind.SUSPENDED_STAFF_ACTIVITY, subject=line_b, by=None)
+    tap(laptop_b, bahati, ClockKind.IN, at(MONDAY, 7, 50), check=TimeCheck.UNVERIFIED, disagrees_with=ingia.pk)
+    with system_context():
+        days = work_out_days(shop_a, MONDAY, MONDAY)
+    assert [(day.staff_id, day.status) for day in days] == [(asha.pk, DayStatus.ON_TIME)]
+
+
 def _came(device: Device, staff: StaffMember, *days: dt.date) -> None:
     # A full day on each date: in at 07:20, out at 18:45.
     for day in days:
