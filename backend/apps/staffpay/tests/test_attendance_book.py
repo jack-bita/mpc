@@ -5,21 +5,30 @@ rule from that day's taps and that day's rules, and kept (ATT-10; 02 §12).
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
     Asha   Sun 22 Nov  off           0.00    —      —
 
-These tests pin the rules the database keeps on a day (AttendanceDay, apps/staffpay/models.py): one per job and date,
-a day that fits its status, and never a delete. What a day was, from its taps, is the rule's, in
-test_attendance_day.py. The fines are the demo's made-up 500 and 1,500 (rule 10). Fake data only: the repo is public.
+First the rules the database keeps on a day (AttendanceDay, apps/staffpay/models.py): one per job and date, a day that
+fits its status, and never a delete. Then the book (work_out_days, apps/staffpay/services.py): which taps a day reads,
+on which date, with which rules, and how a day worked out again is kept. What a day was, from its taps, is the rule's,
+in test_attendance_day.py. Times are Arusha's, three hours ahead of UTC. The fines are the demo's made-up 500 and 1,500
+(rule 10). Fake data only: the repo is public.
 """
 
 import datetime as dt
+import itertools
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import pytest
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
+from django.test.utils import CaptureQueriesContext
 
-from apps.core.tenancy import shop_context
-from apps.people.models import StaffMember
-from apps.shops.models import Shop
-from apps.staffpay.models import AttendanceDay, DayStatus
+from apps.control.models import EditEvent
+from apps.core.settings_registry import LATE_FINE
+from apps.core.tenancy import ShopMismatch, shop_context
+from apps.people.models import Device, StaffMember, User
+from apps.people.services import add_staff, hire_again, mark_left
+from apps.shops.models import Setting, Shop
+from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, TimeCheck
+from apps.staffpay.services import _keep, work_out_days
 
 pytestmark = pytest.mark.django_db
 
@@ -110,3 +119,271 @@ def test_database_refuses_to_delete_a_day(shop_a: Shop, staff_a: StaffMember) ->
         with pytest.raises(IntegrityError, match="never deleted"), transaction.atomic():
             AttendanceDay.objects.filter(pk=row.pk).delete()
         assert AttendanceDay.objects.filter(pk=row.pk).exists()
+
+
+# The book's work (work_out_days). Arusha's clock, as the shop's: a minute here is what the counter showed.
+ARUSHA = ZoneInfo("Africa/Dar_es_Salaam")
+TUESDAY = MONDAY + dt.timedelta(days=1)
+JAN_1 = dt.date(2026, 1, 1)
+# Each tap's number on the laptop, one after another, as a laptop numbers its records (SYNC-4).
+_numbers = itertools.count(1)
+
+
+def at(day: dt.date, hour: int, minute: int, second: int = 0) -> dt.datetime:
+    # A moment on the shop's clock: at(MONDAY, 7, 50) is 07:50 in Arusha, 04:50 in UTC.
+    return dt.datetime(day.year, day.month, day.day, hour, minute, second, tzinfo=ARUSHA)
+
+
+def _worker(shop: Shop, name: str) -> StaffMember:
+    # A worker whose first day was long ago, so every day these tests read is one of theirs. Made the way the app
+    # makes one: create_user, then the people service, inside the shop (PPL-2).
+    user = User.objects.create_user(full_name=f"{name} Demo")
+    with shop_context(shop):
+        return add_staff(shop=shop, user=user, display_name=name, started_on=JAN_1, by=None)
+
+
+@pytest.fixture
+def asha(shop_a: Shop) -> StaffMember:
+    return _worker(shop_a, "Asha")
+
+
+@pytest.fixture
+def juma(shop_a: Shop) -> StaffMember:
+    return _worker(shop_a, "Juma")
+
+
+def tap(
+    device: Device,
+    staff: StaffMember,
+    kind: ClockKind,
+    moment: dt.datetime,
+    *,
+    check: TimeCheck = TimeCheck.DEVICE_OK,
+    server_time: dt.datetime | None = None,
+    **changes: object,
+) -> AttendanceEvent:
+    # One tap kept in the attendance book, as the clock document keeps one (ATT-1): `moment` by the laptop's clock.
+    # device_ok: sent later, its time the laptop's. server: sent at once, its time the server's (`server_time`), and
+    # the laptop's clock off by the difference. unverified: no time trusted.
+    trusted = {TimeCheck.DEVICE_OK: moment, TimeCheck.SERVER: server_time, TimeCheck.UNVERIFIED: None}[check]
+    facts: dict[str, object] = {
+        "shop_id": device.shop_id,
+        "device": device,
+        "device_seq": next(_numbers),
+        "client_time": moment,
+        "received_at": moment + dt.timedelta(hours=1),
+        "created_by": staff,
+        "staff": staff,
+        "kind": kind,
+        "trusted_time": trusted,
+        "time_check": check,
+        "last_server_time": moment - dt.timedelta(minutes=30),
+        "clock_error": moment - server_time if server_time is not None else dt.timedelta(0),
+        "no_photo": "demo",
+    }
+    facts.update(changes)
+    event = AttendanceEvent(**facts)
+    event.save()
+    return event
+
+
+def _rule(shop: Shop, value: str, effective_from: dt.date) -> None:
+    # The owner's first fine, from a day: checked, then saved as set_setting saves a rule, with no line and on any day
+    # (test_get_setting.py writes its rows so), as these tests need rules for days gone by.
+    with shop_context(shop):
+        row = Setting(shop=shop, key=LATE_FINE.key, value=value, effective_from=effective_from)
+        row.full_clean()
+        row.save()
+
+
+def _days(shop: Shop, first: dt.date, last: dt.date) -> dict[tuple[str, dt.date], AttendanceDay]:
+    # The book's answer for the span, by the worker's nickname and the date, to read a day by its two facts.
+    with shop_context(shop):
+        return {(day.staff.display_name, day.date): day for day in work_out_days(shop, first, last)}
+
+
+def test_a_day_is_kept_with_its_rules(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Asha in at 07:50, out at 18:45, with a first fine of 500: late, the fine taken off, and the rules the day read
+    # kept with it as text (T4), so a fine raised later leaves her Monday as it was.
+    _rule(shop_a, "500.00", JAN_1)
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    day = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    with shop_context(shop_a):
+        kept = AttendanceDay.objects.get(pk=day.pk)
+    assert (kept.staff_id, kept.date, kept.status) == (asha.pk, MONDAY, DayStatus.LATE)
+    assert kept.fine == Decimal("500.00")
+    assert (kept.first_in, kept.first_out) == (dt.time(7, 50), dt.time(18, 45))
+    assert kept.rules_used["late_fine"] == "500.00"
+    assert kept.rules_used["on_time_until"] == "07:35"
+    assert kept.created_by_id is None
+
+
+def test_a_day_with_no_taps_is_absent(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
+    # Every job gets its day: Juma, who never tapped, is absent, beside Asha, who came.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    days = _days(shop_a, MONDAY, MONDAY)
+    assert days[("Asha", MONDAY)].status == DayStatus.ON_TIME
+    assert days[("Juma", MONDAY)].status == DayStatus.ABSENT
+    assert (days[("Juma", MONDAY)].first_in, days[("Juma", MONDAY)].fine) == (None, Decimal("0.00"))
+
+
+def test_a_voided_tap_counts_for_nothing(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
+    # Asha's Ingia at 07:20 was voided (T2): its day starts at her next one, 07:50, late. A voided tap is a fact kept,
+    # never a tap counted.
+    tap(
+        device_a,
+        asha,
+        ClockKind.IN,
+        at(MONDAY, 7, 20),
+        voided_at=at(MONDAY, 9, 0),
+        voided_by=juma,
+        void_reason="Si yake",
+    )
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    day = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    assert (day.status, day.first_in) == (DayStatus.LATE, dt.time(7, 50))
+
+
+def test_a_day_reads_the_trusted_time(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Asha's laptop clock was 30 minutes slow: it showed 07:20 as she tapped at 07:50, and sent at once, so the server's
+    # time is the one trusted (ATT-1). Her day reads 07:50, late, never the laptop's 07:20, on time.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20), check=TimeCheck.SERVER, server_time=at(MONDAY, 7, 50))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    day = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    assert (day.status, day.first_in) == (DayStatus.LATE, dt.time(7, 50))
+
+
+def test_a_tap_falls_on_the_shops_date(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # A day runs from the shop's midnight to the next, not UTC's: a tap at 21:30 UTC on Monday is 00:30 on Tuesday in
+    # Arusha, so it is Tuesday's; one at 00:00 on Monday, 21:00 UTC on Sunday, is Monday's. Monday reads 00:00 to 18:45,
+    # and its seconds are dropped as the counter drops them: 18:45:59 is 18:45.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 0, 0))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45, 59))
+    tap(device_a, asha, ClockKind.IN, dt.datetime(2026, 11, 16, 21, 30, tzinfo=dt.UTC))
+    days = _days(shop_a, MONDAY, TUESDAY)
+    assert (days[("Asha", MONDAY)].first_in, days[("Asha", MONDAY)].first_out) == (dt.time(0, 0), dt.time(18, 45))
+    assert days[("Asha", MONDAY)].status == DayStatus.ON_TIME
+    # Tuesday: an Ingia at 00:30 and no Toka, for a manager to decide.
+    assert days[("Asha", TUESDAY)].first_in == dt.time(0, 30)
+    assert days[("Asha", TUESDAY)].status == DayStatus.NEEDS_REVIEW
+
+
+def test_an_unverified_tap_needs_review(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Asha's Ingia came from a laptop whose clock moved: no time is trusted (ATT-1), so no window can be read, and her
+    # day goes to a manager, with no fine, whatever her Toka says. The Toka, trusted, is kept beside it.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20), check=TimeCheck.UNVERIFIED)
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    day = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    assert (day.status, day.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
+    assert (day.first_in, day.first_out) == (None, dt.time(18, 45))
+
+
+def test_an_unverified_tap_falls_on_its_laptops_date(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # A tap with no trusted time has only the laptop's: its Monday, by the shop's clock, so the manager finds it on
+    # Monday, and Tuesday holds nothing of it.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20), check=TimeCheck.UNVERIFIED)
+    days = _days(shop_a, MONDAY, TUESDAY)
+    assert days[("Asha", MONDAY)].status == DayStatus.NEEDS_REVIEW
+    assert days[("Asha", TUESDAY)].status == DayStatus.ABSENT
+
+
+def test_a_day_follows_a_rule_changed_later(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Asha's Monday, late with no fine, as a shop starts with none (ATT-2). The owner then types a first fine of 500
+    # from 1 November, a day already past: worked out again, her Monday takes it, and the edit history keeps the change
+    # (ADR-0036), from 0.00 to 500.00.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    before = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    assert (before.status, before.fine) == (DayStatus.LATE, Decimal("0.00"))
+    _rule(shop_a, "500.00", dt.date(2026, 11, 1))
+    after = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    assert after.pk == before.pk
+    assert (after.fine, after.rules_used["late_fine"]) == (Decimal("500.00"), "500.00")
+    with shop_context(shop_a):
+        edits = list(EditEvent.objects.filter(subject_type="attendance_day", subject_id=before.pk))
+    assert [(edit.before["fine"], edit.after["fine"]) for edit in edits] == [("0.00", "500.00")]
+
+
+def test_a_day_follows_a_tap_that_came_late(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Asha's Toka sat on a laptop that was offline: her Monday has only her Ingia, for a manager. Her Toka arrives the
+    # next day, and her Monday, worked out again, is on time.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    assert _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)].status == DayStatus.NEEDS_REVIEW
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    assert _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)].status == DayStatus.ON_TIME
+
+
+def test_a_day_that_comes_out_the_same_is_not_written_again(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # A month asked for twice, as ATT-5 asks for it each time a manager opens it: the second time nothing has changed,
+    # so the book writes nothing, and answers the rows it kept.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))
+    first = _days(shop_a, MONDAY, TUESDAY)
+    with CaptureQueriesContext(connection) as queries:
+        second = _days(shop_a, MONDAY, TUESDAY)
+    writes = [query["sql"] for query in queries if query["sql"].startswith(("INSERT", "UPDATE"))]
+    assert writes == []
+    assert {key: day.pk for key, day in second.items()} == {key: day.pk for key, day in first.items()}
+
+
+def test_working_out_twice_keeps_one_row(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
+    # Two runs at once (two managers open the month, or the night's job beside them): each reads no day kept, then
+    # keeps its own. The second finds the first's rows by the rule of one day per job and date, and writes over them,
+    # with the same answer, so one row stays per job and date, under its first id. _keep is handed no day kept, as the
+    # second run read none.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))
+    first = _days(shop_a, MONDAY, TUESDAY)
+    again = [
+        AttendanceDay(
+            shop=shop_a,
+            staff=day.staff,
+            date=day.date,
+            status=day.status,
+            fine=day.fine,
+            first_in=day.first_in,
+            first_out=day.first_out,
+            rules_used=day.rules_used,
+        )
+        for day in first.values()
+    ]
+    with shop_context(shop_a):
+        kept = _keep(again, {})
+        assert AttendanceDay.objects.count() == 4
+    assert sorted(day.pk for day in kept) == sorted(day.pk for day in first.values())
+
+
+def test_two_jobs_on_one_day_read_their_own_taps(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Baraka leaves on Monday and is hired again the same day (PPL-11): two jobs, and a day each. He tapped Ingia on his
+    # old job and Toka on his new one, so each job has half a day's taps, and each day goes to a manager: never a full
+    # day paid twice, nor one made of two jobs' taps.
+    old = _worker(shop_a, "Baraka")
+    tap(device_a, old, ClockKind.IN, at(MONDAY, 7, 20))
+    with shop_context(shop_a):
+        mark_left(old, left_on=MONDAY, by=None, reason="Ameacha kazi")
+        old.refresh_from_db()
+        new = hire_again(old, display_name="Baraka", started_on=MONDAY, by=None)
+    tap(device_a, new, ClockKind.OUT, at(MONDAY, 18, 45))
+    with shop_context(shop_a):
+        days = {day.staff_id: day for day in work_out_days(shop_a, MONDAY, MONDAY)}
+    assert (days[old.pk].status, days[old.pk].first_in, days[old.pk].first_out) == (
+        DayStatus.NEEDS_REVIEW,
+        dt.time(7, 20),
+        None,
+    )
+    assert (days[new.pk].status, days[new.pk].first_in, days[new.pk].first_out) == (
+        DayStatus.NEEDS_REVIEW,
+        None,
+        dt.time(18, 45),
+    )
+
+
+def test_work_out_days_refuses_a_moment_or_another_shop(shop_a: Shop, shop_b: Shop) -> None:
+    # A datetime is a moment, not the shop's day; and another shop than the one open would read its taps through the
+    # wrong guard. Both are bugs in the calling code, so both fail loudly, as get_setting and closed_days do.
+    with shop_context(shop_a):
+        with pytest.raises(TypeError):
+            work_out_days(shop_a, at(MONDAY, 0, 0), MONDAY)
+        with pytest.raises(ShopMismatch):
+            work_out_days(shop_b, MONDAY, MONDAY)
