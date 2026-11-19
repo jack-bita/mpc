@@ -1237,22 +1237,27 @@ def test_giving_a_pin_needs_staff_manage(shop_a: Shop, asha: StaffMember, give_r
 def test_who_may_set_a_pin_reaches_the_route(
     shop_a: Shop, baba: StaffMember, juma: StaffMember, give_role: GiveRole
 ) -> None:
-    # set_pin's rule answers through the route, each refusal with its own code for the page to say: nobody sets their
-    # own here; a manager with the key still can't set the owner's, which is the superuser's alone (PPL-13); and one
-    # who left gets none.
+    # set_pin's rule answers through the route, each refusal with its own code for the page to say (Done when #4):
+    # nobody sets their own here; a manager with the key still can't set the owner's, which is the superuser's alone
+    # (PPL-13), nor the PIN of someone holding a key he lacks, as knowing it he could use that key (PPL-12's review);
+    # and one who left gets none.
     meneja = job(shop_a, "Meneja Mfano", "Meneja")
     give_role(meneja, RoleTemplate.MANAGER, None)
+    neema = job(shop_a, "Neema Mfano", "Neema")
     with shop_context(shop_a):
         grant_permission(meneja, Permission.STAFF_MANAGE, side=None, by=None)
+        grant_permission(neema, Permission.PAY_APPROVE, side=None, by=None)
 
     own = give_pin(meneja, meneja)
     owners = give_pin(meneja, baba)
+    stronger = give_pin(meneja, neema)
     left = give_pin(baba, juma)
 
     assert (own.status_code, own.json()["code"]) == (400, "pin.own")
     assert (owners.status_code, owners.json()["code"]) == (400, "pin.superuser_only")
+    assert (stronger.status_code, stronger.json()["code"]) == (400, "pin.more_keys")
     assert (left.status_code, left.json()["code"]) == (400, "staff.left")
-    for person in (meneja, baba, juma):
+    for person in (meneja, baba, neema, juma):
         assert pin_of(person) == ("", None)
 
 
