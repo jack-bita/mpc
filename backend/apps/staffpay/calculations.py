@@ -4,6 +4,10 @@ The time check (ATT-1, 02 §12): how far a clock-in's time can be trusted, from 
 A laptop's clock can be moved by anyone, and an offline clock-in carries only its time, so the server keeps that time
 only when no sign says the clock moved. Server only: the laptop never judges its own clock, so this one has no
 TypeScript twin and no shared test vectors (03 §8).
+
+The day's rule (ATT-4, spec §8.1): what one worker's day was. Every window of the owner's day is a minute on the
+shop's clock, which shop_minute reads from a tap's time. Server only too, as the day is worked out on the server
+(03 §5.8).
 """
 
 import datetime as dt
@@ -96,3 +100,14 @@ def check_time(evidence: Evidence) -> CheckedTime:
     if signs:
         return CheckedTime(TimeCheck.UNVERIFIED, None, clock_error, signs)
     return CheckedTime(TimeCheck.DEVICE_OK, evidence.client_time, clock_error, signs)
+
+
+def shop_minute(moment: dt.datetime, zone: dt.tzinfo) -> dt.time:
+    """A tap's time as a minute on the shop's clock, as the counter shows it (ATT-4, 02 §12): 04:35:40 in UTC is 07:35
+    in Arusha. Every window of the owner's day is such a minute, so a tap's seconds never count."""
+    # A time with no zone would be read on the server's own clock, which runs in UTC: Asha's 07:35 in Arusha would turn
+    # into 10:35, and her day into dharura, without a word. So it fails loudly, as closed_days refuses a datetime.
+    if moment.utcoffset() is None:
+        raise ValueError("shop_minute needs a time with its zone.")
+    # Cut, never rounded: 07:35:59 shows 07:35 on the laptop, so it is still on time (ATT-2).
+    return moment.astimezone(zone).time().replace(second=0, microsecond=0)
