@@ -6,7 +6,7 @@
 // them off. Badilisha turns the details into boxes, in their place (PPL-10, worker-details-form.tsx). Under the
 // buttons, Kuingia: whether they have a PIN, Weka PIN and Nenosiri la muda (PPL-12, worker-logins.tsx); then a card of
 // their roles and extra keys, each by its name and side (PPL-8, worker-roles.tsx); under it, their daily pay rate and
-// its history, for whoever holds settings.manage (WAGE-1, worker-pay.tsx). Later cards add here: the photo (PPL-9), and
+// its history, for whoever holds settings.manage and staff.manage (WAGE-1, worker-pay.tsx). Later cards add here: the photo (PPL-9), and
 // the pay so far (WAGE-2), so the owner pays one who leaves at once.
 //
 // At /workers/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address

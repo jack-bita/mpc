@@ -1065,6 +1065,43 @@ def test_a_key_on_one_side_sees_and_sets_no_rate(
         assert not PayRate.objects.exists()
 
 
+@pytest.mark.django_db
+def test_seeing_pay_needs_the_workers_key_too(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # Baba hands Meneja settings.manage to change the late fine, and nothing else (Jack, WAGE-1's review: A): Meneja
+    # reads nobody's pay, sets none, and a rate's id sent again as a new one hands nothing back. Whoever may see a
+    # worker's pay holds the same two keys as whoever may change it.
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    with shop_context(shop_a):
+        grant_permission(staff_a2, Permission.SETTINGS_MANAGE, side=None, by=None)
+        juma = add_staff(
+            shop=shop_a, user=User.objects.create_user(full_name="Juma Demo"), display_name="Juma", by=None
+        )
+    sent = {
+        "id": str(uuid.uuid7()),
+        "staff": str(juma.pk),
+        "daily_rate": "13579",
+        "shares_meals": True,
+        "effective_from": juma.started_on.isoformat(),
+    }
+    assert client_for(staff_a).post(PAY_RATES, sent, format="json").status_code == 201
+
+    meneja = client_for(staff_a2)
+    new_one = {**sent, "id": str(uuid.uuid7())}
+    for refused in (
+        meneja.get(PAY_RATES, {"staff": str(juma.pk)}),
+        meneja.post(PAY_RATES, new_one, format="json"),
+        meneja.post(PAY_RATES, sent, format="json"),
+    ):
+        assert refused.status_code == 403
+        assert refused.json()["code"] == "permission_denied"
+        assert "13579" not in refused.content.decode()
+    with shop_context(shop_a):
+        assert PayRate.objects.count() == 1
+
+
 def test_pay_rate_routes_name_their_permissions() -> None:
     # Reading a worker's rates and setting one both need `settings.manage` (WAGE-1). Written out in full, as above.
     assert PayRateViewSet.action_permissions == {

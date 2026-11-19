@@ -164,6 +164,32 @@ describe("Malipo kwa siku", () => {
     expect(ratesAsked()).toEqual([]);
   });
 
+  it("isn't there for someone with the rules-and-rates key alone, and asks nothing", async () => {
+    // Baba hands Neema settings.manage to change the late fine, and nothing else: seeing a worker's pay needs the same
+    // two keys as changing it (Jack, WAGE-1's review: A), so the page asks no rates, whatever address she opens.
+    const finesOnly: WhoIsHere = {
+      ...MANAGER,
+      permissions: {
+        whole_shop: ["settings.manage"],
+        sides: MANAGER.permissions.sides.map((side) => ({
+          ...side,
+          permissions: ["settings.manage"],
+        })),
+      },
+    };
+    theServerHas(JUMA, payRates([], null), finesOnly);
+
+    render(<WorkerScreen id={JUMA.id} />);
+
+    expect(
+      await screen.findByRole("heading", { name: JUMA.display_name }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("region", { name: "Malipo kwa siku" }),
+    ).toBeNull();
+    expect(ratesAsked()).toEqual([]);
+  });
+
   it("offers no button on one's own page", async () => {
     // Nobody sets their own pay (staff.own): Baba opens his own page and sees his rate, if he has one, and no button.
     const own = worker({ id: BABA.staff.id, display_name: "Baba" });

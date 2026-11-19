@@ -3,9 +3,10 @@
 //
 // The server answers a worker's rates newest first, the shop's today, and which rate is in force today, worked out on
 // the shop's own date there, as a phone's date can be wrong (GET /api/v1/staffpay/pay-rates/?staff=…). Its route asks
-// settings.manage on the whole shop, the key to the shop's rules and rates, and setting one asks staff.manage too
-// (set_pay_rate): the page opens only for staff.manage already (mayManageStaff), so the card shows to whoever holds
-// settings.manage there.
+// two keys, both on the whole shop, to see a worker's pay as to change it: settings.manage, the key to the shop's
+// rules and rates, and staff.manage, the workers' (Jack, WAGE-1's review: A). So the card shows, and the page asks the
+// rates, only for whoever holds both (maySeePay): a manager handed settings.manage only to change the late fine sees
+// nobody's pay, whatever address he opens.
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -15,10 +16,12 @@ import type { components } from "@/api/schema";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 import { Decimal } from "@/lib/decimal";
 
+import { MANAGES_STAFF } from "./workers";
+
 export type PayRate = components["schemas"]["PayRate"];
 export type PayRates = components["schemas"]["PayRatesAnswer"];
 
-/** The key the rates' route asks, on the whole shop: one of the owner's own four (spec §6). */
+/** The rates route's key, on the whole shop: one of the owner's own four (spec §6). The other is MANAGES_STAFF. */
 export const MANAGES_RATES = "settings.manage";
 
 /** Every worker's rates' place in the store of server answers; a save asks them all again. */
@@ -29,10 +32,11 @@ export function payRatesKey(id: string) {
   return [...PAY_RATES, id] as const;
 }
 
-/** Whether the person may see a worker's pay: settings.manage on the whole shop, as the route asks it there, since a
- * worker belongs to the whole shop. */
+/** Whether the person may see a worker's pay: settings.manage and staff.manage, both on the whole shop, as the route
+ * asks them there, since a worker belongs to the whole shop. */
 export function maySeePay(me: WhoIsHere): boolean {
-  return me.permissions.whole_shop.includes(MANAGES_RATES);
+  const held = me.permissions.whole_shop;
+  return held.includes(MANAGES_RATES) && held.includes(MANAGES_STAFF);
 }
 
 /** The rates read by the page, the part always on it, and handed down by their values alone, as the roles are

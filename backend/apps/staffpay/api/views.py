@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from django.db.models import QuerySet
 from drf_spectacular.utils import extend_schema
+from rest_framework import exceptions
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -31,8 +32,8 @@ class PayRateViewSet(CreateOnceMixin[PayRate]):
     side_field = None
     # A worker's pay is the owner's business: seeing it and setting it both need `settings.manage`, the key to the
     # shop's rules and rates, on the whole shop (WAGE-1). A route of the whole shop's rows may show its rows behind a
-    # key of its own, as the workers' list does (PPL-4). Setting one also asks the PIN's rule, staff.manage among it,
-    # inside the service.
+    # key of its own, as the workers' list does (PPL-4). Both need `staff.manage` on the whole shop too (initial()
+    # below); setting one also asks the PIN's rule, inside the service.
     action_permissions = {
         "list": Permission.SETTINGS_MANAGE,
         "create": Permission.SETTINGS_MANAGE,
@@ -41,6 +42,17 @@ class PayRateViewSet(CreateOnceMixin[PayRate]):
     create_serializer_class = PayRateCreateSerializer
     # One answer, not pages: a worker has a few rates a year, and the page shows them all.
     pagination_class = None
+
+    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
+        # The base's checks first: the login, the action named, and its key above (apps/core/api/base.py). Then the
+        # workers' key, staff.manage on the whole shop, for every action, a read too: whoever may see a worker's pay
+        # holds the same two keys as whoever may change it (Jack, WAGE-1's review: A), so a manager handed
+        # settings.manage only to change the late fine reads nobody's pay. Here, before anything is read, as the route
+        # names one key per action: so a create sent again, which hands back the rate it made, is refused alike.
+        super().initial(request, *args, **kwargs)
+        if Permission.STAFF_MANAGE not in self.held.on(None):
+            # English for the logs; the screens translate the code (ADR-0032).
+            raise exceptions.PermissionDenied(f"This person may not {Permission.STAFF_MANAGE} here.")
 
     def base_rows(self) -> QuerySet[PayRate]:
         # Each rate names who set it (`set_by`): their job comes in the same read, not one read per rate.

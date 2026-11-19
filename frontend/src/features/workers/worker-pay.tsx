@@ -12,8 +12,8 @@
 //
 // A worker with no rate today says so (Bado hana malipo kwa siku.), and their button reads Weka malipo; one with a rate
 // still to come shows it in the history, as it counts from its own day. Which rate is in force is the server's answer,
-// on the shop's own date. Only for whoever holds settings.manage on the whole shop (maySeePay, pay-rates.ts): the page
-// asks the rates for them alone, and hands the read down (worker-page.tsx).
+// on the shop's own date. Only for whoever holds settings.manage and staff.manage on the whole shop (maySeePay,
+// pay-rates.ts): the page asks the rates for them alone, and hands the read down (worker-page.tsx).
 //
 // The button shows as the roles card's do (worker-roles.tsx): for a worker working or suspended, as a suspended one
 // still has days to pay; none for one who left, whose pay up to their last day is worked out with the rates they had;
