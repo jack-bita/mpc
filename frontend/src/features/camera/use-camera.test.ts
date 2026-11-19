@@ -254,6 +254,41 @@ describe("useCamera", () => {
     expect(shrinkFrame).not.toHaveBeenCalled();
   });
 
+  it("waits 5 seconds in all for the camera and its first frame, never twice that", async () => {
+    // The camera answers after 4 seconds but sends no frame: the tap gives up at 5 seconds from the tap, one
+    // limit for both waits, so her tap's time is never 10 seconds late (ATT-3's review).
+    vi.useFakeTimers();
+    const { stream } = aCamera();
+    const { answer, give } = later();
+    theBrowserAnswers(answer);
+    const { result } = renderHook(() => useCamera(true));
+    // A <video> with no frame yet: its size is 0 × 0.
+    const video = document.createElement("video");
+    const listening = vi.spyOn(video, "removeEventListener");
+    act(() => result.current.videoRef(video));
+
+    let done = false;
+    let taking: Promise<Blob | string> = Promise.resolve("");
+    act(() => {
+      taking = result.current.take().finally(() => {
+        done = true;
+      });
+    });
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    await act(async () => {
+      give(stream);
+      await Promise.resolve();
+    });
+    await act(() => vi.advanceTimersByTimeAsync(999));
+    expect(done).toBe(false);
+    await act(() => vi.advanceTimersByTimeAsync(1));
+
+    expect(await taking).toBe("failed");
+    expect(shrinkFrame).not.toHaveBeenCalled();
+    // The wait for a frame ended: its listener is gone with it.
+    expect(listening).toHaveBeenCalledWith("loadeddata", expect.any(Function));
+  });
+
   it("has no photo to give when there is no camera, only why", async () => {
     theBrowserAnswers(() =>
       Promise.reject(new DOMException("no", "NotAllowedError")),

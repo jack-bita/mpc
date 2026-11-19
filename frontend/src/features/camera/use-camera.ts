@@ -36,7 +36,8 @@ export interface Camera {
   take: () => Promise<Blob | CameraProblem>;
 }
 
-/** How long a tap waits for a camera still starting, or for its first frame: then it goes on without. */
+/** How long a tap waits, at most, for a camera still starting and its first frame together: then it goes on
+ * without. One limit for both, so a slow camera never holds a tap twice as long (ATT-3's review). */
 export const START_WAIT = 5 * 1000;
 
 // The front camera, the face's, not the room's (laptops have only that one; the shop's phone has two). An
@@ -133,12 +134,16 @@ export function useCamera(on: boolean): Camera {
   );
 
   const take = useCallback(async (): Promise<Blob | CameraProblem> => {
+    // One deadline from the tap: what the camera's start used of it, its first frame can't have again.
+    const deadline = Date.now() + START_WAIT;
+    const left = () => Math.max(0, deadline - Date.now());
     try {
-      const result = await within(outcome.current, START_WAIT, "failed");
+      const result = await within(outcome.current, left(), "failed");
       if (result === "off") return "failed";
       if (result !== "live") return result;
       const element = video.current;
-      if (element === null || !(await hasAFrame(element))) return "failed";
+      if (element === null || !(await hasAFrame(element, left())))
+        return "failed";
       return await shrinkFrame(
         element,
         element.videoWidth,
@@ -186,11 +191,21 @@ function within<T>(answer: Promise<T>, wait: number, otherwise: T): Promise<T> {
 }
 
 // Whether the <video> has a frame to draw: a camera just turned on may not have sent its first one, whose
-// size is still 0 × 0. Waits for it, as long as a camera's start.
-async function hasAFrame(element: HTMLVideoElement): Promise<boolean> {
+// size is still 0 × 0. Waits for it `wait` milliseconds at most, what is left of the tap's deadline, and
+// stops listening either way, so no listener stays on a <video> after a wait that ended.
+async function hasAFrame(
+  element: HTMLVideoElement,
+  wait: number,
+): Promise<boolean> {
   if (element.videoWidth > 0) return true;
+  let heard: () => void = () => undefined;
   const first = new Promise<boolean>((resolve) => {
-    element.addEventListener("loadeddata", () => resolve(true), { once: true });
+    heard = () => resolve(true);
+    element.addEventListener("loadeddata", heard, { once: true });
   });
-  return within(first, START_WAIT, false);
+  try {
+    return await within(first, wait, false);
+  } finally {
+    element.removeEventListener("loadeddata", heard);
+  }
 }
