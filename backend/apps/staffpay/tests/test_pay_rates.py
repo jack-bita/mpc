@@ -24,7 +24,7 @@ from django.test.utils import CaptureQueriesContext
 from apps.core.models import AppendOnlyError
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import StaffMember, User
-from apps.people.services import add_staff
+from apps.people.services import add_staff, mark_left
 from apps.shops.models import Shop
 from apps.staffpay.models import PayRate
 from apps.staffpay.selectors import rates_between
@@ -189,6 +189,18 @@ def test_a_worker_with_no_rate_has_none_on_any_day(shop_a: Shop) -> None:
     with shop_context(shop_a):
         rates = rates_between(shop_a, NOV_1, NOV_30)
     assert {job for job, _ in rates} == {juma.pk}
+
+
+def test_a_rate_goes_on_after_a_jobs_last_day(shop_a: Shop) -> None:
+    # Juma leaves on 15 Nov: his rate still answers every day after, as a tap after his last day can go to review and
+    # the owner may decide that day is paid (ATT-11, ATT-6), which needs its rate. The selector reads no job's days, so
+    # the month page (ATT-5) and the pay (WAGE-2) keep to the days the book answers, never to this answer alone.
+    juma = _worker(shop_a, "Juma")
+    rate = _rate(juma, "10000.00", NOV_1)
+    with shop_context(shop_a):
+        mark_left(juma, left_on=NOV_15, by=None, reason="Amehamia Moshi")
+        rates = rates_between(shop_a, NOV_1, NOV_30)
+    assert all(rates[(juma.pk, day)] == rate for day in _days(NOV_15 + dt.timedelta(days=1), NOV_30))
 
 
 def test_only_the_shops_own_rates(shop_a: Shop, shop_b: Shop) -> None:

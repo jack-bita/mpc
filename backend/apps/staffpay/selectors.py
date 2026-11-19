@@ -88,7 +88,10 @@ def rates_between(shop: Shop, first: date, last: date) -> dict[tuple[uuid.UUID, 
     """Each job's pay rate on each day from `first` to `last`, both counted: {(job id, day): the rate in force}. A job
     with no rate on a day, as before its first rate, or the owner, who is paid no day, has no key for that day. One
     read for the span, for every job of the shop: the month page (ATT-5) lists only the jobs it names, and the pay
-    (WAGE-2) pays each day at its own rate."""
+    (WAGE-2) pays each day at its own rate. It reads no job's first or last day: no rate starts before a first day
+    (set_pay_rate refuses one), but a rate goes on after a last, as a tap after it goes to review and the owner may
+    decide that day is paid (ATT-11, ATT-6), which needs its rate. So a caller keeps to the days the book answers
+    (work_out_days): Juma, gone since 15 Nov, still has a rate here every day after, and is listed by his days."""
     # The same checks as the book's and the settings', for the same reasons (ADR-0022): asked inside another shop's
     # visit, the guard would hide every row, and the answer would be "no rate" for everyone, without a word. And a
     # datetime is a kind of date in Python, but a moment, not the shop's day.
