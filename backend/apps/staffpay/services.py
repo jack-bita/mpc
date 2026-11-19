@@ -113,7 +113,10 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
             rules_used = rules_as_text(rules)
             for job in working:
                 # Only the job's own taps: Asha's on Asha's day, even on a laptop Juma used too. With none, the rule
-                # answers absent.
+                # answers absent. Each tap as it is, a suspended or gone worker's too: the push flags such a clock-in
+                # on its line in the answer log (suspended_staff_activity, X2), not on the event, so until ATT-11 reads
+                # those flags, Juma's tap the morning after his suspension counts as any other. Nothing is paid from
+                # the book before then: WAGE-2 comes after ATT-11.
                 job_taps = taps.get((job.pk, day), [])
                 if day in closed and not job_taps:
                     # A closed day is off, and not paid, like Sunday (ATT-8).
