@@ -28,6 +28,20 @@ class TimeCheck(models.TextChoices):
     UNVERIFIED = "unverified", "Not verified"  # a sign its clock moved: a manager decides
 
 
+class NoPhoto(models.TextChoices):
+    # Why a tap has no photo (ATT-3). A tap is never refused for want of one, as nobody may lose a day's pay to a camera
+    # (Jack: A): it is kept, and says why, for a manager to see beside the day (ATT-5). Empty when its photo came: the
+    # photo itself is an Attachment pinned to the line (apps/control/models.py), not a column, so one fact lives once.
+    NO_CAMERA = "no_camera", "No camera"  # the laptop has none, or the browser found none
+    BLOCKED = "blocked", "Camera blocked"  # someone told the browser to block it: a manager may want to ask who
+    FAILED = "failed", "Camera failed"  # it started and broke, or the photo couldn't be made: a bug or a broken camera
+    OLD_APP = (
+        "old_app",
+        "App before photos",
+    )  # version 1 of the clock-in, from an app with no camera yet: never a choice
+    DEMO = "demo", "Demo"  # on the demo a visitor's face never leaves their laptop (Jack: A)
+
+
 # The type checker's Django plugin calls the two bases' get_next_by_created_at() a clash, as on PushedDocument
 # (apps/sync/models.py): one and the same method, from ShopScoped. Ignored on this line only.
 class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
@@ -52,6 +66,9 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
     # was as it sent the push (its clock minus the server's: 40 minutes slow is minus 40 minutes).
     last_server_time = models.DateTimeField()
     clock_error = models.DurationField()
+    # Why the tap has no photo, or empty when its photo came (NoPhoto, ATT-3). Written once with the line, as the rest
+    # of it is: a photo that arrives late changes nothing here, as its row is the one that waits (CTRL-3).
+    no_photo = models.CharField(max_length=9, choices=NoPhoto, blank=True)
     # The void stamp (03 §5.6): empty while the line counts, filled once when it is voided, then frozen, as the
     # trigger in this table's migration makes PostgreSQL hold it. A clock-in tapped twice by mistake is voided, never
     # deleted (T3). Who voided it: a staff member, as created_by is; PROTECT, as nothing is deleted. That they are of
@@ -100,6 +117,11 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
                     | models.Q(voided_at__isnull=False, voided_by__isnull=False, void_reason__regex=r"\S")
                 ),
                 name="staffpay_attendanceevent_void_complete",
+            ),
+            # Only the reasons there are, or none (ATT-3). Whether a photo came can't be a rule here: its row is in
+            # another table, and comes in the same transaction, after the line it is pinned to.
+            models.CheckConstraint(
+                condition=models.Q(no_photo__in=["", *NoPhoto.values]), name="staffpay_attendanceevent_no_photo_known"
             ),
         ]
 
