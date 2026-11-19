@@ -278,7 +278,7 @@ def _save(
             # A carried record's is its own laptop's record before it, by its number there: Asha's 07:30 on the Dawa
             # laptop is checked against what Dawa made before it, not against Baraka's 10:00 on the laptop that
             # loaded the file, which would look like a clock moved back (SYNC-12's review).
-            time_before, made_before_by = (
+            time_before, made_before_by, record_before = (
                 _record_before(device.pk, sent.device_seq)
                 if origin is None
                 else _record_before(origin.device.pk, origin.device_seq)
@@ -292,6 +292,7 @@ def _save(
                 sent_at=sent_at,
                 time_before=time_before,
                 made_before_by=made_before_by,
+                record_before=record_before,
                 created_by=maker,
                 carried=origin is not None,
             )
@@ -416,10 +417,11 @@ def _last_number(device: Device) -> int:
     return highest_pushed_number(device)
 
 
-def _record_before(device_id: uuid.UUID, device_seq: int) -> tuple[datetime | None, uuid.UUID | None]:
-    # The laptop's own time on the record it numbered last before this one, of those the server holds, and who made
-    # it (ATT-1): the evidence a clock-in's time check reads, as only this log holds every record of the laptop,
-    # whatever its type; (None, None) when it holds none. A set-aside one counts too: it was made at the counter all
+def _record_before(device_id: uuid.UUID, device_seq: int) -> tuple[datetime | None, uuid.UUID | None, uuid.UUID | None]:
+    # The laptop's own time on the record it numbered last before this one, of those the server holds, who made it,
+    # and its own id (ATT-1, ATT-11): the evidence a clock-in's time check reads, as only this log holds every record of
+    # the laptop, whatever its type; and the record a clock-in keeps when its time disagrees with it. (None, None, None)
+    # when it holds none. A set-aside one counts too: it was made at the counter all
     # the same. After a laptop reset, which numbers again from 1 (SYNC-5), two lines can share a number: the newer is
     # the new count's, so it is the one before. Read through the index on (shop, device, device_seq): one row, however
     # many records the laptop has sent.
@@ -433,21 +435,21 @@ def _record_before(device_id: uuid.UUID, device_seq: int) -> tuple[datetime | No
     own = (
         PushedDocument.objects.filter(device_id=device_id, device_seq__lt=device_seq, carried_from__isnull=True)
         .order_by("-device_seq", "-created_at", "-id")
-        .values_list("device_seq", "client_time", "created_by_id")
+        .values_list("device_seq", "client_time", "created_by_id", "document_id")
         .first()
     )
     carried = (
         PushedDocument.objects.filter(carried_from_id=device_id, carried_seq__lt=device_seq)
         .order_by("-carried_seq", "-created_at", "-id")
-        .values_list("carried_seq", "client_time", "created_by_id")
+        .values_list("carried_seq", "client_time", "created_by_id", "document_id")
         .first()
     )
     found = [line for line in (own, carried) if line is not None]
     if not found:
-        return None, None
+        return None, None, None
     # A carried line's number is never empty: its rule says all three or none (sync_pusheddocument_carried_whole).
-    _, client_time, made_by = max(found, key=lambda line: line[0] or 0)
-    return client_time, made_by
+    _, client_time, made_by, document_id = max(found, key=lambda line: line[0] or 0)
+    return client_time, made_by, document_id
 
 
 def _check_number(device: Device, line: PushedDocument, last: int) -> None:

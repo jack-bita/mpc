@@ -50,9 +50,14 @@ class Document:
     # there is none. A later record with an earlier time says a clock moved between the two, not at which, so a
     # clock-in's flag names them too (Jack, ATT-1's review).
     made_before_by: uuid.UUID | None
+    # That record's own id, as the laptop made it (the tap's, the sale's), not its line's; None when there is none. A
+    # flag names people, not records, so a clock-in whose time disagrees with it keeps it (ATT-11): Juma's day of that
+    # record is then sent to review too, as his time can be the wrong one.
+    record_before: uuid.UUID | None
     created_by: StaffMember
     # Brought in a rescue file from another laptop of the shop (SYNC-12): its time came from a file, which a clock-in
-    # never trusts. time_before and made_before_by are then the laptop's that made it, by its number there.
+    # never trusts. time_before, made_before_by and record_before are then the laptop's that made it, by its number
+    # there.
     carried: bool = False
 
 

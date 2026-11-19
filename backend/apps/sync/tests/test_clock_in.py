@@ -4,6 +4,7 @@ the attendance book (ATT-1; 02 §12, 03 §6.3, §6.6).
     sent at once                         → saved with the server's time                     server
     sent later, and the evidence agrees  → saved with the laptop's time                     device_ok
     sent later, and the clock moved back → saved with no trusted time, and a flag           unverified + unverified_time
+                                           and the record its time disagrees with (ATT-11)  + disagrees_with
     by a worker suspended meanwhile      → saved, and flagged by the push (SYNC-5)          + suspended_staff_activity
     by anyone working here, any laptop   → no key needed (Jack, ATT-1)
 
@@ -195,6 +196,37 @@ def test_a_clock_moved_forward_names_both_workers(
     assert (jumas.time_check, ashas.time_check) == (TimeCheck.DEVICE_OK, TimeCheck.UNVERIFIED)
     [flag] = _flags(shop_a, FlagKind.UNVERIFIED_TIME)
     assert (flag.subject_id, _named(flag)) == (ashas.pk, [staff_a.pk, staff_a2.pk])
+
+
+def test_a_clock_in_keeps_the_record_it_disagrees_with(
+    shop_a: Model, device_a: Device, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # Juma's Toka says 17:00, then Asha's, the record after it, says 16:00. The flag about hers names him too, but a
+    # flag names people, not records: so her tap keeps the id of his, the record its time disagrees with, for the book
+    # to send his day to review as well (Jack, ATT-11: A). His own tap disagrees with nothing.
+    jumas_toka = _clock(1, staff_a2, arusha(17, 0), kind="out")
+    taps = [jumas_toka, _clock(2, staff_a, arusha(16, 0), kind="out")]
+    _push(device_a, taps, sent_at=arusha(18, 0), received_at=arusha(18, 0))
+    jumas, ashas = _events(shop_a)
+    assert (ashas.time_check, ashas.disagrees_with) == (TimeCheck.UNVERIFIED, jumas_toka.id)
+    assert (jumas.time_check, jumas.disagrees_with) == (TimeCheck.DEVICE_OK, None)
+
+
+def test_another_sign_keeps_no_record(
+    shop_a: Model, device_a: Device, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # Neema taps Toka at 14:00. Then Juma takes the laptop off the network, sets it to 17:00, taps Toka, and sets it
+    # back; it sends at 15:01. His Toka is unverified for being after the laptop's own clock as it sent, not for
+    # disagreeing with Neema's, which came before it with an earlier time: so it keeps no record, and Neema's day is
+    # not sent to review for his trick.
+    taps = [
+        _clock(1, staff_a2, arusha(14, 0), kind="out", last_server_time=arusha(13, 0)),
+        _clock(2, staff_a, arusha(17, 0), kind="out", last_server_time=arusha(14, 0)),
+    ]
+    _push(device_a, taps, sent_at=arusha(15, 1), received_at=arusha(15, 1))
+    neemas, jumas = _events(shop_a)
+    assert (neemas.time_check, jumas.time_check) == (TimeCheck.DEVICE_OK, TimeCheck.UNVERIFIED)
+    assert (neemas.disagrees_with, jumas.disagrees_with) == (None, None)
 
 
 def test_a_record_before_by_nobody_known_names_only_the_worker(
