@@ -26,7 +26,10 @@ import type { WhoIsHere } from "@/features/people/who-is-here";
 
 export type Worker = components["schemas"]["Staff"];
 export type GivenRole = components["schemas"]["GivenRole"];
+/** One of the shop's roles, with its codes, as Ongeza kazi offers it (GET /api/v1/people/roles/, PPL-7). */
+export type Role = components["schemas"]["Role"];
 type StaffPage = components["schemas"]["PaginatedStaffList"];
+type RolePage = components["schemas"]["PaginatedRoleList"];
 
 /** The key the workers' routes ask, on the whole shop: one of the owner's own four (spec §6). */
 export const MANAGES_STAFF = "staff.manage";
@@ -67,6 +70,33 @@ async function allWorkers(): Promise<Worker[]> {
 /** The shop's workers, from the store of server answers. */
 export function useWorkers() {
   return useQuery({ queryKey: WORKERS, queryFn: allWorkers });
+}
+
+/** The shop's roles' place in the store: apart from the workers', as a change to a worker changes no role. */
+export const ROLES = ["people", "roles"] as const;
+
+/** Every role the shop has, page after page: six at first, each a copy of a template (set_up_shop), and later any the
+ * owner makes himself (parking lot item 26). Behind staff.manage on the whole shop, as the workers' list is. */
+async function allRoles(): Promise<Role[]> {
+  const roles: Role[] = [];
+  let cursor: string | null = null;
+  do {
+    // Named, as TypeScript can't work out a type that the loop's own cursor feeds back into (allWorkers).
+    const page: RolePage = await answerOf(
+      api.GET("/api/v1/people/roles/", {
+        params: { query: cursor === null ? {} : { cursor } },
+      }),
+    );
+    roles.push(...page.results);
+    cursor = page.next ? new URL(page.next).searchParams.get("cursor") : null;
+  } while (cursor !== null);
+  return roles;
+}
+
+/** The shop's roles, for Ongeza kazi (PPL-8): asked only once `enabled`, when the form opens, so opening a worker's
+ * page costs no read of them. Asked by the page, the part always on the screen, and handed down (worker-page.tsx). */
+export function useRoles(enabled: boolean) {
+  return useQuery({ queryKey: ROLES, queryFn: allRoles, enabled });
 }
 
 /** One worker's place in the store, under the list's: a change that asks the list again (invalidateQueries with
@@ -116,7 +146,7 @@ export function keepWorker(store: QueryClient, worker: Worker): void {
 /** The six roles every shop starts with, by the code of the template each was copied from (RoleTemplate,
  * backend/apps/core/permissions.py). Each has its words in both books; a role the owner made himself has no
  * template, and shows its own name. */
-const ROLE_TEMPLATES = [
+export const ROLE_TEMPLATES = [
   "owner",
   "manager",
   "seller",

@@ -29,7 +29,7 @@ import { formatDay, formatPhone } from "@/lib/format";
 
 import { WorkerActions } from "./worker-actions";
 import { WorkerRoles } from "./worker-roles";
-import { useWorker, type Worker } from "./workers";
+import { useRoles, useWorker, type Worker } from "./workers";
 
 /** Where the back arrow leads when the person didn't come from inside the app. */
 const THE_LIST = "/workers/";
@@ -55,6 +55,10 @@ export function WorkerScreen({ id }: { id: string | null }) {
     staleTime: Infinity,
     enabled: editing,
   });
+  // Ongeza kazi's form has opened (PPL-8): the shop's roles are asked from then on, here, the part always on the page,
+  // and handed down, as the demo's answer is. Opening a worker's page alone asks for none.
+  const [giving, setGiving] = useState(false);
+  const roles = useRoles(giving);
 
   return (
     <div className="grid max-w-2xl gap-6">
@@ -87,8 +91,16 @@ export function WorkerScreen({ id }: { id: string | null }) {
             demo={demo.data === true}
             onEditing={setEditing}
           />
-          {/* Under the buttons, as Jack chose (PPL-8): each set of buttons beside what it changes. */}
-          <WorkerRoles worker={worker.data} me={who.data} />
+          {/* Under the buttons, as Jack chose (PPL-8): each set of buttons beside what it changes. A worker of its own, as
+              WorkerActions: Asha's open form never goes on to Baraka's page. Its key apart from WorkerActions', as two
+              siblings with one key are one part to React, which then draws only one of them. */}
+          <WorkerRoles
+            key={`${worker.data.id}-roles`}
+            worker={worker.data}
+            me={who.data}
+            roles={roles}
+            onGiving={setGiving}
+          />
         </>
       ) : null}
     </div>

@@ -564,6 +564,21 @@
       "staff": "Wafanyakazi, mahudhurio na mishahara",
       "shop": "Duka lenyewe",
       "production": "Kazi za mashine na uzalishaji"
+    },
+    "giving": {
+      "add": "Ongeza kazi",
+      "title": "Ongeza kazi kwa {name}",
+      "what": "Anapewa nini?",
+      "whatHint": "Unaona tu unachoweza kutoa: cheo ambacho ruhusa zake zote unazo upande huo, au ruhusa uliyo nayo huko.",
+      "aRole": "Cheo",
+      "aKey": "Ruhusa moja ya ziada",
+      "role": "Cheo gani?",
+      "key": "Ruhusa gani?",
+      "noRole": "Hakuna cheo unachoweza kumpa.",
+      "noKey": "Hakuna ruhusa unayoweza kumpa.",
+      "side": "Upande",
+      "sideHint": "Pande zote ni kila upande, hata utakaoongezwa baadaye.",
+      "done": "{name} amepewa {what}. Kompyuta za duka zitajua baada ya kusawazisha."
     }
   },
   "attendance": {

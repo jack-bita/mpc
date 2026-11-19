@@ -564,6 +564,21 @@
       "staff": "Staff, attendance and pay",
       "shop": "The shop itself",
       "production": "Machine jobs and production"
+    },
+    "giving": {
+      "add": "Give a role or a permission",
+      "title": "Give {name} a role or a permission",
+      "what": "What are they given?",
+      "whatHint": "You see only what you may give: a role whose every permission you hold on that side, or a permission you hold there.",
+      "aRole": "A role",
+      "aKey": "One extra permission",
+      "role": "Which role?",
+      "key": "Which permission?",
+      "noRole": "There is no role you can give them.",
+      "noKey": "There is no permission you can give them.",
+      "side": "Side",
+      "sideHint": "All sides means every side, even one added later.",
+      "done": "{name} has been given {what}. The shop's laptops will know after their next sync."
     }
   },
   "attendance": {
