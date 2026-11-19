@@ -2,7 +2,7 @@
 
 Each needs a reason, and writes both books: the audit trail keeps who, when and why (02 §13), and the edit history
 keeps the field as it was and as it is, naming who (ADR-0036). Neither ever changes a day before today, so a day the
-attendance may already have worked out and paid (ATT-4) stays as it was. Today is day 0 below:
+attendance may already have worked out and paid (ATT-10) stays as it was. Today is day 0 below:
 
     Ondoa (cancel), only up to its first day
         days 3–5                  → cancelled

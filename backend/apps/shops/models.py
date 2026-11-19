@@ -13,7 +13,7 @@ A Setting is one dated value of one of the shop's rules, such as the late fine f
 a change is a new row, and get_setting (apps/shops/selectors.py) reads the row in force on a day.
 
 A Closure is a span of days the whole shop is closed: a public holiday, or a family funeral (ATT-8). Each of its days is
-off, and not paid; closed_days (apps/shops/selectors.py) lists them for the attendance day (ATT-4).
+off, and not paid; closed_days (apps/shops/selectors.py) lists them for the attendance days (ATT-10).
 """
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
