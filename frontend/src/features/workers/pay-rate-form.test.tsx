@@ -133,6 +133,46 @@ describe("Weka malipo", () => {
   });
 });
 
+describe("after a save", () => {
+  it("shows the new rate as today's and in the history, read again from the server", async () => {
+    // The card's first box, end to end on the page: Baba sets Juma's 10,000 from his first day, and the card shows it
+    // as Sasa and in Historia, from the server's next answer, as the store asks the rates again after the save.
+    let held = payRates([], null);
+    answer("GET", ME, { status: 200, body: BABA });
+    answer("GET", `${STAFF}${JUMA.id}/`, { status: 200, body: JUMA });
+    answer("GET", PAY_RATES_ROUTE, () => Response.json(held));
+    answer("POST", PAY_RATES_ROUTE, async (request) => {
+      const body = (await request.json()) as PayRate;
+      const saved = payRate({ ...body, daily_rate: `${body.daily_rate}.00` });
+      held = payRates([saved], saved);
+      return Response.json(saved, { status: 201 });
+    });
+    await openTheForm("Weka malipo");
+
+    typeInto(box("Kiasi kwa siku"), "10000");
+    fireEvent.click(button("Hifadhi"));
+
+    // Spaces as a reader reads them: money is written with a space that never breaks ("TSh 10,000").
+    const plain = (text: string) => text.replace(/\s+/g, " ");
+    const tsh = plain(formatMoney(new Decimal("10000")));
+    const card = screen.getByRole("region", { name: "Malipo kwa siku" });
+    expect(
+      await within(card).findByText(
+        `Sasa: ${tsh} kwa siku · anachangia chakula`,
+      ),
+    ).toBeTruthy();
+    const history = within(card).getByRole("region", { name: "Historia" });
+    expect(
+      within(history)
+        .getAllByRole("listitem")
+        .map((line) => plain(line.textContent ?? "")),
+    ).toEqual([`Kuanzia 10/11/2026 · ${tsh} · anachangia chakula`]);
+    expect(
+      within(card).getByRole("button", { name: "Badilisha malipo" }),
+    ).toBeTruthy();
+  });
+});
+
 describe("Badilisha malipo", () => {
   it("starts from today's rate, on today, and sends a raise with its reason", async () => {
     // Neema's case on Juma's page: the cook's 8,000, in force today. A raise keeps her answer about the meals.
