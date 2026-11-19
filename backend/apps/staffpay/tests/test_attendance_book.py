@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from django.db import IntegrityError, connection, transaction
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from apps.control.models import EditEvent
 from apps.core.acting import acting_as
@@ -552,6 +553,20 @@ def test_today_is_not_kept(shop_a: Shop, device_a: Device, asha: StaffMember) ->
     assert _days(shop_a, today, today) == {}
     with shop_context(shop_a):
         assert not AttendanceDay.objects.filter(date__gte=today).exists()
+
+
+def test_today_is_the_shops_today_not_utcs(
+    shop_a: Shop, device_a: Device, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 21:30 UTC on Monday is already 00:30 on Tuesday in Arusha: Monday is over in the shop, though not in UTC. So the
+    # book keeps Monday, and a book that read today by the server's UTC clock would keep nothing. The clock is fixed
+    # there, so the test catches that at any hour it runs, not only in the three hours a day UTC is behind.
+    monkeypatch.setattr(timezone, "now", lambda: dt.datetime(2026, 11, 16, 21, 30, tzinfo=dt.UTC))
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    days = _days(shop_a, MONDAY, TUESDAY)
+    assert sorted(date for _, date in days) == [MONDAY]
+    assert days[("Asha", MONDAY)].status == DayStatus.ON_TIME
 
 
 def test_a_day_no_longer_counted_is_not_answered(shop_a: Shop, attendance_on: None) -> None:
