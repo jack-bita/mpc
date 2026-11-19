@@ -180,7 +180,7 @@ def add_worker(
 ) -> StaffMember:
     """A new worker, as the owner adds one on the workers' page (PPL-4): the person and their job at this shop, in one
     step. Juma has never worked at any shop of this system, so he is a new person (User), with no password, as a worker
-    logs in with a PIN (PPL-8). `phone`, typed as people write it, or None or "" for none (PPL-11): stored in one form,
+    logs in with a PIN (PPL-12). `phone`, typed as people write it, or None or "" for none (PPL-11): stored in one form,
     as every phone is. `staff_id`: the id the app made for the job (ADR-0007). `by`: who adds him, who needs
     staff.manage on the whole shop, as the route asks too; None for the system or the superuser. Refuses as add_staff
     does, a nickname another current worker has among them (staff.display_name_taken); a wrong phone (phone.invalid);
@@ -873,7 +873,7 @@ def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, what: 
     if staff.pk == by.pk:
         # A thief holding a logged-in phone could set a new one for its owner, with no current one, and keep the login
         # for good. A person changes their own password by allauth's change route, which asks for the current one. A PIN
-        # has no such route: someone else sets it, face to face, and PPL-8's screen decides how the person types it. And
+        # has no such route: someone else sets it, face to face, and the worker types it on their phone (PPL-12). And
         # a manager who suspended himself, or marked himself left, would lock himself out by a slip of the finger.
         raise ValidationError("A person doesn't do this to themselves here.", code=f"{what}.own")
     # The superuser's alone (ADR-0038). Read from the roles, whatever the person's status: a suspended owner holds no

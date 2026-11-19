@@ -205,6 +205,9 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
     # For a job that ended: the person's current job here, once they are hired again (PPL-11), so the old job's page
     # links to the new one in place of Mwajiri tena; else null. A job not ended is no one's to come back from.
     hired_again_as = serializers.SerializerMethodField()
+    # Whether the worker has a PIN, yes or no (PPL-12): the page says Imewekwa or Haijawekwa, so the owner sees who has
+    # no tile on the shop's laptops yet. Only this one bit: never the hash, nor when it was set (03 §5.9).
+    has_pin = serializers.SerializerMethodField()
 
     class Meta:
         model = StaffMember
@@ -218,6 +221,7 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
             "status",
             "left_on",
             "switched_off",
+            "has_pin",
             "roles",
             "keys",
             "version",
@@ -235,6 +239,10 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
 
     def get_switched_off(self, staff: StaffMember) -> bool:
         return not staff.user.is_active
+
+    def get_has_pin(self, staff: StaffMember) -> bool:
+        # An empty hash is no PIN: the table's own check keeps the hash and its date empty or set together.
+        return staff.pin_hash != ""
 
     @extend_schema_field(GivenRoleSerializer(many=True))
     def get_roles(self, staff: StaffMember) -> Any:
@@ -432,6 +440,14 @@ class TemporaryPasswordSerializer(serializers.Serializer[Any]):
     # Why, kept in its audit line with who and when (T3). A blank reason is let through, so the service refuses it with
     # its own code, staff.reason_required. 500 characters at most, as the audit line keeps (control.AuditEvent).
     reason = serializers.CharField(max_length=500, allow_blank=True, write_only=True)
+
+
+class SetPinSerializer(serializers.Serializer[Any]):
+    # What Weka PIN sends (PPL-12): the PIN the worker typed twice on the owner's phone. Only ever read in: the route
+    # answers with the worker, and nothing shows a PIN back. 16 characters at most, as at the PIN login, so a huge text
+    # can't reach the slow hash; whether it is four digits, and not too easy, is set_pin's (pin.not_four_digits,
+    # pin.too_easy), so the page hears one code for each, from one place.
+    pin = serializers.CharField(max_length=16, write_only=True)
 
 
 class PinLoginSerializer(serializers.Serializer[Any]):

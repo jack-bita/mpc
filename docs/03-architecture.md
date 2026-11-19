@@ -6,7 +6,7 @@
 **Built from:** `01-product-spec.md` v1.0, `02-domain-model.md` v1.0; updated by `04-build-plan.md` v1.0 (v1.1)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Key decisions are in §2 (AD3, AD14 and AD16 confirmed with Jack) and are recorded as ADRs 0015–0032 in `docs/adr/`; AD1 is now ADR-0035 **(v1.4)**, then ADR-0041 **(v1.36)**, then ADR-0043 **(v1.57)**, AD3 ADR-0038 **(v1.16)**, and AD18 ADR-0040 **(v1.30)**. Small open items are in the parking lot (§18). The changes this doc made to the domain model are listed in Appendix B and applied in `02-domain-model.md` v1.1.
 
-**Changes in v1.85** (20 Nov 2026, WAGE-1): §5.8, a worker's daily pay rate, a dated rule kept on the server only, set behind the PIN's rule and the key to the shop's rules and rates, and read a span at a time; §5.10, its office route (04 v1.147). Marked **(v1.85)**.
+**Changes in v1.85** (20 Nov 2026, WAGE-1): §5.8, a worker's daily pay rate, a dated rule kept on the server only, set behind the PIN's rule and the key to the shop's rules and rates, and read a span at a time; §5.10, its office route (04 v1.150). Marked **(v1.85)**.
 
 **Changes in v1.84** (19 Nov 2026, ATT-11's review): §6.6, the book reads two of `sync`'s facts by name at run time, which the layer check can't see, and the tests that guard them (04 v1.144). Marked **(v1.84)**.
 

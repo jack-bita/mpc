@@ -436,6 +436,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/people/staff/{id}/pin/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["people_staff_pin_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/staff/{id}/suspend/": {
         parameters: {
             query?: never;
@@ -1297,6 +1313,9 @@ export interface components {
          * @enum {string}
          */
         SaleFlowEnum: "one_screen" | "writer_cashier_loader";
+        SetPinRequest: {
+            pin: string;
+        };
         Setting: {
             /** Format: uuid */
             readonly id: string;
@@ -1468,6 +1487,7 @@ export interface components {
             /** Format: date */
             readonly left_on: string | null;
             readonly switched_off: boolean;
+            readonly has_pin: boolean;
             readonly roles: components["schemas"]["GivenRole"][];
             readonly keys: components["schemas"]["GivenKey"][];
             readonly version: number;
@@ -2488,6 +2508,40 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["StaffLeaveRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_pin_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPinRequest"];
             };
         };
         responses: {

@@ -12,7 +12,7 @@ under /api/v1/people/ (apps/people/api/urls.py). Today a shop's devices (AUTH-5)
     POST  /api/v1/people/devices/{id}/unblock/   a manager lets it work again, with a reason
 
 And a shop's workers, for whoever holds staff.manage on the whole shop (PPL-4), with their roles and extra keys (PPL-7),
-and a worker's temporary password (AUTH-6):
+and a worker's temporary password (AUTH-6) and PIN (PPL-12):
 
     GET   /api/v1/people/staff/                             every worker the shop has had, with what each was given
     GET   /api/v1/people/staff/{id}/                        one worker
@@ -27,6 +27,7 @@ and a worker's temporary password (AUTH-6):
     POST  /api/v1/people/staff/{id}/end-role/             take a role of theirs away, with a reason
     POST  /api/v1/people/staff/{id}/end-key/              take an extra key of theirs away, with a reason
     POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
+    POST  /api/v1/people/staff/{id}/pin/                  the worker types their own PIN on the owner's phone (PPL-12)
     GET   /api/v1/people/roles/                           the shop's roles, to choose from when giving one
 
 And the routes a device calls with its key, built on DeviceView (apps/people/api/base.py), under /api/devices/v1/
@@ -91,6 +92,7 @@ from apps.people.api.serializers import (
     PairingStartSerializer,
     PinLoginSerializer,
     RoleSerializer,
+    SetPinSerializer,
     StaffAddSerializer,
     StaffEditSerializer,
     StaffLeaveSerializer,
@@ -117,6 +119,7 @@ from apps.people.services import (
     mark_left,
     pin_login,
     rename_device,
+    set_pin,
     set_temporary_password,
     start_pairing,
     suspend,
@@ -227,7 +230,7 @@ class StaffViewSet(
     # sends him, or a new job for one who left, hired again (PPL-11); a worker's details fixed, from the copy the page
     # read, with a reason (PATCH, PPL-10); a worker suspended, brought back or marked left, each with a reason; and a
     # first or forgotten password, set face to face (ADR-0038); a role or an extra key given, or taken away with a
-    # reason (PPL-7). PPL-8 adds the PIN.
+    # reason (PPL-7); and a PIN, typed by the worker on the owner's phone (PPL-12).
     model = StaffMember
     # A person's job belongs to the whole shop, whichever side they work on: a password opens them on every side, and a
     # suspension stops them on every side. So each key is asked on the whole shop, where a key for Dawa alone opens
@@ -249,6 +252,7 @@ class StaffViewSet(
         "end_role": Permission.STAFF_MANAGE,
         "end_key": Permission.STAFF_MANAGE,
         "temporary_password": Permission.STAFF_MANAGE,
+        "pin": Permission.STAFF_MANAGE,
     }
     serializer_class = StaffSerializer
     create_serializer_class = StaffAddSerializer
@@ -412,6 +416,20 @@ class StaffViewSet(
         )
         # Nothing to answer with, on purpose: once sent, the password is never shown again (ADR-0038).
         return Response(status=204)
+
+    # Weka PIN (PPL-12): the owner hands his phone over and the worker types their own PIN, so whoever types it is the
+    # one who knows it. The route only passes who acts: who may (pin.own, pin.superuser_only, pin.more_keys), the demo,
+    # the PIN's strength, and lifting the locks are set_pin's, under its own locks. Answers with the worker as they are
+    # now, has_pin included, so the page needs no second read. `sent` holds the PIN while the service runs: every
+    # variable here, and in everything this calls, shows as stars in Django's error reports, as on the password's route.
+    @extend_schema(request=SetPinSerializer, responses=StaffSerializer)
+    @action(detail=True, methods=["post"])
+    @sensitive_variables()
+    def pin(self, request: Request, pk: str | None = None) -> Response:
+        worker = self._worker()
+        sent = self._sent(request, SetPinSerializer)
+        # `by` is the person logged in, never one the page names: the edit history keeps who set it, and when.
+        return self._answer(set_pin(worker, sent["pin"], by=self._acting()))
 
 
 class RoleViewSet(mixins.ListModelMixin, ShopViewSet[Role]):

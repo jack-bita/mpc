@@ -469,6 +469,27 @@
       "back": "{name} amerudi kazini.",
       "backLink": "Fungua ukurasa wake wa sasa"
     },
+    "logins": {
+      "title": "Kuingia",
+      "pin": "PIN",
+      "pinSet": "Imewekwa",
+      "pinNotSet": "Haijawekwa",
+      "setPin": "Weka PIN",
+      "pinTitle": "Weka PIN ya {name}",
+      "handOver": "Mpe {name} simu hii aandike PIN yake mwenyewe.",
+      "newPin": "PIN mpya",
+      "newPinHint": "Tarakimu nne.",
+      "again": "Andika tena",
+      "differ": "PIN hizi hazifanani.",
+      "pinDone": "PIN ya {name} imewekwa. Kila kompyuta ya duka itamwonyesha ikishasawazisha. Kwenye kompyuta yenye mtandao, kifungo chake kimeondoka na PIN yake ya zamani haifanyi kazi tena; isiyo na mtandao itajua ikishasawazisha.",
+      "temporaryPassword": "Nenosiri la muda",
+      "passwordTitle": "Nenosiri la muda la {name}",
+      "passwordIntro": "Andika nenosiri, kisha mwambie {name} ana kwa ana. Atachagua lake mwenyewe akishaingia.",
+      "password": "Nenosiri",
+      "noPhone": "{name} hana namba ya simu. Kama hana barua pepe pia, ongeza simu yake kwa Badilisha kwanza.",
+      "passwordDone": "Nenosiri la muda la {name} limewekwa. Mwambie nenosiri hili. Ataingia kwa simu yake, {phone}, au kwa barua pepe yake, kisha atachagua nenosiri lake mwenyewe.",
+      "passwordDoneNoPhone": "Nenosiri la muda la {name} limewekwa. Mwambie nenosiri hili. Ataingia kwa barua pepe yake, kisha atachagua nenosiri lake mwenyewe."
+    },
     "roles": {
       "owner": "Mmiliki",
       "manager": "Meneja",
@@ -578,7 +599,8 @@
       "noKey": "Hakuna ruhusa unayoweza kumpa.",
       "side": "Upande",
       "sideHint": "Pande zote ni kila upande, hata utakaoongezwa baadaye.",
-      "done": "{name} amepewa {what}. Kompyuta za duka zitajua baada ya kusawazisha."
+      "done": "{name} amepewa {what}. Kompyuta za duka zitajua baada ya kusawazisha.",
+      "pinAfter": "{name} ana PIN tayari. Kama mtu mwingine ndiye aliyeiweka na unampa cheo au ruhusa kubwa, baada ya hapa mwekee PIN mpya wewe mwenyewe."
     },
     "ending": {
       "remove": "Ondoa",

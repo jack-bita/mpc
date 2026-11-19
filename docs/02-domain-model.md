@@ -78,7 +78,7 @@
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
 
-**Changes in v1.49** (19 Nov 2026, WAGE-1): §5, who may set a pay rate: the PIN's rule, and the key to the shop's rules and rates too; §12, `PayRate` gains its `note`, is in force as a setting is, and starts on any day of the job, never before its first (04 v1.146). Marked **(v1.49)**.
+**Changes in v1.49** (19 Nov 2026, WAGE-1): §5, who may set a pay rate: the PIN's rule, and the key to the shop's rules and rates too; §12, `PayRate` gains its `note`, is in force as a setting is, and starts on any day of the job, never before its first (04 v1.149). Marked **(v1.49)**.
 
 **Changes in v1.48** (19 Nov 2026, ATT-11's review): §12, which days: a day before a first day moved later is read again when the job tapped on it, and needs review (04 v1.144). Marked **(v1.48)**.
 

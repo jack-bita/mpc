@@ -344,6 +344,14 @@ export function GiveForm({
         }
         onValueChange={setPickedSide}
       />
+      {/* Before a big key (PPL-12, the card's default): whoever set the worker's PIN knows it, so a big role or key
+          given now is given to them too. The page can't tell who set it, nor which keys are big, so the line shows
+          for any worker with a PIN, and leaves the call to the person giving. */}
+      {worker.has_pin ? (
+        <p className="text-muted-foreground">
+          {t("pinAfter", { name: worker.display_name })}
+        </p>
+      ) : null}
       {/* Who may and what is already there (see the top), no network, the server's own problem. */}
       <ApiErrorAlert
         error={

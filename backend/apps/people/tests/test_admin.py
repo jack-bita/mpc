@@ -135,8 +135,8 @@ def test_admin_reset_sets_the_mark(superuser_client: Client) -> None:
 
 
 def test_admin_first_password_sets_the_mark(superuser_client: Client) -> None:
-    # "First or forgotten" (ADR-0038): a new owner's first password is typed here too, until PPL-8's screen, and it is
-    # no more their own than a reset one.
+    # "First or forgotten" (ADR-0038): a new owner's first password is typed here, and stays here: an owner's is the
+    # superuser's alone, never the worker's page's (PPL-12). It is no more their own than a reset one.
     response = superuser_client.post(
         f"{USERS}add/",
         {
