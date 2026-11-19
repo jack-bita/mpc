@@ -64,8 +64,8 @@ ANSWER_LOG = "pushed_document"
 def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceDay]:
     """Work out and keep each job's day from `first` to `last`, both counted, and answer them, date by date. Only the
     days that count: while attendance is switched on, from each job's first day to its last, and before the shop's
-    today. A day that comes out as it was kept is not written again. The shop must be open: the visit's own, or a
-    system job's."""
+    today; and a day outside a job's days that it tapped on, for a person to decide (ATT-11). A day that comes out as
+    it was kept is not written again. The shop must be open: the visit's own, or a system job's."""
     # A shop must be open, and be this one, as for get_setting and closed_days: through the guard, another shop's taps
     # would be hidden, and its workers' days kept as absent without a word. So fail closed (ADR-0022).
     opened = current_shop()
@@ -116,37 +116,44 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
             # not even an off one.
             if not switched_on[day][ATTENDANCE_ON.key]:
                 continue
-            # Only the jobs that ran on that date: from the first day to the last, both counted (02 §5). A worker
-            # added on the 10th has no absent days before it; one who left on Friday has none after. The first day as
-            # it is now, as PPL-10 can fix it: a day kept before a first day moved later is no longer answered, and its
-            # row stays (rule 7), counted nowhere (ATT-11 decides what such a day shows).
-            working = [job for job in jobs if job.started_on <= day and (job.left_on is None or day <= job.left_on)]
-            # Sunday is off for every job, whatever its taps: the shop is shut, and Sunday work is paid outside the
-            # system (01 §8.1). No rule is read for it.
+            # Sunday is off for every job that ran on it, whatever its taps, in doubt or not: the shop is shut, and
+            # Sunday work is paid outside the system (01 §8.1). No rule is read for it. A job outside its days keeps
+            # no Sunday at all: off pays nothing, so there is nothing for anyone to decide.
             if day.weekday() == SUNDAY:
-                answered.extend(_off(shop, job, day) for job in working)
+                answered.extend(_off(shop, job, day) for job in jobs if _ran_on(job, day))
                 continue
             # The day's rules, the same for every job (A1).
             rules = rules_by_day[day]
             rules_used = rules_as_text(rules)
-            for job in working:
+            for job in jobs:
                 # Only the job's own taps: Asha's on Asha's day, even on a laptop Juma used too. With none, the rule
                 # answers absent.
                 job_taps = taps.get((job.pk, day), [])
+                # Outside the job's days, before its first or after its last (02 §5): a worker added on the 10th has
+                # no absent days before it; one who left on Friday has none after. The days as they are now, as PPL-10
+                # can move them: a day kept before a first day moved later is no longer answered, and its row stays
+                # (rule 7), counted nowhere. Unless the job tapped on it: Neema, added from the 10th, came on the 10th
+                # and the 11th, and a manager then moved her first day to the 12th. Her taps say she came, her first
+                # day says she didn't, so a person decides (Jack, ATT-11: A), below.
+                outside = not _ran_on(job, day)
+                if outside and not job_taps:
+                    continue
                 if day in closed and not job_taps:
                     # A closed day is off, and not paid, like Sunday (ATT-8).
                     answered.append(_off(shop, job, day))
                     continue
                 result = work_out_day(job_taps, rules)
-                # Two kinds of day the rule can't see, as both depend on more than the taps' kinds and minutes. Each
-                # goes to the owner or a manager (ATT-6), and takes no fine until then. Its taps' minutes stay, which
-                # the rule read, to show when the worker came; the rules too, for whoever decides.
+                # Three kinds of day the rule can't see, as each depends on more than the taps' kinds and minutes.
+                # Each goes to the owner or a manager (ATT-6), and takes no fine until then. Its taps' minutes stay,
+                # which the rule read, to show when the worker came; the rules too, for whoever decides.
                 # - A closed day a worker tapped on all the same: the owner closed the shop at 10:00 for a funeral, and
                 #   Asha had clocked in at 07:20. Nobody can tell from the taps whether her morning is paid (Jack,
                 #   ATT-10).
                 # - A day with a tap in doubt (ATT-11): Juma's, made the morning after Baba suspended him, on a laptop
-                #   offline that didn't know yet (X2). His tap is real, but whether to pay for it is a person's call.
-                if day in closed or (job.pk, day) in in_doubt:
+                #   offline that didn't know yet (X2), or the one Asha's later tap disagrees with. His tap is real, but
+                #   whether to pay for it is a person's call.
+                # - A day outside the job's days that it tapped on, as above (ATT-11).
+                if day in closed or (job.pk, day) in in_doubt or outside:
                     result = replace(result, status=DayStatus.NEEDS_REVIEW, fine=NO_FINE)
                 answered.append(_worked_out(shop, job, day, result, rules_used))
         # Kept as the book, never as the person whose visit asked for the month. The edit history's trigger names
@@ -157,6 +164,11 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         # one (T1).
         with acting_as(_TheBook(shop.pk), device=None):
             return _keep(answered, kept)
+
+
+def _ran_on(job: StaffMember, day: dt.date) -> bool:
+    # Whether `day` is one of the job's days: from its first day to its last, both counted (02 §5), as they are now.
+    return job.started_on <= day and (job.left_on is None or day <= job.left_on)
 
 
 def _off(shop: Shop, job: StaffMember, day: dt.date) -> AttendanceDay:

@@ -617,7 +617,8 @@ def test_today_is_the_shops_today_not_utcs(
 def test_a_day_no_longer_counted_is_not_answered(shop_a: Shop, attendance_on: None) -> None:
     # Neema was added with her first day on Monday 9th, and her days were kept. Then a manager fixes it to Wednesday
     # 11th, the day she really started (PPL-10): worked out again, Monday and Tuesday are no longer hers to answer.
-    # Their rows stay, as nothing is deleted (rule 7), counted nowhere (ATT-11 decides what such a day shows).
+    # Their rows stay, as nothing is deleted (rule 7), counted nowhere: she tapped on neither, or each would need
+    # review (ATT-11, test_a_tap_before_the_first_day_needs_review).
     neema = _worker(shop_a, "Neema", started_on=NOV_9)
     assert len(_days(shop_a, NOV_9, NOV_13)) == 5
     with shop_context(shop_a):
@@ -809,3 +810,83 @@ def test_a_voided_tap_disagreed_with_sends_nothing(
     )
     tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 30), check=TimeCheck.UNVERIFIED, disagrees_with=second.pk)
     assert _days(shop_a, MONDAY, MONDAY)[("Juma", MONDAY)].status == DayStatus.ON_TIME
+
+
+def _came(device: Device, staff: StaffMember, *days: dt.date) -> None:
+    # A full day on each date: in at 07:20, out at 18:45.
+    for day in days:
+        tap(device, staff, ClockKind.IN, at(day, 7, 20))
+        tap(device, staff, ClockKind.OUT, at(day, 18, 45))
+
+
+def test_a_tap_before_the_first_day_needs_review(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
+    # Neema is added with a first day of Tuesday 10th, and comes on the 10th and the 11th. A manager then moves her
+    # first day to Thursday 12th (PPL-10): her taps now fall before it. They say she came, her first day says she
+    # didn't, so those two days need review (Jack, ATT-11: A): the manager puts her first day back, or decides whether
+    # they are paid. Her minutes stay, for whoever decides. Monday 9th, with no tap, is still not one of hers.
+    neema = _worker(shop_a, "Neema", started_on=NOV_10)
+    _came(device_a, neema, NOV_10, NOV_11)
+    with shop_context(shop_a):
+        change_worker(neema, version=neema.version, reason="Alianza Alhamisi", by=None, started_on=NOV_12)
+    days = _days(shop_a, NOV_9, NOV_13)
+    assert {date: day.status for (_, date), day in days.items()} == {
+        NOV_10: DayStatus.NEEDS_REVIEW,
+        NOV_11: DayStatus.NEEDS_REVIEW,
+        NOV_12: DayStatus.ABSENT,
+        NOV_13: DayStatus.ABSENT,
+    }
+    assert (days[("Neema", NOV_10)].first_in, days[("Neema", NOV_10)].fine) == (dt.time(7, 20), Decimal("0.00"))
+
+
+def test_a_tap_after_the_last_day_needs_review(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
+    # Neema's last day is Tuesday 10th, recorded on Thursday: the laptop, offline, still let her clock in on Wednesday.
+    # Her tap after her last day is a day to decide, as one before her first is; Thursday, with no tap, is not hers.
+    neema = _worker(shop_a, "Neema", started_on=NOV_9)
+    _came(device_a, neema, NOV_11)
+    with shop_context(shop_a):
+        mark_left(neema, left_on=NOV_10, by=None, reason="Amehamia mji mwingine")
+    days = _days(shop_a, NOV_9, NOV_12)
+    assert {date: day.status for (_, date), day in days.items()} == {
+        NOV_9: DayStatus.ABSENT,
+        NOV_10: DayStatus.ABSENT,
+        NOV_11: DayStatus.NEEDS_REVIEW,
+    }
+
+
+def test_a_kept_day_before_a_moved_first_day_turns_to_review(
+    shop_a: Shop, device_a: Device, attendance_on: None
+) -> None:
+    # Neema's Tuesday 10th was kept as on time, then her first day was moved to Thursday 12th. Worked out again, the
+    # same row says needs review, and the edit history says so, as the book's own change: never a second row, never a
+    # delete (rule 7). Monday 9th, kept as absent with no tap, stays as it was, and is no longer answered (ATT-10).
+    neema = _worker(shop_a, "Neema", started_on=NOV_9)
+    _came(device_a, neema, NOV_10)
+    kept = _days(shop_a, NOV_9, NOV_10)
+    assert (kept[("Neema", NOV_9)].status, kept[("Neema", NOV_10)].status) == (DayStatus.ABSENT, DayStatus.ON_TIME)
+    with shop_context(shop_a):
+        change_worker(neema, version=neema.version, reason="Alianza Alhamisi", by=None, started_on=NOV_12)
+    again = _days(shop_a, NOV_9, NOV_10)
+    assert list(again) == [("Neema", NOV_10)]
+    tuesday = again[("Neema", NOV_10)]
+    assert (tuesday.pk, tuesday.status) == (kept[("Neema", NOV_10)].pk, DayStatus.NEEDS_REVIEW)
+    with shop_context(shop_a):
+        assert AttendanceDay.objects.get(pk=kept[("Neema", NOV_9)].pk).status == DayStatus.ABSENT
+        assert AttendanceDay.objects.count() == 2
+        change = EditEvent.objects.get(subject_type="attendance_day", subject_id=tuesday.pk)
+    assert (change.created_by_id, change.after["status"]) == (None, DayStatus.NEEDS_REVIEW)
+
+
+def test_a_sunday_tap_in_doubt_is_still_off(
+    shop_a: Shop, device_a: Device, attendance_on: None, juma: StaffMember
+) -> None:
+    # Sunday work is a deal outside the system (01 §8.1), so a Sunday stays off whatever its taps: Juma's, flagged as
+    # made while he was suspended, and Neema's, made before a first day moved to Monday, which keeps no Sunday at all.
+    ingia = tap(device_a, juma, ClockKind.IN, at(SUNDAY, 7, 20))
+    _flag_its_line(ingia)
+    neema = _worker(shop_a, "Neema", started_on=SUNDAY - dt.timedelta(days=7))
+    _came(device_a, neema, SUNDAY)
+    with shop_context(shop_a):
+        change_worker(neema, version=neema.version, reason="Alianza Jumatatu", by=None, started_on=MONDAY)
+    days = _days(shop_a, SUNDAY, SUNDAY)
+    assert days[("Juma", SUNDAY)].status == DayStatus.OFF
+    assert ("Neema", SUNDAY) not in days
