@@ -34,7 +34,7 @@ from apps.people.models import StaffMember
 from apps.shops.models import Shop
 from apps.shops.selectors import closed_days, shop_settings_between, shop_today
 from apps.staffpay.calculations import NO_FINE, DayResult, Tap, shop_minute, work_out_day
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus
+from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, TimeCheck
 from apps.staffpay.selectors import day_rules_between, rules_as_text
 
 # Sunday, as Python numbers the days of the week (Monday is 0). Always off, and not paid: Sunday work is a deal between
@@ -225,6 +225,13 @@ def _taps(shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo) -> tuple[di
     maker_not_working = Exists(
         _answer_log()._default_manager.filter(shop=shop, document_id=OuterRef("pk")).filter(pk__in=suspension_flags)
     )
+    # A tap a later one's time disagrees with: Juma's Toka says 18:45, then Asha's, the laptop's next record, says
+    # 18:30. A clock moved between the two, and nobody knows whose, so hers has no trusted time, and keeps his id
+    # (`disagrees_with`, ATT-11): his time can be the wrong one too (Jack: A). Any tap of the shop that keeps his id,
+    # wherever it fell: hers can fall on another day, or another month, by the laptop's clock, the only time it has.
+    # Voided or not: a void says a tap counts for nothing, not that the laptop's clock was right. Through the small
+    # index of the taps that keep a record (staffpay_event_by_disagreement), each tap's question one lookup.
+    disagreed_with = Exists(AttendanceEvent.objects.filter(shop=shop, disagrees_with=OuterRef("pk")))
     lines = (
         # A voided tap counts for nothing (T2): a clock-in tapped twice by mistake, voided by a manager (ATT-6). Nor
         # does it send its day to review: Juma's flagged tap, once voided, leaves his day absent.
@@ -236,19 +243,24 @@ def _taps(shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo) -> tuple[di
             Q(trusted_time__gte=start, trusted_time__lt=end)
             | Q(trusted_time__isnull=True, client_time__gte=start, client_time__lt=end)
         )
-        .annotate(maker_not_working=maker_not_working)
-        .values_list("staff_id", "kind", "trusted_time", "client_time", "maker_not_working")
+        .annotate(maker_not_working=maker_not_working, disagreed_with=disagreed_with)
+        .values_list(
+            "staff_id", "kind", "trusted_time", "client_time", "time_check", "maker_not_working", "disagreed_with"
+        )
     )
     taps: dict[_JobDay, list[Tap]] = defaultdict(list)
     in_doubt: set[_JobDay] = set()
-    for staff_id, kind, trusted_time, client_time, not_working in lines:
+    for staff_id, kind, trusted_time, client_time, time_check, not_working, disputed in lines:
         # Its date on the shop's calendar, by its trusted time, or by the laptop's for one with none.
         day = (trusted_time if trusted_time is not None else client_time).astimezone(zone).date()
         # Its minute on the shop's clock, its seconds dropped, as the counter showed it (shop_minute): 07:35:40 is
         # 07:35, on time. None for a tap with no trusted time, which sends the day to review (ATT-4).
         minute = shop_minute(trusted_time, zone) if trusted_time is not None else None
         taps[(staff_id, day)].append(Tap(ClockKind(kind), minute))
-        if not_working:
+        # In doubt: made while its worker wasn't working, or timed by a laptop clock a later tap disagrees with. Only
+        # by the laptop's clock (`device_ok`): a tap sent at once has the server's time, which no laptop's clock can
+        # make wrong, and one with no trusted time sends its day to review already (ATT-4).
+        if not_working or (disputed and time_check == TimeCheck.DEVICE_OK):
             in_doubt.add((staff_id, day))
     return taps, in_doubt
 

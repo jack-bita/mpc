@@ -745,3 +745,67 @@ def test_a_day_in_doubt_keeps_its_minutes_and_rules(shop_a: Shop, device_a: Devi
     assert (day.status, day.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
     assert (day.first_in, day.first_out) == (dt.time(7, 50), dt.time(18, 45))
     assert day.rules_used["late_fine"] == "500.00"
+
+
+def test_the_tap_a_later_one_disagrees_with_needs_review(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # The Dawa laptop's clock goes wrong. Juma's Toka says 18:45, then Asha's, the record after it, says 18:30: one of
+    # the two times is wrong, and nobody knows which. Hers has no trusted time, so her day needs review (ATT-4); his
+    # keeps the laptop's, and alone would be a full day. Her tap keeps his id (`disagrees_with`, ATT-11), so his Monday
+    # needs review too (Jack: A), with his minutes kept for whoever decides.
+    tap(device_a, juma, ClockKind.IN, at(MONDAY, 7, 20))
+    jumas_toka = tap(device_a, juma, ClockKind.OUT, at(MONDAY, 18, 45))
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 30), check=TimeCheck.UNVERIFIED, disagrees_with=jumas_toka.pk)
+    days = _days(shop_a, MONDAY, MONDAY)
+    jumas_monday = days[("Juma", MONDAY)]
+    assert (jumas_monday.status, jumas_monday.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
+    assert (jumas_monday.first_in, jumas_monday.first_out) == (dt.time(7, 20), dt.time(18, 45))
+    assert days[("Asha", MONDAY)].status == DayStatus.NEEDS_REVIEW
+
+
+def test_a_disagreement_reaches_another_day(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Juma clocks in on Tuesday at 07:30. Then someone sets the laptop back a day, and Asha's Ingia says Monday 18:50,
+    # after his on the laptop's numbers. Her tap falls on Monday, by the laptop's clock, the only time it has; his on
+    # Tuesday. So the book, asked for Tuesday alone, still finds the tap that disagrees with his, wherever it fell.
+    jumas_ingia = tap(device_a, juma, ClockKind.IN, at(TUESDAY, 7, 30))
+    tap(device_a, juma, ClockKind.OUT, at(TUESDAY, 18, 45))
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 18, 50), check=TimeCheck.UNVERIFIED, disagrees_with=jumas_ingia.pk)
+    assert _days(shop_a, TUESDAY, TUESDAY)[("Juma", TUESDAY)].status == DayStatus.NEEDS_REVIEW
+
+
+def test_a_tap_timed_by_the_server_is_not_in_doubt(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Juma's Toka was sent at once, so its time is the server's, 18:45, whatever the laptop's clock said (ATT-1): it
+    # can't be the wrong one. Asha's tap after it says 18:30 by a laptop clock that moved, so hers alone is in doubt,
+    # and his Monday is the full day it was.
+    tap(device_a, juma, ClockKind.IN, at(MONDAY, 7, 20))
+    jumas_toka = tap(
+        device_a, juma, ClockKind.OUT, at(MONDAY, 19, 0), check=TimeCheck.SERVER, server_time=at(MONDAY, 18, 45)
+    )
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 30), check=TimeCheck.UNVERIFIED, disagrees_with=jumas_toka.pk)
+    assert _days(shop_a, MONDAY, MONDAY)[("Juma", MONDAY)].status == DayStatus.ON_TIME
+
+
+def test_a_voided_tap_disagreed_with_sends_nothing(
+    shop_a: Shop, device_a: Device, staff_a: StaffMember, asha: StaffMember, juma: StaffMember
+) -> None:
+    # Juma's Toka, the one Asha's disagrees with, was a second Toka tapped by mistake, voided by a manager (T2): it
+    # counts for nothing, so it sends nothing either. His Monday ends at his first Toka, on time.
+    tap(device_a, juma, ClockKind.IN, at(MONDAY, 7, 20))
+    tap(device_a, juma, ClockKind.OUT, at(MONDAY, 18, 40))
+    second = tap(
+        device_a,
+        juma,
+        ClockKind.OUT,
+        at(MONDAY, 18, 45),
+        voided_at=at(MONDAY, 19, 0),
+        voided_by=staff_a,
+        void_reason="Alitoka mara mbili",
+    )
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 30), check=TimeCheck.UNVERIFIED, disagrees_with=second.pk)
+    assert _days(shop_a, MONDAY, MONDAY)[("Juma", MONDAY)].status == DayStatus.ON_TIME

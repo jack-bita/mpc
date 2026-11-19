@@ -163,7 +163,17 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
         # the shop's midnight starting the month to the one ending it. Without it, that read would search every
         # shop's lines. Leads with `shop`, as every index does. The few with no trusted time (`unverified`) are read
         # by the laptop's time instead, the only one they have; they are rare, so they need no index of their own.
-        indexes = [models.Index(fields=["shop", "trusted_time"], name="staffpay_event_by_trusted_time")]
+        indexes = [
+            models.Index(fields=["shop", "trusted_time"], name="staffpay_event_by_trusted_time"),
+            # How the book finds, for each tap of a month, whether a later tap disagrees with it (ATT-11): the shop's
+            # lines by the record they disagree with. Only the lines that keep one, as few do (a laptop's clock that
+            # moved), so the index stays small however many taps the shop keeps.
+            models.Index(
+                fields=["shop", "disagrees_with"],
+                name="staffpay_event_by_disagreement",
+                condition=models.Q(disagrees_with__isnull=False),
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.kind} {self.client_time:%Y-%m-%d %H:%M}"
