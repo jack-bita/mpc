@@ -7,9 +7,10 @@ TypeScript twin and no shared test vectors (03 §8).
 
 The day's rule (ATT-4, spec §8.1): what one worker's day was, from that day's taps and that day's rules.
 
-    in 07:20, out 18:40   → on time           in 08:10, out 18:40   → late, the second fine
-    in 07:50, out 18:40   → late, first fine   in 12:30, out 18:40   → the afternoon's half day
-    in 09:00              → dharura, a manager or the owner decides it
+    in 07:20, out 18:40   → on time            in 08:10, out 18:40   → late, the second fine
+    in 07:50, out 18:40   → late, first fine    in 12:30, out 18:40   → the afternoon's half day
+    in 07:20, out 13:10   → the morning's half  in 07:50, out 13:10   → the morning's half, less the first fine
+    in 09:00, or no out   → dharura, a manager or the owner decides it
 
 Every window of the owner's day is a minute on the shop's clock, which shop_minute reads from a tap's time. The rule
 only answers: ATT-10 finds the taps and the rules in force that day, hands them in, and keeps the answer. Server only
@@ -190,4 +191,10 @@ def work_out_day(taps: Sequence[Tap], rules: DayRules) -> DayResult:
     # shop starts with (ATT-2), still makes the day late, with nothing taken off.
     if last_out is not None and last_out >= rules.closing:
         return DayResult(DayStatus.LATE if late else DayStatus.ON_TIME, fine, first_in, last_out)
+    # The morning's half day: leaving from midday to morning_leave_until, both counted. A late arrival's fine still
+    # comes off (the owner, 19 Nov 2026): in at 07:50, out at 13:10, half the day's pay less the first fine.
+    if last_out is not None and rules.midday <= last_out <= rules.morning_leave_until:
+        return DayResult(DayStatus.HALF, fine, first_in, last_out)
+    # Leaving before midday, after 13:30 and before closing, or never clocking out: the owner's dharura, as nobody
+    # knows which half was worked, or when they left (02 §20, item 6).
     return dharura

@@ -5,7 +5,8 @@ Each row of the owner's table in spec §8.1 is a test named after it, so the cod
 
     arrives   by 07:35 on time · before 08:00 the first fine · before 08:30 the second fine · before 12:00 dharura
               · 12:00 to 13:00 the afternoon's half day · after 13:00 dharura
-    leaves    from 18:40 the full day, or the late one with its fine
+    leaves    before 13:00 dharura · 13:00 to 13:30 the morning's half day, a late arrival's fine kept
+              · before 18:40 dharura · from 18:40 the full day, or the late one with its fine · never: dharura
 
 Every window is a minute on the shop's clock, as the counter shows it (SYNC-11): a tap's seconds never count, and the
 server's UTC is never the shop's time; shop_minute turns a tap's time into that minute. Pure: no database, no clock of
@@ -158,3 +159,50 @@ def test_a_day_reads_the_rules_it_is_given() -> None:
     december = dataclasses.replace(OWNERS_DAY, on_time_until=dt.time(7, 45), late_fine=Decimal("1000.00"))
     assert day("07:40", CLOSING, december).status == DayStatus.ON_TIME
     assert day("07:50", CLOSING, december) == DayResult(DayStatus.LATE, Decimal("1000.00"), at("07:50"), at(CLOSING))
+
+
+# The owner's table, spec §8.1: the leavings.
+
+
+def test_arrives_0720_leaves_1310_half_day() -> None:
+    assert day("07:20", "13:10") == DayResult(DayStatus.HALF, NO_FINE, at("07:20"), at("13:10"))
+
+
+def test_arrives_0720_leaves_1200_needs_review() -> None:
+    assert day("07:20", "12:00") == dharura("07:20", "12:00")
+
+
+def test_arrives_0720_leaves_1600_needs_review() -> None:
+    assert day("07:20", "16:00") == dharura("07:20", "16:00")
+
+
+def test_arrives_0720_never_clocks_out_needs_review() -> None:
+    # No Toka: nobody knows when they left, so a manager decides (02 §20, item 6).
+    assert day("07:20") == dharura("07:20", None)
+
+
+def test_arrives_0750_leaves_1310_half_day_minus_fine() -> None:
+    # The owner's answer (19 Nov 2026, through Jack): a late arrival who leaves for the morning's half day loses the
+    # fine of their arrival too. The first fine for 07:50; the second for 08:10.
+    assert day("07:50", "13:10") == DayResult(DayStatus.HALF, FIRST_FINE, at("07:50"), at("13:10"))
+    assert day("08:10", "13:10") == DayResult(DayStatus.HALF, SECOND_FINE, at("08:10"), at("13:10"))
+
+
+def test_arrives_1230_leaves_1600_needs_review() -> None:
+    # The afternoon's half day stays until closing (02 §12): leaving at 16:00, nobody knows what half it was.
+    assert day("12:30", "16:00") == dharura("12:30", "16:00")
+
+
+@pytest.mark.parametrize(
+    ("leaves", "status"),
+    [
+        ("12:59", DayStatus.NEEDS_REVIEW),  # before 13:00: dharura
+        ("13:00", DayStatus.HALF),  # from 13:00: the morning's half day
+        ("13:30", DayStatus.HALF),  # to 13:30: still the morning's
+        ("13:31", DayStatus.NEEDS_REVIEW),  # after 13:30, and before 18:40: dharura
+        ("18:39", DayStatus.NEEDS_REVIEW),  # before 18:40: still dharura
+        ("18:40", DayStatus.ON_TIME),  # from 18:40: the full day
+    ],
+)
+def test_each_leaving_window_takes_its_own_minute(leaves: str, status: DayStatus) -> None:
+    assert day("07:20", leaves) == DayResult(status, NO_FINE, at("07:20"), at(leaves))
