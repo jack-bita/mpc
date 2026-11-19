@@ -3,6 +3,7 @@
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
     Juma   Mon 16 Nov  needs_review  0.00    07:20  —          no Toka: a manager decides (ATT-6)
+    Asha   Sun 22 Nov  off           0.00    —      —          the shop is shut on Sundays and closed days
 
 The day's rule (work_out_day, apps/staffpay/calculations.py) says what one day was; the book finds each day's taps and
 rules, hands them in, and keeps the answer, one row per job and date (AttendanceDay). Nothing here is typed by a person:
@@ -14,6 +15,7 @@ pay, ATT-7 each night. No route of its own, and no line in the change log: no la
 import datetime as dt
 import uuid
 from collections import defaultdict
+from dataclasses import replace
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
@@ -22,9 +24,14 @@ from django.db.models import Q
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.people.models import StaffMember
 from apps.shops.models import Shop
-from apps.staffpay.calculations import Tap, shop_minute, work_out_day
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind
+from apps.shops.selectors import closed_days
+from apps.staffpay.calculations import NO_FINE, DayResult, Tap, shop_minute, work_out_day
+from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus
 from apps.staffpay.selectors import day_rules, rules_as_text
+
+# Sunday, as Python numbers the days of the week (Monday is 0). Always off, and not paid: Sunday work is a deal between
+# the owner and the worker, outside the system (01 §8.1), so a shop has no setting for it.
+SUNDAY = 6
 
 # What the book works out on a day, and so what it writes again when a day comes out otherwise. Not the job, the date
 # or the shop, which say which day it is; nor `created_at`, which says when the day was first kept.
@@ -55,30 +62,67 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         kept = {
             (row.staff_id, row.date): row for row in AttendanceDay.objects.filter(shop=shop, date__range=(first, last))
         }
+        # The days the whole shop is closed (ATT-8): a public holiday, a family funeral. One read for the span.
+        closed = closed_days(shop, first, last)
         answered: list[AttendanceDay] = []
         for day in dates:
+            # Sunday is off for every job, whatever its taps: the shop is shut, and Sunday work is paid outside the
+            # system (01 §8.1). No rule is read for it.
+            if day.weekday() == SUNDAY:
+                answered.extend(_off(shop, job, day) for job in jobs)
+                continue
             # The day's rules, once per date for every job: nine reads, never nine per worker (A1).
             rules = day_rules(shop, day)
             rules_used = rules_as_text(rules)
             for job in jobs:
                 # Only the job's own taps: Asha's on Asha's day, even on a laptop Juma used too. With none, the rule
                 # answers absent.
-                result = work_out_day(taps.get((job.pk, day), []), rules)
-                answered.append(
-                    AttendanceDay(
-                        shop=shop,
-                        staff=job,
-                        date=day,
-                        status=result.status,
-                        fine=result.fine,
-                        first_in=result.first_in,
-                        first_out=result.first_out,
-                        # A copy for each day (T4): one day's rules are never another's object, so nothing done to one
-                        # could reach the other.
-                        rules_used=dict(rules_used),
-                    )
-                )
+                job_taps = taps.get((job.pk, day), [])
+                if day in closed and not job_taps:
+                    # A closed day is off, and not paid, like Sunday (ATT-8).
+                    answered.append(_off(shop, job, day))
+                    continue
+                result = work_out_day(job_taps, rules)
+                if day in closed:
+                    # But a worker tapped on it all the same: the owner closed the shop at 10:00 for a funeral, and
+                    # Asha had clocked in at 07:20. Nobody can tell from the taps whether her morning is paid, so the
+                    # owner or a manager decides (Jack, ATT-10; ATT-6), and the day takes no fine until then. Her taps'
+                    # minutes stay, which the rule read, to show when she came; the rules too, for whoever decides.
+                    result = replace(result, status=DayStatus.NEEDS_REVIEW, fine=NO_FINE)
+                answered.append(_worked_out(shop, job, day, result, rules_used))
         return _keep(answered, kept)
+
+
+def _off(shop: Shop, job: StaffMember, day: dt.date) -> AttendanceDay:
+    # A day the shop is shut, a Sunday or a closed day: off, nothing taken off, no tap read, and no rule, as none was.
+    return AttendanceDay(
+        shop=shop,
+        staff=job,
+        date=day,
+        status=DayStatus.OFF,
+        fine=NO_FINE,
+        first_in=None,
+        first_out=None,
+        rules_used={},
+    )
+
+
+def _worked_out(
+    shop: Shop, job: StaffMember, day: dt.date, result: DayResult, rules_used: dict[str, str]
+) -> AttendanceDay:
+    # A day the rule answered, as the book keeps it: its answer, and the rules it read.
+    return AttendanceDay(
+        shop=shop,
+        staff=job,
+        date=day,
+        status=result.status,
+        fine=result.fine,
+        first_in=result.first_in,
+        first_out=result.first_out,
+        # A copy for each day (T4): one day's rules are never another's object, so nothing done to one could reach
+        # the other.
+        rules_used=dict(rules_used),
+    )
 
 
 def _taps(shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo) -> dict[tuple[uuid.UUID, dt.date], list[Tap]]:

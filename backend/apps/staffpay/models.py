@@ -193,8 +193,9 @@ class AttendanceDay(ShopScoped):
     first_out = models.TimeField(null=True, blank=True)
     # The day's rules as the rule read them (DayRules, apps/staffpay/calculations.py): the seven times and the two
     # fines, each as text ("07:35", "500.00"), so no amount ever passes through a float (rule 3). A copy (T4), never
-    # read back as the rules: the rules are the settings, and their history is theirs. Empty on a day the rule never
-    # read: an off day, and a closed day sent to review for its taps (Jack, ATT-10).
+    # read back as the rules: the rules are the settings, and their history is theirs. Empty on an off day, a Sunday or
+    # a closed day nobody tapped on, which reads no rule. A closed day with a tap keeps them, as it keeps its taps'
+    # minutes, for the owner or a manager who decides it (Jack, ATT-10).
     rules_used = models.JSONField(default=dict, blank=True)
 
     class Meta(ShopScoped.Meta):

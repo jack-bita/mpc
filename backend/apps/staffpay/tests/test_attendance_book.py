@@ -26,7 +26,7 @@ from apps.core.settings_registry import LATE_FINE
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, hire_again, mark_left
-from apps.shops.models import Setting, Shop
+from apps.shops.models import Closure, Setting, Shop
 from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, TimeCheck
 from apps.staffpay.services import _keep, work_out_days
 
@@ -124,6 +124,8 @@ def test_database_refuses_to_delete_a_day(shop_a: Shop, staff_a: StaffMember) ->
 # The book's work (work_out_days). Arusha's clock, as the shop's: a minute here is what the counter showed.
 ARUSHA = ZoneInfo("Africa/Dar_es_Salaam")
 TUESDAY = MONDAY + dt.timedelta(days=1)
+FRIDAY = MONDAY + dt.timedelta(days=4)
+SUNDAY = MONDAY + dt.timedelta(days=6)
 JAN_1 = dt.date(2026, 1, 1)
 # Each tap's number on the laptop, one after another, as a laptop numbers its records (SYNC-4).
 _numbers = itertools.count(1)
@@ -387,3 +389,61 @@ def test_work_out_days_refuses_a_moment_or_another_shop(shop_a: Shop, shop_b: Sh
             work_out_days(shop_a, at(MONDAY, 0, 0), MONDAY)
         with pytest.raises(ShopMismatch):
             work_out_days(shop_b, MONDAY, MONDAY)
+
+
+def _closure(shop: Shop, first: dt.date, last: dt.date) -> None:
+    # Days the shop is closed: checked, then saved, as the closure tests make them (test_closures.py), on days already
+    # past, which the service refuses (ATT-8): these tests read days gone by.
+    with shop_context(shop):
+        row = Closure(shop=shop, first_day=first, last_day=last, name="Msiba wa bibi")
+        row.full_clean()
+        row.save()
+
+
+def test_sunday_is_off(shop_a: Shop, asha: StaffMember) -> None:
+    # The shop is shut on Sunday, so nobody comes and nobody is paid (01 §8.1): off, not absent, with no fine and no
+    # rule read. Monday beside it is a working day, absent with no tap.
+    days = _days(shop_a, SUNDAY - dt.timedelta(days=6), SUNDAY)
+    sunday = days[("Asha", SUNDAY)]
+    assert (sunday.status, sunday.fine, sunday.rules_used) == (DayStatus.OFF, Decimal("0.00"), {})
+    assert days[("Asha", MONDAY)].status == DayStatus.ABSENT
+
+
+def test_a_sunday_tap_is_still_off(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Asha came in on Sunday and tapped: Sunday work is a deal between the owner and the worker, outside the system
+    # (01 §8.1), so her Sunday stays off, and her taps stay in the attendance book for anyone to see.
+    tap(device_a, asha, ClockKind.IN, at(SUNDAY, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, at(SUNDAY, 18, 45))
+    sunday = _days(shop_a, SUNDAY, SUNDAY)[("Asha", SUNDAY)]
+    assert (sunday.status, sunday.first_in, sunday.first_out) == (DayStatus.OFF, None, None)
+
+
+def test_a_closed_day_is_off(shop_a: Shop, asha: StaffMember) -> None:
+    # The shop closes on Friday for a funeral (ATT-8): off, and not paid, like Sunday. Thursday before it is a working
+    # day.
+    _closure(shop_a, FRIDAY, FRIDAY)
+    days = _days(shop_a, FRIDAY - dt.timedelta(days=1), FRIDAY)
+    assert (days[("Asha", FRIDAY)].status, days[("Asha", FRIDAY)].rules_used) == (DayStatus.OFF, {})
+    assert days[("Asha", FRIDAY - dt.timedelta(days=1))].status == DayStatus.ABSENT
+
+
+def test_a_tap_on_a_closed_day_needs_review(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # The owner closes the shop at 10:00 on Friday for a funeral; Asha had clocked in at 07:20 and out at 10:05. Whether
+    # her morning is paid is the owner's or a manager's to decide (Jack, ATT-10): her day needs review, with no fine,
+    # her taps' minutes and the day's rules kept for whoever decides. Juma came all the same, 07:50 to 18:45: the rule
+    # alone would call his day late, less 500, but a closed day takes no fine until someone decides it.
+    _rule(shop_a, "500.00", JAN_1)
+    _closure(shop_a, FRIDAY, FRIDAY)
+    tap(device_a, asha, ClockKind.IN, at(FRIDAY, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, at(FRIDAY, 10, 5))
+    tap(device_a, juma, ClockKind.IN, at(FRIDAY, 7, 50))
+    tap(device_a, juma, ClockKind.OUT, at(FRIDAY, 18, 45))
+    days = _days(shop_a, FRIDAY, FRIDAY)
+    asha_friday, juma_friday = days[("Asha", FRIDAY)], days[("Juma", FRIDAY)]
+    assert (asha_friday.status, asha_friday.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
+    assert (asha_friday.first_in, asha_friday.first_out) == (dt.time(7, 20), dt.time(10, 5))
+    assert asha_friday.rules_used["late_fine"] == "500.00"
+    assert (juma_friday.status, juma_friday.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
+    assert (juma_friday.first_in, juma_friday.first_out) == (dt.time(7, 50), dt.time(18, 45))
