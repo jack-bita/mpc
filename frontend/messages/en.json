@@ -469,6 +469,20 @@
       "back": "{name} is back at work.",
       "backLink": "Open their page now"
     },
+    "logins": {
+      "title": "Logging in",
+      "pin": "PIN",
+      "pinSet": "Set",
+      "pinNotSet": "Not set",
+      "setPin": "Set PIN",
+      "pinTitle": "Set {name}'s PIN",
+      "handOver": "Hand {name} this phone to type their own PIN.",
+      "newPin": "New PIN",
+      "newPinHint": "Four digits.",
+      "again": "Type it again",
+      "differ": "These PINs don't match.",
+      "pinDone": "{name}'s PIN is set. Their name shows on the shop's computers after they sync. If they were locked out, they can log in now; their old PIN no longer works."
+    },
     "roles": {
       "owner": "Owner",
       "manager": "Manager",
@@ -578,7 +592,8 @@
       "noKey": "There is no permission you can give them.",
       "side": "Side",
       "sideHint": "All sides means every side, even one added later.",
-      "done": "{name} has been given {what}. The shop's laptops will know after their next sync."
+      "done": "{name} has been given {what}. The shop's laptops will know after their next sync.",
+      "pinAfter": "{name} already has a PIN. If someone else set it and you are giving a big role or permission, set them a new one yourself afterwards."
     },
     "ending": {
       "remove": "Take away",
