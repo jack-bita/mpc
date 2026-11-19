@@ -151,10 +151,12 @@ describe("Weka PIN", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     fireEvent.click(await findButton("Weka PIN"));
-    // Both hidden, with the phone's number pad: the owner stands beside her, and a PIN is four digits.
+    // Both hidden, with the phone's number pad: the owner stands beside her, and a PIN is four digits. Each a box for a
+    // new secret, so the phone never offers the owner's own saved password to her (PPL-12's review).
     for (const box of [newPin(), again()]) {
       expect(box.type).toBe("password");
       expect(box.inputMode).toBe("numeric");
+      expect(box.autocomplete).toBe("new-password");
     }
     ashaTypes("4829");
     fireEvent.click(button("Hifadhi"));

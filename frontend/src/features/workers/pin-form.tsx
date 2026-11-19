@@ -130,8 +130,10 @@ export function PinForm({
         type="password"
         // The phone's number pad.
         inputMode="numeric"
-        // "off": the owner's phone must never offer to keep a worker's PIN as one of its own passwords.
-        autoComplete="off"
+        // "new-password", never "off", which phones ignore on a hidden box: a box for a new secret is never filled
+        // with a saved one, so the owner's own saved password can't be offered to the worker holding his phone
+        // (PPL-12's review). A browser may still offer to save what is typed; the owner says no.
+        autoComplete="new-password"
         maxLength={4}
         value={pin}
         onChange={(event) => setPin(event.target.value)}
@@ -141,7 +143,7 @@ export function PinForm({
         error={own.again ? t("differ") : undefined}
         type="password"
         inputMode="numeric"
-        autoComplete="off"
+        autoComplete="new-password"
         maxLength={4}
         value={pinAgain}
         onChange={(event) => setPinAgain(event.target.value)}

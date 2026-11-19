@@ -98,9 +98,10 @@ describe("Nenosiri la muda", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     await babaTypes(TEMPORARY, WHY);
-    // Hidden as typed, with the eye every password box has (UI-5); the owner's phone never offers to keep it.
+    // Hidden as typed, with the eye every password box has (UI-5). A box for a new password: the owner's phone never
+    // fills his own saved one in, as it might with "off", which phones ignore on a password box (PPL-12's review).
     expect(passwordBox().type).toBe("password");
-    expect(passwordBox().autocomplete).toBe("off");
+    expect(passwordBox().autocomplete).toBe("new-password");
     fireEvent.click(button("Hifadhi"));
 
     const done = await screen.findByText(

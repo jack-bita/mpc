@@ -135,8 +135,10 @@ export function PasswordForm({
       <PasswordField
         label={t("password")}
         error={sayCode(own.password) ?? byField.password}
-        // "off": the owner's phone must never offer to keep the worker's password as one of its own.
-        autoComplete="off"
+        // "new-password", never "off", which phones ignore on a password box: with "off", one tap could fill in the
+        // owner's own saved password, and Asha would be told it (PPL-12's review). A box for a new password is never
+        // filled with a saved one. A browser may still offer to save what is typed; the owner says no.
+        autoComplete="new-password"
         // As the route takes it (TemporaryPasswordSerializer, 128 characters).
         maxLength={128}
         value={password}
