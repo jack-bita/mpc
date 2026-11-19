@@ -483,12 +483,14 @@ def _maker_breaks(device: Device, kind: DocumentType, maker: StaffMember, *, mad
     # refuses the record (accept, then flag). `device` is the laptop the record was made on: for a carried record, not
     # the one that sent it (SYNC-12).
     broken = []
-    # The key for this type, on the laptop's own side, as its counter asks (X1): a seller of Vyakula holds no key on
-    # the Dawa laptop. Among the keys the person was given, whatever their status: a suspended maker's sale is the
-    # suspension's flag, not a second one saying they hold no key. A note for SALE-2: a sale that names its own side is
-    # checked on the laptop's side all the same, until that card says otherwise. A type that names no key, a clock-in,
-    # has nothing to check here (Jack, ATT-1).
-    if kind.permission is not None and kind.permission not in given_permissions(maker).on(device.home_side_id):
+    # The key for this type, on the laptop's own side, as its counter asks (X1): a seller of Vyakula holds no key on the
+    # Dawa laptop. Among the keys the person was given, whatever their status: a suspended maker's sale is the
+    # suspension's flag, not a second one saying they hold no key. As they were when the record was made, by the
+    # laptop's clock, as the status below is (PPL-7): Asha's sale made before Baba took her role away, and synced after,
+    # breaks no rule. A note for SALE-2: a sale that names its own side is checked on the laptop's side all the same,
+    # until that card says otherwise. A type that names no key, a clock-in, has nothing to check here (Jack, ATT-1).
+    held_then = given_permissions(maker, at=made_at)
+    if kind.permission is not None and kind.permission not in held_then.on(device.home_side_id):
         broken.append(FlagKind.PERMISSION_BREAK)
     # Working here when they made it (X2)? A laptop offline when Baba suspended Juma doesn't know, so its PIN check
     # still lets him in. By the laptop's clock, the one time the record carries: Juma's sale made at 09:00 is his,

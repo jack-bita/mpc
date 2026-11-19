@@ -13,7 +13,8 @@ holds nothing at all, whatever they were given; brought back, they hold it all a
 (ended, PPL-7) counts nowhere, in either question below: its row stays only as history.
 
 And one question about what they were given, whatever their status (given_permissions): what they would hold if brought
-back, for a check of who holds more than whom (AUTH-6).
+back, for a check of who holds more than whom (AUTH-6); or, at a moment past, what they held then, for a record made
+offline and pushed later (SYNC-5, PPL-7).
 
 Read through the guarded `objects` (CORE-2): the person's shop must be open, and only its rows count.
 """
@@ -21,6 +22,7 @@ Read through the guarded `objects` (CORE-2): the person's shop must be open, and
 import uuid
 from collections import defaultdict
 from collections.abc import Iterable
+from datetime import datetime
 
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
@@ -47,22 +49,30 @@ def held_permissions(staff: StaffMember) -> HeldPermissions:
     return _read_permissions(staff, Q(staff=staff, staff__status=StaffStatus.ACTIVE))
 
 
-def given_permissions(staff: StaffMember) -> HeldPermissions:
+def given_permissions(staff: StaffMember, *, at: datetime | None = None) -> HeldPermissions:
     """Every permission code `staff` was given, whatever their status: what they hold once they are brought back. Never
     for what a person may do now, which is held_permissions; this is for comparing two people (HeldPermissions.covers),
-    where a suspended owner must not read as someone with no keys."""
-    return _read_permissions(staff, Q(staff=staff))
+    where a suspended owner must not read as someone with no keys.
+
+    `at`: a moment past, for a record made offline (SYNC-5): the keys not yet taken away by then, by the laptop's
+    clock, as was_working_at reads a status (apps/people/selectors.py). Read from the rows' own end, not the audit
+    trail, as an end writes no audit line (PPL-7). A key given after `at` still counts: a laptop lets nobody use a
+    key it hasn't heard of, so only a slow laptop clock could put a record before its key, and that is no break
+    (PPL-7's card, default). A role's codes are read as they are now, for a moment past too: no card edits a role
+    yet (parking lot item 26)."""
+    return _read_permissions(staff, Q(staff=staff), at=at)
 
 
-def _read_permissions(staff: StaffMember, rows: Q) -> HeldPermissions:
-    # The one reading behind both questions above: they differ only in which of the person's rows count. Never an ended
-    # one (PPL-7): taken away, a role opens nothing, at once.
+def _read_permissions(staff: StaffMember, rows: Q, *, at: datetime | None = None) -> HeldPermissions:
+    # The one reading behind both questions above: they differ only in which of the person's rows count. Never one that
+    # ended (PPL-7): taken away, a role opens nothing, at once. With `at`, one that ended after it still counts: the
+    # person held it then.
     open_shop = current_shop()
     if open_shop is not ALL_SHOPS and open_shop != staff.shop_id:
         # T1: the guard reads only the open shop's rows, so a person of another shop would quietly hold nothing, and the
         # bug in the calling code would hide behind a plain "no". A server error instead, as for another shop's side.
         raise ShopMismatch("The person belongs to another shop than the one open.")
-    rows &= Q(ended_at__isnull=True)
+    rows &= Q(ended_at__isnull=True) if at is None else Q(ended_at__isnull=True) | Q(ended_at__gt=at)
     grants = PermissionGrant.objects.filter(rows).values_list("side_id", "permission")
     roles = RoleAssignment.objects.filter(rows).values_list("side_id", "role__permissions")
     every_side: set[str] = set()

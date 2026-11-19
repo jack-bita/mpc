@@ -15,6 +15,9 @@ suspended or gone, is flagged too:
     Baba suspends Juma at 11:00; Juma sells at 12:00 on a laptop still offline   saved + suspended_staff_activity
     Juma sold at 09:00, offline; Baba suspends him at 11:00                      saved, nothing more: he was working
 
+The same for a key taken away (PPL-7): a sale made before Baba took Asha's Seller role away, synced after, breaks no
+rule; one made after does.
+
 These tests send pretend "ticket" documents (tests/probe/documents.py), which need sale.write, through the push
 service. Fake data only: the repo is public.
 """
@@ -34,8 +37,8 @@ from apps.control.models import AuditEvent, Flag, FlagKind, FlagPerson
 from apps.core.links import LINK_TYPES
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import Device, StaffMember, User
-from apps.people.services import add_staff, mark_left, suspend, unsuspend
+from apps.people.models import Device, RoleAssignment, StaffMember, User
+from apps.people.services import add_staff, end_role, mark_left, suspend, unsuspend
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
@@ -297,6 +300,53 @@ def test_a_leaving_date_recorded_late_counts_from_the_day_after(
     [flag] = _flags(shop_a, FlagKind.SUSPENDED_STAFF_ACTIVITY)
     with shop_context(shop_a):
         assert PushedDocument.objects.get(pk=flag.subject_id).device_seq == 2
+
+
+# A key taken away (PPL-7): the record is checked against the keys its maker held when it was made, by the laptop's
+# clock, as their status is (02 §5 v1.39), read from the row's own end.
+
+
+def _seller_role_ended(asha: StaffMember) -> dt.datetime:
+    # Baba takes Asha's Seller role on Dawa away now; when the row says it ended.
+    with shop_context(asha.shop_id):
+        [given] = RoleAssignment.objects.filter(staff=asha)
+        ended = end_role(given, reason="Amehamia Vyakula", by=None)
+    assert ended.ended_at is not None
+    return ended.ended_at
+
+
+def test_a_record_made_before_its_key_was_taken_away_is_no_break(
+    shop_a: Model, device_a: Device, asha: StaffMember
+) -> None:
+    # Asha sold at 09:00 on the Dawa laptop, offline; Baba took her Seller role away at 11:00; the laptop synced at
+    # 12:00. She held the key when she sold, so the sale broke no rule: flagging it would accuse her falsely.
+    ended_at = _seller_role_ended(asha)
+    _push(device_a, [_made_at(1, asha, ended_at - dt.timedelta(hours=2))])
+    assert _flags(shop_a, FlagKind.PERMISSION_BREAK) == []
+
+
+def test_a_record_made_after_its_key_was_taken_away_is_a_break(
+    shop_a: Model, device_a: Device, asha: StaffMember
+) -> None:
+    # A sale made after the end, on a laptop that hadn't heard of it yet, is a break, as for a key never given.
+    ended_at = _seller_role_ended(asha)
+    _push(
+        device_a,
+        [_made_at(1, asha, ended_at - dt.timedelta(minutes=5)), _made_at(2, asha, ended_at + dt.timedelta(hours=1))],
+    )
+    [broken] = _flags(shop_a, FlagKind.PERMISSION_BREAK)
+    with shop_context(shop_a):
+        assert PushedDocument.objects.get(pk=broken.subject_id).device_seq == 2
+
+
+def test_a_key_given_after_the_record_still_counts(shop_a: Model, device_a: Device, asha: StaffMember) -> None:
+    # The card's default: a laptop lets nobody sell with a key it hasn't heard of, so a record made before its key was
+    # given can only be a slow laptop clock, and that is no break. Asha's role was given today; her sale says 10 Nov.
+    with shop_context(shop_a):
+        [given] = RoleAssignment.objects.filter(staff=asha)
+    assert given.created_at > CLIENT_TIME
+    _push(device_a, [_sent(1, asha)])
+    assert _flags(shop_a, FlagKind.PERMISSION_BREAK) == []
 
 
 def test_a_working_maker_raises_no_suspension_flag(shop_a: Model, device_a: Device, asha: StaffMember) -> None:
