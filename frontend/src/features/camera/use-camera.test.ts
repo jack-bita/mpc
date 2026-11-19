@@ -131,6 +131,26 @@ describe("useCamera", () => {
     expect(result.current.state).toBe("failed");
   });
 
+  it("takes no photo of the frozen frame a camera that went left behind", async () => {
+    // The <video> still holds the last frame, and a screen might still show it: the tap is failed, all the
+    // same, never a photo of a moment that has passed (ATT-3's review).
+    const { track, stream } = aCamera();
+    theBrowserAnswers(() => Promise.resolve(stream));
+    vi.mocked(shrinkFrame).mockResolvedValue(PHOTO);
+    const { result } = renderHook(() => useCamera(true));
+    act(() => result.current.videoRef(aVideo()));
+    await waitFor(() => expect(result.current.state).toBe("live"));
+    act(() => track.dispatchEvent(new Event("ended")));
+
+    let photo: Blob | string = "";
+    await act(async () => {
+      photo = await result.current.take();
+    });
+
+    expect(photo).toBe("failed");
+    expect(shrinkFrame).not.toHaveBeenCalled();
+  });
+
   it("turns the light off when the screen closes", async () => {
     const { track, stream } = aCamera();
     theBrowserAnswers(() => Promise.resolve(stream));
