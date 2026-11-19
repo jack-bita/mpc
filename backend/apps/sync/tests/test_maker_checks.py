@@ -35,10 +35,10 @@ from django.test.utils import CaptureQueriesContext
 
 from apps.control.models import AuditEvent, Flag, FlagKind, FlagPerson
 from apps.core.links import LINK_TYPES
-from apps.core.permissions import RoleTemplate
+from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import Device, RoleAssignment, StaffMember, User
-from apps.people.services import add_staff, end_role, mark_left, suspend, unsuspend
+from apps.people.models import Device, Role, RoleAssignment, StaffMember, User
+from apps.people.services import add_staff, assign_role, end_role, grant_permission, mark_left, suspend, unsuspend
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
@@ -307,9 +307,11 @@ def test_a_leaving_date_recorded_late_counts_from_the_day_after(
 
 
 def _seller_role_ended(asha: StaffMember) -> dt.datetime:
-    # Baba takes Asha's Seller role on Dawa away now; when the row says it ended.
+    # Baba takes Asha's Seller role on Dawa away now; when the row says it ended. Given a day before, as in a shop, so a
+    # sale made hours before the end was made while she held it, not before it was given.
     with shop_context(asha.shop_id):
         [given] = RoleAssignment.objects.filter(staff=asha)
+        RoleAssignment.objects.filter(pk=given.pk).update(created_at=given.created_at - dt.timedelta(days=1))
         ended = end_role(given, reason="Amehamia Vyakula", by=None)
     assert ended.ended_at is not None
     return ended.ended_at
@@ -323,6 +325,13 @@ def test_a_record_made_before_its_key_was_taken_away_is_no_break(
     ended_at = _seller_role_ended(asha)
     _push(device_a, [_made_at(1, asha, ended_at - dt.timedelta(hours=2))])
     assert _flags(shop_a, FlagKind.PERMISSION_BREAK) == []
+
+
+def test_a_record_made_the_moment_its_key_ended_is_a_break(shop_a: Model, device_a: Device, asha: StaffMember) -> None:
+    # At the very moment of the end, the key is gone, as a suspension counts from its own moment (was_working_at).
+    ended_at = _seller_role_ended(asha)
+    _push(device_a, [_made_at(1, asha, ended_at)])
+    assert len(_flags(shop_a, FlagKind.PERMISSION_BREAK)) == 1
 
 
 def test_a_record_made_after_its_key_was_taken_away_is_a_break(
@@ -347,6 +356,24 @@ def test_a_key_given_after_the_record_still_counts(shop_a: Model, device_a: Devi
     assert given.created_at > CLIENT_TIME
     _push(device_a, [_sent(1, asha)])
     assert _flags(shop_a, FlagKind.PERMISSION_BREAK) == []
+
+
+@pytest.mark.parametrize("given_back_as", ["the role", "an extra key"])
+def test_a_key_given_back_after_the_sale_hides_no_break(
+    given_back_as: str, shop_a: Model, device_a: Device, asha: StaffMember, side_a: Side
+) -> None:
+    # The PPL-7 review: Baba takes Asha's Seller role at 11:00; she sells at 12:00 on a laptop that hasn't heard; Baba
+    # gives it back at 13:00, as the role or as an extra sale.write; the laptop syncs at 14:00. A key given after a sale
+    # counts for it only when it is new to her (the slow-clock default): one taken away before the sale and given back
+    # after left a gap, and the sale fell in it. A break, as a suspension and a return around it would be.
+    ended_at = _seller_role_ended(asha)
+    with shop_context(shop_a):
+        if given_back_as == "the role":
+            back = assign_role(asha, Role.objects.get(template=RoleTemplate.SELLER), side=side_a, by=None).created_at
+        else:
+            back = grant_permission(asha, Permission.SALE_WRITE, side=side_a, by=None).created_at
+    _push(device_a, [_made_at(1, asha, ended_at + (back - ended_at) / 2)])
+    assert len(_flags(shop_a, FlagKind.PERMISSION_BREAK)) == 1
 
 
 def test_a_working_maker_raises_no_suspension_flag(shop_a: Model, device_a: Device, asha: StaffMember) -> None:
