@@ -436,7 +436,8 @@
       "status": "Hali",
       "lastDay": "Siku ya mwisho",
       "roles": "Cheo",
-      "extraKeys": "Ruhusa za ziada"
+      "extraKeys": "Ruhusa za ziada",
+      "noExtraKeys": "Hana ruhusa za ziada"
     },
     "actions": {
       "edit": "Badilisha",
@@ -475,6 +476,115 @@
       "order_writer": "Mwandishi wa oda",
       "cashier": "Keshia",
       "worker": "Mfanyakazi"
+    },
+    "keys": {
+      "sale": {
+        "write": "Kuandika mauzo au oda",
+        "take_payment": "Kupokea malipo",
+        "hand_over": "Kukabidhi bidhaa",
+        "bargain": "Kupunguza bei, hadi bei ya chini kabisa",
+        "below_floor_approve": "Kukubali bei iliyo chini ya bei ya chini kabisa",
+        "jumla_switch": "Kubadili mauzo kuwa bei ya jumla",
+        "cancel": "Kughairi mauzo",
+        "refund": "Kurudisha pesa ya mauzo"
+      },
+      "credit": {
+        "give": "Kuuza kwa mkopo",
+        "approve": "Kukubali mkopo unaozidi kikomo"
+      },
+      "debt": {
+        "view": "Kuona madeni",
+        "adjust": "Kurekebisha au kusamehe deni"
+      },
+      "price": {
+        "change": "Kubadilisha bei"
+      },
+      "cost": {
+        "view": "Kuona bei za kununulia na faida"
+      },
+      "product": {
+        "manage": "Kuongeza na kubadilisha bidhaa"
+      },
+      "contact": {
+        "manage": "Kuongeza na kubadilisha wateja, wasambazaji na washirika"
+      },
+      "stock": {
+        "receive": "Kukamilisha mzigo uliofika, na bei zake za kununulia",
+        "weigh": "Kupima mzigo unapofika",
+        "loss": "Kuandika upotevu",
+        "count": "Kuhesabu mzigo",
+        "count_approve": "Kuidhinisha hesabu ya mzigo",
+        "transfer": "Kuhamisha mzigo kutoka sehemu moja kwenda nyingine"
+      },
+      "money": {
+        "expense": "Kulipa matumizi",
+        "advance": "Kumpa mfanyakazi advansi",
+        "withdraw": "Kutoa pesa kwenye droo"
+      },
+      "drawer": {
+        "count": "Kuhesabu droo",
+        "confirm": "Kuthibitisha droo iliyohesabiwa",
+        "approve": "Kuidhinisha siku"
+      },
+      "staff": {
+        "manage": "Kuongeza wafanyakazi na kuwapa vyeo"
+      },
+      "attendance": {
+        "manage": "Kurekebisha mahudhurio"
+      },
+      "pay": {
+        "run": "Kuandaa mishahara ya mwezi",
+        "approve": "Kuidhinisha mishahara ya mwezi"
+      },
+      "settings": {
+        "manage": "Kubadilisha sheria na viwango vya duka"
+      },
+      "device": {
+        "manage": "Kusajili na kuzuia vifaa"
+      },
+      "flag": {
+        "review": "Kutatua au kuacha tofauti za upande"
+      },
+      "report": {
+        "view": "Kuona ripoti"
+      },
+      "job": {
+        "manage": "Kuendesha kazi za mashine"
+      },
+      "production": {
+        "run": "Kuandika uzalishaji"
+      }
+    },
+    "keyGroups": {
+      "selling": "Mauzo",
+      "credit": "Mkopo na madeni",
+      "products": "Bidhaa, bei na wateja",
+      "stock": "Mzigo",
+      "money": "Pesa na droo",
+      "staff": "Wafanyakazi, mahudhurio na mishahara",
+      "shop": "Duka lenyewe",
+      "production": "Kazi za mashine na uzalishaji"
+    },
+    "giving": {
+      "add": "Ongeza kazi",
+      "title": "Ongeza kazi kwa {name}",
+      "what": "Anapewa nini?",
+      "whatHint": "Unaona tu unachoweza kutoa: cheo ambacho ruhusa zake zote unazo upande huo, au ruhusa uliyo nayo huko.",
+      "aRole": "Cheo",
+      "aKey": "Ruhusa moja ya ziada",
+      "role": "Cheo gani?",
+      "key": "Ruhusa gani?",
+      "noRole": "Hakuna cheo unachoweza kumpa.",
+      "noKey": "Hakuna ruhusa unayoweza kumpa.",
+      "side": "Upande",
+      "sideHint": "Pande zote ni kila upande, hata utakaoongezwa baadaye.",
+      "done": "{name} amepewa {what}. Kompyuta za duka zitajua baada ya kusawazisha."
+    },
+    "ending": {
+      "remove": "Ondoa",
+      "removeWhat": "Ondoa {what}",
+      "title": "Ondoa {what} kwa {name}",
+      "done": "Umemwondolea {name} {what}. Kompyuta za duka zitajua baada ya kusawazisha."
     }
   },
   "attendance": {
@@ -756,9 +866,9 @@
       "other_shop": "Hiki ni cha duka jingine.",
       "reason_required": "Andika sababu.",
       "temporary_password_open": "Mtu huyu bado ana nenosiri la muda. Ruhusa hii itasubiri hadi achague nenosiri lake.",
-      "own": "Huwezi kubadilisha hali yako ya kazi wala taarifa zako mwenyewe.",
-      "superuser_only": "Hali ya kazi na taarifa za mtu huyu zinabadilishwa na msimamizi wa mfumo tu.",
-      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kubadilisha hali yake ya kazi wala taarifa zake.",
+      "own": "Huwezi kubadilisha hali yako ya kazi, taarifa zako, wala vyeo na ruhusa zako mwenyewe.",
+      "superuser_only": "Hali ya kazi, taarifa, vyeo na ruhusa za mtu huyu zinabadilishwa na msimamizi wa mfumo tu.",
+      "more_keys": "Mtu huyu ana ruhusa ambazo wewe huna, kwa hiyo huwezi kubadilisha hali yake ya kazi, taarifa zake, wala vyeo na ruhusa zake.",
       "display_name_taken": "Mfanyakazi mwingine tayari ana jina hili la kuitwa. Chagua jingine.",
       "not_active": "Mfanyakazi huyu tayari amesimamishwa.",
       "not_suspended": "Mfanyakazi huyu hajasimamishwa.",

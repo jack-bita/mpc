@@ -1,6 +1,8 @@
 // workers.ts — the shop's workers as the office reads them (PPL-6, 03 §5.10): the list's place in the store of
 // server answers, the reading of every page, one worker for their own page and its address, a saved worker kept in
-// both at once, the key the page asks, and the words for each role and its side.
+// both at once, the key the page asks, and the words for each role and its side. For PPL-8: the shop's roles, read
+// when Ongeza kazi opens (ROLES, useRoles, RolesRead, handed down as values), how a role or a key is written on its
+// side (useOnSide), and what a roles form shows above its buttons (aboutTheChange).
 //
 // GET /api/v1/people/staff/ answers everyone the shop has had, those who left included, newest first, in pages of
 // 50 (CursorPage, PPL-4). A shop has tens of workers over the years, not hundreds, so one screen holds them all,
@@ -20,13 +22,16 @@ import {
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
-import { answerOf } from "@/api/refusal";
+import { answerOf, ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 
 export type Worker = components["schemas"]["Staff"];
 export type GivenRole = components["schemas"]["GivenRole"];
+/** One of the shop's roles, with its codes, as Ongeza kazi offers it (GET /api/v1/people/roles/, PPL-7). */
+export type Role = components["schemas"]["Role"];
 type StaffPage = components["schemas"]["PaginatedStaffList"];
+type RolePage = components["schemas"]["PaginatedRoleList"];
 
 /** The key the workers' routes ask, on the whole shop: one of the owner's own four (spec §6). */
 export const MANAGES_STAFF = "staff.manage";
@@ -67,6 +72,66 @@ async function allWorkers(): Promise<Worker[]> {
 /** The shop's workers, from the store of server answers. */
 export function useWorkers() {
   return useQuery({ queryKey: WORKERS, queryFn: allWorkers });
+}
+
+/** What a roles form (give-form.tsx, end-form.tsx) shows above its buttons: the failure, with one more step than
+ * aboutTheWholeRequest (settings/closures.ts). A refusal of fields alone (`invalid`) names fields the form may have no
+ * box for, as id.taken comes on `id`, or a role or side no longer there on `role`, `role_given`, `key` or `side`: the
+ * first such field's code is about the whole change, so it shows in the code's place, never nowhere (PPL-8's review).
+ * A refusal of the form's own boxes (`boxes`) alone shows beside them instead: nothing above. */
+export function aboutTheChange(
+  error: unknown,
+  boxes: readonly string[] = [],
+): unknown {
+  if (!(error instanceof ApiRefusal) || error.body.code !== "invalid")
+    return error;
+  const field = Object.entries(error.body.fields).find(
+    ([name, codes]) => !boxes.includes(name) && codes.length > 0,
+  );
+  return field === undefined
+    ? null
+    : new ApiRefusal(error.status, {
+        ...error.body,
+        code: field[1][0] ?? error.body.code,
+        fields: {},
+      });
+}
+
+/** The shop's roles' place in the store: apart from the workers', as a change to a worker changes no role. */
+export const ROLES = ["people", "roles"] as const;
+
+/** Every role the shop has, page after page: six at first, each a copy of a template (set_up_shop), and later any the
+ * owner makes himself (parking lot item 26). Behind staff.manage on the whole shop, as the workers' list is. */
+async function allRoles(): Promise<Role[]> {
+  const roles: Role[] = [];
+  let cursor: string | null = null;
+  do {
+    // Named, as TypeScript can't work out a type that the loop's own cursor feeds back into (allWorkers).
+    const page: RolePage = await answerOf(
+      api.GET("/api/v1/people/roles/", {
+        params: { query: cursor === null ? {} : { cursor } },
+      }),
+    );
+    roles.push(...page.results);
+    cursor = page.next ? new URL(page.next).searchParams.get("cursor") : null;
+  } while (cursor !== null);
+  return roles;
+}
+
+/** The roles' read as the page hands it down: its three values, read by the page itself (worker-page.tsx). Never the
+ * query's whole result: TanStack draws a part again only when a value that part has read changes, so a result handed
+ * down and read only later, by a form that opened after the read had failed, kept showing it on its way (PPL-8's
+ * review). */
+export type RolesRead = {
+  data: Role[] | undefined;
+  error: unknown;
+  isPending: boolean;
+};
+
+/** The shop's roles, for Ongeza kazi (PPL-8): asked only once `enabled`, when the form opens, so opening a worker's
+ * page costs no read of them. Asked by the page, the part always on the screen, and handed down (worker-page.tsx). */
+export function useRoles(enabled: boolean) {
+  return useQuery({ queryKey: ROLES, queryFn: allRoles, enabled });
 }
 
 /** One worker's place in the store, under the list's: a change that asks the list again (invalidateQueries with
@@ -116,7 +181,7 @@ export function keepWorker(store: QueryClient, worker: Worker): void {
 /** The six roles every shop starts with, by the code of the template each was copied from (RoleTemplate,
  * backend/apps/core/permissions.py). Each has its words in both books; a role the owner made himself has no
  * template, and shows its own name. */
-const ROLE_TEMPLATES = [
+export const ROLE_TEMPLATES = [
   "owner",
   "manager",
   "seller",
@@ -130,8 +195,9 @@ function isTemplate(code: string): code is RoleTemplate {
   return (ROLE_TEMPLATES as readonly string[]).includes(code);
 }
 
-/** How the page writes each role a worker holds, with its side: "Muuzaji (Dawa)", "Meneja (Pande zote)". */
-export function useRoleWords(me: WhoIsHere) {
+/** How the page writes a role or a key on its side (PPL-8): "Muuzaji (Dawa)", "Meneja (Pande zote)". One rule for
+ * both, so a role and a key on the same side read alike. */
+export function useOnSide(me: WhoIsHere) {
   const t = useTranslations("workers");
   // The sides' names, from `me`: whoever opens this page holds staff.manage on the whole shop, which the server
   // counts on every side, so `me` names every side a role can be on (MePermissionsSerializer).
@@ -139,24 +205,33 @@ export function useRoleWords(me: WhoIsHere) {
     me.permissions.sides.map((side) => [side.id, side.name]),
   );
 
+  /** A name with its side. No side is every side. A side `me` doesn't name, which the key above rules out, shows
+   * the name alone rather than an id. */
+  return function onSide(name: string, sideId: string | null): string {
+    if (sideId === null) {
+      return t("roleOnSide", { role: name, side: t("allSides") });
+    }
+    const side = sideNames.get(sideId);
+    return side === undefined ? name : t("roleOnSide", { role: name, side });
+  };
+}
+
+/** How the page writes each role a worker holds, with its side: "Muuzaji (Dawa)", "Meneja (Pande zote)". */
+export function useRoleWords(me: WhoIsHere) {
+  const t = useTranslations("workers");
+  const onSide = useOnSide(me);
+
   /** A role's own name: its template's words in the person's language (ADR-0032), else the name the shop gave
    * it, as a role the owner made himself, or a template a newer server knows and this app doesn't yet. */
-  function roleName(given: GivenRole): string {
+  function roleName(given: { template: string; name: string }): string {
     return isTemplate(given.template)
       ? t(`roles.${given.template}`)
       : given.name;
   }
 
-  /** The role with its side. No side is every side. A side `me` doesn't name, which the key above rules out,
-   * shows the role alone rather than an id. */
+  /** The role with its side. */
   function roleOnSide(given: GivenRole): string {
-    if (given.side === null) {
-      return t("roleOnSide", { role: roleName(given), side: t("allSides") });
-    }
-    const side = sideNames.get(given.side);
-    return side === undefined
-      ? roleName(given)
-      : t("roleOnSide", { role: roleName(given), side });
+    return onSide(roleName(given), given.side);
   }
 
   return { roleName, roleOnSide };

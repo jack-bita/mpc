@@ -255,7 +255,8 @@ function WorkerRow({
         </TextLink>
       </p>
       <p>{roles}</p>
-      {/* A key given apart from any role: counted only. Their names come with PPL-8, which gives them. */}
+      {/* A key given apart from any role: counted only, so a row stays short (PPL-8's default); the worker's own page
+          names each, with its side (worker-roles.tsx). */}
       {worker.keys.length > 0 ? (
         <p className="text-muted-foreground">
           {t("extraKeys", { count: worker.keys.length })}

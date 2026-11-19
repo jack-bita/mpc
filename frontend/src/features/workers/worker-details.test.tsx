@@ -115,9 +115,12 @@ describe("Badilisha", () => {
 
     await openTheFix();
 
-    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe(
-      "Badilisha taarifa za Asha",
-    );
+    expect(
+      screen.getByRole("heading", {
+        level: 2,
+        name: "Badilisha taarifa za Asha",
+      }),
+    ).toBeTruthy();
     expect(box("Jina kamili").value).toBe("Asha Mfano");
     expect(box("Jina la kuitwa").value).toBe("Asha");
     expect(box("Kazi").value).toBe("Muuzji");
@@ -275,7 +278,7 @@ describe("Badilisha", () => {
     fireEvent.click(button("Hifadhi"));
 
     expect((await screen.findByRole("alert")).textContent).toContain(
-      "Hali ya kazi na taarifa za mtu huyu zinabadilishwa na msimamizi wa mfumo tu.",
+      "Hali ya kazi, taarifa, vyeo na ruhusa za mtu huyu zinabadilishwa na msimamizi wa mfumo tu.",
     );
     expect(box("Kazi").value).toBe("Muuzaji");
   });

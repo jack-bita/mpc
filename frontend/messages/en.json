@@ -436,7 +436,8 @@
       "status": "Status",
       "lastDay": "Last day",
       "roles": "Role",
-      "extraKeys": "Extra permissions"
+      "extraKeys": "Extra permissions",
+      "noExtraKeys": "No extra permissions"
     },
     "actions": {
       "edit": "Edit",
@@ -475,6 +476,115 @@
       "order_writer": "Order writer",
       "cashier": "Cashier",
       "worker": "Worker"
+    },
+    "keys": {
+      "sale": {
+        "write": "Write a sale or an order",
+        "take_payment": "Take a payment",
+        "hand_over": "Hand the goods over",
+        "bargain": "Lower a price, down to the floor",
+        "below_floor_approve": "Approve a price below the floor",
+        "jumla_switch": "Switch a sale to the jumla price",
+        "cancel": "Cancel a sale",
+        "refund": "Refund a sale"
+      },
+      "credit": {
+        "give": "Sell on credit",
+        "approve": "Approve credit over a limit"
+      },
+      "debt": {
+        "view": "See the debts",
+        "adjust": "Adjust or write off a debt"
+      },
+      "price": {
+        "change": "Change a price"
+      },
+      "cost": {
+        "view": "See buying prices and profit"
+      },
+      "product": {
+        "manage": "Add and change products"
+      },
+      "contact": {
+        "manage": "Add and change customers, suppliers and partners"
+      },
+      "stock": {
+        "receive": "Complete a delivery, with its buying prices",
+        "weigh": "Weigh goods as they arrive",
+        "loss": "Record a loss",
+        "count": "Count the stock",
+        "count_approve": "Approve a stock count",
+        "transfer": "Move stock from one place to another"
+      },
+      "money": {
+        "expense": "Pay an expense",
+        "advance": "Give a worker an advance",
+        "withdraw": "Take money out of a drawer"
+      },
+      "drawer": {
+        "count": "Count a drawer",
+        "confirm": "Confirm a counted drawer",
+        "approve": "Approve the day"
+      },
+      "staff": {
+        "manage": "Add workers and give them roles"
+      },
+      "attendance": {
+        "manage": "Fix attendance"
+      },
+      "pay": {
+        "run": "Prepare the month's pay",
+        "approve": "Approve the month's pay"
+      },
+      "settings": {
+        "manage": "Change the shop's rules and rates"
+      },
+      "device": {
+        "manage": "Register and block devices"
+      },
+      "flag": {
+        "review": "Resolve or dismiss a side's flags"
+      },
+      "report": {
+        "view": "See the reports"
+      },
+      "job": {
+        "manage": "Run machine jobs"
+      },
+      "production": {
+        "run": "Record a production run"
+      }
+    },
+    "keyGroups": {
+      "selling": "Selling",
+      "credit": "Credit and debts",
+      "products": "Products, prices and contacts",
+      "stock": "Stock",
+      "money": "Money and drawers",
+      "staff": "Staff, attendance and pay",
+      "shop": "The shop itself",
+      "production": "Machine jobs and production"
+    },
+    "giving": {
+      "add": "Give a role or a permission",
+      "title": "Give {name} a role or a permission",
+      "what": "What are they given?",
+      "whatHint": "You see only what you may give: a role whose every permission you hold on that side, or a permission you hold there.",
+      "aRole": "A role",
+      "aKey": "One extra permission",
+      "role": "Which role?",
+      "key": "Which permission?",
+      "noRole": "There is no role you can give them.",
+      "noKey": "There is no permission you can give them.",
+      "side": "Side",
+      "sideHint": "All sides means every side, even one added later.",
+      "done": "{name} has been given {what}. The shop's laptops will know after their next sync."
+    },
+    "ending": {
+      "remove": "Take away",
+      "removeWhat": "Take away {what}",
+      "title": "Take {what} away from {name}",
+      "done": "{what} was taken away from {name}. The shop's laptops will know after their next sync."
     }
   },
   "attendance": {
@@ -756,9 +866,9 @@
       "other_shop": "This belongs to another shop.",
       "reason_required": "Write a reason.",
       "temporary_password_open": "This person still has a temporary password. This permission waits until they choose their own.",
-      "own": "You can't change your own work status or details.",
-      "superuser_only": "Only the system admin can change this person's work status or details.",
-      "more_keys": "This person has permissions you don't, so you can't change their work status or details.",
+      "own": "You can't change your own work status, details, roles or permissions.",
+      "superuser_only": "Only the system admin can change this person's work status, details, roles or permissions.",
+      "more_keys": "This person has permissions you don't, so you can't change their work status, details, roles or permissions.",
       "display_name_taken": "Another worker already has this nickname. Choose another.",
       "not_active": "This worker is already suspended.",
       "not_suspended": "This worker isn't suspended.",
