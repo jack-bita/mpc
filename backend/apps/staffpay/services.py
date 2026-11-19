@@ -27,10 +27,10 @@ from apps.core.settings_registry import ATTENDANCE_ON
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.people.models import StaffMember
 from apps.shops.models import Shop
-from apps.shops.selectors import closed_days, get_setting, shop_today
+from apps.shops.selectors import closed_days, shop_settings_between, shop_today
 from apps.staffpay.calculations import NO_FINE, DayResult, Tap, shop_minute, work_out_day
 from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus
-from apps.staffpay.selectors import day_rules, rules_as_text
+from apps.staffpay.selectors import day_rules_between, rules_as_text
 
 # Sunday, as Python numbers the days of the week (Monday is 0). Always off, and not paid: Sunday work is a deal between
 # the owner and the worker, outside the system (01 §8.1), so a shop has no setting for it.
@@ -89,14 +89,17 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         kept = {
             (row.staff_id, row.date): row for row in AttendanceDay.objects.filter(shop=shop, date__range=(first, last))
         }
-        # The days the whole shop is closed (ATT-8): a public holiday, a family funeral. One read for the span.
+        # The days the whole shop is closed (ATT-8): a public holiday, a family funeral. The attendance switch on each
+        # day, and the day's rules on each day (A1). One read each for the whole span, never one per day.
         closed = closed_days(shop, first, last)
+        switched_on = shop_settings_between([ATTENDANCE_ON], shop, first, last)
+        rules_by_day = day_rules_between(shop, first, last)
         answered: list[AttendanceDay] = []
         for day in dates:
             # Attendance counts only from the day the owner switched it on (ADR-0033), a dated rule, so read on each
             # date: before it, nobody clocked in, and every day kept would be an absence that never was. No day at all,
             # not even an off one.
-            if not get_setting(ATTENDANCE_ON, shop, on=day):
+            if not switched_on[day][ATTENDANCE_ON.key]:
                 continue
             # Only the jobs that ran on that date: from the first day to the last, both counted (02 §5). A worker
             # added on the 10th has no absent days before it; one who left on Friday has none after. The first day as
@@ -108,8 +111,8 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
             if day.weekday() == SUNDAY:
                 answered.extend(_off(shop, job, day) for job in working)
                 continue
-            # The day's rules, once per date for every job: nine reads, never nine per worker (A1).
-            rules = day_rules(shop, day)
+            # The day's rules, the same for every job (A1).
+            rules = rules_by_day[day]
             rules_used = rules_as_text(rules)
             for job in working:
                 # Only the job's own taps: Asha's on Asha's day, even on a laptop Juma used too. With none, the rule

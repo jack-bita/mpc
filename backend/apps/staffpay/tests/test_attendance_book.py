@@ -367,6 +367,17 @@ def test_a_day_that_comes_out_the_same_is_not_written_again(shop_a: Shop, device
     assert {key: day.pk for key, day in second.items()} == {key: day.pk for key, day in first.items()}
 
 
+def test_a_month_is_read_in_a_few_queries(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
+    # The month page opens November (ATT-5): the book reads the jobs, the taps, the days kept, the closed days, the
+    # switch and the rules once each for the whole month, and writes its new days in one go. However many days and
+    # workers, the count stays small: never a read per day or per worker.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))
+    with shop_context(shop_a), CaptureQueriesContext(connection) as queries:
+        days = work_out_days(shop_a, dt.date(2026, 10, 1), dt.date(2026, 10, 31))
+    assert len(days) == 2 * 31
+    assert len(queries) <= 12
+
+
 def test_working_out_twice_keeps_one_row(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
     # A month asked for again, by the next manager to open it: each job keeps one row per date, under its first id.
     tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))

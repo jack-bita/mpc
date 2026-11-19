@@ -4,8 +4,9 @@
     on 1 Dec:  late_fine 500.00, closing 18:40    so 30 Nov keeps its rules, and 1 Dec gets the new one
 
 A day is judged by the rules of its own date (A1): each of the nine is a dated setting of the whole shop (02 §12), read
-with get_setting on that date. The book of days (apps/staffpay/services.py) reads them once per date, hands them to
-the day's rule (work_out_day), and keeps a copy of them with each day (T4), as text.
+as get_setting answers it on that date. The book of days (apps/staffpay/services.py) reads a span's in one go
+(day_rules_between), hands each day's to the day's rule (work_out_day), and keeps a copy of them with the day (T4), as
+text.
 """
 
 from datetime import date
@@ -24,7 +25,7 @@ from apps.core.settings_registry import (
     SettingKey,
 )
 from apps.shops.models import Shop
-from apps.shops.selectors import get_setting
+from apps.shops.selectors import shop_settings_between
 from apps.staffpay.calculations import DayRules
 
 # Each part of a day's rules, by its name in DayRules, and the setting it is read from: one list, so the rules read and
@@ -44,13 +45,22 @@ DAY_RULE_SETTINGS: dict[str, SettingKey[Any]] = {
 }
 
 
+def day_rules_between(shop: Shop, first: date, last: date) -> dict[date, DayRules]:
+    """The rules each day from `first` to `last`, both counted, is judged by: each as `get_setting` answers it on that
+    date (A1), the key's default where the shop has typed nothing. One read for the whole span (shop_settings_between),
+    never nine per day, nor nine per worker. The shop must be open, and the days dates on the shop's calendar."""
+    # shop_settings_between's own checks stand: a datetime, which Python counts as a date, is refused there (a moment,
+    # not the shop's day), as is a shop that is not the one open.
+    values = shop_settings_between(list(DAY_RULE_SETTINGS.values()), shop, first, last)
+    return {
+        day: DayRules(**{part: on_day[key.key] for part, key in DAY_RULE_SETTINGS.items()})
+        for day, on_day in values.items()
+    }
+
+
 def day_rules(shop: Shop, day: date) -> DayRules:
-    """The rules one day is judged by: each as `get_setting` answers it on that date (A1), the key's default where the
-    shop has typed nothing. The shop must be open, and `day` a date on the shop's calendar, as get_setting asks."""
-    # Nine reads, so the book calls this once per date, for all its workers. get_setting's own checks stand: a
-    # datetime, which Python counts as a date, is refused there (a moment, not the shop's day), as is a shop that is
-    # not the one open.
-    return DayRules(**{part: get_setting(key, shop, on=day) for part, key in DAY_RULE_SETTINGS.items()})
+    """The rules one day is judged by, as day_rules_between answers them for a span of that day alone."""
+    return day_rules_between(shop, day, day)[day]
 
 
 def rules_as_text(rules: DayRules) -> dict[str, str]:
