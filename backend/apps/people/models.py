@@ -381,7 +381,7 @@ class RoleAssignment(ShopScoped):
     # links to this table, so PROTECT can't keep a row: the no-delete trigger in its migration refuses a DELETE.
 
     # PROTECT: nothing is deleted (rule 7). related_name="+": a person's roles are read through the guarded
-    # `objects` (apps/people/permissions.py). db_index=False: the unique rule below indexes (shop, staff, ...),
+    # `objects` (apps/people/permissions.py). db_index=False: the (shop, staff) index below finds a person's rows,
     # and nothing is deleted, so PROTECT never has to search the role's or the side's column.
     staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name="+", db_index=False)
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name="+", db_index=False)
@@ -412,6 +412,10 @@ class RoleAssignment(ShopScoped):
             ),
             models.CheckConstraint(condition=END_IS_WHOLE, name="people_roleassignment_end_whole"),
         ]
+        # A person's rows, ended ones too (PPL-7): the once rule above indexes only the rows that still count, while a
+        # record pushed from offline reads every row of its maker's, to know what they held when it was made
+        # (given_permissions with `at`), once per record. Leads with `shop`, as every index here does.
+        indexes = [models.Index(fields=["shop", "staff"], name="people_roleassignment_staff")]
 
 
 class PermissionGrant(ShopScoped):
@@ -449,6 +453,8 @@ class PermissionGrant(ShopScoped):
             ),
             models.CheckConstraint(condition=END_IS_WHOLE, name="people_permissiongrant_end_whole"),
         ]
+        # As on RoleAssignment.
+        indexes = [models.Index(fields=["shop", "staff"], name="people_permissiongrant_staff")]
 
 
 class DeviceStatus(models.TextChoices):
