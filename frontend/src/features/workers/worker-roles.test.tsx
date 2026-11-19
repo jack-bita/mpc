@@ -122,6 +122,14 @@ const radios = (group: string) =>
         "",
     );
 
+/** The error under a Choice's question: the line its radiogroup's aria-describedby names (choice.tsx). */
+function errorOfGroup(name: string): string {
+  const group = screen.getByRole("radiogroup", { name });
+  const ids = group.getAttribute("aria-describedby")?.split(" ") ?? [];
+  const error = ids.find((id) => id.endsWith("-error"));
+  return error ? (document.getElementById(error)?.textContent ?? "") : "";
+}
+
 /** Picks a row of a Choice, as a tap on its words does. */
 function pick(name: string) {
   fireEvent.click(radio(name));
@@ -345,6 +353,36 @@ describe("Ongeza kazi", () => {
     pick("Ruhusa moja ya ziada");
 
     expect(screen.getByText("Hakuna ruhusa unayoweza kumpa.")).toBeTruthy();
+  });
+
+  it("counts a pick no longer on its list as none: nothing is sent, and the question asks again (the card's Build)", async () => {
+    // Juma is a seller on Vyakula already. Baba picks the Seller role, offered on every side and on Dawa; then a key,
+    // and Vyakula; then back to a role. On Vyakula the Seller is no longer on the list: the pick is gone, not sent.
+    theServerHas({
+      ...JUMA,
+      roles: [role("seller", VYAKULA.id, { role: SELLER_ROLE.id })],
+    });
+
+    render(<WorkerScreen id={JUMA.id} />);
+    await openTheGive();
+    await pickRole("Muuzaji");
+    pick("Ruhusa moja ya ziada");
+    pick("Vyakula");
+    pick("Cheo");
+
+    // The list on Vyakula, without the Seller, and nothing picked on it.
+    expect(radios("Cheo gani?")).not.toContain("Muuzaji");
+    const picked = within(
+      screen.getByRole("radiogroup", { name: "Cheo gani?" }),
+    )
+      .getAllByRole("radio")
+      .filter((each) => each.getAttribute("aria-checked") === "true");
+    expect(picked).toEqual([]);
+    fireEvent.click(button("Hifadhi"));
+
+    // Asked again beside its own question, the role's, not only the side's; nothing sent.
+    expect(errorOfGroup("Cheo gani?")).toBe("Jaza sehemu hii.");
+    expect(sent.filter((request) => request.method === "POST")).toHaveLength(0);
   });
 
   it("leaves out the side where the worker already holds the pick", async () => {
