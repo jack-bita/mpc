@@ -3,7 +3,10 @@
 // with a reason, suspends him, and Rudisha takes its place. The card's Done when, through the real server: PPL-4's
 // routes, their key (staff.manage on the whole shop, which the seed gives the demo's Meneja), and their rules.
 // And roles (PPL-8): Meneja adds Zawadi, gives Zawadi the Seller role on Dawa with Ongeza kazi, and takes it away again
-// with Ondoa and a reason, through PPL-7's routes: the giver rule, the give's own id, the end's reason.
+// with Ondoa and a reason, through PPL-7's routes: the giver rule, the give's own id, the end's reason. And on Zawadi's
+// page, Kuingia (PPL-12): on the demo, Weka PIN and Nenosiri la muda are both off, with the one line saying why, as
+// every visitor shares the seed's logins (Jack, PPL-12: A); a PIN or a password itself is checked by hand on the
+// laptop's own stack, as the demo can show neither.
 //
 // Juma and Zawadi are the visitor's own workers, so the demo lets them change (demo.people_fixed guards only the seed's
 // people, their roles included, PPL-7). The tests share one database (the-shop.ts), made fresh for each run, and no
@@ -187,6 +190,23 @@ test("the demo's manager gives a role and takes it away", async ({
     await expect(cardPart(phone, WORKERS.view.roles)).toContainText(
       WORKERS.noRole,
     );
+  });
+
+  await test.step("Kuingia: on the demo, no PIN and no password for anyone", async () => {
+    // Asked of the real server, which answers that this is the demo (askDemoOpen).
+    await expect(valueOf(phone, WORKERS.logins.pin)).toHaveText(
+      WORKERS.logins.pinNotSet,
+    );
+    await expect(
+      phone.getByRole("button", { name: WORKERS.logins.setPin, exact: true }),
+    ).toBeDisabled();
+    await expect(
+      phone.getByRole("button", {
+        name: WORKERS.logins.temporaryPassword,
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await expect(phone.getByText(sw.errors.demo.logins_fixed)).toBeVisible();
   });
 
   await test.step("Ongeza kazi: the Seller role on Dawa, shown at once", async () => {

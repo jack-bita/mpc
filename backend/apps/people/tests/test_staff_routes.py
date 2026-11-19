@@ -13,11 +13,12 @@ calls (PPL-4; 03 §5.10). What may and may not be done is the services'; these t
     POST  /api/v1/people/staff/{id}/give-key/    give them one extra key, the same way
     POST  /api/v1/people/staff/{id}/end-role/    take a role of theirs away, with a reason
     POST  /api/v1/people/staff/{id}/end-key/     take an extra key of theirs away, with a reason
+    POST  /api/v1/people/staff/{id}/pin/         give them a PIN, typed by the worker on the owner's phone (PPL-12)
     GET   /api/v1/people/roles/                  the shop's roles, to choose from
 
 Each worker comes with their full name, phone, nickname, job title, first day, status and leaving day, each role and
-extra key they were given, with its side (none: every side), the version a fix sends back, and, for a job that ended,
-the job the person came back as, once they are hired again (PPL-11). Only for whoever
+extra key they were given, with its side (none: every side), whether they have a PIN (PPL-12), the version a fix sends
+back, and, for a job that ended, the job the person came back as, once they are hired again (PPL-11). Only for whoever
 holds staff.manage on the whole shop (PPL-4's card): the page shows roles, and later pay (WAGE-2).
 
     shop     side          who          what they were given
@@ -32,19 +33,33 @@ import uuid
 from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
+from unittest import mock
 
 import pytest
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection, transaction
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
+from django.views.debug import ExceptionReporter
+from pytest_django import Settings
 from rest_framework.test import APIClient
 
 from apps.control.models import AuditAction, AuditEvent, EditEvent
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.api.views import RoleViewSet, StaffViewSet
-from apps.people.models import PermissionGrant, Role, RoleAssignment, StaffMember, User
-from apps.people.services import add_staff, add_worker, grant_permission, mark_left, set_pin, suspend
+from apps.people.models import Device, PermissionGrant, PinLock, Role, RoleAssignment, StaffMember, User
+from apps.people.services import (
+    add_staff,
+    add_worker,
+    check_pin,
+    confirm_pairing,
+    grant_permission,
+    mark_left,
+    set_pin,
+    start_pairing,
+    suspend,
+)
 from apps.people.services import hire_again as services_hire_again
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
@@ -127,6 +142,7 @@ def test_staff_routes_name_their_permissions() -> None:
         "end_role": Permission.STAFF_MANAGE,
         "end_key": Permission.STAFF_MANAGE,
         "temporary_password": Permission.STAFF_MANAGE,
+        "pin": Permission.STAFF_MANAGE,
     }
     assert RoleViewSet.action_permissions == {"list": Permission.STAFF_MANAGE}
 
@@ -155,6 +171,8 @@ def test_the_owner_lists_every_worker_the_shop_has_had(
         "status": "active",
         "left_on": None,
         "switched_off": False,
+        # No PIN yet, so no tile on the shop's laptops: the owner sees who still needs one (PPL-12).
+        "has_pin": False,
         # The job's version, which a fix sends back: nobody has fixed her yet.
         "version": 1,
         # Only a job that ended can have been come back from.
@@ -195,6 +213,8 @@ def test_no_secret_of_a_worker_is_shown(baba: StaffMember, asha: StaffMember) ->
     User.objects.filter(pk=asha.user_id).update(phone="+255712345678", email="asha@example.com")
     for answer in (client_for(baba).get(STAFF).json()["results"][0], client_for(baba).get(one(asha)).json()):
         assert not {"pin_hash", "pin_changed_at", "email", "password", "user"} & set(answer)
+        # Only whether she has one, yes or no (PPL-12).
+        assert answer["has_pin"] is True
     assert client_for(baba).get(one(asha)).json()["phone"] == "+255712345678"
 
 
@@ -279,7 +299,7 @@ def test_the_owner_adds_a_worker_in_one_step(shop_a: Shop, baba: StaffMember) ->
         "started_on": "2026-11-16",
         "status": "active",
     }
-    # No role and no key yet (PPL-7), nor a PIN (PPL-8): he can't log in until those.
+    # No role and no key yet (PPL-7), nor a PIN (PPL-12): he can't log in until those.
     assert (body["roles"], body["keys"]) == ([], [])
     [juma] = jobs_named(shop_a, "Juma")
     assert str(juma.pk) == sent["id"]
@@ -1097,3 +1117,181 @@ def test_the_roles_list_answers_the_shops_six_roles(shop_a: Shop, baba: StaffMem
     assert shown == {"id": str(seller.pk), "template": "seller", "name": "", "permissions": seller.permissions}
     refused = client_for(asha).get(ROLES)
     assert (refused.status_code, refused.json()["code"]) == (403, "permission_denied")
+
+
+# --- A worker's PIN (PPL-12): Weka PIN on their page. The rules are set_pin's, tested with it (test_pins.py,
+# test_pin_lock.py, test_who_sets_a_pin.py); these test the door: its key, who acts, what it answers, and that each
+# refusal reaches the page with its own code.
+
+NEW_PIN = "4829"
+OTHER_PIN = "7351"
+
+
+def give_pin(by: StaffMember, staff: StaffMember, pin: str = NEW_PIN) -> Any:
+    return client_for(by).post(act(staff, "pin"), {"pin": pin}, format="json")
+
+
+def pin_of(staff: StaffMember) -> tuple[str, Any]:
+    with shop_context(staff.shop_id):
+        row = StaffMember.objects.get(pk=staff.pk)
+    return row.pin_hash, row.pin_changed_at
+
+
+def laptop_of(manager: StaffMember, side: Side) -> Device:
+    # A laptop paired the way the app pairs one: it asks, and a manager confirms its code.
+    asked = start_pairing()
+    with shop_context(manager.shop_id):
+        return confirm_pairing(asked.request.code, name="Laptop ya Dawa", home_side=side, by=manager)
+
+
+def test_baba_gives_asha_a_pin(baba: StaffMember, asha: StaffMember) -> None:
+    # Done when #1: Asha types her own PIN on Baba's phone; the answer is Asha as she is now, with a PIN, so the page
+    # says so without a second read. Never the hash, nor when it was set: has_pin is all a page learns.
+    given = give_pin(baba, asha)
+
+    assert given.status_code == 200
+    body = given.json()
+    assert (body["id"], body["has_pin"]) == (str(asha.pk), True)
+    assert not {"pin", "pin_hash", "pin_changed_at"} & set(body)
+    assert NEW_PIN not in given.content.decode()
+    pin_hash, changed_at = pin_of(asha)
+    # Stored hashed, and dated: each laptop learns the new date at its next sync and shows her tile (03 §5.9).
+    assert pin_hash not in ("", NEW_PIN)
+    assert changed_at is not None
+
+
+def test_the_person_acting_sets_the_pin(baba: StaffMember, asha: StaffMember) -> None:
+    # `by` is whoever is logged in, never someone the page names: the edit history keeps that Baba set it, and when.
+    # The hash itself never enters the history (ADR-0036), and a PIN has no reason (the card: the worker types it).
+    give_pin(baba, asha)
+
+    with shop_context(asha.shop_id):
+        [edit] = EditEvent.objects.filter(subject_type="staff", subject_id=asha.pk)
+    assert edit.created_by_id == baba.pk
+    assert set(edit.after) == {"pin_changed_at"}
+    assert "pin_hash" not in edit.before
+
+
+def test_a_new_pin_lifts_the_lock_and_ends_the_old_one(
+    shop_a: Shop, sides: dict[str, Side], baba: StaffMember, asha: StaffMember
+) -> None:
+    # Done when #2: Asha's coworker locked her out with five wrong tries; Baba gives her a fresh PIN through the route,
+    # and she logs in at once with it, while her old PIN logs in nowhere.
+    laptop = laptop_of(baba, sides["D"])
+    give_pin(baba, asha, OTHER_PIN)
+    now = timezone.now()
+    with shop_context(shop_a):
+        for _ in range(5):
+            with pytest.raises(ValidationError):
+                check_pin(StaffMember.objects.get(pk=asha.pk), laptop, "0000", at=now)
+        assert PinLock.objects.get(staff=asha).locked_until is not None
+
+    assert give_pin(baba, asha).status_code == 200
+
+    with shop_context(shop_a):
+        assert PinLock.objects.get(staff=asha).locked_until is None
+        renewed = StaffMember.objects.get(pk=asha.pk)
+        check_pin(renewed, laptop, NEW_PIN, at=now)
+        with pytest.raises(ValidationError) as old:
+            check_pin(renewed, laptop, OTHER_PIN, at=now)
+    assert old.value.code == "pin.wrong"
+
+
+@pytest.mark.parametrize(("pin", "code"), [("482", "pin.not_four_digits"), ("1234", "pin.too_easy")])
+def test_a_weak_pin_is_refused_with_its_code(baba: StaffMember, asha: StaffMember, pin: str, code: str) -> None:
+    # set_pin's own strength check, under its code, for the page to show beside PIN mpya. Nothing is stored.
+    refused = give_pin(baba, asha, pin)
+
+    assert (refused.status_code, refused.json()["code"]) == (400, code)
+    assert pin_of(asha) == ("", None)
+
+
+def test_a_pin_must_be_sent(baba: StaffMember, asha: StaffMember) -> None:
+    refused = client_for(baba).post(act(asha, "pin"), {}, format="json")
+
+    assert refused.status_code == 400
+    assert "pin" in refused.json()["fields"]
+    assert pin_of(asha) == ("", None)
+
+
+def test_a_huge_pin_never_reaches_the_slow_hash(baba: StaffMember, asha: StaffMember) -> None:
+    # 16 characters at most, as at the PIN login: a page of text can't be sent to Argon2, which is slow on purpose.
+    with mock.patch("apps.people.services.hash_pin") as hashing:
+        refused = give_pin(baba, asha, "4" * 10_000)
+
+    assert refused.status_code == 400
+    hashing.assert_not_called()
+
+
+def test_giving_a_pin_needs_staff_manage(shop_a: Shop, asha: StaffMember, give_role: GiveRole) -> None:
+    # A manager the owner handed no staff.manage is refused at the door, and nothing changes.
+    manager = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(manager, RoleTemplate.MANAGER, None)
+
+    refused = give_pin(manager, asha)
+
+    assert (refused.status_code, refused.json()["code"]) == (403, "permission_denied")
+    assert pin_of(asha) == ("", None)
+
+
+def test_who_may_set_a_pin_reaches_the_route(
+    shop_a: Shop, baba: StaffMember, juma: StaffMember, give_role: GiveRole
+) -> None:
+    # set_pin's rule answers through the route, each refusal with its own code for the page to say (Done when #4):
+    # nobody sets their own here; a manager with the key still can't set the owner's, which is the superuser's alone
+    # (PPL-13), nor the PIN of someone holding a key he lacks, as knowing it he could use that key (PPL-12's review);
+    # and one who left gets none.
+    meneja = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(meneja, RoleTemplate.MANAGER, None)
+    neema = job(shop_a, "Neema Mfano", "Neema")
+    with shop_context(shop_a):
+        grant_permission(meneja, Permission.STAFF_MANAGE, side=None, by=None)
+        grant_permission(neema, Permission.PAY_APPROVE, side=None, by=None)
+
+    own = give_pin(meneja, meneja)
+    owners = give_pin(meneja, baba)
+    stronger = give_pin(meneja, neema)
+    left = give_pin(baba, juma)
+
+    assert (own.status_code, own.json()["code"]) == (400, "pin.own")
+    assert (owners.status_code, owners.json()["code"]) == (400, "pin.superuser_only")
+    assert (stronger.status_code, stronger.json()["code"]) == (400, "pin.more_keys")
+    assert (left.status_code, left.json()["code"]) == (400, "staff.left")
+    for person in (meneja, baba, neema, juma):
+        assert pin_of(person) == ("", None)
+
+
+def test_another_shops_worker_is_not_found_for_a_pin(baba: StaffMember, staff_b: StaffMember) -> None:
+    hidden = give_pin(baba, staff_b)
+
+    assert hidden.status_code == 404
+    with shop_context(staff_b.shop_id):
+        assert StaffMember.objects.get(pk=staff_b.pk).pin_changed_at is None
+
+
+def test_no_pin_on_the_demo(baba: StaffMember, asha: StaffMember, settings: Settings) -> None:
+    # Done when #5, the server's half: a visitor's worker given a PIN would show his tile on every visitor's laptop
+    # until the night's reset (PPL-4's review). The page turns the button off; the server refuses all the same.
+    settings.DEMO_SEED = True
+
+    refused = give_pin(baba, asha)
+
+    assert (refused.status_code, refused.json()["code"]) == (400, "demo.logins_fixed")
+    assert pin_of(asha) == ("", None)
+
+
+def test_the_pin_stays_out_of_error_reports(baba: StaffMember, asha: StaffMember) -> None:
+    # A crash in the visit lists every function's variables in Django's error report, which a server with DEBUG off
+    # logs and sends. The route holds what was sent while set_pin runs, so a crash in the hash must show it as stars.
+    crashing = mock.patch("apps.people.services.hash_pin", side_effect=MemoryError("out of memory"))
+    with crashing, pytest.raises(MemoryError) as crash:
+        give_pin(baba, asha)
+    frames = ExceptionReporter(None, crash.type, crash.value, crash.tb).get_traceback_frames()
+    # Only the server's frames: the test's own and the test client's hold what this test sent, and a server has none.
+    client_files = ("django/test/client.py", "rest_framework/test.py", "test_staff_routes.py")
+    on_the_server = [frame for frame in frames if not frame["filename"].endswith(client_files)]
+    shown = [(frame["function"], name, str(value)) for frame in on_the_server for name, value in frame["vars"]]
+    assert [(function, name) for function, name, value in shown if NEW_PIN in value] == []
+    # And it looked in the right place: the crash passed through the route, which hid its copy.
+    [sent] = [value for function, name, value in shown if (function, name) == ("pin", "sent")]
+    assert set(sent) == {"*"}

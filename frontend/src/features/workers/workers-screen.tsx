@@ -7,7 +7,8 @@
 // the list a manager reads each day stays short as the years add names.
 //
 // Above the list, Ongeza opens the form for a new worker (worker-form.tsx); once he is added, one line says so, and
-// that his name reaches the shop's laptops once PPL-8 gives him a PIN. On the demo, its Simu box is off (PPL-11).
+// that his name reaches the shop's laptops once he has a PIN, set on his own page (PPL-12). On the demo, its Simu box
+// is off (PPL-11).
 //
 // An office screen: it asks the server through the store of server answers (rule 5), and needs the internet,
 // which the office area says while it is gone. Its routes ask staff.manage on the whole shop (PPL-4); someone
@@ -117,8 +118,9 @@ function AddWorker({ me }: { me: WhoIsHere }) {
         <Alert kind="info">
           {added ? (
             <AlertDescription>
-              {/* No field says who has a PIN, so it is said here, once, for the worker just added (a default of the
-                  card): a laptop shows a tile only for someone with one (PPL-4's review), which PPL-8 gives. */}
+              {/* Said here, once, for the worker just added (a default of the card): a laptop shows a tile only for
+                  someone with a PIN (PPL-4's review), which Weka PIN on his page gives, where Kuingia says whether he
+                  has one (PPL-12). */}
               {t("added", { name: added.display_name })}
             </AlertDescription>
           ) : null}

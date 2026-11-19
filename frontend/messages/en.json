@@ -469,6 +469,27 @@
       "back": "{name} is back at work.",
       "backLink": "Open their page now"
     },
+    "logins": {
+      "title": "Logging in",
+      "pin": "PIN",
+      "pinSet": "Set",
+      "pinNotSet": "Not set",
+      "setPin": "Set PIN",
+      "pinTitle": "Set {name}'s PIN",
+      "handOver": "Hand {name} this phone to type their own PIN.",
+      "newPin": "New PIN",
+      "newPinHint": "Four digits.",
+      "again": "Type it again",
+      "differ": "These PINs don't match.",
+      "pinDone": "{name}'s PIN is set. Each shop computer shows them once it syncs. On a computer with a network, any lock is lifted and their old PIN no longer works; one without a network learns it once it syncs.",
+      "temporaryPassword": "Temporary password",
+      "passwordTitle": "Temporary password for {name}",
+      "passwordIntro": "Type a password, then tell it to {name} face to face. They choose their own once they log in.",
+      "password": "Password",
+      "noPhone": "{name} has no phone number. If they have no email either, add their phone with Edit first.",
+      "passwordDone": "{name}'s temporary password is set. Tell them this password. They log in with their phone, {phone}, or with their email, then choose their own password.",
+      "passwordDoneNoPhone": "{name}'s temporary password is set. Tell them this password. They log in with their email, then choose their own password."
+    },
     "roles": {
       "owner": "Owner",
       "manager": "Manager",
@@ -578,7 +599,8 @@
       "noKey": "There is no permission you can give them.",
       "side": "Side",
       "sideHint": "All sides means every side, even one added later.",
-      "done": "{name} has been given {what}. The shop's laptops will know after their next sync."
+      "done": "{name} has been given {what}. The shop's laptops will know after their next sync.",
+      "pinAfter": "{name} already has a PIN. If someone else set it and you are giving a big role or permission, set them a new one yourself afterwards."
     },
     "ending": {
       "remove": "Take away",

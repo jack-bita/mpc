@@ -4,9 +4,9 @@
 // As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Their full name, nickname, job
 // title, first day and phone; their status, and their last day once they left; and whether the superuser switched
 // them off. Badilisha turns the details into boxes, in their place (PPL-10, worker-details-form.tsx). Under the
-// buttons, a card of their roles and extra keys, each by its name and side (PPL-8, worker-roles.tsx). Later cards add
-// here: the PIN and the temporary password (PPL-12), the photo (PPL-9), and the pay so far (WAGE-2), so the owner pays
-// one who leaves at once.
+// buttons, Kuingia: whether they have a PIN, Weka PIN and Nenosiri la muda (PPL-12, worker-logins.tsx); then a card of
+// their roles and extra keys, each by its name and side (PPL-8, worker-roles.tsx). Later cards add here: the photo
+// (PPL-9), and the pay so far (WAGE-2), so the owner pays one who leaves at once.
 //
 // At /workers/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address
 // (app/(office)/workers/view/page.tsx). It asks GET /api/v1/people/staff/{id}/, and shows the list's copy at once when
@@ -28,6 +28,7 @@ import { useWhoIsHere } from "@/features/people/who-is-here";
 import { formatDay, formatPhone } from "@/lib/format";
 
 import { WorkerActions } from "./worker-actions";
+import { WorkerLogins } from "./worker-logins";
 import { WorkerRoles } from "./worker-roles";
 import { useRoles, useWorker, type Worker } from "./workers";
 
@@ -45,15 +46,23 @@ export function WorkerScreen({ id }: { id: string | null }) {
   const waiting = who.isPending || (id !== null && worker.isPending);
   // Badilisha's form is open: it holds the details in its boxes, so the page doesn't show them twice.
   const [editing, setEditing] = useState(false);
-  // Whether this is the demo, where no worker gets a phone (Jack, PPL-10: A). Asked here, the part always on the page,
-  // and handed down (PPL-6's list, #272), only once a form opens, and once a visit: it changes only on a
-  // deploy, as for Jaribu demo (try-the-demo.tsx). Unknown, or not answered, the box is on: the server refuses a
-  // phone on the demo all the same (demo.phones_fixed).
+  // Whether the page offers Weka PIN and Nenosiri la muda (PPL-12): a worker working or suspended, never one's own
+  // page, as the Kuingia card decides too (worker-logins.tsx).
+  const loginsOffered =
+    who.data !== undefined &&
+    worker.data !== undefined &&
+    worker.data.status !== "left" &&
+    worker.data.id !== who.data.staff.id;
+  // Whether this is the demo, where no worker gets a phone (Jack, PPL-10: A), and nobody's PIN or password changes
+  // (Jack, PPL-12: A). Asked here, the part always on the page, and handed down (PPL-6's list, #272), only once a form
+  // opens or the Kuingia card shows its buttons, which are off on the demo before anyone taps (Jack, PPL-12: A); and
+  // once a visit: it changes only on a deploy, as for Jaribu demo (try-the-demo.tsx). Unknown, or not answered, the
+  // box and the buttons are on: the server refuses on the demo all the same (demo.phones_fixed, demo.logins_fixed).
   const demo = useQuery({
     queryKey: DEMO_OPEN,
     queryFn: askDemoOpen,
     staleTime: Infinity,
-    enabled: editing,
+    enabled: editing || loginsOffered,
   });
   // Ongeza kazi's form has opened (PPL-8): the shop's roles are asked from then on, here, the part always on the page,
   // and handed down, as the demo's answer is. Opening a worker's page alone asks for none.
@@ -66,19 +75,23 @@ export function WorkerScreen({ id }: { id: string | null }) {
     isPending: rolesRead.isPending,
   };
   // Which card has a form open, if any (PPL-8's review): one form at a time on the page, so a person never meets two
-  // Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other card's buttons hide meanwhile.
-  // Each card's own callback, kept the same between draws, as each says "closed" as it goes (its unmount).
-  const [formIn, setFormIn] = useState<"actions" | "roles" | null>(null);
+  // Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other cards' buttons hide
+  // meanwhile. Each card's own callback, kept the same between draws, as each says "closed" as it goes (its unmount).
+  const [formIn, setFormIn] = useState<Card | null>(null);
   const actionsForm = useCallback(
-    (open: boolean) =>
-      setFormIn((now) => (open ? "actions" : now === "actions" ? null : now)),
+    (open: boolean) => setFormIn((now) => opened("actions", open, now)),
+    [],
+  );
+  const loginsForm = useCallback(
+    (open: boolean) => setFormIn((now) => opened("logins", open, now)),
     [],
   );
   const rolesForm = useCallback(
-    (open: boolean) =>
-      setFormIn((now) => (open ? "roles" : now === "roles" ? null : now)),
+    (open: boolean) => setFormIn((now) => opened("roles", open, now)),
     [],
   );
+  /** Another card than this one has a form open: this one's buttons hide. */
+  const elsewhere = (card: Card) => formIn !== null && formIn !== card;
 
   return (
     <div className="grid max-w-2xl gap-6">
@@ -111,7 +124,17 @@ export function WorkerScreen({ id }: { id: string | null }) {
             demo={demo.data === true}
             onEditing={setEditing}
             onForm={actionsForm}
-            buttonsHidden={formIn === "roles"}
+            buttonsHidden={elsewhere("actions")}
+          />
+          {/* Between the status buttons and the roles, as Jack chose (PPL-12: A): a way in is neither. A worker of its
+              own, as each card: Asha's open form never goes on to Baraka's page. */}
+          <WorkerLogins
+            key={`${worker.data.id}-logins`}
+            worker={worker.data}
+            me={who.data}
+            demo={demo.data === true}
+            onForm={loginsForm}
+            buttonsHidden={elsewhere("logins")}
           />
           {/* Under the buttons, as Jack chose (PPL-8): each set of buttons beside what it changes. A worker of its own, as
               WorkerActions: Asha's open form never goes on to Baraka's page. Its key apart from WorkerActions', as two
@@ -123,12 +146,21 @@ export function WorkerScreen({ id }: { id: string | null }) {
             roles={roles}
             onGiving={setGiving}
             onForm={rolesForm}
-            buttonsHidden={formIn === "actions"}
+            buttonsHidden={elsewhere("roles")}
           />
         </>
       ) : null}
     </div>
   );
+}
+
+/** The cards that open a form, each in its own place on the page. */
+type Card = "actions" | "logins" | "roles";
+
+/** What a card's "opened" (true) or "closed" (false) makes of the card with a form open: a close of a card that holds
+ * none changes nothing, as each card says "closed" as it goes. */
+function opened(card: Card, open: boolean, now: Card | null): Card | null {
+  return open ? card : now === card ? null : now;
 }
 
 /** Everything of the worker's, as label and value pairs: a description list, which a screen reader reads as pairs. */
