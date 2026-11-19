@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.42 · 19 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.43 · 19 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.43** (19 Nov 2026, from Jack, ATT-10): §12, a closed day on which a worker clocked in all the same needs review, and the owner or a manager decides whether it is paid (04 v1.135). Marked **(v1.43)**.
 
 **Changes in v1.42** (19 Nov 2026, from the owner, through Jack, ATT-4): §12, a late arrival who leaves for the morning's half day loses the fine of their arrival too, so §15's pay takes off each day's fine; and Toka ends the day, so a day keeps its first Toka, `first_out` (Jack, at ATT-4's review) (01 v1.6, 04 v1.128, v1.130). Marked **(v1.42)**.
 
@@ -539,6 +541,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 **Closure** **(v1.33)** → Shop — days the whole shop is closed: a public holiday, or days the owner closes it, such as for a family funeral (Jack, ATT-8). Replaces v1.32's `Holiday`, which held one date.
 - `first_day`, `last_day` (the same for one day), `name`, `status`: `active` | `cancelled`. Who added it is the row's `created_by` (§1).
 - Each day of an active closure is `off`, and not paid, like Sunday, whatever the reason. Two active closures never share a day.
+- A closed day on which a worker clocked in all the same needs review: the shop may close at 10:00 for a funeral, after the morning's arrivals, so the owner or a manager decides whether it is paid (Jack, ATT-10) **(v1.43)**.
 - Added from the shop's today on. Cancelled up to its first day, or its last day moved earlier or later, each with who, when and why, never deleted (rule 7). No change touches a day before today, so a day already worked out never changes.
 - Eid and Easter move, so the owner types each year's dates.
 
