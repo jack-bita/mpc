@@ -122,8 +122,10 @@ def shop_minute(moment: dt.datetime, zone: dt.tzinfo) -> dt.time:
     return moment.astimezone(zone).time().replace(second=0, microsecond=0)
 
 
-# A day with nothing taken off: on time, a half day for the afternoon, or one a manager decides. Two places, as money
-# is kept (rule 3), so it compares equal to a fine a shop typed.
+# A day with nothing taken off: on time, a half day with no late arrival, absent, or one a manager decides. Written
+# with two places, as every amount is stored (numeric(14,2), 03 §9) and as the fines' own default is (LATE_FINE,
+# apps/core/settings_registry.py), so it reads 0.00 wherever ATT-10 keeps it. Its value would compare equal without
+# them: Decimal("0") == Decimal("0.00").
 NO_FINE = Decimal("0.00")
 
 
@@ -162,7 +164,8 @@ class Tap:
 class DayResult:
     # The answer, for ATT-10 to keep with the rules it used (T4): what the day was, the fine taken off its pay, and the
     # two taps the answer read, the first clock-in and the first clock-out after it, which ended the day, for a manager
-    # to see beside it (ATT-5).
+    # to see beside it (ATT-5). Both are taps with a time trusted: on a day sent to a manager for a tap whose time
+    # can't be trusted, they may not be the day's real first Ingia or Toka, so a screen shows them as taps, not facts.
     status: DayStatus
     fine: Decimal
     first_in: dt.time | None

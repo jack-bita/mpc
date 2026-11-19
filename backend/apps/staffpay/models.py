@@ -8,6 +8,9 @@ pushed later (ATT-1; 02 §12).
 A ledger: a line is written once, by the clock document's saving code (apps/staffpay/documents.py), and never
 changed or deleted, only voided once, with who and why (T2, ADR-0021). A late fine is worked out from these lines
 (ATT-4), so each keeps the laptop's own time, the evidence about it, and the time the server trusts.
+
+It also owns the names of what a day was (DayStatus): on time, late, half, absent, off or needs review, which the
+day's rule answers (apps/staffpay/calculations.py) and ATT-10's book of days will keep.
 """
 
 from django.db import models
@@ -46,7 +49,7 @@ class DayStatus(models.TextChoices):
     # no migration: a list of choices is no column until a model names it.
     ON_TIME = "on_time", "On time"  # a full day
     LATE = "late", "Late"  # a full day, less the fine of its arrival
-    HALF = "half", "Half day"  # half the day's pay
+    HALF = "half", "Half day"  # half the day's pay, less the fine of a late morning arrival (the owner, ATT-4)
     ABSENT = "absent", "Absent"  # no tap: unpaid, unless a manager marks office duty (ATT-6)
     OFF = "off", "Off"  # a Sunday or a closed day: the shop is shut, nobody is paid (ATT-8)
     NEEDS_REVIEW = "needs_review", "Needs review"  # the owner's dharura: a manager or the owner decides it (ATT-6)
