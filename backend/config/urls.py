@@ -25,6 +25,8 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("api/v1/people/", include("apps.people.api.urls")),
     # A photo's file, opened on an office screen by someone allowed to see it (CTRL-3).
     path("api/v1/control/", include("apps.control.api.urls")),
+    # A worker's daily pay rates, read and set on the worker's page (WAGE-1).
+    path("api/v1/staffpay/", include("apps.staffpay.api.urls")),
     # The routes a device calls with its key: the start of a pairing, and what a paired device learns (AUTH-2).
     path("api/devices/v1/", include("apps.people.api.device_urls")),
     # The one-tap demo, under the same prefix: may Jaribu demo show here, and the tap that makes this browser a demo

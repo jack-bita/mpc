@@ -8,8 +8,9 @@ a card that adds a route over a new table gives both shops a row of it here, and
 so, while shop A has none; and a card that adds a route needing query parameters gives them here too
 (sweep_queries). Each shop has a paired device: a row of the office device list (AUTH-5), and the visitor the sweep
 sends to every device route (sweep_device_clients, AUTH-2); dated rules, which the bootstrap sends (SYNC-2); the
-days each shop is closed, which the closures route lists (ATT-8); and a worker's photo with its file, whose id the sweep
-sends the photo routes as shop B (CTRL-3). The demo seed (DATA-1) could fill the shops later.
+days each shop is closed, which the closures route lists (ATT-8); a worker's photo with its file, whose id the sweep
+sends the photo routes as shop B (CTRL-3); and a worker's pay rate, which the pay rates route lists, asked about shop
+A's worker (WAGE-1). The demo seed (DATA-1) could fill the shops later.
 
 The sweep knows shop A's rows by their ids, and by the texts and amounts only shop A holds, so that a leak
 with no ids, like a report of names and totals, is found too. So give shop A values of its own: names and
@@ -24,6 +25,7 @@ import hashlib
 import uuid
 from collections.abc import Callable
 from datetime import date, timedelta
+from decimal import Decimal
 
 import pytest
 from django.utils import timezone
@@ -40,6 +42,7 @@ from apps.people.services import Outage, confirm_pairing, record_outages, start_
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side
+from apps.staffpay.services import set_pay_rate
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -51,11 +54,13 @@ def sweep_shops(
     sweep_settings: tuple[Shop, Shop],
     sweep_closures: tuple[Shop, Shop],
     sweep_attachments: tuple[Shop, Shop],
+    sweep_pay_rates: tuple[Shop, Shop],
 ) -> tuple[Shop, Shop]:
     # Shop A, whose rows must never show, and shop B, the visitor's own, each filled with every table below: their
     # sides, a paired device each, which the office device list shows (AUTH-5), with an offline period the health page
     # shows (SYNC-14), dated rules, which the bootstrap sends (SYNC-2), days closed, which the closures route lists
-    # (ATT-8), and a photo with its file, which the photo routes are asked about (CTRL-3).
+    # (ATT-8), a photo with its file, which the photo routes are asked about (CTRL-3), and a worker's pay rate, which
+    # the pay rates route lists (WAGE-1).
     return sweep_sides
 
 
@@ -130,6 +135,20 @@ def sweep_attachments(sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staf
 
 
 @pytest.fixture
+def sweep_pay_rates(sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember) -> tuple[Shop, Shop]:
+    # Each shop's worker has a daily rate from their first day, of an amount and with a note only that shop holds: the
+    # pay rates route lists a worker's (WAGE-1), and the sweep asks it about shop A's worker (sweep_queries), as shop B
+    # too. Set the way the app sets one (set_pay_rate), by the system, as the demo's seed sets one.
+    for shop, staff, amount, note in (
+        (sweep_sides[0], staff_a, "13579", "Kiwango cha Mfano"),
+        (sweep_sides[1], staff_b, "24680", "Kiwango cha Jirani"),
+    ):
+        with shop_context(shop):
+            set_pay_rate(staff, daily_rate=Decimal(amount), effective_from=staff.started_on, note=note, by=None)
+    return sweep_sides
+
+
+@pytest.fixture
 def sweep_device_keys(
     sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember, give_role: GiveRole
 ) -> tuple[str, str]:
@@ -169,10 +188,11 @@ def sweep_device_clients(sweep_device_keys: tuple[str, str]) -> tuple[APIClient,
 
 
 @pytest.fixture
-def sweep_queries() -> dict[str, dict[str, str]]:
+def sweep_queries(staff_a: StaffMember) -> dict[str, dict[str, str]]:
     # The query parameters a GET route can't answer without, by the route's name. They must be ones under which
     # shop A's rows show: a day's report asks for the day the rows above are made on, the test's today, as in
     # {"daily-report-list": {"date": str(timezone.localdate())}}, never a fixed date, which would show nothing to
     # either shop. Without them such a route answers 400; with ones that show nothing, even shop A's own staff
-    # sees nothing; either way the sweep fails and points here. No route needs any yet.
-    return {}
+    # sees nothing; either way the sweep fails and points here. The pay rates route names its worker (WAGE-1): shop
+    # A's, whose rate sweep_pay_rates sets, so shop B is asked about another shop's worker by their real id.
+    return {"pay-rate-list": {"staff": str(staff_a.pk)}}

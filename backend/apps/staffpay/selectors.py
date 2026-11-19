@@ -15,6 +15,7 @@ And each worker's pay rate on each day of a span (rates_between, WAGE-1), read t
 
 import uuid
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -77,6 +78,12 @@ def rules_as_text(rules: DayRules) -> dict[str, str]:
     return {part: key.kind.to_text(getattr(rules, part)) for part, key in DAY_RULE_SETTINGS.items()}
 
 
+# A job's rates, newest first, as a setting's rows are read (02 §4): the latest day first; on one day the row written
+# last, as a mistake is mended by a new row (T2); then the id, for two rows saved at the very same moment. Every read of
+# the rates orders them so, and rate_in_force reads them in this order.
+NEWEST_FIRST = ("-effective_from", "-created_at", "-id")
+
+
 def rates_between(shop: Shop, first: date, last: date) -> dict[tuple[uuid.UUID, date], PayRate]:
     """Each job's pay rate on each day from `first` to `last`, both counted: {(job id, day): the rate in force}. A job
     with no rate on a day, as before its first rate, or the owner, who is paid no day, has no key for that day. One
@@ -96,17 +103,21 @@ def rates_between(shop: Shop, first: date, last: date) -> dict[tuple[uuid.UUID, 
     # A shop keeps a few rates a worker a year, so reading them all, and walking the days here, is cheaper than asking
     # the database a question per day.
     newest_first: dict[uuid.UUID, list[PayRate]] = defaultdict(list)
-    for rate in PayRate.objects.filter(shop=shop, effective_from__lte=last).order_by(
-        "staff", "-effective_from", "-created_at", "-id"
-    ):
+    for rate in PayRate.objects.filter(shop=shop, effective_from__lte=last).order_by("staff", *NEWEST_FIRST):
         newest_first[rate.staff_id].append(rate)
     answer: dict[tuple[uuid.UUID, date], PayRate] = {}
     for job, rates in newest_first.items():
         day = first
         while day <= last:
-            # The job's first rate, newest first, that has started by this day; none, and the day has no key.
-            in_force = next((rate for rate in rates if rate.effective_from <= day), None)
+            # None, and the day has no key.
+            in_force = rate_in_force(rates, day)
             if in_force is not None:
                 answer[(job, day)] = in_force
             day += timedelta(days=1)
     return answer
+
+
+def rate_in_force(newest_first: Sequence[PayRate], day: date) -> PayRate | None:
+    """Of one job's rates, in NEWEST_FIRST's order, the one in force on `day`: the first that has started by then. None
+    before the job's first rate. One rule, for a span (rates_between) and for the worker's page (its `in_force`)."""
+    return next((rate for rate in newest_first if rate.effective_from <= day), None)

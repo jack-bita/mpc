@@ -866,9 +866,9 @@
       "other_shop": "This belongs to another shop.",
       "reason_required": "Write a reason.",
       "temporary_password_open": "This person still has a temporary password. This permission waits until they choose their own.",
-      "own": "You can't change your own work status, details, roles or permissions.",
-      "superuser_only": "Only the system admin can change this person's work status, details, roles or permissions.",
-      "more_keys": "This person has permissions you don't, so you can't change their work status, details, roles or permissions.",
+      "own": "You can't change your own work status, details, pay, roles or permissions.",
+      "superuser_only": "Only the system admin can change this person's work status, details, pay, roles or permissions.",
+      "more_keys": "This person has permissions you don't, so you can't change their work status, details, pay, roles or permissions.",
       "display_name_taken": "Another worker already has this nickname. Choose another.",
       "not_active": "This worker is already suspended.",
       "not_suspended": "This worker isn't suspended.",
@@ -940,6 +940,10 @@
       "reason_required": "Write the reason.",
       "started": "These days have already started. Change the last day instead.",
       "not_active": "This closure was already cancelled."
+    },
+    "pay_rate": {
+      "amount_invalid": "Type a whole number of shillings, above 0.",
+      "before_first_day": "A rate can't start before this worker's first day."
     },
     "attachment": {
       "not_found": "The server has no such photo.",

@@ -56,6 +56,8 @@ from apps.shops.api.views import ClosureViewSet, SettingViewSet, SideViewSet
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side, set_setting
+from apps.staffpay.api.views import PayRateViewSet
+from apps.staffpay.models import PayRate
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
 from tests.test_tenancy_sweep import addresses
@@ -65,6 +67,7 @@ SETTINGS = "/api/v1/shops/settings/"
 CLOSURES = "/api/v1/shops/closures/"
 ATTACHMENTS = "/api/v1/control/attachments/"
 WORKERS = "/api/v1/people/staff/"
+PAY_RATES = "/api/v1/staffpay/pay-rates/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -998,3 +1001,73 @@ def test_a_create_sent_again_asks_the_key_to_read_its_row(
     give_role(staff_a2, RoleTemplate.OWNER, None)
     again = client_for(staff_a2).post("/api/v1/test/managed-note-makers/", {"id": str(note.pk), "text": "x"})
     assert (again.status_code, again.json()["text"]) == (201, "Mshahara wa Juma")
+
+
+@pytest.mark.django_db
+def test_pay_rates_need_settings_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # A worker's pay is the owner's business (WAGE-1): `settings.manage`, the key to the shop's rules and rates, on the
+    # whole shop. A Manager on every side, who fixes attendance and prepares the pay, neither reads Juma's rates nor
+    # sets one, and nothing is written. The owner does both.
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    with shop_context(shop_a):
+        juma = add_staff(
+            shop=shop_a, user=User.objects.create_user(full_name="Juma Demo"), display_name="Juma", by=None
+        )
+
+    def new() -> dict[str, object]:
+        return {
+            "id": str(uuid.uuid7()),
+            "staff": str(juma.pk),
+            "daily_rate": "10000",
+            "shares_meals": True,
+            "effective_from": juma.started_on.isoformat(),
+        }
+
+    manager = client_for(staff_a2)
+    for refused in (manager.get(PAY_RATES, {"staff": str(juma.pk)}), manager.post(PAY_RATES, new(), format="json")):
+        assert refused.status_code == 403
+        assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert not PayRate.objects.exists()
+
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    owner = client_for(staff_a)
+    assert owner.post(PAY_RATES, new(), format="json").status_code == 201
+    assert len(owner.get(PAY_RATES, {"staff": str(juma.pk)}).json()["rates"]) == 1
+
+
+@pytest.mark.django_db
+def test_a_key_on_one_side_sees_and_sets_no_rate(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # Hamisi may change the shop's rules on Dawa only (X1), and manage its workers: a worker's pay is the whole shop's,
+    # so he reads and sets no rate. Nothing is written.
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.SETTINGS_MANAGE, side=sides["D"], by=None)
+        grant_permission(staff_a, Permission.STAFF_MANAGE, side=None, by=None)
+        juma = add_staff(
+            shop=shop_a, user=User.objects.create_user(full_name="Juma Demo"), display_name="Juma", by=None
+        )
+    hamisi = client_for(staff_a)
+    sent = {
+        "id": str(uuid.uuid7()),
+        "staff": str(juma.pk),
+        "daily_rate": "10000",
+        "shares_meals": True,
+        "effective_from": juma.started_on.isoformat(),
+    }
+    for refused in (hamisi.get(PAY_RATES, {"staff": str(juma.pk)}), hamisi.post(PAY_RATES, sent, format="json")):
+        assert refused.status_code == 403
+        assert refused.json()["code"] == "permission_denied"
+    with shop_context(shop_a):
+        assert not PayRate.objects.exists()
+
+
+def test_pay_rate_routes_name_their_permissions() -> None:
+    # Reading a worker's rates and setting one both need `settings.manage` (WAGE-1). Written out in full, as above.
+    assert PayRateViewSet.action_permissions == {
+        "list": Permission.SETTINGS_MANAGE,
+        "create": Permission.SETTINGS_MANAGE,
+    }

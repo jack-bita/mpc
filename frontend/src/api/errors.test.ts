@@ -111,6 +111,10 @@ const CODES_THE_API_SENDS = [
   "closure.reason_required",
   "closure.not_active",
   "closure.started",
+  // A worker's daily pay rate (WAGE-1, set_pay_rate): an amount of 0 or less, or with cents, and a day before the
+  // worker's first day; on the demo, a note is demo.no_note above.
+  "pay_rate.amount_invalid",
+  "pay_rate.before_first_day",
   // A photo's file, sent by a laptop after the record that named it (CTRL-3): an id this shop doesn't hold, or whose
   // record hasn't arrived yet; over 1 MB; not a JPEG or a WebP by its first bytes; or not the file its record named.
   "attachment.not_found",
@@ -132,7 +136,8 @@ const CODES_THE_API_SENDS = [
   "staff.other_shop",
   "staff.reason_required",
   "staff.temporary_password_open",
-  // Who may suspend a person, bring them back or mark them left: the PIN's rule, with codes of its own (PPL-4).
+  // Who may suspend a person, bring them back or mark them left: the PIN's rule, with codes of its own (PPL-4); and
+  // fix their details (PPL-10), or set their pay rate (WAGE-1).
   "staff.own",
   "staff.superuser_only",
   "staff.more_keys",
