@@ -2,10 +2,12 @@
 // Wafanyakazi lists the seed's people; Ongeza adds Juma, who comes at the top; his name opens his own page; Simamisha,
 // with a reason, suspends him, and Rudisha takes its place. The card's Done when, through the real server: PPL-4's
 // routes, their key (staff.manage on the whole shop, which the seed gives the demo's Meneja), and their rules.
+// And roles (PPL-8): Meneja adds Zawadi, gives Zawadi the Seller role on Dawa with Ongeza kazi, and takes it away again
+// with Ondoa and a reason, through PPL-7's routes: the giver rule, the give's own id, the end's reason.
 //
-// Juma is the visitor's own worker, so the demo lets him change (demo.people_fixed guards only the seed's people). The
-// tests share one database (the-shop.ts), made fresh for each run, and no other test reads or adds workers, so one
-// Juma per run never meets a nickname already taken.
+// Juma and Zawadi are the visitor's own workers, so the demo lets them change (demo.people_fixed guards only the seed's
+// people, their roles included, PPL-7). The tests share one database (the-shop.ts), made fresh for each run, and no
+// other test reads or adds workers, so one Juma and one Zawadi per run never meet a nickname already taken.
 import type { Page } from "@playwright/test";
 
 import sw from "../messages/sw.json";
@@ -15,6 +17,7 @@ import {
   expect,
   MANAGER_EMAIL,
   MANAGER_PASSWORD,
+  SIDE,
   test,
   words,
 } from "./the-shop";
@@ -34,26 +37,35 @@ function valueOf(phone: Page, label: string) {
   return phone.locator(`dt:text-is("${label}") + dd`);
 }
 
+/** Meneja logs in on the phone with the demo's public login, and opens Wafanyakazi from the office home. */
+async function openWorkers(phone: Page) {
+  await phone.goto("/login/");
+  await phone.getByLabel(sw.login.password.name).fill(MANAGER_EMAIL);
+  // exact: the eye beside the box is labelled "Onyesha nenosiri", which holds the word too (the-shop.ts).
+  await phone
+    .getByLabel(sw.login.password.password, { exact: true })
+    .fill(MANAGER_PASSWORD);
+  await phone
+    .getByRole("button", { name: sw.login.password.send, exact: true })
+    .click();
+  await phone.getByRole("link", { name: WORKERS.title, exact: true }).click();
+  await expect(
+    phone.getByRole("heading", { name: WORKERS.title, level: 1 }),
+  ).toBeVisible();
+}
+
+/** One of a worker's roles or keys card's two parts, by its heading: Cheo or Ruhusa za ziada. */
+function cardPart(phone: Page, heading: string) {
+  return phone.getByRole("region", { name: heading, exact: true });
+}
+
 test("the demo's manager adds a worker and suspends him", async ({
   managersPhone,
 }) => {
   const phone = await managersPhone.newPage();
 
-  await test.step("Meneja logs in on the phone and opens Wafanyakazi", async () => {
-    await phone.goto("/login/");
-    await phone.getByLabel(sw.login.password.name).fill(MANAGER_EMAIL);
-    // exact: the eye beside the box is labelled "Onyesha nenosiri", which holds the word too (the-shop.ts).
-    await phone
-      .getByLabel(sw.login.password.password, { exact: true })
-      .fill(MANAGER_PASSWORD);
-    await phone
-      .getByRole("button", { name: sw.login.password.send, exact: true })
-      .click();
-    await phone.getByRole("link", { name: WORKERS.title, exact: true }).click();
-    await expect(
-      phone.getByRole("heading", { name: WORKERS.title, level: 1 }),
-    ).toBeVisible();
-  });
+  await test.step("Meneja logs in on the phone and opens Wafanyakazi", () =>
+    openWorkers(phone));
 
   await test.step("the seed's people are listed", async () => {
     await expect(rowLink(phone, "Meneja", "Meneja Mfano")).toBeVisible();
@@ -107,15 +119,12 @@ test("the demo's manager adds a worker and suspends him", async ({
       WORKERS.status.active,
     );
     // His roles and keys, in their own card under the buttons (PPL-8): none of either yet.
-    await expect(
-      phone.getByRole("region", { name: WORKERS.view.roles, exact: true }),
-    ).toContainText(WORKERS.noRole);
-    await expect(
-      phone.getByRole("region", {
-        name: WORKERS.view.extraKeys,
-        exact: true,
-      }),
-    ).toContainText(WORKERS.view.noExtraKeys);
+    await expect(cardPart(phone, WORKERS.view.roles)).toContainText(
+      WORKERS.noRole,
+    );
+    await expect(cardPart(phone, WORKERS.view.extraKeys)).toContainText(
+      WORKERS.view.noExtraKeys,
+    );
   });
 
   await test.step("Simamisha, with a reason: he is suspended, and Rudisha takes its place", async () => {
@@ -148,5 +157,85 @@ test("the demo's manager adds a worker and suspends him", async ({
       .getByRole("listitem")
       .filter({ has: rowLink(phone, "Juma", "Juma Mfano") });
     await expect(juma).toContainText(WORKERS.status.suspended);
+  });
+});
+
+test("the demo's manager gives a role and takes it away", async ({
+  managersPhone,
+}) => {
+  const phone = await managersPhone.newPage();
+  const seller = words(WORKERS.roleOnSide, {
+    role: WORKERS.roles.seller,
+    side: SIDE,
+  });
+
+  await test.step("Meneja logs in on the phone and opens Wafanyakazi", () =>
+    openWorkers(phone));
+
+  await test.step("Ongeza: Zawadi, a worker of the visitor's own", async () => {
+    await phone.getByRole("button", { name: WORKERS.add, exact: true }).click();
+    await phone
+      .getByLabel(WORKERS.form.fullName, { exact: true })
+      .fill("Zawadi Mfano");
+    await phone
+      .getByLabel(WORKERS.form.nickname, { exact: true })
+      .fill("Zawadi");
+    await phone
+      .getByRole("button", { name: WORKERS.form.save, exact: true })
+      .click();
+    await rowLink(phone, "Zawadi", "Zawadi Mfano").click();
+    await expect(cardPart(phone, WORKERS.view.roles)).toContainText(
+      WORKERS.noRole,
+    );
+  });
+
+  await test.step("Ongeza kazi: the Seller role on Dawa, shown at once", async () => {
+    await phone
+      .getByRole("button", { name: WORKERS.giving.add, exact: true })
+      .click();
+    await phone
+      .getByRole("radio", { name: WORKERS.giving.aRole, exact: true })
+      .click();
+    // The shop's roles are asked as the form opens: the Seller's row comes with their answer.
+    await phone
+      .getByRole("radio", { name: WORKERS.roles.seller, exact: true })
+      .click();
+    // The Owner role is never offered, even to a manager the server would refuse anyway.
+    await expect(
+      phone.getByRole("radio", { name: WORKERS.roles.owner, exact: true }),
+    ).toHaveCount(0);
+    await phone.getByRole("radio", { name: SIDE, exact: true }).click();
+    await phone
+      .getByRole("button", { name: WORKERS.actions.save, exact: true })
+      .click();
+    await expect(
+      phone.getByText(
+        words(WORKERS.giving.done, { name: "Zawadi", what: seller }),
+      ),
+    ).toBeVisible();
+    await expect(cardPart(phone, WORKERS.view.roles)).toContainText(seller);
+  });
+
+  await test.step("Ondoa, with a reason: the role is gone", async () => {
+    await phone
+      .getByRole("button", {
+        name: words(WORKERS.ending.removeWhat, { what: seller }),
+        exact: true,
+      })
+      .click();
+    await phone
+      .getByLabel(WORKERS.actions.reason, { exact: true })
+      .fill("Amehamia Vyakula");
+    await phone
+      .getByRole("button", { name: WORKERS.actions.save, exact: true })
+      .click();
+    await expect(
+      phone.getByText(
+        words(WORKERS.ending.done, { name: "Zawadi", what: seller }),
+      ),
+    ).toBeVisible();
+    await expect(cardPart(phone, WORKERS.view.roles)).toContainText(
+      WORKERS.noRole,
+    );
   });
 });
