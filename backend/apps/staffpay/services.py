@@ -7,12 +7,12 @@
     Asha   Sun 22 Nov  off           0.00    —      —          the shop is shut on Sundays and closed days
 
 The day's rule (work_out_day, apps/staffpay/calculations.py) says what one day was; the book finds each day's taps and
-rules, hands them in, and keeps the answer, one row per job and date (AttendanceDay). Two kinds of day the rule can't
-see go to review: a closed day with a tap (ATT-10), and a day with a tap in doubt (ATT-11). Nothing here is typed by a
-person: the days are answers, worked out again each time they are asked for, as a tap can come late from a laptop that
-was offline, a manager can void a tap (ATT-6), and a job's first or last day can be moved (PPL-10). ATT-5 asks for a
-month to show, WAGE-2 for a month to pay, ATT-7 each night. No route of its own, and no line in the change log: no
-laptop keeps a copy of the days.
+rules, hands them in, and keeps the answer, one row per job and date (AttendanceDay). Three kinds of day the rule can't
+see go to review: a closed day with a tap (ATT-10); and a day with a tap in doubt, or outside a job's days with a tap
+(ATT-11). Nothing here is typed by a person: the days are answers, worked out again each time they are asked for, as a
+tap can come late from a laptop that was offline, a manager can void a tap (ATT-6), and a job's first or last day can be
+moved (PPL-10). ATT-5 asks for a month to show, WAGE-2 for a month to pay, ATT-7 each night. No route of its own, and no
+line in the change log: no laptop keeps a copy of the days.
 """
 
 import datetime as dt
@@ -222,15 +222,17 @@ def _taps(shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo) -> tuple[di
     # the one ending its last, each a moment with its zone.
     start = dt.datetime.combine(first, dt.time.min, tzinfo=zone)
     end = dt.datetime.combine(last + dt.timedelta(days=1), dt.time.min, tzinfo=zone)
-    # A tap whose maker wasn't working when they made it: Baba suspended Juma at 11:00, and the laptop, offline, let
-    # his Ingia through the next morning. The push flags it on the tap's line in the answer log
-    # (suspended_staff_activity, X2), not on the tap, whose own time check can be `server` or `device_ok`, so the tap
-    # alone looks like any other. Its line is the one whose document_id is the tap's own id. Whatever the flag's
-    # status: a manager who closes it has looked at the tap, not decided the day, which is ATT-6's override. Only that
-    # kind: a device_gap flag on the same line, a record still missing, says nothing of whether the worker came. Asked
-    # inside the taps' own read (EXISTS), so a month still takes one query for its taps, whatever their number; through
-    # the guard, as every read is (ADR-0022), and through the log's one-line-per-document rule, which leads with
-    # `shop`, so each tap's line is one lookup. The kind's flags are few, so PostgreSQL reads them once per run.
+    # A tap whose maker wasn't working when they made it: Baba suspended Juma at 11:00, and the laptop, offline, let his
+    # Ingia through the next morning. The push flags it on the tap's line in the answer log (suspended_staff_activity,
+    # X2), not on the tap, whose own time check can be `server` or `device_ok`, so the tap alone looks like any other.
+    # Its line is the one whose document_id is the tap's own id. Whatever the flag's status: a manager who closes it has
+    # looked at the tap, not decided the day, which is ATT-6's override. Only that kind: a device_gap flag on the same
+    # line, a record still missing, says nothing of whether the worker came. Asked inside the taps' own read (EXISTS),
+    # so a month still takes one query for its taps, whatever their number; through the guard, as every read is
+    # (ADR-0022), and through the log's one-line-per-document rule, which leads with `shop`, so each tap's line is one
+    # lookup. The flags are read once per run, not once per tap: every flag of the shop, kept or not by its kind, as no
+    # index has the kind. A shop raises a few a day, so a month's run reads some hundreds, which is cheap; an index on
+    # the kind can come should a shop raise many more (03 §6.6).
     suspension_flags = Flag.objects.filter(
         shop=shop, kind=FlagKind.SUSPENDED_STAFF_ACTIVITY, subject_type=ANSWER_LOG
     ).values("subject_id")

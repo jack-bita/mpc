@@ -418,13 +418,12 @@ def _last_number(device: Device) -> int:
 
 
 def _record_before(device_id: uuid.UUID, device_seq: int) -> tuple[datetime | None, uuid.UUID | None, uuid.UUID | None]:
-    # The laptop's own time on the record it numbered last before this one, of those the server holds, who made it,
-    # and its own id (ATT-1, ATT-11): the evidence a clock-in's time check reads, as only this log holds every record of
-    # the laptop, whatever its type; and the record a clock-in keeps when its time disagrees with it. (None, None, None)
-    # when it holds none. A set-aside one counts too: it was made at the counter all
-    # the same. After a laptop reset, which numbers again from 1 (SYNC-5), two lines can share a number: the newer is
-    # the new count's, so it is the one before. Read through the index on (shop, device, device_seq): one row, however
-    # many records the laptop has sent.
+    # The laptop's own time on the record it numbered last before this one, of those the server holds, who made it, and
+    # its own id (ATT-1, ATT-11): the evidence a clock-in's time check reads, as only this log holds every record of the
+    # laptop, whatever its type; and the record a clock-in keeps when its time disagrees with it. (None, None, None)
+    # when it holds none. A set-aside one counts too: it was made at the counter all the same. After a laptop reset,
+    # which numbers again from 1 (SYNC-5), two lines can share a number: the newer is the new count's, so it is the one
+    # before. Read through the index on (shop, device, device_seq): one row, however many records the laptop has sent.
     #
     # A laptop's records may also have reached the server from another laptop, carried in a rescue file (SYNC-12): its
     # #5, sent by the Vyakula laptop, is still the record before its #6. So the carried lines from this laptop count
