@@ -13,6 +13,7 @@ Each test types its answers in through the `keyboard` fixture (conftest.py), PIN
 shops and people only: the repo is public.
 """
 
+import shlex
 from io import StringIO
 
 import pytest
@@ -292,15 +293,25 @@ def test_owner_is_refused_on_the_demo(
     assert owner_rows(baba) == [(RoleTemplate.OWNER, None, None)]
 
 
-def test_owner_add_points_a_worker_with_no_pin_to_set_pin(mfano: Shop, keyboard: Keyboard) -> None:
-    # No PIN, no tile on the shop's laptops: the command names the next one to run.
+@pytest.mark.parametrize(("nickname", "typed"), [("Juma", "Juma"), ("Mama Juma", "'Mama Juma'")])
+def test_owner_add_points_a_worker_with_no_pin_to_set_pin(
+    mfano: Shop, keyboard: Keyboard, nickname: str, typed: str
+) -> None:
+    # No PIN, no tile on the shop's laptops: the command names the next one to run, ready to copy. A nickname with a
+    # space, common in Swahili (Mama Juma), is quoted, or the shell would split it in two and argparse refuse the rest.
     with shop_context(mfano):
-        add_worker(shop=mfano, full_name="Juma Mfano", display_name="Juma", by=None)
-    keyboard.type("Juma", "y")
+        juma = add_worker(shop=mfano, full_name="Juma Mfano", display_name=nickname, by=None)
+    keyboard.type(nickname, "y")
 
     said = owner("add", "--shop", "MFANO")
 
-    assert "No PIN yet: python manage.py owner set-pin --shop MFANO --nickname Juma" in said
+    printed = f"python manage.py owner set-pin --shop MFANO --nickname {typed}"
+    assert f"No PIN yet: {printed}" in said
+    # The printed command works as it is: split as the shell splits it, it gives the PIN to the same person.
+    keyboard.type_pins(PIN, PIN)
+    owner(*shlex.split(printed)[3:])
+    with shop_context(mfano):
+        assert pin_matches(PIN, StaffMember.objects.get(pk=juma.pk).pin_hash)
 
 
 # --- set-pin

@@ -25,6 +25,7 @@ Watch out). The superuser acts as `by=None`, as the system does: each service's 
 phone, the PIN's strength, role.already_given), and the edit history names nobody, as for the demo seed.
 """
 
+import shlex
 from argparse import ArgumentParser
 from typing import Any
 
@@ -106,7 +107,10 @@ class Command(BaseCommand):
         ask.say(f"{staff.display_name} is now {shop.code}'s Owner on every side.")
         if not staff.pin_hash:
             # No tile on the shop's laptops without a PIN: set-pin gives one.
-            ask.say(f"No PIN yet: python manage.py owner set-pin --shop {shop.code} --nickname {staff.display_name}")
+            # Quoted as the shell needs it, so the line can be copied as it is: a nickname with a space (Mama Juma),
+            # common in Swahili, would otherwise be split in two, and argparse would refuse the second word.
+            nickname = shlex.quote(staff.display_name)
+            ask.say(f"No PIN yet: python manage.py owner set-pin --shop {shop.code} --nickname {nickname}")
 
     def _add_owner(self, ask: Asker, shop: Shop, nickname: str, owner: Role) -> None:
         full_name = ask.text("Full name")
