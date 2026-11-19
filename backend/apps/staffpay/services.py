@@ -21,10 +21,11 @@ from zoneinfo import ZoneInfo
 from django.db import transaction
 from django.db.models import Q
 
+from apps.core.settings_registry import ATTENDANCE_ON
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.people.models import StaffMember
 from apps.shops.models import Shop
-from apps.shops.selectors import closed_days
+from apps.shops.selectors import closed_days, get_setting, shop_today
 from apps.staffpay.calculations import NO_FINE, DayResult, Tap, shop_minute, work_out_day
 from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus
 from apps.staffpay.selectors import day_rules, rules_as_text
@@ -39,8 +40,10 @@ WORKED_OUT = ["status", "fine", "first_in", "first_out", "rules_used"]
 
 
 def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceDay]:
-    """Work out and keep each job's day from `first` to `last`, both counted, and answer them, date by date. A day that
-    comes out as it was kept is not written again. The shop must be open: the visit's own, or a system job's."""
+    """Work out and keep each job's day from `first` to `last`, both counted, and answer them, date by date. Only the
+    days that count: while attendance is switched on, from each job's first day to its last, and before the shop's
+    today. A day that comes out as it was kept is not written again. The shop must be open: the visit's own, or a
+    system job's."""
     # A shop must be open, and be this one, as for get_setting and closed_days: through the guard, another shop's taps
     # would be hidden, and its workers' days kept as absent without a word. So fail closed (ADR-0022).
     opened = current_shop()
@@ -51,6 +54,12 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
     if isinstance(first, dt.datetime) or isinstance(last, dt.datetime):
         raise TypeError("work_out_days needs the shop's business dates, not datetimes.")
     zone = ZoneInfo(shop.timezone)
+    # Only days that are over. Today is not kept until it is: at 11:00 Asha, in since 07:20, has no Toka yet, and the
+    # rule would send her day to a manager. So a span that reaches today stops at yesterday, and ATT-5 shows today's
+    # taps as they come; the night's job keeps today once it is yesterday (ATT-7).
+    last = min(last, shop_today(shop) - dt.timedelta(days=1))
+    if last < first:
+        return []
     dates = [first + dt.timedelta(days=n) for n in range((last - first).days + 1)]
     # One transaction, so what the book answers is what it kept: the taps, the days kept and the writes read one
     # moment of the database's.
@@ -66,15 +75,25 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
         closed = closed_days(shop, first, last)
         answered: list[AttendanceDay] = []
         for day in dates:
+            # Attendance counts only from the day the owner switched it on (ADR-0033), a dated rule, so read on each
+            # date: before it, nobody clocked in, and every day kept would be an absence that never was. No day at all,
+            # not even an off one.
+            if not get_setting(ATTENDANCE_ON, shop, on=day):
+                continue
+            # Only the jobs that ran on that date: from the first day to the last, both counted (02 §5). A worker
+            # added on the 10th has no absent days before it; one who left on Friday has none after. The first day as
+            # it is now, as PPL-10 can fix it: a day kept before a first day moved later is no longer answered, and its
+            # row stays (rule 7), counted nowhere (ATT-11 decides what such a day shows).
+            working = [job for job in jobs if job.started_on <= day and (job.left_on is None or day <= job.left_on)]
             # Sunday is off for every job, whatever its taps: the shop is shut, and Sunday work is paid outside the
             # system (01 §8.1). No rule is read for it.
             if day.weekday() == SUNDAY:
-                answered.extend(_off(shop, job, day) for job in jobs)
+                answered.extend(_off(shop, job, day) for job in working)
                 continue
             # The day's rules, once per date for every job: nine reads, never nine per worker (A1).
             rules = day_rules(shop, day)
             rules_used = rules_as_text(rules)
-            for job in jobs:
+            for job in working:
                 # Only the job's own taps: Asha's on Asha's day, even on a laptop Juma used too. With none, the rule
                 # answers absent.
                 job_taps = taps.get((job.pk, day), [])

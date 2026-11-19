@@ -15,6 +15,7 @@ in test_attendance_day.py. Times are Arusha's, three hours ahead of UTC. The fin
 import datetime as dt
 import itertools
 from decimal import Decimal
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -22,11 +23,12 @@ from django.db import IntegrityError, connection, transaction
 from django.test.utils import CaptureQueriesContext
 
 from apps.control.models import EditEvent
-from apps.core.settings_registry import LATE_FINE
+from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SettingKey
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember, User
-from apps.people.services import add_staff, hire_again, mark_left
+from apps.people.services import add_staff, change_worker, hire_again, mark_left
 from apps.shops.models import Closure, Setting, Shop
+from apps.shops.selectors import shop_today
 from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, TimeCheck
 from apps.staffpay.services import _keep, work_out_days
 
@@ -124,8 +126,9 @@ def test_database_refuses_to_delete_a_day(shop_a: Shop, staff_a: StaffMember) ->
 # The book's work (work_out_days). Arusha's clock, as the shop's: a minute here is what the counter showed.
 ARUSHA = ZoneInfo("Africa/Dar_es_Salaam")
 TUESDAY = MONDAY + dt.timedelta(days=1)
-FRIDAY = MONDAY + dt.timedelta(days=4)
-SUNDAY = MONDAY + dt.timedelta(days=6)
+# The Friday and Sunday before it: days already past, as the book keeps only days that are over.
+FRIDAY = MONDAY - dt.timedelta(days=3)
+SUNDAY = MONDAY - dt.timedelta(days=1)
 JAN_1 = dt.date(2026, 1, 1)
 # Each tap's number on the laptop, one after another, as a laptop numbers its records (SYNC-4).
 _numbers = itertools.count(1)
@@ -136,21 +139,37 @@ def at(day: dt.date, hour: int, minute: int, second: int = 0) -> dt.datetime:
     return dt.datetime(day.year, day.month, day.day, hour, minute, second, tzinfo=ARUSHA)
 
 
-def _worker(shop: Shop, name: str) -> StaffMember:
-    # A worker whose first day was long ago, so every day these tests read is one of theirs. Made the way the app
-    # makes one: create_user, then the people service, inside the shop (PPL-2).
+def _worker(shop: Shop, name: str, started_on: dt.date = JAN_1) -> StaffMember:
+    # A worker whose first day was long ago, unless a test says otherwise, so every day these tests read is one of
+    # theirs. Made the way the app makes one: create_user, then the people service, inside the shop (PPL-2).
     user = User.objects.create_user(full_name=f"{name} Demo")
     with shop_context(shop):
-        return add_staff(shop=shop, user=user, display_name=name, started_on=JAN_1, by=None)
+        return add_staff(shop=shop, user=user, display_name=name, started_on=started_on, by=None)
+
+
+def _setting(shop: Shop, key: SettingKey[Any], value: Any, effective_from: dt.date) -> None:
+    # A rule of the shop's, from a day: checked, then saved as set_setting saves one, with no line and on any day
+    # (test_get_setting.py writes its rows so), as these tests need rules for days gone by. Written by the key's own
+    # kind, as the settings store it ("500.00", "true").
+    with shop_context(shop):
+        row = Setting(shop=shop, key=key.key, value=key.kind.to_text(value), effective_from=effective_from)
+        row.full_clean()
+        row.save()
 
 
 @pytest.fixture
-def asha(shop_a: Shop) -> StaffMember:
+def attendance_on(shop_a: Shop) -> None:
+    # The owner switched attendance on long ago (ADR-0033), so every day these tests read counts.
+    _setting(shop_a, ATTENDANCE_ON, True, JAN_1)
+
+
+@pytest.fixture
+def asha(shop_a: Shop, attendance_on: None) -> StaffMember:
     return _worker(shop_a, "Asha")
 
 
 @pytest.fixture
-def juma(shop_a: Shop) -> StaffMember:
+def juma(shop_a: Shop, attendance_on: None) -> StaffMember:
     return _worker(shop_a, "Juma")
 
 
@@ -190,12 +209,8 @@ def tap(
 
 
 def _rule(shop: Shop, value: str, effective_from: dt.date) -> None:
-    # The owner's first fine, from a day: checked, then saved as set_setting saves a rule, with no line and on any day
-    # (test_get_setting.py writes its rows so), as these tests need rules for days gone by.
-    with shop_context(shop):
-        row = Setting(shop=shop, key=LATE_FINE.key, value=value, effective_from=effective_from)
-        row.full_clean()
-        row.save()
+    # The owner's first fine, from a day.
+    _setting(shop, LATE_FINE, Decimal(value), effective_from)
 
 
 def _days(shop: Shop, first: dt.date, last: dt.date) -> dict[tuple[str, dt.date], AttendanceDay]:
@@ -402,8 +417,8 @@ def _closure(shop: Shop, first: dt.date, last: dt.date) -> None:
 
 def test_sunday_is_off(shop_a: Shop, asha: StaffMember) -> None:
     # The shop is shut on Sunday, so nobody comes and nobody is paid (01 §8.1): off, not absent, with no fine and no
-    # rule read. Monday beside it is a working day, absent with no tap.
-    days = _days(shop_a, SUNDAY - dt.timedelta(days=6), SUNDAY)
+    # rule read. Monday after it is a working day, absent with no tap.
+    days = _days(shop_a, SUNDAY, MONDAY)
     sunday = days[("Asha", SUNDAY)]
     assert (sunday.status, sunday.fine, sunday.rules_used) == (DayStatus.OFF, Decimal("0.00"), {})
     assert days[("Asha", MONDAY)].status == DayStatus.ABSENT
@@ -447,3 +462,56 @@ def test_a_tap_on_a_closed_day_needs_review(
     assert asha_friday.rules_used["late_fine"] == "500.00"
     assert (juma_friday.status, juma_friday.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
     assert (juma_friday.first_in, juma_friday.first_out) == (dt.time(7, 50), dt.time(18, 45))
+
+
+# Which days count. A week of November long past: Monday 9 to Friday 13.
+NOV_9, NOV_10, NOV_11, NOV_12, NOV_13 = (dt.date(2026, 11, n) for n in (9, 10, 11, 12, 13))
+
+
+def test_no_day_before_attendance_is_on(shop_a: Shop) -> None:
+    # The owner switches attendance on from Tuesday 10th, and off again from Thursday 12th (ADR-0033): only Tuesday and
+    # Wednesday count. Before the switch, nobody clocked in, so a day kept then would be an absence that never was;
+    # the book keeps no day at all, not even an off one.
+    _setting(shop_a, ATTENDANCE_ON, True, NOV_10)
+    _setting(shop_a, ATTENDANCE_ON, False, NOV_12)
+    _worker(shop_a, "Asha")
+    days = _days(shop_a, NOV_9, NOV_13)
+    assert sorted(date for _, date in days) == [NOV_10, NOV_11]
+    with shop_context(shop_a):
+        assert AttendanceDay.objects.count() == 2
+
+
+def test_no_day_before_the_first_day_or_after_the_last(shop_a: Shop, attendance_on: None) -> None:
+    # Neema's first day was Tuesday 10th, and she left on Thursday 12th: her days are those three, both ends counted.
+    # Monday is before her job, and Friday after it, so neither is an absence of hers.
+    neema = _worker(shop_a, "Neema", started_on=NOV_10)
+    with shop_context(shop_a):
+        mark_left(neema, left_on=NOV_12, by=None, reason="Amehamia mji mwingine")
+    days = _days(shop_a, NOV_9, NOV_13)
+    assert sorted(date for _, date in days) == [NOV_10, NOV_11, NOV_12]
+
+
+def test_today_is_not_kept(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Asha clocked in this morning and hasn't tapped Toka yet: her day isn't over, and the rule would send it to a
+    # manager. So a span reaching today stops at yesterday, and a span of today or later keeps nothing.
+    today = shop_today(shop_a)
+    tap(device_a, asha, ClockKind.IN, dt.datetime.combine(today, dt.time(7, 20), tzinfo=ARUSHA))
+    yesterday = today - dt.timedelta(days=1)
+    assert sorted(date for _, date in _days(shop_a, yesterday, today + dt.timedelta(days=1))) == [yesterday]
+    assert _days(shop_a, today, today) == {}
+    with shop_context(shop_a):
+        assert not AttendanceDay.objects.filter(date__gte=today).exists()
+
+
+def test_a_day_no_longer_counted_is_not_answered(shop_a: Shop, attendance_on: None) -> None:
+    # Neema was added with her first day on Monday 9th, and her days were kept. Then a manager fixes it to Wednesday
+    # 11th, the day she really started (PPL-10): worked out again, Monday and Tuesday are no longer hers to answer.
+    # Their rows stay, as nothing is deleted (rule 7), counted nowhere (ATT-11 decides what such a day shows).
+    neema = _worker(shop_a, "Neema", started_on=NOV_9)
+    assert len(_days(shop_a, NOV_9, NOV_13)) == 5
+    with shop_context(shop_a):
+        change_worker(neema, version=neema.version, reason="Alianza Jumatano", by=None, started_on=NOV_11)
+    days = _days(shop_a, NOV_9, NOV_13)
+    assert sorted(date for _, date in days) == [NOV_11, NOV_12, NOV_13]
+    with shop_context(shop_a):
+        assert AttendanceDay.objects.count() == 5
