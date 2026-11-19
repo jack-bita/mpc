@@ -613,10 +613,11 @@
       "now": "Now: {amount} a day · {meals}",
       "none": "No daily pay yet.",
       "history": "History",
-      "from": "From {day}",
+      "line": "From {day} · {amount} · {meals}",
+      "lineWithNote": "From {day} · {amount} · {meals} · {note}",
       "meals": {
         "yes": "pays a share of the meals",
-        "no": "pays no share of the meals, the cook"
+        "no": "pays no share of the meals (the cook)"
       },
       "set": "Set the pay",
       "change": "Change the pay",
@@ -975,7 +976,7 @@
       "closed": "The demo isn't open here.",
       "logins_fixed": "On the demo, passwords and PINs stay as they are, so every visitor can log in.",
       "sides_fixed": "On the demo, the sides stay as they are, so every visitor can try them.",
-      "people_fixed": "On the demo, the first workers stay as they are, so every visitor can log in. Add a new worker to try this.",
+      "people_fixed": "On the demo, the first workers stay as they are, so every visitor finds them the same. Add a new worker to try this.",
       "phones_fixed": "On the demo, workers get no phone number, so nobody's real number is shown to every visitor.",
       "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
       "no_note": "On the demo, notes aren't kept. Leave this box empty.",

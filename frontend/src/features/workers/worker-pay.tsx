@@ -125,16 +125,24 @@ export function WorkerPay({
                     {/* Newest first, as the server sends them. role="list" written out, as Safari with VoiceOver stops
                       calling a styled <ul> a list. */}
                     <ul role="list" className="grid gap-2">
-                      {answer.rates.map((rate) => (
-                        <li key={rate.id}>
-                          {[
-                            t("from", { day: formatDay(rate.effective_from) }),
-                            amountOf(rate),
-                            t(mealsOf(rate)),
-                            ...(rate.note === "" ? [] : [rate.note]),
-                          ].join(" · ")}
-                        </li>
-                      ))}
+                      {answer.rates.map((rate) => {
+                        // The line whole, from the books, its " · " too, as Sasa's is: each book orders its parts.
+                        const parts = {
+                          day: formatDay(rate.effective_from),
+                          amount: amountOf(rate),
+                          meals: t(mealsOf(rate)),
+                        };
+                        return (
+                          <li key={rate.id}>
+                            {rate.note === ""
+                              ? t("line", parts)
+                              : t("lineWithNote", {
+                                  ...parts,
+                                  note: rate.note,
+                                })}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </section>
                 ) : null}

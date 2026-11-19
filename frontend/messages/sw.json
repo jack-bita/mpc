@@ -613,7 +613,8 @@
       "now": "Sasa: {amount} kwa siku · {meals}",
       "none": "Bado hana malipo kwa siku.",
       "history": "Historia",
-      "from": "Kuanzia {day}",
+      "line": "Kuanzia {day} · {amount} · {meals}",
+      "lineWithNote": "Kuanzia {day} · {amount} · {meals} · {note}",
       "meals": {
         "yes": "anachangia chakula",
         "no": "hachangii chakula, ni mpishi"
@@ -975,7 +976,7 @@
       "closed": "Demo haipo wazi hapa.",
       "logins_fixed": "Kwenye demo, nenosiri na PIN hazibadilishwi, ili kila mgeni aweze kuingia.",
       "sides_fixed": "Kwenye demo, pande hazibadilishwi, ili kila mgeni aweze kujaribu.",
-      "people_fixed": "Kwenye demo, wafanyakazi wa mwanzo hawabadilishwi, ili kila mgeni aweze kuingia. Ongeza mfanyakazi mpya ujaribu.",
+      "people_fixed": "Kwenye demo, wafanyakazi wa mwanzo hawabadilishwi, ili kila mgeni awakute kama walivyo. Ongeza mfanyakazi mpya ujaribu.",
       "phones_fixed": "Kwenye demo, wafanyakazi hawawekewi namba ya simu, ili namba halisi ya mtu isionekane kwa kila mgeni.",
       "rules_from_tomorrow": "Kwenye demo, thamani mpya huanza kesho au baadaye, ili kila mgeni wa leo akute duka lilivyo.",
       "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi.",
