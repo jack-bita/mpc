@@ -163,12 +163,20 @@ class DayResult:
 
 def work_out_day(taps: Sequence[Tap], rules: DayRules) -> DayResult:
     """What one worker's day was, from that day's taps and that day's rules (ATT-4; spec §8.1, 02 §12): on time, late
-    with its fine, a half day, or dharura for a manager to decide."""
-    # The first clock-in and the last clock-out count: Ingia tapped twice by mistake is one arrival, at the first.
+    with its fine, a half day, absent, or dharura for a manager to decide."""
+    # No tap at all: they didn't come, and the day is unpaid. Whether it was office duty, permission or a no-show is a
+    # manager's to mark (ATT-6).
+    if not taps:
+        return DayResult(DayStatus.ABSENT, NO_FINE, None, None)
+    # The first clock-in and the last clock-out count, in whatever order the taps come: Ingia tapped twice by mistake is
+    # one arrival, at the first. Only taps with a time trusted: the others have no minute to compare.
     first_in = min((tap.minute for tap in taps if tap.kind == ClockKind.IN and tap.minute is not None), default=None)
     last_out = max((tap.minute for tap in taps if tap.kind == ClockKind.OUT and tap.minute is not None), default=None)
     dharura = DayResult(DayStatus.NEEDS_REVIEW, NO_FINE, first_in, last_out)
-    if first_in is None:
+    # A tap whose time can't be trusted (`unverified`, ATT-1): the laptop's clock moved, for that tap or for the one
+    # before it, so no window can be read, whatever the other taps say (02 §12). And a Toka with no Ingia: nobody knows
+    # when they came, so nobody knows the fine. A manager decides both.
+    if first_in is None or any(tap.minute is None for tap in taps):
         return dharura
     # Arriving, window by window in the owner's order. "By" and "from" take their own minute, "before" doesn't:
     # 07:35 is on time, 08:00 takes the second fine.
