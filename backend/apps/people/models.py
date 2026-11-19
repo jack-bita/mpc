@@ -363,11 +363,21 @@ class Role(Editable):
         self.name = (self.name or "").strip()
 
 
+# An end is whole or not there at all (PPL-7), on both tables below: open, with all three empty; or ended, with a time
+# and a reason, as a void is on staffpay's rows (T3). Who ended it may be empty when it ended: the superuser, who is
+# nobody's staff. A reason holds at least one letter, figure or sign: spaces alone are no reason (ATT-1's review). No
+# code: end_role and end_permission always write all of it, so only a bug breaks this rule (ADR-0032).
+END_IS_WHOLE = models.Q(ended_at__isnull=True, ended_by__isnull=True, end_reason="") | models.Q(
+    ended_at__isnull=False, end_reason__regex=r"\S"
+)
+
+
 class RoleAssignment(ShopScoped):
     # One role given to one person, on one side or on all of them (02 §5): Asha is Cashier on Vyakula. Who gave it,
     # and when, are the row's `created_by` and `created_at`. Made only by assign_role (apps/people/services.py),
-    # which checks that the person, the role and the side all belong to the row's shop (T1). Taking a role away
-    # comes with PPL-7, as an edit the history records (ADR-0036): nothing is deleted.
+    # which checks that the person, the role and the side all belong to the row's shop (T1). Taken away by end_role
+    # (PPL-7), as an edit of this row the history records, before and after (ADR-0036): never deleted (rule 7). Nothing
+    # links to this table, so PROTECT can't keep a row: the no-delete trigger in its migration refuses a DELETE.
 
     # PROTECT: nothing is deleted (rule 7). related_name="+": a person's roles are read through the guarded
     # `objects` (apps/people/permissions.py). db_index=False: the unique rule below indexes (shop, staff, ...),
@@ -376,31 +386,48 @@ class RoleAssignment(ShopScoped):
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name="+", db_index=False)
     # Empty: every side of the shop, a side added later included.
     side = models.ForeignKey(Side, on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False)
+    # The end (02 §5, PPL-7): empty while the role counts; filled once when it is taken away, with when and why. Who
+    # took it away: a staff member, or empty for the superuser, who is nobody's staff. That they are of this row's
+    # shop is end_role's check (T1). An ended row counts nowhere (apps/people/permissions.py) and stays as history.
+    ended_at = models.DateTimeField(null=True, blank=True)
+    ended_by = models.ForeignKey(
+        StaffMember, on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
+    )
+    end_reason = models.TextField(blank=True)
 
     class Meta(ShopScoped.Meta):
         constraints = [
-            # Given once per side: a second row would change nothing, and taking the role away would have to find
-            # both. nulls_distinct=False: "all sides" (no side) counts as one value too, which PostgreSQL otherwise
-            # never does with two empty values. The message is there for the code's sake, as on Role.
+            # Given once per side, among the rows that still count: a second would change nothing, and taking the role
+            # away would have to find both. An ended one doesn't count, so the role can be given again, as a new row.
+            # nulls_distinct=False: "all sides" (no side) counts as one value too, which PostgreSQL otherwise never does
+            # with two empty values. The message is there for the code's sake, as on Role.
             models.UniqueConstraint(
                 fields=["shop", "staff", "role", "side"],
+                condition=models.Q(ended_at__isnull=True),
                 nulls_distinct=False,
                 name="people_roleassignment_once",
                 violation_error_code="role.already_given",
                 violation_error_message="This person already has this role on this side.",
             ),
+            models.CheckConstraint(condition=END_IS_WHOLE, name="people_roleassignment_end_whole"),
         ]
 
 
 class PermissionGrant(ShopScoped):
     # One extra permission for one person, on one side or on all of them (02 §5): Juma may count the stock on
     # Vyakula. Made only by grant_permission (apps/people/services.py), with the same checks as a role is given;
-    # taken back with PPL-7, as a role is. Links as on RoleAssignment above.
+    # taken away by end_permission (PPL-7), as a role is, and never deleted. Links and the end as on RoleAssignment.
     staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT, related_name="+", db_index=False)
     # A code from the list (apps/core/permissions.py).
     permission = models.CharField(max_length=PERMISSION_CODE_MAX_LENGTH)
     # Empty: every side of the shop, a side added later included.
     side = models.ForeignKey(Side, on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False)
+    # The end, as on RoleAssignment.
+    ended_at = models.DateTimeField(null=True, blank=True)
+    ended_by = models.ForeignKey(
+        StaffMember, on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
+    )
+    end_reason = models.TextField(blank=True)
 
     class Meta(ShopScoped.Meta):
         constraints = [
@@ -410,14 +437,16 @@ class PermissionGrant(ShopScoped):
                 name="people_permissiongrant_permission_known",
                 violation_error_code="permission.unknown",
             ),
-            # Given once per side, "all sides" included, as a role is.
+            # Given once per side, "all sides" included, among the rows that still count, as a role is.
             models.UniqueConstraint(
                 fields=["shop", "staff", "permission", "side"],
+                condition=models.Q(ended_at__isnull=True),
                 nulls_distinct=False,
                 name="people_permissiongrant_once",
                 violation_error_code="permission.already_given",
                 violation_error_message="This person already has this permission on this side.",
             ),
+            models.CheckConstraint(condition=END_IS_WHOLE, name="people_permissiongrant_end_whole"),
         ]
 
 

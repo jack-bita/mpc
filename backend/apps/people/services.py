@@ -863,9 +863,11 @@ def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, what: 
         # a manager who suspended himself, or marked himself left, would lock himself out by a slip of the finger.
         raise ValidationError("A person doesn't do this to themselves here.", code=f"{what}.own")
     # The superuser's alone (ADR-0038). Read from the roles, whatever the person's status: a suspended owner holds no
-    # keys but is still the owner, and two owners may have fallen out with each other. When PPL-7 adds an end to a role,
-    # an ended Owner role must stop counting here too.
-    is_owner = RoleAssignment.objects.filter(staff=staff, role__template=RoleTemplate.OWNER).exists()
+    # keys but is still the owner, and two owners may have fallen out with each other. An Owner role taken away (PPL-7)
+    # no longer counts: they are then a worker like any other.
+    is_owner = RoleAssignment.objects.filter(
+        staff=staff, role__template=RoleTemplate.OWNER, ended_at__isnull=True
+    ).exists()
     # Someone who can open the admin reads every shop's rows, so they stand above any shop's people: no shop's owner may
     # act as them, whether by their password, which opens the admin, or by their PIN, which opens their job. A job at
     # another shop isn't looked at: reading that shop's rows during this shop's visit, to decide who may, would pass the
