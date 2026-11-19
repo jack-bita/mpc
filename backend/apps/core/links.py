@@ -55,7 +55,7 @@ LINK_TYPES: dict[str, str] = {
     # ledger, so it has no edit history to name it.
     "attendance_event": "staffpay.AttendanceEvent",
     # One worker's day in the book of days: the history of its edits, as a day is worked out again when a tap comes
-    # late or a rule changes for days past (ATT-10).
+    # late, a tap is voided, or a job's first or last day is moved (ATT-10).
     "attendance_day": "staffpay.AttendanceDay",
     # Days the shop is closed, such as a funeral: the history of its edits, and the audit trail's lines about cancelling
     # it and moving its last day (ATT-8).

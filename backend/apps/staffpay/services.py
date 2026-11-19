@@ -8,8 +8,9 @@
 The day's rule (work_out_day, apps/staffpay/calculations.py) says what one day was; the book finds each day's taps and
 rules, hands them in, and keeps the answer, one row per job and date (AttendanceDay). Nothing here is typed by a person:
 the days are answers, worked out again each time they are asked for, as a tap can come late from a laptop that was
-offline, and the owner can change a rule for days already past. ATT-5 asks for a month to show, WAGE-2 for a month to
-pay, ATT-7 each night. No route of its own, and no line in the change log: no laptop keeps a copy of the days.
+offline, a manager can void a tap (ATT-6), and a job's first or last day can be moved (PPL-10). ATT-5 asks for a month
+to show, WAGE-2 for a month to pay, ATT-7 each night. No route of its own, and no line in the change log: no laptop
+keeps a copy of the days.
 """
 
 import datetime as dt
@@ -175,8 +176,8 @@ def _taps(shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo) -> dict[tup
 
 def _keep(answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], AttendanceDay]) -> list[AttendanceDay]:
     # Keep each day the book worked out, and answer the rows as kept. A day that came out as it was kept is answered as
-    # it was, and not written again: the edit history keeps only real changes (a tap that came late, a rule changed for
-    # days past), and a month asked for twice writes nothing the second time.
+    # it was, and not written again: the edit history keeps only real changes (a tap that came late, a tap voided), and
+    # a month asked for twice writes nothing the second time.
     rows: list[AttendanceDay] = []
     changed: list[AttendanceDay] = []
     new: list[AttendanceDay] = []
@@ -193,7 +194,7 @@ def _keep(answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], A
             changed.append(old)
         rows.append(old)
     # A day kept before: an UPDATE by its id, which the edit history's trigger writes down (ADR-0036), Asha's Monday
-    # from on time to late. In the order the days were worked out, as every run writes them.
+    # from needs review to on time. In the order the days were worked out, as every run writes them.
     if changed:
         AttendanceDay.objects.bulk_update(changed, WORKED_OUT)
     # A day kept for the first time: an INSERT, or, when another run kept the same day a moment before (two managers

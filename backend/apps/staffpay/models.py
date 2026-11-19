@@ -161,10 +161,13 @@ class AttendanceDay(ShopScoped):
     # they were. ShopScoped (CORE-2) gives `id`, `shop`, `created_at`, `created_by` and the guard on reads;
     # `created_by` is always empty, as only the book writes a day, and the book is the system, not a person.
     #
-    # Not a ledger: a day is worked out again freely until its pay run is approved (WAGE-3), as a tap can come late,
-    # from a laptop that was offline, and the owner can change a rule for days already past. So its row changes, and
-    # the edit history's trigger in this table's migration keeps each change (ADR-0036): Asha's 16 Nov went from
-    # on time to late, the day her late tap arrived. The trigger writes nothing when a day comes out the same.
+    # Not a ledger: a day is worked out again freely until its pay run is approved (WAGE-3), as what it is worked out
+    # from can still change after it is kept: a tap comes late, from a laptop that was offline; a manager voids a tap
+    # (ATT-6); a job's first or last day is moved (PPL-10). Never a rule: a rule never starts on a day gone by
+    # (setting.date_past, SHOP-3), and the book keeps only days gone by. So its row changes, and the edit history's
+    # trigger in this table's migration keeps each change (ADR-0036): Asha's 16 Nov went from needs review to on time,
+    # the day her Toka arrived from a laptop that had been offline. The trigger writes nothing when a day comes out the
+    # same.
     # Not Editable: no screen types over a day, so no version is needed to keep two people's edits apart; a manager's
     # decision on a day is ATT-6's `override`, beside what the book worked out, which stays visible (A2).
     # Never deleted (rule 7): nothing links to a day yet, so PROTECT can't keep it, and a trigger in the same migration

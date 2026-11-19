@@ -308,9 +308,11 @@ def test_an_unverified_tap_falls_on_its_laptops_date(shop_a: Shop, device_a: Dev
 
 
 def test_a_day_follows_a_rule_changed_later(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
-    # Asha's Monday, late with no fine, as a shop starts with none (ATT-2). The owner then types a first fine of 500
-    # from 1 November, a day already past: worked out again, her Monday takes it, and the edit history keeps the change
-    # (ADR-0036), from 0.00 to 500.00.
+    # A safety net. The settings page never starts a rule on a day gone by (setting.date_past, SHOP-3), and the book
+    # keeps only days gone by, so the app can't do this today. But the book reads the rules as they stand each time it
+    # runs, never its own copy, so a row for a past day, here written past the service, is followed: Asha's Monday,
+    # late with no fine, as a shop starts with none (ATT-2), takes a first fine of 500 from 1 November, and the edit
+    # history keeps the change (ADR-0036), from 0.00 to 500.00.
     tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 50))
     tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
     before = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
