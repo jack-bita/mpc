@@ -723,11 +723,17 @@ describe("the photo at each tap (ATT-3)", () => {
     expect(tap?.payload).not.toHaveProperty("photo");
     expect(await db().attachment_files.count()).toBe(0);
     expect(await db().attachment_bytes.count()).toBe(0);
+    // Named as the photo just taken, never as one kept with her attendance (ATT-3's review).
     expect(
       await screen.findByRole("img", {
-        name: "Picha yako, iliyohifadhiwa pamoja na mahudhurio yako",
+        name: "Picha yako uliyopigwa sasa hivi",
       }),
     ).toBeDefined();
+    expect(
+      screen.queryByRole("img", {
+        name: "Picha yako, iliyohifadhiwa pamoja na mahudhurio yako",
+      }),
+    ).toBeNull();
     expect(
       screen.getByText(
         "Hii ni demo: picha yako inabaki kwenye kompyuta hii, haitumwi kwenye seva.",

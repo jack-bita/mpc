@@ -291,7 +291,9 @@ export function AttendanceScreen() {
         <div className="grid gap-2">
           <Image
             src={kept}
-            alt={t("photo.kept")}
+            // On the demo the photo is kept nowhere, so it is the one just taken, not one kept: a screen reader
+            // never says "kept" above a line that says it is never sent (ATT-3's review).
+            alt={t(demo ? "photo.taken" : "photo.kept")}
             width={1600}
             height={900}
             className="h-auto w-40 rounded-lg"

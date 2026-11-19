@@ -105,7 +105,8 @@ test("a clock-in's photo is taken and shown, and on the demo never leaves the la
       ),
   );
 
-  const photo = counter.getByRole("img", { name: sw.attendance.photo.kept });
+  // On the demo, named as the photo just taken: it is kept nowhere.
+  const photo = counter.getByRole("img", { name: sw.attendance.photo.taken });
 
   await test.step("she taps Ingia kazini: the photo shows, and the camera goes off", async () => {
     await counter

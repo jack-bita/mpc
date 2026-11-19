@@ -498,6 +498,7 @@
     },
     "photo": {
       "kept": "Your photo, kept with your attendance",
+      "taken": "Your photo, just taken",
       "demo": "This is the demo: your photo stays on this laptop and is never sent to the server."
     },
     "list": {
