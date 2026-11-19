@@ -585,6 +585,34 @@
       "removeWhat": "Ondoa {what}",
       "title": "Ondoa {what} kwa {name}",
       "done": "Umemwondolea {name} {what}. Kompyuta za duka zitajua baada ya kusawazisha."
+    },
+    "pay": {
+      "title": "Malipo kwa siku",
+      "now": "Sasa: {amount} kwa siku · {meals}",
+      "none": "Bado hana malipo kwa siku.",
+      "history": "Historia",
+      "from": "Kuanzia {day}",
+      "meals": {
+        "yes": "anachangia chakula",
+        "no": "hachangii chakula, ni mpishi"
+      },
+      "set": "Weka malipo",
+      "change": "Badilisha malipo",
+      "saved": "Malipo ya {name} yamehifadhiwa: {amount} kwa siku, kuanzia {day}.",
+      "form": {
+        "title": "Malipo mapya ya {name}",
+        "amount": "Kiasi kwa siku",
+        "amountHint": "Shilingi nzima, mfano 10000.",
+        "from": "Kuanzia",
+        "fromHint": "Siku ya kwanza ya malipo haya. Inaweza kuwa siku iliyopita, lakini si kabla ya siku yake ya kwanza kazini.",
+        "meals": "Anachangia chakula?",
+        "mealsYes": "Ndiyo",
+        "mealsNo": "Hapana, ni mpishi",
+        "note": "Sababu (si lazima)",
+        "noteHint": "Mfano: Ameongezewa.",
+        "save": "Hifadhi",
+        "cancel": "Ghairi"
+      }
     }
   },
   "attendance": {

@@ -585,6 +585,34 @@
       "removeWhat": "Take away {what}",
       "title": "Take {what} away from {name}",
       "done": "{what} was taken away from {name}. The shop's laptops will know after their next sync."
+    },
+    "pay": {
+      "title": "Daily pay",
+      "now": "Now: {amount} a day · {meals}",
+      "none": "No daily pay yet.",
+      "history": "History",
+      "from": "From {day}",
+      "meals": {
+        "yes": "pays a share of the meals",
+        "no": "pays no share of the meals, the cook"
+      },
+      "set": "Set the pay",
+      "change": "Change the pay",
+      "saved": "{name}'s pay is saved: {amount} a day, from {day}.",
+      "form": {
+        "title": "New pay for {name}",
+        "amount": "Amount a day",
+        "amountHint": "Whole shillings, such as 10000.",
+        "from": "From",
+        "fromHint": "The first day of this pay. It can be a day gone by, but not before their first day at work.",
+        "meals": "Pays a share of the meals?",
+        "mealsYes": "Yes",
+        "mealsNo": "No, the cook",
+        "note": "Reason (optional)",
+        "noteHint": "Such as: A raise.",
+        "save": "Save",
+        "cancel": "Cancel"
+      }
     }
   },
   "attendance": {

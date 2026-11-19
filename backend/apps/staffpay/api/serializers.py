@@ -9,6 +9,7 @@ force today (PayRatesAnswer), for the worker named in the address (PayRatesQuery
 from typing import Any
 
 from django.db.models import QuerySet
+from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
@@ -61,6 +62,9 @@ class PayRatesQuery(serializers.Serializer[Any]):
     staff = serializers.UUIDField(help_text="The worker's job.")
 
 
+# many=False, as for the settings' and closures' answers (apps/shops/api/serializers.py): the answer is one object, not
+# a list, though the route's action is `list`; without it the schema, and so the app's types, would say a list of them.
+@extend_schema_serializer(many=False)
 class PayRatesAnswer(serializers.Serializer[Any]):
     # A worker's rates, newest first, as the page's history shows them; the shop's today, from which the form's date
     # starts; and the one in force today, which the page shows first ("Sasa"), or none: worked out here, on the shop's

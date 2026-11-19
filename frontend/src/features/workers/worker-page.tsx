@@ -4,9 +4,10 @@
 // As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Their full name, nickname, job
 // title, first day and phone; their status, and their last day once they left; and whether the superuser switched
 // them off. Badilisha turns the details into boxes, in their place (PPL-10, worker-details-form.tsx). Under the
-// buttons, a card of their roles and extra keys, each by its name and side (PPL-8, worker-roles.tsx). Later cards add
-// here: the PIN and the temporary password (PPL-12), the photo (PPL-9), and the pay so far (WAGE-2), so the owner pays
-// one who leaves at once.
+// buttons, a card of their roles and extra keys, each by its name and side (PPL-8, worker-roles.tsx); under it, their
+// daily pay rate and its history, for whoever holds settings.manage (WAGE-1, worker-pay.tsx). Later cards add here: the
+// PIN and the temporary password (PPL-12), the photo (PPL-9), and the pay so far (WAGE-2), so the owner pays one who
+// leaves at once.
 //
 // At /workers/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address
 // (app/(office)/workers/view/page.tsx). It asks GET /api/v1/people/staff/{id}/, and shows the list's copy at once when
@@ -27,7 +28,9 @@ import { askDemoOpen, DEMO_OPEN } from "@/features/devices/demo";
 import { useWhoIsHere } from "@/features/people/who-is-here";
 import { formatDay, formatPhone } from "@/lib/format";
 
+import { maySeePay, usePayRates } from "./pay-rates";
 import { WorkerActions } from "./worker-actions";
+import { WorkerPay } from "./worker-pay";
 import { WorkerRoles } from "./worker-roles";
 import { useRoles, useWorker, type Worker } from "./workers";
 
@@ -65,10 +68,21 @@ export function WorkerScreen({ id }: { id: string | null }) {
     error: rolesRead.error,
     isPending: rolesRead.isPending,
   };
+  // The worker's pay rates (WAGE-1), for whoever may see them: asked here, the part always on the page, and handed down
+  // by their values, as the roles are; asked for nobody else, as the server would refuse them.
+  const seesPay = who.data !== undefined && maySeePay(who.data);
+  const ratesRead = usePayRates(id, seesPay);
+  const rates = {
+    data: ratesRead.data,
+    error: ratesRead.error,
+    isPending: ratesRead.isPending,
+  };
   // Which card has a form open, if any (PPL-8's review): one form at a time on the page, so a person never meets two
-  // Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other card's buttons hide meanwhile.
-  // Each card's own callback, kept the same between draws, as each says "closed" as it goes (its unmount).
-  const [formIn, setFormIn] = useState<"actions" | "roles" | null>(null);
+  // Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other cards' buttons hide
+  // meanwhile. Each card's own callback, kept the same between draws, as each says "closed" as it goes (its unmount).
+  const [formIn, setFormIn] = useState<"actions" | "roles" | "pay" | null>(
+    null,
+  );
   const actionsForm = useCallback(
     (open: boolean) =>
       setFormIn((now) => (open ? "actions" : now === "actions" ? null : now)),
@@ -77,6 +91,11 @@ export function WorkerScreen({ id }: { id: string | null }) {
   const rolesForm = useCallback(
     (open: boolean) =>
       setFormIn((now) => (open ? "roles" : now === "roles" ? null : now)),
+    [],
+  );
+  const payForm = useCallback(
+    (open: boolean) =>
+      setFormIn((now) => (open ? "pay" : now === "pay" ? null : now)),
     [],
   );
 
@@ -111,7 +130,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
             demo={demo.data === true}
             onEditing={setEditing}
             onForm={actionsForm}
-            buttonsHidden={formIn === "roles"}
+            buttonsHidden={formIn !== null && formIn !== "actions"}
           />
           {/* Under the buttons, as Jack chose (PPL-8): each set of buttons beside what it changes. A worker of its own, as
               WorkerActions: Asha's open form never goes on to Baraka's page. Its key apart from WorkerActions', as two
@@ -123,8 +142,20 @@ export function WorkerScreen({ id }: { id: string | null }) {
             roles={roles}
             onGiving={setGiving}
             onForm={rolesForm}
-            buttonsHidden={formIn === "actions"}
+            buttonsHidden={formIn !== null && formIn !== "roles"}
           />
+          {/* Under the roles, as Jack pictured it (WAGE-1), for whoever may see a worker's pay. A worker of its own, as
+              the cards above: Asha's open form never goes on to Baraka's page. */}
+          {seesPay ? (
+            <WorkerPay
+              key={`${worker.data.id}-pay`}
+              worker={worker.data}
+              me={who.data}
+              rates={rates}
+              onForm={payForm}
+              buttonsHidden={formIn !== null && formIn !== "pay"}
+            />
+          ) : null}
         </>
       ) : null}
     </div>

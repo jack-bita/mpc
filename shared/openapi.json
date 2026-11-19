@@ -2093,10 +2093,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/PayRatesAnswer"
-                                    }
+                                    "$ref": "#/components/schemas/PayRatesAnswer"
                                 }
                             }
                         },

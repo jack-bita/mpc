@@ -2936,7 +2936,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PayRatesAnswer"][];
+                    "application/json": components["schemas"]["PayRatesAnswer"];
                 };
             };
             default: {
