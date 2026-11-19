@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.49 · 19 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.50 · 20 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.50** (20 Nov 2026, WAGE-1's review): §5, seeing a worker's pay needs the same two keys as setting it (Jack: A); §12, a rate reads no job's first or last day, so the month page and the pay keep to the days the book answers (04 v1.151). Marked **(v1.50)**.
 
 **Changes in v1.49** (19 Nov 2026, WAGE-1): §5, who may set a pay rate: the PIN's rule, and the key to the shop's rules and rates too; §12, `PayRate` gains its `note`, is in force as a setting is, and starts on any day of the job, never before its first (04 v1.149). Marked **(v1.49)**.
 
@@ -302,7 +304,7 @@ A full diagram for GitHub is in Appendix A.
 
 **A person hired again** **(v1.38)**: one whose job at a shop ended, and who is hired there again, comes back as the same person, with a new job (PPL-11): their history and their login stay one, and the old job keeps what it said. Who may is the add's, `staff.manage` on the whole shop *(default)*, as they come back with no role, key or PIN, so whoever hires them gains nothing over them. Not while they work at another shop, until AUTH-7. The first day is never before the old job's last day; the same day may be, so a leaving marked by mistake is mended at once *(default)*. A person the superuser switched off may be hired again, and stays off: only the superuser switches a person on (Jack, 18 Nov 2026: A). A phone typed for a new worker that is such a person's finds them; any other phone a person has is refused as in use, saying nothing of whose, and never joins them to the shop, as whoever joins a person could then set their PIN or a temporary password and log in as them.
 
-**Who may set a pay rate** **(v1.49)**: whoever sets a worker's rate sets their pay, so the PIN's rule applies *(default)* (WAGE-1). Someone with `staff.manage` on the whole shop, who holds every key the worker was given, and `settings.manage` on the whole shop too, the key to the shop's rules and rates, so a manager handed `staff.manage` to reset PINs can't change anyone's pay *(default)*. Never their own. An owner's, or a person's who can open the admin, only by the superuser. Not a worker who has left.
+**Who may set a pay rate** **(v1.49)**: whoever sets a worker's rate sets their pay, so the PIN's rule applies *(default)* (WAGE-1). Someone with `staff.manage` on the whole shop, who holds every key the worker was given, and `settings.manage` on the whole shop too, the key to the shop's rules and rates, so a manager handed `staff.manage` to reset PINs can't change anyone's pay *(default)*. Never their own. An owner's, or a person's who can open the admin, only by the superuser. Not a worker who has left. Seeing a worker's rates needs the same two keys, as whoever sees a worker's pay should be whoever may change it: a manager handed `settings.manage` only to change the late fine sees nobody's pay (Jack, WAGE-1's review: A) **(v1.50)**.
 
 **What a person holds** **(v1.10)**: on a side, the codes of every role and grant given on that side, plus those given on all sides; for an action on the whole shop, only those given on all sides. A person who is suspended, or has left, holds nothing; brought back, they hold it all again. A role or a permission that ended counts nowhere; a record made offline is checked against what its maker held when it was made, by the device's clock, as their status is (X2), so a sale made before a role was taken away, and synced after, breaks no rule **(v1.39)**. A key given after the record counts for it, as only a slow laptop clock could put a record before its key, unless that key had been taken away by then: a sale made between a key's end and its return breaks the rule, whichever role or extra key gives it back **(v1.41)**.
 
@@ -564,7 +566,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 
 **PayRate** → StaffMember — `daily_rate`, `shares_meals` (yes; the cook's no) **(v1.29)**, `effective_from`, `note` **(v1.49)**. Dated, so a worker who becomes the cook mid-month pays a share up to that day and none after.
 - **(v1.49)** The rate is money, above 0, in whole shillings. Who set it is the row's `created_by` (§1). Append-only, as every dated rule is (T2): a wrong rate is mended by a new row for the same day.
-- In force on a date: the latest row with `effective_from` on or before it; on one date, the row written last wins, as for a setting (§4). A job with no row on or before a date has no rate that day, and is not shown on the attendance month page (ATT-5).
+- In force on a date: the latest row with `effective_from` on or before it; on one date, the row written last wins, as for a setting (§4). A job with no row on or before a date has no rate that day. A rate reads no job's first or last day: it goes on after a last day, as a tap after it goes to review and the owner may decide that day is paid (ATT-11, ATT-6), which needs its rate. So the attendance month page (ATT-5) lists a worker with a rate on some day of the month, and the pay (WAGE-2) pays, only the days the book of days answers **(v1.50)**.
 - From any day of the job, gone by or still to come, never before its first day: a worker hired on 10 Nov whose rate is typed on the 19th is paid from the 10th. A day in an approved pay run takes no new rate (WAGE-3).
 - Never on a shared device: a worker's pay stays on the server (03 §6.1).
 
