@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.4 · 16 Nov 2026 · Portion 1 of the planning pack
+**Version:** 1.5 · 19 Nov 2026 · Portion 1 of the planning pack
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. Open questions are collected in §14. Key decisions are recorded as ADRs in `docs/adr/`.
 
 **Changes in v1.1** (18 Oct 2026): applies the build plan's Appendix A (`04-build-plan.md`). Attendance (R1b) is built and switched on first, then the Drugs side (R1), then the Foods side (R2); every part lives in the one website and is switched on in settings (§7.8, §10, §11, §14 — 04 BP7, ADR-0033). §6 now states the side decision (02 D1, ADR-0001).
@@ -12,6 +12,8 @@
 **Changes in v1.3** (16 Nov 2026, from the owner, through Jack, OWN-7): the attendance rules in §8.1 are the owner's: two fines, the half days' windows, and *dharura*, a day a manager decides. The fines' amounts are the owner's to type on the real server, so this public spec names none, and the payslip example takes a made-up fine of 500 (02 v1.32, 04 v1.86). Marked **(v1.3)**.
 
 **Changes in v1.4** (16 Nov 2026, from Jack, ATT-8): besides Sundays and public holidays, the owner may close the shop for days of his own, such as a family funeral: each closure runs from a first day to a last, which he may move, and nobody is paid on its days (§8.1; 02 v1.33, 04 v1.89). Marked **(v1.4)**.
+
+**Changes in v1.5** (19 Nov 2026, from Jack, ATT-3): §7.8, a clock-in's photo is decided, no longer a default, and a camera missing or broken never stops a tap. Marked **(v1.5)**.
 
 ---
 
@@ -185,7 +187,7 @@ Release tags: **R1** Drugs side live · **R1b** attendance and pay · **R2** Foo
 - Jobs can be paid at any time, with the same payment and credit rules as sales
 
 ### 7.8 Attendance and pay — R1b (built first, §10)
-- Clock in and out on a shop device with a PIN, plus a photo *(default)*
+- Clock in and out on a shop device with a PIN, plus a photo from its camera; with no camera, or one that fails, the tap still counts, marked with no photo (Jack, ATT-3) **(v1.5)**
 - The rules in §8.1; absence types: office duty, with permission, no-show
 - Monthly pay calculated per worker, with advances and meals deducted **(v1.2)**
 - The day's meal money, typed each day, by whoever the owner gives the key to **(v1.2)**

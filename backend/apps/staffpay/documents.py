@@ -1,29 +1,35 @@
 """apps/staffpay/documents.py — the clock document: a tap of Ingia or Toka a shop laptop pushes, saved as one line
-in the attendance book (ATT-1; 02 §12, 03 §6.3).
+in the attendance book with its photo's row, or why it has none (ATT-1, ATT-3; 02 §12, 03 §6.3, §5.13).
 
-    {"type": "clock", "schema_version": 1, ..., "payload": {"kind": "in", "last_server_time": "2026-11-10T03:50:00Z"}}
+    version 2: {"kind": "in", "last_server_time": "2026-11-19T03:50:00Z", "photo": {"id": ..., "kind": "clock_photo",
+               "content_type": "image/jpeg", "size": 151234, "sha256": "9f…"}}      or "no_photo": "no_camera"
+    version 1: {"kind": "in", "last_server_time": "2026-11-10T03:50:00Z"}           the app before ATT-3: old_app
 
 The push (apps/sync/push.py) checks the envelope, the maker and the shape, then calls post_clock inside its own
 transaction for the document; the list of document types (apps/sync/document_types.py) names it. As every saving
 code does (tests/probe/documents.py): it saves inside a recording_changes block, which joins the push's; an INSERT
 with the laptop's id, so an id another shop holds clashes and is never overwritten; and a broken rule is a flag,
 never a refusal (accept, then flag). A clock-in needs no key: anyone working at the shop may clock in on any of its
-laptops (Jack, ATT-1).
+laptops (Jack, ATT-1). A camera missing, blocked or broken never stops a tap either: it is kept, with why it has no
+photo (Jack, ATT-3: A).
 """
 
 import datetime as dt
 import uuid
 from typing import Any, Protocol
 
+from django.conf import settings
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from rest_framework import serializers
+from rest_framework.exceptions import ErrorDetail
 
-from apps.control.models import Flag, FlagKind
-from apps.control.services import raise_flag
+from apps.control.models import AttachmentKind, Flag, FlagKind
+from apps.control.services import expect_attachment, raise_flag
 from apps.core.api.times import ZonedDateTimeField
 from apps.core.changes import record_change, recording_changes
 from apps.people.models import Device, StaffMember
 from apps.staffpay.calculations import Evidence, Sign, check_time
-from apps.staffpay.models import AttendanceEvent, ClockKind, TimeCheck
+from apps.staffpay.models import AttendanceEvent, ClockKind, NoPhoto, TimeCheck
 
 
 class Pushed(Protocol):
@@ -62,10 +68,75 @@ class ClockShape(serializers.Serializer[Any]):
     last_server_time = ZonedDateTimeField()
 
 
+class PhotoLabelShape(serializers.Serializer[Any]):
+    # A photo's label, as the laptop wrote it (labelPhoto, frontend/src/offline/attachments.ts): the five facts its row
+    # is written from, and its file checked against when it comes (CTRL-3). Only their types here: their rules (a JPEG
+    # or a WebP, 1 byte to 1 MB, 64 lower-case hex digits) are the row's own, asked by expect_attachment, in one place.
+    id = serializers.UUIDField()
+    # A clock-in's photo is a clock photo, opened with attendance.manage. Another kind pinned to a line would be a bug
+    # in the camera's code, which expect_attachment raises as a server error, not a refusal: so the shape asks first.
+    kind = serializers.ChoiceField(choices=[AttachmentKind.CLOCK_PHOTO.value])
+    content_type = serializers.CharField()
+    size = serializers.IntegerField()
+    sha256 = serializers.CharField()
+
+
+# The reasons a laptop may give for no photo. Not old_app: that one is the server's word for version 1 alone.
+REASONS_A_LAPTOP_GIVES = [NoPhoto.NO_CAMERA.value, NoPhoto.BLOCKED.value, NoPhoto.FAILED.value, NoPhoto.DEMO.value]
+
+
+class ClockShapeV2(ClockShape):
+    # A clock document's payload, its shape's version 2 (ATT-3): version 1's, and the tap's photo or why it has none,
+    # one or the other. The laptop takes the photo as the worker taps, so it always knows which.
+    photo = PhotoLabelShape(required=False)
+    no_photo = serializers.ChoiceField(choices=REASONS_A_LAPTOP_GIVES, required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        # Filed under `no_photo` either way, with DRF's own codes: a bug in the laptop's code, which the counter's
+        # warning names by its code, as a wrong shape (needs-attention.tsx).
+        if "photo" in attrs and "no_photo" in attrs:
+            both = ErrorDetail("A tap with a photo has no reason for none.", code="invalid")
+            raise serializers.ValidationError({"no_photo": [both]})
+        if "photo" not in attrs and "no_photo" not in attrs:
+            neither = ErrorDetail("A tap names its photo, or why it has none.", code="required")
+            raise serializers.ValidationError({"no_photo": [neither]})
+        return attrs
+
+
+def post_clock_v1(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
+    """Save a tap from a laptop still on the app before ATT-3, which names no photo: as a version 2 tap whose reason
+    is the old app. Kept until every laptop has updated (03 §6.8): the app's number makes them (SYNC-13)."""
+    return post_clock(document, payload | {"no_photo": NoPhoto.OLD_APP})
+
+
+def _refused_label(refusal: ValidationError) -> ValidationError:
+    # The photo's row refused the label the laptop wrote (expect_attachment, CTRL-3). A rule of the photo's own
+    # (attachment.too_big, attachment.not_an_image...) refuses the whole tap under its code, so the counter's warning
+    # says it in words (needs-attention.tsx), as it says document.* codes, not as a field of "invalid". Anything else
+    # (an id this shop already holds) is filed under the payload's `photo`, where the laptop wrote it: so the push
+    # answers `photo.id` taken as `id.taken`, as it answers any of the laptop's ids taken (03 §5.4).
+    problems = refusal.error_dict if hasattr(refusal, "error_dict") else {NON_FIELD_ERRORS: refusal.error_list}
+    for errors in problems.values():
+        for error in errors:
+            if error.code is not None and error.code.startswith("attachment."):
+                return ValidationError(error.message, code=error.code, params=error.params)
+    return ValidationError(
+        {("photo" if name == NON_FIELD_ERRORS else f"photo.{name}"): errors for name, errors in problems.items()}
+    )
+
+
 def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
     """Save one tap of Ingia or Toka in the attendance book, its time checked, and flag it when the time can't be
-    trusted. The line is its maker's: a worker clocks in for themselves, by their PIN (X3)."""
+    trusted; with its photo's row, waiting for the file, or why it has none. The line is its maker's: a worker clocks in
+    for themselves, by their PIN (X3)."""
     shop_id = document.device.shop_id
+    photo: dict[str, Any] | None = payload.get("photo")
+    no_photo = payload.get("no_photo", "")
+    if photo is not None and settings.DEMO_SEED:
+        # On the demo every visitor shares Meneja's login, which opens clock-in photos, so no visitor's face is kept
+        # there (Jack: A). The laptop sends none (attendance.tsx); this is the second lock, should one come all the
+        # same: no row, so the server would refuse its file (attachment.not_found), and the line says why.
+        photo, no_photo = None, NoPhoto.DEMO
     # The time check, from the evidence the push handed over and the payload's own (apps/staffpay/calculations.py).
     checked = check_time(
         Evidence(
@@ -92,11 +163,32 @@ def post_clock(document: Pushed, payload: dict[str, Any]) -> list[Flag]:
             time_check=checked.time_check,
             last_server_time=payload["last_server_time"],
             clock_error=checked.clock_error,
+            no_photo=no_photo,
         )
         # An INSERT, never an UPDATE: the id comes from the laptop, and one another shop already holds must clash on
         # the primary key, not overwrite that shop's line (03 §5.4).
         event.save(force_insert=True)
         record_change(event)
+        if photo is not None:
+            # The photo's row, pinned to the line, in the push's own transaction for this tap: kept with the line or
+            # not at all, so a file that comes later always finds its row, and a refused label leaves no line behind
+            # whose photo could never come (CTRL-3). After the line, as a row's record must be saved first. Taken by
+            # the worker who tapped, and named by the line's own laptop, the one whose key sent the push: for a tap
+            # carried in a rescue file (SYNC-12), the laptop that loaded it, not the one that took the photo, as the
+            # line names it too. No change line: no laptop keeps a copy of photos' rows.
+            try:
+                expect_attachment(
+                    id=photo["id"],
+                    kind=photo["kind"],
+                    subject=event,
+                    content_type=photo["content_type"],
+                    size=photo["size"],
+                    sha256=photo["sha256"],
+                    by=document.created_by,
+                    device=document.device,
+                )
+            except ValidationError as refusal:
+                raise _refused_label(refusal) from refusal
     if checked.time_check != TimeCheck.UNVERIFIED:
         return []
     # A sign the laptop's clock moved, or a record carried in a rescue file: the line is kept, and flagged for a

@@ -2,6 +2,9 @@
 // screen (SYNC-11, 02 §12): whether the person here is in, and who is. It owns what a clock document's
 // payload holds on the laptop, and which day is today for the taps.
 //
+// The payload's version 2 (ATT-3) carries the tap's photo, or why it has none: a camera that can't never
+// stops a tap (Jack: A). Taps saved by version 1, before ATT-3, are read the same: only `kind` counts here.
+//
 // Today is the shop's date, in the shop's own time zone (mpc.device's shop.timezone), never the laptop's
 // zone, which may be set to anything. By the laptop's own clock, not put right by the server's offset as a
 // rule's day is (reference.ts): a tap is written with the laptop's clock (client_time), so a screen that
@@ -20,22 +23,28 @@ import { useEffect, useState } from "react";
 
 import { useThisDevice } from "@/features/devices/this-device";
 
+import type { PhotoLabel } from "./attachments";
 import type { DocumentRow } from "./db";
 import { shopToday } from "./rules";
 import { useShopDatabase } from "./this-shop";
 
 /** A clock document's type, as the server names it (apps/sync/document_types.py, ATT-1). */
 export const CLOCK = "clock";
-/** Its payload's shape version: ClockShape, apps/staffpay/documents.py. */
-export const CLOCK_VERSION = 1;
+/** Its payload's shape version: ClockShapeV2, apps/staffpay/documents.py (ATT-3). */
+export const CLOCK_VERSION = 2;
 
 export type ClockKind = "in" | "out";
 
-/** A clock document's payload: what was tapped, and the last time the server had told the laptop. */
-export interface ClockPayload {
+/** Why a tap has no photo, as the server's NoPhoto names it: the camera's problem, or the demo, where a
+ * visitor's photo never leaves their laptop (Jack, ATT-3: A). Not `old_app`: the server's word alone. */
+export type NoPhoto = "no_camera" | "blocked" | "failed" | "demo";
+
+/** A clock document's payload: what was tapped, the last time the server had told the laptop, and the
+ * tap's photo (its label, the server writing its row from it) or why it has none, never both. */
+export type ClockPayload = {
   kind: ClockKind;
   last_server_time: string;
-}
+} & ({ photo: PhotoLabel } | { no_photo: NoPhoto });
 
 /** One tap, as the screen reads it. */
 export interface Tap {

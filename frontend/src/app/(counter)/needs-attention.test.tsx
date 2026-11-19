@@ -125,6 +125,20 @@ describe("the records the server refused", () => {
       "document.loaded_by_unknown",
       "Aliyepakia faili la kumbukumbu hii hafanyi kazi katika duka hili.",
     ],
+    // A clock-in whose photo's label the server refused (ATT-3).
+    [
+      "attachment.not_an_image",
+      "Seva haipokei picha ya kumbukumbu hii: si JPEG wala WebP.",
+    ],
+    [
+      "attachment.too_big",
+      "Seva haipokei picha ya kumbukumbu hii: ni kubwa kuliko MB 1.",
+    ],
+    ["attachment.empty", "Seva haipokei picha ya kumbukumbu hii: haina kitu."],
+    [
+      "attachment.sha256_invalid",
+      "Seva haipokei picha ya kumbukumbu hii: alama yake imeharibika.",
+    ],
   ])("gives %s words of its own, with no try again", async (code, words) => {
     // The office's sentence for id.taken says "Jaribu tena", which a refused record can't do: it is never
     // sent again.

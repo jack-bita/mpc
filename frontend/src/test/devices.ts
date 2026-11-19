@@ -25,6 +25,7 @@ export const DAWA_LAPTOP_ANSWER: components["schemas"]["DeviceMe"] = {
     timezone: "Africa/Dar_es_Salaam",
     currency: "TZS",
     default_language: "sw",
+    demo: false,
   },
 };
 
@@ -40,6 +41,7 @@ export const DAWA_LAPTOP: ThisDevice = {
     timezone: "Africa/Dar_es_Salaam",
     currency: "TZS",
     language: "sw",
+    demo: false,
   },
   homeSide: {
     id: "019a5e00-0000-7000-8000-0000000000d1",

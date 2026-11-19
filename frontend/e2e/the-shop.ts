@@ -75,8 +75,10 @@ export const test = base.extend<{
 }>({
   // The shop's new laptop, with a clock the test can move: the idle lock waits 15 minutes, and a test can't.
   // Put in before the first page, so every timer the app starts runs on it. It keeps normal time until moved.
+  // Allowed the camera, as the manager allows it once as a laptop is set up (ATT-3); the camera itself is
+  // Chromium's pretend one (playwright.config.ts).
   laptop: async ({ browser }, provide) => {
-    const laptop = await browser.newContext();
+    const laptop = await browser.newContext({ permissions: ["camera"] });
     await laptop.clock.install();
     await provide(laptop);
     await laptop.close();

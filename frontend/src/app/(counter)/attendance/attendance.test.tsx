@@ -1,6 +1,11 @@
 // attendance.test.tsx — the Mahudhurio screen (SYNC-11, 02 §12): one big button, the one that fits; a tap
 // saved on the laptop as one clock document in the person's name, with the last server time the laptop had
-// seen; Toka kazini says goodbye, then logs her out (Jack, SYNC-11); and nothing asked of the server.
+// seen; Toka kazini says goodbye, then logs her out (Jack, SYNC-11); and nothing asked of the server. With a
+// photo at each tap, saved with it, or the tap saved all the same when the camera can't, and on the demo the
+// photo shown but kept nowhere (ATT-3).
+//
+// The tests' browser (jsdom) has no camera: a test that wants one gives the page a pretend one, and the
+// shrinking is a stand-in (shrink-photo.test.ts tests it), so every other test meets a laptop with none.
 import {
   act,
   fireEvent,
@@ -11,6 +16,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { saveDevice } from "@/features/devices/this-device";
+import { shrinkFrame } from "@/lib/shrink-photo";
 import {
   arriveAtCounter,
   useLeaveAsked,
@@ -29,6 +35,8 @@ import { DAWA_SIDE } from "@/test/shop-lists";
 import CounterLayout from "../layout";
 import { GOODBYE_FOR } from "./attendance";
 import AttendancePage from "./page";
+
+vi.mock("@/lib/shrink-photo", () => ({ shrinkFrame: vi.fn() }));
 
 // Two sellers on Dawa, as the sync left them on the laptop. Fake people.
 const keys = {
@@ -86,12 +94,13 @@ async function switchedOffFrom(day: string): Promise<void> {
 /** The screen, inside the counter's frame, with Asha logged in at the home page before it opened. */
 async function theScreen() {
   arriveAtCounter(ASHA, 15, "server");
-  render(
+  const view = render(
     <CounterLayout>
       <AttendancePage />
     </CounterLayout>,
   );
   await screen.findByRole("heading", { level: 1, name: "Mahudhurio" });
+  return view;
 }
 
 // The pretend clock: the time and the timers only, and it still moves on its own. The test database
@@ -147,11 +156,16 @@ describe("clocking in", () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({
       type: "clock",
-      schema_version: 1,
+      // Version 2, with its photo or why it has none (ATT-3): this laptop has no camera.
+      schema_version: 2,
       created_by: ASHA.id,
       // The laptop's clock at the tap, 07:55 in Dar: the pretend clock still moves on, by milliseconds.
       client_time: expect.stringMatching(/^2026-11-13T04:55:/),
-      payload: { kind: "in", last_server_time: SERVER_TIME },
+      payload: {
+        kind: "in",
+        last_server_time: SERVER_TIME,
+        no_photo: "no_camera",
+      },
     });
     // Waiting in the outbox, the next number after the bootstrap's: the sync takes it from there.
     expect(await db().outbox.toArray()).toMatchObject([
@@ -439,6 +453,309 @@ describe("while attendance is switched off (ATT-2)", () => {
 
     expect(
       await screen.findByRole("button", { name: "Ingia kazini" }),
+    ).toBeDefined();
+  });
+});
+
+/** A camera's track: its light is on until `stop()`. */
+class PretendTrack extends EventTarget {
+  stop = vi.fn();
+}
+
+/** The laptop's webcam, which the browser hands over at once, or refuses with `refusal`. */
+function theLaptopHasACamera(refusal?: string): PretendTrack {
+  const track = new PretendTrack();
+  const stream = { getTracks: () => [track] } as unknown as MediaStream;
+  Object.defineProperty(navigator, "mediaDevices", {
+    configurable: true,
+    value: {
+      getUserMedia: () =>
+        refusal === undefined
+          ? Promise.resolve(stream)
+          : Promise.reject(new DOMException("no", refusal)),
+    },
+  });
+  return track;
+}
+
+/** A made-up JPEG, its first bytes a JPEG's, never a face: what the shrinking gives back. */
+const PHOTO = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])], {
+  type: "image/jpeg",
+});
+
+/** The live picture on the screen, showing a webcam's 1280 × 720 frame. */
+async function theLivePicture(): Promise<HTMLVideoElement> {
+  const video = await screen.findByLabelText<HTMLVideoElement>(
+    "Kamera: uso wako sasa hivi",
+  );
+  Object.defineProperty(video, "videoWidth", { value: 1280 });
+  Object.defineProperty(video, "videoHeight", { value: 720 });
+  return video;
+}
+
+describe("the photo at each tap (ATT-3)", () => {
+  beforeEach(() => {
+    vi.mocked(shrinkFrame).mockResolvedValue(PHOTO);
+    // jsdom has no addresses for a photo in memory: a pretend one, freed as the screen closes.
+    URL.createObjectURL = vi.fn(() => "blob:asha-0755");
+    URL.revokeObjectURL = vi.fn();
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, "mediaDevices");
+    Reflect.deleteProperty(URL, "createObjectURL");
+    Reflect.deleteProperty(URL, "revokeObjectURL");
+    vi.mocked(shrinkFrame).mockReset();
+  });
+
+  it("shows her face live, takes her photo as she taps, and saves it with the tap", async () => {
+    const light = theLaptopHasACamera();
+    await theScreen();
+    await theLivePicture();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+
+    expect(
+      await screen.findByText("Umeingia kazini saa 07:55 asubuhi."),
+    ).toBeDefined();
+    // The tap names its photo by its label, and the photo waits beside it, both saved at once (CTRL-6).
+    const [tap] = await db().documents.toArray();
+    expect(tap?.payload).toMatchObject({
+      kind: "in",
+      photo: {
+        kind: "clock_photo",
+        content_type: "image/jpeg",
+        size: PHOTO.size,
+        sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      },
+    });
+    expect(tap?.payload).not.toHaveProperty("no_photo");
+    const waiting = await db().attachment_files.toArray();
+    expect(waiting).toMatchObject([
+      { document_id: tap?.id, kind: "clock_photo", state: "waiting" },
+    ]);
+    // She sees the photo kept, and the camera's light is off at once.
+    const kept = await screen.findByRole<HTMLImageElement>("img", {
+      name: "Picha yako, iliyohifadhiwa pamoja na mahudhurio yako",
+    });
+    expect(kept.src).toBe("blob:asha-0755");
+    expect(light.stop).toHaveBeenCalled();
+    expect(screen.queryByLabelText("Kamera: uso wako sasa hivi")).toBeNull();
+  });
+
+  it("frees the photo's place in the browser's memory when the screen closes", async () => {
+    // The photo shown after the tap lives in memory at its own address until it is freed: it goes with the
+    // screen, not when the tab closes (ATT-3's review).
+    theLaptopHasACamera();
+    const { unmount } = await theScreen();
+    await theLivePicture();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+    await screen.findByRole("img");
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:asha-0755");
+  });
+
+  it("says there is no camera, and saves the tap all the same, with why", async () => {
+    // A laptop with no webcam: nobody loses a day's pay to a camera (Jack: A).
+    await theScreen();
+
+    expect(
+      await screen.findByText("Hakuna kamera: utaingia bila picha."),
+    ).toBeDefined();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
+    const [tap] = await db().documents.toArray();
+    expect(tap?.payload).toMatchObject({ kind: "in", no_photo: "no_camera" });
+    expect(await db().attachment_files.count()).toBe(0);
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
+  it("says a blocked camera is the manager's to allow, and saves the tap as blocked", async () => {
+    theLaptopHasACamera("NotAllowedError");
+    await theScreen();
+
+    expect(
+      await screen.findByText(
+        "Kamera imezuiwa: utaingia bila picha. Mwambie meneja airuhusu.",
+      ),
+    ).toBeDefined();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
+    const [tap] = await db().documents.toArray();
+    expect(tap?.payload).toMatchObject({ no_photo: "blocked" });
+  });
+
+  it("says she clocks out without a photo, on Toka kazini", async () => {
+    await tappedEarlier(ASHA, "in", MORNING);
+    vi.setSystemTime(EVENING);
+
+    await theScreen();
+
+    expect(
+      await screen.findByText("Hakuna kamera: utatoka bila picha."),
+    ).toBeDefined();
+  });
+
+  it("goes on without a photo the shrinking couldn't make, as failed", async () => {
+    // A broken camera, or a bug: the tap is kept all the same, and the console says why.
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.mocked(shrinkFrame).mockRejectedValue(new Error("can't draw"));
+    theLaptopHasACamera();
+    await theScreen();
+    await theLivePicture();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
+    const [tap] = await db().documents.toArray();
+    expect(tap?.payload).toMatchObject({ no_photo: "failed" });
+    expect(await db().attachment_files.count()).toBe(0);
+  });
+
+  it.each([
+    [
+      // The shrinking gave something that isn't a JPEG: labelPhoto refuses it, a bug in the camera's code.
+      "a photo labelPhoto refuses",
+      () =>
+        vi
+          .mocked(shrinkFrame)
+          .mockResolvedValue(
+            new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])]),
+          ),
+    ],
+    [
+      // The browser couldn't work out the photo's SHA-256: the laptop's trouble.
+      "a photo the browser can't read",
+      () =>
+        vi
+          .spyOn(crypto.subtle, "digest")
+          .mockRejectedValueOnce(new Error("no digest")),
+    ],
+  ])("saves the tap without %s, as failed", async (_what, goesWrong) => {
+    // A photo's problem never stops a tap (Jack: A; ATT-3's review).
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    goesWrong();
+    theLaptopHasACamera();
+    await theScreen();
+    await theLivePicture();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
+    const [tap] = await db().documents.toArray();
+    expect(tap?.payload).toMatchObject({ no_photo: "failed" });
+    expect(await db().attachment_files.count()).toBe(0);
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
+  it("uses the photo just taken on a try after a save that failed", async () => {
+    // Asha taps; the laptop's disk is full, and the save fails. She taps again: the camera went off with her
+    // photo, and her second tap uses it, never "camera failed" for a camera that works (ATT-3's review).
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    theLaptopHasACamera();
+    await theScreen();
+    await theLivePicture();
+    vi.spyOn(db(), "transaction").mockRejectedValueOnce(
+      new DOMException("The disk is full.", "QuotaExceededError"),
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+    expect(
+      await screen.findByText(
+        "Haikuhifadhiwa. Jaribu tena; ikishindikana tena, mwambie meneja.",
+      ),
+    ).toBeDefined();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
+    const [tap] = await db().documents.toArray();
+    expect(tap?.payload).toMatchObject({
+      photo: { kind: "clock_photo", size: PHOTO.size },
+    });
+    expect(await db().attachment_files.count()).toBe(1);
+    // One photo taken, for both tries.
+    expect(shrinkFrame).toHaveBeenCalledTimes(1);
+  });
+
+  it("still says there is no camera on a try after a save that failed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await theScreen();
+    // Once the screen has read the laptop, so the full disk meets the save, not the screen's own reads.
+    const button = await screen.findByRole("button", { name: "Ingia kazini" });
+    await screen.findByText("Hakuna kamera: utaingia bila picha.");
+    vi.spyOn(db(), "transaction").mockRejectedValueOnce(
+      new DOMException("The disk is full.", "QuotaExceededError"),
+    );
+
+    fireEvent.click(button);
+    await screen.findByText(
+      "Haikuhifadhiwa. Jaribu tena; ikishindikana tena, mwambie meneja.",
+    );
+
+    expect(
+      screen.getByText("Hakuna kamera: utaingia bila picha."),
+    ).toBeDefined();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
+    const [tap] = await db().documents.toArray();
+    expect(tap?.payload).toMatchObject({ no_photo: "no_camera" });
+  });
+
+  it("on the demo, shows the photo taken but keeps it on the laptop, never saved", async () => {
+    // Every demo visitor shares Meneja's login, which opens clock-in photos: a visitor's face never
+    // leaves their laptop (Jack, ATT-3: A).
+    saveDevice({ ...DAWA_LAPTOP, shop: { ...DAWA_LAPTOP.shop, demo: true } });
+    theLaptopHasACamera();
+    await theScreen();
+    await theLivePicture();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ingia kazini" }),
+    );
+
+    await screen.findByText("Umeingia kazini saa 07:55 asubuhi.");
+    const [tap] = await db().documents.toArray();
+    expect(tap?.payload).toMatchObject({ kind: "in", no_photo: "demo" });
+    expect(tap?.payload).not.toHaveProperty("photo");
+    expect(await db().attachment_files.count()).toBe(0);
+    expect(await db().attachment_bytes.count()).toBe(0);
+    // Named as the photo just taken, never as one kept with her attendance (ATT-3's review).
+    expect(
+      await screen.findByRole("img", {
+        name: "Picha yako uliyopigwa sasa hivi",
+      }),
+    ).toBeDefined();
+    expect(
+      screen.queryByRole("img", {
+        name: "Picha yako, iliyohifadhiwa pamoja na mahudhurio yako",
+      }),
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        "Hii ni demo: picha yako inabaki kwenye kompyuta hii, haitumwi kwenye seva.",
+      ),
     ).toBeDefined();
   });
 });

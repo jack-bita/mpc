@@ -25,9 +25,17 @@
 //
 // It runs in the page's sync alone, at its end (sync.ts): never in the service worker's push (SYNC-16), as a few
 // minutes' wait for a photo costs nothing (the card's default).
+//
+// On the demo no visitor's clock-in photo leaves their laptop (Jack, ATT-3: A): the screen keeps none there
+// (attendance.tsx), the server keeps no row there (post_clock), and this is the third lock, for a photo a laptop saved
+// before it knew it belonged to the demo, as one whose saved copy came from before ATT-3 and tapped before its first
+// check. Such photos are dropped from the laptop, never sent: their records went up without them, as `demo` or with
+// a label the server writes no row for (ATT-3's review).
 import Dexie from "dexie";
 
 import { ApiRefusal, NoConnection } from "@/api/refusal";
+
+import { isTheDemo, savedDevice } from "@/features/devices/this-device";
 
 import { LARGEST_PHOTO } from "../attachments";
 import type { AttachmentFileRow, ShopDatabase } from "../db";
@@ -66,6 +74,23 @@ export const FIRST_WAIT_MS = 60_000;
 /** The longest wait: however long the trouble, a photo goes again at least once an hour. */
 export const LONGEST_WAIT_MS = 60 * 60_000;
 
+/** Takes every clock-in photo off a demo laptop, waiting or set aside, its row and its bytes together, so none can
+ * ever go up (ATT-3's review). A short list: a demo laptop keeps none but those saved before it knew. */
+async function dropTheDemosClockPhotos(db: ShopDatabase): Promise<void> {
+  const ids = await db.attachment_files
+    .filter((row) => row.kind === "clock_photo")
+    .primaryKeys();
+  if (ids.length === 0) return;
+  await db.transaction(
+    "rw",
+    [db.attachment_files, db.attachment_bytes],
+    async () => {
+      await db.attachment_files.bulkDelete(ids);
+      await db.attachment_bytes.bulkDelete(ids);
+    },
+  );
+}
+
 /** What Chrome, Edge and Android's browsers say of the line the device is on (the Network Information API). Not in
  * TypeScript's own list of the browser's parts, as Firefox and Safari have none: so each field may be missing. */
 interface NetworkInformation {
@@ -99,6 +124,8 @@ export async function sendAttachments(
   db: ShopDatabase,
   place: SyncPlace,
 ): Promise<void> {
+  // The demo's third lock, before anything is read for sending.
+  if (isTheDemo(savedDevice())) await dropTheDemosClockPhotos(db);
   // Only their ids first, then each one's small row as it comes: the bytes are read only for the photo that goes.
   const ids = await waitingInOrder(db).primaryKeys();
   let sentBytes = 0;

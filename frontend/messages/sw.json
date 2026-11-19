@@ -490,6 +490,17 @@
     "savedOut": "Umetoka kazini saa {time}. Kwaheri!",
     "firstSync": "Subiri kidogo: kompyuta hii bado inaleta data za duka kwa mara ya kwanza. Jaribu tena baada ya muda mfupi.",
     "failed": "Haikuhifadhiwa. Jaribu tena; ikishindikana tena, mwambie meneja.",
+    "camera": {
+      "live": "Kamera: uso wako sasa hivi",
+      "no_camera": "Hakuna kamera: {kind, select, in {utaingia} other {utatoka}} bila picha.",
+      "blocked": "Kamera imezuiwa: {kind, select, in {utaingia} other {utatoka}} bila picha. Mwambie meneja airuhusu.",
+      "failed": "Kamera haifanyi kazi: {kind, select, in {utaingia} other {utatoka}} bila picha. Mwambie meneja."
+    },
+    "photo": {
+      "kept": "Picha yako, iliyohifadhiwa pamoja na mahudhurio yako",
+      "taken": "Picha yako uliyopigwa sasa hivi",
+      "demo": "Hii ni demo: picha yako inabaki kwenye kompyuta hii, haitumwi kwenye seva."
+    },
     "list": {
       "title": "Leo kwenye kompyuta hii",
       "empty": "Bado hakuna aliyeingia kazini leo.",
@@ -520,6 +531,10 @@
       "idTaken": "Seva ina kumbukumbu nyingine yenye namba hii ya utambulisho.",
       "carriedFromUnknown": "Kumbukumbu hii inasema imetoka kwenye kompyuta ambayo si nyingine ya duka hili.",
       "loadedByUnknown": "Aliyepakia faili la kumbukumbu hii hafanyi kazi katika duka hili.",
+      "photoNotAnImage": "Seva haipokei picha ya kumbukumbu hii: si JPEG wala WebP.",
+      "photoTooBig": "Seva haipokei picha ya kumbukumbu hii: ni kubwa kuliko MB 1.",
+      "photoEmpty": "Seva haipokei picha ya kumbukumbu hii: haina kitu.",
+      "photoLabelBroken": "Seva haipokei picha ya kumbukumbu hii: alama yake imeharibika.",
       "other": "Seva imeikataa. Msimbo: {code}"
     }
   },
@@ -814,7 +829,9 @@
       "file_differs": "Picha hii si ile iliyotajwa kwenye kumbukumbu yake. Huenda iliharibika njiani.",
       "file_waiting": "Picha hii bado haijafika kwenye seva. Itafika kompyuta ikipata mtandao.",
       "file_removed": "Picha hii imeshaondolewa.",
-      "length_required": "Picha ilitumwa bila kuonyesha ukubwa wake. Itatumwa tena."
+      "length_required": "Picha ilitumwa bila kuonyesha ukubwa wake. Itatumwa tena.",
+      "empty": "Picha hii haina kitu.",
+      "sha256_invalid": "Alama ya picha hii imeharibika."
     },
     "password_too_short": "Nenosiri ni fupi mno.",
     "password_too_common": "Nenosiri hili linatumiwa na watu wengi mno. Chagua jingine.",

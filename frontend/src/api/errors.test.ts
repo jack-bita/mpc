@@ -123,6 +123,11 @@ const CODES_THE_API_SENDS = [
   // photo whose file was removed, 90 days after its pay run (ATT-7).
   "attachment.file_waiting",
   "attachment.file_removed",
+  // And from the push (ATT-3): a clock-in whose photo's label the photo's row refuses, the whole tap refused under
+  // the photo's code (_refused_label, apps/staffpay/documents.py). too_big and not_an_image are above; these two
+  // only a bug in the laptop's code could send, as labelPhoto writes the label.
+  "attachment.empty",
+  "attachment.sha256_invalid",
   "staff.left",
   "staff.other_shop",
   "staff.reason_required",

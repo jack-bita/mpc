@@ -1,7 +1,8 @@
 """apps/sync/document_types.py — the list of document types a push takes, each in the versions of its shape the
 server still reads, with its saving code and the permission its maker needs, if any (SYNC-4; 03 §6.3, §6.8).
 
-    ("clock", 1)  its shape, its saving code, no key        (ATT-1; the laptop's side is SYNC-11's)
+    ("clock", 2)  its shape, its saving code, no key        (ATT-3: with its photo, or why it has none)
+    ("clock", 1)  kept until every laptop sends version 2   (ATT-1; the laptop's side is SYNC-11's)
     ("sale", 2)   its shape, its saving code, sale.write   (SALE-2)
     ("sale", 1)   kept until every laptop sends version 2
 
@@ -24,7 +25,7 @@ from rest_framework import serializers
 from apps.control.models import Flag
 from apps.core.permissions import Permission
 from apps.people.models import Device, StaffMember
-from apps.staffpay.documents import ClockShape, post_clock
+from apps.staffpay.documents import ClockShape, ClockShapeV2, post_clock, post_clock_v1
 
 
 @dataclass(frozen=True)
@@ -75,7 +76,9 @@ class DocumentType:
 DOCUMENT_TYPES: dict[tuple[str, int], DocumentType] = {
     # A tap of Ingia or Toka (apps/staffpay/documents.py). No key: anyone working at the shop may clock in on any of its
     # laptops (Jack, ATT-1).
-    ("clock", 1): DocumentType("clock", 1, ClockShape, post_clock, None),
+    ("clock", 2): DocumentType("clock", 2, ClockShapeV2, post_clock, None),
+    # The app before ATT-3, with no camera: kept until every laptop has updated, its taps saved as old_app.
+    ("clock", 1): DocumentType("clock", 1, ClockShape, post_clock_v1, None),
 }
 
 

@@ -21,6 +21,7 @@ import {
   DeviceCheck,
 } from "./device-check";
 import {
+  isTheDemo,
   saveBlocked,
   savedBlocked,
   saveDevice,
@@ -45,6 +46,21 @@ describe("checkThisDevice", () => {
 
     expect(await checkThisDevice()).toEqual(DAWA_LAPTOP);
     expect(savedDevice()).toEqual(DAWA_LAPTOP);
+  });
+
+  it("keeps whether the shop is the demo's, for the counter to read offline", async () => {
+    // On the demo no visitor's clock-in photo leaves their laptop (Jack, ATT-3: A).
+    answer("GET", ME, {
+      status: 200,
+      body: {
+        ...DAWA_LAPTOP_ANSWER,
+        shop: { ...DAWA_LAPTOP_ANSWER.shop, demo: true },
+      },
+    });
+
+    await checkThisDevice();
+
+    expect(isTheDemo(savedDevice())).toBe(true);
   });
 
   it("forgets the saved copy when the server knows no device by this key", async () => {

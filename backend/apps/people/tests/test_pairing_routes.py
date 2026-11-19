@@ -244,6 +244,8 @@ def test_paired_device_learns_its_shop_and_code(manager_a: StaffMember, side_a: 
             "timezone": "Africa/Dar_es_Salaam",
             "currency": "TZS",
             "default_language": "sw",
+            # Not the demo's: a real shop's laptop sends its clock-in photos (ATT-3).
+            "demo": False,
         },
     }
     # Never the key's hash: it stays on the server (03 §5.9).

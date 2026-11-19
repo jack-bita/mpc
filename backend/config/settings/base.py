@@ -380,5 +380,6 @@ APP_VERSION = env("APP_VERSION", "dev")
 # the minimum sends its outbox first, in the shapes it wrote, and in the same release the server would refuse them. Not
 # APP_VERSION, a git commit, which can't say whether it is older or newer than another; nor the release number, as
 # every merge deploys before its release exists. In the code, not the environment: it belongs to the code a release
-# ships.
-MIN_APP_VERSION = 1
+# ships. 2 since ATT-3: its apps write the clock-in's version 2, with its photo, so older ones, with no camera, update;
+# the server still takes version 1 from what they send first (apps/sync/document_types.py).
+MIN_APP_VERSION = 2
