@@ -8,6 +8,7 @@ Each row of the owner's table in spec §8.1 is a test named after it, so the cod
     leaves    before 13:00 dharura · 13:00 to 13:30 the morning's half day, a late arrival's fine kept
               · before 18:40 dharura · from 18:40 the full day, or the late one with its fine · never: dharura
     no tap    absent · a tap whose time can't be trusted, or a Toka with no Ingia: dharura
+    Toka      ends the day: the first one after the first Ingia counts, and no tap after it (no lunch Toka at MPC)
 
 Every window is a minute on the shop's clock, as the counter shows it (SYNC-11): a tap's seconds never count, and the
 server's UTC is never the shop's time; shop_minute turns a tap's time into that minute. Pure: no database, no clock of
@@ -234,13 +235,34 @@ def test_clock_out_without_clock_in_needs_review() -> None:
     assert day(None, CLOSING) == dharura(None, CLOSING)
 
 
-def test_first_in_and_last_out_count() -> None:
-    # Ingia tapped twice by mistake, and Toka too, handed in in no order: the day reads from the first Ingia to the last
-    # Toka, as ATT-10 may hand the taps in any order.
+def test_the_first_toka_ends_the_day() -> None:
+    # At MPC Toka ends the day: nobody taps out for lunch (Jack, ATT-4's review). So the day reads from the first Ingia
+    # to the first Toka after it, and a tap after that Toka counts for nothing.
+    # Asha taps out at 13:05 and in again at 13:40: her 13:05 ended the day, the morning's half.
+    asha = [Tap(ClockKind.IN, at("07:20")), Tap(ClockKind.OUT, at("13:05")), Tap(ClockKind.IN, at("13:40"))]
+    assert work_out_day(asha, OWNERS_DAY) == DayResult(DayStatus.HALF, NO_FINE, at("07:20"), at("13:05"))
+    # Juma taps Toka at 13:05 by mistake, Ingia at 13:10, and Toka at closing: still the morning's half, which a manager
+    # can mend with a reason (ATT-6), the taps all kept.
+    juma = [*asha[:2], Tap(ClockKind.IN, at("13:10")), Tap(ClockKind.OUT, at(CLOSING))]
+    assert work_out_day(juma, OWNERS_DAY) == DayResult(DayStatus.HALF, NO_FINE, at("07:20"), at("13:05"))
+    # Mparee taps Toka by mistake at 11:06, and Ingia again at 11:07: his day ended before midday, so a manager decides.
+    mparee = [Tap(ClockKind.IN, at("07:20")), Tap(ClockKind.OUT, at("11:06")), Tap(ClockKind.IN, at("11:07"))]
+    assert work_out_day(mparee, OWNERS_DAY) == dharura("07:20", "11:06")
+
+
+def test_a_tap_made_twice_counts_once() -> None:
+    # Ingia tapped twice by mistake, and Toka too, handed in in no order, as ATT-10 may hand the taps in any order: the
+    # first Ingia starts the day, and the first Toka after it ends the day.
     taps = [
         Tap(ClockKind.OUT, at("18:42")),
         Tap(ClockKind.IN, at("07:22")),
         Tap(ClockKind.OUT, at(CLOSING)),
         Tap(ClockKind.IN, at("07:20")),
     ]
-    assert work_out_day(taps, OWNERS_DAY) == DayResult(DayStatus.ON_TIME, NO_FINE, at("07:20"), at("18:42"))
+    assert work_out_day(taps, OWNERS_DAY) == DayResult(DayStatus.ON_TIME, NO_FINE, at("07:20"), at(CLOSING))
+
+
+def test_a_toka_before_the_ingia_ends_nothing() -> None:
+    # A Toka at 07:00, before any Ingia, ends no day: the day hadn't started. The day runs from 07:20 to closing.
+    taps = [Tap(ClockKind.OUT, at("07:00")), Tap(ClockKind.IN, at("07:20")), Tap(ClockKind.OUT, at(CLOSING))]
+    assert work_out_day(taps, OWNERS_DAY) == DayResult(DayStatus.ON_TIME, NO_FINE, at("07:20"), at(CLOSING))

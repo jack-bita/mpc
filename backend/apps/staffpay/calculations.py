@@ -154,11 +154,12 @@ class Tap:
 @dataclass(frozen=True)
 class DayResult:
     # The answer, for ATT-10 to keep with the rules it used (T4): what the day was, the fine taken off its pay, and the
-    # two taps the answer read, the first clock-in and the last clock-out, for a manager to see beside it (ATT-5).
+    # two taps the answer read, the first clock-in and the first clock-out after it, which ended the day, for a manager
+    # to see beside it (ATT-5).
     status: DayStatus
     fine: Decimal
     first_in: dt.time | None
-    last_out: dt.time | None
+    first_out: dt.time | None
 
 
 def work_out_day(taps: Sequence[Tap], rules: DayRules) -> DayResult:
@@ -168,11 +169,15 @@ def work_out_day(taps: Sequence[Tap], rules: DayRules) -> DayResult:
     # manager's to mark (ATT-6).
     if not taps:
         return DayResult(DayStatus.ABSENT, NO_FINE, None, None)
-    # The first clock-in and the last clock-out count, in whatever order the taps come: Ingia tapped twice by mistake is
-    # one arrival, at the first. Only taps with a time trusted: the others have no minute to compare.
+    # The first clock-in starts the day, in whatever order the taps come: Ingia tapped twice by mistake is one arrival,
+    # at the first. Only taps with a time trusted: the others have no minute to compare.
     first_in = min((tap.minute for tap in taps if tap.kind == ClockKind.IN and tap.minute is not None), default=None)
-    last_out = max((tap.minute for tap in taps if tap.kind == ClockKind.OUT and tap.minute is not None), default=None)
-    dharura = DayResult(DayStatus.NEEDS_REVIEW, NO_FINE, first_in, last_out)
+    # And the first Toka after it ends the day: at MPC nobody taps out for lunch, so a tap after that Toka counts for
+    # nothing, and a Toka tapped by mistake sends the day to a manager, who mends it with a reason (Jack, ATT-4's
+    # review; ATT-6). A Toka before any Ingia ends no day; with no Ingia at all, the first Toka is kept for the manager.
+    outs = sorted(tap.minute for tap in taps if tap.kind == ClockKind.OUT and tap.minute is not None)
+    first_out = next((minute for minute in outs if first_in is None or minute >= first_in), None)
+    dharura = DayResult(DayStatus.NEEDS_REVIEW, NO_FINE, first_in, first_out)
     # A tap whose time can't be trusted (`unverified`, ATT-1): the laptop's clock moved, for that tap or for the one
     # before it, so no window can be read, whatever the other taps say (02 §12). And a Toka with no Ingia: nobody knows
     # when they came, so nobody knows the fine. A manager decides both.
@@ -189,20 +194,20 @@ def work_out_day(taps: Sequence[Tap], rules: DayRules) -> DayResult:
     elif rules.afternoon_from <= first_in <= rules.midday:
         # The afternoon's half day, from 12:00 to 13:00, if they stay until closing. No fine: arriving for the
         # afternoon is not arriving late.
-        if last_out is not None and last_out >= rules.closing:
-            return DayResult(DayStatus.HALF, NO_FINE, first_in, last_out)
+        if first_out is not None and first_out >= rules.closing:
+            return DayResult(DayStatus.HALF, NO_FINE, first_in, first_out)
         return dharura
     else:
         # From 08:30 and before 12:00, or after 13:00: the owner's dharura.
         return dharura
     # Leaving, after a morning arrival: from closing, the full day, or the late one with its fine. A fine of 0, as a
     # shop starts with (ATT-2), still makes the day late, with nothing taken off.
-    if last_out is not None and last_out >= rules.closing:
-        return DayResult(DayStatus.LATE if late else DayStatus.ON_TIME, fine, first_in, last_out)
+    if first_out is not None and first_out >= rules.closing:
+        return DayResult(DayStatus.LATE if late else DayStatus.ON_TIME, fine, first_in, first_out)
     # The morning's half day: leaving from midday to morning_leave_until, both counted. A late arrival's fine still
     # comes off (the owner, 19 Nov 2026): in at 07:50, out at 13:10, half the day's pay less the first fine.
-    if last_out is not None and rules.midday <= last_out <= rules.morning_leave_until:
-        return DayResult(DayStatus.HALF, fine, first_in, last_out)
+    if first_out is not None and rules.midday <= first_out <= rules.morning_leave_until:
+        return DayResult(DayStatus.HALF, fine, first_in, first_out)
     # Leaving before midday, after 13:30 and before closing, or never clocking out: the owner's dharura, as nobody
     # knows which half was worked, or when they left (02 §20, item 6).
     return dharura
