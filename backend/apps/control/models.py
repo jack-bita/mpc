@@ -488,8 +488,10 @@ class Attachment(ShopScoped):
     class Meta(ShopScoped.Meta):
         # Built on ShopScoped.Meta, so `objects`, with the shop guard, stays the default manager (CORE-2). The database
         # is the last guard (03 §5.6); the services check the same rules first. These codes stop a bug in our own code,
-        # as the label comes from our app: no screen shows them yet, so they have no sentences (errors.test.ts). Those a
-        # route sends get theirs with the route.
+        # as the label comes from our app. Since ATT-3 the push sends them, for a clock-in whose photo's label one
+        # refuses (apps/staffpay/documents.py), so the counter shows them with words of its own (needs-attention.tsx),
+        # and those it sends have their two sentences (errors.test.ts): not_an_image, too_big, empty, sha256_invalid.
+        # kind_unknown and subject_type_invalid no push can send, as the clock-in's shape and saving code pick both.
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(kind__in=AttachmentKind.values),
