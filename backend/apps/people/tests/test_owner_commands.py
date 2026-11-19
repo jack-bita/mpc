@@ -29,11 +29,11 @@ from apps.core.tenancy import shop_context
 from apps.people.models import Device, PinLock, Role, RoleAssignment, StaffMember, User
 from apps.people.pins import PIN_TRIES, pin_matches
 from apps.people.services import add_worker, assign_role, check_pin, mark_left, set_pin, set_up_shop, suspend
-from apps.people.tests.conftest import Keyboard
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide
 from tests.change_log import lines_written
+from tests.keyboard import Keyboard
 
 pytestmark = pytest.mark.django_db
 

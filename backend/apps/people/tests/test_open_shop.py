@@ -24,7 +24,6 @@ from apps.core.tenancy import shop_context, system_context
 from apps.people.management.commands.open_shop import FLOW_SHOWN, FLOW_WORDS
 from apps.people.models import Role
 from apps.people.services import set_up_shop
-from apps.people.tests.conftest import Keyboard
 from apps.shops.models import (
     PaymentAccount,
     PaymentAccountKind,
@@ -37,6 +36,7 @@ from apps.shops.models import (
     StockLocation,
 )
 from apps.shops.services import NewSide
+from tests.keyboard import Keyboard
 
 pytestmark = pytest.mark.django_db
 
