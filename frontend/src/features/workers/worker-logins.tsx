@@ -1,6 +1,7 @@
 // worker-logins.tsx — Kuingia, a worker's ways in, on their own page (PPL-12): whether they have a PIN, Imewekwa or
-// Haijawekwa, so the owner sees who has no tile on the shop's laptops yet; and Weka PIN, which opens its form in the
-// button's place (pin-form.tsx). Step 3 of the card adds Nenosiri la muda beside it.
+// Haijawekwa, so the owner sees who has no tile on the shop's laptops yet; Weka PIN, for a laptop's tile
+// (pin-form.tsx); and Nenosiri la muda, for one who works from their own phone (password-form.tsx). Each opens its
+// form in the buttons' place.
 //
 // A card of its own between the status buttons and the roles (Jack, PPL-12: A): a way to log in is neither the job's
 // status nor a role. The PIN's line shows for every worker; the buttons as PPL-8's do: for a worker working or
@@ -31,12 +32,17 @@ import { Button } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
+import { formatPhone } from "@/lib/format";
 
+import { PasswordForm } from "./password-form";
 import { PinForm } from "./pin-form";
 import { type Worker, WORKERS } from "./workers";
 
 /** The form open, if any. */
-type Form = "pin";
+type Form = "pin" | "password";
+
+/** The buttons, in their order on the card: the PIN first, as every worker at a laptop needs one. */
+const FORMS: Form[] = ["pin", "password"];
 
 export function WorkerLogins({
   worker,
@@ -130,26 +136,46 @@ export function WorkerLogins({
               }
               onCancel={() => cancelled("pin")}
             />
+          ) : open === "password" ? (
+            <PasswordForm
+              worker={worker}
+              // With her phone as the shop writes it, 0712 345 678; with none, her email, which the page never sees.
+              onDone={() =>
+                said(
+                  worker.phone === null
+                    ? t("passwordDoneNoPhone", { name: worker.display_name })
+                    : t("passwordDone", {
+                        name: worker.display_name,
+                        phone: formatPhone(worker.phone),
+                      }),
+                )
+              }
+              onCancel={() => cancelled("password")}
+            />
           ) : null}
           {showButtons ? (
             <div className="grid gap-3">
               <div className="flex flex-wrap gap-3">
-                <Button
-                  ref={(button) => {
-                    if (button) buttons.current.set("pin", button);
-                    else buttons.current.delete("pin");
-                  }}
-                  kind="second"
-                  // Off on the demo, with the line under it saying why (see the top).
-                  disabled={demo}
-                  onClick={() => {
-                    setNews(null);
-                    setOpen("pin");
-                  }}
-                >
-                  {t("setPin")}
-                </Button>
+                {FORMS.map((form) => (
+                  <Button
+                    key={form}
+                    ref={(button) => {
+                      if (button) buttons.current.set(form, button);
+                      else buttons.current.delete(form);
+                    }}
+                    kind="second"
+                    // Off on the demo, with the line under them saying why (see the top).
+                    disabled={demo}
+                    onClick={() => {
+                      setNews(null);
+                      setOpen(form);
+                    }}
+                  >
+                    {form === "pin" ? t("setPin") : t("temporaryPassword")}
+                  </Button>
+                ))}
               </div>
+              {/* One line for both buttons: the server's own sentence for the demo's logins. */}
               {demo ? <p>{codeMessage(codes, "demo.logins_fixed")}</p> : null}
             </div>
           ) : null}
