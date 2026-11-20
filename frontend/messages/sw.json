@@ -677,6 +677,48 @@
       "offline": "Hakuna mtandao: zitatumwa mtandao ukirudi."
     }
   },
+  "attendanceMonth": {
+    "title": "Mahudhurio ya mwezi",
+    "intro": "Siku za kila mfanyakazi anayelipwa kwa siku, mwezi mzima.",
+    "months": "Chagua mwezi",
+    "before": "Mwezi uliopita",
+    "after": "Mwezi unaofuata",
+    "monthTitle": "{month} {year}",
+    "monthNames": {
+      "01": "Januari",
+      "02": "Februari",
+      "03": "Machi",
+      "04": "Aprili",
+      "05": "Mei",
+      "06": "Juni",
+      "07": "Julai",
+      "08": "Agosti",
+      "09": "Septemba",
+      "10": "Oktoba",
+      "11": "Novemba",
+      "12": "Desemba"
+    },
+    "countedTo": "Hadi jana, {day}.",
+    "nothingOverYet": "Bado hakuna siku iliyokwisha mwezi huu.",
+    "workersCaption": "Siku za kila mfanyakazi",
+    "worker": "Mfanyakazi",
+    "mark": {
+      "on_time": "✓",
+      "late": "Ch",
+      "half": "½",
+      "absent": "H",
+      "needs_review": "!"
+    },
+    "kind": {
+      "on_time": "kwa wakati",
+      "late": "amechelewa",
+      "half": "nusu siku",
+      "absent": "hakuja",
+      "needs_review": "inahitaji uamuzi"
+    },
+    "keyLabel": "Maana ya alama",
+    "nobody": "Hakuna mfanyakazi anayelipwa kwa siku katika mwezi huu."
+  },
   "needsAttention": {
     "title": "Kumbukumbu zilizokataliwa na seva",
     "clock": "{name}: {action}, saa {time}",

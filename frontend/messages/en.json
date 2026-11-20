@@ -677,6 +677,48 @@
       "offline": "No internet: they will be sent once it is back."
     }
   },
+  "attendanceMonth": {
+    "title": "Monthly attendance",
+    "intro": "The days of each worker paid by the day, for the whole month.",
+    "months": "Choose a month",
+    "before": "Previous month",
+    "after": "Next month",
+    "monthTitle": "{month} {year}",
+    "monthNames": {
+      "01": "January",
+      "02": "February",
+      "03": "March",
+      "04": "April",
+      "05": "May",
+      "06": "June",
+      "07": "July",
+      "08": "August",
+      "09": "September",
+      "10": "October",
+      "11": "November",
+      "12": "December"
+    },
+    "countedTo": "Up to yesterday, {day}.",
+    "nothingOverYet": "No day of this month is over yet.",
+    "workersCaption": "Each worker's days",
+    "worker": "Worker",
+    "mark": {
+      "on_time": "✓",
+      "late": "L",
+      "half": "½",
+      "absent": "A",
+      "needs_review": "!"
+    },
+    "kind": {
+      "on_time": "on time",
+      "late": "late",
+      "half": "half day",
+      "absent": "absent",
+      "needs_review": "needs a decision"
+    },
+    "keyLabel": "What the marks mean",
+    "nobody": "No worker paid by the day in this month."
+  },
   "needsAttention": {
     "title": "Records the server refused",
     "clock": "{name}: {action}, at {time}",

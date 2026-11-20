@@ -1,12 +1,13 @@
 // office-home.test.tsx — the office's home page greets the person, with a big button for each office
-// screen they may open (UI-5), Mipangilio ya duka (SHOP-5) and Wafanyakazi (PPL-6) among them.
+// screen they may open (UI-5), Mipangilio ya duka (SHOP-5), Wafanyakazi (PPL-6) and Mahudhurio ya mwezi (ATT-5)
+// among them.
 import { QueryClientProvider } from "@tanstack/react-query";
 import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { makeQueryClient } from "@/api/query-client";
 import { WHO_IS_HERE } from "@/features/people/who-is-here";
-import { DAWA, whoIsHere } from "@/test/devices";
+import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal } from "@/test/fake-server";
 import { render } from "@/test/render";
 import { MANAGER } from "@/test/workers";
@@ -125,6 +126,47 @@ describe("the office's home page", () => {
 
     await screen.findByRole("link", { name: "Mipangilio ya duka" });
     expect(screen.queryByRole("link", { name: "Wafanyakazi" })).toBeNull();
+  });
+
+  it("opens Mahudhurio ya mwezi for whoever holds attendance.manage on the whole shop (ATT-5)", async () => {
+    // The owner and the managers fix attendance; the month is the whole shop's, Asha of Dawa beside Baraka of Vyakula.
+    answer("GET", ME, {
+      status: 200,
+      body: {
+        ...whoIsHere([]),
+        permissions: {
+          whole_shop: ["attendance.manage"],
+          sides: [
+            { ...DAWA, permissions: ["attendance.manage"] },
+            { ...VYAKULA, permissions: ["attendance.manage"] },
+          ],
+        },
+      },
+    });
+
+    render(<OfficeHome />);
+
+    const link = await screen.findByRole("link", {
+      name: "Mahudhurio ya mwezi",
+    });
+    expect(link.getAttribute("href")).toMatch(/^\/attendance-month\/?$/);
+  });
+
+  it("offers no Mahudhurio ya mwezi to a seller, nor for attendance.manage on one side alone", async () => {
+    // Asha sells on Dawa: whose day was late is not hers to see. Hamisi fixes attendance on Dawa alone: the month is
+    // the whole shop's, so the server would refuse him, and the button stays off his page.
+    for (const permissions of [["sale.create"], ["attendance.manage"]]) {
+      answer("GET", ME, {
+        status: 200,
+        body: whoIsHere([{ side: DAWA, permissions }]),
+      });
+      const shown = render(<OfficeHome />);
+      await screen.findByRole("link", { name: "Mipangilio ya duka" });
+      expect(
+        screen.queryByRole("link", { name: "Mahudhurio ya mwezi" }),
+      ).toBeNull();
+      shown.unmount();
+    }
   });
 
   it("says when there is nothing to open, for someone who works on no side", async () => {
