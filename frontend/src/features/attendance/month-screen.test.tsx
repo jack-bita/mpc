@@ -78,6 +78,11 @@ function theShopHas(months: Record<string, WorkerMonth[]>) {
   });
 }
 
+/** ›, the button to the month after. */
+function next(): HTMLElement {
+  return screen.getByRole("button", { name: "Mwezi unaofuata" });
+}
+
 /** The months the page asked the server for, in order. */
 function monthsAsked(): string[] {
   return sent
@@ -218,9 +223,7 @@ describe("the month page", () => {
     render(<MonthScreen asked={null} />);
 
     expect(await screen.findByText("Hadi jana, 29/11/2026.")).toBeTruthy();
-    expect(
-      screen.queryByRole("button", { name: "Mwezi unaofuata" }),
-    ).toBeNull();
+    expect(next().getAttribute("aria-disabled")).toBe("true");
 
     vi.setSystemTime(new Date("2026-12-02T09:00:00Z"));
     act(() => {
@@ -228,9 +231,9 @@ describe("the month page", () => {
       window.dispatchEvent(new Event("focus"));
     });
 
-    expect(
-      await screen.findByRole("button", { name: "Mwezi unaofuata" }),
-    ).toBeTruthy();
+    await waitFor(() =>
+      expect(next().getAttribute("aria-disabled")).not.toBe("true"),
+    );
     await waitFor(() => expect(screen.queryByText(/Hadi jana/)).toBeNull());
     expect(screen.getByRole("heading", { name: "Novemba 2026" })).toBeTruthy();
   });
@@ -246,9 +249,10 @@ describe("the month page", () => {
     render(<MonthScreen asked={null} />);
 
     await screen.findByRole("heading", { name: "Novemba 2026" });
-    expect(
-      screen.queryByRole("button", { name: "Mwezi unaofuata" }),
-    ).toBeNull();
+    // › is there, greyed out: no day after today is over.
+    expect(next().getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(next());
+    expect(monthsAsked()).toEqual(["2026-11"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Mwezi uliopita" }));
 
@@ -260,10 +264,15 @@ describe("the month page", () => {
     // A month gone by is counted to its end: no "Hadi jana".
     expect(screen.queryByText(/Hadi jana/)).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Mwezi unaofuata" }));
+    next().focus();
+    fireEvent.click(next());
 
     await screen.findByRole("heading", { name: "Novemba 2026" });
     expect(window.location.search).toBe("?month=2026-11");
+    // The keyboard stays where it was: › greys out, and keeps its focus, so Tab and Shift+Tab go on from there,
+    // never from the page's top (the review).
+    expect(document.activeElement).toBe(next());
+    expect(next().getAttribute("aria-disabled")).toBe("true");
     expect(monthsAsked()).toEqual(["2026-11", "2026-10", "2026-11"]);
   });
 

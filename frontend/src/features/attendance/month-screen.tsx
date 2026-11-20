@@ -153,7 +153,7 @@ function MonthSwitch({
   const t = useTranslations("attendanceMonth");
   const [year, number] = month.split("-") as [string, string];
   return (
-    // Three columns, the name always in the middle, whether › is there or not. Each arrow a square button as tall as
+    // Three columns, the name always in the middle. Each arrow a square button as tall as
     // a normal one, so a finger finds it; its name a word, as a screen reader can't read an arrow (page-header.tsx).
     <nav
       aria-label={t("months")}
@@ -175,20 +175,21 @@ function MonthSwitch({
           year,
         })}
       </h2>
-      {month < thisMonth ? (
-        <Button
-          kind="second"
-          size="normal"
-          aria-label={t("after")}
-          className="w-(--control-normal) px-0"
-          onClick={() => onChoose(monthAfter(month))}
-        >
-          <ChevronRight aria-hidden className="size-6" />
-        </Button>
-      ) : (
-        // Its place kept, so the month's name doesn't move as › comes and goes.
-        <span className="w-(--control-normal)" />
-      )}
+      {/* Always there, greyed out on this month, as no day after today is over. Never taken away: pressed to reach
+          this month, a button that went would take the keyboard's place with it, back to the page's top (the review).
+          focusableWhenDisabled keeps it in the Tab order, said "dimmed" by a screen reader, where a plain disabled
+          button would drop the focus it has. */}
+      <Button
+        kind="second"
+        size="normal"
+        aria-label={t("after")}
+        className="w-(--control-normal) px-0"
+        disabled={month >= thisMonth}
+        focusableWhenDisabled
+        onClick={() => onChoose(monthAfter(month))}
+      >
+        <ChevronRight aria-hidden className="size-6" />
+      </Button>
     </nav>
   );
 }
