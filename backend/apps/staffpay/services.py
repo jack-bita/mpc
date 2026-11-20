@@ -3,17 +3,18 @@ daily pay rate (WAGE-1).
 
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
-    Juma   Mon 16 Nov  needs_review  0.00    07:20  —          no Toka: a manager decides (ATT-6)
-    Juma   Tue 17 Nov  needs_review  0.00    07:20  18:45      suspended on Monday: a tap in doubt (ATT-11)
+    Juma   Mon 16 Nov  needs_review  0.00    07:20  —          no_out: a manager decides (ATT-6)
+    Juma   Tue 17 Nov  needs_review  0.00    07:20  18:45      not_working: suspended on Monday (ATT-11)
     Asha   Sun 22 Nov  off           0.00    —      —          the shop is shut on Sundays and closed days
 
 The day's rule (work_out_day, apps/staffpay/calculations.py) says what one day was; the book finds each day's taps and
 rules, hands them in, and keeps the answer, one row per job and date (AttendanceDay). Three kinds of day the rule can't
 see go to review: a closed day with a tap (ATT-10); and a day with a tap in doubt, or outside a job's days with a tap
-(ATT-11). Nothing here is typed by a person: the days are answers, worked out again each time they are asked for, as a
-tap can come late from a laptop that was offline, a manager can void a tap (ATT-6), and a job's first or last day can be
-moved (PPL-10). ATT-5 asks for a month to show, WAGE-2 for a month to pay, ATT-7 each night. No route of its own, and no
-line in the change log: no laptop keeps a copy of the days.
+(ATT-11). Each day to decide keeps why, the book's reason before the rule's (ReviewReason, ATT-5), for the month page
+to show beside it. Nothing here is typed by a person: the days are answers, worked out again each time they are asked
+for, as a tap can come late from a laptop that was offline, a manager can void a tap (ATT-6), and a job's first or last
+day can be moved (PPL-10). ATT-5 asks for a month to show, WAGE-2 for a month to pay, ATT-7 each night. No route of
+its own, and no line in the change log: no laptop keeps a copy of the days.
 
 A pay rate is typed by a person, the owner (set_pay_rate): from 10 Nov, Juma earns 10,000 a day. Whoever sets it sets a
 worker's pay, so who may is the PIN's rule, asked by the people app (02 §5). No line in the change log either: a
@@ -45,7 +46,15 @@ from apps.people.services import lock_worker_for_a_change
 from apps.shops.models import Shop
 from apps.shops.selectors import closed_days, shop_settings_between, shop_today
 from apps.staffpay.calculations import NO_FINE, DayResult, Tap, shop_minute, work_out_day
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, PayRate, TimeCheck
+from apps.staffpay.models import (
+    AttendanceDay,
+    AttendanceEvent,
+    ClockKind,
+    DayStatus,
+    PayRate,
+    ReviewReason,
+    TimeCheck,
+)
 from apps.staffpay.selectors import day_rules_between, rules_as_text
 
 # Sunday, as Python numbers the days of the week (Monday is 0). Always off, and not paid: Sunday work is a deal between
@@ -62,8 +71,9 @@ class _TheBook:
 
 
 # What the book works out on a day, and so what it writes again when a day comes out otherwise. Not the job, the date
-# or the shop, which say which day it is; nor `created_at`, which says when the day was first kept.
-WORKED_OUT = ["status", "fine", "first_in", "first_out", "rules_used"]
+# or the shop, which say which day it is; nor `created_at`, which says when the day was first kept. The reason too
+# (ATT-5): a day to decide kept before it had none, and gets its reason the next time it is worked out.
+WORKED_OUT = ["status", "fine", "first_in", "first_out", "rules_used", "review_reason"]
 
 # The answer log's link code (apps/core/links.py): the push keeps a line there for each document a laptop sends, and
 # flags a suspended or gone worker's tap on that line (X2), not on the tap. The log is a table of `sync`, a layer above
@@ -164,8 +174,18 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
                 #   offline that didn't know yet (X2), or the one Asha's later tap disagrees with. His tap is real, but
                 #   whether to pay for it is a person's call.
                 # - A day outside the job's days that it tapped on, as above (ATT-11).
-                if day in closed or (job.pk, day) in in_doubt or outside:
-                    result = replace(result, status=DayStatus.NEEDS_REVIEW, fine=NO_FINE)
+                # Each says why (ATT-5), the first that holds, in ReviewReason's order: outside the job's days, then a
+                # closed day, then a tap in doubt. The book's reason comes before the rule's, as each asks whether the
+                # day is paid at all, whatever its times say: Juma suspended, with no Toka, is about the suspension.
+                why = (
+                    ReviewReason.OUTSIDE_JOB
+                    if outside
+                    else ReviewReason.CLOSED_DAY
+                    if day in closed
+                    else in_doubt.get((job.pk, day))
+                )
+                if why is not None:
+                    result = replace(result, status=DayStatus.NEEDS_REVIEW, fine=NO_FINE, reason=why)
                 answered.append(_worked_out(shop, job, day, result, rules_used))
         # Kept as the book, never as the person whose visit asked for the month. The edit history's trigger names
         # whoever the visit's note says acts (apps/core/acting.py): Meneja opens November (ATT-5), and Asha's Monday,
@@ -193,6 +213,7 @@ def _off(shop: Shop, job: StaffMember, day: dt.date) -> AttendanceDay:
         first_in=None,
         first_out=None,
         rules_used={},
+        review_reason="",
     )
 
 
@@ -211,6 +232,8 @@ def _worked_out(
         # A copy for each day (T4): one day's rules are never another's object, so nothing done to one could reach
         # the other.
         rules_used=dict(rules_used),
+        # Why it needs a decision, on a day that does (ATT-5); empty on any other, as the table keeps "no reason".
+        review_reason=result.reason or "",
     )
 
 
@@ -226,11 +249,13 @@ def _answer_log() -> Any:
 type _JobDay = tuple[uuid.UUID, dt.date]
 
 
-def _taps(shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo) -> tuple[dict[_JobDay, list[Tap]], set[_JobDay]]:
+def _taps(
+    shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo
+) -> tuple[dict[_JobDay, list[Tap]], dict[_JobDay, ReviewReason]]:
     # Each job's taps on each date from `first` to `last`, as the rule reads them, and the days with a tap in doubt,
-    # which a person must decide (ATT-11). A day's edges are the shop's own midnights, not UTC's: Asha's tap at 21:30
-    # UTC on Monday is Tuesday's, at 00:30 in Arusha. So the span is read from the midnight starting its first day to
-    # the one ending its last, each a moment with its zone.
+    # which a person must decide (ATT-11), each with why (ATT-5). A day's edges are the shop's own midnights, not
+    # UTC's: Asha's tap at 21:30 UTC on Monday is Tuesday's, at 00:30 in Arusha. So the span is read from the midnight
+    # starting its first day to the one ending its last, each a moment with its zone.
     start = dt.datetime.combine(first, dt.time.min, tzinfo=zone)
     end = dt.datetime.combine(last + dt.timedelta(days=1), dt.time.min, tzinfo=zone)
     # A tap whose maker wasn't working when they made it: Baba suspended Juma at 11:00, and the laptop, offline, let his
@@ -274,7 +299,7 @@ def _taps(shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo) -> tuple[di
         )
     )
     taps: dict[_JobDay, list[Tap]] = defaultdict(list)
-    in_doubt: set[_JobDay] = set()
+    in_doubt: dict[_JobDay, ReviewReason] = {}
     for staff_id, kind, trusted_time, client_time, time_check, not_working, disputed in lines:
         # Its date on the shop's calendar, by its trusted time, or by the laptop's for one with none.
         day = (trusted_time if trusted_time is not None else client_time).astimezone(zone).date()
@@ -284,9 +309,12 @@ def _taps(shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo) -> tuple[di
         taps[(staff_id, day)].append(Tap(ClockKind(kind), minute))
         # In doubt: made while its worker wasn't working, or timed by a laptop clock a later tap disagrees with. Only
         # by the laptop's clock (`device_ok`): a tap sent at once has the server's time, which no laptop's clock can
-        # make wrong, and one with no trusted time sends its day to review already (ATT-4).
-        if not_working or (disputed and time_check == TimeCheck.DEVICE_OK):
-            in_doubt.add((staff_id, day))
+        # make wrong, and one with no trusted time sends its day to review already (ATT-4). A day with both says the
+        # first, in ReviewReason's order (ATT-5): whether a suspended worker is paid at all comes before his time.
+        if not_working:
+            in_doubt[(staff_id, day)] = ReviewReason.NOT_WORKING
+        elif disputed and time_check == TimeCheck.DEVICE_OK:
+            in_doubt.setdefault((staff_id, day), ReviewReason.CLOCK_DISAGREES)
     return taps, in_doubt
 
 

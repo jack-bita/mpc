@@ -10,7 +10,7 @@ The day's rule (ATT-4, spec §8.1): what one worker's day was, from that day's t
     in 07:20, out 18:40   → on time            in 08:10, out 18:40   → late, the second fine
     in 07:50, out 18:40   → late, first fine    in 12:30, out 18:40   → the afternoon's half day
     in 07:20, out 13:10   → the morning's half  in 07:50, out 13:10   → the morning's half, less the first fine
-    in 09:00, or no out   → dharura, a manager or the owner decides it
+    in 09:00, or no out   → dharura, a manager or the owner decides it, told why: came late, or no Toka (ATT-5)
 
 Every window of the owner's day is a minute on the shop's clock, which shop_minute reads from a tap's time. The rule
 only answers: ATT-10 finds the taps and the rules in force that day, hands them in, and keeps the answer. Server only
@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
-from apps.staffpay.models import ClockKind, DayStatus, TimeCheck
+from apps.staffpay.models import ClockKind, DayStatus, ReviewReason, TimeCheck
 
 # A clock-in the laptop sent within 2 minutes of the tap, both by its own clock, was made online: the push runs 2
 # seconds after a new record (03 §6.5), and a retry or two still fits. Its time is the server's time of the tap: the
@@ -166,10 +166,19 @@ class DayResult:
     # two taps the answer read, the first clock-in and the first clock-out after it, which ended the day, for a manager
     # to see beside it (ATT-5). Both are taps with a time trusted: on a day sent to a manager for a tap whose time
     # can't be trusted, they may not be the day's real first Ingia or Toka, so a screen shows them as taps, not facts.
+    # And why a day needs a manager (ATT-5): a reason on a day to decide, and only there.
     status: DayStatus
     fine: Decimal
     first_in: dt.time | None
     first_out: dt.time | None
+    reason: ReviewReason | None = None
+
+    def __post_init__(self) -> None:
+        # A day sent to a manager with no reason would leave them guessing, and a reason on any other day would put it
+        # on the month page's list for nothing: either is a bug in our code, so it fails here, before the book keeps
+        # it, as the table's own rule would refuse the second (staffpay_attendanceday_reason_only_to_decide).
+        if (self.status == DayStatus.NEEDS_REVIEW) != (self.reason is not None):
+            raise ValueError("A day says why exactly when it needs review.")
 
 
 def work_out_day(taps: Sequence[Tap], rules: DayRules) -> DayResult:
@@ -187,12 +196,19 @@ def work_out_day(taps: Sequence[Tap], rules: DayRules) -> DayResult:
     # review; ATT-6). A Toka before any Ingia ends no day; with no Ingia at all, the first Toka is kept for the manager.
     outs = sorted(tap.minute for tap in taps if tap.kind == ClockKind.OUT and tap.minute is not None)
     first_out = next((minute for minute in outs if first_in is None or minute >= first_in), None)
-    dharura = DayResult(DayStatus.NEEDS_REVIEW, NO_FINE, first_in, first_out)
+
+    def dharura(why: ReviewReason) -> DayResult:
+        # The owner's dharura, with why, for whoever decides it (ATT-5): its taps kept beside it, and no fine yet.
+        return DayResult(DayStatus.NEEDS_REVIEW, NO_FINE, first_in, first_out, why)
+
     # A tap whose time can't be trusted (`unverified`, ATT-1): the laptop's clock moved, for that tap or for the one
-    # before it, so no window can be read, whatever the other taps say (02 §12). And a Toka with no Ingia: nobody knows
-    # when they came, so nobody knows the fine. A manager decides both.
-    if first_in is None or any(tap.minute is None for tap in taps):
-        return dharura
+    # before it, so no window can be read, whatever the other taps say (02 §12). First, as the manager should look at
+    # the laptop's clock, not ask whether they came: an Ingia whose time is lost still says they did.
+    if any(tap.minute is None for tap in taps):
+        return dharura(ReviewReason.TIME_UNKNOWN)
+    # A Toka with no Ingia: nobody knows when they came, so nobody knows the fine.
+    if first_in is None:
+        return dharura(ReviewReason.NO_IN)
     # Arriving, window by window in the owner's order. "By" and "from" take their own minute, "before" doesn't:
     # 07:35 is on time, 08:00 takes the second fine.
     if first_in <= rules.on_time_until:
@@ -206,10 +222,11 @@ def work_out_day(taps: Sequence[Tap], rules: DayRules) -> DayResult:
         # afternoon is not arriving late.
         if first_out is not None and first_out >= rules.closing:
             return DayResult(DayStatus.HALF, NO_FINE, first_in, first_out)
-        return dharura
+        return dharura(ReviewReason.NO_OUT if first_out is None else ReviewReason.LEFT_EARLY)
     else:
-        # From 08:30 and before 12:00, or after 13:00: the owner's dharura.
-        return dharura
+        # From 08:30 and before 12:00, or after 13:00: the owner's dharura. Their arrival is why, read before their
+        # leaving, whether they tapped Toka or not: "alifika saa 09:00" says more than "hakuna Toka".
+        return dharura(ReviewReason.CAME_LATE)
     # Leaving, after a morning arrival: from closing, the full day, or the late one with its fine. A fine of 0, as a
     # shop starts with (ATT-2), still makes the day late, with nothing taken off.
     if first_out is not None and first_out >= rules.closing:
@@ -220,4 +237,4 @@ def work_out_day(taps: Sequence[Tap], rules: DayRules) -> DayResult:
         return DayResult(DayStatus.HALF, fine, first_in, first_out)
     # Leaving before midday, after 13:30 and before closing, or never clocking out: the owner's dharura, as nobody
     # knows which half was worked, or when they left (02 §20, item 6).
-    return dharura
+    return dharura(ReviewReason.NO_OUT if first_out is None else ReviewReason.LEFT_EARLY)

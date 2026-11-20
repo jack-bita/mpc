@@ -10,6 +10,9 @@ Each row of the owner's table in spec §8.1 is a test named after it, so the cod
     no tap    absent · a tap whose time can't be trusted, or a Toka with no Ingia: dharura
     Toka      ends the day: the first one after the first Ingia counts, and no tap after it (no lunch Toka at MPC)
 
+A day of dharura says why, for the person who decides it (ATT-5): the time can't be trusted, no Ingia, came late, no
+Toka, or left early, the first that holds in the rule's own order. Every dharura below names its reason.
+
 Every window is a minute on the shop's clock, as the counter shows it (SYNC-11): a tap's seconds never count, and the
 server's UTC is never the shop's time; shop_minute turns a tap's time into that minute. Pure: no database, no clock of
 its own. The fines are the demo's made-up 500 and 1,500: the repo is public, so no real amount (rule 10).
@@ -23,7 +26,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from apps.staffpay.calculations import NO_FINE, DayResult, DayRules, Tap, shop_minute, work_out_day
-from apps.staffpay.models import ClockKind, DayStatus
+from apps.staffpay.models import ClockKind, DayStatus, ReviewReason
 
 ARUSHA = ZoneInfo("Africa/Dar_es_Salaam")
 FIRST_FINE = Decimal("500.00")
@@ -60,14 +63,24 @@ def day(arrives: str | None, leaves: str | None = None, rules: DayRules = OWNERS
     return work_out_day(taps, rules)
 
 
-def dharura(arrives: str | None, leaves: str | None) -> DayResult:
-    # A day that needs review: no fine, as a manager or the owner decides it (ATT-6); its taps kept, for them to see.
+def dharura(arrives: str | None, leaves: str | None, why: ReviewReason) -> DayResult:
+    # A day that needs review: no fine, as a manager or the owner decides it (ATT-6); its taps kept, for them to see,
+    # and why it needs them (ATT-5).
     return DayResult(
         DayStatus.NEEDS_REVIEW,
         NO_FINE,
         None if arrives is None else at(arrives),
         None if leaves is None else at(leaves),
+        why,
     )
+
+
+# Each reason by a short name, for the tables of edges below.
+TIME_UNKNOWN = ReviewReason.TIME_UNKNOWN
+NO_IN = ReviewReason.NO_IN
+CAME_LATE = ReviewReason.CAME_LATE
+NO_OUT = ReviewReason.NO_OUT
+LEFT_EARLY = ReviewReason.LEFT_EARLY
 
 
 def test_shop_minute_reads_the_shops_clock() -> None:
@@ -115,7 +128,7 @@ def test_arrives_0810_full_day_minus_the_second_fine() -> None:
 
 
 def test_arrives_0900_needs_review() -> None:
-    assert day("09:00", CLOSING) == dharura("09:00", CLOSING)
+    assert day("09:00", CLOSING) == dharura("09:00", CLOSING, CAME_LATE)
 
 
 def test_arrives_1230_half_day() -> None:
@@ -124,7 +137,7 @@ def test_arrives_1230_half_day() -> None:
 
 
 def test_arrives_1330_needs_review() -> None:
-    assert day("13:30", CLOSING) == dharura("13:30", CLOSING)
+    assert day("13:30", CLOSING) == dharura("13:30", CLOSING, CAME_LATE)
 
 
 # The edges: "by" and "from" take their own minute, "before" and "after" don't (02 §12). One minute either side of
@@ -132,22 +145,24 @@ def test_arrives_1330_needs_review() -> None:
 
 
 @pytest.mark.parametrize(
-    ("arrives", "status", "fine"),
+    ("arrives", "status", "fine", "why"),
     [
-        ("07:35", DayStatus.ON_TIME, NO_FINE),  # by 07:35: on time
-        ("07:36", DayStatus.LATE, FIRST_FINE),  # after it: the first fine
-        ("07:59", DayStatus.LATE, FIRST_FINE),  # before 08:00: still the first
-        ("08:00", DayStatus.LATE, SECOND_FINE),  # from 08:00: the second
-        ("08:29", DayStatus.LATE, SECOND_FINE),  # before 08:30: still the second
-        ("08:30", DayStatus.NEEDS_REVIEW, NO_FINE),  # from 08:30: dharura
-        ("11:59", DayStatus.NEEDS_REVIEW, NO_FINE),  # before 12:00: still dharura
-        ("12:00", DayStatus.HALF, NO_FINE),  # from 12:00: the afternoon's half day
-        ("13:00", DayStatus.HALF, NO_FINE),  # to 13:00: still the afternoon's
-        ("13:01", DayStatus.NEEDS_REVIEW, NO_FINE),  # after 13:00: dharura
+        ("07:35", DayStatus.ON_TIME, NO_FINE, None),  # by 07:35: on time
+        ("07:36", DayStatus.LATE, FIRST_FINE, None),  # after it: the first fine
+        ("07:59", DayStatus.LATE, FIRST_FINE, None),  # before 08:00: still the first
+        ("08:00", DayStatus.LATE, SECOND_FINE, None),  # from 08:00: the second
+        ("08:29", DayStatus.LATE, SECOND_FINE, None),  # before 08:30: still the second
+        ("08:30", DayStatus.NEEDS_REVIEW, NO_FINE, CAME_LATE),  # from 08:30: dharura, as they came late
+        ("11:59", DayStatus.NEEDS_REVIEW, NO_FINE, CAME_LATE),  # before 12:00: still dharura
+        ("12:00", DayStatus.HALF, NO_FINE, None),  # from 12:00: the afternoon's half day
+        ("13:00", DayStatus.HALF, NO_FINE, None),  # to 13:00: still the afternoon's
+        ("13:01", DayStatus.NEEDS_REVIEW, NO_FINE, CAME_LATE),  # after 13:00: dharura, as they came late
     ],
 )
-def test_each_arrival_window_takes_its_own_minute(arrives: str, status: DayStatus, fine: Decimal) -> None:
-    assert day(arrives, CLOSING) == DayResult(status, fine, at(arrives), at(CLOSING))
+def test_each_arrival_window_takes_its_own_minute(
+    arrives: str, status: DayStatus, fine: Decimal, why: ReviewReason | None
+) -> None:
+    assert day(arrives, CLOSING) == DayResult(status, fine, at(arrives), at(CLOSING), why)
 
 
 def test_a_tap_at_073540_is_on_time() -> None:
@@ -180,16 +195,16 @@ def test_arrives_0720_leaves_1310_half_day() -> None:
 
 
 def test_arrives_0720_leaves_1200_needs_review() -> None:
-    assert day("07:20", "12:00") == dharura("07:20", "12:00")
+    assert day("07:20", "12:00") == dharura("07:20", "12:00", LEFT_EARLY)
 
 
 def test_arrives_0720_leaves_1600_needs_review() -> None:
-    assert day("07:20", "16:00") == dharura("07:20", "16:00")
+    assert day("07:20", "16:00") == dharura("07:20", "16:00", LEFT_EARLY)
 
 
 def test_arrives_0720_never_clocks_out_needs_review() -> None:
     # No Toka: nobody knows when they left, so a manager decides (02 §20, item 6).
-    assert day("07:20") == dharura("07:20", None)
+    assert day("07:20") == dharura("07:20", None, NO_OUT)
 
 
 def test_arrives_0750_leaves_1310_half_day_minus_fine() -> None:
@@ -201,35 +216,35 @@ def test_arrives_0750_leaves_1310_half_day_minus_fine() -> None:
 
 def test_arrives_1230_leaves_1600_needs_review() -> None:
     # The afternoon's half day stays until closing (02 §12): leaving at 16:00, nobody knows what half it was.
-    assert day("12:30", "16:00") == dharura("12:30", "16:00")
+    assert day("12:30", "16:00") == dharura("12:30", "16:00", LEFT_EARLY)
 
 
 def test_arrives_1230_leaves_1310_needs_review() -> None:
     # The morning's half-day window is for a morning arrival: Rehema, in at 12:30 for the afternoon, out at 13:10,
     # worked forty minutes of neither half, so a manager decides.
-    assert day("12:30", "13:10") == dharura("12:30", "13:10")
+    assert day("12:30", "13:10") == dharura("12:30", "13:10", LEFT_EARLY)
 
 
 def test_a_late_day_sent_to_review_takes_no_fine() -> None:
     # Juma is late at 07:50 and leaves at 16:00, or never taps Toka: the day goes to a manager with no fine, as they
     # decide what it was (ATT-6); the late arrival stays on it for them to see.
-    assert day("07:50", "16:00") == dharura("07:50", "16:00")
-    assert day("07:50") == dharura("07:50", None)
+    assert day("07:50", "16:00") == dharura("07:50", "16:00", LEFT_EARLY)
+    assert day("07:50") == dharura("07:50", None, NO_OUT)
 
 
 @pytest.mark.parametrize(
-    ("leaves", "status"),
+    ("leaves", "status", "why"),
     [
-        ("12:59", DayStatus.NEEDS_REVIEW),  # before 13:00: dharura
-        ("13:00", DayStatus.HALF),  # from 13:00: the morning's half day
-        ("13:30", DayStatus.HALF),  # to 13:30: still the morning's
-        ("13:31", DayStatus.NEEDS_REVIEW),  # after 13:30, and before 18:40: dharura
-        ("18:39", DayStatus.NEEDS_REVIEW),  # before 18:40: still dharura
-        ("18:40", DayStatus.ON_TIME),  # from 18:40: the full day
+        ("12:59", DayStatus.NEEDS_REVIEW, LEFT_EARLY),  # before 13:00: dharura, as they left early
+        ("13:00", DayStatus.HALF, None),  # from 13:00: the morning's half day
+        ("13:30", DayStatus.HALF, None),  # to 13:30: still the morning's
+        ("13:31", DayStatus.NEEDS_REVIEW, LEFT_EARLY),  # after 13:30, and before 18:40: dharura
+        ("18:39", DayStatus.NEEDS_REVIEW, LEFT_EARLY),  # before 18:40: still dharura
+        ("18:40", DayStatus.ON_TIME, None),  # from 18:40: the full day
     ],
 )
-def test_each_leaving_window_takes_its_own_minute(leaves: str, status: DayStatus) -> None:
-    assert day("07:20", leaves) == DayResult(status, NO_FINE, at("07:20"), at(leaves))
+def test_each_leaving_window_takes_its_own_minute(leaves: str, status: DayStatus, why: ReviewReason | None) -> None:
+    assert day("07:20", leaves) == DayResult(status, NO_FINE, at("07:20"), at(leaves), why)
 
 
 # The days the table has no time for: no tap, or a tap that can't be read.
@@ -245,16 +260,17 @@ def test_a_tap_with_no_trusted_time_needs_review() -> None:
     # laptop's clock moved, for that tap or for the one before it, so her 07:20 can't be believed either. Whatever the
     # other taps say, a manager decides.
     taps = [Tap(ClockKind.IN, at("07:20")), Tap(ClockKind.IN, None), Tap(ClockKind.OUT, at(CLOSING))]
-    assert work_out_day(taps, OWNERS_DAY) == dharura("07:20", CLOSING)
-    # And Juma's only Ingia can't be trusted: his Toka alone says nothing of when he came.
+    assert work_out_day(taps, OWNERS_DAY) == dharura("07:20", CLOSING, TIME_UNKNOWN)
+    # And Juma's only Ingia can't be trusted: his Toka alone says nothing of when he came. Its time is why, not a
+    # missing Ingia: he did tap one, and the manager should look at the laptop's clock, not ask whether he came.
     assert work_out_day([Tap(ClockKind.IN, None), Tap(ClockKind.OUT, at(CLOSING))], OWNERS_DAY) == dharura(
-        None, CLOSING
+        None, CLOSING, TIME_UNKNOWN
     )
 
 
 def test_clock_out_without_clock_in_needs_review() -> None:
     # Toka at 18:40 and no Ingia: nobody knows when they came, so nobody knows the fine.
-    assert day(None, CLOSING) == dharura(None, CLOSING)
+    assert day(None, CLOSING) == dharura(None, CLOSING, NO_IN)
 
 
 def test_the_first_toka_ends_the_day() -> None:
@@ -269,7 +285,7 @@ def test_the_first_toka_ends_the_day() -> None:
     assert work_out_day(juma, OWNERS_DAY) == DayResult(DayStatus.HALF, NO_FINE, at("07:20"), at("13:05"))
     # Mparee taps Toka by mistake at 11:06, and Ingia again at 11:07: his day ended before midday, so a manager decides.
     mparee = [Tap(ClockKind.IN, at("07:20")), Tap(ClockKind.OUT, at("11:06")), Tap(ClockKind.IN, at("11:07"))]
-    assert work_out_day(mparee, OWNERS_DAY) == dharura("07:20", "11:06")
+    assert work_out_day(mparee, OWNERS_DAY) == dharura("07:20", "11:06", LEFT_EARLY)
 
 
 def test_a_tap_made_twice_counts_once() -> None:
@@ -295,3 +311,27 @@ def test_a_fine_is_a_decimal() -> None:
     # values alone would not catch a float. Every kind of day, then, its fine's own type.
     for result in (day("07:20", CLOSING), day("07:50", CLOSING), day("07:50", "13:10"), day("09:00"), day(None)):
         assert type(result.fine) is Decimal
+
+
+# Why a day needs a decision (ATT-5): one reason a day, for the person who decides it.
+
+
+def test_a_late_arrival_with_no_toka_says_came_late() -> None:
+    # Juma comes at 09:00 and never taps Toka: two things are wrong, and the day says the first in the rule's order,
+    # his arrival, as it is read before his leaving. "Alifika saa 09:00" tells the manager more than "hakuna Toka".
+    assert day("09:00") == dharura("09:00", None, CAME_LATE)
+
+
+def test_a_day_not_to_decide_has_no_reason() -> None:
+    # On time, late, half or absent: the rule had its answer, so nobody needs to be told why.
+    for result in (day("07:20", CLOSING), day("07:50", CLOSING), day("07:20", "13:10"), day(None)):
+        assert result.reason is None
+
+
+def test_a_result_says_why_exactly_when_it_needs_a_decision() -> None:
+    # A bug that sent a day to review with no reason would leave the manager guessing, and a reason on an on-time day
+    # would put it on the list for nothing: both fail loudly, before the book keeps them.
+    with pytest.raises(ValueError, match="why"):
+        DayResult(DayStatus.NEEDS_REVIEW, NO_FINE, at("07:20"), None)
+    with pytest.raises(ValueError, match="why"):
+        DayResult(DayStatus.ON_TIME, NO_FINE, at("07:20"), at(CLOSING), NO_OUT)
