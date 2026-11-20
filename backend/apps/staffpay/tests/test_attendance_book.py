@@ -1006,3 +1006,30 @@ def test_a_day_kept_before_gets_its_reason(shop_a: Shop, device_a: Device, asha:
         change = EditEvent.objects.filter(subject_type="attendance_day", subject_id=kept.pk).latest("created_at")
     assert (again.pk, kept.review_reason) == (kept.pk, ReviewReason.NO_OUT)
     assert (change.created_by_id, change.after["review_reason"]) == (None, ReviewReason.NO_OUT)
+
+
+def test_outside_the_jobs_days_comes_before_a_closed_day(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
+    # Neema's first day is Thursday 12th, but she tapped on Tuesday 10th, a day the shop was closed for a funeral. Two
+    # of the book's reasons hold; the first in ReviewReason's order is said: the day wasn't one of her job's at all,
+    # which the manager settles first, by her first day (ATT-5's review).
+    neema = _worker(shop_a, "Neema", started_on=NOV_12)
+    _closure(shop_a, NOV_10, NOV_10)
+    _came(device_a, neema, NOV_10)
+    assert _days(shop_a, NOV_10, NOV_10)[("Neema", NOV_10)].review_reason == ReviewReason.OUTSIDE_JOB
+
+
+def test_a_suspension_comes_before_a_disagreement_on_one_day(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # On each of two days one of Juma's taps was made while he was suspended, and the other is one a later tap's time
+    # disagrees with: on Monday the disputed one comes first, on Tuesday the flagged one. Whatever order the taps are
+    # read in, the day says the suspension, as whether he is paid at all comes before his time (ATT-5's review).
+    for day, flagged_first in ((MONDAY, False), (TUESDAY, True)):
+        ingia = tap(device_a, juma, ClockKind.IN, at(day, 7, 20))
+        toka = tap(device_a, juma, ClockKind.OUT, at(day, 18, 45))
+        flagged, disputed = (ingia, toka) if flagged_first else (toka, ingia)
+        _flag_its_line(flagged)
+        tap(device_a, asha, ClockKind.OUT, at(day, 18, 30), check=TimeCheck.UNVERIFIED, disagrees_with=disputed.pk)
+    days = _days(shop_a, MONDAY, TUESDAY)
+    assert days[("Juma", MONDAY)].review_reason == ReviewReason.NOT_WORKING
+    assert days[("Juma", TUESDAY)].review_reason == ReviewReason.NOT_WORKING
