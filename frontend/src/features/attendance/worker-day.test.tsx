@@ -318,6 +318,12 @@ describe("a day under the calendar", () => {
           tap({
             date: "2026-11-12",
             kind: "out",
+            time: "18:45",
+            doubt: "clock_disagrees",
+          }),
+          tap({
+            date: "2026-11-12",
+            kind: "out",
             time: null,
             laptop_time: "18:30",
           }),
@@ -331,6 +337,10 @@ describe("a day under the calendar", () => {
     const open = await theDay("Alhamisi 12/11/2026");
     expect(
       within(open).getByText("Shaka: alikuwa amesimamishwa au ameondoka"),
+    ).toBeTruthy();
+    // The other doubt, in words of its own: never "Shaka: saa yake ina shaka".
+    expect(
+      within(open).getByText("Shaka: huenda saa ya kompyuta ilibadilishwa"),
     ).toBeTruthy();
     expect(
       within(open).getByText(

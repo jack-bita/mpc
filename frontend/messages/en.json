@@ -792,6 +792,10 @@
     "tapLine": "{kind} {time} · {laptop}",
     "laptopTime": "{time} (the laptop's clock, not trusted)",
     "doubt": "In doubt: {why}",
+    "doubtWhy": {
+      "not_working": "suspended or gone",
+      "clock_disagrees": "the laptop's clock may have been changed"
+    },
     "photoAlt": "{name}'s photo, {kind} {time}",
     "photoWaiting": "The photo hasn't arrived yet.",
     "photoRemoved": "The photo was removed.",

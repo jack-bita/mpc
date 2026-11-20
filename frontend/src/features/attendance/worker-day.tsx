@@ -151,7 +151,6 @@ function Kept({ day, answer }: { day: WorkerDay; answer: WorkerAttendance }) {
 /** One tap: "Ingia 07:20 asubuhi · Laptop ya Dawa", why it is in doubt, then its photo or why there is none. */
 function Tap({ tap, name }: { tap: AttendanceTap; name: string }) {
   const t = useTranslations("attendanceWorker");
-  const monthWords = useTranslations("attendanceMonth");
   const attendance = useTranslations("attendance");
   // The time the server trusts, with its part of the day, so nobody reads 13:20 as Swahili time (Jack, SYNC-11); or,
   // for a tap whose time it doesn't trust, the laptop's own, said to be the laptop's.
@@ -165,10 +164,11 @@ function Tap({ tap, name }: { tap: AttendanceTap; name: string }) {
   return (
     <div className="grid gap-2">
       <p>{t("tapLine", { kind, time, laptop: tap.laptop })}</p>
-      {/* The tap itself in doubt (ATT-11): its worker was suspended or gone, or a later tap's time disagrees. */}
+      {/* The tap itself in doubt (ATT-11): its worker was suspended or gone, or a later tap's time disagrees, said in
+          words of its own, as the day's "saa yake ina shaka" after "Shaka:" said doubt twice (ATT-12's review). */}
       {tap.doubt !== null ? (
         <p className="font-semibold">
-          {t("doubt", { why: monthWords(`reason.${tap.doubt}`, { time: "" }) })}
+          {t("doubt", { why: t(`doubtWhy.${tap.doubt}`) })}
         </p>
       ) : null}
       {tap.photo?.state === "kept" && photoFailed ? (

@@ -792,6 +792,10 @@
     "tapLine": "{kind} {time} · {laptop}",
     "laptopTime": "{time} (saa ya kompyuta, haiaminiki)",
     "doubt": "Shaka: {why}",
+    "doubtWhy": {
+      "not_working": "alikuwa amesimamishwa au ameondoka",
+      "clock_disagrees": "huenda saa ya kompyuta ilibadilishwa"
+    },
     "photoAlt": "Picha ya {name}, {kind} {time}",
     "photoWaiting": "Picha bado haijafika.",
     "photoRemoved": "Picha imeondolewa.",
