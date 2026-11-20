@@ -367,6 +367,9 @@ describe("the month page", () => {
 
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
+    // No ‹ › either: each press would only ask again and be refused again (the review).
+    expect(screen.queryByRole("button", { name: "Mwezi uliopita" })).toBeNull();
+    expect(screen.queryByRole("navigation")).toBeNull();
   });
 
   it("says to wait while it asks, so the page is never blank", () => {

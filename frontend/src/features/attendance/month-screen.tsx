@@ -35,6 +35,7 @@ import { DaysToDecide } from "./to-decide";
 import {
   type AttendanceMonth,
   isMonth,
+  mayManageAttendance,
   MONTH_PARAM,
   monthAfter,
   monthBefore,
@@ -87,7 +88,13 @@ export function MonthScreen({ asked }: { asked: string | null }) {
       </p>
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
-      {month !== null && thisMonth !== null ? (
+      {/* Only for someone who may see a month: a seller who opened the address sees the server's refusal alone, with no
+          ‹ › to press, as each press would only ask again and be refused again (the review). The server still asks
+          the key on every read. */}
+      {month !== null &&
+      thisMonth !== null &&
+      who.data &&
+      mayManageAttendance(who.data) ? (
         <MonthSwitch month={month} thisMonth={thisMonth} onChoose={choose} />
       ) : null}
       {/* The month is asked here alone and its answer handed down as values, never asked again by the part that shows
