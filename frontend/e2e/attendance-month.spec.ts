@@ -83,9 +83,9 @@ test("Meneja sees the demo's month, a line per worker and Asha's day to decide",
       ).toBeVisible();
     }
     // The line's last count is the days to decide (✓ Ch ½ H !, month-screen.tsx).
-    const asha = workers
-      .getByRole("row")
-      .filter({ has: phone.getByRole("rowheader", { name: "Asha" }) });
+    const asha = workers.getByRole("row").filter({
+      has: phone.getByRole("rowheader", { name: "Asha", exact: true }),
+    });
     await expect(asha.getByRole("cell").last()).toHaveText("1");
   });
 });
