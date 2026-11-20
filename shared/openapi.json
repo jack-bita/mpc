@@ -5500,6 +5500,10 @@
             "WorkerDay": {
                 "type": "object",
                 "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
                     "date": {
                         "type": "string",
                         "format": "date"
@@ -5555,6 +5559,7 @@
                     "fine",
                     "first_in",
                     "first_out",
+                    "id",
                     "reason",
                     "status"
                 ]

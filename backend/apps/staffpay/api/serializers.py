@@ -182,6 +182,8 @@ class WorkerDaySerializer(serializers.Serializer[Any]):
     # the book's codes, which the page says in its language, ADR-0040), else null, and its fine, a string (rule 3). The
     # fine is the shop's own rule, which anyone working there may read; never the worker's rate or the day's pay. And
     # the two taps the rule read, as minutes on the shop's clock, for "alifika saa 09:10", as DayToDecide sends them.
+    # Its id, the address the sheet sends a decision on it to (attendance-days/{id}/decide/, ATT-6).
+    id = serializers.UUIDField()
     date = serializers.DateField()
     status = serializers.ChoiceField(choices=DayStatus.choices)
     reason = serializers.ChoiceField(choices=ReviewReason.choices, allow_null=True)

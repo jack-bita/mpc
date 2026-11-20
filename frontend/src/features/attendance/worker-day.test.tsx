@@ -62,6 +62,8 @@ function day(
   fields: Partial<WorkerDay> & Pick<WorkerDay, "date" | "status">,
 ): WorkerDay {
   return {
+    // Each day its own id, made from its date, as the server sends one.
+    id: `019a8400-0000-7000-9000-${fields.date.replaceAll("-", "").padStart(12, "0")}`,
     reason: null,
     fine: "0.00",
     first_in: null,

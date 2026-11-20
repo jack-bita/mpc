@@ -1786,6 +1786,8 @@ export interface components {
             ready_reasons: components["schemas"]["ReadyReasonsEnum"][];
         };
         WorkerDay: {
+            /** Format: uuid */
+            id: string;
             /** Format: date */
             date: string;
             status: components["schemas"]["DayStatusEnum"];

@@ -23,7 +23,7 @@ from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff
 from apps.shops.models import Setting, Shop
 from apps.shops.selectors import shop_today
-from apps.staffpay.models import AttendanceEvent, ClockKind, TimeCheck
+from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, TimeCheck
 from apps.staffpay.services import set_pay_rate
 
 pytestmark = pytest.mark.django_db
@@ -112,7 +112,10 @@ def test_the_workers_month_as_the_page_reads_it(
     # Each with no decision yet, and the sheet's lines it may take (ATT-6), each with its fine: this shop has typed no
     # fine, so every one is 0.00; the 1st, with no Ingia, can't be called late.
     nothing = "0.00"
+    with shop_context(shop_a):
+        kept = {str(day.date): str(day.pk) for day in AttendanceDay.objects.filter(staff=asha, date__month=10)}
     assert answer["days"][1] == {
+        "id": kept["2026-10-02"],
         "date": "2026-10-02",
         "status": "needs_review",
         "reason": "came_late",
@@ -126,6 +129,7 @@ def test_the_workers_month_as_the_page_reads_it(
         ],
     }
     assert answer["days"][0] == {
+        "id": kept["2026-10-01"],
         "date": "2026-10-01",
         "status": "absent",
         "reason": None,

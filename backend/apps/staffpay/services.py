@@ -579,6 +579,8 @@ class WorkerDay:
     # on a day to decide, and its fine. The fine is the shop's own rule, which anyone working there may read on the
     # rules page, never the worker's rate or the day's pay (WAGE-1). And the two taps the rule read, the first Ingia and
     # the first Toka after it, for the reason that names one, "alifika saa 09:10", as the month page's list says it.
+    # Its id: the address a decision on it is sent to (attendance-days/{id}/decide/, ATT-6).
+    id: uuid.UUID
     date: dt.date
     status: DayStatus
     reason: ReviewReason | None
@@ -705,6 +707,7 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
         left_on=job.left_on,
         days=[
             WorkerDay(
+                id=day.pk,
                 date=day.date,
                 status=DayStatus(day.status),
                 # The table keeps "no reason" as empty (ATT-5): said as None.

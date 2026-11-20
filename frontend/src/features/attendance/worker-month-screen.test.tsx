@@ -40,6 +40,8 @@ const MENEJA: components["schemas"]["WhoIsHere"] = {
 /** A day of Juma's November, as the book keeps it. */
 function day(date: number, status: WorkerDay["status"]): WorkerDay {
   return {
+    // Each day its own id, made from its date, as the server sends one.
+    id: `019a8400-0000-7000-9000-${String(date).padStart(12, "0")}`,
     date: `2026-11-${String(date).padStart(2, "0")}`,
     status,
     reason: status === "needs_review" ? "no_out" : null,
