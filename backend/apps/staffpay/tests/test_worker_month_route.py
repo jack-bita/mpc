@@ -151,3 +151,12 @@ def test_no_month_is_refused(staff_client_a: APIClient, asha: StaffMember) -> No
     reply = staff_client_a.get(worker_url(asha.pk))
     assert reply.status_code == 400
     assert reply.json()["fields"]["month"] == ["required"]
+
+
+def test_the_calendars_last_month_answers_nothing(staff_client_a: APIClient, asha: StaffMember) -> None:
+    # Someone types ?month=9999-12 into the worker page's address. No day of it is over and no tap can be in it, so the
+    # answer is an empty month: never a server error from reading past the calendar's last day (ATT-12's review, as
+    # ATT-5's on the month page).
+    reply = staff_client_a.get(worker_url(asha.pk), {"month": "9999-12"})
+    assert reply.status_code == 200
+    assert (reply.json()["days"], reply.json()["taps"]) == ([], [])

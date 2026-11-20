@@ -568,27 +568,37 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAtt
     days = [day for day in work_out_days(shop, first, last) if day.staff_id == job.pk]
     kinds = Counter(day.status for day in days if day.status != DayStatus.OFF)
     zone = ZoneInfo(shop.timezone)
+    today = shop_today(shop)
+    # The taps up to today, the last day the calendar shows: a day to come has none to show. And never read past the
+    # month's end into the day after it: in the calendar's last month, December 9999, that day is past the last one
+    # Python knows, and a month typed into the address was a server error, as on the month page before (ATT-12's
+    # review, ATT-5's). A month to come has no tap at all, and nothing is read.
+    taps_until = min(last, today)
     # The job's taps of the month, in one read, today's too: the book keeps no day until it is over (ATT-10), so
     # today's taps are read here as they come. Each with its laptop's name, joined in the same read, and the two
     # questions of doubt the book asks (_doubt_questions). A voided tap counts for nothing (T2), and the book doesn't
     # read it, so nor does this: ATT-6, which voids one, shows them crossed out (A2). In the order they were made, by
     # the time the book places them by, then by the laptop's own numbering, as two taps can share a minute.
     asks_not_working, asks_disputed = _doubt_questions(shop)
-    lines = list(
-        AttendanceEvent.objects.filter(shop=shop, staff=job, voided_at__isnull=True)
-        .filter(_falls_between(first, last, zone))
-        .annotate(maker_not_working=asks_not_working, disagreed_with=asks_disputed)
-        .order_by(Coalesce("trusted_time", "client_time"), "device_seq")
-        .values_list(
-            "pk",
-            "kind",
-            "trusted_time",
-            "client_time",
-            "time_check",
-            "device__name",
-            "no_photo",
-            "maker_not_working",
-            "disagreed_with",
+    lines = (
+        []
+        if taps_until < first
+        else list(
+            AttendanceEvent.objects.filter(shop=shop, staff=job, voided_at__isnull=True)
+            .filter(_falls_between(first, taps_until, zone))
+            .annotate(maker_not_working=asks_not_working, disagreed_with=asks_disputed)
+            .order_by(Coalesce("trusted_time", "client_time"), "device_seq")
+            .values_list(
+                "pk",
+                "kind",
+                "trusted_time",
+                "client_time",
+                "time_check",
+                "device__name",
+                "no_photo",
+                "maker_not_working",
+                "disagreed_with",
+            )
         )
     )
     photos = _photos_of(shop, [line[0] for line in lines])
@@ -611,7 +621,7 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAtt
         )
     return WorkerAttendance(
         month=first,
-        today=shop_today(shop),
+        today=today,
         worker=_line(job.pk, job.display_name, kinds),
         started_on=job.started_on,
         left_on=job.left_on,
