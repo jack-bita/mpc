@@ -228,7 +228,8 @@ LAST_HEARD = time(6, 50)
 # The side a one-tap demo device serves (OPS-3): Dawa, where Asha sells. Any seller can still log in on it.
 DEMO_DEVICE_SIDE = "D"
 
-# The demo's own rules (ATT-2), set by the system from the day it is made. Attendance switched on, as an owner switches
+# The demo's own rules (ATT-2), set by the system from three weeks before the day it is made, as its laptop's taps
+# start there (HISTORY_DAYS, DATA-8). Attendance switched on, as an owner switches
 # a real shop's on at its go-live (ADR-0033): the demo shows a shop at work, so its laptops keep Mahudhurio. And two
 # made-up fines: a shop's fines start at nothing, as this public repo names no real amount (rule 10, Jack, 16 Nov
 # 2026), and a visitor should still see a late day's fine. Not the owner's amounts: those he types on the real server.
@@ -451,15 +452,18 @@ def _holds_its_closures(shop: Shop) -> bool:
 
 def _make_the_shop() -> Shop:
     # The new shop's id first, so the shop can be opened before it exists: the services' checks read through the
-    # tenancy guard (ADR-0042). One block for the whole shop, which every service below joins, so all its lines (the
-    # sides, their drawers, the people) are numbered once, at the very end (SYNC-15): a visitor's new laptop starts
-    # from them. The block ends just before _wipe_and_make's transaction commits.
+    # tenancy guard (ADR-0042). One block for the whole shop (_the_shop_and_its_people), which every service there
+    # joins, so all its lines (the sides, their drawers, the people) are numbered once, at its end (SYNC-15): a
+    # visitor's new laptop starts from them. Then the laptop and its taps, after that block, and all of it before
+    # _wipe_and_make's transaction commits.
     shop_id = uuid.uuid7()
     with shop_context(shop_id):
         shop, people = _the_shop_and_its_people(shop_id)
-        # The taps after the shop's block, once its lines are numbered: the push saves each one in a transaction of its
-        # own (03 §5.5), numbered in a block of its own, and a block may not be named inside a part that can roll back
-        # alone (apps/core/changes.py). Still in _wipe_and_make's one transaction: a refused tap undoes the whole reset.
+        # The taps after the shop's block: its lines numbered first, all at once (SYNC-15), and each tap then numbered
+        # as the push numbers any document, at the end of a block of its own, inside a transaction of its own (03 §5.5).
+        # Inside the shop's block it would work too, as a block inside an atomic() part is one of its own
+        # (apps/core/changes.py); the taps would just take the first numbers. Still in _wipe_and_make's one
+        # transaction: a refused tap undoes the whole reset.
         manager = next(people[person.display_name] for person in PEOPLE if person.email == MANAGER_EMAIL)
         laptop = _demo_laptop(manager, Side.objects.get(code=DEMO_LAPTOP_SIDE))
         _send_the_taps(laptop, people, _demo_taps(shop_today(shop), ZoneInfo(shop.timezone)))

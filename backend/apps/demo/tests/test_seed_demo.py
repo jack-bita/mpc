@@ -216,7 +216,8 @@ def test_seed_demo_refused_without_the_sign_writes_nothing(settings: Settings) -
 
 def test_seed_demo_is_repeatable(three_weeks: None) -> None:
     # The card's first box: the same shop every time. Built twice, both builds hold the same shop, sides, people, roles
-    # and logins, and the shop as Jack chose it (8 Nov 2026). Nothing in this version is picked at random.
+    # and logins, and the shop as Jack chose it (8 Nov 2026). The taps' minutes are picked at random from a fixed seed
+    # (TAPS_SEED, DATA-8), so both builds pick the same.
     seed_demo(fresh=True)
     first = what_the_shop_holds()
     seed_demo(fresh=True)
