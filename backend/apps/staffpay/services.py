@@ -574,6 +574,11 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAtt
     # Python knows, and a month typed into the address was a server error, as on the month page before (ATT-12's
     # review, ATT-5's). A month to come has no tap at all, and nothing is read.
     taps_until = min(last, today)
+    # Read after the book has kept the month's days, in a read of its own, so the two can disagree for a moment: Asha's
+    # Toka, pushed between them, shows in the list while her day still says "hakuna Toka". The next ask works the day
+    # out again with it (work_out_days), so it mends itself within a minute of the page asking again (ATT-12's review).
+    # Not one transaction with the book: the book's lock would then be held for this read too, and every other run of
+    # the book, a month page or the night's job, would wait for it.
     # The job's taps of the month, in one read, today's too: the book keeps no day until it is over (ATT-10), so
     # today's taps are read here as they come. Each with its laptop's name, joined in the same read, and the two
     # questions of doubt the book asks (_doubt_questions). A voided tap counts for nothing (T2), and the book doesn't
