@@ -238,6 +238,39 @@ describe("the month page", () => {
     expect(screen.getByRole("heading", { name: "Novemba 2026" })).toBeTruthy();
   });
 
+  it("asks the server for the month again only once a minute has passed (the review)", async () => {
+    // Each ask works the whole month out again and locks every worker's row a moment (work_out_days). A phone
+    // switched back to the page within a minute shows what it has; after a minute, it asks again, as a late tap may
+    // have come in.
+    theShopHas({ "2026-11": [line()] });
+
+    render(<MonthScreen asked={null} />);
+    await rows();
+    expect(monthsAsked()).toEqual(["2026-11"]);
+
+    function comeBack() {
+      act(() => {
+        document.dispatchEvent(
+          new Event("visibilitychange", { bubbles: true }),
+        );
+        window.dispatchEvent(new Event("focus"));
+      });
+    }
+    /** A moment for a request that may be on its way to reach the server: it goes out after the event, not in it. */
+    async function aMoment() {
+      await act(() => new Promise((done) => setTimeout(done, 100)));
+    }
+    vi.setSystemTime(new Date(Date.parse(NOW) + 30_000));
+    comeBack();
+    await aMoment();
+    expect(monthsAsked()).toEqual(["2026-11"]);
+
+    vi.setSystemTime(new Date(Date.parse(NOW) + 61_000));
+    comeBack();
+    await aMoment();
+    expect(monthsAsked()).toEqual(["2026-11", "2026-11"]);
+  });
+
   it("goes back a month, and forward again, never past this one, keeping the month in the address", async () => {
     // › stays off this month: no day after today is over. The month is in the address, replaced, so the back arrow
     // still leaves the page, and a worker's page (ATT-12) comes back to the same month.
@@ -273,7 +306,8 @@ describe("the month page", () => {
     // never from the page's top (the review).
     expect(document.activeElement).toBe(next());
     expect(next().getAttribute("aria-disabled")).toBe("true");
-    expect(monthsAsked()).toEqual(["2026-11", "2026-10", "2026-11"]);
+    // November, read a moment ago, shows from what the page has: not asked again within its minute.
+    expect(monthsAsked()).toEqual(["2026-11", "2026-10"]);
   });
 
   it("goes back across a year's end", async () => {

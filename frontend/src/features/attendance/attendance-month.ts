@@ -42,8 +42,16 @@ export function useAttendanceMonth(month: string | null) {
         }),
       ),
     enabled: month !== null,
+    // Asked again only once a minute old. Each ask works the whole month out again and locks every worker's row a
+    // moment (work_out_days), so a phone switched back to the page within a minute shows what it has (the review);
+    // after a minute it asks again, as a tap that came late from an offline laptop may change a day. A month gone by
+    // too: a late tap, or a void (ATT-6), can still change one of its days until its pay run is approved (WAGE-3).
+    staleTime: STALE_AFTER,
   });
 }
+
+/** How long a month's answer is kept before the page asks for it again: a minute. */
+export const STALE_AFTER = 60_000;
 
 /** The month of a day, as the address writes it: "2026-11" of "2026-11-20". */
 export function monthOf(day: string): string {
