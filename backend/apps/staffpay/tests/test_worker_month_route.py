@@ -109,8 +109,22 @@ def test_the_workers_month_as_the_page_reads_it(
     }
     # Every day of October the book answers, Sundays too; the 2nd waits for a decision, the 1st was a day away.
     assert len(answer["days"]) == 31
-    assert answer["days"][1] == {"date": "2026-10-02", "status": "needs_review", "reason": "came_late", "fine": "0.00"}
-    assert answer["days"][0] == {"date": "2026-10-01", "status": "absent", "reason": None, "fine": "0.00"}
+    assert answer["days"][1] == {
+        "date": "2026-10-02",
+        "status": "needs_review",
+        "reason": "came_late",
+        "fine": "0.00",
+        "first_in": "09:10",
+        "first_out": None,
+    }
+    assert answer["days"][0] == {
+        "date": "2026-10-01",
+        "status": "absent",
+        "reason": None,
+        "fine": "0.00",
+        "first_in": None,
+        "first_out": None,
+    }
     assert "13579" not in reply.content.decode()
 
 

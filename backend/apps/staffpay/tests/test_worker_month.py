@@ -154,6 +154,8 @@ def test_a_day_to_decide_says_why(shop_a: Shop, device_a: Device, asha: StaffMem
     tap(device_a, asha, ClockKind.IN, on(6, 7, 20))
     day = next(day for day in month_of(shop_a, asha).days if day.date == dt.date(2026, 10, 6))
     assert (day.status, day.reason, day.fine) == (DayStatus.NEEDS_REVIEW, ReviewReason.NO_OUT, Decimal("0"))
+    # The tap the rule read, for a reason that names one: here, when she came.
+    assert (day.first_in, day.first_out) == (dt.time(7, 20), None)
 
 
 def test_each_tap_with_its_time_and_laptop(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:

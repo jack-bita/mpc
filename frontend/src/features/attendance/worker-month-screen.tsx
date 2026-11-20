@@ -1,7 +1,8 @@
 // worker-month-screen.tsx — one worker's month as a calendar, on the owner's or a manager's phone (ATT-12, 03 §5.10),
 // opened from the worker's name on Mahudhurio ya mwezi (month-screen.tsx): the worker's name as the page's title, the
 // month, the month's counts as on their line (✓ 11 · Ch 2 · …), then the month Monday first (Jt Jn Jtn Al Ij Jm Jp),
-// each day its mark, and what the marks mean under it.
+// each day its mark, and what the marks mean under it. A day tapped opens under the calendar (worker-day.tsx): its
+// status, why, and each tap with its laptop and photo.
 //
 // As Jack pictured it (19 Nov 2026) and approved as a screen (20 Nov 2026). It only shows: deciding a day is ATT-6's.
 // The server works the month out from the book of days, and the page draws the marks it is given, never deciding
@@ -10,7 +11,9 @@
 //
 // The month is the one the page came from (?month=2026-11), with no ‹ › of its own (Jack's yes, 20 Nov 2026): to see
 // another, the back arrow returns to the month page, on the same month, as the month page keeps it in its address.
-// Opened from a typed address, the arrow goes to the month page on this worker's month (`fallback`).
+// Opened from a typed address, the arrow goes to the month page on this worker's month (`fallback`). The day open is
+// kept in the address too (&day=2026-11-12), replaced, not pushed, as the month page keeps its month: the back arrow
+// leaves the page, whatever days were looked at, and a line of Zinahitaji uamuzi opens its day directly.
 //
 // An office screen: it asks the server through the store of server answers (rule 5). Its route asks attendance.manage
 // on the whole shop; someone without it sees the server's refusal.
@@ -25,6 +28,7 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Card } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
 import { useWhoIsHere } from "@/features/people/who-is-here";
+import { formatDayMonth, weekdayOf } from "@/lib/format";
 import { shopToday } from "@/offline/rules";
 
 import {
@@ -35,8 +39,10 @@ import {
   monthOf,
   type Weekday,
 } from "./attendance-month";
+import { TheDay } from "./worker-day";
 import {
   calendarWeeks,
+  DAY_PARAM,
   useWorkerMonth,
   type WorkerAttendance,
   type WorkerDay,
@@ -51,9 +57,11 @@ type Mark = (typeof KINDS)[number] | "off" | "today" | null;
 export function WorkerMonthScreen({
   staff,
   asked,
+  askedDay,
 }: {
   staff: string | null;
   asked: string | null;
+  askedDay: string | null;
 }) {
   const t = useTranslations("attendanceWorker");
   // The PIN login's book, for its "Subiri kidogo…", which the office says the same way.
@@ -70,6 +78,7 @@ export function WorkerMonthScreen({
         ? monthOf(shopToday(who.data.shop.timezone, openedAt))
         : null;
   const answer = useWorkerMonth(staff, month);
+  const [chosen, choose] = useDayInTheAddress(askedDay);
   // Until both answer: "Subiri kidogo…", through the store's own tries too (month-screen.tsx). Only for a worker the
   // address names: with none, nothing is asked, and nothing waits.
   const waiting =
@@ -100,27 +109,70 @@ export function WorkerMonthScreen({
       <ApiErrorAlert error={who.error} />
       <ApiErrorAlert error={answer.error} />
       {answer.data && !answer.isPending ? (
-        <TheWorkersMonth answer={answer.data} />
+        <TheWorkersMonth
+          answer={answer.data}
+          chosen={chosen}
+          onChoose={choose}
+        />
       ) : null}
     </div>
   );
 }
 
-/** The month's name, the counts, the calendar and what its marks mean. */
-function TheWorkersMonth({ answer }: { answer: WorkerAttendance }) {
+/** The day open under the calendar, kept in the address as it changes (&day=2026-11-12), and how to open another. */
+function useDayInTheAddress(
+  asked: string | null,
+): [string | null, (day: string) => void] {
+  const [chosen, setChosen] = useState(asked);
+  function choose(day: string) {
+    setChosen(day);
+    const url = new URL(window.location.href);
+    url.searchParams.set(DAY_PARAM, day);
+    // Replaced, not pushed: the back arrow leaves the page, whatever days were opened. null, never
+    // window.history.state, so Next.js notes the new address (settings-screen.tsx, month-screen.tsx).
+    window.history.replaceState(null, "", url);
+  }
+  return [chosen, choose];
+}
+
+/** The month's name, the counts, the calendar and what its marks mean, then the day open, if one is. */
+function TheWorkersMonth({
+  answer,
+  chosen,
+  onChoose,
+}: {
+  answer: WorkerAttendance;
+  chosen: string | null;
+  onChoose: (day: string) => void;
+}) {
   const monthWords = useTranslations("attendanceMonth");
   const [year, number] = answer.month.split("-") as [string, MonthNumber];
   const monthName = monthWords("monthTitle", {
     month: monthWords(`monthNames.${number}`),
     year,
   });
+  // The book's days by date, to find each day's in one look.
+  const days = new Map(answer.days.map((day) => [day.date, day]));
+  // The day open: one with a mark only, a day the book answers or today, as only those can be tapped. A day the
+  // address names that has none, another month's or a day to come, opens nothing.
+  const open =
+    chosen !== null && markOf(chosen, days.get(chosen), answer.today) !== null
+      ? chosen
+      : null;
   return (
     <>
       {/* A heading, so a screen reader can jump to it: the page's title is the worker's name. */}
       <h2 className="text-xl font-semibold">{monthName}</h2>
       <Counts answer={answer} />
-      <Calendar answer={answer} monthName={monthName} />
+      <Calendar
+        answer={answer}
+        days={days}
+        monthName={monthName}
+        open={open}
+        onChoose={onChoose}
+      />
       <MarksKey />
+      {open !== null ? <TheDay day={open} answer={answer} /> : null}
     </>
   );
 }
@@ -158,18 +210,23 @@ function Counts({ answer }: { answer: WorkerAttendance }) {
   );
 }
 
-/** The month as a table: a column per weekday, Monday first, a row per week, each day its number and its mark. */
+/** The month as a table: a column per weekday, Monday first, a row per week, each day its number and its mark. A day
+ * with a mark is a button that opens it under the calendar. */
 function Calendar({
   answer,
+  days,
   monthName,
+  open,
+  onChoose,
 }: {
   answer: WorkerAttendance;
+  days: Map<string, WorkerDay>;
   monthName: string;
+  open: string | null;
+  onChoose: (day: string) => void;
 }) {
   const t = useTranslations("attendanceWorker");
   const monthWords = useTranslations("attendanceMonth");
-  // The book's days by date, to find each day's in one look.
-  const days = new Map(answer.days.map((day) => [day.date, day]));
   return (
     <Card className="py-0">
       <table className="w-full table-fixed text-center tabular-nums">
@@ -201,10 +258,12 @@ function Calendar({
                 day === null ? (
                   <td key={`empty ${place}`} />
                 ) : (
-                  <td key={day} className="py-1.5 align-top">
+                  <td key={day} className="p-0.5 align-top">
                     <DayOfTheMonth
                       day={day}
                       mark={markOf(day, days.get(day), answer.today)}
+                      open={day === open}
+                      onChoose={onChoose}
                     />
                   </td>
                 ),
@@ -225,19 +284,59 @@ function markOf(day: string, kept: WorkerDay | undefined, today: string): Mark {
   return kept.status;
 }
 
-/** One day: its number, small, and its mark under it, big, as on Jack's picture. */
-function DayOfTheMonth({ day, mark }: { day: string; mark: Mark }) {
+/** One day: its number, small, and its mark under it, big, as on Jack's picture. A day with a mark is a button, as
+ * tall as a finger needs, pressed while it is open; one with none, a day to come or one the book doesn't answer, is
+ * only its number. */
+function DayOfTheMonth({
+  day,
+  mark,
+  open,
+  onChoose,
+}: {
+  day: string;
+  mark: Mark;
+  open: boolean;
+  onChoose: (day: string) => void;
+}) {
+  const t = useTranslations("attendanceWorker");
+  const monthWords = useTranslations("attendanceMonth");
+  const inside = <DaysNumberAndMark day={day} mark={mark} />;
+  if (mark === null) return <div className="py-1">{inside}</div>;
+  return (
+    <button
+      type="button"
+      // Named in full, "Alhamisi 12/11: inahitaji uamuzi", as a screen reader moving from button to button hears no
+      // column above it; its number and mark are for the eye.
+      aria-label={t("dayButton", {
+        weekday: monthWords(`weekdays.${String(weekdayOf(day)) as Weekday}`),
+        date: formatDayMonth(day),
+        kind: kindOf(mark, t, monthWords),
+      })}
+      // Pressed while open, so a screen reader says which day is open, as the eye sees by its colour.
+      aria-pressed={open}
+      onClick={() => onChoose(day)}
+      className={
+        open
+          ? "w-full rounded-md bg-primary py-1 text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring"
+          : "w-full rounded-md py-1 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring"
+      }
+    >
+      {inside}
+    </button>
+  );
+}
+
+/** A day's number and its mark, the mark for the eye, in words for a screen reader. */
+function DaysNumberAndMark({ day, mark }: { day: string; mark: Mark }) {
   const t = useTranslations("attendanceWorker");
   const monthWords = useTranslations("attendanceMonth");
   const isWorkersOwn = mark !== null && mark !== "off" && mark !== "today";
   return (
-    <div className="grid gap-0.5">
-      <span className="text-sm text-muted-foreground">
-        {Number(day.slice(8))}
-      </span>
+    <span className="grid gap-0.5">
+      <span className="text-sm">{Number(day.slice(8))}</span>
       {mark === null ? (
         // Nothing to show: an empty place as tall as a mark, so every row keeps its height.
-        <span aria-hidden className="h-7" />
+        <span aria-hidden className="block h-7" />
       ) : (
         <>
           <span
@@ -252,15 +351,22 @@ function DayOfTheMonth({ day, mark }: { day: string; mark: Mark }) {
               ? monthWords(`mark.${mark}`)
               : t(`mark.${mark as "off" | "today"}`)}
           </span>
-          <span className="sr-only">
-            {isWorkersOwn
-              ? monthWords(`kind.${mark}`)
-              : t(`kind.${mark as "off" | "today"}`)}
-          </span>
+          <span className="sr-only">{kindOf(mark, t, monthWords)}</span>
         </>
       )}
-    </div>
+    </span>
   );
+}
+
+/** A mark in words: one of the line's five kinds from the month page's book, a shut day's or today's from this one. */
+function kindOf(
+  mark: Exclude<Mark, null>,
+  t: ReturnType<typeof useTranslations<"attendanceWorker">>,
+  monthWords: ReturnType<typeof useTranslations<"attendanceMonth">>,
+): string {
+  return mark === "off" || mark === "today"
+    ? t(`kind.${mark}`)
+    : monthWords(`kind.${mark}`);
 }
 
 /** What each mark means, under the calendar: the line's five, then a shut day's and today's. */

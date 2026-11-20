@@ -60,6 +60,18 @@ describe("the weeks of a worker's calendar", () => {
 });
 
 describe("a worker's month's address", () => {
+  it("names the day open under the calendar, when there is one", () => {
+    expect(
+      workerMonthAddress(
+        "019a8400-0000-7000-8000-000000000001",
+        "2026-11",
+        "2026-11-12",
+      ),
+    ).toBe(
+      "/attendance-month/worker/?staff=019a8400-0000-7000-8000-000000000001&month=2026-11&day=2026-11-12",
+    );
+  });
+
   it("names the worker's job and the month", () => {
     expect(
       workerMonthAddress("019a8400-0000-7000-8000-000000000001", "2026-11"),

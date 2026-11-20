@@ -527,11 +527,14 @@ class TapLine:
 class WorkerDay:
     # One of a worker's days, as their calendar marks it and the day says it: what it was, why it waits for a decision
     # on a day to decide, and its fine. The fine is the shop's own rule, which anyone working there may read on the
-    # rules page, never the worker's rate or the day's pay (WAGE-1).
+    # rules page, never the worker's rate or the day's pay (WAGE-1). And the two taps the rule read, the first Ingia and
+    # the first Toka after it, for the reason that names one, "alifika saa 09:10", as the month page's list says it.
     date: dt.date
     status: DayStatus
     reason: ReviewReason | None
     fine: Decimal
+    first_in: dt.time | None
+    first_out: dt.time | None
 
 
 @dataclass(frozen=True)
@@ -619,6 +622,8 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAtt
                 # The table keeps "no reason" as empty (ATT-5): said as None.
                 reason=ReviewReason(day.review_reason) if day.review_reason else None,
                 fine=day.fine,
+                first_in=day.first_in,
+                first_out=day.first_out,
             )
             for day in days
         ],

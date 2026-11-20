@@ -157,11 +157,14 @@ class AttendanceMonthAnswer(serializers.Serializer[Any]):
 class WorkerDaySerializer(serializers.Serializer[Any]):
     # One of a worker's days, as their calendar marks it (ATT-12): what it was, why it waits on a day to decide (one of
     # the book's codes, which the page says in its language, ADR-0040), else null, and its fine, a string (rule 3). The
-    # fine is the shop's own rule, which anyone working there may read; never the worker's rate or the day's pay.
+    # fine is the shop's own rule, which anyone working there may read; never the worker's rate or the day's pay. And
+    # the two taps the rule read, as minutes on the shop's clock, for "alifika saa 09:10", as DayToDecide sends them.
     date = serializers.DateField()
     status = serializers.ChoiceField(choices=DayStatus.choices)
     reason = serializers.ChoiceField(choices=ReviewReason.choices, allow_null=True)
     fine = serializers.DecimalField(max_digits=14, decimal_places=2)
+    first_in = serializers.TimeField(format="%H:%M", allow_null=True)
+    first_out = serializers.TimeField(format="%H:%M", allow_null=True)
 
 
 class TapPhotoSerializer(serializers.Serializer[Any]):

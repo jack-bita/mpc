@@ -766,7 +766,45 @@
     "kind": {
       "off": "duka limefungwa",
       "today": "leo"
-    }
+    },
+    "dayTitle": "{weekday} {date}",
+    "dayTitleToday": "{weekday} {date} · leo",
+    "notOverYet": "Siku bado haijaisha.",
+    "status": {
+      "on_time": "Kwa wakati",
+      "late": "Amechelewa",
+      "half": "Nusu siku",
+      "absent": "Hakuja",
+      "needs_review": "Inahitaji uamuzi",
+      "off": "Duka limefungwa"
+    },
+    "statusWithFine": "{status} · faini {amount}",
+    "why": "Kwa nini: {why}",
+    "jobFrom": "Siku zake za kazi: kuanzia {first}.",
+    "jobBetween": "Siku zake za kazi: {first} hadi {last}.",
+    "tapsLabel": "Ingia na Toka za siku hii",
+    "tapKind": {
+      "in": "Ingia",
+      "out": "Toka"
+    },
+    "tapLine": "{kind} {time} · {laptop}",
+    "laptopTime": "{time} (saa ya kompyuta, haiaminiki)",
+    "doubt": "Shaka: {why}",
+    "photoAlt": "Picha ya {name}, {kind} {time}",
+    "photoWaiting": "Picha bado haijafika.",
+    "photoRemoved": "Picha imeondolewa.",
+    "noPhoto": "Hakuna picha: {why}",
+    "noPhotoWhy": {
+      "no_camera": "kompyuta haina kamera",
+      "blocked": "kamera imezuiwa",
+      "failed": "kamera haikufanya kazi",
+      "old_app": "programu ya zamani, kabla ya picha",
+      "demo": "hii ni demo, picha haitumwi"
+    },
+    "noTaps": "Hakuna Ingia wala Toka siku hii.",
+    "noIn": "Hakuna Ingia.",
+    "noOut": "Hakuna Toka.",
+    "dayButton": "{weekday} {date}: {kind}"
   },
   "needsAttention": {
     "title": "Kumbukumbu zilizokataliwa na seva",

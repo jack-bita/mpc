@@ -5331,11 +5331,23 @@
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "first_in": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "first_out": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
                     }
                 },
                 "required": [
                     "date",
                     "fine",
+                    "first_in",
+                    "first_out",
                     "reason",
                     "status"
                 ]

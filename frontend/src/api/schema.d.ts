@@ -1719,6 +1719,10 @@ export interface components {
             reason: (components["schemas"]["ReasonEnum"] | components["schemas"]["NullEnum"]) | null;
             /** Format: decimal */
             fine: string;
+            /** Format: time */
+            first_in: string | null;
+            /** Format: time */
+            first_out: string | null;
         };
         WorkerMonth: {
             /** Format: uuid */

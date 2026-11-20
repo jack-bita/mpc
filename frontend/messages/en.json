@@ -766,7 +766,45 @@
     "kind": {
       "off": "shop closed",
       "today": "today"
-    }
+    },
+    "dayTitle": "{weekday} {date}",
+    "dayTitleToday": "{weekday} {date} · today",
+    "notOverYet": "The day isn't over yet.",
+    "status": {
+      "on_time": "On time",
+      "late": "Late",
+      "half": "Half day",
+      "absent": "Absent",
+      "needs_review": "Needs a decision",
+      "off": "Shop closed"
+    },
+    "statusWithFine": "{status} · fine {amount}",
+    "why": "Why: {why}",
+    "jobFrom": "Their work days: from {first}.",
+    "jobBetween": "Their work days: {first} to {last}.",
+    "tapsLabel": "This day's Ingia and Toka",
+    "tapKind": {
+      "in": "Ingia",
+      "out": "Toka"
+    },
+    "tapLine": "{kind} {time} · {laptop}",
+    "laptopTime": "{time} (the laptop's clock, not trusted)",
+    "doubt": "In doubt: {why}",
+    "photoAlt": "{name}'s photo, {kind} {time}",
+    "photoWaiting": "The photo hasn't arrived yet.",
+    "photoRemoved": "The photo was removed.",
+    "noPhoto": "No photo: {why}",
+    "noPhotoWhy": {
+      "no_camera": "the laptop has no camera",
+      "blocked": "the camera is blocked",
+      "failed": "the camera didn't work",
+      "old_app": "an app from before photos",
+      "demo": "this is the demo, the photo isn't sent"
+    },
+    "noTaps": "No Ingia or Toka this day.",
+    "noIn": "No Ingia.",
+    "noOut": "No Toka.",
+    "dayButton": "{weekday} {date}: {kind}"
   },
   "needsAttention": {
     "title": "Records the server refused",

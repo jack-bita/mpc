@@ -1,5 +1,6 @@
-// worker-month.ts — a worker's month as the office reads it (ATT-12, 03 §5.10): its address, its place in the store of
-// server answers, and the month's weeks as the calendar draws them, Monday first.
+// worker-month.ts — a worker's month as the office reads it (ATT-12, 03 §5.10): its address, with the day open under
+// the calendar, its place in the store of server answers, and the month's weeks as the calendar draws them, Monday
+// first.
 //
 // GET /api/v1/staffpay/attendance-worker/{id}/?month=2026-11 answers one worker's month: their days as the book keeps
 // them, their counts, and every tap of the month, today's too. The server works it all out; the page only shows it.
@@ -15,6 +16,7 @@ import { MONTH_PARAM, STALE_AFTER } from "./attendance-month";
 
 export type WorkerAttendance = components["schemas"]["WorkerAttendanceAnswer"];
 export type WorkerDay = components["schemas"]["WorkerDay"];
+export type AttendanceTap = components["schemas"]["AttendanceTap"];
 
 /** The workers' months' place in the store of server answers, each worker's month under its own key. */
 export const WORKER_MONTHS = ["staffpay", "attendance-worker"] as const;
@@ -22,12 +24,21 @@ export const WORKER_MONTHS = ["staffpay", "attendance-worker"] as const;
 /** The address's name for the worker: /attendance-month/worker/?staff=…&month=2026-11. */
 export const STAFF_PARAM = "staff";
 
-/** The address of a worker's month, as a name on the month page opens it: their job's id, and the month shown. */
-export function workerMonthAddress(staff: string, month: string): string {
+/** The address's name for the day open under the calendar: …&day=2026-11-12. */
+export const DAY_PARAM = "day";
+
+/** The address of a worker's month, as a name on the month page opens it: their job's id, and the month shown; and a
+ * day of it, open under the calendar, as a line of Zinahitaji uamuzi opens one. */
+export function workerMonthAddress(
+  staff: string,
+  month: string,
+  day?: string,
+): string {
   const query = new URLSearchParams({
     [STAFF_PARAM]: staff,
     [MONTH_PARAM]: month,
   });
+  if (day !== undefined) query.set(DAY_PARAM, day);
   return `/attendance-month/worker/?${query.toString()}`;
 }
 

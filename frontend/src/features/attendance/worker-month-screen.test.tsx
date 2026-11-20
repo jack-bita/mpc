@@ -44,6 +44,8 @@ function day(date: number, status: WorkerDay["status"]): WorkerDay {
     status,
     reason: status === "needs_review" ? "no_out" : null,
     fine: status === "late" ? "500.00" : "0.00",
+    first_in: null,
+    first_out: null,
   };
 }
 
@@ -115,7 +117,7 @@ describe("a worker's month", () => {
   it("shows the month as a calendar, Monday first, each day its mark", async () => {
     answer("GET", JUMAS_MONTH, { status: 200, body: JUMAS_NOVEMBER });
 
-    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" />);
+    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay={null} />);
 
     // Each place holds its number, its mark (✓ Ch ½ H ! – •), drawn for the eye alone, then the mark in words, for a
     // screen reader.
@@ -174,7 +176,7 @@ describe("a worker's month", () => {
   it("names the worker and the month, and counts the month as the server did", async () => {
     answer("GET", JUMAS_MONTH, { status: 200, body: JUMAS_NOVEMBER });
 
-    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" />);
+    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay={null} />);
 
     expect(
       await screen.findByRole("heading", { level: 1, name: "Juma" }),
@@ -214,7 +216,7 @@ describe("a worker's month", () => {
   it("asks the server for the worker and the month in the address", async () => {
     answer("GET", JUMAS_MONTH, { status: 200, body: JUMAS_NOVEMBER });
 
-    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" />);
+    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay={null} />);
 
     await calendar();
     const asked = sent.filter(
@@ -228,7 +230,7 @@ describe("a worker's month", () => {
   it("opens this month on the shop's clock when the address names none", async () => {
     answer("GET", JUMAS_MONTH, { status: 200, body: JUMAS_NOVEMBER });
 
-    render(<WorkerMonthScreen staff={JUMA} asked="Novemba" />);
+    render(<WorkerMonthScreen staff={JUMA} asked="Novemba" askedDay={null} />);
 
     await calendar();
     const asked = sent.filter(
@@ -250,7 +252,7 @@ describe("a worker's month", () => {
       },
     });
 
-    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" />);
+    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay={null} />);
 
     const weeks = await calendar();
     expect(weeks[1]).toEqual(["2", "3", "4", "5", "6", "7", "8"]);
@@ -258,7 +260,7 @@ describe("a worker's month", () => {
   });
 
   it("says when the address names no worker, and asks nothing", async () => {
-    render(<WorkerMonthScreen staff={null} asked="2026-11" />);
+    render(<WorkerMonthScreen staff={null} asked="2026-11" askedDay={null} />);
 
     expect(
       await screen.findByText("Hakuna mfanyakazi aliyechaguliwa."),
@@ -272,7 +274,7 @@ describe("a worker's month", () => {
     // Another shop's worker, or an id no shop has: "not found" alike (03 §5.4).
     answer("GET", JUMAS_MONTH, refusal(404, "not_found"));
 
-    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" />);
+    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay={null} />);
 
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();

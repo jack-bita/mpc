@@ -4,7 +4,8 @@
 //
 // The days come from the server, worked out by the book, each with why (its review_reason): oldest first, as the
 // oldest has waited longest, by name on a day. The page keeps that order and only says each in words. It only shows:
-// deciding a day is ATT-6's, and opening it, with its taps and its photo, ATT-12's.
+// deciding a day is ATT-6's. Each line is a link that opens its day under the worker's calendar, with its taps and
+// their photos (ATT-12).
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
@@ -14,9 +15,11 @@ import { useTranslations } from "use-intl";
 
 import type { components } from "@/api/schema";
 import { Card } from "@/components/design/card";
+import { TextLink } from "@/components/design/text-link";
 import { clockPart, formatDayMonth, weekdayOf } from "@/lib/format";
 
-import type { Weekday } from "./attendance-month";
+import { monthOf, type Weekday } from "./attendance-month";
+import { workerMonthAddress } from "./worker-month";
 
 type DayToDecide = components["schemas"]["DayToDecide"];
 
@@ -47,7 +50,17 @@ export function DaysToDecide({ days }: { days: DayToDecide[] }) {
             {days.map((day) => (
               // A day is one job's, once: its job and its date name it.
               <li key={`${day.staff} ${day.date}`} className="px-4 py-3">
-                <DayLine day={day} />
+                {/* The whole line is the link, so a finger finds it: it opens the worker's month, on this day's month,
+                    with this day open under the calendar (ATT-12). */}
+                <TextLink
+                  href={workerMonthAddress(
+                    day.staff,
+                    monthOf(day.date),
+                    day.date,
+                  )}
+                >
+                  <DayLine day={day} />
+                </TextLink>
               </li>
             ))}
           </ul>
