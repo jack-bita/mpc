@@ -571,6 +571,11 @@ def test_suspended_member_gets_nothing_from_routes(
         assert client.post(f"{WORKERS}{juma.pk}/{change}/", sent, format="json").status_code == 404, change
     fix = {"version": 1, "reason": "Hapana", "job_title": "Fundi"}
     assert client.patch(f"{WORKERS}{juma.pk}/", fix, format="json").status_code == 404
+    # Nor the month's attendance (ATT-5), nor a worker's month (ATT-12), Juma's or their own: refused, as the key is
+    # asked first, before any month is worked out.
+    assert client.get(ATTENDANCE_MONTH, {"month": "2026-10"}).status_code == 403
+    for whose in (juma, staff_a):
+        assert client.get(ATTENDANCE_WORKER.format(whose.pk), {"month": "2026-10"}).status_code == 403
     with shop_context(shop_a):
         assert Side.objects.get(pk=sides["F"].pk).is_live is False
         assert Side.objects.get(pk=sides["F"].pk).band == "blue"
@@ -1155,6 +1160,19 @@ def test_a_workers_month_needs_attendance_manage(
     assert refused.status_code == 403
     assert refused.json()["code"] == "permission_denied"
     assert client_for(staff_a2).get(address, {"month": "2026-10"}).status_code == 200
+
+
+@pytest.mark.django_db
+def test_a_key_on_one_side_opens_no_workers_month(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # Hamisi may fix attendance on Dawa only (X1): attendance is the whole shop's, so a key on one side opens no
+    # worker's month, as it opens no month (ATT-5).
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.ATTENDANCE_MANAGE, side=sides["D"], by=None)
+    refused = client_for(staff_a).get(ATTENDANCE_WORKER.format(staff_a2.pk), {"month": "2026-10"})
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
 
 
 def test_attendance_worker_route_names_its_permission() -> None:
