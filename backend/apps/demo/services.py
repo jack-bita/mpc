@@ -15,6 +15,12 @@ attendance switched on and two made-up fines (DEMO_RULES, ATT-2), closed on the 
 (PUBLIC_HOLIDAYS, ATT-8), and each of its people paid a made-up daily rate from their first day (DemoPerson.daily_rate,
 WAGE-1), which a visitor sees on Meneja's Wafanyakazi and can't change, as the seed's people stay as made.
 
+And the 21 days before today (DATA-8): the demo is made again every morning, and the book keeps only days that are
+over (ATT-10), so Mahudhurio ya mwezi (ATT-5) would list nobody. So the shop's rules, its people's first days and their
+rates start that far back, and the demo's laptop, Laptop ya Dawa, sends three weeks of Ingia and Toka through the push,
+as a laptop back online does: most days on time, a few late with their fine, a half day, an absent day, and one day to
+decide (DemoPerson.odd_days). The minutes come from a fixed random seed, so every reset makes the same taps.
+
 `manage.py seed_demo` (management/commands/seed_demo.py) runs it, on every start of the demo (backend/start-demo.sh)
 and of the browser tests' container, which starts the same way (compose.e2e.yml):
 the tests log in as these people, with the logins written again in frontend/e2e/pair-and-pin-login.spec.ts. Change
@@ -34,8 +40,9 @@ safe only on a database that holds nothing but demo data, so the seed refuses, b
 Once a day, not on every start (DATA-1's plan, 8 Nov 2026): the free demo sleeps after 15 minutes with no visitor,
 and every wake-up runs its start again. A visitor back from a break should find the PIN screen with their work still
 there (the idle lock, UI-4), so a start keeps a demo shop made today, in the shop's own time, and makes it again only
-when it was made on an earlier day, or lacks a rule, a closure or a person's extra key this seed sets, as a demo an
-older seed made that morning does on a deploy's day (ATT-2, ATT-8, #275). `fresh=True` makes it again whatever its day.
+when it was made on an earlier day, or lacks a rule, a closure, a person's extra key or rate, or the taps of the days
+before today this seed sets, as a demo an older seed made that morning does on a deploy's day (ATT-2, ATT-8, #275,
+WAGE-1, DATA-8). `fresh=True` makes it again whatever its day.
 
 Made through the services, as a real shop is set up (set_up_shop, add_staff, assign_role, set_pin), never by writing
 rows: the demo can't hold anything a real shop couldn't, and a service that changes its rules changes the demo too.
@@ -52,9 +59,10 @@ visitors need them. Nobody here is staff in Django's sense (`is_staff`), so no s
 login page has no rate limit yet (04 DATA-1, v1.8).
 """
 
+import random
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -85,14 +93,28 @@ from apps.people.services import (
 from apps.shops.models import Closure, Setting, Shop, ShopKind, Side, SideBand
 from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide, add_closure, set_setting, switch_side
-from apps.staffpay.models import PayRate
-from apps.staffpay.services import set_pay_rate
+from apps.staffpay.models import AttendanceEvent, ClockKind, NoPhoto, PayRate
+from apps.staffpay.services import SUNDAY, set_pay_rate
+from apps.sync.api.serializers import MOST_DOCUMENTS
+from apps.sync.models import PushedStatus
+from apps.sync.push import Sent, push
 
 SHOP_NAME = "Duka la Mfano"
 SHOP_CODE = "DEMO"
 # The two sides MPC has, in the words the app already uses for them (Jack, 8 Nov 2026). Vyakula's band is striped, like
 # the Foods bags, and Dawa keeps the blue one (SHOP-4, UI-8).
 SIDES = (NewSide("D", "Dawa"), NewSide("F", "Vyakula", band=SideBand.STRIPED))
+
+
+@dataclass(frozen=True)
+class OddDay:
+    # A day of a demo person's that isn't an ordinary one (DATA-8). `back`: its place among the working days before
+    # today, 1 the latest (_working_days_back), so it never falls on a Sunday, wherever today falls. `came` and `left`:
+    # the minutes of their Ingia and Toka by the shop's clock, None for no tap.
+    back: int
+    came: time | None
+    left: time | None
+
 
 # The manager's login. example.com is a domain kept for examples, so no real mailbox is ever sent a reset. The
 # password is public: it opens only the demo's fake shop, which is made again every day.
@@ -110,7 +132,8 @@ class DemoPerson:
     # every side, as a shop's manager is. `pin`: four digits the PIN rules allow (apps/people/pins.py), or None for
     # a person who logs in only with their password. `keys`: extra keys beyond the role's, each on the whole shop,
     # given as an owner gives one (grant_permission). `daily_rate`: their made-up pay for a day, in whole shillings,
-    # from their first day (set_pay_rate, WAGE-1), or None for one paid no day, as a shop's owner is.
+    # from their first day (set_pay_rate, WAGE-1), or None for one paid no day, as a shop's owner is. `odd_days`: the
+    # days of the three weeks before today that aren't ordinary (DATA-8); every other working day, they came on time.
     full_name: str
     display_name: str
     role: RoleTemplate
@@ -120,6 +143,7 @@ class DemoPerson:
     password: str | None = None
     keys: tuple[Permission, ...] = ()
     daily_rate: str | None = None
+    odd_days: tuple[OddDay, ...] = ()
 
 
 PEOPLE = (
@@ -141,16 +165,71 @@ PEOPLE = (
         keys=(Permission.SETTINGS_MANAGE, Permission.STAFF_MANAGE),
         # Made-up amounts, as everything here is (rule 10): a manager paid a little more than a seller.
         daily_rate="15000",
+        # He clocks in too, on the shop's laptop with his password (OPS-13): he has a daily rate, so the month page
+        # lists him (ATT-5), and with no taps every day of his would be absent. Late once, the first fine.
+        odd_days=(OddDay(8, came=time(7, 42), left=time(18, 50)),),
     ),
     # A seller on each side, with a PIN only: they log in at the shop's laptop, as a seller does.
-    DemoPerson("Asha Mfano", "Asha", RoleTemplate.SELLER, side="D", pin="2580", daily_rate="10000"),
-    DemoPerson("Baraka Mfano", "Baraka", RoleTemplate.SELLER, side="F", pin="1470", daily_rate="10000"),
+    DemoPerson(
+        "Asha Mfano",
+        "Asha",
+        RoleTemplate.SELLER,
+        side="D",
+        pin="2580",
+        daily_rate="10000",
+        # The days the month page shows a visitor (ATT-5), against the demo's rules (DEMO_RULES, and the attendance
+        # day's own times: on time to 07:35, the second fine from 08:00, closing 18:40): the day to decide, her
+        # latest, an Ingia with no Toka (no_out), at the top of Zinahitaji uamuzi; late, the first fine; late after
+        # 08:00, the second; and the morning's half day, out between 13:00 and 13:30.
+        odd_days=(
+            OddDay(1, came=time(7, 25), left=None),
+            OddDay(4, came=time(7, 50), left=time(18, 50)),
+            OddDay(9, came=time(8, 10), left=time(18, 45)),
+            OddDay(13, came=time(7, 20), left=time(13, 10)),
+        ),
+    ),
+    # Late once, and absent once: no tap at all, so the book answers absent (ATT-4).
+    DemoPerson(
+        "Baraka Mfano",
+        "Baraka",
+        RoleTemplate.SELLER,
+        side="F",
+        pin="1470",
+        daily_rate="10000",
+        odd_days=(OddDay(6, came=time(7, 45), left=time(18, 55)), OddDay(11, came=None, left=None)),
+    ),
 )
+
+# How far back the demo's attendance goes (DATA-8): the 21 days before today, so the month page has days to show, this
+# month's and, early in a month, the last one's. Three weeks hold three Sundays, so 18 working days, enough for every
+# odd day above. The shop's rules, its people's first days and their rates start on the first of them.
+HISTORY_DAYS = 21
+
+# The demo's own laptop (DATA-8), which sends the taps of the days before today: on Dawa, as a shop's laptop sits on a
+# side. Anyone working at the shop may clock in on it (Jack, ATT-1), Baraka of Vyakula too.
+DEMO_LAPTOP_NAME = "Laptop ya Dawa"
+DEMO_LAPTOP_SIDE = "D"
+
+# The seed of the random minutes of an ordinary day: a fixed one, so every reset makes the same taps (DATA-1's first
+# box, the same shop every time). Any number does; changing it changes every minute.
+TAPS_SEED = 8
+
+# An ordinary day's taps: Ingia from 07:10, within ON_TAPS minutes, so by 07:34, before on time ends (07:35); Toka from
+# 18:40, closing, within OFF_TAPS, so by 19:05.
+ON_TIME_FROM = time(7, 10)
+ON_TAPS = 24
+CLOSING_FROM = time(18, 40)
+OFF_TAPS = 25
+
+# When the demo's laptop last heard from the server (`last_server_time`, ATT-1's sign 2): 06:50 on the first of the
+# three weeks, before any tap, as a laptop offline since that morning, which sends them all as it comes back.
+LAST_HEARD = time(6, 50)
 
 # The side a one-tap demo device serves (OPS-3): Dawa, where Asha sells. Any seller can still log in on it.
 DEMO_DEVICE_SIDE = "D"
 
-# The demo's own rules (ATT-2), set by the system from the day it is made. Attendance switched on, as an owner switches
+# The demo's own rules (ATT-2), set by the system from three weeks before the day it is made, as its laptop's taps
+# start there (HISTORY_DAYS, DATA-8). Attendance switched on, as an owner switches
 # a real shop's on at its go-live (ADR-0033): the demo shows a shop at work, so its laptops keep Mahudhurio. And two
 # made-up fines: a shop's fines start at nothing, as this public repo names no real amount (rule 10, Jack, 16 Nov
 # 2026), and a visitor should still see a late day's fine. Not the owner's amounts: those he types on the real server.
@@ -228,6 +307,7 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
         and _holds_its_closures(shop)
         and _holds_its_keys(shop)
         and _holds_its_rates(shop)
+        and _holds_its_taps(shop)
     ):
         return Seeded.KEPT
     try:
@@ -343,6 +423,23 @@ def _holds_its_rates(shop: Shop) -> bool:
     return wanted <= set_by_the_system
 
 
+def _holds_its_taps(shop: Shop) -> bool:
+    # Whether today's demo holds the taps of the days before today this seed sends (DATA-8): as for its rules, a deploy
+    # whose seed sends them must not keep a demo an older seed made that morning, with no day before today, or the month
+    # page would list nobody until the next morning. Counted: the taps of the seed's own people (created by nobody, as
+    # for the keys), timed before today, at least as many as this seed sends. Nothing a visitor does lowers it: a
+    # visitor's tap is today's, and a tap is never deleted, only voided (ATT-6).
+    zone = ZoneInfo(shop.timezone)
+    today = shop_today(shop)
+    with shop_context(shop):
+        held = AttendanceEvent.objects.filter(
+            shop=shop,
+            staff__created_by__isnull=True,
+            client_time__lt=datetime.combine(today, time.min, tzinfo=zone),
+        ).count()
+    return held >= len(_demo_taps(today, zone))
+
+
 def _holds_its_closures(shop: Shop) -> bool:
     # Whether today's demo holds every closure this seed adds, as the system added them: as for its rules, a deploy
     # whose seed adds a closure must not keep a demo made that morning without it (ATT-8). Known by its first day and
@@ -355,11 +452,28 @@ def _holds_its_closures(shop: Shop) -> bool:
 
 def _make_the_shop() -> Shop:
     # The new shop's id first, so the shop can be opened before it exists: the services' checks read through the
-    # tenancy guard (ADR-0042). One block for the whole shop, which every service below joins, so all its lines (the
-    # sides, their drawers, the people) are numbered once, at the very end (SYNC-15): a visitor's new laptop starts
-    # from them. The block ends just before _wipe_and_make's transaction commits.
+    # tenancy guard (ADR-0042). One block for the whole shop (_the_shop_and_its_people), which every service there
+    # joins, so all its lines (the sides, their drawers, the people) are numbered once, at its end (SYNC-15): a
+    # visitor's new laptop starts from them. Then the laptop and its taps, after that block, and all of it before
+    # _wipe_and_make's transaction commits.
     shop_id = uuid.uuid7()
-    with shop_context(shop_id), recording_changes(shop_id):
+    with shop_context(shop_id):
+        shop, people, today = _the_shop_and_its_people(shop_id)
+        # The taps after the shop's block: its lines numbered first, all at once (SYNC-15), and each tap then numbered
+        # as the push numbers any document, at the end of a block of its own, inside a transaction of its own (03 §5.5).
+        # Inside the shop's block it would work too, as a block inside an atomic() part is one of its own
+        # (apps/core/changes.py); the taps would just take the first numbers. Still in _wipe_and_make's one
+        # transaction: a refused tap undoes the whole reset.
+        manager = next(people[person.display_name] for person in PEOPLE if person.email == MANAGER_EMAIL)
+        laptop = _demo_laptop(manager, Side.objects.get(code=DEMO_LAPTOP_SIDE))
+        _send_the_taps(laptop, people, _demo_taps(today, ZoneInfo(shop.timezone)), today)
+    return shop
+
+
+def _the_shop_and_its_people(shop_id: uuid.UUID) -> tuple[Shop, dict[str, StaffMember], date]:
+    # The shop, its sides, rules and closures, and its people, by their nicknames, and the shop's day they were made
+    # from. The caller opens the shop.
+    with recording_changes(shop_id):
         # The shop, its sides with their stock places and cash drawers, and its own copy of the six roles
         # (set_up_shop), as a demo shop: the refusal above knows it as the seed's own at the next run.
         shop = set_up_shop(name=SHOP_NAME, code=SHOP_CODE, sides=SIDES, kind=ShopKind.DEMO, shop_id=shop_id)
@@ -369,23 +483,33 @@ def _make_the_shop() -> Shop:
         sides = {
             side.code: switch_side(side, version=side.version, is_live=True, by=None) for side in Side.objects.all()
         }
-        # The demo's rules, from the shop's own today, as the system: on the demo a visitor's new value starts
-        # tomorrow at the earliest (demo.rules_from_tomorrow), and the system's today, so the demo starts with them.
-        # Each row gets its line in this block, as a laptop needs every rule's rows (SYNC-2).
+        # The demo's rules, from three weeks back, as the system, saying it is the demo's seed, which alone may start
+        # a rule on a day gone by, and only on the demo (as_the_demo_seed, DATA-8): the book counts a day only once
+        # attendance is on (ATT-10), and fines a late one by that day's rules. A visitor's new value starts tomorrow
+        # at the earliest (demo.rules_from_tomorrow). Each row gets its line in this block, as a laptop needs every
+        # rule's rows (SYNC-2).
+        # The shop's day, asked once, here, as the shop's zone is known from now on: every part of the demo is made
+        # from this one answer. A reset that runs across midnight in Arusha and asked again later would make the
+        # taps from another day than the rules and the people, and the first day's taps would be flagged, days to
+        # decide nobody made (DATA-8's review).
         today = shop_today(shop)
+        first_day = today - timedelta(days=HISTORY_DAYS)
         for rule, value in DEMO_RULES:
-            set_setting(shop, key=rule.key, value=value, effective_from=today, by=None)
+            set_setting(shop, key=rule.key, value=value, effective_from=first_day, by=None, as_the_demo_seed=True)
         # The coming public holidays, closed, as the system, from the shop's own today (ATT-8): Mipangilio ya duka then
         # lists them (ATT-9), and a visitor can try Ondoa and a new last day on them, from tomorrow on
         # (demo.closures_from_tomorrow). The laptops never get closures, so they add no line to this block.
         for first, last, name in coming_public_holidays(today):
             add_closure(shop, first_day=first, last_day=last, name=name, by=None)
+        people = {}
         for person in PEOPLE:
             # A person's account has no shop (rule 1); their job at the shop does. create_user with no password
             # stores one that nothing can match, so a seller can log in only with her PIN.
             user = User.objects.create_user(full_name=person.full_name, email=person.email, password=person.password)
             # by=None everywhere: the system sets the demo up, not one of its people, so no giver is named (02 §1).
-            staff = add_staff(shop=shop, user=user, display_name=person.display_name, by=None)
+            # Working from three weeks back, as the rules start (DATA-8): the book counts no day before a job's first
+            # (02 §5), and a tap before it would go to review (ATT-11).
+            staff = add_staff(shop=shop, user=user, display_name=person.display_name, started_on=first_day, by=None)
             role = Role.objects.get(template=person.role)
             side = None if person.side is None else sides[person.side]
             assign_role(staff, role, side=side, by=None)
@@ -393,11 +517,109 @@ def _make_the_shop() -> Shop:
                 grant_permission(staff, key, side=None, by=None)
             if person.pin is not None:
                 set_pin(staff, person.pin, by=None)
-            # Their pay from their first day, today, as the system: a visitor sees it on the worker's page (WAGE-1),
-            # and the month page lists them by it (ATT-5). No laptop gets a rate, so it adds no line to this block.
+            # Their pay from their first day, as the system: a visitor sees it on the worker's page (WAGE-1), and the
+            # month page lists them by it (ATT-5). No laptop gets a rate, so it adds no line to this block.
             if person.daily_rate is not None:
                 set_pay_rate(staff, daily_rate=Decimal(person.daily_rate), effective_from=staff.started_on, by=None)
-    return shop
+            people[person.display_name] = staff
+    return shop, people, today
+
+
+# Django's error reports list each function's local variables when something fails: `pairing` holds the laptop's key,
+# which shows as stars there, as in start_pairing (AUTH-2).
+@sensitive_variables("pairing")
+def _demo_laptop(manager: StaffMember, side: Side) -> Device:
+    # The demo's laptop (DATA-8), paired as any laptop is (03 §5.9): it asks to join, and the manager confirms its code,
+    # as the one-tap demo pairs a visitor's browser (register_demo_device). So the devices page shows it, confirmed by
+    # Meneja, as any laptop. Its key is dropped here: no browser holds it, so nothing but this seed ever sends as it.
+    pairing = start_pairing()
+    return confirm_pairing(pairing.request.code, name=DEMO_LAPTOP_NAME, home_side=side, by=manager)
+
+
+def _working_days_back(today: date) -> list[date]:
+    # The working days of the HISTORY_DAYS before today, the latest first: Sunday is off at every shop, and paid
+    # outside the system (01 §8.1), so it has no taps. An OddDay's `back` counts in this list, from 1.
+    days = (today - timedelta(days=n) for n in range(1, HISTORY_DAYS + 1))
+    return [day for day in days if day.weekday() != SUNDAY]
+
+
+@dataclass(frozen=True)
+class _DemoTap:
+    # One tap of the days before today: whose, Ingia or Toka, and when, by the laptop's clock in the shop's zone.
+    person: DemoPerson
+    kind: ClockKind
+    at: datetime
+
+
+def _demo_taps(today: date, zone: ZoneInfo) -> list[_DemoTap]:
+    # Each person's taps on each working day before `today`, the earliest first, as the laptop made them: an ordinary
+    # day's minutes drawn from the fixed seed, an odd day's as PEOPLE gives them. From the date and the zone alone, so
+    # the seed's check counts them (_holds_its_taps) without reading the shop's rows.
+    draws = random.Random(TAPS_SEED)
+    taps: list[_DemoTap] = []
+    # The oldest day first, and the people in PEOPLE's order, so the draws come in the same order at every reset.
+    for back, day in reversed(list(enumerate(_working_days_back(today), start=1))):
+        for person in PEOPLE:
+            # Drawn on every day, odd or not, so an odd day moved changes no other day's minutes.
+            came: datetime | None = datetime.combine(day, ON_TIME_FROM, tzinfo=zone) + timedelta(
+                minutes=draws.randint(0, ON_TAPS)
+            )
+            left: datetime | None = datetime.combine(day, CLOSING_FROM, tzinfo=zone) + timedelta(
+                minutes=draws.randint(0, OFF_TAPS)
+            )
+            odd = next((odd for odd in person.odd_days if odd.back == back), None)
+            if odd is not None:
+                came = None if odd.came is None else datetime.combine(day, odd.came, tzinfo=zone)
+                left = None if odd.left is None else datetime.combine(day, odd.left, tzinfo=zone)
+            taps.extend(_DemoTap(person, kind, at) for kind, at in ((ClockKind.IN, came), (ClockKind.OUT, left)) if at)
+    # The laptop numbers its records in the order they were made, so a later one never has an earlier time: that would
+    # say its clock moved (ATT-1's sign 1). sorted() keeps two taps of one minute in the order above.
+    return sorted(taps, key=lambda tap: tap.at)
+
+
+def _send_the_taps(laptop: Device, people: dict[str, StaffMember], taps: list[_DemoTap], today: date) -> None:
+    # The taps, sent by the demo's laptop through the push (SYNC-4), as the laptop sends its outbox: each a clock
+    # document, version 2, made by the person's job in this shop (`people`, by nickname), numbered from 1, in pushes of
+    # at most MOST_DOCUMENTS, as the route takes (03 §6.3). Sent now, long after they were made, by a laptop whose
+    # clock is right (sent_at, the server's now): so the server keeps each at the laptop's time (device_ok, ATT-1). No
+    # photo: the demo keeps none (Jack, ATT-3: A). `today`: the shop's day the taps were made from.
+    zone = ZoneInfo(laptop.shop.timezone)
+    last_heard = datetime.combine(today - timedelta(days=HISTORY_DAYS), LAST_HEARD, tzinfo=zone)
+    documents = [
+        Sent(
+            id=uuid.uuid7(),
+            type="clock",
+            schema_version=2,
+            device_seq=number,
+            client_time=tap.at,
+            created_by=people[tap.person.display_name].pk,
+            payload={"kind": tap.kind, "last_server_time": last_heard.isoformat(), "no_photo": NoPhoto.DEMO},
+        )
+        for number, tap in enumerate(taps, start=1)
+    ]
+    for start in range(0, len(documents), MOST_DOCUMENTS):
+        batch = documents[start : start + MOST_DOCUMENTS]
+        now = timezone.now()
+        answers = push(
+            laptop,
+            batch,
+            received_at=now,
+            sent_at=now,
+            unsent_count=len(documents) - start - len(batch),
+            app_version=settings.APP_VERSION,
+            outages=[],
+        )
+        # The push never raises for a tap it refuses: it answers invalid, and goes on (03 §6.3). Nor for one it flags:
+        # that one is accepted (accept, then flag). The seed's taps are its own, timed by a right clock, so either is a
+        # bug in this seed, and a flag would hand a visitor a day to decide nobody made. So it stops the reset, and its
+        # transaction takes the wipe back too: yesterday's demo stays, and the deploy's smoke test shows red.
+        wrong = [
+            (answer.status, answer.code, answer.fields, answer.flags)
+            for answer in answers
+            if answer.status != PushedStatus.ACCEPTED or answer.flags
+        ]
+        if wrong:
+            raise RuntimeError(f"The push refused or flagged the demo laptop's taps: {wrong}")
 
 
 @dataclass(frozen=True)

@@ -9,6 +9,11 @@ tests prove what it refuses, and that a refusal writes nothing:
     today's demo shop         → kept: a visitor back from a break finds their work
     an earlier day's          → made again, the day being Arusha's, not UTC's
 
+And the 21 days before today (DATA-8): Asha, Baraka and Meneja tapping Ingia and Toka on the demo's laptop, so the month
+page (ATT-5) has days to show. Those tests work the days out through the book (ATT-10) and count them. Only the tests
+that take `three_weeks` get them; the others make the shop with no day before today, as the taps cost the seed some 3
+seconds (conftest.py).
+
 The logins are written here as the visitors read them (README, docs/runbooks/demo.md, 04's notes, the browser test),
 never imported from the seed: a changed PIN must turn a test red, not pass quietly while the README says another.
 
@@ -16,6 +21,8 @@ never imported from the seed: a changed PIN must turn a test red, not pass quiet
 with new ids, and the test's rollback takes those back, so the next test must not find them in memory.
 """
 
+import uuid
+from collections import Counter
 from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, date, datetime, time, timedelta
@@ -34,22 +41,32 @@ from django.test import Client
 from django.utils import timezone
 from pytest_django import Settings
 
+from apps.control.models import Flag
 from apps.core.models import ChangeOp, SequenceName
 from apps.core.permissions import Permission
 from apps.core.sequences import next_numbers
 from apps.core.settings_registry import ATTENDANCE_ON, CLOSING, LATE_FINE, SECOND_FINE
 from apps.core.tenancy import shop_context
 from apps.demo import services
-from apps.demo.services import SHOP_CODE, PublicHoliday, Seeded, coming_public_holidays, seed_demo
-from apps.people.models import PermissionGrant, RoleAssignment, StaffMember, User
+from apps.demo.services import (
+    SHOP_CODE,
+    PublicHoliday,
+    Seeded,
+    coming_public_holidays,
+    register_demo_device,
+    seed_demo,
+)
+from apps.people.models import Device, PermissionGrant, RoleAssignment, StaffMember, User
 from apps.people.permissions import effective_permissions
 from apps.people.pins import pin_matches
 from apps.people.services import add_worker, end_permission, mark_left, suspend
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, ShopKind, Side
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
-from apps.staffpay.models import PayRate
-from apps.staffpay.services import set_pay_rate
+from apps.staffpay.models import AttendanceEvent, DayStatus, NoPhoto, PayRate, ReviewReason, TimeCheck
+from apps.staffpay.services import attendance_month, set_pay_rate, work_out_days
+from apps.sync.models import PushedDocument, PushedStatus
+from apps.sync.push import Answer, Sent, push
 from apps.sync.registry import REGISTRY
 from tests.change_log import lines_after
 
@@ -117,7 +134,13 @@ def what_the_shop_holds() -> dict[str, Any]:
                     "password works": user.check_password(MANAGER_PASSWORD),
                 }
             )
-    return {"shop": (shop.name, shop.code, shop.kind), "sides": side_list, "people": people}
+        # Every tap (DATA-8): who, in or out, and when by the laptop's clock. Two builds on one day make the same, as
+        # the minutes come from a fixed seed.
+        taps = sorted(
+            (event.staff.display_name, event.kind, event.client_time)
+            for event in AttendanceEvent.objects.select_related("staff")
+        )
+    return {"shop": (shop.name, shop.code, shop.kind), "sides": side_list, "people": people, "taps": taps}
 
 
 def row_counts() -> dict[str, int]:
@@ -199,15 +222,20 @@ def test_seed_demo_refused_without_the_sign_writes_nothing(settings: Settings) -
     assert row_counts() == before
 
 
-def test_seed_demo_is_repeatable() -> None:
+def test_seed_demo_is_repeatable(three_weeks: None) -> None:
     # The card's first box: the same shop every time. Built twice, both builds hold the same shop, sides, people, roles
-    # and logins, and the shop as Jack chose it (8 Nov 2026). Nothing in this version is picked at random.
+    # and logins, and the shop as Jack chose it (8 Nov 2026). The taps' minutes are picked at random from a fixed seed
+    # (TAPS_SEED, DATA-8), so both builds pick the same.
     seed_demo(fresh=True)
     first = what_the_shop_holds()
     seed_demo(fresh=True)
     second = what_the_shop_holds()
 
     assert first == second
+    # The taps, the same in both builds above (DATA-8), and as many as the card's days give: two a working day, of 18,
+    # but none on Baraka's absent day and no Toka on Asha's day to decide.
+    taps = first.pop("taps")
+    assert Counter(name for name, _kind, _at in taps) == {"Asha": 35, "Baraka": 34, "Meneja": 36}
     assert first == {
         "shop": ("Duka la Mfano", "DEMO", ShopKind.DEMO),
         "sides": [("D", "Dawa"), ("F", "Vyakula")],
@@ -350,6 +378,54 @@ def test_seed_demo_makes_todays_shop_again_without_its_rates(monkeypatch: pytest
         assert PayRate.objects.get(staff__display_name="Asha").daily_rate == Decimal("11000.00")
     # Then kept, as its people hold their rates now.
     assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_makes_todays_shop_again_without_its_taps(three_weeks: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # As for its rules, closures, keys and rates: DATA-8's deploy finds the demo the older seed made that morning, with
+    # no day before today, and makes the shop again at once, so the month page (ATT-5) shows its weeks the same day.
+    with monkeypatch.context() as older_seed:
+        older_seed.setattr(services, "HISTORY_DAYS", 0)
+        seed_demo(fresh=True)
+    made = the_demo_shop()
+
+    assert seed_demo() == Seeded.MADE
+    shop = the_demo_shop()
+    assert shop != made
+    with shop_context(shop):
+        assert AttendanceEvent.objects.exists()
+    # Then kept, as it holds them now.
+    assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_keeps_todays_shop_with_its_taps(three_weeks: None) -> None:
+    # The demo wakes from its 15-minute sleep: a demo made today with its weeks stays, with a visitor's work in it. A
+    # check that never found the taps would make it again at every wake-up. The visitor's work here: Asha's Ingia this
+    # morning, on the visitor's own laptop (Jaribu demo), which the check never counts, as it counts the days before
+    # today (DATA-8's review).
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+    visitors_laptop = register_demo_device().device
+    now = timezone.now()
+    with shop_context(made):
+        asha = StaffMember.objects.get(display_name="Asha")
+        tapped = Sent(
+            id=uuid.uuid7(),
+            type="clock",
+            schema_version=2,
+            device_seq=1,
+            client_time=now,
+            created_by=asha.pk,
+            payload={"kind": "in", "last_server_time": now.isoformat(), "no_photo": "demo"},
+        )
+        answers = push(
+            visitors_laptop, [tapped], received_at=now, sent_at=now, unsent_count=0, app_version="dev", outages=[]
+        )
+    assert [answer.status for answer in answers] == [PushedStatus.ACCEPTED]
+
+    assert seed_demo() == Seeded.KEPT
+    assert the_demo_shop() == made
+    with shop_context(made):
+        assert AttendanceEvent.objects.filter(pk=tapped.id).exists()
 
 
 def test_seed_demo_keeps_its_peoples_rates_as_made() -> None:
@@ -623,41 +699,212 @@ def test_coming_public_holidays() -> None:
     assert coming_public_holidays(date(2026, 12, 26)) == [mwaka_mpya, mapinduzi, karume]
 
 
-def test_seed_demo_sets_its_fines_and_switches_attendance_on() -> None:
+def test_seed_demo_sets_its_fines_and_switches_attendance_on(three_weeks: None) -> None:
     # A shop's fines start at nothing, as this public repo names no real amount (rule 10), so the demo types made-up
-    # ones, and a visitor sees a late day's fine. Attendance is on from the day the demo is made (ADR-0033), so its
-    # laptops keep Mahudhurio (ATT-2).
+    # ones, and a visitor sees a late day's fine. Attendance is on (ADR-0033), so its laptops keep Mahudhurio (ATT-2):
+    # from three weeks back, as are the fines and each person's first day, so the book counts the days the demo's
+    # laptop tapped on (DATA-8). The day before, the shop had no attendance and no fines.
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        three_weeks_back = shop_today(shop) - timedelta(days=21)
+        assert get_setting(ATTENDANCE_ON, shop, on=three_weeks_back) is True
+        assert get_setting(LATE_FINE, shop, on=three_weeks_back) == Decimal("500.00")
+        assert get_setting(SECOND_FINE, shop, on=three_weeks_back) == Decimal("1500.00")
+        assert get_setting(ATTENDANCE_ON, shop, on=three_weeks_back - timedelta(days=1)) is False
+        # Set by the system, with no note, as no person of the demo set them.
+        rows = Setting.objects.order_by("key")
+        assert [(row.key, row.effective_from, row.note, row.created_by) for row in rows] == [
+            ("attendance.enabled", three_weeks_back, "", None),
+            ("attendance.late_fine", three_weeks_back, "", None),
+            ("attendance.second_fine", three_weeks_back, "", None),
+        ]
+        assert set(StaffMember.objects.values_list("started_on", flat=True)) == {three_weeks_back}
+
+
+def test_seed_demo_numbers_every_record_once(three_weeks: None) -> None:
+    # A visitor's new laptop starts from the demo shop's change log (SYNC-3): every record it gets names a line, made
+    # through the services, and the seed numbers them all once, at the end of its one block (SYNC-15). The demo shop's
+    # two sides, their two drawers, its three rules (ATT-2) and its three people: ten lines, from 1. Then the demo
+    # laptop's taps (DATA-8), each numbered as the push numbers any document, at the end of its own (SYNC-4): its line
+    # is the tap's posted_seq. No laptop is sent a tap, so the pull skips those lines (apps/sync/pull.py).
+    with mock.patch("apps.core.changes.next_numbers", wraps=next_numbers) as numbering:
+        seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        taps = {event.pk for event in AttendanceEvent.objects.all()}
+    assert numbering.call_args_list == [
+        mock.call(shop.pk, SequenceName.CHANGE, 10),
+        *[mock.call(shop.pk, SequenceName.CHANGE, 1)] * len(taps),
+    ]
+    lines = lines_after(shop, 0)
+    assert [number for number, *_ in lines] == list(range(1, 11 + len(taps)))
+    assert all(op == ChangeOp.UPSERT for *_, op in lines)
+    # One line for each record a laptop is sent, and one for each tap, and none for anything else: the registry's rows
+    # (apps/sync/registry.py).
+    with shop_context(shop):
+        sent = {(code, row.pk) for code, entry in REGISTRY.items() for row in entry.rows(shop)}
+    assert {(entity, record_id) for _number, entity, record_id, _op in lines} == sent | {
+        ("attendance_event", tap) for tap in taps
+    }
+
+
+def test_seed_demo_gives_three_weeks_of_taps(three_weeks: None) -> None:
+    # The card's first box (DATA-8): the 21 days before today, worked out by the book (ATT-10), give each of the demo's
+    # people the days the card names, wherever today falls. 21 days hold three Sundays, off, so 18 working days each:
+    # Asha late twice, a half day and a day to decide; Baraka late once and absent once; Meneja late once.
     seed_demo(fresh=True)
 
     shop = the_demo_shop()
     with shop_context(shop):
         today = shop_today(shop)
-        assert get_setting(ATTENDANCE_ON, shop, on=today) is True
-        assert get_setting(LATE_FINE, shop, on=today) == Decimal("500.00")
-        assert get_setting(SECOND_FINE, shop, on=today) == Decimal("1500.00")
-        # Set by the system from the shop's own today, with no note, as no person of the demo set them.
-        rows = Setting.objects.order_by("key")
-        assert [(row.key, row.effective_from, row.note, row.created_by) for row in rows] == [
-            ("attendance.enabled", today, "", None),
-            ("attendance.late_fine", today, "", None),
-            ("attendance.second_fine", today, "", None),
-        ]
+        days = work_out_days(shop, today - timedelta(days=21), today - timedelta(days=1))
+    kinds = {
+        name: Counter(day.status for day in days if day.staff.display_name == name)
+        for name in ("Asha", "Baraka", "Meneja")
+    }
+    assert kinds == {
+        "Asha": {
+            DayStatus.ON_TIME: 14,
+            DayStatus.LATE: 2,
+            DayStatus.HALF: 1,
+            DayStatus.NEEDS_REVIEW: 1,
+            DayStatus.OFF: 3,
+        },
+        "Baraka": {DayStatus.ON_TIME: 16, DayStatus.LATE: 1, DayStatus.ABSENT: 1, DayStatus.OFF: 3},
+        "Meneja": {DayStatus.ON_TIME: 17, DayStatus.LATE: 1, DayStatus.OFF: 3},
+    }
+    # Each late day takes its fine: Asha's 08:10 the second, 1,500, the others the first, 500 (DEMO_RULES).
+    assert sorted((day.staff.display_name, day.fine) for day in days if day.status == DayStatus.LATE) == [
+        ("Asha", Decimal("500.00")),
+        ("Asha", Decimal("1500.00")),
+        ("Baraka", Decimal("500.00")),
+        ("Meneja", Decimal("500.00")),
+    ]
+    # The one day to decide is Asha's latest working day, the day before today, or Saturday when today is Monday: an
+    # Ingia with no Toka. So the month page's list always shows it, at the top of the latest month (ATT-5).
+    latest = today - timedelta(days=2 if today.weekday() == 0 else 1)
+    to_decide = [(day.staff.display_name, day.date, day.review_reason) for day in days if day.review_reason]
+    assert to_decide == [("Asha", latest, ReviewReason.NO_OUT)]
 
 
-def test_seed_demo_numbers_every_record_once() -> None:
-    # A visitor's new laptop starts from the demo shop's change log (SYNC-3): every record it gets names a line, made
-    # through the services, and the seed numbers them all once, at the end of its one block (SYNC-15). The demo shop's
-    # two sides, their two drawers, its three rules (ATT-2) and its three people: ten lines, from 1.
-    with mock.patch("apps.core.changes.next_numbers", wraps=next_numbers) as numbering:
-        seed_demo(fresh=True)
+def test_seed_demo_fills_the_month_page(three_weeks: None) -> None:
+    # The card's first box, as the month page reads it (attendance_month, ATT-5), not only the book: the 21 days fall in
+    # one month or two, and over them each of the three people is listed, by their daily rate, with the card's counts,
+    # and the one day to decide is Asha's latest working day, with no Toka (DATA-8's review).
+    seed_demo(fresh=True)
 
     shop = the_demo_shop()
-    numbering.assert_called_once_with(shop.pk, SequenceName.CHANGE, 10)
-    lines = lines_after(shop, 0)
-    assert [number for number, *_ in lines] == list(range(1, 11))
-    assert all(op == ChangeOp.UPSERT for *_, op in lines)
-    # One line for each record a laptop is sent, and none for anything else: the registry's rows
-    # (apps/sync/registry.py).
     with shop_context(shop):
-        sent = {(code, row.pk) for code, entry in REGISTRY.items() for row in entry.rows(shop)}
-    assert {(entity, record_id) for _number, entity, record_id, _op in lines} == sent
+        today = shop_today(shop)
+        months = sorted({(today - timedelta(days=21)).replace(day=1), (today - timedelta(days=1)).replace(day=1)})
+        answers = [attendance_month(shop, month) for month in months]
+    kinds = ("on_time", "late", "half", "absent", "needs_review")
+    listed = {worker.display_name for answer in answers for worker in answer.workers}
+    assert listed == {"Asha", "Baraka", "Meneja"}
+    counted = {
+        name: [
+            sum(getattr(worker, kind) for answer in answers for worker in answer.workers if worker.display_name == name)
+            for kind in kinds
+        ]
+        for name in listed
+    }
+    # ✓ Ch ½ H !, as the page shows them.
+    assert counted == {"Asha": [14, 2, 1, 0, 1], "Baraka": [16, 1, 0, 1, 0], "Meneja": [17, 1, 0, 0, 0]}
+    latest = today - timedelta(days=2 if today.weekday() == 0 else 1)
+    to_decide = [
+        (day.staff.display_name, day.date, day.review_reason) for answer in answers for day in answer.to_decide
+    ]
+    assert to_decide == [("Asha", latest, ReviewReason.NO_OUT)]
+
+
+def test_every_odd_day_falls_in_the_weeks(three_weeks: None) -> None:
+    # Each odd day counts back among the working days before today (OddDay.back): one past them would quietly never
+    # happen, and the month page would lose a late day or the day to decide with no test the wiser (DATA-8's review).
+    # 21 days always hold three Sundays, so 18 working days, wherever today falls; nor may one person have two odd
+    # days in one place, as only the first would count.
+    for today in (date(2026, 11, 20), date(2026, 11, 23), date(2026, 12, 1), date(2027, 3, 1)):
+        assert len(services._working_days_back(today)) == 18
+    for person in services.PEOPLE:
+        places = [odd.back for odd in person.odd_days]
+        assert all(1 <= place <= 18 for place in places), person.display_name
+        assert len(set(places)) == len(places), person.display_name
+
+
+def test_seed_demo_taps_are_the_laptops_time(three_weeks: None) -> None:
+    # Each tap reaches the server as a laptop's do, through the push (SYNC-4), from the demo's laptop on Dawa, sent at
+    # the reset, long after it was made: so the server keeps the laptop's time (device_ok, ATT-1), as no sign says its
+    # clock moved, and no photo, as the demo keeps none (ATT-3). The laptop numbers them from 1 with none missing, every
+    # line of the answer log says accepted, and nothing is flagged.
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        laptop = Device.objects.select_related("home_side").get()
+        taps = list(AttendanceEvent.objects.order_by("device_seq"))
+        assert (laptop.name, laptop.home_side.code) == ("Laptop ya Dawa", "D")
+        assert {(tap.device_id, tap.time_check, tap.no_photo) for tap in taps} == {
+            (laptop.pk, TimeCheck.DEVICE_OK, NoPhoto.DEMO)
+        }
+        assert all(tap.trusted_time == tap.client_time for tap in taps)
+        assert [tap.device_seq for tap in taps] == list(range(1, len(taps) + 1))
+        assert list(PushedDocument.objects.values_list("status", flat=True).distinct()) == [PushedStatus.ACCEPTED]
+        assert PushedDocument.objects.count() == len(taps)
+        assert not Flag.objects.exists()
+
+
+def test_seed_demo_reads_its_day_once(three_weeks: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A reset that runs across midnight in Arusha: the seed asks the shop's day once, as it starts, and every part of
+    # the demo is made from that one answer. Asked again later, the first day's taps would have been older than the
+    # laptop's last word from the server, or later than the push, and flagged: days to decide nobody made (DATA-8's
+    # review). Here the shop's clock turns to the next day after its first answer.
+    asked: list[Shop] = []
+
+    def turning_at_midnight(shop: Shop) -> date:
+        asked.append(shop)
+        return shop_today(shop) + timedelta(days=0 if len(asked) == 1 else 1)
+
+    monkeypatch.setattr(services, "shop_today", turning_at_midnight)
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        assert not Flag.objects.exists()
+        assert set(AttendanceEvent.objects.values_list("time_check", flat=True)) == {TimeCheck.DEVICE_OK}
+
+
+def test_seed_demo_stops_when_a_tap_is_flagged(three_weeks: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A flagged tap is accepted (accept, then flag), so the push says nothing more. The demo's taps are the seed's own,
+    # timed by a right clock: a flag says the seed is wrong, and would send a visitor a day to decide nobody made. So
+    # the reset stops, and the demo made before stays.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+
+    def flags(laptop: Device, documents: list[Any], **kwargs: object) -> list[Answer]:
+        flag = {"id": "0", "kind": "unverified_time"}
+        return [Answer(id=document.id, status=PushedStatus.ACCEPTED, flags=[flag]) for document in documents]
+
+    monkeypatch.setattr(services, "push", flags)
+
+    with pytest.raises(RuntimeError, match="refused or flagged"):
+        seed_demo(fresh=True)
+    assert the_demo_shop() == made
+
+
+def test_seed_demo_stops_when_a_tap_is_refused(three_weeks: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The push never raises for a tap it refuses: it answers invalid and goes on (03 §6.3). A refused tap is a bug in
+    # the seed, so the reset stops, and its one transaction takes the wipe back too: the demo made before stays, never
+    # a shop with holes in its weeks (DATA-8's card).
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+
+    def refuses(laptop: Device, documents: list[Any], **kwargs: object) -> list[Answer]:
+        return [Answer(id=document.id, status=PushedStatus.INVALID, code="invalid") for document in documents]
+
+    monkeypatch.setattr(services, "push", refuses)
+
+    with pytest.raises(RuntimeError, match="refused or flagged"):
+        seed_demo(fresh=True)
+    assert the_demo_shop() == made
