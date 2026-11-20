@@ -16,13 +16,14 @@
 // Everything comes from the server's one answer for the month (worker-month.ts): the page never works out what a day
 // was, nor moves a time by the phone's zone. The photo is opened from its own route, which asks attendance.manage
 // again and keeps no copy (CTRL-3), and only once the answer says its file came: a photo still on its way, or taken
-// away, says so in words, never as a broken picture.
+// away, says so in words, never as a broken picture; and one that came but can't be opened now, as the phone went
+// offline or the login ended while the page was open, says that instead (ATT-12's review).
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
 
 import Image from "next/image";
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Decimal } from "@/lib/decimal";
@@ -158,6 +159,9 @@ function Tap({ tap, name }: { tap: AttendanceTap; name: string }) {
   const said = attendance("timeOfDay", { time: clock, part: clockPart(clock) });
   const time = tap.time === null ? t("laptopTime", { time: said }) : said;
   const kind = t(`tapKind.${tap.kind}`);
+  // Whether the browser failed to open the photo the answer said is kept: a request of its own, which the route can
+  // refuse though the month was read (no network now, a login ended, the key taken away, the file gone from the disk).
+  const [photoFailed, setPhotoFailed] = useState(false);
   return (
     <div className="grid gap-2">
       <p>{t("tapLine", { kind, time, laptop: tap.laptop })}</p>
@@ -167,7 +171,9 @@ function Tap({ tap, name }: { tap: AttendanceTap; name: string }) {
           {t("doubt", { why: monthWords(`reason.${tap.doubt}`, { time: "" }) })}
         </p>
       ) : null}
-      {tap.photo?.state === "kept" ? (
+      {tap.photo?.state === "kept" && photoFailed ? (
+        <p className="text-muted-foreground">{t("photoFailed")}</p>
+      ) : tap.photo?.state === "kept" ? (
         // Opened from the photo route, as the browser sends the office's login with it. Not shrunk by Next.js, which
         // a static app can't (images.unoptimized), and said so here too, so the address is the route's own wherever
         // the page runs: the laptop shrank the photo already (03 §5.13). The size is a hint for the page's layout;
@@ -179,6 +185,7 @@ function Tap({ tap, name }: { tap: AttendanceTap; name: string }) {
           width={1600}
           height={900}
           className="h-auto w-48 rounded-lg"
+          onError={() => setPhotoFailed(true)}
         />
       ) : tap.photo?.state === "waiting" ? (
         <p className="text-muted-foreground">{t("photoWaiting")}</p>

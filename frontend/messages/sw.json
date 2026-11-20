@@ -807,7 +807,8 @@
     "noIn": "Hakuna Ingia.",
     "noOut": "Hakuna Toka.",
     "dayButton": "{weekday} {date}: {kind}",
-    "notCounted": "Siku hii haihesabiwi, lakini ina Ingia au Toka."
+    "notCounted": "Siku hii haihesabiwi, lakini ina Ingia au Toka.",
+    "photoFailed": "Picha haikufunguka. Jaribu tena baadaye."
   },
   "needsAttention": {
     "title": "Kumbukumbu zilizokataliwa na seva",

@@ -191,9 +191,11 @@ describe("a day under the calendar", () => {
     const photo = within(list).getByRole("img", {
       name: "Picha ya Juma, Ingia 07:20 asubuhi",
     });
-    expect(photo.getAttribute("src")).toBe(
-      `/api/v1/control/attachments/${PHOTO}/file/`,
-    );
+    // The photo route's own address, on the app's own host: Next.js writes it whole once the picture watches for a
+    // failure (onError), so only its path is compared.
+    expect(
+      new URL(photo.getAttribute("src") ?? "", window.location.href).pathname,
+    ).toBe(`/api/v1/control/attachments/${PHOTO}/file/`);
     expect(within(open).getByText("Hakuna Toka.")).toBeTruthy();
   });
 
@@ -335,6 +337,44 @@ describe("a day under the calendar", () => {
         "Toka 18:30 jioni (saa ya kompyuta, haiaminiki) · Laptop ya Dawa",
       ),
     ).toBeTruthy();
+  });
+
+  it("says so when a kept photo can't be opened, never a broken picture", async () => {
+    // The answer says the photo is kept, but the browser can't open it now: the phone went offline, or the login
+    // ended while the page was open, and the photo route refused.
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [
+          day({
+            date: "2026-11-02",
+            status: "on_time",
+            first_in: "07:20",
+            first_out: "18:45",
+          }),
+        ],
+        [
+          tap({
+            date: "2026-11-02",
+            kind: "in",
+            time: "07:20",
+            photo: { id: PHOTO, state: "kept" },
+            no_photo: null,
+          }),
+        ],
+      ),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-02" />,
+    );
+
+    const open = await theDay("Jumatatu 02/11/2026");
+    fireEvent.error(within(open).getByRole("img"));
+
+    expect(
+      await within(open).findByText("Picha haikufunguka. Jaribu tena baadaye."),
+    ).toBeTruthy();
+    expect(within(open).queryByRole("img")).toBeNull();
   });
 
   it("says a photo hasn't come yet, or was removed, never a broken picture", async () => {

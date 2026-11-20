@@ -807,7 +807,8 @@
     "noIn": "No Ingia.",
     "noOut": "No Toka.",
     "dayButton": "{weekday} {date}: {kind}",
-    "notCounted": "This day isn't counted, but it has an Ingia or Toka."
+    "notCounted": "This day isn't counted, but it has an Ingia or Toka.",
+    "photoFailed": "The photo didn't open. Try again later."
   },
   "needsAttention": {
     "title": "Records the server refused",
