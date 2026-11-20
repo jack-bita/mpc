@@ -306,8 +306,8 @@ def test_the_tap_a_later_one_disagrees_with_says_so(
 
 
 def test_a_voided_tap_is_left_out(shop_a: Shop, device_a: Device, asha: StaffMember, staff_a: StaffMember) -> None:
-    # A clock-in tapped twice by mistake, the second voided by a manager (ATT-6): it counts for nothing (T2), so the
-    # day doesn't show it, as the book doesn't read it. ATT-6 shows voided taps, crossed out (A2).
+    # A clock-in tapped twice by mistake, the second voided by a manager (ATT-13): it counts for nothing (T2), so the
+    # day doesn't show it, as the book doesn't read it. ATT-13 shows voided taps, crossed out (A2).
     first = tap(device_a, asha, ClockKind.IN, on(1, 7, 20))
     tap(
         device_a,

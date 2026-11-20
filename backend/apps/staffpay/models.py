@@ -96,7 +96,7 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
     # who tapped, on the laptop, by their PIN (X3).
 
     # Whose attendance it is: today always the one who tapped. A column of its own all the same, as a manager
-    # entering a missed clock-in for someone (ATT-6) writes a line about another person, and a ledger's lines can't
+    # entering a missed clock-in for someone (ATT-13) writes a line about another person, and a ledger's lines can't
     # be filled in later. PROTECT: nothing is deleted (rule 7). No index of its own: indexes lead with `shop`, and the
     # one the book of days reads a month by is below (Meta).
     staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
@@ -126,7 +126,7 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
     # The void stamp (03 §5.6): empty while the line counts, filled once when it is voided, then frozen, as the
     # trigger in this table's migration makes PostgreSQL hold it. A clock-in tapped twice by mistake is voided, never
     # deleted (T3). Who voided it: a staff member, as created_by is; PROTECT, as nothing is deleted. That they are of
-    # this line's shop is the void service's check (T1, ATT-6): the database can't hold it with one column. The fourth
+    # this line's shop is the void service's check (T1, ATT-13): the database can't hold it with one column. The fourth
     # part, `void_approval`, comes with the Approval table (R1), in a migration of its own.
     voided_at = models.DateTimeField(null=True, blank=True)
     voided_by = models.ForeignKey(
@@ -212,7 +212,7 @@ class AttendanceDay(ShopScoped):
     #
     # Not a ledger: a day is worked out again freely until its pay run is approved (WAGE-3), as what it is worked out
     # from can still change after it is kept: a tap comes late, from a laptop that was offline; a manager voids a tap
-    # (ATT-6); a job's first or last day is moved (PPL-10). Never a rule: a rule never starts on a day gone by
+    # (ATT-13); a job's first or last day is moved (PPL-10). Never a rule: a rule never starts on a day gone by
     # (setting.date_past, SHOP-3), and the book keeps only days gone by. So its row changes, and the edit history's
     # trigger in this table's migration keeps each change (ADR-0036): Asha's 16 Nov went from needs review to on time,
     # the day her Toka arrived from a laptop that had been offline. The trigger writes nothing when a day comes out the

@@ -12,7 +12,7 @@ rules, hands them in, and keeps the answer, one row per job and date (Attendance
 see go to review: a closed day with a tap (ATT-10); and a day with a tap in doubt, or outside a job's days with a tap
 (ATT-11). Each day to decide keeps why, the book's reason before the rule's (ReviewReason, ATT-5), for the month page
 to show beside it. Nothing here is typed by a person: the days are answers, worked out again each time they are asked
-for, as a tap can come late from a laptop that was offline, a manager can void a tap (ATT-6), and a job's first or last
+for, as a tap can come late from a laptop that was offline, a manager can void a tap (ATT-13), and a job's first or last
 day can be moved (PPL-10). ATT-5 asks for a month to show, WAGE-2 for a month to pay, ATT-7 each night. No line in the
 change log: no laptop keeps a copy of the days.
 
@@ -269,7 +269,7 @@ def _taps(
     # which a person must decide (ATT-11), each with why (ATT-5). One query, whatever the number of taps.
     asks_not_working, asks_disputed = _doubt_questions(shop)
     lines = (
-        # A voided tap counts for nothing (T2): a clock-in tapped twice by mistake, voided by a manager (ATT-6). Nor
+        # A voided tap counts for nothing (T2): a clock-in tapped twice by mistake, voided by a manager (ATT-13). Nor
         # does it send its day to review: Juma's flagged tap, once voided, leaves his day absent.
         AttendanceEvent.objects.filter(shop=shop, voided_at__isnull=True)
         .filter(_falls_between(first, last, zone))
@@ -582,7 +582,7 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAtt
     # The job's taps of the month, in one read, today's too: the book keeps no day until it is over (ATT-10), so
     # today's taps are read here as they come. Each with its laptop's name, joined in the same read, and the two
     # questions of doubt the book asks (_doubt_questions). A voided tap counts for nothing (T2), and the book doesn't
-    # read it, so nor does this: ATT-6, which voids one, shows them crossed out (A2). In the order they were made, by
+    # read it, so nor does this: ATT-13, which voids one, shows them crossed out (A2). In the order they were made, by
     # the moment the book places them by; two of one moment, rare, as on two laptops at once, by their ids, which each
     # laptop makes in time order (UUIDv7, ADR-0007): never by a laptop's own numbering, which says nothing between two
     # laptops (ATT-12's review).

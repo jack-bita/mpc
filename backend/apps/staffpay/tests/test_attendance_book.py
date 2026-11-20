@@ -744,7 +744,7 @@ def test_another_flag_on_the_line_sends_nothing(shop_a: Shop, device_a: Device, 
 def test_a_voided_flagged_tap_sends_nothing(
     shop_a: Shop, device_a: Device, staff_a: StaffMember, juma: StaffMember
 ) -> None:
-    # Juma's flagged Ingia is voided by a manager (T2, ATT-6): a voided tap counts for nothing, so it sends nothing
+    # Juma's flagged Ingia is voided by a manager (T2, ATT-13): a voided tap counts for nothing, so it sends nothing
     # either. With no tap left, his Tuesday is absent.
     ingia = tap(
         device_a,
