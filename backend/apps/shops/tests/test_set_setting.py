@@ -63,7 +63,8 @@ def test_set_setting_saves_a_new_row(shop_a: Shop, staff_a: Any) -> None:
 
 def test_past_day_refused(shop_a: Shop) -> None:
     # Yesterday is refused, and nothing is written: a value from yesterday would change what yesterday's clock-ins
-    # answer (Jack, 15 Nov 2026).
+    # answer (Jack, 15 Nov 2026). The system too, as here: only on the demo may it (DATA-8), and the real server never
+    # has the demo's sign.
     yesterday = shop_today(shop_a) - timedelta(days=1)
     with shop_context(shop_a), pytest.raises(ValidationError) as refused:
         set_setting(shop_a, key=LATE_FINE.key, value="2000", effective_from=yesterday, by=None)
@@ -201,3 +202,28 @@ def test_the_system_sets_a_value_from_today_on_the_demo(shop_a: Shop, settings: 
     with shop_context(shop_a):
         set_setting(shop_a, key=LATE_FINE.key, value="2000", effective_from=today, note="Mbegu", by=None)
         assert get_setting(LATE_FINE, shop_a, on=today) == Decimal("2000.00")
+
+
+def test_the_system_starts_a_rule_on_a_past_day_on_the_demo(shop_a: Shop, settings: Settings) -> None:
+    # The demo's seed starts its rules three weeks back, so the month page has days to show (DATA-8): attendance on,
+    # and its fines, from 30 Oct when the seed runs on 20 Nov. It makes a new shop each morning, where no day has been
+    # worked out yet, so nothing a past day answered changes. The day is saved as given, and answers from then on.
+    settings.DEMO_SEED = True
+    three_weeks_back = shop_today(shop_a) - timedelta(days=21)
+    with shop_context(shop_a):
+        set_setting(shop_a, key=LATE_FINE.key, value="500", effective_from=three_weeks_back, by=None)
+        assert get_setting(LATE_FINE, shop_a, on=three_weeks_back) == Decimal("500.00")
+        assert get_setting(LATE_FINE, shop_a, on=three_weeks_back - timedelta(days=1)) == Decimal("0.00")
+
+
+def test_on_the_demo_a_person_still_cant_start_a_rule_on_a_past_day(
+    shop_a: Shop, staff_a: Any, settings: Settings
+) -> None:
+    # Only the system may, as the seed acts (DATA-8): a visitor, as Meneja, with settings.manage, who set the late fine
+    # from yesterday would change days the month page already showed every visitor before them.
+    settings.DEMO_SEED = True
+    yesterday = shop_today(shop_a) - timedelta(days=1)
+    with shop_context(shop_a), pytest.raises(ValidationError) as refused:
+        set_setting(shop_a, key=LATE_FINE.key, value="2000", effective_from=yesterday, by=staff_a)
+    assert refusal_codes(refused) == {"effective_from": ["setting.date_past"]}
+    assert no_rows(shop_a)
