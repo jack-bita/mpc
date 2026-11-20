@@ -11,6 +11,12 @@
 //
 // The tests share one database (the-shop.ts). Others clock Asha in today, which shows on today's square, not on the
 // day to decide; none moves a day of the seed's weeks (demo.people_fixed).
+//
+// The second test decides that day (ATT-6): Meneja opens it, taps Amua siku hii, picks Siku kamili and one of the demo's
+// ready reasons in the sheet, and the day shows his decision beside what the system said, and leaves Zinahitaji
+// uamuzi. A decision is never taken back, so it runs last of the tests that read Asha's day to decide: after
+// attendance-month.spec.ts, as the tests run one at a time, file by file in their names' order (playwright.config.ts),
+// and after the test above, in this file's order. No later file reads the month.
 import sw from "../messages/sw.json";
 
 import {
@@ -100,6 +106,102 @@ test("Meneja opens Asha's day to decide under her calendar, and comes back to th
     ).toBeVisible();
     await expect(
       phone.getByRole("heading", { name: monthShown, level: 2 }),
+    ).toBeVisible();
+  });
+});
+
+test("Meneja decides Asha's day in a sheet, and it waits no more", async ({
+  managersPhone,
+}) => {
+  const phone = await managersPhone.newPage();
+  const sheet = phone.getByRole("dialog", {
+    name: words(WORKER.sheetTitle, { name: "Asha" }),
+  });
+
+  await test.step("Meneja opens Asha's day to decide, from Mahudhurio ya mwezi", async () => {
+    await phone.goto("/login/");
+    await phone.getByLabel(sw.login.password.name).fill(MANAGER_EMAIL);
+    await phone
+      .getByLabel(sw.login.password.password, { exact: true })
+      .fill(MANAGER_PASSWORD);
+    await phone
+      .getByRole("button", { name: sw.login.password.send, exact: true })
+      .click();
+    await phone.getByRole("link", { name: MONTH.title, exact: true }).click();
+    const nothingOver = phone.getByText(MONTH.nothingOverYet, { exact: true });
+    const toDecide = phone.getByRole("list", {
+      name: words(MONTH.toDecide, { count: "1" }),
+    });
+    // On a month's first days, the day is in the month before, as in the test above.
+    await expect(toDecide.or(nothingOver)).toBeVisible();
+    if (await nothingOver.isVisible()) {
+      await phone
+        .getByRole("button", { name: MONTH.before, exact: true })
+        .click();
+      await expect(toDecide).toBeVisible();
+    }
+    await phone
+      .getByRole("link", {
+        name: new RegExp(`^Asha · .+ · ${MONTH.reason.no_out}$`),
+      })
+      .click();
+  });
+
+  await test.step("the sheet slides up with the day's choices, and Meneja decides a full day", async () => {
+    const day = phone.getByRole("region").filter({
+      hasText: words(WORKER.why, { why: MONTH.reason.no_out }),
+    });
+    await day.getByRole("button", { name: WORKER.decide, exact: true }).click();
+    await expect(sheet).toBeVisible();
+    // The demo's fines are made up (rule 10): the line for a late day names one, whatever its amount.
+    await expect(
+      sheet.getByText(WORKER.decision.on_time, { exact: true }),
+    ).toBeVisible();
+    await sheet.getByText(WORKER.decision.on_time, { exact: true }).click();
+    // On the demo, the reason is one of three ready ones to tap (Jack: A), never typed.
+    await sheet
+      .getByText(WORKER.readyReason.forgot_toka, { exact: true })
+      .click();
+    await sheet.getByRole("button", { name: WORKER.save, exact: true }).click();
+    await expect(sheet).toBeHidden();
+  });
+
+  await test.step("the day shows his decision beside what the system said", async () => {
+    const day = phone.getByRole("region").filter({
+      hasText: words(WORKER.decisionReason, {
+        reason: WORKER.readyReason.forgot_toka,
+      }),
+    });
+    // "Siku kamili · uamuzi wa Meneja, 20/11/2026": the sentence from the book, with whatever day the test runs on.
+    const [before, after] = words(WORKER.decidedBy, {
+      decision: WORKER.decision.on_time,
+      by: "Meneja",
+      date: "@",
+    }).split("@");
+    await expect(
+      day.getByText(new RegExp(`^${before}\\d\\d/\\d\\d/\\d{4}${after}$`)),
+    ).toBeVisible();
+    await expect(
+      day.getByText(
+        words(WORKER.systemSaidWhy, {
+          said: WORKER.status.needs_review,
+          why: MONTH.reason.no_out,
+        }),
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      day.getByRole("button", { name: WORKER.changeDecision, exact: true }),
+    ).toBeVisible();
+  });
+
+  await test.step("back on the month, the day waits no more", async () => {
+    await phone.getByRole("button", { name: sw.pageHeader.back }).click();
+    await expect(
+      phone.getByRole("heading", { name: MONTH.title, level: 1 }),
+    ).toBeVisible();
+    await expect(
+      phone.getByText(MONTH.noneToDecide, { exact: true }),
     ).toBeVisible();
   });
 });
