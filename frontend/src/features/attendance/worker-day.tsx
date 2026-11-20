@@ -246,8 +246,11 @@ function Decided({
   return (
     <>
       <p className="flex gap-2 text-lg">
+        {/* The calendar's mark for it: an absence by its kind, O, R or H; else what was decided. */}
         <span aria-hidden className="font-semibold">
-          {monthWords(`mark.${decision.status}`)}
+          {decision.absence_type === null
+            ? monthWords(`mark.${decision.status}`)
+            : t(`mark.${decision.absence_type}`)}
         </span>
         <span>
           {timezone === null

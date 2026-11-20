@@ -656,7 +656,8 @@ describe("deciding a day (ATT-6)", () => {
       "Kazi ya ofisi · uamuzi wa Baba, 20/11/2026",
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Ijumaa 13/11: inahitaji uamuzi" }),
+      // Marked by its decision now, late, on the calendar too.
+      screen.getByRole("button", { name: "Ijumaa 13/11: amechelewa" }),
     );
     // By its words, as a person reads them: the amount keeps its space unbroken (formatMoney), which getByText reads as
     // a space.

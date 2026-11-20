@@ -763,11 +763,17 @@
       "0": "Jp"
     },
     "mark": {
+      "office_duty": "O",
+      "permission": "R",
+      "no_show": "H",
       "off": "–",
       "today": "•",
       "tapped": "+"
     },
     "kind": {
+      "office_duty": "kazi ya ofisi, analipwa",
+      "permission": "ruhusa, halipwi",
+      "no_show": "hakuja bila taarifa",
       "off": "duka limefungwa",
       "today": "leo",
       "tapped": "ina Ingia au Toka, haihesabiwi"

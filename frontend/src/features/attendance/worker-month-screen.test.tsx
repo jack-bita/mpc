@@ -179,6 +179,62 @@ describe("a worker's month", () => {
     ]);
   });
 
+  it("marks a decided day by its decision: O office duty, R permission, H a no-show (ATT-6)", async () => {
+    // Baba decided the week of the 9th: Monday permission, Tuesday a no-show, Wednesday the bank (office duty), and
+    // Thursday's day to decide a full day. Each shows its decision's mark, the book's own answer kept on the day.
+    const decided = (
+      status: WorkerDay["status"],
+      absence: "office_duty" | "permission" | "no_show" | null,
+    ): WorkerDay["decision"] => ({
+      status: status === "needs_review" ? "on_time" : "absent",
+      absence_type: absence,
+      fine: "0.00",
+      by: "Baba",
+      at: "2026-11-20T06:00:00Z",
+      reason: "Uamuzi wa mwenye duka",
+    });
+    const days = JUMAS_NOVEMBER.days.map((each) => {
+      const kinds: Record<
+        string,
+        "office_duty" | "permission" | "no_show" | null
+      > = {
+        "2026-11-09": "permission",
+        "2026-11-10": "no_show",
+        "2026-11-11": "office_duty",
+        "2026-11-12": null,
+      };
+      return each.date in kinds
+        ? {
+            ...each,
+            status:
+              each.date === "2026-11-12" ? each.status : ("absent" as const),
+            decision: decided(each.status, kinds[each.date] ?? null),
+          }
+        : each;
+    });
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: { ...JUMAS_NOVEMBER, days },
+    });
+
+    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay={null} />);
+
+    const weeks = await calendar();
+    expect(weeks[2]?.slice(0, 4)).toEqual([
+      "9Rruhusa, halipwi",
+      "10Hhakuja bila taarifa",
+      "11Okazi ya ofisi, analipwa",
+      "12✓kwa wakati",
+    ]);
+    // The key says what O and R mean; H is any absence's.
+    const key = screen.getByRole("list", { name: "Maana ya alama" });
+    const lines = within(key)
+      .getAllByRole("listitem")
+      .map((line) => line.textContent);
+    expect(lines).toContain("O kazi ya ofisi, analipwa");
+    expect(lines).toContain("R ruhusa, halipwi");
+  });
+
   it("names the worker and the month, and counts the month as the server did", async () => {
     answer("GET", JUMAS_MONTH, { status: 200, body: JUMAS_NOVEMBER });
 
@@ -214,6 +270,9 @@ describe("a worker's month", () => {
       "½ nusu siku",
       "H hakuja",
       "! inahitaji uamuzi",
+      // A decided absence's own two (ATT-6); a no-show is H, as any absence.
+      "O kazi ya ofisi, analipwa",
+      "R ruhusa, halipwi",
       "– duka limefungwa",
       "• leo",
       "+ ina Ingia au Toka, haihesabiwi",

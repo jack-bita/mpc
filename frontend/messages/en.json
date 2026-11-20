@@ -763,11 +763,17 @@
       "0": "Su"
     },
     "mark": {
+      "office_duty": "O",
+      "permission": "P",
+      "no_show": "A",
       "off": "–",
       "today": "•",
       "tapped": "+"
     },
     "kind": {
+      "office_duty": "office duty, paid",
+      "permission": "permission, unpaid",
+      "no_show": "no-show",
       "off": "shop closed",
       "today": "today",
       "tapped": "has an Ingia or Toka, not counted"
