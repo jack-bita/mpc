@@ -25,7 +25,8 @@ type DayToDecide = components["schemas"]["DayToDecide"];
 
 export function DaysToDecide({ days }: { days: DayToDecide[] }) {
   const t = useTranslations("attendanceMonth");
-  // The heading's id, React's own for this part, so two lists on one page (ATT-12 may show a second) never share one.
+  // The heading's id, React's own for this part, so the list is named by its own heading, and two such lists on one page
+  // would never share one.
   const headingId = useId();
   return (
     // A plain box, unnamed: named by its heading too, it was a region a screen reader announced, then the list inside
