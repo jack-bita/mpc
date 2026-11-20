@@ -383,9 +383,9 @@ class AttendanceMonth:
 
 def attendance_month(shop: Shop, month: dt.date) -> AttendanceMonth:
     """The month of `month`, any day of it, as the month page shows it (ATT-5): each worker with a daily pay rate on a
-    day of the month the book answers, with their counts, by name; and those workers' days to decide, oldest first,
-    each with why. Works the month out through the book (work_out_days), so it writes as the book does, and asked
-    twice writes nothing the second time. The shop must be open, as for the book."""
+    working day of the month the book answers, with their counts, by name; and those workers' days to decide, oldest
+    first, each with why. Works the month out through the book (work_out_days), so it writes as the book does, and
+    asked twice writes nothing the second time. The shop must be open, as for the book."""
     first = month.replace(day=1)
     # The last day, as the calendar counts the month's days (30, 31, 28 or 29). Not "the 1st of the month after, less a
     # day": in the calendar's last month, December 9999, that sum runs past the last day Python knows, and a month typed
@@ -399,9 +399,11 @@ def attendance_month(shop: Shop, month: dt.date) -> AttendanceMonth:
     # book keeps him absent every working day; he has no rate, so no line (Jack, ATT-10's review: A). Read on the
     # server, never through the rates route, which a manager who fixes attendance may not open: the page learns who
     # is listed, and no amount (Jack, WAGE-1's review: A). A rate goes on after a job's last day (rates_between), so a
-    # worker is listed by the book's days alone: Neema, gone in September, has no October day, so no October line.
+    # worker is listed by the book's days alone: Neema, gone in September, has no October day, so no October line. And
+    # by its working days alone, never an off one: Neema, whose last day was Sunday 1 March, would have a line of
+    # zeros in March, as if she had worked there (ATT-5's review).
     rates = rates_between(shop, first, last)
-    listed = {day.staff_id for day in days if (day.staff_id, day.date) in rates}
+    listed = {day.staff_id for day in days if day.status != DayStatus.OFF and (day.staff_id, day.date) in rates}
     counts: dict[uuid.UUID, Counter[str]] = defaultdict(Counter)
     names: dict[uuid.UUID, str] = {}
     for day in days:

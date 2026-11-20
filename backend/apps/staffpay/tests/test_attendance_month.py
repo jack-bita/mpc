@@ -148,6 +148,17 @@ def test_a_worker_gone_before_the_month_is_not_listed(shop_a: Shop, device_a: De
     assert [line.display_name for line in month(shop_a, SEPT_1).workers] == ["Neema"]
 
 
+def test_a_worker_whose_only_day_is_off_is_not_listed(shop_a: Shop, attendance_on: None) -> None:
+    # Neema's last day was Sunday 1 March 2026: the book answers that Sunday, off, and no other March day of hers. A
+    # line of zeros would say she worked in March; listed by working days only, she has none (ATT-5's review). Her
+    # February is listed as it was.
+    neema = worker(shop_a, "Neema", started_on=dt.date(2026, 2, 2))
+    with shop_context(shop_a):
+        mark_left(neema, left_on=dt.date(2026, 3, 1), by=None, reason="Amehamia mji mwingine")
+    assert month(shop_a, dt.date(2026, 3, 1)).workers == []
+    assert [line.display_name for line in month(shop_a, dt.date(2026, 2, 1)).workers] == ["Neema"]
+
+
 def test_the_workers_by_name(shop_a: Shop, attendance_on: None) -> None:
     # One line per worker, by name, whatever order they were added in, so the owner finds Juma where he looks.
     for name in ("Zawadi", "asha", "Baraka"):
