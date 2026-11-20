@@ -16,6 +16,8 @@ import type { components } from "@/api/schema";
 import { Card } from "@/components/design/card";
 import { clockPart, formatDayMonth, weekdayOf } from "@/lib/format";
 
+import type { Weekday } from "./attendance-month";
+
 type DayToDecide = components["schemas"]["DayToDecide"];
 
 export function DaysToDecide({ days }: { days: DayToDecide[] }) {
@@ -76,6 +78,3 @@ function DayLine({ day }: { day: DayToDecide }) {
     why: t(`reason.${day.reason}`, { time }),
   });
 }
-
-/** A weekday as the word books number it, as JavaScript does: "0" is Sunday. */
-type Weekday = "0" | "1" | "2" | "3" | "4" | "5" | "6";

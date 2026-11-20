@@ -3,7 +3,8 @@
 // line per worker paid by the day with the month's counts, under marks a phone has room for (✓ Ch ½ H !), and what each
 // mark means under them.
 //
-// As Jack pictured it (19 Nov 2026). It only shows: deciding a day is ATT-6's, and a worker's own month, ATT-12's.
+// As Jack pictured it (19 Nov 2026). It only shows: deciding a day is ATT-6's. A worker's name opens their own month
+// as a calendar (worker-month-screen.tsx, ATT-12).
 // The server works the month out from the book of days and lists only workers with a daily pay rate, so Baba, who
 // never clocks in, is not on it; the page shows the counts it is given and never adds them up itself.
 //
@@ -27,26 +28,26 @@ import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Button } from "@/components/design/button";
 import { Card } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
+import { TextLink } from "@/components/design/text-link";
 import { useWhoIsHere } from "@/features/people/who-is-here";
 import { dayBefore, formatDay } from "@/lib/format";
 import { shopToday } from "@/offline/rules";
 
-import { DaysToDecide } from "./to-decide";
 import {
   type AttendanceMonth,
   isMonth,
+  KINDS,
   mayManageAttendance,
   MONTH_PARAM,
   monthAfter,
   monthBefore,
+  type MonthNumber,
   monthOf,
   useAttendanceMonth,
   type WorkerMonth,
 } from "./attendance-month";
-
-/** The kinds of day a line counts, in the order Jack drew them: on time, late, half, absent, to decide. Off days, a
- * Sunday or a closed day, are nobody's to count. */
-const KINDS = ["on_time", "late", "half", "absent", "needs_review"] as const;
+import { DaysToDecide } from "./to-decide";
+import { workerMonthAddress } from "./worker-month";
 
 export function MonthScreen({ asked }: { asked: string | null }) {
   const t = useTranslations("attendanceMonth");
@@ -200,21 +201,6 @@ function MonthSwitch({
   );
 }
 
-/** A month's number as the word books name it: "01" to "12". */
-type MonthNumber =
-  | "01"
-  | "02"
-  | "03"
-  | "04"
-  | "05"
-  | "06"
-  | "07"
-  | "08"
-  | "09"
-  | "10"
-  | "11"
-  | "12";
-
 /** The month's answer: how far it is counted, the days to decide, then the workers' lines and what the marks mean. */
 function TheMonth({ answer }: { answer: AttendanceMonth }) {
   const t = useTranslations("attendanceMonth");
@@ -245,14 +231,21 @@ function TheMonth({ answer }: { answer: AttendanceMonth }) {
       {countedTo}
       {/* At the top, before anyone's counts: what waits for the owner's decision (Jack's picture). */}
       <DaysToDecide days={answer.to_decide} />
-      <Workers workers={answer.workers} />
+      <Workers month={answer.month} workers={answer.workers} />
       <MarksKey />
     </>
   );
 }
 
-/** A table: a row per worker, a column per kind of day, so the numbers line up under their marks on a phone. */
-function Workers({ workers }: { workers: WorkerMonth[] }) {
+/** A table: a row per worker, a column per kind of day, so the numbers line up under their marks on a phone. Each
+ * name opens the worker's own month, the same month, as a calendar (ATT-12). */
+function Workers({
+  month,
+  workers,
+}: {
+  month: string;
+  workers: WorkerMonth[];
+}) {
   const t = useTranslations("attendanceMonth");
   return (
     <Card className="py-0">
@@ -282,7 +275,12 @@ function Workers({ workers }: { workers: WorkerMonth[] }) {
           {workers.map((worker) => (
             <tr key={worker.staff}>
               <th scope="row" className="px-4 py-3 text-left font-normal">
-                {worker.display_name}
+                {/* A link, as a worker's name on Wafanyakazi is (PPL-6): it opens a page, the worker's month. Each
+                    line is a job's, so a person hired again within the month opens each job's own calendar (ATT-5's
+                    review). */}
+                <TextLink href={workerMonthAddress(worker.staff, month)}>
+                  {worker.display_name}
+                </TextLink>
               </th>
               {KINDS.map((kind) => (
                 <td key={kind} className="py-3 text-center last:pr-3">

@@ -742,6 +742,32 @@
     },
     "nobody": "No worker paid by the day in this month."
   },
+  "attendanceWorker": {
+    "title": "A worker's attendance",
+    "intro": "One worker's days, the whole month.",
+    "noWorker": "No worker is chosen.",
+    "countsLabel": "This month's days",
+    "count": "{mark} {count}",
+    "countSaid": "{kind}: {count}",
+    "calendarCaption": "{name}'s days, {month}",
+    "weekdaysShort": {
+      "1": "Mo",
+      "2": "Tu",
+      "3": "We",
+      "4": "Th",
+      "5": "Fr",
+      "6": "Sa",
+      "0": "Su"
+    },
+    "mark": {
+      "off": "–",
+      "today": "•"
+    },
+    "kind": {
+      "off": "shop closed",
+      "today": "today"
+    }
+  },
   "needsAttention": {
     "title": "Records the server refused",
     "clock": "{name}: {action}, at {time}",

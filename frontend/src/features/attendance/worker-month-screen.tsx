@@ -1,0 +1,289 @@
+// worker-month-screen.tsx — one worker's month as a calendar, on the owner's or a manager's phone (ATT-12, 03 §5.10),
+// opened from the worker's name on Mahudhurio ya mwezi (month-screen.tsx): the worker's name as the page's title, the
+// month, the month's counts as on their line (✓ 11 · Ch 2 · …), then the month Monday first (Jt Jn Jtn Al Ij Jm Jp),
+// each day its mark, and what the marks mean under it.
+//
+// As Jack pictured it (19 Nov 2026) and approved as a screen (20 Nov 2026). It only shows: deciding a day is ATT-6's.
+// The server works the month out from the book of days, and the page draws the marks it is given, never deciding
+// itself what a day was: – a Sunday or a closed day (`off`), • today, which the book keeps only once it is over, and
+// nothing for a day the book doesn't answer, a day to come, before the worker's first day or after their last.
+//
+// The month is the one the page came from (?month=2026-11), with no ‹ › of its own (Jack's yes, 20 Nov 2026): to see
+// another, the back arrow returns to the month page, on the same month, as the month page keeps it in its address.
+// Opened from a typed address, the arrow goes to the month page on this worker's month (`fallback`).
+//
+// An office screen: it asks the server through the store of server answers (rule 5). Its route asks attendance.manage
+// on the whole shop; someone without it sees the server's refusal.
+//
+// "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
+"use client";
+
+import { useState } from "react";
+import { useTranslations } from "use-intl";
+
+import { ApiErrorAlert } from "@/components/api-error-alert";
+import { Card } from "@/components/design/card";
+import { PageHeader } from "@/components/design/page-header";
+import { useWhoIsHere } from "@/features/people/who-is-here";
+import { shopToday } from "@/offline/rules";
+
+import {
+  isMonth,
+  KINDS,
+  MONTH_PARAM,
+  type MonthNumber,
+  monthOf,
+  type Weekday,
+} from "./attendance-month";
+import {
+  calendarWeeks,
+  useWorkerMonth,
+  type WorkerAttendance,
+  type WorkerDay,
+} from "./worker-month";
+
+/** The weekdays as the calendar's columns run, Monday first, as the word books number them (Sunday "0"). */
+const MONDAY_FIRST: Weekday[] = ["1", "2", "3", "4", "5", "6", "0"];
+
+/** What a day of the calendar shows: one of the five kinds the line counts, a day the shop was shut, today, or nothing. */
+type Mark = (typeof KINDS)[number] | "off" | "today" | null;
+
+export function WorkerMonthScreen({
+  staff,
+  asked,
+}: {
+  staff: string | null;
+  asked: string | null;
+}) {
+  const t = useTranslations("attendanceWorker");
+  // The PIN login's book, for its "Subiri kidogo…", which the office says the same way.
+  const loginWords = useTranslations("login");
+  const who = useWhoIsHere();
+  // The moment the page opened, read once, never while drawing (React's rule; month-screen.tsx keeps it the same way).
+  const [openedAt] = useState(() => Date.now());
+  // The month the address names, as the month page wrote it; or, with none, or one that is no month, this month on
+  // the shop's clock, once the page knows the shop.
+  const month =
+    asked !== null && isMonth(asked)
+      ? asked
+      : who.data
+        ? monthOf(shopToday(who.data.shop.timezone, openedAt))
+        : null;
+  const answer = useWorkerMonth(staff, month);
+  // Until both answer: "Subiri kidogo…", through the store's own tries too (month-screen.tsx). Only for a worker the
+  // address names: with none, nothing is asked, and nothing waits.
+  const waiting =
+    who.isPending || (staff !== null && month !== null && answer.isPending);
+  // The month page on this month, for the arrow when going back would leave the app.
+  const back =
+    month === null
+      ? "/attendance-month/"
+      : `/attendance-month/?${new URLSearchParams({ [MONTH_PARAM]: month }).toString()}`;
+
+  return (
+    <div className="grid max-w-2xl gap-6">
+      {/* The worker's name as the title once the server says it, as Jack drew it ("← Juma"); until then, what the page
+          is. */}
+      <PageHeader
+        title={answer.data?.worker.display_name ?? t("title")}
+        intro={t("intro")}
+        fallback={back}
+      />
+      <p role="status" className={waiting ? "text-lg" : "sr-only"}>
+        {waiting ? loginWords("waiting") : null}
+      </p>
+      {/* An address with no worker names nobody: the page says so, and asks nothing. */}
+      {staff === null ? <p>{t("noWorker")}</p> : null}
+      {/* Not logged in, no network, the server's own problem; or the month refused: no key, or a worker the shop
+          doesn't have, "not found", as for an id no shop has (03 §5.4). The month is asked here alone and its answer
+          handed down as values, never asked again by the part that shows it (PPL-6). */}
+      <ApiErrorAlert error={who.error} />
+      <ApiErrorAlert error={answer.error} />
+      {answer.data && !answer.isPending ? (
+        <TheWorkersMonth answer={answer.data} />
+      ) : null}
+    </div>
+  );
+}
+
+/** The month's name, the counts, the calendar and what its marks mean. */
+function TheWorkersMonth({ answer }: { answer: WorkerAttendance }) {
+  const monthWords = useTranslations("attendanceMonth");
+  const [year, number] = answer.month.split("-") as [string, MonthNumber];
+  const monthName = monthWords("monthTitle", {
+    month: monthWords(`monthNames.${number}`),
+    year,
+  });
+  return (
+    <>
+      {/* A heading, so a screen reader can jump to it: the page's title is the worker's name. */}
+      <h2 className="text-xl font-semibold">{monthName}</h2>
+      <Counts answer={answer} />
+      <Calendar answer={answer} monthName={monthName} />
+      <MarksKey />
+    </>
+  );
+}
+
+/** "✓ 11 · Ch 2 · ½ 1 · H 1 · ! 1": the worker's line from the month page, as the server counted it. */
+function Counts({ answer }: { answer: WorkerAttendance }) {
+  const t = useTranslations("attendanceWorker");
+  const monthWords = useTranslations("attendanceMonth");
+  return (
+    // A list, named, so a screen reader says what it counts. role="list" written out, as Safari with VoiceOver stops
+    // calling a styled <ul> a list (workers-screen.tsx).
+    <ul
+      role="list"
+      aria-label={t("countsLabel")}
+      className="flex flex-wrap gap-x-5 gap-y-1 text-lg tabular-nums"
+    >
+      {KINDS.map((kind) => (
+        <li key={kind}>
+          {/* The mark for the eye; the kind in words for a screen reader, which can't read "Ch" or "!". */}
+          <span aria-hidden>
+            {t("count", {
+              mark: monthWords(`mark.${kind}`),
+              count: answer.worker[kind],
+            })}
+          </span>
+          <span className="sr-only">
+            {t("countSaid", {
+              kind: monthWords(`kind.${kind}`),
+              count: answer.worker[kind],
+            })}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The month as a table: a column per weekday, Monday first, a row per week, each day its number and its mark. */
+function Calendar({
+  answer,
+  monthName,
+}: {
+  answer: WorkerAttendance;
+  monthName: string;
+}) {
+  const t = useTranslations("attendanceWorker");
+  const monthWords = useTranslations("attendanceMonth");
+  // The book's days by date, to find each day's in one look.
+  const days = new Map(answer.days.map((day) => [day.date, day]));
+  return (
+    <Card className="py-0">
+      <table className="w-full table-fixed text-center tabular-nums">
+        <caption className="sr-only">
+          {t("calendarCaption", {
+            name: answer.worker.display_name,
+            month: monthName,
+          })}
+        </caption>
+        <thead>
+          <tr className="border-b border-border">
+            {MONDAY_FIRST.map((weekday) => (
+              <th key={weekday} scope="col" className="py-2 font-semibold">
+                {/* Short for a phone's width; the whole name for a screen reader, which reads "Jtn" letter by
+                    letter. */}
+                <span aria-hidden>{t(`weekdaysShort.${weekday}`)}</span>
+                <span className="sr-only">
+                  {monthWords(`weekdays.${weekday}`)}
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {calendarWeeks(answer.month).map((week) => (
+            // A week is named by its first place, a day or the empty place before the 1st.
+            <tr key={week.find((day) => day !== null)}>
+              {week.map((day, place) =>
+                day === null ? (
+                  <td key={`empty ${place}`} />
+                ) : (
+                  <td key={day} className="py-1.5 align-top">
+                    <DayOfTheMonth
+                      day={day}
+                      mark={markOf(day, days.get(day), answer.today)}
+                    />
+                  </td>
+                ),
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+/** The mark a day of the calendar shows: today's •, as the book keeps no day until it is over; then the book's own,
+ * – for a day the shop was shut; nothing for a day it doesn't answer. */
+function markOf(day: string, kept: WorkerDay | undefined, today: string): Mark {
+  if (day === today) return "today";
+  if (kept === undefined) return null;
+  return kept.status;
+}
+
+/** One day: its number, small, and its mark under it, big, as on Jack's picture. */
+function DayOfTheMonth({ day, mark }: { day: string; mark: Mark }) {
+  const t = useTranslations("attendanceWorker");
+  const monthWords = useTranslations("attendanceMonth");
+  const isWorkersOwn = mark !== null && mark !== "off" && mark !== "today";
+  return (
+    <div className="grid gap-0.5">
+      <span className="text-sm text-muted-foreground">
+        {Number(day.slice(8))}
+      </span>
+      {mark === null ? (
+        // Nothing to show: an empty place as tall as a mark, so every row keeps its height.
+        <span aria-hidden className="h-7" />
+      ) : (
+        <>
+          <span
+            aria-hidden
+            className={
+              mark === "needs_review"
+                ? "h-7 text-lg font-bold"
+                : "h-7 text-lg font-semibold"
+            }
+          >
+            {isWorkersOwn
+              ? monthWords(`mark.${mark}`)
+              : t(`mark.${mark as "off" | "today"}`)}
+          </span>
+          <span className="sr-only">
+            {isWorkersOwn
+              ? monthWords(`kind.${mark}`)
+              : t(`kind.${mark as "off" | "today"}`)}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** What each mark means, under the calendar: the line's five, then a shut day's and today's. */
+function MarksKey() {
+  const t = useTranslations("attendanceWorker");
+  const monthWords = useTranslations("attendanceMonth");
+  return (
+    // A list, named, as the month page's key (month-screen.tsx).
+    <ul
+      role="list"
+      aria-label={monthWords("keyLabel")}
+      className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground"
+    >
+      {KINDS.map((kind) => (
+        <li key={kind}>
+          {monthWords(`mark.${kind}`)} {monthWords(`kind.${kind}`)}
+        </li>
+      ))}
+      {(["off", "today"] as const).map((extra) => (
+        <li key={extra}>
+          {t(`mark.${extra}`)} {t(`kind.${extra}`)}
+        </li>
+      ))}
+    </ul>
+  );
+}

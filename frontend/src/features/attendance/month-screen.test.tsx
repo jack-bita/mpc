@@ -139,6 +139,22 @@ describe("the month page", () => {
     expect(monthsAsked()).toEqual(["2026-11"]);
   });
 
+  it("opens a worker's own month, the month shown, from their name (ATT-12)", async () => {
+    const asha = line({ display_name: "Asha" });
+    theShopHas({ "2026-10": [asha] });
+
+    render(<MonthScreen asked="2026-10" />);
+
+    const name = await screen.findByRole("link", { name: "Asha" });
+    // Next.js's Link drops the trailing slash outside a built app, which adds it back (trailingSlash, next.config.ts),
+    // as workers-screen.test.tsx reads a worker's link.
+    expect(name.getAttribute("href")).toMatch(
+      new RegExp(
+        `^/attendance-month/worker/?\\?staff=${asha.staff}&month=2026-10$`,
+      ),
+    );
+  });
+
   it("names each count's kind to a screen reader, and says what each mark means", async () => {
     // A column's mark is short for a phone ("Ch"), so its heading also says the kind in words, which a screen reader
     // reads; and under the table, each mark with its meaning, for whoever doesn't know them yet.

@@ -742,6 +742,32 @@
     },
     "nobody": "Hakuna mfanyakazi anayelipwa kwa siku katika mwezi huu."
   },
+  "attendanceWorker": {
+    "title": "Mahudhurio ya mfanyakazi",
+    "intro": "Siku za mfanyakazi mmoja, mwezi mzima.",
+    "noWorker": "Hakuna mfanyakazi aliyechaguliwa.",
+    "countsLabel": "Siku za mwezi huu",
+    "count": "{mark} {count}",
+    "countSaid": "{kind}: {count}",
+    "calendarCaption": "Siku za {name}, {month}",
+    "weekdaysShort": {
+      "1": "Jt",
+      "2": "Jn",
+      "3": "Jtn",
+      "4": "Al",
+      "5": "Ij",
+      "6": "Jm",
+      "0": "Jp"
+    },
+    "mark": {
+      "off": "–",
+      "today": "•"
+    },
+    "kind": {
+      "off": "duka limefungwa",
+      "today": "leo"
+    }
+  },
   "needsAttention": {
     "title": "Kumbukumbu zilizokataliwa na seva",
     "clock": "{name}: {action}, saa {time}",

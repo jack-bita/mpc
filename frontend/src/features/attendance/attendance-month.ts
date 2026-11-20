@@ -15,6 +15,34 @@ import type { WhoIsHere } from "@/features/people/who-is-here";
 export type AttendanceMonth = components["schemas"]["AttendanceMonthAnswer"];
 export type WorkerMonth = components["schemas"]["WorkerMonth"];
 
+/** The kinds of day a worker's line counts, in the order Jack drew them: on time, late, half, absent, to decide. Off
+ * days, a Sunday or a closed day, are nobody's to count. The month page and a worker's own month (ATT-12) both. */
+export const KINDS = [
+  "on_time",
+  "late",
+  "half",
+  "absent",
+  "needs_review",
+] as const;
+
+/** A month's number as the word books name it: "01" to "12". */
+export type MonthNumber =
+  | "01"
+  | "02"
+  | "03"
+  | "04"
+  | "05"
+  | "06"
+  | "07"
+  | "08"
+  | "09"
+  | "10"
+  | "11"
+  | "12";
+
+/** A weekday as the word books number it, as JavaScript does: "0" is Sunday. */
+export type Weekday = "0" | "1" | "2" | "3" | "4" | "5" | "6";
+
 /** The key the month's route asks, on the whole shop: the Owner's and the Manager's (03 §5.8). */
 export const MANAGES_ATTENDANCE = "attendance.manage";
 
