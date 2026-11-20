@@ -1,6 +1,7 @@
 // month-screen.tsx — Mahudhurio ya mwezi, the month's attendance on the owner's or a manager's phone (ATT-5, 03 §5.10):
-// the month (‹ Novemba 2026 ›), then a line per worker paid by the day with the month's counts, under marks a phone
-// has room for (✓ Ch ½ H !), and what each mark means under them.
+// the month (‹ Novemba 2026 ›), the days a person must decide at the top (Zinahitaji uamuzi, to-decide.tsx), then a
+// line per worker paid by the day with the month's counts, under marks a phone has room for (✓ Ch ½ H !), and what each
+// mark means under them.
 //
 // As Jack pictured it (19 Nov 2026). It only shows: deciding a day is ATT-6's, and a worker's own month, ATT-12's.
 // The server works the month out from the book of days and lists only workers with a daily pay rate, so Baba, who
@@ -31,6 +32,7 @@ import { dayBefore } from "@/features/settings/closures";
 import { formatDay } from "@/lib/format";
 import { shopToday } from "@/offline/rules";
 
+import { DaysToDecide } from "./to-decide";
 import {
   type AttendanceMonth,
   isMonth,
@@ -179,7 +181,7 @@ type MonthNumber =
   | "11"
   | "12";
 
-/** The month's answer: how far it is counted, then the workers' lines and what the marks mean. */
+/** The month's answer: how far it is counted, the days to decide, then the workers' lines and what the marks mean. */
 function TheMonth({
   month,
   thisMonth,
@@ -209,6 +211,8 @@ function TheMonth({
   return (
     <>
       {countedTo}
+      {/* At the top, before anyone's counts: what waits for the owner's decision (Jack's picture). */}
+      <DaysToDecide days={answer.to_decide} />
       <Workers workers={answer.workers} />
       <MarksKey />
     </>

@@ -717,6 +717,29 @@
       "needs_review": "needs a decision"
     },
     "keyLabel": "What the marks mean",
+    "toDecide": "Need a decision ({count})",
+    "noneToDecide": "No day this month needs a decision.",
+    "dayToDecide": "{name} · {weekday} {date} · {why}",
+    "weekdays": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
+    "reason": {
+      "outside_job": "outside their work days",
+      "closed_day": "the shop was closed",
+      "not_working": "suspended or gone",
+      "clock_disagrees": "their time is in doubt",
+      "time_unknown": "their time is unknown",
+      "no_in": "no Ingia",
+      "came_late": "came at {time}",
+      "no_out": "no Toka",
+      "left_early": "left at {time}"
+    },
     "nobody": "No worker paid by the day in this month."
   },
   "needsAttention": {

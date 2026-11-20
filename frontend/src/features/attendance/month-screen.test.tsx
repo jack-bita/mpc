@@ -228,6 +228,42 @@ describe("the month page", () => {
     expect(monthsAsked()).toEqual(["2026-09", "2026-11", "2026-11", "2026-11"]);
   });
 
+  it("puts the days to decide at the top, above the workers' lines (Jack's picture)", async () => {
+    answer("GET", ME, { status: 200, body: MENEJA });
+    answer("GET", MONTH, {
+      status: 200,
+      body: {
+        ...monthOf("2026-11", [
+          line({ display_name: "Juma", needs_review: 1 }),
+        ]),
+        to_decide: [
+          {
+            staff: "019a8400-0000-7000-8000-000000000099",
+            display_name: "Juma",
+            date: "2026-11-12",
+            reason: "no_out",
+            first_in: "07:20",
+            first_out: null,
+          },
+        ],
+      },
+    });
+
+    render(<MonthScreen asked={null} />);
+
+    const table = await screen.findByRole("table");
+    const toDecide = screen.getByRole("heading", {
+      name: "Zinahitaji uamuzi (1)",
+    });
+    expect(
+      toDecide.compareDocumentPosition(table) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen.getByText("Juma · Alhamisi 12/11 · hakuna Toka"),
+    ).toBeTruthy();
+  });
+
   it("says so when nobody is paid by the day in the month", async () => {
     // Before the owner gave anyone a daily rate, or a month before attendance was switched on.
     theShopHas({ "2026-11": [] });

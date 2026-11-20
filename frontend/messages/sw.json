@@ -717,6 +717,29 @@
       "needs_review": "inahitaji uamuzi"
     },
     "keyLabel": "Maana ya alama",
+    "toDecide": "Zinahitaji uamuzi ({count})",
+    "noneToDecide": "Hakuna siku inayohitaji uamuzi mwezi huu.",
+    "dayToDecide": "{name} · {weekday} {date} · {why}",
+    "weekdays": {
+      "0": "Jumapili",
+      "1": "Jumatatu",
+      "2": "Jumanne",
+      "3": "Jumatano",
+      "4": "Alhamisi",
+      "5": "Ijumaa",
+      "6": "Jumamosi"
+    },
+    "reason": {
+      "outside_job": "nje ya siku zake za kazi",
+      "closed_day": "duka lilikuwa limefungwa",
+      "not_working": "alikuwa amesimamishwa au ameondoka",
+      "clock_disagrees": "saa yake ina shaka",
+      "time_unknown": "saa yake haijulikani",
+      "no_in": "hakuna Ingia",
+      "came_late": "alifika saa {time}",
+      "no_out": "hakuna Toka",
+      "left_early": "aliondoka saa {time}"
+    },
     "nobody": "Hakuna mfanyakazi anayelipwa kwa siku katika mwezi huu."
   },
   "needsAttention": {
