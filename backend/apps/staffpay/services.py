@@ -578,7 +578,9 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAtt
     # today's taps are read here as they come. Each with its laptop's name, joined in the same read, and the two
     # questions of doubt the book asks (_doubt_questions). A voided tap counts for nothing (T2), and the book doesn't
     # read it, so nor does this: ATT-6, which voids one, shows them crossed out (A2). In the order they were made, by
-    # the time the book places them by, then by the laptop's own numbering, as two taps can share a minute.
+    # the moment the book places them by; two of one moment, rare, as on two laptops at once, by their ids, which each
+    # laptop makes in time order (UUIDv7, ADR-0007): never by a laptop's own numbering, which says nothing between two
+    # laptops (ATT-12's review).
     asks_not_working, asks_disputed = _doubt_questions(shop)
     lines = (
         []
@@ -587,7 +589,7 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAtt
             AttendanceEvent.objects.filter(shop=shop, staff=job, voided_at__isnull=True)
             .filter(_falls_between(first, taps_until, zone))
             .annotate(maker_not_working=asks_not_working, disagreed_with=asks_disputed)
-            .order_by(Coalesce("trusted_time", "client_time"), "device_seq")
+            .order_by(Coalesce("trusted_time", "client_time"), "pk")
             .values_list(
                 "pk",
                 "kind",

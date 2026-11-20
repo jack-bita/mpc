@@ -35,7 +35,7 @@ from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SettingKey
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, hire_again, mark_left
-from apps.shops.models import Setting, Shop
+from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import AttendanceEvent, ClockKind, DayStatus, NoPhoto, ReviewReason, TimeCheck
 from apps.staffpay.services import PhotoState, TapLine, WorkerAttendance, worker_attendance
@@ -176,6 +176,21 @@ def test_each_tap_with_its_time_and_laptop(shop_a: Shop, device_a: Device, asha:
         no_photo=NoPhoto.DEMO,
         doubt=None,
     )
+
+
+def test_taps_of_one_moment_keep_the_order_they_were_made(
+    shop_a: Shop, side_a: Side, device_a: Device, asha: StaffMember
+) -> None:
+    # Two taps of Asha's at the same moment, 07:20:00, on two laptops (rare, as a double tap across the counter): the
+    # first made comes first, by its id, which is made in time order (UUIDv7). Never by each laptop's own numbering,
+    # which says nothing between two laptops: here the Vyakula laptop's 1 was made after the Dawa laptop's 500.
+    with shop_context(shop_a):
+        vyakula_laptop = Device.objects.create(
+            shop=shop_a, home_side=side_a, name="Laptop ya Vyakula", code=2, key_hash="b" * 64
+        )
+    first = tap(device_a, asha, ClockKind.IN, on(1, 7, 20), device_seq=500)
+    second = tap(vyakula_laptop, asha, ClockKind.IN, on(1, 7, 20), device_seq=1)
+    assert [line.id for line in month_of(shop_a, asha).taps] == [first.pk, second.pk]
 
 
 def test_a_tap_falls_on_the_shops_date(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
