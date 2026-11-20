@@ -820,6 +820,19 @@ def test_seed_demo_fills_the_month_page(three_weeks: None) -> None:
     assert to_decide == [("Asha", latest, ReviewReason.NO_OUT)]
 
 
+def test_every_odd_day_falls_in_the_weeks(three_weeks: None) -> None:
+    # Each odd day counts back among the working days before today (OddDay.back): one past them would quietly never
+    # happen, and the month page would lose a late day or the day to decide with no test the wiser (DATA-8's review).
+    # 21 days always hold three Sundays, so 18 working days, wherever today falls; nor may one person have two odd
+    # days in one place, as only the first would count.
+    for today in (date(2026, 11, 20), date(2026, 11, 23), date(2026, 12, 1), date(2027, 3, 1)):
+        assert len(services._working_days_back(today)) == 18
+    for person in services.PEOPLE:
+        places = [odd.back for odd in person.odd_days]
+        assert all(1 <= place <= 18 for place in places), person.display_name
+        assert len(set(places)) == len(places), person.display_name
+
+
 def test_seed_demo_taps_are_the_laptops_time(three_weeks: None) -> None:
     # Each tap reaches the server as a laptop's do, through the push (SYNC-4), from the demo's laptop on Dawa, sent at
     # the reset, long after it was made: so the server keeps the laptop's time (device_ok, ATT-1), as no sign says its
