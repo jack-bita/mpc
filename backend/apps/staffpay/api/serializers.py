@@ -1,5 +1,5 @@
-"""apps/staffpay/api/serializers.py — how a worker's pay rates and a month of attendance look in the API (WAGE-1, ATT-5;
-03 §5.10).
+"""apps/staffpay/api/serializers.py — how a worker's pay rates, a month of attendance and a worker's own month look in
+the API (WAGE-1, ATT-5, ATT-12; 03 §5.10).
 
 Thin: they describe fields and check their shape. A rate is set through set_pay_rate (apps/staffpay/services.py), which
 asks who may and checks the amount and the day; the rates in force are read by the selectors (ADR-0015). The route
@@ -7,7 +7,8 @@ answers a rate (PayRateSerializer), takes a new one (PayRateCreateSerializer), a
 force today (PayRatesAnswer), for the worker named in the address (PayRatesQuery). Money travels as strings (rule 3).
 
 And the month page's month (AttendanceMonthAnswer, ATT-5), worked out by attendance_month
-(apps/staffpay/services.py), for the month named in the address (AttendanceMonthQuery).
+(apps/staffpay/services.py), for the month named in the address (AttendanceMonthQuery). And a worker's own month, their
+calendar's days and each tap (WorkerAttendanceAnswer, ATT-12), worked out by worker_attendance, for the same month.
 """
 
 import re
@@ -20,7 +21,8 @@ from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
 from apps.people.models import StaffMember
-from apps.staffpay.models import PayRate, ReviewReason
+from apps.staffpay.models import ClockKind, DayStatus, NoPhoto, PayRate, ReviewReason
+from apps.staffpay.services import PhotoState
 
 
 class WorkerField(serializers.PrimaryKeyRelatedField[StaffMember]):
@@ -150,3 +152,55 @@ class AttendanceMonthAnswer(serializers.Serializer[Any]):
     )
     workers = WorkerMonthSerializer(many=True)
     to_decide = DayToDecideSerializer(many=True)
+
+
+class WorkerDaySerializer(serializers.Serializer[Any]):
+    # One of a worker's days, as their calendar marks it (ATT-12): what it was, why it waits on a day to decide (one of
+    # the book's codes, which the page says in its language, ADR-0040), else null, and its fine, a string (rule 3). The
+    # fine is the shop's own rule, which anyone working there may read; never the worker's rate or the day's pay.
+    date = serializers.DateField()
+    status = serializers.ChoiceField(choices=DayStatus.choices)
+    reason = serializers.ChoiceField(choices=ReviewReason.choices, allow_null=True)
+    fine = serializers.DecimalField(max_digits=14, decimal_places=2)
+
+
+class TapPhotoSerializer(serializers.Serializer[Any]):
+    # A tap's photo: the id the photo route opens (`/api/v1/control/attachments/{id}/file/`, CTRL-3), and whether its
+    # file came, hasn't come yet, or was taken away. The page shows a photo only when it is `kept`.
+    id = serializers.UUIDField()
+    state = serializers.ChoiceField(choices=PhotoState.choices)
+
+
+# Why a tap itself is in doubt (ATT-11): the two of the book's reasons a single tap can carry. The others are a day's.
+TAP_DOUBTS = [(reason.value, reason.label) for reason in (ReviewReason.NOT_WORKING, ReviewReason.CLOCK_DISAGREES)]
+
+
+class AttendanceTapSerializer(serializers.Serializer[Any]):
+    # One tap, as the day under the calendar shows it: "Ingia 07:20 asubuhi · Laptop ya Dawa", then its photo or why it
+    # has none. Minutes on the shop's clock, "07:20", worked out on the server, so a phone in another zone never moves
+    # them; `time` null for a tap whose time the server doesn't trust, which shows its laptop's own (`laptop_time`).
+    id = serializers.UUIDField()
+    date = serializers.DateField()
+    kind = serializers.ChoiceField(choices=ClockKind.choices)
+    time = serializers.TimeField(format="%H:%M", allow_null=True)
+    laptop_time = serializers.TimeField(format="%H:%M")
+    laptop = serializers.CharField()
+    photo = TapPhotoSerializer(allow_null=True)
+    no_photo = serializers.ChoiceField(choices=NoPhoto.choices, allow_null=True)
+    doubt = serializers.ChoiceField(choices=TAP_DOUBTS, allow_null=True)
+
+
+# One object, not a list, as for the month's answer above.
+@extend_schema_serializer(many=False)
+class WorkerAttendanceAnswer(serializers.Serializer[Any]):
+    # A worker's month, as their calendar shows it (ATT-12): which month; the shop's today, which the calendar marks
+    # (•), on the shop's own date; the worker's line, as the month page counts it; their first and last day, for a
+    # day outside them to say why; each day the book answers for them, up to yesterday; and each tap of the month,
+    # today's too. No amount but the fines: a manager who fixes attendance sees no one's pay (WAGE-1's review).
+    month = MonthField()
+    today = serializers.DateField()
+    worker = WorkerMonthSerializer()
+    started_on = serializers.DateField()
+    left_on = serializers.DateField(allow_null=True)
+    days = WorkerDaySerializer(many=True)
+    taps = AttendanceTapSerializer(many=True)

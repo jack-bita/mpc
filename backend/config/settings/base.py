@@ -304,6 +304,14 @@ SPECTACULAR_SETTINGS = {
         "PushedStatusEnum": "apps.sync.models.PushedStatus",
         # A side's band (SHOP-4): one name for the office's side, the laptop's copy and `me`, which all carry it.
         "SideBandEnum": "apps.shops.models.SideBand",
+        # A worker's month (ATT-12): a day's status, a tap's kind, why it has no photo, what became of its photo, and
+        # why it is in doubt, each named after its own list, not after the field (`status`, `kind`, `state`), which
+        # another route's field of the same name would rename.
+        "DayStatusEnum": "apps.staffpay.models.DayStatus",
+        "ClockKindEnum": "apps.staffpay.models.ClockKind",
+        "NoPhotoEnum": "apps.staffpay.models.NoPhoto",
+        "PhotoStateEnum": "apps.staffpay.services.PhotoState",
+        "TapDoubtEnum": "apps.staffpay.api.serializers.TAP_DOUBTS",
     },
     # The docs page's own code comes from a CDN: one exact version, never "latest", so the code that runs on
     # our address can't change under us. Only on the demo and a laptop: the real server keeps it closed.
