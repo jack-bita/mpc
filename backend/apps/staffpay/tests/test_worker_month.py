@@ -34,7 +34,7 @@ from apps.core.links import table_of
 from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SettingKey
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember, User
-from apps.people.services import add_staff
+from apps.people.services import add_staff, hire_again, mark_left
 from apps.shops.models import Setting, Shop
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import AttendanceEvent, ClockKind, DayStatus, NoPhoto, ReviewReason, TimeCheck
@@ -329,6 +329,26 @@ def test_the_jobs_days_and_a_tap_outside_them(shop_a: Shop, device_a: Device, at
     eighth = next(day for day in answer.days if day.date == dt.date(2026, 10, 8))
     assert eighth.reason == ReviewReason.OUTSIDE_JOB
     assert dt.date(2026, 10, 9) not in {day.date for day in answer.days}
+
+
+def test_a_person_hired_again_keeps_each_jobs_month_apart(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
+    # Baraka left on Friday 9 October and Baba hired him again from Monday the 19th (PPL-11): one person, two jobs, so
+    # two lines of one name on the month page (ATT-5's review), each opening its own job's calendar. The first job's
+    # taps and days never show on the second's, nor the second's on the first's.
+    old = worker(shop_a, "Baraka")
+    with shop_context(shop_a):
+        mark_left(old, left_on=dt.date(2026, 10, 9), by=None, reason="Ameacha kazi")
+        old.refresh_from_db()
+        new = hire_again(old, display_name="Baraka", started_on=dt.date(2026, 10, 19), by=None)
+    before = tap(device_a, old, ClockKind.IN, on(1, 7, 20))
+    after = tap(device_a, new, ClockKind.IN, on(20, 7, 20))
+    first_job, second_job = month_of(shop_a, old), month_of(shop_a, new)
+    assert [line.id for line in first_job.taps] == [before.pk]
+    assert [line.id for line in second_job.taps] == [after.pk]
+    # Each job's days are its own: the first's end on the 9th, the second's start on the 19th.
+    assert max(day.date for day in first_job.days) == dt.date(2026, 10, 9)
+    assert min(day.date for day in second_job.days) == dt.date(2026, 10, 19)
+    assert (first_job.left_on, second_job.started_on) == (dt.date(2026, 10, 9), dt.date(2026, 10, 19))
 
 
 def test_a_month_in_a_few_queries(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
