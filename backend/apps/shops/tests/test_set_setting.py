@@ -61,10 +61,12 @@ def test_set_setting_saves_a_new_row(shop_a: Shop, staff_a: Any) -> None:
     assert (saved.value, saved.note, saved.side_id, saved.created_by_id) == ("2000.00", "Mwezi mpya", None, staff_a.pk)
 
 
-def test_past_day_refused(shop_a: Shop) -> None:
+def test_past_day_refused(shop_a: Shop, settings: Settings) -> None:
     # Yesterday is refused, and nothing is written: a value from yesterday would change what yesterday's clock-ins
     # answer (Jack, 15 Nov 2026). The system too, as here: only on the demo may it (DATA-8), and the real server never
-    # has the demo's sign.
+    # has the demo's sign. Taken away here, as on the real server, so the test proves the rule, not the environment it
+    # runs in (DATA-8's review).
+    settings.DEMO_SEED = False
     yesterday = shop_today(shop_a) - timedelta(days=1)
     with shop_context(shop_a), pytest.raises(ValidationError) as refused:
         set_setting(shop_a, key=LATE_FINE.key, value="2000", effective_from=yesterday, by=None)
