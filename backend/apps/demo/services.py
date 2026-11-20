@@ -458,7 +458,7 @@ def _make_the_shop() -> Shop:
     # _wipe_and_make's transaction commits.
     shop_id = uuid.uuid7()
     with shop_context(shop_id):
-        shop, people = _the_shop_and_its_people(shop_id)
+        shop, people, today = _the_shop_and_its_people(shop_id)
         # The taps after the shop's block: its lines numbered first, all at once (SYNC-15), and each tap then numbered
         # as the push numbers any document, at the end of a block of its own, inside a transaction of its own (03 §5.5).
         # Inside the shop's block it would work too, as a block inside an atomic() part is one of its own
@@ -466,12 +466,13 @@ def _make_the_shop() -> Shop:
         # transaction: a refused tap undoes the whole reset.
         manager = next(people[person.display_name] for person in PEOPLE if person.email == MANAGER_EMAIL)
         laptop = _demo_laptop(manager, Side.objects.get(code=DEMO_LAPTOP_SIDE))
-        _send_the_taps(laptop, people, _demo_taps(shop_today(shop), ZoneInfo(shop.timezone)))
+        _send_the_taps(laptop, people, _demo_taps(today, ZoneInfo(shop.timezone)), today)
     return shop
 
 
-def _the_shop_and_its_people(shop_id: uuid.UUID) -> tuple[Shop, dict[str, StaffMember]]:
-    # The shop, its sides, rules and closures, and its people, by their nicknames. The caller opens the shop.
+def _the_shop_and_its_people(shop_id: uuid.UUID) -> tuple[Shop, dict[str, StaffMember], date]:
+    # The shop, its sides, rules and closures, and its people, by their nicknames, and the shop's day they were made
+    # from. The caller opens the shop.
     with recording_changes(shop_id):
         # The shop, its sides with their stock places and cash drawers, and its own copy of the six roles
         # (set_up_shop), as a demo shop: the refusal above knows it as the seed's own at the next run.
@@ -486,6 +487,10 @@ def _the_shop_and_its_people(shop_id: uuid.UUID) -> tuple[Shop, dict[str, StaffM
         # only on the demo (DATA-8): the book counts a day only once attendance is on (ATT-10), and fines a late one
         # by that day's rules. A visitor's new value starts tomorrow at the earliest (demo.rules_from_tomorrow). Each
         # row gets its line in this block, as a laptop needs every rule's rows (SYNC-2).
+        # The shop's day, asked once, here, as the shop's zone is known from now on: every part of the demo is made
+        # from this one answer. A reset that runs across midnight in Arusha and asked again later would make the
+        # taps from another day than the rules and the people, and the first day's taps would be flagged, days to
+        # decide nobody made (DATA-8's review).
         today = shop_today(shop)
         first_day = today - timedelta(days=HISTORY_DAYS)
         for rule, value in DEMO_RULES:
@@ -516,7 +521,7 @@ def _the_shop_and_its_people(shop_id: uuid.UUID) -> tuple[Shop, dict[str, StaffM
             if person.daily_rate is not None:
                 set_pay_rate(staff, daily_rate=Decimal(person.daily_rate), effective_from=staff.started_on, by=None)
             people[person.display_name] = staff
-    return shop, people
+    return shop, people, today
 
 
 # Django's error reports list each function's local variables when something fails: `pairing` holds the laptop's key,
@@ -571,14 +576,14 @@ def _demo_taps(today: date, zone: ZoneInfo) -> list[_DemoTap]:
     return sorted(taps, key=lambda tap: tap.at)
 
 
-def _send_the_taps(laptop: Device, people: dict[str, StaffMember], taps: list[_DemoTap]) -> None:
+def _send_the_taps(laptop: Device, people: dict[str, StaffMember], taps: list[_DemoTap], today: date) -> None:
     # The taps, sent by the demo's laptop through the push (SYNC-4), as the laptop sends its outbox: each a clock
     # document, version 2, made by the person's job in this shop (`people`, by nickname), numbered from 1, in pushes of
     # at most MOST_DOCUMENTS, as the route takes (03 §6.3). Sent now, long after they were made, by a laptop whose
     # clock is right (sent_at, the server's now): so the server keeps each at the laptop's time (device_ok, ATT-1). No
-    # photo: the demo keeps none (Jack, ATT-3: A).
+    # photo: the demo keeps none (Jack, ATT-3: A). `today`: the shop's day the taps were made from.
     zone = ZoneInfo(laptop.shop.timezone)
-    last_heard = datetime.combine(shop_today(laptop.shop) - timedelta(days=HISTORY_DAYS), LAST_HEARD, tzinfo=zone)
+    last_heard = datetime.combine(today - timedelta(days=HISTORY_DAYS), LAST_HEARD, tzinfo=zone)
     documents = [
         Sent(
             id=uuid.uuid7(),
@@ -603,12 +608,17 @@ def _send_the_taps(laptop: Device, people: dict[str, StaffMember], taps: list[_D
             app_version=settings.APP_VERSION,
             outages=[],
         )
-        # The push never raises for a tap it refuses: it answers invalid, and goes on (accept, then flag, 03 §6.3). A
-        # refused tap here is a bug in this seed, so it stops the reset, and its transaction takes the wipe back too:
-        # yesterday's demo stays, and the deploy's smoke test shows red.
-        refused = [(answer.code, answer.fields) for answer in answers if answer.status != PushedStatus.ACCEPTED]
-        if refused:
-            raise RuntimeError(f"The push refused the demo laptop's taps: {refused}")
+        # The push never raises for a tap it refuses: it answers invalid, and goes on (03 §6.3). Nor for one it flags:
+        # that one is accepted (accept, then flag). The seed's taps are its own, timed by a right clock, so either is a
+        # bug in this seed, and a flag would hand a visitor a day to decide nobody made. So it stops the reset, and its
+        # transaction takes the wipe back too: yesterday's demo stays, and the deploy's smoke test shows red.
+        wrong = [
+            (answer.status, answer.code, answer.fields, answer.flags)
+            for answer in answers
+            if answer.status != PushedStatus.ACCEPTED or answer.flags
+        ]
+        if wrong:
+            raise RuntimeError(f"The push refused or flagged the demo laptop's taps: {wrong}")
 
 
 @dataclass(frozen=True)

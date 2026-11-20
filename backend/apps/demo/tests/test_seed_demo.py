@@ -783,6 +783,44 @@ def test_seed_demo_taps_are_the_laptops_time(three_weeks: None) -> None:
         assert not Flag.objects.exists()
 
 
+def test_seed_demo_reads_its_day_once(three_weeks: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A reset that runs across midnight in Arusha: the seed asks the shop's day once, as it starts, and every part of
+    # the demo is made from that one answer. Asked again later, the first day's taps would have been older than the
+    # laptop's last word from the server, or later than the push, and flagged: days to decide nobody made (DATA-8's
+    # review). Here the shop's clock turns to the next day after its first answer.
+    asked: list[Shop] = []
+
+    def turning_at_midnight(shop: Shop) -> date:
+        asked.append(shop)
+        return shop_today(shop) + timedelta(days=0 if len(asked) == 1 else 1)
+
+    monkeypatch.setattr(services, "shop_today", turning_at_midnight)
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        assert not Flag.objects.exists()
+        assert set(AttendanceEvent.objects.values_list("time_check", flat=True)) == {TimeCheck.DEVICE_OK}
+
+
+def test_seed_demo_stops_when_a_tap_is_flagged(three_weeks: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A flagged tap is accepted (accept, then flag), so the push says nothing more. The demo's taps are the seed's own,
+    # timed by a right clock: a flag says the seed is wrong, and would send a visitor a day to decide nobody made. So
+    # the reset stops, and the demo made before stays.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+
+    def flags(laptop: Device, documents: list[Any], **kwargs: object) -> list[Answer]:
+        flag = {"id": "0", "kind": "unverified_time"}
+        return [Answer(id=document.id, status=PushedStatus.ACCEPTED, flags=[flag]) for document in documents]
+
+    monkeypatch.setattr(services, "push", flags)
+
+    with pytest.raises(RuntimeError, match="refused or flagged"):
+        seed_demo(fresh=True)
+    assert the_demo_shop() == made
+
+
 def test_seed_demo_stops_when_a_tap_is_refused(three_weeks: None, monkeypatch: pytest.MonkeyPatch) -> None:
     # The push never raises for a tap it refuses: it answers invalid and goes on (03 §6.3). A refused tap is a bug in
     # the seed, so the reset stops, and its one transaction takes the wipe back too: the demo made before stays, never
@@ -795,6 +833,6 @@ def test_seed_demo_stops_when_a_tap_is_refused(three_weeks: None, monkeypatch: p
 
     monkeypatch.setattr(services, "push", refuses)
 
-    with pytest.raises(RuntimeError, match="refused the demo laptop's taps"):
+    with pytest.raises(RuntimeError, match="refused or flagged"):
         seed_demo(fresh=True)
     assert the_demo_shop() == made
