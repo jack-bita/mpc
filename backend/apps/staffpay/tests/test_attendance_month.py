@@ -244,10 +244,14 @@ def test_any_day_of_the_month_asks_for_the_whole_month(shop_a: Shop, attendance_
 
 
 def test_a_month_is_read_in_a_few_queries(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
-    # The month page opens October for three workers: the book's dozen queries, one for the rates, and none per worker
-    # or per day, as each day comes with its worker (ATT-10's review).
+    # The month page opens October for three workers, then opens it again, as Baba does each morning. The second visit
+    # reads every day already kept, each with its worker in the same read (ATT-10's review): the book's dozen queries
+    # and one for the rates, never one per worker or per day, some 90 for this month. Counted on the second visit, as
+    # on the first every day is new and carries its worker already, so a lost select_related would pass unseen there
+    # (ATT-5's review).
     for name in ("Asha", "Baraka", "Zawadi"):
         came(device_a, worker(shop_a, name), 6, (7, 20), None)
+    month(shop_a)
     with shop_context(shop_a), CaptureQueriesContext(connection) as queries:
         answer = attendance_month(shop_a, OCTOBER)
     assert [day.staff.display_name for day in answer.to_decide] == ["Asha", "Baraka", "Zawadi"]
