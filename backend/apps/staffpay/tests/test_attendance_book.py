@@ -15,6 +15,7 @@ the demo's made-up 500 and 1,500 (rule 10). Fake data only: the repo is public.
 
 import datetime as dt
 import itertools
+from collections.abc import Callable
 from decimal import Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
@@ -29,14 +30,23 @@ from apps.control.services import dismiss_flag, raise_flag
 from apps.core.acting import acting_as
 from apps.core.links import table_of
 from apps.core.models import ShopScoped
+from apps.core.permissions import RoleTemplate
 from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SettingKey
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, change_worker, hire_again, mark_left
 from apps.shops.models import Closure, Setting, Shop, Side
 from apps.shops.selectors import shop_today
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, ReviewReason, TimeCheck
-from apps.staffpay.services import work_out_days
+from apps.staffpay.models import (
+    AttendanceDay,
+    AttendanceEvent,
+    ClockKind,
+    DayChoice,
+    DayStatus,
+    ReviewReason,
+    TimeCheck,
+)
+from apps.staffpay.services import decide_day, work_out_days
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
@@ -504,6 +514,31 @@ def test_a_day_follows_a_tap_that_came_late(shop_a: Shop, device_a: Device, asha
     assert _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)].status == DayStatus.NEEDS_REVIEW
     tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
     assert _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)].status == DayStatus.ON_TIME
+
+
+def test_the_book_never_writes_over_a_decision(
+    shop_a: Shop,
+    device_a: Device,
+    asha: StaffMember,
+    give_role: Callable[[StaffMember, RoleTemplate, Side | None], None],
+) -> None:
+    # Asha's Monday waits with no Toka, and Baba decides it a half day (ATT-6). Her Toka then arrives from a laptop
+    # that was offline: the book works the day out again, on time, and writes only what it works out (WORKED_OUT), so
+    # Baba's decision stays as he made it, beside the book's new answer (A2).
+    baba = _worker(shop_a, "Baba")
+    give_role(baba, RoleTemplate.OWNER, None)
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    monday = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    with shop_context(shop_a):
+        decide_day(monday, choice=DayChoice.HALF, reason="Aliondoka mchana", replaces=None, by=baba)
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    again = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    assert (again.status, again.review_reason) == (DayStatus.ON_TIME, "")
+    assert (again.decided_status, again.decided_by_id, again.decision_reason) == (
+        DayStatus.HALF,
+        baba.pk,
+        "Aliondoka mchana",
+    )
 
 
 def test_the_book_writes_as_nobody(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
