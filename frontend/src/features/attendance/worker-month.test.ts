@@ -2,7 +2,13 @@
 // empty places before the 1st and after the last, and the address a name on the month page opens.
 import { describe, expect, it } from "vitest";
 
-import { calendarWeeks, workerMonthAddress } from "./worker-month";
+import type { components } from "@/api/schema";
+
+import {
+  askAgainEvery,
+  calendarWeeks,
+  workerMonthAddress,
+} from "./worker-month";
 
 describe("the weeks of a worker's calendar", () => {
   it("starts November 2026, whose 1st is a Sunday, in the week's last place", () => {
@@ -78,5 +84,39 @@ describe("a worker's month's address", () => {
     ).toBe(
       "/attendance-month/worker/?staff=019a8400-0000-7000-8000-000000000001&month=2026-11",
     );
+  });
+});
+
+describe("how often a worker's month is asked again", () => {
+  /** An answer for `month`, on the server's today, the 20th of November. */
+  function answerFor(
+    month: string,
+  ): components["schemas"]["WorkerAttendanceAnswer"] {
+    return {
+      month,
+      today: "2026-11-20",
+      worker: {
+        staff: "019a8400-0000-7000-8000-000000000007",
+        display_name: "Juma",
+        on_time: 0,
+        late: 0,
+        half: 0,
+        absent: 0,
+        needs_review: 0,
+      },
+      started_on: "2026-09-01",
+      left_on: null,
+      days: [],
+      taps: [],
+    };
+  }
+
+  it("asks each minute while it shows this month, as today's taps come", () => {
+    expect(askAgainEvery(answerFor("2026-11"))).toBe(60_000);
+  });
+
+  it("never asks by itself for a month gone by, nor before the first answer", () => {
+    expect(askAgainEvery(answerFor("2026-10"))).toBe(false);
+    expect(askAgainEvery(undefined)).toBe(false);
   });
 });

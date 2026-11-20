@@ -12,7 +12,7 @@ import { answerOf } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { weekdayOf } from "@/lib/format";
 
-import { MONTH_PARAM, STALE_AFTER } from "./attendance-month";
+import { MONTH_PARAM, monthOf, STALE_AFTER } from "./attendance-month";
 
 export type WorkerAttendance = components["schemas"]["WorkerAttendanceAnswer"];
 export type WorkerDay = components["schemas"]["WorkerDay"];
@@ -57,7 +57,22 @@ export function useWorkerMonth(staff: string | null, month: string | null) {
     // As the month page's: each ask works the whole month out and locks every worker's row a moment
     // (work_out_days), so it is asked again only once a minute old; a tap that came late may change a day.
     staleTime: STALE_AFTER,
+    // And while it shows this month, asked again each minute by itself, so today's taps come as they are made
+    // (ATT-12's review): only while the page is on the screen, as TanStack stops counting in a hidden tab.
+    refetchInterval: (query) => askAgainEvery(query.state.data),
   });
+}
+
+/**
+ * How often a worker's month is asked again by itself: each minute while it is this month, by the server's own today,
+ * as today's taps come during the day; never for a month gone by, whose days are over, nor before the first answer.
+ */
+export function askAgainEvery(
+  answer: WorkerAttendance | undefined,
+): number | false {
+  return answer !== undefined && monthOf(answer.today) === answer.month
+    ? STALE_AFTER
+    : false;
 }
 
 /**
