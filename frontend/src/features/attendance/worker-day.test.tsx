@@ -441,6 +441,35 @@ describe("a day under the calendar", () => {
     ).toBeTruthy();
   });
 
+  it("opens a day with taps the book doesn't count, marked +", async () => {
+    // Juma's first day is 10 November, but he tapped on Sunday the 8th: the book keeps no Sunday outside a job's days,
+    // so the day has no mark of the book's. Its taps are still in reach: + opens them, and the day says it isn't
+    // counted.
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [],
+        [tap({ date: "2026-11-08", kind: "in", time: "09:00" })],
+        { started_on: "2026-11-10" },
+      ),
+    });
+    render(<WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay={null} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Jumapili 08/11: ina Ingia au Toka, haihesabiwi",
+      }),
+    );
+
+    const open = await theDay("Jumapili 08/11/2026");
+    expect(
+      within(open).getByText("Siku hii haihesabiwi, lakini ina Ingia au Toka."),
+    ).toBeTruthy();
+    expect(
+      within(open).getByText("Ingia 09:00 asubuhi · Laptop ya Dawa"),
+    ).toBeTruthy();
+  });
+
   it("opens nothing for another month's day the address names", async () => {
     // ?month=2026-10&day=2026-11-20: today, but not October's. October's calendar opens no November day under it.
     answer("GET", JUMAS_MONTH, {

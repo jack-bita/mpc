@@ -51,8 +51,12 @@ import {
 /** The weekdays as the calendar's columns run, Monday first, as the word books number them (Sunday "0"). */
 const MONDAY_FIRST: Weekday[] = ["1", "2", "3", "4", "5", "6", "0"];
 
-/** What a day of the calendar shows: one of the five kinds the line counts, a day the shop was shut, today, or nothing. */
-type Mark = (typeof KINDS)[number] | "off" | "today" | null;
+/** What a day of the calendar shows: one of the five kinds the line counts, a day the shop was shut, today, a day with
+ * taps the book doesn't count, or nothing. */
+type Mark = (typeof KINDS)[number] | "off" | "today" | "tapped" | null;
+
+/** The marks of this page's own book, beside the line's five from the month page's. */
+type OwnMark = "off" | "today" | "tapped";
 
 export function WorkerMonthScreen({
   staff,
@@ -280,9 +284,10 @@ function Calendar({
 }
 
 /** The mark a day of the calendar shows: the book's own, – for a day the shop was shut; today's •, as the book keeps
- * no day until it is over, but only on one of the worker's days, from their first to their last; nothing for any other
- * day. Neema, who left on the 15th, has no • on the 20th, and nothing to open there: her calendar stays empty after her
- * last day, as the card says (ATT-12's review). */
+ * no day until it is over, but only on one of the worker's days, from their first to their last; + for a day with taps
+ * the book doesn't count, so they can still be opened; nothing for any other day. Neema, who left on the 15th, has no •
+ * on the 20th, and nothing to open there: her calendar stays empty after her last day, as the card says (ATT-12's
+ * review). */
 function markOf(
   day: string,
   kept: WorkerDay | undefined,
@@ -292,7 +297,11 @@ function markOf(
   const worksThatDay =
     answer.started_on <= day &&
     (answer.left_on === null || day <= answer.left_on);
-  return day === answer.today && worksThatDay ? "today" : null;
+  if (day === answer.today && worksThatDay) return "today";
+  // A tap on a day the book keeps nothing for: a Sunday outside the job's days, which the book never keeps, as off
+  // pays nothing; a day before attendance was switched on; today, after the job's last day. Rare, but a tap the
+  // answer sends must never be out of reach (ATT-12's review).
+  return answer.taps.some((tap) => tap.date === day) ? "tapped" : null;
 }
 
 /** One day: its number, small, and its mark under it, big, as on Jack's picture. A day with a mark is a button, as
@@ -341,7 +350,8 @@ function DayOfTheMonth({
 function DaysNumberAndMark({ day, mark }: { day: string; mark: Mark }) {
   const t = useTranslations("attendanceWorker");
   const monthWords = useTranslations("attendanceMonth");
-  const isWorkersOwn = mark !== null && mark !== "off" && mark !== "today";
+  const isWorkersOwn =
+    mark !== null && mark !== "off" && mark !== "today" && mark !== "tapped";
   return (
     <span className="grid gap-0.5">
       <span className="text-sm">{Number(day.slice(8))}</span>
@@ -360,7 +370,7 @@ function DaysNumberAndMark({ day, mark }: { day: string; mark: Mark }) {
           >
             {isWorkersOwn
               ? monthWords(`mark.${mark}`)
-              : t(`mark.${mark as "off" | "today"}`)}
+              : t(`mark.${mark as OwnMark}`)}
           </span>
           <span className="sr-only">{kindOf(mark, t, monthWords)}</span>
         </>
@@ -375,12 +385,12 @@ function kindOf(
   t: ReturnType<typeof useTranslations<"attendanceWorker">>,
   monthWords: ReturnType<typeof useTranslations<"attendanceMonth">>,
 ): string {
-  return mark === "off" || mark === "today"
+  return mark === "off" || mark === "today" || mark === "tapped"
     ? t(`kind.${mark}`)
     : monthWords(`kind.${mark}`);
 }
 
-/** What each mark means, under the calendar: the line's five, then a shut day's and today's. */
+/** What each mark means, under the calendar: the line's five, then a shut day's, today's, and a day not counted. */
 function MarksKey() {
   const t = useTranslations("attendanceWorker");
   const monthWords = useTranslations("attendanceMonth");
@@ -396,7 +406,7 @@ function MarksKey() {
           {monthWords(`mark.${kind}`)} {monthWords(`kind.${kind}`)}
         </li>
       ))}
-      {(["off", "today"] as const).map((extra) => (
+      {(["off", "today", "tapped"] as const).map((extra) => (
         <li key={extra}>
           {t(`mark.${extra}`)} {t(`kind.${extra}`)}
         </li>

@@ -79,6 +79,8 @@ export function TheDay({
         {isToday ? t("dayTitleToday", title) : t("dayTitle", title)}
       </h3>
       {isToday ? <p>{t("notOverYet")}</p> : null}
+      {/* A day the book doesn't count, opened for its taps alone (the calendar's +): it says so. */}
+      {!isToday && kept === undefined ? <p>{t("notCounted")}</p> : null}
       {kept ? <Kept day={kept} answer={answer} /> : null}
       {taps.length > 0 ? (
         // A list, named, so a screen reader says how many taps the day had. role="list" written out, as Safari with

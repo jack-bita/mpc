@@ -210,6 +210,7 @@ describe("a worker's month", () => {
       "! inahitaji uamuzi",
       "– duka limefungwa",
       "• leo",
+      "+ ina Ingia au Toka, haihesabiwi",
     ]);
   });
 

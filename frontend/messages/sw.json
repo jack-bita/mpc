@@ -761,11 +761,13 @@
     },
     "mark": {
       "off": "–",
-      "today": "•"
+      "today": "•",
+      "tapped": "+"
     },
     "kind": {
       "off": "duka limefungwa",
-      "today": "leo"
+      "today": "leo",
+      "tapped": "ina Ingia au Toka, haihesabiwi"
     },
     "dayTitle": "{weekday} {date}",
     "dayTitleToday": "{weekday} {date} · leo",
@@ -804,7 +806,8 @@
     "noTaps": "Hakuna Ingia wala Toka siku hii.",
     "noIn": "Hakuna Ingia.",
     "noOut": "Hakuna Toka.",
-    "dayButton": "{weekday} {date}: {kind}"
+    "dayButton": "{weekday} {date}: {kind}",
+    "notCounted": "Siku hii haihesabiwi, lakini ina Ingia au Toka."
   },
   "needsAttention": {
     "title": "Kumbukumbu zilizokataliwa na seva",
