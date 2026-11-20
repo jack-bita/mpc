@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.52 · 20 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.53 · 20 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.53** (20 Nov 2026, ATT-6): §12, a day's decision: `override` and `absence_type` become one decision beside what the book worked out (what, its kind on an absence, its fine, who, when, why), never on one's own day; a decided day's fine read from its first Ingia and its own rules; how a decided day counts (04 v1.166). Marked **(v1.53)**.
 
 **Changes in v1.52** (20 Nov 2026, DATA-8): §4, on the demo the seed alone may start a rule on a past day: the demo's seed makes a new shop each morning, where no day has been worked out yet, and starts its rules three weeks back, so the month page has days to show. A person never may, there or anywhere. Marked **(v1.52)**.
 
@@ -544,8 +546,9 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 
 **AttendanceDay** → StaffMember, date — worked out from the events and the rules in force that day.
 - `first_in`, `first_out` **(v1.42)**, `status`: `on_time` | `late` | `half` | `absent` | `off` (Sunday, a closed day **(v1.33)**) | `needs_review`
-- `absence_type`: `office_duty` (paid as a full day) | `permission` (unpaid) | `no_show` (unpaid)
-- `fine`, `rules_used` (copied), `override` (status, by, reason — the worked-out value stays visible)
+- `fine`, `rules_used` (copied)
+- **A decision** **(v1.53)**, a manager's or the owner's, beside what the book worked out, which stays visible (A2) and which the book never writes over: `decided_status` (`on_time` | `late` | `half` | `absent`), `absence_type` on an absent decision only (`office_duty`, paid as a full day | `permission`, unpaid | `no_show`, unpaid), `decided_fine`, `decided_by`, `decided_at`, `decision_reason`; whole or none. Any working day that is over may be decided, a day to decide or any other (Juma, on time, sent home sick at 10:00, is a half day), and decided again, with a new reason; the edit history keeps the decision before. Never one's own day: the manager's days are the owner's to decide (Jack, ATT-6). A decided day counts as its decision and waits no more; on the month's line, office duty counts as a full day, permission and a no-show as absent, and the calendar marks each by its kind (O, R, H). On the demo, the reason is one of three ready ones (Jack, ATT-6).
+- **A decided day's fine** **(v1.53)**: a day sent to review carries none, so a day decided late or half reads it again, from its first trusted Ingia and the rules it used (T4), never today's: after `on_time_until` the first fine, from `second_fine_from` on the second, later arrivals too (*Claude's default*); *late* is not offered with no trusted Ingia, or one on time. A half day keeps a late morning arrival's fine, as the rule's morning half does; an afternoon arrival, or none known, has none. A full day and an absence take none. The fine is kept with the decision.
 - `review_reason` **(v1.51)**: why a day needs review, one reason, the first that holds: the book's own, as each asks whether the day is paid at all (a tap outside the job's days, a tap on a closed day, a tap made while suspended or gone, a later tap that disagrees), then the rule's, in the order it reads a day (a time not trusted, no Ingia, came late, no Toka, left early). Empty on every other day, and on a day to decide kept before ATT-5 until it is worked out again. The month page shows it beside the day: *Juma · Alhamisi 12/11 · hakuna Toka* (ATT-5).
 - `meal_share` **(v1.29)**: the worker's part of the day's meal money (§15, 14), worked out with the day, so the pay up to any day is a sum of days already worked out. It follows the day's status: a day that needs review has none until a manager decides it.
 - Locked once its pay run is approved.
@@ -557,7 +560,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - **Leaving,** after a morning arrival: before `midday`, needs review. From `midday` to `morning_leave_until` (13:30), the morning's half day, less the fine of a late arrival (the owner, 19 Nov 2026) **(v1.42)**. After it and before `closing`, needs review. From `closing`, the full day, or the late one. No clock-out: needs review (§20, item 6).
 - The seven times keep this order, each after the one before it, on every day (`setting.out_of_order`, ATT-2), so no minute lands in two windows.
 - **Toka ends the day** **(v1.42)**: the day runs from the first Ingia to the first Toka after it, and a tap after that Toka counts for nothing: nobody taps out for lunch (Jack, 19 Nov 2026). A Toka tapped by mistake, before midday, sends the day to review.
-- A day that needs review is the owner's *dharura*: a manager or the owner decides it (`override`).
+- A day that needs review is the owner's *dharura*: a manager or the owner decides it (a decision, above **(v1.53)**).
 - The fines start at 0: a shop has no fine until its owner types one. This public repo names no real amount (rule 10).
 - `attendance.enabled`: days count only from the day it is on (ADR-0033). Until then the counter shows no *Mahudhurio*.
 - Sunday is always `off`, and not paid: Sunday work is a deal between the owner and the worker, outside the system.
