@@ -10,10 +10,12 @@ And the month page's month (AttendanceMonthAnswer, ATT-5), worked out by attenda
 (apps/staffpay/services.py), for the month named in the address (AttendanceMonthQuery).
 """
 
+import re
+from datetime import date
 from typing import Any
 
 from django.db.models import QuerySet
-from drf_spectacular.utils import extend_schema_serializer
+from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
@@ -78,10 +80,38 @@ class PayRatesAnswer(serializers.Serializer[Any]):
     rates = PayRateSerializer(many=True)
 
 
+# A month as the address and the answer write it: four figures, a dash, two figures (01 to 12). The page writes the same
+# (isMonth, frontend/src/features/attendance/attendance-month.ts).
+MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
+# No month before this one: no shop's attendance can be in it, and near the calendar's first day a month's first
+# midnight in Arusha, three hours ahead of UTC, falls before UTC's first day, which the database can't be asked for.
+FIRST_MONTH = date(2000, 1, 1)
+
+
+@extend_schema_field({"type": "string", "pattern": MONTH_PATTERN, "example": "2026-11"})
+class MonthField(serializers.Field[date, str, str, Any]):
+    """A month, "2026-11", read as its first day and written back as "2026-11". Strict, where a date field reading
+    "%Y-%m" took "2026-1" too, and its description said a whole date, "2026-11-01", which the route never took nor sent
+    (ATT-5's review)."""
+
+    default_error_messages = {"invalid": "A month is written as 2026-11, from 2000-01 on."}
+
+    def to_internal_value(self, data: Any) -> date:
+        if not isinstance(data, str) or not re.fullmatch(MONTH_PATTERN, data):
+            self.fail("invalid")
+        month = date(int(data[:4]), int(data[5:7]), 1)
+        if month < FIRST_MONTH:
+            self.fail("invalid")
+        return month
+
+    def to_representation(self, value: date) -> str:
+        return value.strftime("%Y-%m")
+
+
 class AttendanceMonthQuery(serializers.Serializer[Any]):
-    # Which month, in the address (?month=2026-11), as the page keeps it. Anything else, a day or "2026-13", is refused
-    # under `month` (400 invalid), and the month page never sends one.
-    month = serializers.DateField(input_formats=["%Y-%m"], help_text="The month, as 2026-11.")
+    # Which month, in the address (?month=2026-11), as the page keeps it. Anything else, a day, "2026-13" or "2026-1",
+    # is refused under `month` (400 invalid), and the month page never sends one.
+    month = MonthField(help_text="The month, as 2026-11.")
 
 
 class WorkerMonthSerializer(serializers.Serializer[Any]):
@@ -113,7 +143,7 @@ class DayToDecideSerializer(serializers.Serializer[Any]):
 class AttendanceMonthAnswer(serializers.Serializer[Any]):
     # The month page's answer (ATT-5): which month, as "2026-11"; the shop's today, so the page says this month's counts
     # reach yesterday, on the shop's own date, as a phone's can be wrong; a line per worker; and the days to decide.
-    month = serializers.DateField(format="%Y-%m")
+    month = MonthField()
     today = serializers.DateField()
     working_day_over = serializers.BooleanField(
         help_text="Whether a working day of the month is over: with none, nobody is listed for want of a day."

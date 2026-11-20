@@ -2130,7 +2130,8 @@
                         "name": "month",
                         "schema": {
                             "type": "string",
-                            "format": "date"
+                            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                            "example": "2026-11"
                         },
                         "description": "The month, as 2026-11.",
                         "required": true
@@ -2311,7 +2312,8 @@
                 "properties": {
                     "month": {
                         "type": "string",
-                        "format": "date"
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "example": "2026-11"
                     },
                     "today": {
                         "type": "string",

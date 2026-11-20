@@ -715,7 +715,7 @@ export interface components {
             };
         };
         AttendanceMonthAnswer: {
-            /** Format: date */
+            /** @example 2026-11 */
             month: string;
             /** Format: date */
             today: string;

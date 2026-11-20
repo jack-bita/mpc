@@ -99,9 +99,11 @@ def test_the_month_as_the_page_reads_it(
     assert "13579" not in reply.content.decode()
 
 
-@pytest.mark.parametrize("month", ["2026-13", "2026-10-02", "Oktoba", ""])
+@pytest.mark.parametrize("month", ["2026-13", "2026-10-02", "Oktoba", "", "2026-1", "1999-12", "0001-01"])
 def test_a_month_the_route_cant_read_is_refused(staff_client_a: APIClient, month: str) -> None:
-    # The page always sends "2026-10". Anything else is refused under `month`, and no month is worked out.
+    # The page always sends "2026-10". Anything else is refused under `month`, and no month is worked out: "2026-1",
+    # which a looser reading took for October (ATT-5's review); and a month before 2000, which no shop's attendance
+    # can be in, and whose first midnight in Arusha falls before UTC's first day, a server error once read.
     reply = staff_client_a.get(MONTH, {"month": month})
     assert reply.status_code == 400
     assert "month" in reply.json()["fields"]
