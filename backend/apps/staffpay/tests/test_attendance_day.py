@@ -13,6 +13,9 @@ Each row of the owner's table in spec §8.1 is a test named after it, so the cod
 A day of dharura says why, for the person who decides it (ATT-5): the time can't be trusted, no Ingia, came late, no
 Toka, or left early, the first that holds in the rule's own order. Every dharura below names its reason.
 
+Then a decided day's fine (ATT-6, day_choices): a day a manager decides late or half takes the fine its first Ingia
+gives, from 08:00 on the second, and a full day or an absence none.
+
 Every window is a minute on the shop's clock, as the counter shows it (SYNC-11): a tap's seconds never count, and the
 server's UTC is never the shop's time; shop_minute turns a tap's time into that minute. Pure: no database, no clock of
 its own. The fines are the demo's made-up 500 and 1,500: the repo is public, so no real amount (rule 10).
@@ -25,8 +28,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from apps.staffpay.calculations import NO_FINE, DayResult, DayRules, Tap, shop_minute, work_out_day
-from apps.staffpay.models import ClockKind, DayStatus, ReviewReason
+from apps.staffpay.calculations import NO_FINE, DayResult, DayRules, Tap, day_choices, shop_minute, work_out_day
+from apps.staffpay.models import ClockKind, DayChoice, DayStatus, ReviewReason
 
 ARUSHA = ZoneInfo("Africa/Dar_es_Salaam")
 FIRST_FINE = Decimal("500.00")
@@ -335,3 +338,63 @@ def test_a_result_says_why_exactly_when_it_needs_a_decision() -> None:
         DayResult(DayStatus.NEEDS_REVIEW, NO_FINE, at("07:20"), None)
     with pytest.raises(ValueError, match="why"):
         DayResult(DayStatus.ON_TIME, NO_FINE, at("07:20"), at(CLOSING), NO_OUT)
+
+
+# A decided day's fine (ATT-6): a manager decides a day, and a day decided late or half takes the fine its first Ingia
+# gives by the day's own rules, as the rule would have. Named as the owner's table is, by the Ingia.
+def choices(arrives: str | None) -> dict[DayChoice, Decimal]:
+    # The sheet's choices for a day whose first trusted Ingia is at `arrives`, None for no Ingia known.
+    return day_choices(None if arrives is None else at(arrives), OWNERS_DAY)
+
+
+def test_decided_late_0750_takes_the_first_fine() -> None:
+    assert choices("07:50")[DayChoice.LATE] == FIRST_FINE
+
+
+def test_decided_late_0800_takes_the_second_fine() -> None:
+    # "From" takes its own minute, as the rule's window does: 08:00 is the second fine.
+    assert choices("08:00")[DayChoice.LATE] == SECOND_FINE
+
+
+def test_decided_late_0910_takes_the_second_fine() -> None:
+    # Past the rule's own windows (from 08:30, dharura) a later arrival is never cheaper than 08:10: the second fine.
+    assert choices("09:10")[DayChoice.LATE] == SECOND_FINE
+
+
+def test_decided_late_is_not_offered_to_one_on_time() -> None:
+    # 07:35 is on time ("by" takes its own minute), so nobody may fine it as late; nor a day with no Ingia known, a
+    # Toka alone or a time not trusted: nobody knows when they came.
+    for arrives in ("07:20", "07:35", None):
+        assert DayChoice.LATE not in choices(arrives)
+
+
+def test_decided_half_0750_keeps_the_first_fine() -> None:
+    # The morning's half keeps a late arrival's fine, as the rule's own does (the owner, 19 Nov 2026).
+    assert choices("07:50")[DayChoice.HALF] == FIRST_FINE
+    assert choices("09:10")[DayChoice.HALF] == SECOND_FINE
+
+
+def test_decided_half_takes_no_fine_when_none_is_known() -> None:
+    # On time, an afternoon arrival (from 12:00, its own minute: no late one, ATT-4), or no Ingia known: no fine.
+    for arrives in ("07:20", "12:00", "12:20", None):
+        assert choices(arrives)[DayChoice.HALF] == NO_FINE
+
+
+def test_decided_full_days_and_absences_take_no_fine() -> None:
+    # A full day takes none, however late the Ingia: whoever decides it so has forgiven it. Nor does an absence.
+    for arrives in ("07:20", "09:10", None):
+        offered = choices(arrives)
+        for choice in (DayChoice.ON_TIME, DayChoice.OFFICE_DUTY, DayChoice.PERMISSION, DayChoice.NO_SHOW):
+            assert offered[choice] == NO_FINE
+
+
+def test_decided_choices_come_in_the_sheets_order() -> None:
+    # Siku kamili, Amechelewa, Nusu siku, then the three absences, as the sheet lists them (ATT-6).
+    assert list(choices("07:50")) == list(DayChoice)
+    assert list(choices(None)) == [choice for choice in DayChoice if choice != DayChoice.LATE]
+
+
+def test_decided_late_with_no_fine_set_is_still_late() -> None:
+    # A shop starts with no fine (ATT-2): late is still offered, and takes 0, as the rule's late day does.
+    no_fines = dataclasses.replace(OWNERS_DAY, late_fine=NO_FINE, second_fine=NO_FINE)
+    assert day_choices(at("07:50"), no_fines)[DayChoice.LATE] == NO_FINE

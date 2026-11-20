@@ -15,6 +15,14 @@ The day's rule (ATT-4, spec §8.1): what one worker's day was, from that day's t
 Every window of the owner's day is a minute on the shop's clock, which shop_minute reads from a tap's time. The rule
 only answers: ATT-10 finds the taps and the rules in force that day, hands them in, and keeps the answer. Server only
 too, as the day is worked out on the server (03 §5.8).
+
+A decided day's fine (ATT-6): a manager or the owner decides a day, and a day decided late or half takes the fine its
+first Ingia gives, by the rules that day used (T4):
+
+    in 07:50  → Amechelewa: the first fine     Nusu siku: the first fine
+    in 08:10  → Amechelewa: the second fine    Nusu siku: the second fine
+    in 07:20  → Amechelewa: not offered        Nusu siku: no fine
+    in 12:20  → Amechelewa: the second fine    Nusu siku: no fine, the afternoon's half
 """
 
 import datetime as dt
@@ -23,7 +31,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
-from apps.staffpay.models import ClockKind, DayStatus, ReviewReason, TimeCheck
+from apps.staffpay.models import ClockKind, DayChoice, DayStatus, ReviewReason, TimeCheck
 
 # A clock-in the laptop sent within 2 minutes of the tap, both by its own clock, was made online: the push runs 2
 # seconds after a new record (03 §6.5), and a retry or two still fits. Its time is the server's time of the tap: the
@@ -238,3 +246,32 @@ def work_out_day(taps: Sequence[Tap], rules: DayRules) -> DayResult:
     # Leaving before midday, after 13:30 and before closing, or never clocking out: the owner's dharura, as nobody
     # knows which half was worked, or when they left (02 §20, item 6).
     return dharura(ReviewReason.NO_OUT if first_out is None else ReviewReason.LEFT_EARLY)
+
+
+def day_choices(first_in: dt.time | None, rules: DayRules) -> dict[DayChoice, Decimal]:
+    """The choices a manager may decide a day as (ATT-6), each with the fine it takes, in the sheet's order: from the
+    day's first Ingia with a trusted time (`first_in`, ATT-4) and the rules the day used (`rules_used`, T4), never
+    today's. A choice the day can't take is left out: *Amechelewa* with no Ingia known, or an Ingia on time."""
+    # A day sent to review carries no fine (NO_FINE, ATT-4), so deciding it late reads the fine again, as the rule
+    # would have: by on_time_until no fine; after it and before second_fine_from the first; from second_fine_from on
+    # the second. Past the rule's own windows (from review_from, 08:30, the owner's dharura) a late arrival is later
+    # still, so it takes the second fine too, the larger: 09:10 is never cheaper than 08:10 (Claude's default, the
+    # plan Jack approved).
+    arrival_fine: Decimal | None
+    if first_in is None or first_in <= rules.on_time_until:
+        arrival_fine = None
+    elif first_in < rules.second_fine_from:
+        arrival_fine = rules.late_fine
+    else:
+        arrival_fine = rules.second_fine
+    # A half day keeps a late morning arrival's fine, as the rule's morning half does (the owner, 19 Nov 2026); an
+    # afternoon arrival, from afternoon_from on, is no late one (ATT-4), and an Ingia not known can't be fined.
+    morning = first_in is not None and first_in < rules.afternoon_from
+    half_fine = arrival_fine if morning and arrival_fine is not None else NO_FINE
+    choices = {DayChoice.ON_TIME: NO_FINE}
+    if arrival_fine is not None:
+        choices[DayChoice.LATE] = arrival_fine
+    choices[DayChoice.HALF] = half_fine
+    # The three absences take no fine: nobody arrived late who never arrived.
+    choices |= {DayChoice.OFFICE_DUTY: NO_FINE, DayChoice.PERMISSION: NO_FINE, DayChoice.NO_SHOW: NO_FINE}
+    return choices

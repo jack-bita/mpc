@@ -1,4 +1,5 @@
-"""apps/staffpay/selectors.py — reads for attendance and pay: the rules a day is judged by (ATT-10).
+"""apps/staffpay/selectors.py — reads for attendance and pay: the rules a day is judged by (ATT-10), and read back from
+a day's own copy for a day decided late (ATT-6).
 
     on 30 Nov: late_fine 0.00, closing 18:40      the owner types 500 from 1 Dec
     on 1 Dec:  late_fine 500.00, closing 18:40    so 30 Nov keeps its rules, and 1 Dec gets the new one
@@ -76,6 +77,14 @@ def rules_as_text(rules: DayRules) -> dict[str, str]:
     """A day's rules as the day keeps them (`rules_used`, T4): each written by its own setting's kind, as the settings
     store it, "07:35" and "500.00", so no amount ever passes through a float (rule 3), and each reads back as itself."""
     return {part: key.kind.to_text(getattr(rules, part)) for part, key in DAY_RULE_SETTINGS.items()}
+
+
+def rules_from_text(kept: dict[str, str]) -> DayRules:
+    """A day's own copy of its rules (`rules_used`), read back as the rules the day was judged by, for the fine of a
+    day decided late (ATT-6, T4): the rules of that day, never today's, which the owner may have changed since. Each
+    read by its own setting's kind, as rules_as_text wrote it. Never on an off day, which keeps no copy: a missing part
+    is a KeyError, a bug in our code."""
+    return DayRules(**{part: key.kind.parse(kept[part]) for part, key in DAY_RULE_SETTINGS.items()})
 
 
 # A job's rates, newest first, as a setting's rows are read (02 §4): the latest day first; on one day the row written

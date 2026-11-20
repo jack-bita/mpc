@@ -107,6 +107,29 @@ class AbsenceType(models.TextChoices):
 DECIDED = [DayStatus.ON_TIME, DayStatus.LATE, DayStatus.HALF, DayStatus.ABSENT]
 
 
+class DayChoice(models.TextChoices):
+    # The six choices of the sheet a manager decides a day in (ATT-6), in the sheet's order: *Siku kamili*,
+    # *Amechelewa*, *Nusu siku*, then the three absences. Not a column: each is kept as a decided status and, for an
+    # absence, its kind (DECISION_OF), so the pay reads one status, whatever the sheet called it.
+    ON_TIME = "on_time", "Full day"
+    LATE = "late", "Late"
+    HALF = "half", "Half day"
+    OFFICE_DUTY = "office_duty", "Office duty"
+    PERMISSION = "permission", "Permission"
+    NO_SHOW = "no_show", "No-show"
+
+
+# Each choice as the day keeps it: the decided status, and the absence's kind, or "" for none.
+DECISION_OF: dict[DayChoice, tuple[DayStatus, str]] = {
+    DayChoice.ON_TIME: (DayStatus.ON_TIME, ""),
+    DayChoice.LATE: (DayStatus.LATE, ""),
+    DayChoice.HALF: (DayStatus.HALF, ""),
+    DayChoice.OFFICE_DUTY: (DayStatus.ABSENT, AbsenceType.OFFICE_DUTY),
+    DayChoice.PERMISSION: (DayStatus.ABSENT, AbsenceType.PERMISSION),
+    DayChoice.NO_SHOW: (DayStatus.ABSENT, AbsenceType.NO_SHOW),
+}
+
+
 # The type checker's Django plugin calls the two bases' get_next_by_created_at() a clash, as on PushedDocument
 # (apps/sync/models.py): one and the same method, from ShopScoped. Ignored on this line only.
 class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
