@@ -9,8 +9,9 @@ so, while shop A has none; and a card that adds a route needing query parameters
 (sweep_queries). Each shop has a paired device: a row of the office device list (AUTH-5), and the visitor the sweep
 sends to every device route (sweep_device_clients, AUTH-2); dated rules, which the bootstrap sends (SYNC-2); the
 days each shop is closed, which the closures route lists (ATT-8); a worker's photo with its file, whose id the sweep
-sends the photo routes as shop B (CTRL-3); and a worker's pay rate, which the pay rates route lists, asked about shop
-A's worker (WAGE-1). The demo seed (DATA-1) could fill the shops later.
+sends the photo routes as shop B (CTRL-3); a worker's pay rate, which the pay rates route lists, asked about shop
+A's worker (WAGE-1); and a worker paid by the day with their days in the book, whom the month page lists (ATT-5). The
+demo seed (DATA-1) could fill the shops later.
 
 The sweep knows shop A's rows by their ids, and by the texts and amounts only shop A holds, so that a leak
 with no ids, like a report of names and totals, is found too. So give shop A values of its own: names and
@@ -34,15 +35,15 @@ from rest_framework.test import APIClient
 from apps.control.models import AttachmentKind, AttachmentType
 from apps.control.services import expect_attachment, receive_attachment_file
 from apps.core.permissions import RoleTemplate
-from apps.core.settings_registry import CASH_TOLERANCE, LATE_FINE
+from apps.core.settings_registry import ATTENDANCE_ON, CASH_TOLERANCE, LATE_FINE
 from apps.core.tenancy import shop_context
 from apps.people.device_keys import DEVICE_KEY_COOKIE
-from apps.people.models import StaffMember
-from apps.people.services import Outage, confirm_pairing, record_outages, start_pairing
+from apps.people.models import StaffMember, User
+from apps.people.services import Outage, add_staff, confirm_pairing, record_outages, start_pairing
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side
-from apps.staffpay.services import set_pay_rate
+from apps.staffpay.services import set_pay_rate, work_out_days
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -55,12 +56,13 @@ def sweep_shops(
     sweep_closures: tuple[Shop, Shop],
     sweep_attachments: tuple[Shop, Shop],
     sweep_pay_rates: tuple[Shop, Shop],
+    sweep_attendance: tuple[Shop, Shop],
 ) -> tuple[Shop, Shop]:
     # Shop A, whose rows must never show, and shop B, the visitor's own, each filled with every table below: their
     # sides, a paired device each, which the office device list shows (AUTH-5), with an offline period the health page
     # shows (SYNC-14), dated rules, which the bootstrap sends (SYNC-2), days closed, which the closures route lists
-    # (ATT-8), a photo with its file, which the photo routes are asked about (CTRL-3), and a worker's pay rate, which
-    # the pay rates route lists (WAGE-1).
+    # (ATT-8), a photo with its file, which the photo routes are asked about (CTRL-3), a worker's pay rate, which
+    # the pay rates route lists (WAGE-1), and a worker's days in the book, which the month page lists (ATT-5).
     return sweep_sides
 
 
@@ -149,6 +151,29 @@ def sweep_pay_rates(sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staff_
 
 
 @pytest.fixture
+def sweep_attendance(sweep_sides: tuple[Shop, Shop]) -> tuple[Shop, Shop]:
+    # Each shop switched attendance on in January and has a worker paid by the day since 40 days ago, under a nickname
+    # only that shop holds: the month page lists them (ATT-5), and the sweep asks it for the month of yesterday
+    # (sweep_queries), the last day the book keeps. Their days are worked out here, as the page's first visit would,
+    # so shop A has days in the book for the sweep to look for. The switch is saved as set_setting saves a rule, but on
+    # a day gone by, which the service refuses, as sweep_settings does; the worker and the rate through the services.
+    for shop, name, amount in (
+        (sweep_sides[0], "Mhudhuriaji Mfano", "11223"),
+        (sweep_sides[1], "Mhudhuriaji Jirani", "33221"),
+    ):
+        with shop_context(shop):
+            row = Setting(shop=shop, key=ATTENDANCE_ON.key, value="true", effective_from=date(2026, 1, 1))
+            row.full_clean()
+            row.save()
+            started = shop_today(shop) - timedelta(days=40)
+            user = User.objects.create_user(full_name=f"{name} Demo")
+            worker = add_staff(shop=shop, user=user, display_name=name, started_on=started, by=None)
+            set_pay_rate(worker, daily_rate=Decimal(amount), effective_from=started, by=None)
+            work_out_days(shop, started, shop_today(shop) - timedelta(days=1))
+    return sweep_sides
+
+
+@pytest.fixture
 def sweep_device_keys(
     sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staff_b: StaffMember, give_role: GiveRole
 ) -> tuple[str, str]:
@@ -188,11 +213,17 @@ def sweep_device_clients(sweep_device_keys: tuple[str, str]) -> tuple[APIClient,
 
 
 @pytest.fixture
-def sweep_queries(staff_a: StaffMember) -> dict[str, dict[str, str]]:
+def sweep_queries(shop_a: Shop, staff_a: StaffMember) -> dict[str, dict[str, str]]:
     # The query parameters a GET route can't answer without, by the route's name. They must be ones under which
     # shop A's rows show: a day's report asks for the day the rows above are made on, the test's today, as in
     # {"daily-report-list": {"date": str(timezone.localdate())}}, never a fixed date, which would show nothing to
     # either shop. Without them such a route answers 400; with ones that show nothing, even shop A's own staff
     # sees nothing; either way the sweep fails and points here. The pay rates route names its worker (WAGE-1): shop
-    # A's, whose rate sweep_pay_rates sets, so shop B is asked about another shop's worker by their real id.
-    return {"pay-rate-list": {"staff": str(staff_a.pk)}}
+    # A's, whose rate sweep_pay_rates sets, so shop B is asked about another shop's worker by their real id. The month
+    # page names its month (ATT-5): yesterday's, as the book keeps no day before it is over, so on the 1st this
+    # month would list nobody.
+    yesterday = shop_today(shop_a) - timedelta(days=1)
+    return {
+        "pay-rate-list": {"staff": str(staff_a.pk)},
+        "attendance-month-list": {"month": yesterday.strftime("%Y-%m")},
+    }

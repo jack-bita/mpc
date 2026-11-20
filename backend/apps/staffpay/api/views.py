@@ -1,8 +1,9 @@
 """apps/staffpay/api/views.py — the staffpay routes an office screen calls, under /api/v1/staffpay/ (WAGE-1; 03 §5.10).
 
-Today one: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku). Thin, as every route is
-(ADR-0015): who may set a rate, and what it may be, are set_pay_rate's (apps/staffpay/services.py); which rate is in
-force, the selectors'.
+Two: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); and a month of
+attendance, read on Mahudhurio ya mwezi (ATT-5). Thin, as every route is (ADR-0015): who may set a rate, and what it may
+be, are set_pay_rate's (apps/staffpay/services.py); which rate is in force, the selectors'; what a month holds,
+attendance_month's.
 """
 
 from typing import Any, cast
@@ -13,15 +14,22 @@ from rest_framework import exceptions
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.core.api.base import CreateOnceMixin
+from apps.core.api.base import CreateOnceMixin, ShopViewSet
 from apps.core.permissions import Permission
 from apps.people.models import StaffMember
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_today
-from apps.staffpay.api.serializers import PayRateCreateSerializer, PayRatesAnswer, PayRateSerializer, PayRatesQuery
-from apps.staffpay.models import PayRate
+from apps.staffpay.api.serializers import (
+    AttendanceMonthAnswer,
+    AttendanceMonthQuery,
+    PayRateCreateSerializer,
+    PayRatesAnswer,
+    PayRateSerializer,
+    PayRatesQuery,
+)
+from apps.staffpay.models import AttendanceDay, PayRate
 from apps.staffpay.selectors import NEWEST_FIRST, rate_in_force
-from apps.staffpay.services import set_pay_rate
+from apps.staffpay.services import attendance_month, set_pay_rate
 
 
 class PayRateViewSet(CreateOnceMixin[PayRate]):
@@ -83,3 +91,28 @@ class PayRateViewSet(CreateOnceMixin[PayRate]):
             note=data.get("note", ""),
             by=cast(StaffMember, self.actor),
         )
+
+
+class AttendanceMonthViewSet(ShopViewSet[AttendanceDay]):
+    # GET attendance-month/?month=2026-11: the month page's month (ATT-5), a line per worker the shop pays by the day,
+    # with the month's counts, and the days a person must decide, each with why. Only a read: deciding a day is ATT-6's.
+    # It works the month out through the book, which keeps the days it works out (work_out_days), so this GET writes;
+    # it is safe to send again, as a month asked for twice writes nothing the second time (ATT-10).
+    model = AttendanceDay
+    # Attendance belongs to the whole shop, as its rules do (02 §12): no side.
+    side_field = None
+    # The key to fix attendance, held by the owner and the managers (03 §5.8), on the whole shop, as a route of the
+    # whole shop's rows asks its key there (PPL-4): a seller, or a manager of one side alone, sees nobody's month. No
+    # amount is in the answer, so the pay's two keys aren't asked (WAGE-1's review).
+    action_permissions = {"list": Permission.ATTENDANCE_MANAGE}
+    # One answer, not pages: a month of a shop's workers is a few dozen lines.
+    pagination_class = None
+
+    @extend_schema(parameters=[AttendanceMonthQuery], responses=AttendanceMonthAnswer)
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        asked = AttendanceMonthQuery(data=request.query_params)
+        # No month named, or one that is no month: 400 under `month`, through the one error handler.
+        asked.is_valid(raise_exception=True)
+        # The visit's own shop, open already (ShopViewSet): the book and the rates read inside it, through the guard.
+        shop = Shop.objects.get(pk=self.actor.shop_id)
+        return Response(AttendanceMonthAnswer(attendance_month(shop, asked.validated_data["month"])).data)

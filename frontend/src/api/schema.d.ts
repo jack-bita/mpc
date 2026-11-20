@@ -650,6 +650,22 @@ export interface paths {
         patch: operations["shops_sides_partial_update"];
         trace?: never;
     };
+    "/api/v1/staffpay/attendance-month/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["staffpay_attendance_month_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staffpay/pay-rates/": {
         parameters: {
             query?: never;
@@ -697,6 +713,14 @@ export interface components {
             params: {
                 [key: string]: (string | number | boolean) | null;
             };
+        };
+        AttendanceMonthAnswer: {
+            /** Format: date */
+            month: string;
+            /** Format: date */
+            today: string;
+            workers: components["schemas"]["WorkerMonth"][];
+            to_decide: components["schemas"]["DayToDecide"][];
         };
         BootstrapAnswer: {
             /**
@@ -776,6 +800,18 @@ export interface components {
          * @enum {string}
          */
         ClosureStatusEnum: "active" | "cancelled";
+        DayToDecide: {
+            /** Format: uuid */
+            staff: string;
+            display_name: string;
+            /** Format: date */
+            date: string;
+            reason: components["schemas"]["ReasonEnum"];
+            /** Format: time */
+            first_in: string | null;
+            /** Format: time */
+            first_out: string | null;
+        };
         DemoDevice: {
             readonly pins: components["schemas"]["DemoPin"][];
             readonly logins: components["schemas"]["DemoLogin"][];
@@ -1286,6 +1322,19 @@ export interface components {
          * @enum {string}
          */
         PushedStatusEnum: "accepted" | "invalid";
+        /**
+         * @description * `outside_job` - Outside the job's days
+         *     * `closed_day` - The shop was closed
+         *     * `not_working` - Suspended or gone
+         *     * `clock_disagrees` - A later tap disagrees
+         *     * `time_unknown` - Time not trusted
+         *     * `no_in` - No Ingia
+         *     * `came_late` - Came late
+         *     * `no_out` - No Toka
+         *     * `left_early` - Left early
+         * @enum {string}
+         */
+        ReasonEnum: "outside_job" | "closed_day" | "not_working" | "clock_disagrees" | "time_unknown" | "no_in" | "came_late" | "no_out" | "left_early";
         Role: {
             /** Format: uuid */
             readonly id: string;
@@ -1573,6 +1622,16 @@ export interface components {
             must_change_password: boolean;
             idle_minutes: number;
             permissions: components["schemas"]["MePermissions"];
+        };
+        WorkerMonth: {
+            /** Format: uuid */
+            staff: string;
+            display_name: string;
+            on_time: number;
+            late: number;
+            half: number;
+            absent: number;
+            needs_review: number;
         };
     };
     responses: never;
@@ -2961,6 +3020,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Side"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_attendance_month_list: {
+        parameters: {
+            query: {
+                /** @description The month, as 2026-11. */
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceMonthAnswer"];
                 };
             };
             default: {

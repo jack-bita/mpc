@@ -16,6 +16,9 @@ for, as a tap can come late from a laptop that was offline, a manager can void a
 day can be moved (PPL-10). ATT-5 asks for a month to show, WAGE-2 for a month to pay, ATT-7 each night. No route of
 its own, and no line in the change log: no laptop keeps a copy of the days.
 
+The month page (ATT-5) asks for a month through attendance_month: the book's days, a line per worker the shop pays by
+the day with how many days were each kind, and the days a person must decide, each with why.
+
 A pay rate is typed by a person, the owner (set_pay_rate): from 10 Nov, Juma earns 10,000 a day. Whoever sets it sets a
 worker's pay, so who may is the PIN's rule, asked by the people app (02 §5). No line in the change log either: a
 worker's pay never sits on a shared device (03 §6.1).
@@ -23,7 +26,7 @@ worker's pay never sits on a shared device (03 §6.1).
 
 import datetime as dt
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any
@@ -55,7 +58,7 @@ from apps.staffpay.models import (
     ReviewReason,
     TimeCheck,
 )
-from apps.staffpay.selectors import day_rules_between, rules_as_text
+from apps.staffpay.selectors import day_rules_between, rates_between, rules_as_text
 
 # Sunday, as Python numbers the days of the week (Monday is 0). Always off, and not paid: Sunday work is a deal between
 # the owner and the worker, outside the system (01 §8.1), so a shop has no setting for it.
@@ -347,6 +350,79 @@ def _keep(answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], A
     if new:
         AttendanceDay.objects.bulk_create(new)
     return rows
+
+
+@dataclass(frozen=True)
+class WorkerMonth:
+    # One worker's line on the month page: whose, and how many of their days of the month were each kind, every kind
+    # but off, as a Sunday or a closed day is nobody's to count; the page shows each beside its mark (✓ Ch ½ H !). A
+    # job's line, as a day is a job's: a person hired again in the month has two (PPL-11), each with its own days.
+    staff_id: uuid.UUID
+    display_name: str
+    on_time: int
+    late: int
+    half: int
+    absent: int
+    needs_review: int
+
+
+@dataclass(frozen=True)
+class AttendanceMonth:
+    # The month page's answer (ATT-5). `month` is its first day; `today` the shop's, so the page knows this month's
+    # counts reach yesterday, as the book keeps no day until it is over.
+    month: dt.date
+    today: dt.date
+    workers: list[WorkerMonth]
+    to_decide: list[AttendanceDay]
+
+
+def attendance_month(shop: Shop, month: dt.date) -> AttendanceMonth:
+    """The month of `month`, any day of it, as the month page shows it (ATT-5): each worker with a daily pay rate on a
+    day of the month the book answers, with their counts, by name; and those workers' days to decide, oldest first,
+    each with why. Works the month out through the book (work_out_days), so it writes as the book does, and asked
+    twice writes nothing the second time. The shop must be open, as for the book."""
+    first = month.replace(day=1)
+    # The last day: the 1st of the month after, less a day. 32 days after any 1st is always in the next month.
+    last = (first + dt.timedelta(days=32)).replace(day=1) - dt.timedelta(days=1)
+    # The book's answer, never the table's rows: a day kept to decide that the book no longer answers, its tap voided
+    # outside a job's days, stays in its row as it was (rule 7), and is no longer anyone's to decide (ATT-11's review).
+    # Only days that are over: this month's stop at yesterday. Each comes with its worker, in the same read.
+    days = work_out_days(shop, first, last)
+    # Who the shop pays by the day, on each day (WAGE-1): only they are listed. Baba, the owner, never clocks in, so the
+    # book keeps him absent every working day; he has no rate, so no line (Jack, ATT-10's review: A). Read on the
+    # server, never through the rates route, which a manager who fixes attendance may not open: the page learns who
+    # is listed, and no amount (Jack, WAGE-1's review: A). A rate goes on after a job's last day (rates_between), so a
+    # worker is listed by the book's days alone: Neema, gone in September, has no October day, so no October line.
+    rates = rates_between(shop, first, last)
+    listed = {day.staff_id for day in days if (day.staff_id, day.date) in rates}
+    counts: dict[uuid.UUID, Counter[str]] = defaultdict(Counter)
+    names: dict[uuid.UUID, str] = {}
+    for day in days:
+        if day.staff_id in listed:
+            counts[day.staff_id][day.status] += 1
+            names[day.staff_id] = day.staff.display_name
+    workers = [
+        WorkerMonth(
+            staff_id=job,
+            display_name=names[job],
+            on_time=kinds[DayStatus.ON_TIME],
+            late=kinds[DayStatus.LATE],
+            half=kinds[DayStatus.HALF],
+            absent=kinds[DayStatus.ABSENT],
+            needs_review=kinds[DayStatus.NEEDS_REVIEW],
+        )
+        for job, kinds in counts.items()
+    ]
+    # By name, as the owner looks for Juma by his name; "asha" beside "Asha", whatever its first letter; then the job's
+    # id, so two jobs of one name always come in the same order.
+    workers.sort(key=lambda line: (line.display_name.casefold(), line.staff_id))
+    # The days to decide, oldest first, as the oldest has waited longest and payday comes for it first; on one day, by
+    # name. A listed worker's only: a worker with no rate isn't paid by the day, so nothing of theirs waits here.
+    to_decide = sorted(
+        (day for day in days if day.staff_id in listed and day.status == DayStatus.NEEDS_REVIEW),
+        key=lambda day: (day.date, day.staff.display_name.casefold(), day.staff_id),
+    )
+    return AttendanceMonth(month=first, today=shop_today(shop), workers=workers, to_decide=to_decide)
 
 
 def set_pay_rate(

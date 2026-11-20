@@ -2121,6 +2121,53 @@
                 }
             }
         },
+        "/api/v1/staffpay/attendance-month/": {
+            "get": {
+                "operationId": "staffpay_attendance_month_list",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "month",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "description": "The month, as 2026-11.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AttendanceMonthAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/staffpay/pay-rates/": {
             "get": {
                 "operationId": "staffpay_pay_rates_list",
@@ -2257,6 +2304,37 @@
                     "fields",
                     "message",
                     "params"
+                ]
+            },
+            "AttendanceMonthAnswer": {
+                "type": "object",
+                "properties": {
+                    "month": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "today": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "workers": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WorkerMonth"
+                        }
+                    },
+                    "to_decide": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DayToDecide"
+                        }
+                    }
+                },
+                "required": [
+                    "month",
+                    "to_decide",
+                    "today",
+                    "workers"
                 ]
             },
             "BootstrapAnswer": {
@@ -2498,6 +2576,43 @@
                 ],
                 "type": "string",
                 "description": "* `active` - Active\n* `cancelled` - Cancelled"
+            },
+            "DayToDecide": {
+                "type": "object",
+                "properties": {
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "reason": {
+                        "$ref": "#/components/schemas/ReasonEnum"
+                    },
+                    "first_in": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "first_out": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "date",
+                    "display_name",
+                    "first_in",
+                    "first_out",
+                    "reason",
+                    "staff"
+                ]
             },
             "DemoDevice": {
                 "type": "object",
@@ -3945,6 +4060,21 @@
                 "type": "string",
                 "description": "* `accepted` - Accepted\n* `invalid` - Invalid"
             },
+            "ReasonEnum": {
+                "enum": [
+                    "outside_job",
+                    "closed_day",
+                    "not_working",
+                    "clock_disagrees",
+                    "time_unknown",
+                    "no_in",
+                    "came_late",
+                    "no_out",
+                    "left_early"
+                ],
+                "type": "string",
+                "description": "* `outside_job` - Outside the job's days\n* `closed_day` - The shop was closed\n* `not_working` - Suspended or gone\n* `clock_disagrees` - A later tap disagrees\n* `time_unknown` - Time not trusted\n* `no_in` - No Ingia\n* `came_late` - Came late\n* `no_out` - No Toka\n* `left_early` - Left early"
+            },
             "Role": {
                 "type": "object",
                 "properties": {
@@ -4929,6 +5059,42 @@
                     "shop",
                     "staff",
                     "user"
+                ]
+            },
+            "WorkerMonth": {
+                "type": "object",
+                "properties": {
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "on_time": {
+                        "type": "integer"
+                    },
+                    "late": {
+                        "type": "integer"
+                    },
+                    "half": {
+                        "type": "integer"
+                    },
+                    "absent": {
+                        "type": "integer"
+                    },
+                    "needs_review": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "absent",
+                    "display_name",
+                    "half",
+                    "late",
+                    "needs_review",
+                    "on_time",
+                    "staff"
                 ]
             }
         },

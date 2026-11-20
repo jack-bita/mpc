@@ -56,7 +56,7 @@ from apps.shops.api.views import ClosureViewSet, SettingViewSet, SideViewSet
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side, set_setting
-from apps.staffpay.api.views import PayRateViewSet
+from apps.staffpay.api.views import AttendanceMonthViewSet, PayRateViewSet
 from apps.staffpay.models import PayRate
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
@@ -68,6 +68,7 @@ CLOSURES = "/api/v1/shops/closures/"
 ATTACHMENTS = "/api/v1/control/attachments/"
 WORKERS = "/api/v1/people/staff/"
 PAY_RATES = "/api/v1/staffpay/pay-rates/"
+ATTENDANCE_MONTH = "/api/v1/staffpay/attendance-month/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -1108,3 +1109,33 @@ def test_pay_rate_routes_name_their_permissions() -> None:
         "list": Permission.SETTINGS_MANAGE,
         "create": Permission.SETTINGS_MANAGE,
     }
+
+
+@pytest.mark.django_db
+def test_the_attendance_month_needs_attendance_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # The month page is for whoever fixes attendance (ATT-5): `attendance.manage`, which the Owner and the Manager
+    # hold. Asha, a seller on Dawa, sees nobody's month, her own included; a Manager on every side opens it.
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    refused = client_for(staff_a).get(ATTENDANCE_MONTH, {"month": "2026-10"})
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    assert client_for(staff_a2).get(ATTENDANCE_MONTH, {"month": "2026-10"}).status_code == 200
+
+
+@pytest.mark.django_db
+def test_a_key_on_one_side_opens_no_month(shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember) -> None:
+    # Hamisi may fix attendance on Dawa only (X1): attendance is the whole shop's, as Asha of Dawa and Baraka of
+    # Vyakula are on one list, so a key on one side opens no month.
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.ATTENDANCE_MANAGE, side=sides["D"], by=None)
+    refused = client_for(staff_a).get(ATTENDANCE_MONTH, {"month": "2026-10"})
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+
+
+def test_attendance_month_route_names_its_permission() -> None:
+    # The month page's one action, a read, behind the key to fix attendance (ATT-5). Written out in full, as above.
+    assert AttendanceMonthViewSet.action_permissions == {"list": Permission.ATTENDANCE_MANAGE}
