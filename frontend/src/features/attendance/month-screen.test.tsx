@@ -1,7 +1,13 @@
 // month-screen.test.tsx — Mahudhurio ya mwezi (ATT-5): a line per worker paid by the day with the month's counts and
 // what each mark means; the month moved back and forward, never past this one, and kept in the address; how far this
 // month's counts reach; and the line when nobody is listed.
-import { fireEvent, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
@@ -192,6 +198,41 @@ describe("the month page", () => {
     ).toBeTruthy();
     expect(screen.queryByText(/Hakuna mfanyakazi/)).toBeNull();
     expect(screen.queryByText(/Hadi jana/)).toBeNull();
+  });
+
+  it("follows the shop's today when it comes back into view, left open into a new month (the review)", async () => {
+    // Baba leaves November open on 30 November and unlocks his phone on 2 December. November is now a month gone by:
+    // no "Hadi jana" under its full table, whatever today is; and › now reaches December.
+    vi.setSystemTime(new Date("2026-11-30T09:00:00Z"));
+    answer("GET", ME, { status: 200, body: MENEJA });
+    answer("GET", MONTH, (request) =>
+      Response.json({
+        ...monthOf(new URL(request.url).searchParams.get("month") ?? "", [
+          line(),
+        ]),
+        // The server's today, the shop's: 09:00 UTC is noon in Arusha, the same date.
+        today: new Date(Date.now()).toISOString().slice(0, 10),
+      }),
+    );
+
+    render(<MonthScreen asked={null} />);
+
+    expect(await screen.findByText("Hadi jana, 29/11/2026.")).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Mwezi unaofuata" }),
+    ).toBeNull();
+
+    vi.setSystemTime(new Date("2026-12-02T09:00:00Z"));
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(
+      await screen.findByRole("button", { name: "Mwezi unaofuata" }),
+    ).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText(/Hadi jana/)).toBeNull());
+    expect(screen.getByRole("heading", { name: "Novemba 2026" })).toBeTruthy();
   });
 
   it("goes back a month, and forward again, never past this one, keeping the month in the address", async () => {

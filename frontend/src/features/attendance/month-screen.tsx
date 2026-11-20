@@ -20,7 +20,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -54,21 +54,26 @@ export function MonthScreen({ asked }: { asked: string | null }) {
   const loginWords = useTranslations("login");
   const who = useWhoIsHere();
   const [chosen, choose] = useMonthInTheAddress(asked);
-  // The moment the page opened, read once, as a page drawn again must draw the same (React's rule, as
-  // register-this-device.tsx keeps its clock): a page left open into the next month moves on at its next opening.
-  const [openedAt] = useState(() => Date.now());
-  // This month on the shop's clock, once the page knows the shop: a phone in another zone still opens Arusha's.
-  const thisMonth = who.data
+  // The page's clock: read as it opens, and again each time it comes back into view, never while drawing, as a page
+  // drawn again must draw the same (React's rule; register-this-device.tsx keeps its clock in the same way).
+  const { openedAt, now } = usePagesClock();
+  // On the shop's clock, once the page knows the shop: a phone in another zone still reads Arusha's. The month the
+  // page opened on, which it keeps until the person moves; and this month, as it is now, which › stops at.
+  const openedOn = who.data
     ? monthOf(shopToday(who.data.shop.timezone, openedAt))
     : null;
-  // The month shown: the one chosen, if it is a month and not one to come; else this month. A month to come has no
-  // day that is over, so the address can't open one, nor can a typo.
+  const thisMonth = who.data
+    ? monthOf(shopToday(who.data.shop.timezone, now))
+    : null;
+  // The month shown: the one chosen, if it is a month and not one to come; else the month the page opened on. A month
+  // to come has no day that is over, so the address can't open one, nor can a typo. Never moved by the clock alone:
+  // Baba, back on 2 December to a page he opened in November, is checking November before payday.
   const month =
-    thisMonth === null
+    openedOn === null || thisMonth === null
       ? null
       : chosen !== null && isMonth(chosen) && chosen <= thisMonth
         ? chosen
-        : thisMonth;
+        : openedOn;
   const answer = useAttendanceMonth(month);
   // Until both answer: "Subiri kidogo…", never a title with nothing under it, through the store's own tries too
   // (workers-screen.tsx). Only once the month is known: a query not yet asked waits forever, and a person the server
@@ -91,10 +96,32 @@ export function MonthScreen({ asked }: { asked: string | null }) {
           failed read shows its reason; a refresh that fails keeps the month last read, with the reason above it. */}
       <ApiErrorAlert error={answer.error} />
       {month !== null && answer.data && !answer.isPending ? (
-        <TheMonth month={month} thisMonth={thisMonth} answer={answer.data} />
+        <TheMonth answer={answer.data} />
       ) : null}
     </div>
   );
+}
+
+/** The page's two looks at the clock: the moment it opened, kept; and the last, as it opened, then each time it comes
+ * back into view. Baba leaves November open on 30 November and unlocks his phone on 2 December: the store asks for
+ * November again as the page comes back (TanStack's refetch on focus), November stays on show, and this month moves
+ * on, so › reaches December (the review). */
+function usePagesClock(): { openedAt: number; now: number } {
+  const [openedAt] = useState(() => Date.now());
+  const [now, setNow] = useState(openedAt);
+  useEffect(() => {
+    function lookAgain() {
+      if (document.visibilityState !== "hidden") setNow(Date.now());
+    }
+    // A phone unlocked, or a tab come back to, says it is visible again; a laptop's window clicked into, focused.
+    document.addEventListener("visibilitychange", lookAgain);
+    window.addEventListener("focus", lookAgain);
+    return () => {
+      document.removeEventListener("visibilitychange", lookAgain);
+      window.removeEventListener("focus", lookAgain);
+    };
+  }, []);
+  return { openedAt, now };
 }
 
 /** The month chosen, kept in the address as it changes (?month=2026-10), and how to choose another. */
@@ -182,19 +209,13 @@ type MonthNumber =
   | "12";
 
 /** The month's answer: how far it is counted, the days to decide, then the workers' lines and what the marks mean. */
-function TheMonth({
-  month,
-  thisMonth,
-  answer,
-}: {
-  month: string;
-  thisMonth: string | null;
-  answer: AttendanceMonth;
-}) {
+function TheMonth({ answer }: { answer: AttendanceMonth }) {
   const t = useTranslations("attendanceMonth");
-  // This month is counted to yesterday, as the book keeps no day until it is over: said by the server's today, the
-  // shop's, never the phone's. A month gone by is counted to its end.
-  const isThisMonth = month === thisMonth;
+  // This month is counted to yesterday, as the book keeps no day until it is over. Whether the month shown is this
+  // month is the server's to say, from its own two answers, the month and the shop's today, never from the phone's
+  // clock: a page left open into the next month, read again, would say "Hadi jana, 01/12/2026" under November's full
+  // table (the review). A month gone by is counted to its end.
+  const isThisMonth = monthOf(answer.today) === answer.month;
   // No working day of this month over yet, the server says: on the 1st, or on Monday the 2nd after a Sunday the 1st.
   // Nobody is listed then for want of a day, not of a rate, so that is all the page says: "Hakuna mfanyakazi
   // anayelipwa kwa siku" would be untrue (ATT-5's review).
