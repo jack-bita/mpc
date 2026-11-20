@@ -22,6 +22,7 @@ import pytest
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import connection
+from django.db.models import QuerySet
 from django.utils import timezone
 from pytest_django import Settings
 from rest_framework.test import APIClient
@@ -51,6 +52,9 @@ PINS = {"Asha": "2580", "Baraka": "1470"}
 # The manager's public login, as visitors read it there too.
 MANAGER_LOGIN = "meneja@example.com"
 MANAGER_PASSWORD = "jaribu-demo"
+# The demo's own laptop, which the seed pairs as any laptop is (DATA-8), by its name as visitors read it on the devices
+# page: never a tap's, so the counts below leave it out.
+SEEDS_LAPTOP = "Laptop ya Dawa"
 # The start of a pairing's limit, an hour, which the tap shares (config/settings/base.py).
 LIMIT = 10
 
@@ -86,10 +90,18 @@ def is_open() -> bool:
 
 
 def devices_made() -> int:
-    # Every shop's devices, read straight from PostgreSQL, past the tenancy guard: a refusal must make none anywhere.
+    # Every shop's devices but the demo's own laptop, which the seed pairs (DATA-8), read straight from PostgreSQL,
+    # past the tenancy guard: a refusal must make none anywhere.
     with connection.cursor() as cursor:
-        cursor.execute(f"SELECT count(*) FROM {connection.ops.quote_name(Device._meta.db_table)}")
+        cursor.execute(
+            f"SELECT count(*) FROM {connection.ops.quote_name(Device._meta.db_table)} WHERE name <> %s", [SEEDS_LAPTOP]
+        )
         return int(cursor.fetchone()[0])
+
+
+def pairing_requests() -> QuerySet[PairingRequest]:
+    # Every pairing request but the one the seed's laptop was paired by (DATA-8): the taps' own, or none.
+    return PairingRequest.objects.exclude(device__name=SEEDS_LAPTOP)
 
 
 def assert_refused_as_closed(answer: Any) -> None:
@@ -98,7 +110,7 @@ def assert_refused_as_closed(answer: Any) -> None:
     assert answer.status_code == 400
     assert answer.json()["code"] == "demo.closed"
     assert DEVICE_KEY_COOKIE not in answer.cookies
-    assert PairingRequest.objects.count() == 0
+    assert not pairing_requests().exists()
     assert devices_made() == 0
 
 
@@ -174,11 +186,11 @@ def test_one_tap_demo_makes_a_working_device(demo_shop: Shop) -> None:
     assert me.json()["shop"]["demo"] is True
     assert me.json()["home_side"]["code"] == "D"
     with shop_context(demo_shop):
-        device = Device.objects.get()
+        device = Device.objects.exclude(name=SEEDS_LAPTOP).get()
         # Through the two steps of every pairing: its waiting request was confirmed, by the demo's manager.
         assert device.key_hash == hash_device_key(key)
         assert device.created_by == StaffMember.objects.get(display_name="Meneja")
-        request = PairingRequest.objects.get()
+        request = pairing_requests().get()
         assert request.device == device
         assert device.name == f"Demo {request.code[:4]}-{request.code[4:]}"
 
@@ -300,7 +312,7 @@ def test_one_tap_demo_refused_confirm_leaves_nothing(demo_shop: Shop, monkeypatc
     browser = APIClient()
     browser.post(PAIRING)
     waiting_key = browser.cookies[DEVICE_KEY_COOKIE].value
-    waiting = PairingRequest.objects.get()
+    waiting = pairing_requests().get()
 
     def refused(*args: object, **kwargs: object) -> None:
         raise ValidationError("A device of this shop already has this name.", code="device.name_taken")
@@ -311,7 +323,7 @@ def test_one_tap_demo_refused_confirm_leaves_nothing(demo_shop: Shop, monkeypatc
 
     assert answer.status_code == 400
     assert answer.json()["code"] == "device.name_taken"
-    assert list(PairingRequest.objects.all()) == [waiting]
+    assert list(pairing_requests()) == [waiting]
     waiting.refresh_from_db()
     assert waiting.expires_at > timezone.now()
     assert devices_made() == 0
