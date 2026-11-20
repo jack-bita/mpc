@@ -86,10 +86,14 @@ export function monthOf(day: string): string {
   return day.slice(0, 7);
 }
 
-/** Whether `text` is a month as the address writes one, "2026-11": anything else in the address is ignored, and the
- * page opens this month. */
+/** The first month the server takes (FIRST_MONTH, apps/staffpay/api/serializers.py): no shop's attendance is older. */
+const FIRST_MONTH = "2000-01";
+
+/** Whether `text` is a month as the address writes one, "2026-11", and one the server takes, from 2000-01 on: anything
+ * else in the address is ignored, and the page opens this month, never the server's refusal of "1999-12" (ATT-12's
+ * review). Written months compare as text, as their figures line up. */
 export function isMonth(text: string): boolean {
-  return /^\d{4}-(0[1-9]|1[0-2])$/.test(text);
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(text) && text >= FIRST_MONTH;
 }
 
 /** The month before `month`: "2025-12" before "2026-01". Counted on its two numbers, never through a Date, which has a
