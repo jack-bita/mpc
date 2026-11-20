@@ -46,6 +46,8 @@ function day(date: number, status: WorkerDay["status"]): WorkerDay {
     fine: status === "late" ? "500.00" : "0.00",
     first_in: null,
     first_out: null,
+    decision: null,
+    choices: [],
   };
 }
 
@@ -87,6 +89,8 @@ const JUMAS_NOVEMBER: WorkerAttendance = {
     day(19, "on_time"),
   ],
   taps: [],
+  yours: false,
+  ready_reasons: [],
 };
 
 /** Each row of the calendar, as its seven places' text: the day's number, its mark for the eye, and the mark in

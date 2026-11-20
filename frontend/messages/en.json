@@ -1117,7 +1117,8 @@
       "phones_fixed": "On the demo, workers get no phone number, so nobody's real number is shown to every visitor.",
       "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
       "no_note": "On the demo, notes aren't kept. Leave this box empty.",
-      "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is."
+      "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is.",
+      "ready_reasons": "On the demo, pick one of the ready reasons."
     },
     "closure": {
       "date_past": "A day that has already passed can't be changed.",
@@ -1132,6 +1133,12 @@
     "pay_rate": {
       "amount_invalid": "Type a whole number of shillings, above 0.",
       "before_first_day": "A rate can't start before this worker's first day."
+    },
+    "day": {
+      "own": "You can't decide your own day. The owner decides it.",
+      "not_working_day": "This day can't be decided: it isn't a working day that is over.",
+      "choice_not_offered": "This day can't be decided that way.",
+      "reason_missing": "Write why you decided this."
     },
     "attachment": {
       "not_found": "The server has no such photo.",

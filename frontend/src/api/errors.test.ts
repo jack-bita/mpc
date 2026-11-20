@@ -115,6 +115,14 @@ const CODES_THE_API_SENDS = [
   // worker's first day; on the demo, a note is demo.no_note above.
   "pay_rate.amount_invalid",
   "pay_rate.before_first_day",
+  // Deciding a day (ATT-6, decide_day): one's own day, which the owner decides; a day that isn't a working day gone
+  // by; a choice the day can't take (Amechelewa with no late Ingia); no reason; and on the demo, a reason that isn't one
+  // of the three ready ones. Someone deciding it meanwhile is version_conflict above.
+  "day.own",
+  "day.not_working_day",
+  "day.choice_not_offered",
+  "day.reason_missing",
+  "demo.ready_reasons",
   // A photo's file, sent by a laptop after the record that named it (CTRL-3): an id this shop doesn't hold, or whose
   // record hasn't arrived yet; over 1 MB; not a JPEG or a WebP by its first bytes; or not the file its record named.
   "attachment.not_found",

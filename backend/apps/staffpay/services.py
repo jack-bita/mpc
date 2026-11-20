@@ -712,7 +712,7 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
                 fine=day.fine,
                 first_in=day.first_in,
                 first_out=day.first_out,
-                decision=_decision_of(day, deciders),
+                decision=decision_of(day, deciders),
                 choices=[]
                 if yours or day.status == DayStatus.OFF
                 else [
@@ -728,9 +728,10 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
     )
 
 
-def _decision_of(day: AttendanceDay, deciders: dict[uuid.UUID, str]) -> DayDecision | None:
-    # A day's decision as the page shows it, or None when nobody has decided it. The table keeps "no kind" as empty:
-    # said as None. Whole or none, as the table's own rule holds, so every part is there once decided_at is.
+def decision_of(day: AttendanceDay, deciders: dict[uuid.UUID, str]) -> DayDecision | None:
+    """A day's decision as the page shows it (ATT-6), or None when nobody has decided it. `deciders`: the nickname of
+    each job that decided, by id, read once for many days. The table keeps "no kind" as empty: said as None. Whole or
+    none, as the table's own rule holds, so every part is there once decided_at is."""
     if day.decided_at is None or day.decided_by_id is None or day.decided_fine is None:
         return None
     return DayDecision(

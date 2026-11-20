@@ -27,7 +27,8 @@ tests may not import a higher layer (ADR-0035). Fake data only: the repo is publ
 import hashlib
 import uuid
 from collections.abc import Callable, Iterable, Mapping
-from datetime import timedelta
+from datetime import date, time, timedelta
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -56,8 +57,13 @@ from apps.shops.api.views import ClosureViewSet, SettingViewSet, SideViewSet
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side, set_setting
-from apps.staffpay.api.views import AttendanceMonthViewSet, AttendanceWorkerViewSet, PayRateViewSet
-from apps.staffpay.models import PayRate
+from apps.staffpay.api.views import (
+    AttendanceDayViewSet,
+    AttendanceMonthViewSet,
+    AttendanceWorkerViewSet,
+    PayRateViewSet,
+)
+from apps.staffpay.models import AttendanceDay, PayRate
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
 from tests.test_tenancy_sweep import addresses
@@ -70,6 +76,7 @@ WORKERS = "/api/v1/people/staff/"
 PAY_RATES = "/api/v1/staffpay/pay-rates/"
 ATTENDANCE_MONTH = "/api/v1/staffpay/attendance-month/"
 ATTENDANCE_WORKER = "/api/v1/staffpay/attendance-worker/{}/"
+ATTENDANCE_DAY_DECIDE = "/api/v1/staffpay/attendance-days/{}/decide/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -1179,3 +1186,47 @@ def test_attendance_worker_route_names_its_permission() -> None:
     # A worker's month's one action, a read, behind the key to fix attendance, as the month's (ATT-12). Written out in
     # full, as above.
     assert AttendanceWorkerViewSet.action_permissions == {"retrieve": Permission.ATTENDANCE_MANAGE}
+
+
+@pytest.mark.django_db
+def test_deciding_a_day_needs_attendance_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # Deciding a day (ATT-6) is for whoever fixes attendance: Asha, a seller on Dawa, may not decide anyone's, even
+    # with the address typed in; a Manager on every side decides Asha's. Her day, in at 07:50 with no Toka, waits.
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    rules = {
+        "on_time_until": "07:35",
+        "second_fine_from": "08:00",
+        "review_from": "08:30",
+        "afternoon_from": "12:00",
+        "midday": "13:00",
+        "morning_leave_until": "13:30",
+        "closing": "18:40",
+        "late_fine": "0.00",
+        "second_fine": "0.00",
+    }
+    with shop_context(shop_a):
+        day = AttendanceDay.objects.create(
+            shop=shop_a,
+            staff=staff_a,
+            date=date(2026, 11, 16),
+            status="needs_review",
+            fine=Decimal("0.00"),
+            first_in=time(7, 50),
+            rules_used=rules,
+            review_reason="no_out",
+        )
+    sent = {"choice": "on_time", "reason": "Alisahau kubonyeza Toka", "replaces": None}
+    refused = client_for(staff_a).post(ATTENDANCE_DAY_DECIDE.format(day.pk), sent, format="json")
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    decided = client_for(staff_a2).post(ATTENDANCE_DAY_DECIDE.format(day.pk), sent, format="json")
+    assert decided.status_code == 200
+
+
+def test_attendance_day_route_names_its_permission() -> None:
+    # Deciding a day's one action, a change, behind the key to fix attendance (ATT-6), as the month's read is. Written
+    # out in full, as above.
+    assert AttendanceDayViewSet.action_permissions == {"decide": Permission.ATTENDANCE_MANAGE}

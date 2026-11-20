@@ -1117,7 +1117,8 @@
       "phones_fixed": "Kwenye demo, wafanyakazi hawawekewi namba ya simu, ili namba halisi ya mtu isionekane kwa kila mgeni.",
       "rules_from_tomorrow": "Kwenye demo, thamani mpya huanza kesho au baadaye, ili kila mgeni wa leo akute duka lilivyo.",
       "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi.",
-      "closures_from_tomorrow": "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo."
+      "closures_from_tomorrow": "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo.",
+      "ready_reasons": "Kwenye demo, chagua moja ya sababu zilizo tayari."
     },
     "closure": {
       "date_past": "Siku iliyoshapita haiwezi kubadilishwa.",
@@ -1132,6 +1133,12 @@
     "pay_rate": {
       "amount_invalid": "Andika kiasi cha shilingi nzima, zaidi ya sifuri.",
       "before_first_day": "Malipo hayawezi kuanza kabla ya siku ya kwanza ya kazi ya mfanyakazi huyu."
+    },
+    "day": {
+      "own": "Huwezi kuamua siku yako mwenyewe. Mwenye duka ataiamua.",
+      "not_working_day": "Siku hii haiamuliwi: si siku ya kazi iliyokwisha.",
+      "choice_not_offered": "Siku hii haiwezi kuamuliwa hivyo.",
+      "reason_missing": "Andika sababu ya uamuzi huu."
     },
     "attachment": {
       "not_found": "Seva haina picha hii.",

@@ -109,6 +109,9 @@ def test_the_workers_month_as_the_page_reads_it(
     }
     # Every day of October the book answers, Sundays too; the 2nd waits for a decision, the 1st was a day away.
     assert len(answer["days"]) == 31
+    # Each with no decision yet, and the sheet's lines it may take (ATT-6), each with its fine: this shop has typed no
+    # fine, so every one is 0.00; the 1st, with no Ingia, can't be called late.
+    nothing = "0.00"
     assert answer["days"][1] == {
         "date": "2026-10-02",
         "status": "needs_review",
@@ -116,6 +119,11 @@ def test_the_workers_month_as_the_page_reads_it(
         "fine": "0.00",
         "first_in": "09:10",
         "first_out": None,
+        "decision": None,
+        "choices": [
+            {"choice": choice, "fine": nothing}
+            for choice in ("on_time", "late", "half", "office_duty", "permission", "no_show")
+        ],
     }
     assert answer["days"][0] == {
         "date": "2026-10-01",
@@ -124,7 +132,14 @@ def test_the_workers_month_as_the_page_reads_it(
         "fine": "0.00",
         "first_in": None,
         "first_out": None,
+        "decision": None,
+        "choices": [
+            {"choice": choice, "fine": nothing}
+            for choice in ("on_time", "half", "office_duty", "permission", "no_show")
+        ],
     }
+    # Staff A, the owner, looks at Asha's month, not their own; and this is no demo, so no ready reasons.
+    assert (answer["yours"], answer["ready_reasons"]) == (False, [])
     assert "13579" not in reply.content.decode()
 
 

@@ -2121,6 +2121,63 @@
                 }
             }
         },
+        "/api/v1/staffpay/attendance-days/{id}/decide/": {
+            "post": {
+                "operationId": "staffpay_attendance_days_decide_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this attendance day.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DecideDayRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DayDecision"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/staffpay/attendance-month/": {
             "get": {
                 "operationId": "staffpay_attendance_month_list",
@@ -2322,6 +2379,15 @@
     },
     "components": {
         "schemas": {
+            "AbsenceTypeEnum": {
+                "enum": [
+                    "office_duty",
+                    "permission",
+                    "no_show"
+                ],
+                "type": "string",
+                "description": "* `office_duty` - Office duty\n* `permission` - Permission\n* `no_show` - No-show"
+            },
             "ApiError": {
                 "type": "object",
                 "properties": {
@@ -2597,6 +2663,18 @@
                 "type": "string",
                 "description": "* `upsert` - Added or changed\n* `archive` - Archived"
             },
+            "ChoiceEnum": {
+                "enum": [
+                    "on_time",
+                    "late",
+                    "half",
+                    "office_duty",
+                    "permission",
+                    "no_show"
+                ],
+                "type": "string",
+                "description": "* `on_time` - Full day\n* `late` - Late\n* `half` - Half day\n* `office_duty` - Office duty\n* `permission` - Permission\n* `no_show` - No-show"
+            },
             "ClockKindEnum": {
                 "enum": [
                     "in",
@@ -2719,6 +2797,75 @@
                 "type": "string",
                 "description": "* `active` - Active\n* `cancelled` - Cancelled"
             },
+            "DayDecision": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/DayDecisionStatusEnum"
+                    },
+                    "absence_type": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/AbsenceTypeEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "fine": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "absence_type",
+                    "at",
+                    "by",
+                    "fine",
+                    "reason",
+                    "status"
+                ]
+            },
+            "DayDecisionStatusEnum": {
+                "enum": [
+                    "on_time",
+                    "late",
+                    "half",
+                    "absent"
+                ],
+                "type": "string",
+                "description": "* `on_time` - On time\n* `late` - Late\n* `half` - Half day\n* `absent` - Absent"
+            },
+            "DayOption": {
+                "type": "object",
+                "properties": {
+                    "choice": {
+                        "$ref": "#/components/schemas/ChoiceEnum"
+                    },
+                    "fine": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "choice",
+                    "fine"
+                ]
+            },
             "DayStatusEnum": {
                 "enum": [
                     "on_time",
@@ -2766,6 +2913,28 @@
                     "first_out",
                     "reason",
                     "staff"
+                ]
+            },
+            "DecideDayRequest": {
+                "type": "object",
+                "properties": {
+                    "choice": {
+                        "$ref": "#/components/schemas/ChoiceEnum"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "replaces": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "choice",
+                    "reason",
+                    "replaces"
                 ]
             },
             "DemoDevice": {
@@ -4234,6 +4403,15 @@
                 "type": "string",
                 "description": "* `accepted` - Accepted\n* `invalid` - Invalid"
             },
+            "ReadyReasonsEnum": {
+                "enum": [
+                    "forgot_toka",
+                    "away_on_work",
+                    "owner_allowed"
+                ],
+                "type": "string",
+                "description": "* `forgot_toka` - forgot_toka\n* `away_on_work` - away_on_work\n* `owner_allowed` - owner_allowed"
+            },
             "ReasonEnum": {
                 "enum": [
                     "outside_job",
@@ -5294,16 +5472,29 @@
                         "items": {
                             "$ref": "#/components/schemas/AttendanceTap"
                         }
+                    },
+                    "yours": {
+                        "type": "boolean",
+                        "description": "Whether the month is the viewer's own: then none of its days is theirs to decide (ATT-6)."
+                    },
+                    "ready_reasons": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ReadyReasonsEnum"
+                        },
+                        "description": "On the demo, the ready reasons a decision may take, as codes; elsewhere none (ATT-6)."
                     }
                 },
                 "required": [
                     "days",
                     "left_on",
                     "month",
+                    "ready_reasons",
                     "started_on",
                     "taps",
                     "today",
-                    "worker"
+                    "worker",
+                    "yours"
                 ]
             },
             "WorkerDay": {
@@ -5341,10 +5532,26 @@
                         "type": "string",
                         "format": "time",
                         "nullable": true
+                    },
+                    "decision": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DayDecision"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "choices": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DayOption"
+                        }
                     }
                 },
                 "required": [
+                    "choices",
                     "date",
+                    "decision",
                     "fine",
                     "first_in",
                     "first_out",

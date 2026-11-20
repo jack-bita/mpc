@@ -66,6 +66,8 @@ function day(
     fine: "0.00",
     first_in: null,
     first_out: null,
+    decision: null,
+    choices: [],
     ...fields,
   };
 }
@@ -92,6 +94,8 @@ function november(
     left_on: null,
     days,
     taps: dayTaps,
+    yours: false,
+    ready_reasons: [],
     ...fields,
   };
 }
