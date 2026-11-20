@@ -1,5 +1,5 @@
-"""apps/staffpay/services.py — the writes of attendance and pay: the book of days (ATT-10; 02 §12), and each worker's
-daily pay rate (WAGE-1).
+"""apps/staffpay/services.py — the writes of attendance and pay: the book of days (ATT-10; 02 §12), the month the month
+page shows, worked out through it (ATT-5), and each worker's daily pay rate (WAGE-1).
 
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
@@ -13,11 +13,13 @@ see go to review: a closed day with a tap (ATT-10); and a day with a tap in doub
 (ATT-11). Each day to decide keeps why, the book's reason before the rule's (ReviewReason, ATT-5), for the month page
 to show beside it. Nothing here is typed by a person: the days are answers, worked out again each time they are asked
 for, as a tap can come late from a laptop that was offline, a manager can void a tap (ATT-6), and a job's first or last
-day can be moved (PPL-10). ATT-5 asks for a month to show, WAGE-2 for a month to pay, ATT-7 each night. No route of
-its own, and no line in the change log: no laptop keeps a copy of the days.
+day can be moved (PPL-10). ATT-5 asks for a month to show, WAGE-2 for a month to pay, ATT-7 each night. No line in the
+change log: no laptop keeps a copy of the days.
 
-The month page (ATT-5) asks for a month through attendance_month: the book's days, a line per worker the shop pays by
-the day with how many days were each kind, and the days a person must decide, each with why.
+The month page (ATT-5) asks for a month through attendance_month, which its route calls (GET attendance-month/): the
+book's days, a line per worker the shop pays by the day with how many days were each kind, and the days a person must
+decide, each with why. So that GET writes, as the book keeps the days it works out; asked twice, the month writes
+nothing the second time.
 
 A pay rate is typed by a person, the owner (set_pay_rate): from 10 Nov, Juma earns 10,000 a day. Whoever sets it sets a
 worker's pay, so who may is the PIN's rule, asked by the people app (02 §5). No line in the change log either: a
