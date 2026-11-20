@@ -64,7 +64,7 @@ from apps.shops.models import Closure, ClosureStatus, Setting, Shop, ShopKind, S
 from apps.shops.selectors import get_setting, shop_today
 from apps.shops.services import NewSide, create_shop
 from apps.staffpay.models import AttendanceEvent, DayStatus, NoPhoto, PayRate, ReviewReason, TimeCheck
-from apps.staffpay.services import set_pay_rate, work_out_days
+from apps.staffpay.services import attendance_month, set_pay_rate, work_out_days
 from apps.sync.models import PushedDocument, PushedStatus
 from apps.sync.push import Answer, Sent, push
 from apps.sync.registry import REGISTRY
@@ -787,6 +787,36 @@ def test_seed_demo_gives_three_weeks_of_taps(three_weeks: None) -> None:
     # Ingia with no Toka. So the month page's list always shows it, at the top of the latest month (ATT-5).
     latest = today - timedelta(days=2 if today.weekday() == 0 else 1)
     to_decide = [(day.staff.display_name, day.date, day.review_reason) for day in days if day.review_reason]
+    assert to_decide == [("Asha", latest, ReviewReason.NO_OUT)]
+
+
+def test_seed_demo_fills_the_month_page(three_weeks: None) -> None:
+    # The card's first box, as the month page reads it (attendance_month, ATT-5), not only the book: the 21 days fall in
+    # one month or two, and over them each of the three people is listed, by their daily rate, with the card's counts,
+    # and the one day to decide is Asha's latest working day, with no Toka (DATA-8's review).
+    seed_demo(fresh=True)
+
+    shop = the_demo_shop()
+    with shop_context(shop):
+        today = shop_today(shop)
+        months = sorted({(today - timedelta(days=21)).replace(day=1), (today - timedelta(days=1)).replace(day=1)})
+        answers = [attendance_month(shop, month) for month in months]
+    kinds = ("on_time", "late", "half", "absent", "needs_review")
+    listed = {worker.display_name for answer in answers for worker in answer.workers}
+    assert listed == {"Asha", "Baraka", "Meneja"}
+    counted = {
+        name: [
+            sum(getattr(worker, kind) for answer in answers for worker in answer.workers if worker.display_name == name)
+            for kind in kinds
+        ]
+        for name in listed
+    }
+    # ✓ Ch ½ H !, as the page shows them.
+    assert counted == {"Asha": [14, 2, 1, 0, 1], "Baraka": [16, 1, 0, 1, 0], "Meneja": [17, 1, 0, 0, 0]}
+    latest = today - timedelta(days=2 if today.weekday() == 0 else 1)
+    to_decide = [
+        (day.staff.display_name, day.date, day.review_reason) for answer in answers for day in answer.to_decide
+    ]
     assert to_decide == [("Asha", latest, ReviewReason.NO_OUT)]
 
 
