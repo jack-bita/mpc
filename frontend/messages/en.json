@@ -815,7 +815,44 @@
     "noOut": "No Toka.",
     "dayButton": "{weekday} {date}: {kind}",
     "notCounted": "This day isn't counted, but it has an Ingia or Toka.",
-    "photoFailed": "The photo didn't open. Try again later."
+    "photoFailed": "The photo didn't open. Try again later.",
+    "decide": "Decide this day",
+    "changeDecision": "Change the decision",
+    "decision": {
+      "on_time": "Full day",
+      "late": "Late",
+      "half": "Half day",
+      "absent": "Absent",
+      "office_duty": "Office duty",
+      "permission": "Permission",
+      "no_show": "No-show"
+    },
+    "option": {
+      "withFine": "{decision} · fine {amount}",
+      "office_duty": "Office duty · paid as a full day",
+      "permission": "Permission · unpaid",
+      "no_show": "No-show · unpaid"
+    },
+    "decidedBy": "{decision} · decided by {by}, {date}",
+    "decidedByNoDate": "{decision} · decided by {by}",
+    "decisionReason": "Reason: {reason}",
+    "systemSaid": "The system said: {said}",
+    "systemSaidWhy": "The system said: {said} · {why}",
+    "yours": "Your days are decided by the owner.",
+    "sheetTitle": "Decide {name}'s day",
+    "sheetAbout": "{weekday} {date}",
+    "sheetAboutIn": "{weekday} {date} · Clock-in {time}",
+    "choiceLabel": "This day was",
+    "pickOne": "Pick one decision.",
+    "reasonLabel": "Reason",
+    "reasonHint": "Why you decided so, in your own words.",
+    "readyHint": "On the demo, pick a ready reason.",
+    "readyReason": {
+      "forgot_toka": "Forgot to tap Toka",
+      "away_on_work": "Was out on the shop's work",
+      "owner_allowed": "Allowed by the owner"
+    },
+    "save": "Save the decision"
   },
   "needsAttention": {
     "title": "Records the server refused",

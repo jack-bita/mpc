@@ -92,6 +92,16 @@ describe("the sheet", () => {
     expect(screen.getByRole("dialog")).toBeDefined();
   });
 
+  it("can hold its main button alone, leaving Ghairi free, as with no network", () => {
+    const { onAction, onClose } = open({ actionDisabled: true });
+    const main = screen.getByRole("button", { name: "Hifadhi uamuzi" });
+    expect((main as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.submit(screen.getByRole("textbox"));
+    expect(onAction).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Ghairi" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("says Ghairi in the open book's language", () => {
     setLanguage("en");
     render(

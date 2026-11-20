@@ -815,7 +815,44 @@
     "noOut": "Hakuna Toka.",
     "dayButton": "{weekday} {date}: {kind}",
     "notCounted": "Siku hii haihesabiwi, lakini ina Ingia au Toka.",
-    "photoFailed": "Picha haikufunguka. Jaribu tena baadaye."
+    "photoFailed": "Picha haikufunguka. Jaribu tena baadaye.",
+    "decide": "Amua siku hii",
+    "changeDecision": "Badilisha uamuzi",
+    "decision": {
+      "on_time": "Siku kamili",
+      "late": "Amechelewa",
+      "half": "Nusu siku",
+      "absent": "Hakuja",
+      "office_duty": "Kazi ya ofisi",
+      "permission": "Ruhusa",
+      "no_show": "Hakuja bila taarifa"
+    },
+    "option": {
+      "withFine": "{decision} · faini {amount}",
+      "office_duty": "Kazi ya ofisi · analipwa siku kamili",
+      "permission": "Ruhusa · halipwi",
+      "no_show": "Hakuja bila taarifa · halipwi"
+    },
+    "decidedBy": "{decision} · uamuzi wa {by}, {date}",
+    "decidedByNoDate": "{decision} · uamuzi wa {by}",
+    "decisionReason": "Sababu: {reason}",
+    "systemSaid": "Mfumo ulisema: {said}",
+    "systemSaidWhy": "Mfumo ulisema: {said} · {why}",
+    "yours": "Siku zako huamuliwa na mwenye duka.",
+    "sheetTitle": "Amua siku ya {name}",
+    "sheetAbout": "{weekday} {date}",
+    "sheetAboutIn": "{weekday} {date} · Ingia {time}",
+    "choiceLabel": "Siku hii ilikuwa",
+    "pickOne": "Chagua uamuzi mmoja.",
+    "reasonLabel": "Sababu",
+    "reasonHint": "Kwa nini umeamua hivi, kwa maneno yako.",
+    "readyHint": "Kwenye demo, chagua sababu iliyo tayari.",
+    "readyReason": {
+      "forgot_toka": "Alisahau kubonyeza Toka",
+      "away_on_work": "Alikuwa kazini nje",
+      "owner_allowed": "Ameruhusiwa na mwenye duka"
+    },
+    "save": "Hifadhi uamuzi"
   },
   "needsAttention": {
     "title": "Kumbukumbu zilizokataliwa na seva",

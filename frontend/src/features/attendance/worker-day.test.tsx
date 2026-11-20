@@ -2,7 +2,7 @@
 // the address; a day to decide says why, each tap with its time, laptop and photo, and what is missing; a late day its
 // fine; today its taps as they came; a tap in doubt, an untrusted time, a photo still on its way or removed, and no
 // photo with its reason; a day outside the worker's days with their days; and a day the address names with no mark.
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
@@ -555,5 +555,181 @@ describe("a day under the calendar", () => {
 
     await screen.findByRole("table");
     expect(screen.queryByRole("region")).toBeNull();
+  });
+});
+
+describe("deciding a day (ATT-6)", () => {
+  /** Thursday 12th, in at 07:50 and no Toka, waiting; the server offers the sheet's choices. */
+  const waiting = (fields: Partial<WorkerDay> = {}) =>
+    day({
+      date: "2026-11-12",
+      status: "needs_review",
+      reason: "no_out",
+      first_in: "07:50",
+      choices: [
+        { choice: "on_time", fine: "0.00" },
+        { choice: "late", fine: "500.00" },
+        { choice: "half", fine: "500.00" },
+        { choice: "office_duty", fine: "0.00" },
+        { choice: "permission", fine: "0.00" },
+        { choice: "no_show", fine: "0.00" },
+      ],
+      ...fields,
+    });
+  const DECIDED: components["schemas"]["DayDecision"] = {
+    status: "on_time",
+    absence_type: null,
+    fine: "0.00",
+    by: "Baba",
+    at: "2026-11-20T06:00:00Z",
+    reason: "Alisahau kubonyeza Toka",
+  };
+
+  function openThursday(days: WorkerDay[], fields = {}) {
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(days, [], fields),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-12" />,
+    );
+  }
+
+  it("offers Amua siku hii where the server offers choices, and opens the sheet over the day", async () => {
+    openThursday([waiting()]);
+    const thursday = await theDay("Alhamisi 12/11/2026");
+
+    fireEvent.click(
+      within(thursday).getByRole("button", { name: "Amua siku hii" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Amua siku ya Juma" }),
+    ).toBeTruthy();
+    // Ghairi closes it, and the day is as it was.
+    fireEvent.click(screen.getByRole("button", { name: "Ghairi" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(thursday).getByText("Kwa nini: hakuna Toka")).toBeTruthy();
+  });
+
+  it("shows a decision first, who made it and when, its reason, then what the system said (A2)", async () => {
+    openThursday([waiting({ decision: DECIDED })]);
+    const thursday = await theDay("Alhamisi 12/11/2026");
+
+    expect(thursday.textContent).toContain(
+      "Siku kamili · uamuzi wa Baba, 20/11/2026",
+    );
+    expect(
+      within(thursday).getByText("Sababu: Alisahau kubonyeza Toka"),
+    ).toBeTruthy();
+    expect(
+      within(thursday).getByText(
+        "Mfumo ulisema: Inahitaji uamuzi · hakuna Toka",
+      ),
+    ).toBeTruthy();
+    // Decided once, it may be decided again.
+    expect(
+      within(thursday).getByRole("button", { name: "Badilisha uamuzi" }),
+    ).toBeTruthy();
+    expect(
+      within(thursday).queryByRole("button", { name: "Amua siku hii" }),
+    ).toBeNull();
+  });
+
+  it("says an absence by its kind, and a late decision with its fine", async () => {
+    openThursday([
+      waiting({
+        decision: {
+          ...DECIDED,
+          status: "absent",
+          absence_type: "office_duty",
+          reason: "Alienda benki",
+        },
+      }),
+      waiting({
+        date: "2026-11-13",
+        decision: { ...DECIDED, status: "late", fine: "500.00" },
+      }),
+    ]);
+    const thursday = await theDay("Alhamisi 12/11/2026");
+    expect(thursday.textContent).toContain(
+      "Kazi ya ofisi · uamuzi wa Baba, 20/11/2026",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ijumaa 13/11: inahitaji uamuzi" }),
+    );
+    // By its words, as a person reads them: the amount keeps its space unbroken (formatMoney), which getByText reads as
+    // a space.
+    expect(
+      within(await theDay("Ijumaa 13/11/2026")).getByText(
+        "Amechelewa · faini TSh 500 · uamuzi wa Baba, 20/11/2026",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("says a demo's ready reason in words", async () => {
+    openThursday(
+      [waiting({ decision: { ...DECIDED, reason: "forgot_toka" } })],
+      {
+        ready_reasons: ["forgot_toka", "away_on_work", "owner_allowed"],
+      },
+    );
+    const thursday = await theDay("Alhamisi 12/11/2026");
+    expect(
+      within(thursday).getByText("Sababu: Alisahau kubonyeza Toka"),
+    ).toBeTruthy();
+  });
+
+  it("offers nothing on the viewer's own month, and says the owner decides it", async () => {
+    // Meneja opens his own month: the server sends no choices, and says it is his.
+    openThursday([waiting({ choices: [] })], { yours: true });
+    const thursday = await theDay("Alhamisi 12/11/2026");
+    expect(within(thursday).queryByRole("button")).toBeNull();
+    expect(
+      within(thursday).getByText("Siku zako huamuliwa na mwenye duka."),
+    ).toBeTruthy();
+  });
+
+  it("offers nothing on a day the shop was shut", async () => {
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november([day({ date: "2026-11-15", status: "off" })], []),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-15" />,
+    );
+    const sunday = await theDay("Jumapili 15/11/2026");
+    expect(within(sunday).queryByRole("button")).toBeNull();
+  });
+
+  it("shows the decision on the day as soon as the sheet saves it", async () => {
+    openThursday([waiting()]);
+    answer("POST", `/api/v1/staffpay/attendance-days/${waiting().id}/decide/`, {
+      status: 200,
+      body: DECIDED,
+    });
+    const thursday = await theDay("Alhamisi 12/11/2026");
+
+    fireEvent.click(
+      within(thursday).getByRole("button", { name: "Amua siku hii" }),
+    );
+    const sheet = screen.getByRole("dialog");
+    fireEvent.click(within(sheet).getByText("Siku kamili"));
+    fireEvent.change(within(sheet).getByLabelText("Sababu"), {
+      target: { value: "Alisahau kubonyeza Toka" },
+    });
+    // The server, once it has kept the decision, answers the month with it, as the page asks for it again.
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november([waiting({ decision: DECIDED })], []),
+    });
+    fireEvent.click(
+      within(sheet).getByRole("button", { name: "Hifadhi uamuzi" }),
+    );
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(
+      await within(thursday).findByText("Sababu: Alisahau kubonyeza Toka"),
+    ).toBeTruthy();
   });
 });

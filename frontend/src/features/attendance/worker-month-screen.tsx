@@ -117,6 +117,7 @@ export function WorkerMonthScreen({
           answer={answer.data}
           chosen={chosen}
           onChoose={choose}
+          timezone={who.data?.shop.timezone ?? null}
         />
       ) : null}
     </div>
@@ -144,10 +145,13 @@ function TheWorkersMonth({
   answer,
   chosen,
   onChoose,
+  timezone,
 }: {
   answer: WorkerAttendance;
   chosen: string | null;
   onChoose: (day: string) => void;
+  /** The shop's zone, read once by the screen, for the date a decision was made on (ATT-6). */
+  timezone: string | null;
 }) {
   const monthWords = useTranslations("attendanceMonth");
   const [year, number] = answer.month.split("-") as [string, MonthNumber];
@@ -179,7 +183,9 @@ function TheWorkersMonth({
         onChoose={onChoose}
       />
       <MarksKey />
-      {open !== null ? <TheDay day={open} answer={answer} /> : null}
+      {open !== null ? (
+        <TheDay day={open} answer={answer} timezone={timezone} />
+      ) : null}
     </>
   );
 }

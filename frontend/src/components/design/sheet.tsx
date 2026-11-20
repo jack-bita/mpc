@@ -59,6 +59,7 @@ export function Sheet({
   actionLabel,
   onAction,
   busy = false,
+  actionDisabled = false,
   children,
 }: {
   /** Whether it is on the screen: the screen keeps this, opening it from its own button. */
@@ -73,6 +74,8 @@ export function Sheet({
   onAction: () => void;
   /** The main action is on its way: both buttons held, and nothing closes it. */
   busy?: boolean;
+  /** The main button alone held, Ghairi still free: with no network, so nothing waits unsent while it looks done. */
+  actionDisabled?: boolean;
   /** The form's boxes and choices, and a failure to show inside the sheet. */
   children: ReactNode;
 }) {
@@ -81,7 +84,7 @@ export function Sheet({
   function send(event: FormEvent<HTMLFormElement>) {
     // The browser's own sending of a form would load the page again: this one is sent by the screen.
     event.preventDefault();
-    if (!busy) onAction();
+    if (!busy && !actionDisabled) onAction();
   }
 
   return (
@@ -128,7 +131,7 @@ export function Sheet({
               kind="main"
               type="submit"
               className="flex-1"
-              disabled={busy}
+              disabled={busy || actionDisabled}
             >
               {actionLabel}
             </Button>
