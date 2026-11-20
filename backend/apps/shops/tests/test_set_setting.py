@@ -4,7 +4,8 @@ A new value is a new row, never an edit: today the late fine is its default, no 
 from 1 December. The service checks what Setting.clean() holds (a known key, a value of its kind, no side for a shop's
 rule), which `objects.create` would skip, and two rules of its own, both Jack's (15 Nov 2026):
 - a value starts on the shop's today or later, never before: an earlier day would change what past days answer, and a
-  draft pay run with them;
+  draft pay run with them. One exception: the demo's seed, by name (`as_the_demo_seed`), on the demo alone, as it makes
+  a new shop each morning, with no day worked out yet, and starts its rules three weeks back (DATA-8);
 - a side's rule (the two tolerances, the expiry alert, blocking stock below zero) is set one side at a time, with no
   row for the whole shop, so a side's old row can never hide a newer shop value (CORE-4: a side's row beats it).
 A third, the attendance day's times kept in order, has its own file (test_day_in_order.py, ATT-2).
