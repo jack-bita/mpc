@@ -371,6 +371,33 @@ def test_seed_demo_makes_todays_shop_again_without_its_rates(monkeypatch: pytest
     assert seed_demo() == Seeded.KEPT
 
 
+def test_seed_demo_makes_todays_shop_again_without_its_taps(three_weeks: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    # As for its rules, closures, keys and rates: DATA-8's deploy finds the demo the older seed made that morning, with
+    # no day before today, and makes the shop again at once, so the month page (ATT-5) shows its weeks the same day.
+    with monkeypatch.context() as older_seed:
+        older_seed.setattr(services, "HISTORY_DAYS", 0)
+        seed_demo(fresh=True)
+    made = the_demo_shop()
+
+    assert seed_demo() == Seeded.MADE
+    shop = the_demo_shop()
+    assert shop != made
+    with shop_context(shop):
+        assert AttendanceEvent.objects.exists()
+    # Then kept, as it holds them now.
+    assert seed_demo() == Seeded.KEPT
+
+
+def test_seed_demo_keeps_todays_shop_with_its_taps(three_weeks: None) -> None:
+    # The demo wakes from its 15-minute sleep: a demo made today with its weeks stays, with a visitor's work in it. A
+    # check that never found the taps would make it again at every wake-up.
+    seed_demo(fresh=True)
+    made = the_demo_shop()
+
+    assert seed_demo() == Seeded.KEPT
+    assert the_demo_shop() == made
+
+
 def test_seed_demo_keeps_its_peoples_rates_as_made() -> None:
     # Every visitor logs in as Meneja, who holds both keys a rate needs, so a visitor can try Weka malipo on a worker
     # they add (WAGE-1), with no note. The seed's people keep their rates: a visitor's 1 shilling for Asha would show to

@@ -40,8 +40,9 @@ safe only on a database that holds nothing but demo data, so the seed refuses, b
 Once a day, not on every start (DATA-1's plan, 8 Nov 2026): the free demo sleeps after 15 minutes with no visitor,
 and every wake-up runs its start again. A visitor back from a break should find the PIN screen with their work still
 there (the idle lock, UI-4), so a start keeps a demo shop made today, in the shop's own time, and makes it again only
-when it was made on an earlier day, or lacks a rule, a closure or a person's extra key this seed sets, as a demo an
-older seed made that morning does on a deploy's day (ATT-2, ATT-8, #275). `fresh=True` makes it again whatever its day.
+when it was made on an earlier day, or lacks a rule, a closure, a person's extra key or rate, or the taps of the days
+before today this seed sets, as a demo an older seed made that morning does on a deploy's day (ATT-2, ATT-8, #275,
+WAGE-1, DATA-8). `fresh=True` makes it again whatever its day.
 
 Made through the services, as a real shop is set up (set_up_shop, add_staff, assign_role, set_pin), never by writing
 rows: the demo can't hold anything a real shop couldn't, and a service that changes its rules changes the demo too.
@@ -92,7 +93,7 @@ from apps.people.services import (
 from apps.shops.models import Closure, Setting, Shop, ShopKind, Side, SideBand
 from apps.shops.selectors import shop_today
 from apps.shops.services import NewSide, add_closure, set_setting, switch_side
-from apps.staffpay.models import ClockKind, NoPhoto, PayRate
+from apps.staffpay.models import AttendanceEvent, ClockKind, NoPhoto, PayRate
 from apps.staffpay.services import SUNDAY, set_pay_rate
 from apps.sync.api.serializers import MOST_DOCUMENTS
 from apps.sync.models import PushedStatus
@@ -305,6 +306,7 @@ def seed_demo(*, fresh: bool = False) -> Seeded:
         and _holds_its_closures(shop)
         and _holds_its_keys(shop)
         and _holds_its_rates(shop)
+        and _holds_its_taps(shop)
     ):
         return Seeded.KEPT
     try:
@@ -420,6 +422,23 @@ def _holds_its_rates(shop: Shop) -> bool:
     return wanted <= set_by_the_system
 
 
+def _holds_its_taps(shop: Shop) -> bool:
+    # Whether today's demo holds the taps of the days before today this seed sends (DATA-8): as for its rules, a deploy
+    # whose seed sends them must not keep a demo an older seed made that morning, with no day before today, or the month
+    # page would list nobody until the next morning. Counted: the taps of the seed's own people (created by nobody, as
+    # for the keys), timed before today, at least as many as this seed sends. Nothing a visitor does lowers it: a
+    # visitor's tap is today's, and a tap is never deleted, only voided (ATT-6).
+    zone = ZoneInfo(shop.timezone)
+    today = shop_today(shop)
+    with shop_context(shop):
+        held = AttendanceEvent.objects.filter(
+            shop=shop,
+            staff__created_by__isnull=True,
+            client_time__lt=datetime.combine(today, time.min, tzinfo=zone),
+        ).count()
+    return held >= len(_demo_taps(today, zone))
+
+
 def _holds_its_closures(shop: Shop) -> bool:
     # Whether today's demo holds every closure this seed adds, as the system added them: as for its rules, a deploy
     # whose seed adds a closure must not keep a demo made that morning without it (ATT-8). Known by its first day and
@@ -443,7 +462,7 @@ def _make_the_shop() -> Shop:
         # alone (apps/core/changes.py). Still in _wipe_and_make's one transaction: a refused tap undoes the whole reset.
         manager = next(people[person.display_name] for person in PEOPLE if person.email == MANAGER_EMAIL)
         laptop = _demo_laptop(manager, Side.objects.get(code=DEMO_LAPTOP_SIDE))
-        _send_the_taps(laptop, _demo_taps(shop, people))
+        _send_the_taps(laptop, people, _demo_taps(shop_today(shop), ZoneInfo(shop.timezone)))
     return shop
 
 
@@ -517,19 +536,19 @@ def _working_days_back(today: date) -> list[date]:
 @dataclass(frozen=True)
 class _DemoTap:
     # One tap of the days before today: whose, Ingia or Toka, and when, by the laptop's clock in the shop's zone.
-    staff: StaffMember
+    person: DemoPerson
     kind: ClockKind
     at: datetime
 
 
-def _demo_taps(shop: Shop, people: dict[str, StaffMember]) -> list[_DemoTap]:
-    # Each person's taps on each working day before today, the earliest first, as the laptop made them: an ordinary
-    # day's minutes drawn from the fixed seed, an odd day's as PEOPLE gives them.
-    zone = ZoneInfo(shop.timezone)
+def _demo_taps(today: date, zone: ZoneInfo) -> list[_DemoTap]:
+    # Each person's taps on each working day before `today`, the earliest first, as the laptop made them: an ordinary
+    # day's minutes drawn from the fixed seed, an odd day's as PEOPLE gives them. From the date and the zone alone, so
+    # the seed's check counts them (_holds_its_taps) without reading the shop's rows.
     draws = random.Random(TAPS_SEED)
     taps: list[_DemoTap] = []
     # The oldest day first, and the people in PEOPLE's order, so the draws come in the same order at every reset.
-    for back, day in reversed(list(enumerate(_working_days_back(shop_today(shop)), start=1))):
+    for back, day in reversed(list(enumerate(_working_days_back(today), start=1))):
         for person in PEOPLE:
             # Drawn on every day, odd or not, so an odd day moved changes no other day's minutes.
             came: datetime | None = datetime.combine(day, ON_TIME_FROM, tzinfo=zone) + timedelta(
@@ -542,18 +561,18 @@ def _demo_taps(shop: Shop, people: dict[str, StaffMember]) -> list[_DemoTap]:
             if odd is not None:
                 came = None if odd.came is None else datetime.combine(day, odd.came, tzinfo=zone)
                 left = None if odd.left is None else datetime.combine(day, odd.left, tzinfo=zone)
-            staff = people[person.display_name]
-            taps.extend(_DemoTap(staff, kind, at) for kind, at in ((ClockKind.IN, came), (ClockKind.OUT, left)) if at)
+            taps.extend(_DemoTap(person, kind, at) for kind, at in ((ClockKind.IN, came), (ClockKind.OUT, left)) if at)
     # The laptop numbers its records in the order they were made, so a later one never has an earlier time: that would
     # say its clock moved (ATT-1's sign 1). sorted() keeps two taps of one minute in the order above.
     return sorted(taps, key=lambda tap: tap.at)
 
 
-def _send_the_taps(laptop: Device, taps: list[_DemoTap]) -> None:
+def _send_the_taps(laptop: Device, people: dict[str, StaffMember], taps: list[_DemoTap]) -> None:
     # The taps, sent by the demo's laptop through the push (SYNC-4), as the laptop sends its outbox: each a clock
-    # document, version 2, numbered from 1, in pushes of at most MOST_DOCUMENTS, as the route takes (03 §6.3). Sent
-    # now, long after they were made, by a laptop whose clock is right (sent_at, the server's now): so the server keeps
-    # each at the laptop's time (device_ok, ATT-1). No photo: the demo keeps none (Jack, ATT-3: A).
+    # document, version 2, made by the person's job in this shop (`people`, by nickname), numbered from 1, in pushes of
+    # at most MOST_DOCUMENTS, as the route takes (03 §6.3). Sent now, long after they were made, by a laptop whose
+    # clock is right (sent_at, the server's now): so the server keeps each at the laptop's time (device_ok, ATT-1). No
+    # photo: the demo keeps none (Jack, ATT-3: A).
     zone = ZoneInfo(laptop.shop.timezone)
     last_heard = datetime.combine(shop_today(laptop.shop) - timedelta(days=HISTORY_DAYS), LAST_HEARD, tzinfo=zone)
     documents = [
@@ -563,7 +582,7 @@ def _send_the_taps(laptop: Device, taps: list[_DemoTap]) -> None:
             schema_version=2,
             device_seq=number,
             client_time=tap.at,
-            created_by=tap.staff.pk,
+            created_by=people[tap.person.display_name].pk,
             payload={"kind": tap.kind, "last_server_time": last_heard.isoformat(), "no_photo": NoPhoto.DEMO},
         )
         for number, tap in enumerate(taps, start=1)
