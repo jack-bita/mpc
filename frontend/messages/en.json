@@ -147,6 +147,9 @@
   "passwordField": {
     "show": "Show password"
   },
+  "sheet": {
+    "cancel": "Cancel"
+  },
   "password": {
     "chooseTitle": "Choose your password",
     "chooseIntro": "The password you were given is temporary. Choose your own, then go on.",
@@ -983,6 +986,15 @@
         "blue": "Dawa",
         "striped": "Vyakula"
       }
+    },
+    "sheet": {
+      "title": "Bottom sheet",
+      "hint": "A short task opens from the bottom, over its own page: pick, type why, save. Cancel, Esc or a tap outside closes it.",
+      "open": "Open the sheet",
+      "sampleTitle": "Decide Juma's day",
+      "sampleDescription": "Thursday 12/11 · Clock-in 07:50 morning",
+      "sampleReason": "Reason",
+      "sampleAction": "Save the decision"
     }
   },
   "apiError": {

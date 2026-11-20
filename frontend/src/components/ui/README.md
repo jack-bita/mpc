@@ -18,3 +18,5 @@ They are not the shop's look, and screens never import them (ADR-0039).
 
 Added in UI-8: `button`, `input`, `label`, `card`, `alert`. In UI-3: `radio-group`, worn by `Choice`.
 On the settings page's tabs (17 Nov 2026): `tabs`, worn by `Tabs`.
+For deciding a day (ATT-6, 20 Nov 2026): `sheet`, worn by `Sheet`, on Base UI's dialog, with no package of its
+own; `Sheet` hides its corner ✕, whose word is English, as Ghairi closes it.

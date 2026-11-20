@@ -3,7 +3,7 @@
 //
 // What the pieces look like is checked by eye on the page itself; these tests check that nothing is
 // missing from it, so a new colour or a new piece can't hide from that check.
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { SCREEN_BUTTON_KINDS } from "@/components/design/button";
@@ -150,6 +150,17 @@ describe("the design page", () => {
     ).toBeDefined();
     const row = screen.getByRole("tablist", { name: t.tabs.title });
     expect(row.querySelectorAll("[role=tab]")).toHaveLength(6);
+  });
+
+  it("shows the sheet, opened from its button and closed by Ghairi (ATT-6)", () => {
+    render(<DesignPage />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: t.sheet.open }));
+    expect(
+      screen.getByRole("dialog", { name: t.sheet.sampleTitle }),
+    ).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: sw.sheet.cancel }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it.each(["default", "second"])(
