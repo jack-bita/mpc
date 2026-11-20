@@ -193,13 +193,17 @@ function TheMonth({
 }) {
   const t = useTranslations("attendanceMonth");
   // This month is counted to yesterday, as the book keeps no day until it is over: said by the server's today, the
-  // shop's, never the phone's. On the 1st, no day of it is over yet. A month gone by is counted to its end.
-  const countedTo =
-    month !== thisMonth ? null : answer.today.endsWith("-01") ? (
-      <p>{t("nothingOverYet")}</p>
-    ) : (
-      <p>{t("countedTo", { day: formatDay(dayBefore(answer.today)) })}</p>
-    );
+  // shop's, never the phone's. A month gone by is counted to its end.
+  const isThisMonth = month === thisMonth;
+  // No working day of this month over yet, the server says: on the 1st, or on Monday the 2nd after a Sunday the 1st.
+  // Nobody is listed then for want of a day, not of a rate, so that is all the page says: "Hakuna mfanyakazi
+  // anayelipwa kwa siku" would be untrue (ATT-5's review).
+  if (isThisMonth && !answer.working_day_over) {
+    return <p>{t("nothingOverYet")}</p>;
+  }
+  const countedTo = isThisMonth ? (
+    <p>{t("countedTo", { day: formatDay(dayBefore(answer.today)) })}</p>
+  ) : null;
   if (answer.workers.length === 0) {
     return (
       <>

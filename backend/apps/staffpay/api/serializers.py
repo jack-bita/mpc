@@ -115,5 +115,8 @@ class AttendanceMonthAnswer(serializers.Serializer[Any]):
     # reach yesterday, on the shop's own date, as a phone's can be wrong; a line per worker; and the days to decide.
     month = serializers.DateField(format="%Y-%m")
     today = serializers.DateField()
+    working_day_over = serializers.BooleanField(
+        help_text="Whether a working day of the month is over: with none, nobody is listed for want of a day."
+    )
     workers = WorkerMonthSerializer(many=True)
     to_decide = DayToDecideSerializer(many=True)

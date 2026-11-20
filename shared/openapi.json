@@ -2317,6 +2317,10 @@
                         "type": "string",
                         "format": "date"
                     },
+                    "working_day_over": {
+                        "type": "boolean",
+                        "description": "Whether a working day of the month is over: with none, nobody is listed for want of a day."
+                    },
                     "workers": {
                         "type": "array",
                         "items": {
@@ -2334,7 +2338,8 @@
                     "month",
                     "to_decide",
                     "today",
-                    "workers"
+                    "workers",
+                    "working_day_over"
                 ]
             },
             "BootstrapAnswer": {

@@ -369,9 +369,11 @@ class WorkerMonth:
 @dataclass(frozen=True)
 class AttendanceMonth:
     # The month page's answer (ATT-5). `month` is its first day; `today` the shop's, so the page knows this month's
-    # counts reach yesterday, as the book keeps no day until it is over.
+    # counts reach yesterday, as the book keeps no day until it is over. `working_day_over`: whether any working day
+    # of the month is over, so the page can tell "no day is over yet" from "nobody is paid by the day" (the review).
     month: dt.date
     today: dt.date
+    working_day_over: bool
     workers: list[WorkerMonth]
     to_decide: list[AttendanceDay]
 
@@ -422,7 +424,14 @@ def attendance_month(shop: Shop, month: dt.date) -> AttendanceMonth:
         (day for day in days if day.staff_id in listed and day.status == DayStatus.NEEDS_REVIEW),
         key=lambda day: (day.date, day.staff.display_name.casefold(), day.staff_id),
     )
-    return AttendanceMonth(month=first, today=shop_today(shop), workers=workers, to_decide=to_decide)
+    # Whether a working day of the month is over: any day the book answered that isn't off, the owner's absent days
+    # included, as every job has its days. False on the 1st, on Monday the 2nd after a Sunday the 1st, after a closed
+    # 1st, and in a month to come or before attendance was switched on, when nobody is listed for want of a day, not
+    # of a rate (ATT-5's review).
+    working_day_over = any(day.status != DayStatus.OFF for day in days)
+    return AttendanceMonth(
+        month=first, today=shop_today(shop), working_day_over=working_day_over, workers=workers, to_decide=to_decide
+    )
 
 
 def set_pay_rate(

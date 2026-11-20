@@ -719,6 +719,8 @@ export interface components {
             month: string;
             /** Format: date */
             today: string;
+            /** @description Whether a working day of the month is over: with none, nobody is listed for want of a day. */
+            working_day_over: boolean;
             workers: components["schemas"]["WorkerMonth"][];
             to_decide: components["schemas"]["DayToDecide"][];
         };

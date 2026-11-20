@@ -73,6 +73,7 @@ def test_the_month_as_the_page_reads_it(
     assert reply.json() == {
         "month": "2026-10",
         "today": shop_today(shop_a).isoformat(),
+        "working_day_over": True,
         "workers": [
             {
                 "staff": str(asha.pk),

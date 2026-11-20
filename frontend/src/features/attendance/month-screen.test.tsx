@@ -54,7 +54,13 @@ function line(fields: Partial<WorkerMonth> = {}): WorkerMonth {
 
 /** The month page's answer for `month`, as the server would give it today. */
 function monthOf(month: string, workers: WorkerMonth[]): AttendanceMonth {
-  return { month, today: "2026-11-20", workers, to_decide: [] };
+  return {
+    month,
+    today: "2026-11-20",
+    working_day_over: true,
+    workers,
+    to_decide: [],
+  };
 }
 
 /** Meneja is logged in; each month answers with its own lines, or none. */
@@ -161,6 +167,31 @@ describe("the month page", () => {
     render(<MonthScreen asked={null} />);
 
     expect(await screen.findByText("Hadi jana, 19/11/2026.")).toBeTruthy();
+  });
+
+  it("says only that no working day is over yet, on the month's first days (the review)", async () => {
+    // 1 December: no day is over, so nobody is listed for want of a day, not of a pay rate. "Hakuna mfanyakazi
+    // anayelipwa kwa siku" would be untrue. The same on Monday the 2nd after a Sunday the 1st, which the server says.
+    vi.setSystemTime(new Date("2026-12-01T09:00:00Z"));
+    answer("GET", ME, { status: 200, body: MENEJA });
+    answer("GET", MONTH, {
+      status: 200,
+      body: {
+        ...monthOf("2026-12", []),
+        today: "2026-12-01",
+        working_day_over: false,
+      },
+    });
+
+    render(<MonthScreen asked={null} />);
+
+    expect(
+      await screen.findByText(
+        "Bado hakuna siku ya kazi iliyokwisha mwezi huu.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Hakuna mfanyakazi/)).toBeNull();
+    expect(screen.queryByText(/Hadi jana/)).toBeNull();
   });
 
   it("goes back a month, and forward again, never past this one, keeping the month in the address", async () => {

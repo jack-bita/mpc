@@ -209,6 +209,16 @@ def test_a_month_to_come_lists_nobody(shop_a: Shop, attendance_on: None) -> None
     assert (answer.workers, answer.to_decide) == ([], [])
 
 
+def test_the_month_says_whether_a_working_day_is_over(shop_a: Shop, attendance_on: None) -> None:
+    # On 1 December, or on Monday 2 March after a Sunday the 1st, no working day of the month is over, so nobody is
+    # listed: the page must then say that no day is over yet, not that nobody is paid by the day (ATT-5's review). The
+    # book answers the owner's absent days too, so any working day gone by, with attendance on, says so.
+    worker(shop_a, "Asha")
+    assert month(shop_a).working_day_over is True
+    next_month = (shop_today(shop_a).replace(day=1) + dt.timedelta(days=32)).replace(day=1)
+    assert month(shop_a, next_month).working_day_over is False
+
+
 def test_this_months_counts_reach_yesterday(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
     # Asha came today at 07:20 and hasn't tapped Toka: today is not over, so the book keeps nothing of it, and her day
     # is neither counted nor to decide. Every working day before it, from the 1st to yesterday, is counted, absent.
