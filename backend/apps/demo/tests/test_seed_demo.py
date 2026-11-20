@@ -21,6 +21,7 @@ never imported from the seed: a changed PIN must turn a test red, not pass quiet
 with new ids, and the test's rollback takes those back, so the next test must not find them in memory.
 """
 
+import uuid
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import replace
@@ -47,7 +48,14 @@ from apps.core.sequences import next_numbers
 from apps.core.settings_registry import ATTENDANCE_ON, CLOSING, LATE_FINE, SECOND_FINE
 from apps.core.tenancy import shop_context
 from apps.demo import services
-from apps.demo.services import SHOP_CODE, PublicHoliday, Seeded, coming_public_holidays, seed_demo
+from apps.demo.services import (
+    SHOP_CODE,
+    PublicHoliday,
+    Seeded,
+    coming_public_holidays,
+    register_demo_device,
+    seed_demo,
+)
 from apps.people.models import Device, PermissionGrant, RoleAssignment, StaffMember, User
 from apps.people.permissions import effective_permissions
 from apps.people.pins import pin_matches
@@ -58,7 +66,7 @@ from apps.shops.services import NewSide, create_shop
 from apps.staffpay.models import AttendanceEvent, DayStatus, NoPhoto, PayRate, ReviewReason, TimeCheck
 from apps.staffpay.services import set_pay_rate, work_out_days
 from apps.sync.models import PushedDocument, PushedStatus
-from apps.sync.push import Answer
+from apps.sync.push import Answer, Sent, push
 from apps.sync.registry import REGISTRY
 from tests.change_log import lines_after
 
@@ -391,12 +399,33 @@ def test_seed_demo_makes_todays_shop_again_without_its_taps(three_weeks: None, m
 
 def test_seed_demo_keeps_todays_shop_with_its_taps(three_weeks: None) -> None:
     # The demo wakes from its 15-minute sleep: a demo made today with its weeks stays, with a visitor's work in it. A
-    # check that never found the taps would make it again at every wake-up.
+    # check that never found the taps would make it again at every wake-up. The visitor's work here: Asha's Ingia this
+    # morning, on the visitor's own laptop (Jaribu demo), which the check never counts, as it counts the days before
+    # today (DATA-8's review).
     seed_demo(fresh=True)
     made = the_demo_shop()
+    visitors_laptop = register_demo_device().device
+    now = timezone.now()
+    with shop_context(made):
+        asha = StaffMember.objects.get(display_name="Asha")
+        tapped = Sent(
+            id=uuid.uuid7(),
+            type="clock",
+            schema_version=2,
+            device_seq=1,
+            client_time=now,
+            created_by=asha.pk,
+            payload={"kind": "in", "last_server_time": now.isoformat(), "no_photo": "demo"},
+        )
+        answers = push(
+            visitors_laptop, [tapped], received_at=now, sent_at=now, unsent_count=0, app_version="dev", outages=[]
+        )
+    assert [answer.status for answer in answers] == [PushedStatus.ACCEPTED]
 
     assert seed_demo() == Seeded.KEPT
     assert the_demo_shop() == made
+    with shop_context(made):
+        assert AttendanceEvent.objects.filter(pk=tapped.id).exists()
 
 
 def test_seed_demo_keeps_its_peoples_rates_as_made() -> None:
