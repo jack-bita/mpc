@@ -111,3 +111,11 @@ def test_no_month_is_refused(staff_client_a: APIClient) -> None:
     reply = staff_client_a.get(MONTH)
     assert reply.status_code == 400
     assert reply.json()["fields"]["month"] == ["required"]
+
+
+def test_the_calendars_last_month_lists_nobody(staff_client_a: APIClient) -> None:
+    # Someone types ?month=9999-12 into the address. No day of it is over, so nobody is listed: an answer, never a
+    # server error from a sum that runs past the calendar's last day (ATT-5's review).
+    reply = staff_client_a.get(MONTH, {"month": "9999-12"})
+    assert reply.status_code == 200
+    assert (reply.json()["workers"], reply.json()["to_decide"]) == ([], [])

@@ -24,6 +24,7 @@ worker's pay, so who may is the PIN's rule, asked by the people app (02 §5). No
 worker's pay never sits on a shared device (03 §6.1).
 """
 
+import calendar
 import datetime as dt
 import uuid
 from collections import Counter, defaultdict
@@ -384,8 +385,10 @@ def attendance_month(shop: Shop, month: dt.date) -> AttendanceMonth:
     each with why. Works the month out through the book (work_out_days), so it writes as the book does, and asked
     twice writes nothing the second time. The shop must be open, as for the book."""
     first = month.replace(day=1)
-    # The last day: the 1st of the month after, less a day. 32 days after any 1st is always in the next month.
-    last = (first + dt.timedelta(days=32)).replace(day=1) - dt.timedelta(days=1)
+    # The last day, as the calendar counts the month's days (30, 31, 28 or 29). Not "the 1st of the month after, less a
+    # day": in the calendar's last month, December 9999, that sum runs past the last day Python knows, and a month typed
+    # into the address became a server error (ATT-5's review).
+    last = first.replace(day=calendar.monthrange(first.year, first.month)[1])
     # The book's answer, never the table's rows: a day kept to decide that the book no longer answers, its tap voided
     # outside a job's days, stays in its row as it was (rule 7), and is no longer anyone's to decide (ATT-11's review).
     # Only days that are over: this month's stop at yesterday. Each comes with its worker, in the same read.
