@@ -9,6 +9,7 @@
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
 
+import { useId } from "react";
 import { useTranslations } from "use-intl";
 
 import type { components } from "@/api/schema";
@@ -19,13 +20,16 @@ type DayToDecide = components["schemas"]["DayToDecide"];
 
 export function DaysToDecide({ days }: { days: DayToDecide[] }) {
   const t = useTranslations("attendanceMonth");
-  const heading = t("toDecide", { count: days.length });
+  // The heading's id, React's own for this part, so two lists on one page (ATT-12 may show a second) never share one.
+  const headingId = useId();
   return (
-    <section className="grid gap-3" aria-labelledby="to-decide">
+    // A plain box, unnamed: named by its heading too, it was a region a screen reader announced, then the list inside
+    // it with the same name, said twice (the review). The list carries the name alone.
+    <section className="grid gap-3">
       {/* Counted in the heading, so the owner sees at once whether anything waits: "(0)" says nothing does. A third
           level: the page's title is the first, the month's name the second. */}
-      <h3 id="to-decide" className="text-lg font-semibold">
-        {heading}
+      <h3 id={headingId} className="text-lg font-semibold">
+        {t("toDecide", { count: days.length })}
       </h3>
       {days.length === 0 ? (
         <p>{t("noneToDecide")}</p>
@@ -35,7 +39,7 @@ export function DaysToDecide({ days }: { days: DayToDecide[] }) {
               Safari with VoiceOver stops calling a styled <ul> a list (workers-screen.tsx). */}
           <ul
             role="list"
-            aria-label={heading}
+            aria-labelledby={headingId}
             className="divide-y divide-border"
           >
             {days.map((day) => (

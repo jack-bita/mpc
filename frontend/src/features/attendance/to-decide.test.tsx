@@ -83,6 +83,29 @@ describe("the days to decide", () => {
     expect(lines()).toEqual([`Juma · Alhamisi 12/11 · ${why}`]);
   });
 
+  it("names the list once, by its heading, with an id of its own (the review)", () => {
+    // A screen reader says the list's name as it enters it; a region named the same around it said it twice. Two
+    // lists on one page (ATT-12 may show a second) never share an id, so each is named by its own heading.
+    render(
+      <>
+        <DaysToDecide days={[day()]} />
+        <DaysToDecide days={[day(), day({ date: "2026-11-13" })]} />
+      </>,
+    );
+
+    expect(screen.queryByRole("region")).toBeNull();
+    const lists = screen.getAllByRole("list");
+    expect(
+      lists.map((list) => list.getAttribute("aria-labelledby")),
+    ).toHaveLength(2);
+    expect(lists[0]?.getAttribute("aria-labelledby")).not.toBe(
+      lists[1]?.getAttribute("aria-labelledby"),
+    );
+    expect(
+      screen.getByRole("list", { name: "Zinahitaji uamuzi (2)" }),
+    ).toBeTruthy();
+  });
+
   it("says so when no day needs a decision", () => {
     render(<DaysToDecide days={[]} />);
 
