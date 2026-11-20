@@ -39,14 +39,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
 import { Field } from "@/components/design/field";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
-import { formatDay } from "@/lib/format";
+import { dayBefore, formatDay } from "@/lib/format";
 import { useOnline } from "@/offline/network";
 
 import {
   aboutTheWholeRequest,
   type Closure,
   CLOSURES,
-  dayBefore,
   dropClosure,
   keepClosure,
 } from "./closures";

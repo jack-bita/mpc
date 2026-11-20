@@ -677,6 +677,71 @@
       "offline": "Hakuna mtandao: zitatumwa mtandao ukirudi."
     }
   },
+  "attendanceMonth": {
+    "title": "Mahudhurio ya mwezi",
+    "intro": "Siku za kila mfanyakazi anayelipwa kwa siku, mwezi mzima.",
+    "months": "Chagua mwezi",
+    "before": "Mwezi uliopita",
+    "after": "Mwezi unaofuata",
+    "monthTitle": "{month} {year}",
+    "monthNames": {
+      "01": "Januari",
+      "02": "Februari",
+      "03": "Machi",
+      "04": "Aprili",
+      "05": "Mei",
+      "06": "Juni",
+      "07": "Julai",
+      "08": "Agosti",
+      "09": "Septemba",
+      "10": "Oktoba",
+      "11": "Novemba",
+      "12": "Desemba"
+    },
+    "countedTo": "Hadi jana, {day}.",
+    "nothingOverYet": "Bado hakuna siku ya kazi iliyokwisha mwezi huu.",
+    "workersCaption": "Siku za kila mfanyakazi",
+    "worker": "Mfanyakazi",
+    "mark": {
+      "on_time": "✓",
+      "late": "Ch",
+      "half": "½",
+      "absent": "H",
+      "needs_review": "!"
+    },
+    "kind": {
+      "on_time": "kwa wakati",
+      "late": "amechelewa",
+      "half": "nusu siku",
+      "absent": "hakuja",
+      "needs_review": "inahitaji uamuzi"
+    },
+    "keyLabel": "Maana ya alama",
+    "toDecide": "Zinahitaji uamuzi ({count})",
+    "noneToDecide": "Hakuna siku inayohitaji uamuzi mwezi huu.",
+    "dayToDecide": "{name} · {weekday} {date} · {why}",
+    "weekdays": {
+      "0": "Jumapili",
+      "1": "Jumatatu",
+      "2": "Jumanne",
+      "3": "Jumatano",
+      "4": "Alhamisi",
+      "5": "Ijumaa",
+      "6": "Jumamosi"
+    },
+    "reason": {
+      "outside_job": "nje ya siku zake za kazi",
+      "closed_day": "duka lilikuwa limefungwa",
+      "not_working": "alikuwa amesimamishwa au ameondoka",
+      "clock_disagrees": "saa yake ina shaka",
+      "time_unknown": "saa yake haijulikani",
+      "no_in": "hakuna Ingia",
+      "came_late": "alifika saa {time}",
+      "no_out": "hakuna Toka",
+      "left_early": "aliondoka saa {time}"
+    },
+    "nobody": "Hakuna mfanyakazi anayelipwa kwa siku katika mwezi huu."
+  },
   "needsAttention": {
     "title": "Kumbukumbu zilizokataliwa na seva",
     "clock": "{name}: {action}, saa {time}",

@@ -7,9 +7,10 @@ rule from that day's taps and that day's rules, and kept (ATT-10; 02 §12).
 
 First the rules the database keeps on a day (AttendanceDay, apps/staffpay/models.py): one per job and date, a day that
 fits its status, and never a delete. Then the book (work_out_days, apps/staffpay/services.py): which taps a day reads,
-on which date, with which rules, and how a day worked out again is kept. Last, the taps in doubt (ATT-11), each sending
-its day to review. What a day was, from its taps, is the rule's, in test_attendance_day.py. Times are Arusha's, three
-hours ahead of UTC. The fines are the demo's made-up 500 and 1,500 (rule 10). Fake data only: the repo is public.
+on which date, with which rules, and how a day worked out again is kept. Then the taps in doubt (ATT-11), each sending
+its day to review. Last, why a day needs a decision (ATT-5): each day to decide keeps its one reason. What a day was,
+from its taps, is the rule's, in test_attendance_day.py. Times are Arusha's, three hours ahead of UTC. The fines are
+the demo's made-up 500 and 1,500 (rule 10). Fake data only: the repo is public.
 """
 
 import datetime as dt
@@ -34,7 +35,7 @@ from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, change_worker, hire_again, mark_left
 from apps.shops.models import Closure, Setting, Shop, Side
 from apps.shops.selectors import shop_today
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, TimeCheck
+from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, ReviewReason, TimeCheck
 from apps.staffpay.services import work_out_days
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
@@ -115,10 +116,28 @@ def test_only_an_off_day_keeps_no_rules(shop_a: Shop, staff_a: StaffMember, chan
         _day(shop_a, staff_a, **changes).save()
 
 
+@pytest.mark.parametrize(
+    "changes",
+    [
+        # A reason only on a day to decide: a late day has its answer already.
+        {"review_reason": ReviewReason.NO_OUT},
+        {"status": DayStatus.OFF, "fine": Decimal("0.00"), "first_in": None, "first_out": None, "rules_used": {}}
+        | {"review_reason": ReviewReason.CLOSED_DAY},
+        # And only the reasons there are.
+        {"status": DayStatus.NEEDS_REVIEW, "fine": Decimal("0.00"), "review_reason": "lazy"},
+    ],
+)
+def test_a_reason_only_on_a_day_to_decide(shop_a: Shop, staff_a: StaffMember, changes: dict[str, object]) -> None:
+    # A reason on a day nobody must decide would put it on the month page's list for nothing (ATT-5): a bug in the
+    # book, which the database refuses as the last guard.
+    with pytest.raises(IntegrityError, match="reason_only_to_decide"), transaction.atomic():
+        _day(shop_a, staff_a, **changes).save()
+
+
 def test_each_status_saves_as_it_should(shop_a: Shop, staff_a: StaffMember) -> None:
     # The rule's other side: every status, as the book writes it, is kept. A late day with a fine of 0, as a shop
     # starts with (ATT-2); the morning's half with a late arrival's fine (the owner, ATT-4); and a day for review with
-    # its taps, or with none.
+    # its taps, or with none, with its reason, or with none, as a day kept before ATT-5 has.
     days = [
         {"status": DayStatus.LATE, "fine": Decimal("0.00")},
         {"status": DayStatus.HALF, "first_out": dt.time(13, 10)},
@@ -127,6 +146,7 @@ def test_each_status_saves_as_it_should(shop_a: Shop, staff_a: StaffMember) -> N
         {"status": DayStatus.ABSENT, "fine": Decimal("0.00"), "first_in": None, "first_out": None},
         {"status": DayStatus.NEEDS_REVIEW, "fine": Decimal("0.00"), "first_out": None},
         {"status": DayStatus.NEEDS_REVIEW, "fine": Decimal("0.00"), "first_in": None, "first_out": None},
+        {"status": DayStatus.NEEDS_REVIEW, "fine": Decimal("0.00"), "review_reason": ReviewReason.CAME_LATE},
     ]
     for offset, changes in enumerate(days):
         _day(shop_a, staff_a, date=MONDAY + dt.timedelta(days=offset), **changes).save()
@@ -320,6 +340,7 @@ def test_an_unverified_tap_needs_review(shop_a: Shop, device_a: Device, asha: St
     day = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
     assert (day.status, day.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
     assert (day.first_in, day.first_out) == (None, dt.time(18, 45))
+    assert day.review_reason == ReviewReason.TIME_UNKNOWN
 
 
 def test_an_unverified_tap_falls_on_its_laptops_date(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
@@ -559,6 +580,8 @@ def test_a_tap_on_a_closed_day_needs_review(
     assert asha_friday.rules_used["late_fine"] == "500.00"
     assert (juma_friday.status, juma_friday.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
     assert (juma_friday.first_in, juma_friday.first_out) == (dt.time(7, 50), dt.time(18, 45))
+    # Why, for both: the shop was closed. Asha's left before midday too, but the closure is what to decide.
+    assert asha_friday.review_reason == juma_friday.review_reason == ReviewReason.CLOSED_DAY
 
 
 # Which days count. A week of November long past: Monday 9 to Friday 13.
@@ -676,6 +699,7 @@ def test_a_suspended_workers_tap_needs_review(
     _flag_its_line(ingia)
     days = _days(shop_a, TUESDAY, TUESDAY)
     assert days[("Juma", TUESDAY)].status == DayStatus.NEEDS_REVIEW
+    assert days[("Juma", TUESDAY)].review_reason == ReviewReason.NOT_WORKING
     assert days[("Asha", TUESDAY)].status == DayStatus.ON_TIME
 
 
@@ -689,7 +713,8 @@ def test_a_gone_workers_tap_needs_review(shop_a: Shop, device_a: Device, attenda
     with shop_context(shop_a):
         mark_left(neema, left_on=MONDAY, by=None, reason="Amehamia mji mwingine")
     _flag_its_line(toka)
-    assert _days(shop_a, MONDAY, MONDAY)[("Neema", MONDAY)].status == DayStatus.NEEDS_REVIEW
+    monday = _days(shop_a, MONDAY, MONDAY)[("Neema", MONDAY)]
+    assert (monday.status, monday.review_reason) == (DayStatus.NEEDS_REVIEW, ReviewReason.NOT_WORKING)
 
 
 def test_a_closed_suspension_flag_still_needs_review(
@@ -764,6 +789,9 @@ def test_the_tap_a_later_one_disagrees_with_needs_review(
     assert (jumas_monday.status, jumas_monday.fine) == (DayStatus.NEEDS_REVIEW, Decimal("0.00"))
     assert (jumas_monday.first_in, jumas_monday.first_out) == (dt.time(7, 20), dt.time(18, 45))
     assert days[("Asha", MONDAY)].status == DayStatus.NEEDS_REVIEW
+    # Why: his because a later tap's time disagrees with his; hers because her own time can't be trusted.
+    assert jumas_monday.review_reason == ReviewReason.CLOCK_DISAGREES
+    assert days[("Asha", MONDAY)].review_reason == ReviewReason.TIME_UNKNOWN
 
 
 def test_a_disagreement_reaches_another_day(
@@ -873,6 +901,7 @@ def test_a_tap_before_the_first_day_needs_review(shop_a: Shop, device_a: Device,
         NOV_13: DayStatus.ABSENT,
     }
     assert (days[("Neema", NOV_10)].first_in, days[("Neema", NOV_10)].fine) == (dt.time(7, 20), Decimal("0.00"))
+    assert days[("Neema", NOV_10)].review_reason == days[("Neema", NOV_11)].review_reason == ReviewReason.OUTSIDE_JOB
 
 
 def test_a_tap_after_the_last_day_needs_review(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
@@ -888,6 +917,7 @@ def test_a_tap_after_the_last_day_needs_review(shop_a: Shop, device_a: Device, a
         NOV_10: DayStatus.ABSENT,
         NOV_11: DayStatus.NEEDS_REVIEW,
     }
+    assert days[("Neema", NOV_11)].review_reason == ReviewReason.OUTSIDE_JOB
 
 
 def test_a_kept_day_before_a_moved_first_day_turns_to_review(
@@ -927,3 +957,79 @@ def test_a_sunday_tap_in_doubt_is_still_off(
     days = _days(shop_a, SUNDAY, SUNDAY)
     assert days[("Juma", SUNDAY)].status == DayStatus.OFF
     assert ("Neema", SUNDAY) not in days
+
+
+# Why a day needs a decision (ATT-5): the book keeps one reason beside each day to decide, for the month page, the day's
+# page (ATT-12) and whoever decides it (ATT-6). The rule's own reasons are its tests' (test_attendance_day.py).
+
+
+def test_the_books_reason_comes_first(shop_a: Shop, device_a: Device, juma: StaffMember) -> None:
+    # Juma never taps Toka on two days. On Friday the shop was closed for a funeral; on Tuesday Baba had suspended him,
+    # and the offline laptop let his Ingia through. A missing Toka is the rule's reason, but what a person must decide
+    # first is the book's: whether a closed day, or a suspended worker's day, is paid at all. Closed comes before
+    # suspended, as nobody is paid for a closed day whoever came.
+    _closure(shop_a, FRIDAY, FRIDAY)
+    _flag_its_line(tap(device_a, juma, ClockKind.IN, at(FRIDAY, 7, 20)))
+    _flag_its_line(tap(device_a, juma, ClockKind.IN, at(TUESDAY, 7, 20)))
+    days = _days(shop_a, FRIDAY, TUESDAY)
+    assert days[("Juma", FRIDAY)].review_reason == ReviewReason.CLOSED_DAY
+    assert days[("Juma", TUESDAY)].review_reason == ReviewReason.NOT_WORKING
+
+
+def test_a_day_not_to_decide_keeps_no_reason(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Asha's Sunday is off, her Monday on time, her Tuesday absent: none is on the list to decide, so none keeps a
+    # reason. Her Wednesday, an Ingia and no Toka, keeps "no Toka".
+    wednesday = TUESDAY + dt.timedelta(days=1)
+    _came(device_a, asha, MONDAY)
+    tap(device_a, asha, ClockKind.IN, at(wednesday, 7, 20))
+    days = _days(shop_a, SUNDAY, wednesday)
+    assert {date: day.review_reason for (_, date), day in days.items()} == {
+        SUNDAY: "",
+        MONDAY: "",
+        TUESDAY: "",
+        wednesday: ReviewReason.NO_OUT,
+    }
+
+
+def test_a_day_kept_before_gets_its_reason(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Asha's Monday, an Ingia and no Toka, was kept before ATT-5, as needing review with no reason: here, kept, then
+    # its reason emptied by hand, as the column came empty on every row already there. The next time the book works it
+    # out, the same row gets its reason, as a reason is one of the day's answers, and the edit history keeps the change
+    # as the book's.
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    _days(shop_a, MONDAY, MONDAY)
+    with shop_context(shop_a):
+        AttendanceDay.objects.filter(staff=asha, date=MONDAY).update(review_reason="")
+    again = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    with shop_context(shop_a):
+        kept = AttendanceDay.objects.get(staff=asha, date=MONDAY)
+        change = EditEvent.objects.filter(subject_type="attendance_day", subject_id=kept.pk).latest("created_at")
+    assert (again.pk, kept.review_reason) == (kept.pk, ReviewReason.NO_OUT)
+    assert (change.created_by_id, change.after["review_reason"]) == (None, ReviewReason.NO_OUT)
+
+
+def test_outside_the_jobs_days_comes_before_a_closed_day(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
+    # Neema's first day is Thursday 12th, but she tapped on Tuesday 10th, a day the shop was closed for a funeral. Two
+    # of the book's reasons hold; the first in ReviewReason's order is said: the day wasn't one of her job's at all,
+    # which the manager settles first, by her first day (ATT-5's review).
+    neema = _worker(shop_a, "Neema", started_on=NOV_12)
+    _closure(shop_a, NOV_10, NOV_10)
+    _came(device_a, neema, NOV_10)
+    assert _days(shop_a, NOV_10, NOV_10)[("Neema", NOV_10)].review_reason == ReviewReason.OUTSIDE_JOB
+
+
+def test_a_suspension_comes_before_a_disagreement_on_one_day(
+    shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember
+) -> None:
+    # On each of two days one of Juma's taps was made while he was suspended, and the other is one a later tap's time
+    # disagrees with: on Monday the disputed one comes first, on Tuesday the flagged one. Whatever order the taps are
+    # read in, the day says the suspension, as whether he is paid at all comes before his time (ATT-5's review).
+    for day, flagged_first in ((MONDAY, False), (TUESDAY, True)):
+        ingia = tap(device_a, juma, ClockKind.IN, at(day, 7, 20))
+        toka = tap(device_a, juma, ClockKind.OUT, at(day, 18, 45))
+        flagged, disputed = (ingia, toka) if flagged_first else (toka, ingia)
+        _flag_its_line(flagged)
+        tap(device_a, asha, ClockKind.OUT, at(day, 18, 30), check=TimeCheck.UNVERIFIED, disagrees_with=disputed.pk)
+    days = _days(shop_a, MONDAY, TUESDAY)
+    assert days[("Juma", MONDAY)].review_reason == ReviewReason.NOT_WORKING
+    assert days[("Juma", TUESDAY)].review_reason == ReviewReason.NOT_WORKING

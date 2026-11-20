@@ -1,20 +1,26 @@
-"""apps/staffpay/api/serializers.py — how a worker's pay rates look in the API (WAGE-1; 03 §5.10).
+"""apps/staffpay/api/serializers.py — how a worker's pay rates and a month of attendance look in the API (WAGE-1, ATT-5;
+03 §5.10).
 
 Thin: they describe fields and check their shape. A rate is set through set_pay_rate (apps/staffpay/services.py), which
 asks who may and checks the amount and the day; the rates in force are read by the selectors (ADR-0015). The route
 answers a rate (PayRateSerializer), takes a new one (PayRateCreateSerializer), and lists a worker's, with the one in
 force today (PayRatesAnswer), for the worker named in the address (PayRatesQuery). Money travels as strings (rule 3).
+
+And the month page's month (AttendanceMonthAnswer, ATT-5), worked out by attendance_month
+(apps/staffpay/services.py), for the month named in the address (AttendanceMonthQuery).
 """
 
+import re
+from datetime import date
 from typing import Any
 
 from django.db.models import QuerySet
-from drf_spectacular.utils import extend_schema_serializer
+from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
 from apps.people.models import StaffMember
-from apps.staffpay.models import PayRate
+from apps.staffpay.models import PayRate, ReviewReason
 
 
 class WorkerField(serializers.PrimaryKeyRelatedField[StaffMember]):
@@ -72,3 +78,75 @@ class PayRatesAnswer(serializers.Serializer[Any]):
     today = serializers.DateField()
     in_force = serializers.UUIDField(allow_null=True, help_text="The rate in force on the shop's today, or none.")
     rates = PayRateSerializer(many=True)
+
+
+# A month as the address and the answer write it: four figures, a dash, two figures (01 to 12). The page writes the same
+# (isMonth, frontend/src/features/attendance/attendance-month.ts).
+MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
+# No month before this one: no shop's attendance can be in it, and near the calendar's first day a month's first
+# midnight in Arusha, three hours ahead of UTC, falls before UTC's first day, which the database can't be asked for.
+FIRST_MONTH = date(2000, 1, 1)
+
+
+@extend_schema_field({"type": "string", "pattern": MONTH_PATTERN, "example": "2026-11"})
+class MonthField(serializers.Field[date, str, str, Any]):
+    """A month, "2026-11", read as its first day and written back as "2026-11". Strict, where a date field reading
+    "%Y-%m" took "2026-1" too, and its description said a whole date, "2026-11-01", which the route never took nor sent
+    (ATT-5's review)."""
+
+    default_error_messages = {"invalid": "A month is written as 2026-11, from 2000-01 on."}
+
+    def to_internal_value(self, data: Any) -> date:
+        if not isinstance(data, str) or not re.fullmatch(MONTH_PATTERN, data):
+            self.fail("invalid")
+        month = date(int(data[:4]), int(data[5:7]), 1)
+        if month < FIRST_MONTH:
+            self.fail("invalid")
+        return month
+
+    def to_representation(self, value: date) -> str:
+        return value.strftime("%Y-%m")
+
+
+class AttendanceMonthQuery(serializers.Serializer[Any]):
+    # Which month, in the address (?month=2026-11), as the page keeps it. Anything else, a day, "2026-13" or "2026-1",
+    # is refused under `month` (400 invalid), and the month page never sends one.
+    month = MonthField(help_text="The month, as 2026-11.")
+
+
+class WorkerMonthSerializer(serializers.Serializer[Any]):
+    # One worker's line: their job, the nickname the page shows, and how many days of the month were each kind. No
+    # amount: a manager who fixes attendance sees who is paid by the day, never what (WAGE-1's review).
+    staff = serializers.UUIDField(source="staff_id")
+    display_name = serializers.CharField()
+    on_time = serializers.IntegerField()
+    late = serializers.IntegerField()
+    half = serializers.IntegerField()
+    absent = serializers.IntegerField()
+    needs_review = serializers.IntegerField()
+
+
+class DayToDecideSerializer(serializers.Serializer[Any]):
+    # One day a person must decide: whose, which, and why (ATT-5), with the two taps the rule read, as minutes on the
+    # shop's clock, "09:10", for "alifika saa 09:10". The reason is one of the book's codes, which the page says in
+    # its language (ADR-0040).
+    staff = serializers.UUIDField(source="staff_id")
+    display_name = serializers.CharField(source="staff.display_name")
+    date = serializers.DateField()
+    reason = serializers.ChoiceField(choices=ReviewReason.choices, source="review_reason")
+    first_in = serializers.TimeField(format="%H:%M", allow_null=True)
+    first_out = serializers.TimeField(format="%H:%M", allow_null=True)
+
+
+# One object, not a list, as for the pay rates' answer above.
+@extend_schema_serializer(many=False)
+class AttendanceMonthAnswer(serializers.Serializer[Any]):
+    # The month page's answer (ATT-5): which month, as "2026-11"; the shop's today, so the page says this month's counts
+    # reach yesterday, on the shop's own date, as a phone's can be wrong; a line per worker; and the days to decide.
+    month = MonthField()
+    today = serializers.DateField()
+    working_day_over = serializers.BooleanField(
+        help_text="Whether a working day of the month is over: with none, nobody is listed for want of a day."
+    )
+    workers = WorkerMonthSerializer(many=True)
+    to_decide = DayToDecideSerializer(many=True)

@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.50 · 20 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.51 · 20 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.51** (20 Nov 2026, ATT-5): §12, each `AttendanceDay` that needs review keeps why, one of nine reasons, the book's before the rule's, for the month page to show beside it (04 v1.154). Marked **(v1.51)**.
 
 **Changes in v1.50** (20 Nov 2026, WAGE-1's review): §5, seeing a worker's pay needs the same two keys as setting it (Jack: A); §12, a rate reads no job's first or last day, so the month page and the pay keep to the days the book answers (04 v1.151). Marked **(v1.50)**.
 
@@ -542,6 +544,7 @@ Balance per side = the sum of its entries; combined = the sum over sides.
 - `first_in`, `first_out` **(v1.42)**, `status`: `on_time` | `late` | `half` | `absent` | `off` (Sunday, a closed day **(v1.33)**) | `needs_review`
 - `absence_type`: `office_duty` (paid as a full day) | `permission` (unpaid) | `no_show` (unpaid)
 - `fine`, `rules_used` (copied), `override` (status, by, reason — the worked-out value stays visible)
+- `review_reason` **(v1.51)**: why a day needs review, one reason, the first that holds: the book's own, as each asks whether the day is paid at all (a tap outside the job's days, a tap on a closed day, a tap made while suspended or gone, a later tap that disagrees), then the rule's, in the order it reads a day (a time not trusted, no Ingia, came late, no Toka, left early). Empty on every other day, and on a day to decide kept before ATT-5 until it is worked out again. The month page shows it beside the day: *Juma · Alhamisi 12/11 · hakuna Toka* (ATT-5).
 - `meal_share` **(v1.29)**: the worker's part of the day's meal money (§15, 14), worked out with the day, so the pay up to any day is a sum of days already worked out. It follows the day's status: a day that needs review has none until a manager decides it.
 - Locked once its pay run is approved.
 - **Which days** **(v1.44)**: one per job and date, worked out again from its taps and its date's rules each time it is asked for, until its pay run is approved; kept only once the day is over (today is not), while `attendance.enabled` is on, and from the job's first day to its last. A person hired again the same day they left has two jobs, so two days, each read from its own taps. A day that no longer counts, its job's first day moved later, keeps its row and is no longer read (ATT-10), unless the job tapped on it: then it needs review (ATT-11) **(v1.48)**. Every job has its days, the owner's too, absent every working day as he never clocks in: the month page and the pay show only workers with a daily pay rate (Jack, ATT-10's review) **(v1.45)**.

@@ -3,11 +3,12 @@
 //
 // Where a manager lands after logging in on their own phone (Jack, 7 Nov 2026): big buttons are easy to
 // tap, and the page grows a button as each office screen comes (products, prices, reports…). Today there
-// are four. Two are for whoever holds device.manage on some side: Vifaa, as its Sajili kifaa is theirs
+// are five. Two are for whoever holds device.manage on some side: Vifaa, as its Sajili kifaa is theirs
 // (UI-3), and Hali ya vifaa, as keeping the devices working is theirs too (SYNC-14). Mipangilio ya duka is
 // for anyone who works on a side: reading the shop's rules needs no key, and changing one is the owner's,
 // which the page itself asks for (SHOP-5). Wafanyakazi is for whoever holds staff.manage on the whole shop,
-// as even reading the workers is behind it (PPL-6).
+// as even reading the workers is behind it (PPL-6). Mahudhurio ya mwezi is for whoever holds attendance.manage on
+// the whole shop, the owner and the managers, as its route asks (ATT-5).
 // A button for a screen someone may not use stays off the page; the server still checks every change
 // itself (PPL-5), so this only keeps a door nobody may use out of sight. Under them, for everyone,
 // Mipangilio yangu: a person's own language and font need no key (UI-9).
@@ -26,6 +27,7 @@ import {
   useWhoIsHere,
   type WhoIsHere,
 } from "@/features/people/who-is-here";
+import { mayManageAttendance } from "@/features/attendance/attendance-month";
 import { mayManageStaff } from "@/features/workers/workers";
 
 export function OfficeHome() {
@@ -37,6 +39,7 @@ export function OfficeHome() {
   const loginWords = useTranslations("login");
   const settings = useTranslations("mySettings");
   const workers = useTranslations("workers");
+  const attendanceMonth = useTranslations("attendanceMonth");
   const me = useWhoIsHere();
   // Focus on the welcome as each person arrives: after a login, or Chagua nenosiri lako's Hifadhi, the
   // button that had it is gone. A screen reader then says where the person is, and Tab goes on to the
@@ -71,6 +74,13 @@ export function OfficeHome() {
         href: "/workers/",
         label: workers("title"),
         open: mayManageStaff(here),
+      },
+      {
+        // The month's attendance is the whole shop's, Asha of Dawa beside Baraka of Vyakula: its route asks
+        // attendance.manage on the whole shop, not on a side (ATT-5).
+        href: "/attendance-month/",
+        label: attendanceMonth("title"),
+        open: mayManageAttendance(here),
       },
     ].filter((screen) => screen.open);
 

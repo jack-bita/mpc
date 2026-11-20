@@ -10,7 +10,8 @@ changed or deleted, only voided once, with who and why (T2, ADR-0021). A late fi
 (ATT-4), so each keeps the laptop's own time, the evidence about it, and the time the server trusts.
 
 It also owns the names of what a day was (DayStatus): on time, late, half, absent, off or needs review, which the
-day's rule answers (apps/staffpay/calculations.py); and the book of days (AttendanceDay, ATT-10), one row per worker
+day's rule answers (apps/staffpay/calculations.py), and of why a day needs review (ReviewReason, ATT-5); and the book of
+days (AttendanceDay, ATT-10), one row per worker
 per day, which keeps each answer with the rules it used:
 
     who    date        status        fine    in     out
@@ -69,6 +70,22 @@ class DayStatus(models.TextChoices):
     ABSENT = "absent", "Absent"  # no tap: unpaid, unless a manager marks office duty (ATT-6)
     OFF = "off", "Off"  # a Sunday or a closed day: the shop is shut, nobody is paid (ATT-8)
     NEEDS_REVIEW = "needs_review", "Needs review"  # the owner's dharura: a manager or the owner decides it (ATT-6)
+
+
+class ReviewReason(models.TextChoices):
+    # Why a day needs a person's decision (ATT-5): the one line the month page shows beside it, "Juma · Alhamisi 12/11 ·
+    # hakuna Toka", so the owner knows what to look at before he opens the day. One reason a day: the first that holds,
+    # in this order. The book's own first (apps/staffpay/services.py), as each asks whether the day is paid at all,
+    # whatever its times say; then the rule's (apps/staffpay/calculations.py), in the order the rule reads a day.
+    OUTSIDE_JOB = "outside_job", "Outside the job's days"  # a tap before the first day or after the last (ATT-11)
+    CLOSED_DAY = "closed_day", "The shop was closed"  # a tap on a day the shop closed, a funeral (ATT-10)
+    NOT_WORKING = "not_working", "Suspended or gone"  # a tap the offline laptop let through after a suspension (ATT-11)
+    CLOCK_DISAGREES = "clock_disagrees", "A later tap disagrees"  # its laptop's clock may have moved (ATT-11)
+    TIME_UNKNOWN = "time_unknown", "Time not trusted"  # a tap whose time can't be trusted (`unverified`, ATT-1)
+    NO_IN = "no_in", "No Ingia"  # a Toka, and no Ingia before it
+    CAME_LATE = "came_late", "Came late"  # in from 08:30 and before 12:00, or after 13:00: the owner's dharura
+    NO_OUT = "no_out", "No Toka"  # an Ingia, and no Toka after it
+    LEFT_EARLY = "left_early", "Left early"  # out before closing, outside the half day's windows
 
 
 # The type checker's Django plugin calls the two bases' get_next_by_created_at() a clash, as on PushedDocument
@@ -232,6 +249,10 @@ class AttendanceDay(ShopScoped):
     # a closed day nobody tapped on, which reads no rule, and only there, as a rule below holds. A closed day with a
     # tap keeps them, as it keeps its taps' minutes, for the owner or a manager who decides it (Jack, ATT-10).
     rules_used = models.JSONField(default=dict, blank=True)
+    # Why the day needs a decision (ReviewReason, ATT-5), worked out with the rest of the day, and empty on every other
+    # day. Empty too on a day to decide kept before ATT-5, as the column came empty on every row already there, until
+    # the book works that day out again and writes its reason (a reason is one of the day's answers, WORKED_OUT).
+    review_reason = models.CharField(max_length=15, choices=ReviewReason, blank=True)
 
     class Meta(ShopScoped.Meta):
         # Built on ShopScoped.Meta, so `objects`, with the guard, stays the default manager (CORE-2). No error codes on
@@ -278,6 +299,17 @@ class AttendanceDay(ShopScoped):
                     | (~models.Q(status=DayStatus.OFF) & ~models.Q(rules_used={}))
                 ),
                 name="staffpay_attendanceday_rules_kept_unless_off",
+            ),
+            # A reason only on a day to decide, and only one of the reasons there are (ATT-5): a reason on an on-time
+            # day would put it on the month page's list for nothing. Not the other way: a day to decide kept before
+            # ATT-5 has none until the book works it out again, so "every day to decide has one" would refuse the rows
+            # already there, and the migration with them.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(review_reason="")
+                    | models.Q(status=DayStatus.NEEDS_REVIEW, review_reason__in=ReviewReason.values)
+                ),
+                name="staffpay_attendanceday_reason_only_to_decide",
             ),
         ]
 

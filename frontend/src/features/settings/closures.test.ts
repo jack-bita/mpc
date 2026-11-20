@@ -1,24 +1,11 @@
-// closures.test.ts — the closures' helpers (ATT-9): the day before a day, as a moved last day's box reaches back to it,
-// across a month's end, a year's, and a leap day; and a change put into the list at once, in its place, soonest first,
-// or out of it once it is over or cancelled (ATT-9's review).
+// closures.test.ts — the closures' helpers (ATT-9): a change put into the list at once, in its place, soonest first, or
+// out of it once it is over or cancelled (ATT-9's review). The day before a day is src/lib/format.ts's, tested there.
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import { closure, closuresAnswer } from "@/test/closures";
 
-import { CLOSURES, dayBefore, dropClosure, keepClosure } from "./closures";
-
-describe("dayBefore", () => {
-  it.each([
-    ["2026-11-15", "2026-11-14"],
-    ["2026-12-01", "2026-11-30"],
-    ["2027-01-01", "2026-12-31"],
-    ["2028-03-01", "2028-02-29"],
-    ["2027-03-01", "2027-02-28"],
-  ])("the day before %s is %s", (day, before) => {
-    expect(dayBefore(day)).toBe(before);
-  });
-});
+import { CLOSURES, dropClosure, keepClosure } from "./closures";
 
 // On the shop's today of the tests, Sunday 15 Nov 2026.
 const FUNERAL = closure();
