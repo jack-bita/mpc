@@ -14,7 +14,7 @@ import { useTranslations } from "use-intl";
 
 import type { components } from "@/api/schema";
 import { Card } from "@/components/design/card";
-import { clockPart } from "@/lib/format";
+import { clockPart, formatDayMonth, weekdayOf } from "@/lib/format";
 
 type DayToDecide = components["schemas"]["DayToDecide"];
 
@@ -59,14 +59,6 @@ export function DaysToDecide({ days }: { days: DayToDecide[] }) {
 function DayLine({ day }: { day: DayToDecide }) {
   const t = useTranslations("attendanceMonth");
   const attendance = useTranslations("attendance");
-  const [year, month, date] = day.date.split("-").map(Number) as [
-    number,
-    number,
-    number,
-  ];
-  // The weekday of a day with no time, worked out at noon UTC, never through the phone's own zone: a day has no zone,
-  // and midnight in a zone behind UTC is still the day before (formatDay, src/lib/format.ts).
-  const weekday = new Date(Date.UTC(year, month - 1, date, 12)).getUTCDay();
   // The time a reason names, "alifika saa 09:10 asubuhi": one of the rule's two taps, already a minute on the shop's
   // clock, with its part of the day, so nobody reads 13:20 as Swahili time (Jack, SYNC-11). Only came_late and
   // left_early name one, and the book always keeps that tap for them; any other reason's sentence has no {time}.
@@ -77,9 +69,10 @@ function DayLine({ day }: { day: DayToDecide }) {
       : attendance("timeOfDay", { time: tap, part: clockPart(tap) });
   return t("dayToDecide", {
     name: day.display_name,
-    weekday: t(`weekdays.${String(weekday) as Weekday}`),
-    // The day and the month, "12/11": the year is the month's, said above the list.
-    date: `${String(date).padStart(2, "0")}/${String(month).padStart(2, "0")}`,
+    // Its weekday and "12/11", from the day's own parts, so no phone's zone moves it (src/lib/format.ts): the year is
+    // the month's, said above the list.
+    weekday: t(`weekdays.${String(weekdayOf(day.date)) as Weekday}`),
+    date: formatDayMonth(day.date),
     why: t(`reason.${day.reason}`, { time }),
   });
 }

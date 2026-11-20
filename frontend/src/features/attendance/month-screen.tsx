@@ -28,8 +28,7 @@ import { Button } from "@/components/design/button";
 import { Card } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
 import { useWhoIsHere } from "@/features/people/who-is-here";
-import { dayBefore } from "@/features/settings/closures";
-import { formatDay } from "@/lib/format";
+import { dayBefore, formatDay } from "@/lib/format";
 import { shopToday } from "@/offline/rules";
 
 import { DaysToDecide } from "./to-decide";

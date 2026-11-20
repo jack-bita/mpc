@@ -1,14 +1,18 @@
 // format.time.test.ts — a time of day and a date as the shop reads them: "07:55", 24 hours, in the shop's own
 // zone, like a phone's clock and the shop's rules ("late after 08:00"), never Swahili time (Jack, SYNC-11); and
-// "13/11/2026", day, month, year, the order Tanzania writes a date in.
+// "13/11/2026", day, month, year, the order Tanzania writes a date in. And a day with no time: the day before it, its
+// day and month alone, "12/11", and its weekday, none moved by a zone (ATT-9, ATT-5).
 import { describe, expect, it } from "vitest";
 
 import {
   clockPart,
+  dayBefore,
   dayPart,
   formatDate,
   formatDay,
+  formatDayMonth,
   formatTime,
+  weekdayOf,
 } from "./format";
 
 const DAR = "Africa/Dar_es_Salaam";
@@ -70,6 +74,34 @@ describe("a day with no time (SHOP-5)", () => {
     const lima = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Lima" });
     expect(lima.format(Date.parse("2026-12-01"))).toBe("30/11/2026");
     expect(formatDay("2026-12-01")).toBe("01/12/2026");
+  });
+});
+
+describe("the day before a day (ATT-9)", () => {
+  it.each([
+    ["2026-11-15", "2026-11-14"],
+    ["2026-12-01", "2026-11-30"],
+    ["2027-01-01", "2026-12-31"],
+    ["2028-03-01", "2028-02-29"],
+    ["2027-03-01", "2027-02-28"],
+  ])("the day before %s is %s", (day, before) => {
+    expect(dayBefore(day)).toBe(before);
+  });
+});
+
+describe("a day's day and month, and its weekday (ATT-5)", () => {
+  it("writes the day and the month alone, as a month page's line does", () => {
+    // "Juma · Alhamisi 12/11 · hakuna Toka": the year is the month's, said above the list.
+    expect(formatDayMonth("2026-11-12")).toBe("12/11");
+    expect(formatDayMonth("2027-01-05")).toBe("05/01");
+  });
+
+  it("names its weekday as JavaScript numbers them, Sunday 0, whatever the phone's zone", () => {
+    // Thursday 12 November 2026; Sunday 1 November; Saturday 31 December 2022. A day has no zone: in Lima, midnight
+    // UTC of the 12th is still the 11th, so the weekday is never read through the phone's own clock.
+    expect(weekdayOf("2026-11-12")).toBe(4);
+    expect(weekdayOf("2026-11-01")).toBe(0);
+    expect(weekdayOf("2022-12-31")).toBe(6);
   });
 });
 

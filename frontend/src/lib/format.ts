@@ -1,6 +1,8 @@
 // format.ts — money, stock, times of day, dates and phones as people read them: "TSh 41,000", "mifuko 26 + kilo
 // 35.5", "07:55", "13/11/2026" and "0712 345 678" (03 §7.4). A rule's own values too (SHOP-5): an amount written
-// exactly as saved, a day with no time, "2026-12-01", and the part of the day of a clock time, "07:35".
+// exactly as saved, a day with no time, "2026-12-01", and the part of the day of a clock time, "07:35". And a day's
+// own sums, kept beside how a day is written: the day before it (ATT-9), its day and month alone, "12/11", and its
+// weekday (ATT-5), each read from the day's own parts, so no zone moves it.
 //
 // Every screen and slip writes numbers through here, so 41000 never shows as "41000.00" on one screen
 // and "TSh 41,000" on another. Writing never rounds: a value that would need rounding is refused, so
@@ -169,6 +171,38 @@ export function formatDate(at: string, timezone: string): string {
 export function formatDay(day: string): string {
   const [year, month, date] = day.split("-");
   return `${date}/${month}/${year}`;
+}
+
+/**
+ * A day's day and month alone, "12/11" of "2026-11-12", as a line of the month page writes it, its year said above
+ * the list (ATT-5). From its own parts, as formatDay.
+ */
+export function formatDayMonth(day: string): string {
+  const [, month, date] = day.split("-");
+  return `${date}/${month}`;
+}
+
+/**
+ * The day before `day`, both as a date box writes them: "2027-01-01" → "2026-12-31". Days only, read and written in
+ * UTC, so no zone, nor a clock change, moves it (ATT-9: a closure's last day moved back to yesterday).
+ */
+export function dayBefore(day: string): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The weekday of a day, as JavaScript numbers them, Sunday 0 to Saturday 6, which the word books name (ATT-5). Read at
+ * noon UTC, never through the phone's own zone: midnight UTC of the 12th is still the 11th in a zone behind UTC.
+ */
+export function weekdayOf(day: string): number {
+  const [year, month, date] = day.split("-").map(Number) as [
+    number,
+    number,
+    number,
+  ];
+  return new Date(Date.UTC(year, month - 1, date, 12)).getUTCDay();
 }
 
 /** The part of the day a time falls in, by the shop's clock: what a Swahili screen names after the time. */
