@@ -483,10 +483,11 @@ def _the_shop_and_its_people(shop_id: uuid.UUID) -> tuple[Shop, dict[str, StaffM
         sides = {
             side.code: switch_side(side, version=side.version, is_live=True, by=None) for side in Side.objects.all()
         }
-        # The demo's rules, from three weeks back, as the system, which alone may start a rule on a day gone by, and
-        # only on the demo (DATA-8): the book counts a day only once attendance is on (ATT-10), and fines a late one
-        # by that day's rules. A visitor's new value starts tomorrow at the earliest (demo.rules_from_tomorrow). Each
-        # row gets its line in this block, as a laptop needs every rule's rows (SYNC-2).
+        # The demo's rules, from three weeks back, as the system, saying it is the demo's seed, which alone may start
+        # a rule on a day gone by, and only on the demo (as_the_demo_seed, DATA-8): the book counts a day only once
+        # attendance is on (ATT-10), and fines a late one by that day's rules. A visitor's new value starts tomorrow
+        # at the earliest (demo.rules_from_tomorrow). Each row gets its line in this block, as a laptop needs every
+        # rule's rows (SYNC-2).
         # The shop's day, asked once, here, as the shop's zone is known from now on: every part of the demo is made
         # from this one answer. A reset that runs across midnight in Arusha and asked again later would make the
         # taps from another day than the rules and the people, and the first day's taps would be flagged, days to
@@ -494,7 +495,7 @@ def _the_shop_and_its_people(shop_id: uuid.UUID) -> tuple[Shop, dict[str, StaffM
         today = shop_today(shop)
         first_day = today - timedelta(days=HISTORY_DAYS)
         for rule, value in DEMO_RULES:
-            set_setting(shop, key=rule.key, value=value, effective_from=first_day, by=None)
+            set_setting(shop, key=rule.key, value=value, effective_from=first_day, by=None, as_the_demo_seed=True)
         # The coming public holidays, closed, as the system, from the shop's own today (ATT-8): Mipangilio ya duka then
         # lists them (ATT-9), and a visitor can try Ondoa and a new last day on them, from tomorrow on
         # (demo.closures_from_tomorrow). The laptops never get closures, so they add no line to this block.

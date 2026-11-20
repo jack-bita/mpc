@@ -234,13 +234,15 @@ def set_setting(
     note: str = "",
     setting_id: uuid.UUID | None = None,
     by: Actor | None,
+    as_the_demo_seed: bool = False,
 ) -> Setting:
     """Give the rule `key` a new value from the day `effective_from` on: one new Setting row, for the whole shop, or for
     `side` alone on a side's rule. `value` is text, as a screen sends it ("2000"); it is stored in its kind's one form
     ("2000.00"). `setting_id`: the id the client made for the row (ADR-0007), if it made one. `by`: who sets it; None
-    for the system or the superuser. Refuses, all together, with their codes: a day before the shop's today (but from
-    the system on the demo, whose seed starts its rules three weeks back, DATA-8), a side's rule with no side, and
-    whatever Setting.clean() refuses (an unknown key, a wrong value, a side on a shop's rule).
+    for the system or the superuser. `as_the_demo_seed`: True from the demo's seed alone (DATA-8). Refuses, all
+    together, with their codes: a day before the shop's today (but from the demo's seed, as the system, on the demo,
+    which starts the demo's rules three weeks back), a side's rule with no side, and whatever Setting.clean() refuses
+    (an unknown key, a wrong value, a side on a shop's rule).
     On the demo, a person's value from today, and a person's note (demo.rules_from_tomorrow, demo.no_note). Then, once
     all of those pass, a time of the attendance day that breaks the day's order (setting.out_of_order, ATT-2)."""
     _check_shop(shop, by)
@@ -267,10 +269,13 @@ def set_setting(
     # clock-ins, fines and draft pay run already worked out from it. Today is still open: a mistake made this morning
     # is fixed with one more row for today, which wins (T2). The shop's today, not the server's, which runs in UTC.
     today = shop_today(shop)
-    # But on the demo the system may (DATA-8): its seed makes a new shop each morning, where no day has been worked out
-    # yet, and starts its rules three weeks back, so the month page has days to show. The same sign as the demo's locks
-    # below; a person is still refused, there as everywhere, and the real server never has the sign.
-    seeding_the_demo = settings.DEMO_SEED and by is None
+    # But the demo's seed may (DATA-8): it makes a new shop each morning, where no day has been worked out yet, and
+    # starts its rules three weeks back, so the month page has days to show. Asked by name, never guessed from `by`
+    # None, which is also the superuser and any system job to come, as the night's book (ATT-7), which must never
+    # change a past day (DATA-8's review). And only as the system, with the same sign as the demo's locks below: a
+    # person is still refused, there as everywhere, and on the real server, which never has the sign, the word means
+    # nothing.
+    seeding_the_demo = as_the_demo_seed and settings.DEMO_SEED and by is None
     if effective_from < today and not seeding_the_demo:
         errors["effective_from"] = [ValidationError("A new value can't start before today.", code="setting.date_past")]
     # On the demo every visitor shares the manager's login (OPS-3), who holds settings.manage so a visitor can try the
