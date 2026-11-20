@@ -153,10 +153,13 @@ function TheWorkersMonth({
   });
   // The book's days by date, to find each day's in one look.
   const days = new Map(answer.days.map((day) => [day.date, day]));
-  // The day open: one with a mark only, a day the book answers or today, as only those can be tapped. A day the
-  // address names that has none, another month's or a day to come, opens nothing.
+  // The day open: one of this month with a mark only, a day the book answers or today, as only those can be tapped.
+  // A day the address names that has none, a day to come, or another month's, as ?month=2026-10&day=2026-11-20 would
+  // name, opens nothing: never a November day under October's calendar (ATT-12's review).
   const open =
-    chosen !== null && markOf(chosen, days.get(chosen), answer.today) !== null
+    chosen !== null &&
+    chosen.startsWith(`${answer.month}-`) &&
+    markOf(chosen, days.get(chosen), answer) !== null
       ? chosen
       : null;
   return (
@@ -261,7 +264,7 @@ function Calendar({
                   <td key={day} className="p-0.5 align-top">
                     <DayOfTheMonth
                       day={day}
-                      mark={markOf(day, days.get(day), answer.today)}
+                      mark={markOf(day, days.get(day), answer)}
                       open={day === open}
                       onChoose={onChoose}
                     />
@@ -276,12 +279,20 @@ function Calendar({
   );
 }
 
-/** The mark a day of the calendar shows: today's •, as the book keeps no day until it is over; then the book's own,
- * – for a day the shop was shut; nothing for a day it doesn't answer. */
-function markOf(day: string, kept: WorkerDay | undefined, today: string): Mark {
-  if (day === today) return "today";
-  if (kept === undefined) return null;
-  return kept.status;
+/** The mark a day of the calendar shows: the book's own, – for a day the shop was shut; today's •, as the book keeps
+ * no day until it is over, but only on one of the worker's days, from their first to their last; nothing for any other
+ * day. Neema, who left on the 15th, has no • on the 20th, and nothing to open there: her calendar stays empty after her
+ * last day, as the card says (ATT-12's review). */
+function markOf(
+  day: string,
+  kept: WorkerDay | undefined,
+  answer: WorkerAttendance,
+): Mark {
+  if (kept !== undefined) return kept.status;
+  const worksThatDay =
+    answer.started_on <= day &&
+    (answer.left_on === null || day <= answer.left_on);
+  return day === answer.today && worksThatDay ? "today" : null;
 }
 
 /** One day: its number, small, and its mark under it, big, as on Jack's picture. A day with a mark is a button, as

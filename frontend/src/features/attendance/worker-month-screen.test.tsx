@@ -259,6 +259,34 @@ describe("a worker's month", () => {
     expect(weeks[2]?.[2]).toBe("11Hhakuja");
   });
 
+  it("gives no • to today after the worker's last day, nor before their first", async () => {
+    // Juma left on Sunday the 15th: the 20th is none of his days, so it is empty, with nothing to open. And a worker
+    // whose first day is the 23rd has none on the 20th either.
+    for (const [started, left] of [
+      ["2026-09-01", "2026-11-15"],
+      ["2026-11-23", null],
+    ] as const) {
+      answer("GET", JUMAS_MONTH, {
+        status: 200,
+        body: {
+          ...JUMAS_NOVEMBER,
+          started_on: started,
+          left_on: left,
+          days: JUMAS_NOVEMBER.days.filter((each) => each.date <= "2026-11-15"),
+        },
+      });
+      const { unmount } = render(
+        <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay={null} />,
+      );
+      const weeks = await calendar();
+      expect(weeks[3]?.[4]).toBe("20");
+      expect(
+        screen.queryByRole("button", { name: /^Ijumaa 20\/11/ }),
+      ).toBeNull();
+      unmount();
+    }
+  });
+
   it("says when the address names no worker, and asks nothing", async () => {
     render(<WorkerMonthScreen staff={null} asked="2026-11" askedDay={null} />);
 

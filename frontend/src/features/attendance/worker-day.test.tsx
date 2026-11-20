@@ -441,6 +441,26 @@ describe("a day under the calendar", () => {
     ).toBeTruthy();
   });
 
+  it("opens nothing for another month's day the address names", async () => {
+    // ?month=2026-10&day=2026-11-20: today, but not October's. October's calendar opens no November day under it.
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [],
+        [tap({ date: "2026-11-20", kind: "in", time: "07:25" })],
+        {
+          month: "2026-10",
+        },
+      ),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-10" askedDay="2026-11-20" />,
+    );
+
+    await screen.findByRole("table");
+    expect(screen.queryByRole("region")).toBeNull();
+  });
+
   it("opens nothing for a day the address names with no mark", async () => {
     // A day to come: the book answers nothing for it, so there is nothing to open.
     answer("GET", JUMAS_MONTH, { status: 200, body: november([], []) });
