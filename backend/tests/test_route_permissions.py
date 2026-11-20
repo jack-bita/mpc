@@ -56,7 +56,7 @@ from apps.shops.api.views import ClosureViewSet, SettingViewSet, SideViewSet
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side, set_setting
-from apps.staffpay.api.views import AttendanceMonthViewSet, PayRateViewSet
+from apps.staffpay.api.views import AttendanceMonthViewSet, AttendanceWorkerViewSet, PayRateViewSet
 from apps.staffpay.models import PayRate
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
@@ -69,6 +69,7 @@ ATTACHMENTS = "/api/v1/control/attachments/"
 WORKERS = "/api/v1/people/staff/"
 PAY_RATES = "/api/v1/staffpay/pay-rates/"
 ATTENDANCE_MONTH = "/api/v1/staffpay/attendance-month/"
+ATTENDANCE_WORKER = "/api/v1/staffpay/attendance-worker/{}/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -570,6 +571,11 @@ def test_suspended_member_gets_nothing_from_routes(
         assert client.post(f"{WORKERS}{juma.pk}/{change}/", sent, format="json").status_code == 404, change
     fix = {"version": 1, "reason": "Hapana", "job_title": "Fundi"}
     assert client.patch(f"{WORKERS}{juma.pk}/", fix, format="json").status_code == 404
+    # Nor the month's attendance (ATT-5), nor a worker's month (ATT-12), Juma's or their own: refused, as the key is
+    # asked first, before any month is worked out.
+    assert client.get(ATTENDANCE_MONTH, {"month": "2026-10"}).status_code == 403
+    for whose in (juma, staff_a):
+        assert client.get(ATTENDANCE_WORKER.format(whose.pk), {"month": "2026-10"}).status_code == 403
     with shop_context(shop_a):
         assert Side.objects.get(pk=sides["F"].pk).is_live is False
         assert Side.objects.get(pk=sides["F"].pk).band == "blue"
@@ -1139,3 +1145,37 @@ def test_a_key_on_one_side_opens_no_month(shop_a: Shop, sides: dict[str, Side], 
 def test_attendance_month_route_names_its_permission() -> None:
     # The month page's one action, a read, behind the key to fix attendance (ATT-5). Written out in full, as above.
     assert AttendanceMonthViewSet.action_permissions == {"list": Permission.ATTENDANCE_MANAGE}
+
+
+@pytest.mark.django_db
+def test_a_workers_month_needs_attendance_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # A worker's month (ATT-12) is behind the month page's key: Asha, a seller on Dawa, may not open anyone's, her own
+    # included, even with the address typed in; a Manager on every side opens hers.
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    address = ATTENDANCE_WORKER.format(staff_a.pk)
+    refused = client_for(staff_a).get(address, {"month": "2026-10"})
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    assert client_for(staff_a2).get(address, {"month": "2026-10"}).status_code == 200
+
+
+@pytest.mark.django_db
+def test_a_key_on_one_side_opens_no_workers_month(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # Hamisi may fix attendance on Dawa only (X1): attendance is the whole shop's, so a key on one side opens no
+    # worker's month, as it opens no month (ATT-5).
+    with shop_context(shop_a):
+        grant_permission(staff_a, Permission.ATTENDANCE_MANAGE, side=sides["D"], by=None)
+    refused = client_for(staff_a).get(ATTENDANCE_WORKER.format(staff_a2.pk), {"month": "2026-10"})
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+
+
+def test_attendance_worker_route_names_its_permission() -> None:
+    # A worker's month's one action, a read, behind the key to fix attendance, as the month's (ATT-12). Written out in
+    # full, as above.
+    assert AttendanceWorkerViewSet.action_permissions == {"retrieve": Permission.ATTENDANCE_MANAGE}

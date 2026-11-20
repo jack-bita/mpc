@@ -666,6 +666,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staffpay/attendance-worker/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["staffpay_attendance_worker_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staffpay/pay-rates/": {
         parameters: {
             query?: never;
@@ -724,6 +740,21 @@ export interface components {
             workers: components["schemas"]["WorkerMonth"][];
             to_decide: components["schemas"]["DayToDecide"][];
         };
+        AttendanceTap: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            date: string;
+            kind: components["schemas"]["ClockKindEnum"];
+            /** Format: time */
+            time: string | null;
+            /** Format: time */
+            laptop_time: string;
+            laptop: string;
+            photo: components["schemas"]["TapPhoto"] | null;
+            no_photo: (components["schemas"]["NoPhotoEnum"] | components["schemas"]["NullEnum"]) | null;
+            doubt: (components["schemas"]["TapDoubtEnum"] | components["schemas"]["NullEnum"]) | null;
+        };
         BootstrapAnswer: {
             /**
              * Format: uuid
@@ -766,6 +797,12 @@ export interface components {
          * @enum {string}
          */
         ChangeOpEnum: "upsert" | "archive";
+        /**
+         * @description * `in` - In
+         *     * `out` - Out
+         * @enum {string}
+         */
+        ClockKindEnum: "in" | "out";
         Closure: {
             /** Format: uuid */
             readonly id: string;
@@ -802,6 +839,16 @@ export interface components {
          * @enum {string}
          */
         ClosureStatusEnum: "active" | "cancelled";
+        /**
+         * @description * `on_time` - On time
+         *     * `late` - Late
+         *     * `half` - Half day
+         *     * `absent` - Absent
+         *     * `off` - Off
+         *     * `needs_review` - Needs review
+         * @enum {string}
+         */
+        DayStatusEnum: "on_time" | "late" | "half" | "absent" | "off" | "needs_review";
         DayToDecide: {
             /** Format: uuid */
             staff: string;
@@ -1032,6 +1079,15 @@ export interface components {
             readonly language: components["schemas"]["LanguageEnum"];
             readonly font: components["schemas"]["FontEnum"];
         };
+        /**
+         * @description * `no_camera` - No camera
+         *     * `blocked` - Camera blocked
+         *     * `failed` - Camera failed
+         *     * `old_app` - App before photos
+         *     * `demo` - Demo
+         * @enum {string}
+         */
+        NoPhotoEnum: "no_camera" | "blocked" | "failed" | "old_app" | "demo";
         /** @enum {unknown} */
         NullEnum: null;
         OutageEnvelopeRequest: {
@@ -1228,6 +1284,13 @@ export interface components {
          * @enum {string}
          */
         PermissionEnum: "sale.write" | "sale.take_payment" | "sale.hand_over" | "sale.bargain" | "sale.below_floor_approve" | "sale.jumla_switch" | "sale.cancel" | "sale.refund" | "credit.give" | "credit.approve" | "debt.view" | "debt.adjust" | "price.change" | "cost.view" | "product.manage" | "contact.manage" | "stock.receive" | "stock.weigh" | "stock.loss" | "stock.count" | "stock.count_approve" | "stock.transfer" | "money.expense" | "money.advance" | "money.withdraw" | "drawer.count" | "drawer.confirm" | "drawer.approve" | "staff.manage" | "attendance.manage" | "pay.run" | "pay.approve" | "settings.manage" | "device.manage" | "flag.review" | "report.view" | "job.manage" | "production.run";
+        /**
+         * @description * `kept` - Kept
+         *     * `waiting` - Waiting
+         *     * `removed` - Removed
+         * @enum {string}
+         */
+        PhotoStateEnum: "kept" | "waiting" | "removed";
         PinLoginRequest: {
             /** Format: uuid */
             staff: string;
@@ -1611,6 +1674,17 @@ export interface components {
          * @enum {string}
          */
         StaffStatusEnum: "active" | "suspended" | "left";
+        /**
+         * @description * `not_working` - Suspended or gone
+         *     * `clock_disagrees` - A later tap disagrees
+         * @enum {string}
+         */
+        TapDoubtEnum: "not_working" | "clock_disagrees";
+        TapPhoto: {
+            /** Format: uuid */
+            id: string;
+            state: components["schemas"]["PhotoStateEnum"];
+        };
         TemporaryPasswordRequest: {
             password: string;
             reason: string;
@@ -1624,6 +1698,31 @@ export interface components {
             must_change_password: boolean;
             idle_minutes: number;
             permissions: components["schemas"]["MePermissions"];
+        };
+        WorkerAttendanceAnswer: {
+            /** @example 2026-11 */
+            month: string;
+            /** Format: date */
+            today: string;
+            worker: components["schemas"]["WorkerMonth"];
+            /** Format: date */
+            started_on: string;
+            /** Format: date */
+            left_on: string | null;
+            days: components["schemas"]["WorkerDay"][];
+            taps: components["schemas"]["AttendanceTap"][];
+        };
+        WorkerDay: {
+            /** Format: date */
+            date: string;
+            status: components["schemas"]["DayStatusEnum"];
+            reason: (components["schemas"]["ReasonEnum"] | components["schemas"]["NullEnum"]) | null;
+            /** Format: decimal */
+            fine: string;
+            /** Format: time */
+            first_in: string | null;
+            /** Format: time */
+            first_out: string | null;
         };
         WorkerMonth: {
             /** Format: uuid */
@@ -3052,6 +3151,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttendanceMonthAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_attendance_worker_retrieve: {
+        parameters: {
+            query: {
+                /** @description The month, as 2026-11. */
+                month: string;
+            };
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerAttendanceAnswer"];
                 };
             };
             default: {

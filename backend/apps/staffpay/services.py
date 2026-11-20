@@ -1,5 +1,5 @@
 """apps/staffpay/services.py — the writes of attendance and pay: the book of days (ATT-10; 02 §12), the month the month
-page shows, worked out through it (ATT-5), and each worker's daily pay rate (WAGE-1).
+page shows, worked out through it (ATT-5), and a worker's own month (ATT-12), and each worker's daily pay rate (WAGE-1).
 
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
@@ -21,6 +21,11 @@ book's days, a line per worker the shop pays by the day with how many days were 
 decide, each with why. So that GET writes, as the book keeps the days it works out; asked twice, the month writes
 nothing the second time.
 
+A worker's name on that page opens their own month (ATT-12), through worker_attendance, which its route calls (GET
+attendance-worker/{id}/): the book's days of that job, worked out the same way, and every tap of the month, today's too,
+with its laptop, its photo or why none, and whether it is in doubt, the question the book asks too (_doubt_questions),
+so the calendar's ! and the tap's own line never disagree.
+
 A pay rate is typed by a person, the owner (set_pay_rate): from 10 Nov, Juma earns 10,000 a day. Whoever sets it sets a
 worker's pay, so who may is the PIN's rule, asked by the people app (02 §5). No line in the change log either: a
 worker's pay never sits on a shared device (03 §6.1).
@@ -37,10 +42,11 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import Exists, OuterRef, Q
+from django.db.models.functions import Coalesce
 
-from apps.control.models import Flag, FlagKind
+from apps.control.models import ATTACHMENT_KINDS, Attachment, AttachmentKind, Flag, FlagKind
 from apps.core.acting import acting_as
 from apps.core.links import table_of
 from apps.core.permissions import Permission
@@ -57,6 +63,7 @@ from apps.staffpay.models import (
     AttendanceEvent,
     ClockKind,
     DayStatus,
+    NoPhoto,
     PayRate,
     ReviewReason,
     TimeCheck,
@@ -259,11 +266,65 @@ def _taps(
     shop: Shop, first: dt.date, last: dt.date, zone: ZoneInfo
 ) -> tuple[dict[_JobDay, list[Tap]], dict[_JobDay, ReviewReason]]:
     # Each job's taps on each date from `first` to `last`, as the rule reads them, and the days with a tap in doubt,
-    # which a person must decide (ATT-11), each with why (ATT-5). A day's edges are the shop's own midnights, not
-    # UTC's: Asha's tap at 21:30 UTC on Monday is Tuesday's, at 00:30 in Arusha. So the span is read from the midnight
-    # starting its first day to the one ending its last, each a moment with its zone.
+    # which a person must decide (ATT-11), each with why (ATT-5). One query, whatever the number of taps.
+    asks_not_working, asks_disputed = _doubt_questions(shop)
+    lines = (
+        # A voided tap counts for nothing (T2): a clock-in tapped twice by mistake, voided by a manager (ATT-6). Nor
+        # does it send its day to review: Juma's flagged tap, once voided, leaves his day absent.
+        AttendanceEvent.objects.filter(shop=shop, voided_at__isnull=True)
+        .filter(_falls_between(first, last, zone))
+        .annotate(maker_not_working=asks_not_working, disagreed_with=asks_disputed)
+        .values_list(
+            "staff_id", "kind", "trusted_time", "client_time", "time_check", "maker_not_working", "disagreed_with"
+        )
+    )
+    taps: dict[_JobDay, list[Tap]] = defaultdict(list)
+    in_doubt: dict[_JobDay, ReviewReason] = {}
+    for staff_id, kind, trusted_time, client_time, time_check, not_working, disputed in lines:
+        day, minute = _where_it_falls(trusted_time, client_time, zone)
+        taps[(staff_id, day)].append(Tap(ClockKind(kind), minute))
+        # A day with both doubts says the first, in ReviewReason's order (ATT-5): whether a suspended worker is paid at
+        # all comes before his time. So a suspension writes over a disagreement, and a disagreement never over one.
+        doubt = _doubt_of(not_working, disputed, time_check)
+        if doubt == ReviewReason.NOT_WORKING:
+            in_doubt[(staff_id, day)] = doubt
+        elif doubt is not None:
+            in_doubt.setdefault((staff_id, day), doubt)
+    return taps, in_doubt
+
+
+def _falls_between(first: dt.date, last: dt.date, zone: ZoneInfo) -> Q:
+    # The taps that fall from `first` to `last`, both counted, on the shop's calendar. A day's edges are the shop's own
+    # midnights, not UTC's: Asha's tap at 21:30 UTC on Monday is Tuesday's, at 00:30 in Arusha. So the span is read
+    # from the midnight starting its first day to the one ending its last, each a moment with its zone.
     start = dt.datetime.combine(first, dt.time.min, tzinfo=zone)
     end = dt.datetime.combine(last + dt.timedelta(days=1), dt.time.min, tzinfo=zone)
+    # By the time the server trusts, never the laptop's, whose clock anyone can move (ATT-1): through the index on
+    # (shop, trusted_time). One with no trusted time (`unverified`) by the laptop's time instead, the only one it has:
+    # its day needs review anyway, but it must land on a day for a manager to see it.
+    return Q(trusted_time__gte=start, trusted_time__lt=end) | Q(
+        trusted_time__isnull=True, client_time__gte=start, client_time__lt=end
+    )
+
+
+def _where_it_falls(
+    trusted_time: dt.datetime | None, client_time: dt.datetime, zone: ZoneInfo
+) -> tuple[dt.date, dt.time | None]:
+    # A tap's date on the shop's calendar, by its trusted time, or by the laptop's for one with none; and its minute on
+    # the shop's clock, its seconds dropped, as the counter showed it (shop_minute): 07:35:40 is 07:35, on time. No
+    # minute for a tap with no trusted time, which sends its day to review (ATT-4).
+    day = (trusted_time if trusted_time is not None else client_time).astimezone(zone).date()
+    minute = shop_minute(trusted_time, zone) if trusted_time is not None else None
+    return day, minute
+
+
+def _doubt_questions(shop: Shop) -> tuple[Exists, Exists]:
+    # The two questions that put a tap in doubt (ATT-11), asked inside the taps' own read, as annotations: the book's
+    # (_taps) and a worker's month's (worker_attendance) ask them alike, so the calendar's ! and the tap's own line,
+    # "alikuwa amesimamishwa", never disagree (ATT-12). Each answer is turned into a reason by _doubt_of. Two, in this
+    # order: whether the maker wasn't working, and whether a later tap disagrees; named by each read as it annotates
+    # them, as the type checker reads an annotation's name only where it is written.
+    #
     # A tap whose maker wasn't working when they made it: Baba suspended Juma at 11:00, and the laptop, offline, let his
     # Ingia through the next morning. The push flags it on the tap's line in the answer log (suspended_staff_activity,
     # X2), not on the tap, whose own time check can be `server` or `device_ok`, so the tap alone looks like any other.
@@ -288,40 +349,19 @@ def _taps(
     # Voided or not: a void says a tap counts for nothing, not that the laptop's clock was right. Through the small
     # index of the taps that keep a record (staffpay_event_by_disagreement), each tap's question one lookup.
     disagreed_with = Exists(AttendanceEvent.objects.filter(shop=shop, disagrees_with=OuterRef("pk")))
-    lines = (
-        # A voided tap counts for nothing (T2): a clock-in tapped twice by mistake, voided by a manager (ATT-6). Nor
-        # does it send its day to review: Juma's flagged tap, once voided, leaves his day absent.
-        AttendanceEvent.objects.filter(shop=shop, voided_at__isnull=True)
-        .filter(
-            # By the time the server trusts, never the laptop's, whose clock anyone can move (ATT-1): through the
-            # index on (shop, trusted_time). One with no trusted time (`unverified`) by the laptop's time instead,
-            # the only one it has: its day needs review anyway, but it must land on a day for a manager to see it.
-            Q(trusted_time__gte=start, trusted_time__lt=end)
-            | Q(trusted_time__isnull=True, client_time__gte=start, client_time__lt=end)
-        )
-        .annotate(maker_not_working=maker_not_working, disagreed_with=disagreed_with)
-        .values_list(
-            "staff_id", "kind", "trusted_time", "client_time", "time_check", "maker_not_working", "disagreed_with"
-        )
-    )
-    taps: dict[_JobDay, list[Tap]] = defaultdict(list)
-    in_doubt: dict[_JobDay, ReviewReason] = {}
-    for staff_id, kind, trusted_time, client_time, time_check, not_working, disputed in lines:
-        # Its date on the shop's calendar, by its trusted time, or by the laptop's for one with none.
-        day = (trusted_time if trusted_time is not None else client_time).astimezone(zone).date()
-        # Its minute on the shop's clock, its seconds dropped, as the counter showed it (shop_minute): 07:35:40 is
-        # 07:35, on time. None for a tap with no trusted time, which sends the day to review (ATT-4).
-        minute = shop_minute(trusted_time, zone) if trusted_time is not None else None
-        taps[(staff_id, day)].append(Tap(ClockKind(kind), minute))
-        # In doubt: made while its worker wasn't working, or timed by a laptop clock a later tap disagrees with. Only
-        # by the laptop's clock (`device_ok`): a tap sent at once has the server's time, which no laptop's clock can
-        # make wrong, and one with no trusted time sends its day to review already (ATT-4). A day with both says the
-        # first, in ReviewReason's order (ATT-5): whether a suspended worker is paid at all comes before his time.
-        if not_working:
-            in_doubt[(staff_id, day)] = ReviewReason.NOT_WORKING
-        elif disputed and time_check == TimeCheck.DEVICE_OK:
-            in_doubt.setdefault((staff_id, day), ReviewReason.CLOCK_DISAGREES)
-    return taps, in_doubt
+    return maker_not_working, disagreed_with
+
+
+def _doubt_of(not_working: bool, disputed: bool, time_check: str) -> ReviewReason | None:
+    # Why a tap is in doubt, from the two questions' answers (_doubt_questions), or None. Made while its worker wasn't
+    # working, first; or timed by a laptop clock a later tap disagrees with, only by the laptop's clock (`device_ok`): a
+    # tap sent at once has the server's time, which no laptop's clock can make wrong, and one with no trusted time sends
+    # its day to review already (ATT-4).
+    if not_working:
+        return ReviewReason.NOT_WORKING
+    if disputed and time_check == TimeCheck.DEVICE_OK:
+        return ReviewReason.CLOCK_DISAGREES
+    return None
 
 
 def _keep(answered: list[AttendanceDay], kept: dict[tuple[uuid.UUID, dt.date], AttendanceDay]) -> list[AttendanceDay]:
@@ -386,11 +426,7 @@ def attendance_month(shop: Shop, month: dt.date) -> AttendanceMonth:
     working day of the month the book answers, with their counts, by name; and those workers' days to decide, oldest
     first, each with why. Works the month out through the book (work_out_days), so it writes as the book does, and
     asked twice writes nothing the second time. The shop must be open, as for the book."""
-    first = month.replace(day=1)
-    # The last day, as the calendar counts the month's days (30, 31, 28 or 29). Not "the 1st of the month after, less a
-    # day": in the calendar's last month, December 9999, that sum runs past the last day Python knows, and a month typed
-    # into the address became a server error (ATT-5's review).
-    last = first.replace(day=calendar.monthrange(first.year, first.month)[1])
+    first, last = _month_span(month)
     # The book's answer, never the table's rows: a day kept to decide that the book no longer answers, its tap voided
     # outside a job's days, stays in its row as it was (rule 7), and is no longer anyone's to decide (ATT-11's review).
     # Only days that are over: this month's stop at yesterday. Each comes with its worker, in the same read.
@@ -410,18 +446,7 @@ def attendance_month(shop: Shop, month: dt.date) -> AttendanceMonth:
         if day.staff_id in listed:
             counts[day.staff_id][day.status] += 1
             names[day.staff_id] = day.staff.display_name
-    workers = [
-        WorkerMonth(
-            staff_id=job,
-            display_name=names[job],
-            on_time=kinds[DayStatus.ON_TIME],
-            late=kinds[DayStatus.LATE],
-            half=kinds[DayStatus.HALF],
-            absent=kinds[DayStatus.ABSENT],
-            needs_review=kinds[DayStatus.NEEDS_REVIEW],
-        )
-        for job, kinds in counts.items()
-    ]
+    workers = [_line(job, names[job], kinds) for job, kinds in counts.items()]
     # By name, as the owner looks for Juma by his name; "asha" beside "Asha", whatever its first letter; then the job's
     # id, so two jobs of one name always come in the same order.
     workers.sort(key=lambda line: (line.display_name.casefold(), line.staff_id))
@@ -439,6 +464,207 @@ def attendance_month(shop: Shop, month: dt.date) -> AttendanceMonth:
     return AttendanceMonth(
         month=first, today=shop_today(shop), working_day_over=working_day_over, workers=workers, to_decide=to_decide
     )
+
+
+def _month_span(month: dt.date) -> tuple[dt.date, dt.date]:
+    # The first and the last day of the month of `month`, any day of it. The last as the calendar counts the month's
+    # days (30, 31, 28 or 29). Not "the 1st of the month after, less a day": in the calendar's last month, December
+    # 9999, that sum runs past the last day Python knows, and a month typed into the address became a server error
+    # (ATT-5's review).
+    first = month.replace(day=1)
+    return first, first.replace(day=calendar.monthrange(first.year, first.month)[1])
+
+
+def _line(staff_id: uuid.UUID, display_name: str, kinds: Counter[str]) -> WorkerMonth:
+    # A worker's line of counts, from how many of their days were each kind. The month page's lines and a worker's own
+    # month (ATT-12) count alike, so the calendar's ✓ 11 is the line's ✓ 11.
+    return WorkerMonth(
+        staff_id=staff_id,
+        display_name=display_name,
+        on_time=kinds[DayStatus.ON_TIME],
+        late=kinds[DayStatus.LATE],
+        half=kinds[DayStatus.HALF],
+        absent=kinds[DayStatus.ABSENT],
+        needs_review=kinds[DayStatus.NEEDS_REVIEW],
+    )
+
+
+class PhotoState(models.TextChoices):
+    # What became of a clock-in's photo, as the day under a worker's calendar says it (ATT-12): its file came, and the
+    # page may show it; the laptop hasn't sent it yet (CTRL-6); or it was taken away for good, 90 days after its pay
+    # run (ATT-7). Not a column: worked out from the photo's row (Attachment, apps/control/models.py) on each read.
+    KEPT = "kept", "Kept"
+    WAITING = "waiting", "Waiting"
+    REMOVED = "removed", "Removed"
+
+
+@dataclass(frozen=True)
+class TapPhoto:
+    # A tap's photo: its id, which the photo route opens (`attachments/{id}/file/`, CTRL-3), and what became of it.
+    id: uuid.UUID
+    state: PhotoState
+
+
+@dataclass(frozen=True)
+class TapLine:
+    # One tap, as the day under a worker's calendar shows it (ATT-12): "Ingia 07:20 asubuhi · Laptop ya Dawa", then its
+    # photo or why it has none. `date` and `time` on the shop's calendar and clock, by the time the server trusts; a
+    # tap with none has no `time`, and its date is the laptop's, as the book places it. `laptop_time` is the laptop's
+    # own clock, on the shop's, the only time an untrusted tap has. `doubt`: why the tap itself is in doubt (ATT-11),
+    # the push's flag or a later tap's disagreement, or None.
+    id: uuid.UUID
+    date: dt.date
+    kind: ClockKind
+    time: dt.time | None
+    laptop_time: dt.time
+    laptop: str
+    photo: TapPhoto | None
+    no_photo: NoPhoto | None
+    doubt: ReviewReason | None
+
+
+@dataclass(frozen=True)
+class WorkerDay:
+    # One of a worker's days, as their calendar marks it and the day says it: what it was, why it waits for a decision
+    # on a day to decide, and its fine. The fine is the shop's own rule, which anyone working there may read on the
+    # rules page, never the worker's rate or the day's pay (WAGE-1). And the two taps the rule read, the first Ingia and
+    # the first Toka after it, for the reason that names one, "alifika saa 09:10", as the month page's list says it.
+    date: dt.date
+    status: DayStatus
+    reason: ReviewReason | None
+    fine: Decimal
+    first_in: dt.time | None
+    first_out: dt.time | None
+
+
+@dataclass(frozen=True)
+class WorkerAttendance:
+    # A worker's month, as their calendar shows it (ATT-12): the month, as its first day; the shop's today, so the page
+    # marks it (•); their line of counts, as on the month page; their first and last day, for a day outside them to say
+    # why; each day the book answers for them, up to yesterday; and each of their taps of the month, today's too.
+    month: dt.date
+    today: dt.date
+    worker: WorkerMonth
+    started_on: dt.date
+    left_on: dt.date | None
+    days: list[WorkerDay]
+    taps: list[TapLine]
+
+
+def worker_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAttendance:
+    """One job's month of `month`, any day of it, as their calendar and its days show it (ATT-12): the book's days of
+    the job, worked out through the book as the month page's are (work_out_days), so it writes as the book does, and
+    asked twice writes nothing the second time; their counts; and every tap of the job in the month, today's too, none
+    voided, each with its laptop, its photo or why none, and whether it is in doubt. The shop must be open, and the job
+    one of it."""
+    # The job is the shop's: the route finds it through the guard, so another shop's never comes here; but a service
+    # checks what it is given (T1), so a bug that passed one would fail loudly, never answer another shop's taps.
+    if job.shop_id != shop.pk:
+        raise ShopMismatch("worker_attendance was given a job of another shop.")
+    first, last = _month_span(month)
+    # The whole shop's month, as the month page asks it: the book works out every job's days at once, under one lock
+    # (work_out_days), so the calendar and the month page's line never come from two different workings out. Then this
+    # job's days alone. Every day the book answers, off days too, which the calendar marks with –.
+    days = [day for day in work_out_days(shop, first, last) if day.staff_id == job.pk]
+    kinds = Counter(day.status for day in days if day.status != DayStatus.OFF)
+    zone = ZoneInfo(shop.timezone)
+    today = shop_today(shop)
+    # The taps up to today, the last day the calendar shows: a day to come has none to show. And never read past the
+    # month's end into the day after it: in the calendar's last month, December 9999, that day is past the last one
+    # Python knows, and a month typed into the address was a server error, as on the month page before (ATT-12's
+    # review, ATT-5's). A month to come has no tap at all, and nothing is read.
+    taps_until = min(last, today)
+    # Read after the book has kept the month's days, in a read of its own, so the two can disagree for a moment: Asha's
+    # Toka, pushed between them, shows in the list while her day still says "hakuna Toka". The next ask works the day
+    # out again with it (work_out_days), so it mends itself within a minute of the page asking again (ATT-12's review).
+    # Not one transaction with the book: the book's lock would then be held for this read too, and every other run of
+    # the book, a month page or the night's job, would wait for it.
+    # The job's taps of the month, in one read, today's too: the book keeps no day until it is over (ATT-10), so
+    # today's taps are read here as they come. Each with its laptop's name, joined in the same read, and the two
+    # questions of doubt the book asks (_doubt_questions). A voided tap counts for nothing (T2), and the book doesn't
+    # read it, so nor does this: ATT-6, which voids one, shows them crossed out (A2). In the order they were made, by
+    # the moment the book places them by; two of one moment, rare, as on two laptops at once, by their ids, which each
+    # laptop makes in time order (UUIDv7, ADR-0007): never by a laptop's own numbering, which says nothing between two
+    # laptops (ATT-12's review).
+    asks_not_working, asks_disputed = _doubt_questions(shop)
+    lines = (
+        []
+        if taps_until < first
+        else list(
+            AttendanceEvent.objects.filter(shop=shop, staff=job, voided_at__isnull=True)
+            .filter(_falls_between(first, taps_until, zone))
+            .annotate(maker_not_working=asks_not_working, disagreed_with=asks_disputed)
+            .order_by(Coalesce("trusted_time", "client_time"), "pk")
+            .values_list(
+                "pk",
+                "kind",
+                "trusted_time",
+                "client_time",
+                "time_check",
+                "device__name",
+                "no_photo",
+                "maker_not_working",
+                "disagreed_with",
+            )
+        )
+    )
+    photos = _photos_of(shop, [line[0] for line in lines])
+    taps = []
+    for tap_id, kind, trusted_time, client_time, time_check, laptop, no_photo, maker_not_working, disagreed in lines:
+        day, minute = _where_it_falls(trusted_time, client_time, zone)
+        taps.append(
+            TapLine(
+                id=tap_id,
+                date=day,
+                kind=ClockKind(kind),
+                time=minute,
+                laptop_time=shop_minute(client_time, zone),
+                laptop=laptop,
+                photo=photos.get(tap_id),
+                # Empty when its photo came (ATT-3): said as no reason at all.
+                no_photo=NoPhoto(no_photo) if no_photo else None,
+                doubt=_doubt_of(maker_not_working, disagreed, time_check),
+            )
+        )
+    return WorkerAttendance(
+        month=first,
+        today=today,
+        worker=_line(job.pk, job.display_name, kinds),
+        started_on=job.started_on,
+        left_on=job.left_on,
+        days=[
+            WorkerDay(
+                date=day.date,
+                status=DayStatus(day.status),
+                # The table keeps "no reason" as empty (ATT-5): said as None.
+                reason=ReviewReason(day.review_reason) if day.review_reason else None,
+                fine=day.fine,
+                first_in=day.first_in,
+                first_out=day.first_out,
+            )
+            for day in days
+        ],
+        taps=taps,
+    )
+
+
+def _photos_of(shop: Shop, tap_ids: list[uuid.UUID]) -> dict[uuid.UUID, TapPhoto]:
+    # The clock-in photos of these taps, by tap, in one read, through the index on each record's attachments
+    # (control_attachment_by_subject), never one read per tap. A photo's row is pinned to its tap by the tap's table's
+    # code and its id (a generic link, CTRL-3), the code a clock-in photo's rule names. None asked for none.
+    if not tap_ids:
+        return {}
+    pinned_to = ATTACHMENT_KINDS[AttachmentKind.CLOCK_PHOTO].subject_type
+    rows = Attachment.objects.filter(
+        shop=shop, kind=AttachmentKind.CLOCK_PHOTO, subject_type=pinned_to, subject_id__in=tap_ids
+    ).values_list("id", "subject_id", "file", "file_removed_at")
+    photos: dict[uuid.UUID, TapPhoto] = {}
+    for photo_id, tap_id, file, removed_at in rows:
+        # Removed first: a removed photo's file is empty, as is one still waiting, so only its removal tells them apart.
+        state = PhotoState.REMOVED if removed_at is not None else PhotoState.KEPT if file else PhotoState.WAITING
+        # One photo per tap: the clock document names one, and its id is the row's (expect_attachment).
+        photos[tap_id] = TapPhoto(id=photo_id, state=state)
+    return photos
 
 
 def set_pay_rate(

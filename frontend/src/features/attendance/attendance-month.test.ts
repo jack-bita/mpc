@@ -20,6 +20,7 @@ describe("the months of the month page", () => {
   it("takes only a month as the address writes one", () => {
     // Anything else in the address is ignored, and the page opens this month: a typo, a day, a 13th month.
     expect(isMonth("2026-11")).toBe(true);
+    expect(isMonth("2000-01")).toBe(true);
     for (const wrong of [
       "2026-13",
       "2026-00",
@@ -27,6 +28,9 @@ describe("the months of the month page", () => {
       "2026-11-20",
       "Novemba",
       "",
+      // Before the first month the server takes: the page opens this month, not its refusal (ATT-12's review).
+      "1999-12",
+      "0001-01",
     ]) {
       expect(isMonth(wrong)).toBe(false);
     }

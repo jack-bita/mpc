@@ -221,9 +221,11 @@ def sweep_queries(shop_a: Shop, staff_a: StaffMember) -> dict[str, dict[str, str
     # sees nothing; either way the sweep fails and points here. The pay rates route names its worker (WAGE-1): shop
     # A's, whose rate sweep_pay_rates sets, so shop B is asked about another shop's worker by their real id. The month
     # page names its month (ATT-5): yesterday's, as the book keeps no day before it is over, so on the 1st this
-    # month would list nobody.
+    # month would list nobody. A worker's month names its month the same way (ATT-12); its worker is in the address,
+    # each of shop A's in turn, as for any route of one row.
     yesterday = shop_today(shop_a) - timedelta(days=1)
     return {
         "pay-rate-list": {"staff": str(staff_a.pk)},
         "attendance-month-list": {"month": yesterday.strftime("%Y-%m")},
+        "attendance-worker-detail": {"month": yesterday.strftime("%Y-%m")},
     }

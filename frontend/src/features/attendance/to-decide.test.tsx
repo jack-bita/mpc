@@ -1,6 +1,7 @@
 // to-decide.test.tsx — Zinahitaji uamuzi, the days a person must decide, at the top of the month page (ATT-5): a line
 // per day, "Juma · Alhamisi 12/11 · hakuna Toka", for each of the nine reasons, in the server's order, counted in the
-// heading; a line when there is none; and the same in English.
+// heading; each line a link to its day under the worker's calendar (ATT-12); a line when there is none; and the same in
+// English.
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -35,6 +36,18 @@ function lines(): string[] {
 }
 
 describe("the days to decide", () => {
+  it("opens each day under its worker's calendar, on the day's month (ATT-12)", () => {
+    render(<DaysToDecide days={[day()]} />);
+
+    const line = screen.getByRole("link", {
+      name: "Juma · Alhamisi 12/11 · hakuna Toka",
+    });
+    // Next.js's Link drops the trailing slash outside a built app (month-screen.test.tsx).
+    expect(line.getAttribute("href")).toMatch(
+      /^\/attendance-month\/worker\/?\?staff=019a8400-0000-7000-8000-000000000001&month=2026-11&day=2026-11-12$/,
+    );
+  });
+
   it("says each day's worker, weekday and date, and why, in the server's order, counted", () => {
     // The server sends them oldest first, by name on a day: the page keeps its order.
     render(
