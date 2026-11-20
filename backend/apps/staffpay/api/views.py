@@ -142,4 +142,7 @@ class AttendanceWorkerViewSet(ShopViewSet[StaffMember]):
         asked.is_valid(raise_exception=True)
         job = self.get_object()
         shop = Shop.objects.get(pk=self.actor.shop_id)
-        return Response(WorkerAttendanceAnswer(worker_attendance(shop, job, asked.validated_data["month"])).data)
+        # The person looking, so their own month offers no day to decide (Jack, ATT-6): cast, as the pay rate's route
+        # does, since an office visit's actor is always a staff member.
+        answer = worker_attendance(shop, job, asked.validated_data["month"], viewer=cast(StaffMember, self.actor))
+        return Response(WorkerAttendanceAnswer(answer).data)

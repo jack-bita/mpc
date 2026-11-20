@@ -68,6 +68,7 @@ from apps.shops.selectors import closed_days, shop_settings_between, shop_today
 from apps.staffpay.calculations import NO_FINE, DayResult, Tap, day_choices, shop_minute, work_out_day
 from apps.staffpay.models import (
     DECISION_OF,
+    AbsenceType,
     AttendanceDay,
     AttendanceEvent,
     ClockKind,
@@ -458,16 +459,21 @@ def attendance_month(shop: Shop, month: dt.date) -> AttendanceMonth:
     names: dict[uuid.UUID, str] = {}
     for day in days:
         if day.staff_id in listed:
-            counts[day.staff_id][day.status] += 1
+            counts[day.staff_id][_counted_as(day)] += 1
             names[day.staff_id] = day.staff.display_name
     workers = [_line(job, names[job], kinds) for job, kinds in counts.items()]
     # By name, as the owner looks for Juma by his name; "asha" beside "Asha", whatever its first letter; then the job's
     # id, so two jobs of one name always come in the same order.
     workers.sort(key=lambda line: (line.display_name.casefold(), line.staff_id))
     # The days to decide, oldest first, as the oldest has waited longest and payday comes for it first; on one day, by
-    # name. A listed worker's only: a worker with no rate isn't paid by the day, so nothing of theirs waits here.
+    # name. A listed worker's only: a worker with no rate isn't paid by the day, so nothing of theirs waits here. A day
+    # someone has decided waits no more (ATT-6), though the book still says it needs review beside the decision (A2).
     to_decide = sorted(
-        (day for day in days if day.staff_id in listed and day.status == DayStatus.NEEDS_REVIEW),
+        (
+            day
+            for day in days
+            if day.staff_id in listed and day.status == DayStatus.NEEDS_REVIEW and not day.decided_status
+        ),
         key=lambda day: (day.date, day.staff.display_name.casefold(), day.staff_id),
     )
     # Whether a working day of the month is over: any day the book answered that isn't off, the owner's absent days
@@ -501,6 +507,16 @@ def _line(staff_id: uuid.UUID, display_name: str, kinds: Counter[str]) -> Worker
         absent=kinds[DayStatus.ABSENT],
         needs_review=kinds[DayStatus.NEEDS_REVIEW],
     )
+
+
+def _counted_as(day: AttendanceDay) -> str:
+    # What a day counts as on a worker's line of the month (ATT-5, ATT-12): the decision once there is one (ATT-6), else
+    # the book's answer. An absence by its kind: office duty is a full day paid, so it counts with ✓; permission and a
+    # no-show are unpaid, so they count with H (Claude's default, the plan Jack approved). The calendar marks each day
+    # by its kind (O, R, H); the line keeps its five counts.
+    if day.absence_type == AbsenceType.OFFICE_DUTY:
+        return DayStatus.ON_TIME
+    return day.decided_status or day.status
 
 
 class PhotoState(models.TextChoices):
@@ -538,6 +554,26 @@ class TapLine:
 
 
 @dataclass(frozen=True)
+class DayDecision:
+    # A decision as the day shows it: "Siku kamili · uamuzi wa Baba, 20/11 · Sababu: Alisahau kubonyeza Toka". `by` is
+    # the decider's nickname on this shop, as every other name on these pages is. `at` is when it was made, which a
+    # page sends back when it decides the day again (`replaces`), so a decision it never saw is never written over.
+    status: DayStatus
+    absence_type: AbsenceType | None
+    fine: Decimal
+    by: str
+    at: dt.datetime
+    reason: str
+
+
+@dataclass(frozen=True)
+class DayOption:
+    # One line of the sheet: a choice and the fine it takes, "Amechelewa · faini 500".
+    choice: DayChoice
+    fine: Decimal
+
+
+@dataclass(frozen=True)
 class WorkerDay:
     # One of a worker's days, as their calendar marks it and the day says it: what it was, why it waits for a decision
     # on a day to decide, and its fine. The fine is the shop's own rule, which anyone working there may read on the
@@ -549,6 +585,11 @@ class WorkerDay:
     fine: Decimal
     first_in: dt.time | None
     first_out: dt.time | None
+    # A person's decision on the day, or None (ATT-6), shown beside what the book said, which stays (A2).
+    decision: DayDecision | None
+    # What the day may be decided as, each with its fine (day_choices), in the sheet's order: none on an off day, or
+    # when the month is the viewer's own, as nobody decides their own day (Jack, ATT-6).
+    choices: list[DayOption]
 
 
 @dataclass(frozen=True)
@@ -563,14 +604,21 @@ class WorkerAttendance:
     left_on: dt.date | None
     days: list[WorkerDay]
     taps: list[TapLine]
+    # Whether the month is the viewer's own: then no day of it is theirs to decide, and the page says the owner decides
+    # it (Jack, ATT-6).
+    yours: bool
+    # On the demo, the three ready reasons a decision may take (DEMO_REASONS, Jack: A), as codes the page says in
+    # words; elsewhere none, and a person types their own.
+    ready_reasons: list[str]
 
 
-def worker_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAttendance:
+def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: StaffMember | None) -> WorkerAttendance:
     """One job's month of `month`, any day of it, as their calendar and its days show it (ATT-12): the book's days of
     the job, worked out through the book as the month page's are (work_out_days), so it writes as the book does, and
     asked twice writes nothing the second time; their counts; and every tap of the job in the month, today's too, none
-    voided, each with its laptop, its photo or why none, and whether it is in doubt. The shop must be open, and the job
-    one of it."""
+    voided, each with its laptop, its photo or why none, and whether it is in doubt. Each day with its decision and
+    what it may be decided as (ATT-6), as `viewer` may decide it: the person looking, or None for the system. The shop
+    must be open, and the job one of it."""
     # The job is the shop's: the route finds it through the guard, so another shop's never comes here; but a service
     # checks what it is given (T1), so a bug that passed one would fail loudly, never answer another shop's taps.
     if job.shop_id != shop.pk:
@@ -580,7 +628,16 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAtt
     # (work_out_days), so the calendar and the month page's line never come from two different workings out. Then this
     # job's days alone. Every day the book answers, off days too, which the calendar marks with –.
     days = [day for day in work_out_days(shop, first, last) if day.staff_id == job.pk]
-    kinds = Counter(day.status for day in days if day.status != DayStatus.OFF)
+    kinds = Counter(_counted_as(day) for day in days if day.status != DayStatus.OFF)
+    # Never one's own day (Jack, ATT-6): by the person, as decide_day asks it, so a person hired again (PPL-11) can't
+    # decide the days of either of their jobs.
+    yours = viewer is not None and viewer.user_id == job.user_id
+    # Who decided, by nickname, in one read for the whole month, never one per day.
+    deciders = dict(
+        StaffMember.objects.filter(pk__in={day.decided_by_id for day in days if day.decided_by_id}).values_list(
+            "pk", "display_name"
+        )
+    )
     zone = ZoneInfo(shop.timezone)
     today = shop_today(shop)
     # The taps up to today, the last day the calendar shows: a day to come has none to show. And never read past the
@@ -655,10 +712,34 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date) -> WorkerAtt
                 fine=day.fine,
                 first_in=day.first_in,
                 first_out=day.first_out,
+                decision=_decision_of(day, deciders),
+                choices=[]
+                if yours or day.status == DayStatus.OFF
+                else [
+                    DayOption(choice=choice, fine=fine)
+                    for choice, fine in day_choices(day.first_in, rules_from_text(day.rules_used)).items()
+                ],
             )
             for day in days
         ],
         taps=taps,
+        yours=yours,
+        ready_reasons=list(DEMO_REASONS) if settings.DEMO_SEED else [],
+    )
+
+
+def _decision_of(day: AttendanceDay, deciders: dict[uuid.UUID, str]) -> DayDecision | None:
+    # A day's decision as the page shows it, or None when nobody has decided it. The table keeps "no kind" as empty:
+    # said as None. Whole or none, as the table's own rule holds, so every part is there once decided_at is.
+    if day.decided_at is None or day.decided_by_id is None or day.decided_fine is None:
+        return None
+    return DayDecision(
+        status=DayStatus(day.decided_status),
+        absence_type=AbsenceType(day.absence_type) if day.absence_type else None,
+        fine=day.decided_fine,
+        by=deciders[day.decided_by_id],
+        at=day.decided_at,
+        reason=day.decision_reason,
     )
 
 

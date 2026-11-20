@@ -8,7 +8,8 @@
     Baraka   ...
 
 attendance_month (apps/staffpay/services.py) asks the book for the month (work_out_days), and answers a line per worker
-with a daily pay rate, with the month's counts, and the days a person must decide, each with why. What a day was is the
+with a daily pay rate, with the month's counts, and the days a person must decide, each with why; a day someone
+decided (ATT-6) counts as decided, and waits no more. What a day was is the
 book's and the rule's, tested in test_attendance_book.py and test_attendance_day.py; here, only what the month makes of
 them. October 2026 starts on a Thursday, and its Sundays are the 4th, 11th, 18th and 25th, so it has 27 working days.
 Times are Arusha's. Fake data only: the repo is public, and the amounts are made up (rule 10).
@@ -16,6 +17,7 @@ Times are Arusha's. Fake data only: the repo is public, and the amounts are made
 
 import datetime as dt
 import itertools
+from collections.abc import Callable
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -23,16 +25,27 @@ import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
+from apps.core.permissions import RoleTemplate
 from apps.core.settings_registry import ATTENDANCE_ON
 from apps.core.tenancy import shop_context
 from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, change_worker, mark_left
-from apps.shops.models import Setting, Shop
+from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import shop_today
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, ReviewReason, TimeCheck
-from apps.staffpay.services import AttendanceMonth, WorkerMonth, attendance_month, set_pay_rate
+from apps.staffpay.models import (
+    AttendanceDay,
+    AttendanceEvent,
+    ClockKind,
+    DayChoice,
+    DayStatus,
+    ReviewReason,
+    TimeCheck,
+)
+from apps.staffpay.services import AttendanceMonth, WorkerMonth, attendance_month, decide_day, set_pay_rate
 
 pytestmark = pytest.mark.django_db
+
+GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
 ARUSHA = ZoneInfo("Africa/Dar_es_Salaam")
 OCTOBER = dt.date(2026, 10, 1)
@@ -103,6 +116,26 @@ def month(shop: Shop, first: dt.date = OCTOBER) -> AttendanceMonth:
 
 def line_of(answer: AttendanceMonth, name: str) -> WorkerMonth:
     return next(line for line in answer.workers if line.display_name == name)
+
+
+def owner(shop: Shop, give_role: GiveRole) -> StaffMember:
+    # Baba, the owner: every key, attendance.manage among them. No rate, as he is never paid by the day, so no line.
+    baba = worker(shop, "Baba", rate=None)
+    give_role(baba, RoleTemplate.OWNER, None)
+    return baba
+
+
+def _kept(shop: Shop, staff: StaffMember) -> list[AttendanceDay]:
+    # A worker's days of October as the book keeps them, after the month has been asked for once.
+    month(shop)
+    with shop_context(shop):
+        return list(AttendanceDay.objects.filter(staff=staff, date__month=10))
+
+
+def decide(day: AttendanceDay, by: StaffMember, choice: DayChoice) -> None:
+    # A decision as the route makes one (ATT-6), with a reason.
+    with shop_context(day.shop_id):
+        decide_day(day, choice=choice, reason="Uamuzi wa mwenye duka", replaces=None, by=by)
 
 
 def test_a_line_per_worker_with_the_months_counts(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
@@ -181,6 +214,37 @@ def test_the_days_to_decide_oldest_first_with_why(shop_a: Shop, device_a: Device
     ]
     assert (days[0].first_in, days[0].first_out) == (dt.time(9, 10), dt.time(18, 45))
     assert (days[1].staff_id, days[1].first_out) == (asha.pk, None)
+
+
+def test_a_decided_day_waits_no_more_and_counts_as_decided(
+    shop_a: Shop, device_a: Device, give_role: GiveRole, attendance_on: None
+) -> None:
+    # Asha never tapped Toka on the 6th, and Baraka came at 09:10 on the 2nd: both wait. Baba decides Asha's 6th a full
+    # day (ATT-6): it leaves the list, and her line counts it with ✓, though the book still says it needs review (A2).
+    # Baraka's 2nd still waits.
+    asha, baraka = worker(shop_a, "Asha"), worker(shop_a, "Baraka")
+    came(device_a, baraka, 2, (9, 10), (18, 45))
+    came(device_a, asha, 6, (7, 20), None)
+    sixth = next(day for day in month(shop_a).to_decide if day.staff_id == asha.pk)
+    decide(sixth, owner(shop_a, give_role), DayChoice.ON_TIME)
+    answer = month(shop_a)
+    assert [(day.staff.display_name, day.date.day) for day in answer.to_decide] == [("Baraka", 2)]
+    line = line_of(answer, "Asha")
+    assert (line.on_time, line.needs_review, line.absent) == (1, 0, 26)
+
+
+def test_an_absence_counts_by_its_kind(shop_a: Shop, give_role: GiveRole, attendance_on: None) -> None:
+    # Asha tapped nothing on the 1st, 2nd and 5th: absent, unpaid. Baba sent her to the bank on the 1st (office duty, a
+    # full day paid: counted with ✓), let her stay home on the 2nd (permission: H), and she gave no word on the 5th
+    # (no-show: H). Counted as the pay will read them, the kind beside each on her calendar (ATT-12).
+    asha = worker(shop_a, "Asha")
+    baba = owner(shop_a, give_role)
+    days = {day.date.day: day for day in _kept(shop_a, asha)}
+    decide(days[1], baba, DayChoice.OFFICE_DUTY)
+    decide(days[2], baba, DayChoice.PERMISSION)
+    decide(days[5], baba, DayChoice.NO_SHOW)
+    line = line_of(month(shop_a), "Asha")
+    assert (line.on_time, line.absent) == (1, 26)
 
 
 def test_only_listed_workers_days_are_to_decide(shop_a: Shop, device_a: Device, attendance_on: None) -> None:
