@@ -27,8 +27,7 @@ tests may not import a higher layer (ADR-0035). Fake data only: the repo is publ
 import hashlib
 import uuid
 from collections.abc import Callable, Iterable, Mapping
-from datetime import date, time, timedelta
-from decimal import Decimal
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -51,7 +50,7 @@ from apps.core.api import base
 from apps.core.api.base import CreateOnceMixin, ShopViewSet
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import StaffMember, User
+from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, grant_permission, mark_left, suspend
 from apps.shops.api.views import ClosureViewSet, SettingViewSet, SideViewSet
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
@@ -63,7 +62,8 @@ from apps.staffpay.api.views import (
     AttendanceWorkerViewSet,
     PayRateViewSet,
 )
-from apps.staffpay.models import AttendanceDay, PayRate
+from apps.staffpay.models import PayRate
+from apps.staffpay.tests.days import job, kept_day, switch_on
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
 from tests.test_tenancy_sweep import addresses
@@ -1193,31 +1193,15 @@ def test_deciding_a_day_needs_attendance_manage(
     shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
 ) -> None:
     # Deciding a day (ATT-6) is for whoever fixes attendance: Asha, a seller on Dawa, may not decide anyone's, even
-    # with the address typed in; a Manager on every side decides Asha's. Her day, in at 07:50 with no Toka, waits.
+    # with the address typed in; a Manager on every side decides Juma's. His Monday, in at 07:50 with no Toka, waits,
+    # made the way the shop makes one: a tap on the shop's laptop, then the book (apps/staffpay/tests/days.py). The
+    # laptop is made here, on this file's Dawa, as device_a would make a Dawa of its own beside it.
+    with shop_context(shop_a):
+        Device.objects.create(shop=shop_a, home_side=sides["D"], name="Laptop ya Dawa", code=1, key_hash="a" * 64)
     give_role(staff_a, RoleTemplate.SELLER, sides["D"])
     give_role(staff_a2, RoleTemplate.MANAGER, None)
-    rules = {
-        "on_time_until": "07:35",
-        "second_fine_from": "08:00",
-        "review_from": "08:30",
-        "afternoon_from": "12:00",
-        "midday": "13:00",
-        "morning_leave_until": "13:30",
-        "closing": "18:40",
-        "late_fine": "0.00",
-        "second_fine": "0.00",
-    }
-    with shop_context(shop_a):
-        day = AttendanceDay.objects.create(
-            shop=shop_a,
-            staff=staff_a,
-            date=date(2026, 11, 16),
-            status="needs_review",
-            fine=Decimal("0.00"),
-            first_in=time(7, 50),
-            rules_used=rules,
-            review_reason="no_out",
-        )
+    switch_on(shop_a)
+    day = kept_day(job(shop_a, "Juma"))
     sent = {"choice": "on_time", "reason": "Alisahau kubonyeza Toka", "replaces": None}
     refused = client_for(staff_a).post(ATTENDANCE_DAY_DECIDE.format(day.pk), sent, format="json")
     assert refused.status_code == 403

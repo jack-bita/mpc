@@ -794,25 +794,33 @@ def decide_day(
     # One transaction: the locks below hold until the decision is saved. Not a recording_changes block: no laptop keeps
     # a day, so a decision writes no line in the change log (03 §6.6).
     with transaction.atomic():
-        # The day's job first, with the light lock the book takes on every job (work_out_days), then the day: so a
-        # decision made while a manager opens the month waits a moment for the book, and reads the day as the book left
-        # it, and the book waits for the decision in turn. The same order as the book's (jobs, then days), so the two
-        # never each hold what the other waits for. FOR NO KEY UPDATE: a tap pushed meanwhile still saves (backend
-        # rules). Read afresh: the copy the route found may be a moment old.
-        job = StaffMember.objects.select_for_update(no_key=True).get(pk=day.staff_id)
-        day = AttendanceDay.objects.select_for_update(no_key=True).get(pk=day.pk)
         # Who may, asked afresh inside the transaction, as set_pay_rate asks: a key taken away a moment ago counts.
-        # attendance.manage on the whole shop, as attendance belongs to the whole shop (a funeral closes both sides).
+        # First, so someone without it sets nothing to work. attendance.manage on the whole shop, as attendance belongs
+        # to the whole shop (a funeral closes both sides).
         require(by, Permission.ATTENDANCE_MANAGE, None)
+        # The day as the book answers it now, worked out afresh (work_out_days), and only if the book answers it at all:
+        # a row it no longer reads, its job's first day moved later past it (PPL-10) or its only tap voided outside the
+        # job's days (ATT-11's review), stays in the table as it was (rule 7), but counts for nothing, so a decision on
+        # it would be read by nothing; and today, which the book keeps only once it is over (ATT-10). The book locks
+        # every job of the shop, in the order of their ids, as each of its runs does, before it reads the taps: so a
+        # decision waits a moment for a manager opening the month, and the book for the decision; and both take the
+        # jobs, then the days, in one order, so neither ever holds what the other waits for (a deadlock). Worked out
+        # afresh too, so the fine below reads the day's first Ingia as it is now, a tap that came late included.
+        answered = work_out_days(Shop.objects.get(pk=day.shop_id), day.date, day.date)
+        if not any(each.pk == day.pk for each in answered):
+            raise ValidationError("Only a working day that is over can be decided.", code="day.not_working_day")
+        # Then the day, with the light lock: two decisions on it at once take turns here (FOR NO KEY UPDATE, backend
+        # rules). The job's lock is the book's, held until the decision is saved.
+        day = AttendanceDay.objects.select_for_update(no_key=True).get(pk=day.pk)
+        job = StaffMember.objects.get(pk=day.staff_id)
         # Never one's own day (Jack: A, 20 Nov 2026): the manager's days are the owner's to decide, as a person never
         # approves their own, and a manager late at 08:10 would otherwise take his own fine off. By the person, not
         # the job: someone hired again (PPL-11) has two jobs, and neither of their days is theirs to decide.
         if job.user_id == by.user_id:
             raise ValidationError("Nobody decides their own day.", code="day.own")
-        # A working day that is over. An off day, a Sunday or a closed day nobody tapped on, is the shop's calendar,
-        # never paid (01 §8.1); a closed day with a tap is no off day, as it waits for a decision (ATT-10). Today is not
-        # over: the book keeps it only once it is (ATT-10), so a row of today would be a bug, refused all the same.
-        if day.status == DayStatus.OFF or day.date >= shop_today(job.shop):
+        # A working day: an off day, a Sunday or a closed day nobody tapped on, is the shop's calendar, never paid
+        # (01 §8.1); a closed day with a tap is no off day, as it waits for a decision (ATT-10).
+        if day.status == DayStatus.OFF:
             raise ValidationError("Only a working day that is over can be decided.", code="day.not_working_day")
         # The same decision sent again, as a phone does when the network lost the first one's answer: the day holds it
         # already, made by this person, with the same choice and the same reason. Answered as done, writing nothing and

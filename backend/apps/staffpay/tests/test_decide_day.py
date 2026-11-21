@@ -28,66 +28,33 @@ from apps.control.models import EditEvent
 from apps.core.acting import acting_as
 from apps.core.editing import VersionConflict
 from apps.core.permissions import RoleTemplate
+from apps.core.settings_registry import LATE_FINE
 from apps.core.tenancy import ShopMismatch, shop_context
-from apps.people.models import StaffMember, User
-from apps.people.services import add_staff
+from apps.people.models import Device, StaffMember
+from apps.people.services import change_worker
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
-from apps.staffpay.calculations import DayRules
-from apps.staffpay.models import AbsenceType, AttendanceDay, DayChoice, DayStatus, ReviewReason
-from apps.staffpay.selectors import rules_as_text
+from apps.staffpay.models import (
+    AbsenceType,
+    AttendanceDay,
+    ClockKind,
+    DayChoice,
+    DayStatus,
+    ReviewReason,
+)
 from apps.staffpay.services import decide_day
+from apps.staffpay.tests.days import FIRST_FINE, SUNDAY, absent_day, job, kept_day, rule, switch_on
 
 pytestmark = pytest.mark.django_db
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
-MONDAY = dt.date(2026, 11, 16)
-SUNDAY = dt.date(2026, 11, 15)
-FIRST_FINE = Decimal("500.00")
 
-# The rules Juma's Monday was judged by, as the book kept them with it (T4): the owner's day, a first fine of 500.
-MONDAYS_RULES = rules_as_text(
-    DayRules(
-        on_time_until=dt.time(7, 35),
-        second_fine_from=dt.time(8, 0),
-        review_from=dt.time(8, 30),
-        afternoon_from=dt.time(12, 0),
-        midday=dt.time(13, 0),
-        morning_leave_until=dt.time(13, 30),
-        closing=dt.time(18, 40),
-        late_fine=FIRST_FINE,
-        second_fine=Decimal("1500.00"),
-    )
-)
-
-
-def job(shop: Shop, name: str) -> StaffMember:
-    # A job made the way the app makes one: create_user, then the people service, inside the shop (PPL-2).
-    user = User.objects.create_user(full_name=f"{name} Demo")
-    with shop_context(shop):
-        return add_staff(shop=shop, user=user, display_name=name, started_on=dt.date(2026, 1, 1), by=None)
-
-
-def kept_day(staff: StaffMember, **changes: object) -> AttendanceDay:
-    # A day as the book keeps it (ATT-10): Juma's Monday, in at 07:50 and no Toka, sent to review; `changes` overrides
-    # a fact. Written past the book, as test_attendance_book.py writes its rows: these tests decide a day, they don't
-    # work one out.
-    facts: dict[str, object] = {
-        "shop_id": staff.shop_id,
-        "staff": staff,
-        "date": MONDAY,
-        "status": DayStatus.NEEDS_REVIEW,
-        "fine": Decimal("0.00"),
-        "first_in": dt.time(7, 50),
-        "first_out": None,
-        "rules_used": MONDAYS_RULES,
-        "review_reason": ReviewReason.NO_OUT,
-    }
-    facts.update(changes)
-    day = AttendanceDay(**facts)
-    day.save()
-    return day
+@pytest.fixture(autouse=True)
+def the_shops_day(shop_a: Shop, device_a: Device) -> None:
+    # The shop switched attendance on in January, with the owner's fines, and keeps its laptop, Laptop ya Dawa, where
+    # every tap below is made (days.py).
+    switch_on(shop_a)
 
 
 def decide(
@@ -157,9 +124,12 @@ def test_a_manager_decides_a_workers_day(meneja: StaffMember, juma: StaffMember)
 
 
 def test_a_day_decided_late_takes_its_fine_from_its_own_rules(baba: StaffMember, juma: StaffMember) -> None:
-    # In at 07:50: the first fine, 500, from the rules Monday kept (T4). The shop today has typed no fine at all, so a
-    # fine read from today's rules would be 0: the day's own copy is what counts.
+    # In at 07:50: the first fine, 500, from the rules Monday kept (T4). The owner raised it to 2,000 from today, so a
+    # fine read from today's rules would be 2,000: the day's own copy is what counts.
     day = kept_day(juma)
+    with shop_context(juma.shop_id):
+        today = shop_today(juma.shop)
+    rule(juma.shop, LATE_FINE, Decimal("2000.00"), today)
     decide(day, baba, DayChoice.LATE, "Alichelewa, hakubonyeza Toka")
     kept = fresh(day)
     assert (kept.decided_status, kept.decided_fine) == (DayStatus.LATE, FIRST_FINE)
@@ -183,7 +153,7 @@ def test_a_day_decided_half_keeps_a_late_arrivals_fine(baba: StaffMember, juma: 
 def test_an_absence_keeps_its_kind(baba: StaffMember, juma: StaffMember, choice: DayChoice, kind: AbsenceType) -> None:
     # Juma never tapped on Monday: absent, unpaid, until Baba says why. Sent to the bank, it is office duty, paid as a
     # full day (WAGE-2); allowed to stay home, permission; no word, a no-show. Each kept as absent, with its kind.
-    day = kept_day(juma, status=DayStatus.ABSENT, first_in=None, review_reason="")
+    day = absent_day(juma)
     decide(day, baba, choice, "Alienda benki")
     kept = fresh(day)
     assert (kept.decided_status, kept.absence_type, kept.decided_fine) == (DayStatus.ABSENT, kind, Decimal("0.00"))
@@ -192,7 +162,7 @@ def test_an_absence_keeps_its_kind(baba: StaffMember, juma: StaffMember, choice:
 
 def test_any_working_day_may_be_decided(baba: StaffMember, juma: StaffMember) -> None:
     # Not only a day to decide: Juma was on time, but Baba sent him home sick at 10:00, so his day is a half day.
-    day = kept_day(juma, status=DayStatus.ON_TIME, first_in=dt.time(7, 20), first_out=dt.time(18, 45), review_reason="")
+    day = kept_day(juma, (ClockKind.IN, 7, 20), (ClockKind.OUT, 18, 45))
     decide(day, baba, DayChoice.HALF, "Aliumwa, akarudi nyumbani")
     assert (fresh(day).decided_status, fresh(day).decided_fine) == (DayStatus.HALF, Decimal("0.00"))
 
@@ -300,7 +270,8 @@ def test_a_person_of_another_shop_is_a_bug(staff_b: StaffMember, juma: StaffMemb
 
 def test_an_off_day_is_not_decided(baba: StaffMember, juma: StaffMember) -> None:
     # A Sunday, or a closed day nobody tapped on, is the shop's calendar: never paid, so nothing to decide (01 §8.1).
-    day = kept_day(juma, date=SUNDAY, status=DayStatus.OFF, first_in=None, rules_used={}, review_reason="")
+    day = absent_day(juma, SUNDAY)
+    assert day.status == DayStatus.OFF
     with pytest.raises(ValidationError) as refused:
         decide(day, baba)
     assert refused.value.code == "day.not_working_day"
@@ -310,15 +281,38 @@ def test_today_is_not_decided(baba: StaffMember, juma: StaffMember) -> None:
     # Today isn't over: the book never keeps it (ATT-10), so a row of today is refused all the same.
     with shop_context(juma.shop_id):
         today = shop_today(juma.shop)
+        # Written past the book, which never keeps today: a row of today could only come from a bug.
+        row = AttendanceDay.objects.create(
+            shop_id=juma.shop_id,
+            staff=juma,
+            date=today,
+            status=DayStatus.ABSENT,
+            fine=Decimal("0.00"),
+            rules_used={"late_fine": "500.00"},
+        )
     with pytest.raises(ValidationError) as refused:
-        decide(kept_day(juma, date=today), baba)
+        decide(row, baba)
     assert refused.value.code == "day.not_working_day"
+
+
+def test_a_day_the_book_no_longer_answers_is_not_decided(baba: StaffMember, juma: StaffMember) -> None:
+    # Juma's Monday was kept, absent; then his first day was fixed to Wednesday 18th (PPL-10). The row stays (rule 7),
+    # but the book no longer reads it, so a decision on it would count for nothing: refused, as a day that isn't one of
+    # his working days. The page never offers one; a request typed by hand meets this (ATT-6's review).
+    day = absent_day(juma)
+    with shop_context(juma.shop_id):
+        change_worker(juma, version=juma.version, reason="Alianza Jumatano", by=None, started_on=dt.date(2026, 11, 18))
+    with pytest.raises(ValidationError) as refused:
+        decide(day, baba)
+    assert refused.value.code == "day.not_working_day"
+    assert fresh(day).decided_status == ""
 
 
 def test_late_is_refused_with_no_late_ingia(baba: StaffMember, juma: StaffMember) -> None:
     # Juma's Monday with no Ingia known (a Toka alone): nobody knows when he came, so nobody may fine him as late. Sent
     # all the same, with no reason either: both refused at once, each beside its box, and nothing kept.
-    day = kept_day(juma, first_in=None, first_out=dt.time(18, 45), review_reason=ReviewReason.NO_IN)
+    day = kept_day(juma, (ClockKind.OUT, 18, 45))
+    assert day.review_reason == ReviewReason.NO_IN
     with pytest.raises(ValidationError) as refused:
         decide(day, baba, DayChoice.LATE, reason="   ")
     assert codes_of(refused) == {"choice": {"day.choice_not_offered"}, "reason": {"day.reason_missing"}}
