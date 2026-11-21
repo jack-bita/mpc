@@ -1,7 +1,9 @@
 // workers.spec.ts — the demo's manager adds a worker and suspends him, end to end (PPL-6): on the manager's phone,
 // Wafanyakazi lists the seed's people; Ongeza adds Juma, who comes at the top; his name opens his own page; Simamisha,
-// with a reason, suspends him, and Rudisha takes its place. The card's Done when, through the real server: PPL-4's
-// routes, their key (staff.manage on the whole shop, which the seed gives the demo's Meneja), and their rules.
+// with a reason, suspends him, and Rudisha takes its place; Rudisha, with a reason, brings him back. The card's Done
+// when, through the real server: PPL-4's routes, their key (staff.manage on the whole shop, which the seed gives the
+// demo's Meneja), and their rules. Since UI-10, Simamisha, Rudisha and Ondoa each open a sheet over the page, its main
+// button naming the action, and a tap on the dimmed page, a real browser's, leaves it open with what was typed.
 // And roles (PPL-8): Meneja adds Zawadi, gives Zawadi the Seller role on Dawa with Ongeza kazi, and takes it away again
 // with Ondoa and a reason, through PPL-7's routes: the giver rule, the give's own id, the end's reason. And on Zawadi's
 // page, Kuingia (PPL-12): on the demo, Weka PIN and Nenosiri la muda are both off, with the one line saying why, as
@@ -55,6 +57,11 @@ async function openWorkers(phone: Page) {
   await expect(
     phone.getByRole("heading", { name: WORKERS.title, level: 1 }),
   ).toBeVisible();
+}
+
+/** The sheet open over the page (UI-10), by its title. */
+function sheet(phone: Page, title: string) {
+  return phone.getByRole("dialog", { name: title, exact: true });
 }
 
 /** One of a worker's roles or keys card's two parts, by its heading: Cheo or Ruhusa za ziada. */
@@ -130,16 +137,30 @@ test("the demo's manager adds a worker and suspends him", async ({
     );
   });
 
-  await test.step("Simamisha, with a reason: he is suspended, and Rudisha takes its place", async () => {
+  await test.step("Simamisha, in its sheet, with a reason: he is suspended, and Rudisha takes its place", async () => {
     await phone
       .getByRole("button", { name: WORKERS.actions.suspend, exact: true })
       .click();
-    await phone
+    const suspending = sheet(
+      phone,
+      words(WORKERS.actions.title.suspend, { name: "Juma" }),
+    );
+    await suspending
       .getByLabel(WORKERS.actions.reason, { exact: true })
       .fill("Hakuja siku tatu bila ruhusa");
-    await phone
-      .getByRole("button", { name: WORKERS.actions.save, exact: true })
+    // A thumb on the dimmed page above the sheet, its top-left corner: the sheet stays, and so does the reason (UI-10).
+    await phone.mouse.click(8, 8);
+    await expect(suspending).toBeVisible();
+    await expect(
+      suspending.getByLabel(WORKERS.actions.reason, { exact: true }),
+    ).toHaveValue("Hakuja siku tatu bila ruhusa");
+    await suspending
+      .getByRole("button", {
+        name: WORKERS.actions.confirm.suspend,
+        exact: true,
+      })
       .click();
+    await expect(suspending).toBeHidden();
     await expect(
       phone.getByText(words(WORKERS.actions.done.suspend, { name: "Juma" })),
     ).toBeVisible();
@@ -160,6 +181,32 @@ test("the demo's manager adds a worker and suspends him", async ({
       .getByRole("listitem")
       .filter({ has: rowLink(phone, "Juma", "Juma Mfano") });
     await expect(juma).toContainText(WORKERS.status.suspended);
+  });
+
+  await test.step("Rudisha, in its sheet, with a reason: he works again", async () => {
+    await rowLink(phone, "Juma", "Juma Mfano").click();
+    await phone
+      .getByRole("button", { name: WORKERS.actions.unsuspend, exact: true })
+      .click();
+    const bringing = sheet(
+      phone,
+      words(WORKERS.actions.title.unsuspend, { name: "Juma" }),
+    );
+    await bringing
+      .getByLabel(WORKERS.actions.reason, { exact: true })
+      .fill("Ameomba radhi");
+    await bringing
+      .getByRole("button", {
+        name: WORKERS.actions.confirm.unsuspend,
+        exact: true,
+      })
+      .click();
+    await expect(
+      phone.getByText(words(WORKERS.actions.done.unsuspend, { name: "Juma" })),
+    ).toBeVisible();
+    await expect(valueOf(phone, WORKERS.view.status)).toHaveText(
+      WORKERS.status.active,
+    );
   });
 });
 
@@ -236,19 +283,24 @@ test("the demo's manager gives a role and takes it away", async ({
     await expect(cardPart(phone, WORKERS.view.roles)).toContainText(seller);
   });
 
-  await test.step("Ondoa, with a reason: the role is gone", async () => {
+  await test.step("Ondoa, in its sheet, with a reason: the role is gone", async () => {
     await phone
       .getByRole("button", {
         name: words(WORKERS.ending.removeWhat, { what: seller }),
         exact: true,
       })
       .click();
-    await phone
+    const removing = sheet(
+      phone,
+      words(WORKERS.ending.title, { what: seller, name: "Zawadi" }),
+    );
+    await removing
       .getByLabel(WORKERS.actions.reason, { exact: true })
       .fill("Amehamia Vyakula");
-    await phone
-      .getByRole("button", { name: WORKERS.actions.save, exact: true })
+    await removing
+      .getByRole("button", { name: WORKERS.ending.remove, exact: true })
       .click();
+    await expect(removing).toBeHidden();
     await expect(
       phone.getByText(
         words(WORKERS.ending.done, { name: "Zawadi", what: seller }),
