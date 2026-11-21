@@ -398,6 +398,23 @@ def test_a_decided_day_says_its_taps_changed_after(
     assert day_of(answer, 5).taps_changed is False
 
 
+def test_a_laptops_tap_that_arrives_after_the_decision_changes_the_day_too(
+    shop_a: Shop, device_a: Device, asha: StaffMember, baba: StaffMember
+) -> None:
+    # Asha's laptop was offline: her Toka of 18:45 on Tuesday 6th arrives after Baba decided the day, in at 07:50 with
+    # no Toka, a full day. The decision stays, and the day says its taps changed, by when the tap arrived (received_at,
+    # ATT-13's review): no one added it, but the day now reads otherwise.
+    tap(device_a, asha, ClockKind.IN, on(6, 7, 50))
+    kept = next(day for day in _book(shop_a, asha) if day.date == dt.date(2026, 10, 6))
+    with shop_context(shop_a):
+        decided = decide_day(kept, choice=DayChoice.ON_TIME, reason="Alisahau kubonyeza Toka", replaces=None, by=baba)
+    assert decided.decided_at is not None
+    tap(device_a, asha, ClockKind.OUT, on(6, 18, 45), received_at=decided.decided_at + dt.timedelta(minutes=5))
+    sixth = day_of(month_of(shop_a, asha), 6)
+    assert sixth.taps_changed is True
+    assert sixth.decision is not None
+
+
 def test_a_tap_crossed_out_after_the_decision_changes_the_day_too(
     shop_a: Shop, device_a: Device, asha: StaffMember, baba: StaffMember
 ) -> None:
