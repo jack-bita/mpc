@@ -688,6 +688,8 @@ describe("Ondoa", () => {
     fireEvent.change(screen.getByLabelText("Sababu"), {
       target: { value: "  Amehamia Vyakula  " },
     });
+    // Red, as PPL-8 drew it: the worker loses something they could do (Jack: A, UI-10's review).
+    expect(sheetButton("Ondoa").className).toContain("text-destructive");
     fireEvent.click(sheetButton("Ondoa"));
 
     const line =
