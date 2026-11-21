@@ -410,8 +410,9 @@
       "left": "Ameondoka"
     },
     "switchedOff": "Amezimwa na msimamizi wa mfumo. Hawezi kuingia.",
-    "leftHeading": "Walioondoka",
-    "noneLeft": "Hakuna.",
+    "hereHeading": "Wanaofanya kazi ({count})",
+    "leftHeading": "Walioondoka ({count})",
+    "nobody": "Hakuna.",
     "add": "Ongeza",
     "added": "{name} ameongezwa. Jina lake litaonekana kwenye kompyuta za duka baada ya kupewa PIN.",
     "form": {

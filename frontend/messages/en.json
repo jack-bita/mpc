@@ -410,8 +410,9 @@
       "left": "Left"
     },
     "switchedOff": "Switched off by the system admin. They can't log in.",
-    "leftHeading": "Those who left",
-    "noneLeft": "Nobody.",
+    "hereHeading": "Working here ({count})",
+    "leftHeading": "Those who left ({count})",
+    "nobody": "Nobody.",
     "add": "Add",
     "added": "{name} has been added. Their name shows on the shop's laptops once they are given a PIN.",
     "form": {

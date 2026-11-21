@@ -4,7 +4,8 @@
 // As Jack pictured it at PPL-4 (17 Nov 2026): the list first; a name opens the worker's own page, with everything
 // of theirs and the buttons. Those still at the shop come first, newest first as the server sends them, so a worker
 // just added is at the top; those who left sit under their own heading at the bottom (a default of the card), so
-// the list a manager reads each day stays short as the years add names.
+// the list a manager reads each day stays short as the years add names. Each group's heading counts it, "Wanaofanya
+// kazi (5)" and "Walioondoka (2)" (UI-11).
 //
 // Above the list, Ongeza opens the form for a new worker (worker-form.tsx); once he is added, one line says so, and
 // that his name reaches the shop's laptops once he has a PIN, set on his own page (PPL-12). On the demo, its Simu box
@@ -183,23 +184,53 @@ function WorkerList({
   return (
     <>
       {failure}
-      <Workers workers={here} roleOnSide={roleOnSide} />
-      <section className="grid gap-3" aria-labelledby="workers-left">
-        <h2 id="workers-left" className="text-lg font-semibold">
-          {t("leftHeading")}
-        </h2>
-        {gone.length === 0 ? (
-          <p>{t("noneLeft")}</p>
-        ) : (
-          <Workers workers={gone} roleOnSide={roleOnSide} />
-        )}
-      </section>
+      <Group
+        id="workers-here"
+        heading={t("hereHeading", { count: here.length })}
+        workers={here}
+        roleOnSide={roleOnSide}
+      />
+      <Group
+        id="workers-left"
+        heading={t("leftHeading", { count: gone.length })}
+        workers={gone}
+        roleOnSide={roleOnSide}
+      />
     </>
   );
 }
 
 /** How a role is written with its side, "Muuzaji (Dawa)" (useRoleWords). */
 type RoleOnSide = (given: GivenRole) => string;
+
+/** One group under its heading, which counts it, "Wanaofanya kazi (5)" (UI-11, as Jack pictured the list): the
+ * count says at a glance how many work here and how many left, without counting the rows. A region named by its
+ * heading, so a screen reader can jump to either group. An empty group says so in words, never a heading alone. */
+function Group({
+  id,
+  heading,
+  workers,
+  roleOnSide,
+}: {
+  id: string;
+  heading: string;
+  workers: Worker[];
+  roleOnSide: RoleOnSide;
+}) {
+  const t = useTranslations("workers");
+  return (
+    <section className="grid gap-3" aria-labelledby={id}>
+      <h2 id={id} className="text-lg font-semibold">
+        {heading}
+      </h2>
+      {workers.length === 0 ? (
+        <p>{t("nobody")}</p>
+      ) : (
+        <Workers workers={workers} roleOnSide={roleOnSide} />
+      )}
+    </section>
+  );
+}
 
 /** One group of workers, in one panel, a row each. */
 function Workers({

@@ -1,5 +1,6 @@
 // workers-screen.test.tsx — Wafanyakazi lists the shop's workers, each with their names, roles, sides and status,
-// newest first, those who left under their own heading (PPL-6); and Ongeza, whose worker comes at the top.
+// newest first, those who left under their own heading (PPL-6), each group counted in its heading (UI-11); and Ongeza,
+// whose worker comes at the top.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
@@ -153,7 +154,7 @@ describe("the workers' page", () => {
     const here = await rowsHere();
     expect(here).toHaveLength(1);
     expect(within(here[0]!).queryByText(/Hamisi/)).toBeNull();
-    const gone = screen.getByRole("region", { name: "Walioondoka" });
+    const gone = screen.getByRole("region", { name: "Walioondoka (1)" });
     expect(within(gone).getByText("Hamisi · Hamisi Mfano")).toBeTruthy();
     expect(within(gone).getByText("Ameondoka")).toBeTruthy();
   });
@@ -175,7 +176,7 @@ describe("the workers' page", () => {
     render(<WorkersScreen />);
 
     const [here] = await rowsHere();
-    const gone = screen.getByRole("region", { name: "Walioondoka" });
+    const gone = screen.getByRole("region", { name: "Walioondoka (1)" });
     const now = within(here!).getByRole("link", {
       name: "Baraka · Baraka Mfano",
     });
@@ -196,8 +197,51 @@ describe("the workers' page", () => {
 
     render(<WorkersScreen />);
 
-    const gone = await screen.findByRole("region", { name: "Walioondoka" });
+    const gone = await screen.findByRole("region", {
+      name: "Walioondoka (0)",
+    });
     expect(within(gone).getByText("Hakuna.")).toBeTruthy();
+  });
+
+  it("says nobody works here, when everyone has left", async () => {
+    // A heading alone over nothing would look like a list still on its way.
+    theShopHas([worker({ status: "left", left_on: "2026-11-10" })]);
+
+    render(<WorkersScreen />);
+
+    const here = await screen.findByRole("region", {
+      name: "Wanaofanya kazi (0)",
+    });
+    expect(within(here).getByText("Hakuna.")).toBeTruthy();
+    expect(within(here).queryByRole("list")).toBeNull();
+  });
+
+  it("counts each group in its heading, the suspended among those working (UI-11, as Jack pictured it)", async () => {
+    // Five at the shop, Juma suspended among them, as he comes back; two who left.
+    theShopHas([
+      worker({ display_name: "Neema" }),
+      worker({ display_name: "Juma", status: "suspended" }),
+      worker({ display_name: "Baraka" }),
+      worker({ display_name: "Asha" }),
+      worker({ display_name: "Meneja" }),
+      worker({ display_name: "Halima", status: "left", left_on: "2026-10-01" }),
+      worker({ display_name: "Musa", status: "left", left_on: "2026-09-15" }),
+    ]);
+
+    render(<WorkersScreen />);
+
+    const here = await screen.findByRole("region", {
+      name: "Wanaofanya kazi (5)",
+    });
+    expect(within(here).getAllByRole("listitem")).toHaveLength(5);
+    const gone = screen.getByRole("region", { name: "Walioondoka (2)" });
+    expect(within(gone).getAllByRole("listitem")).toHaveLength(2);
+    // Each a heading under the page's title, so a screen reader can jump between the two.
+    expect(
+      screen
+        .getAllByRole("heading", { level: 2 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Wanaofanya kazi (5)", "Walioondoka (2)"]);
   });
 
   it("says who the superuser switched off, apart from the job's status", async () => {
