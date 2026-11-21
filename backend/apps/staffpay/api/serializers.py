@@ -314,9 +314,11 @@ class VoidTapSerializer(serializers.Serializer[Any]):
     reason = serializers.CharField(max_length=200, allow_blank=True)
 
 
-class TapAnswer(serializers.BaseSerializer[AttendanceEvent]):
-    # A tap added or crossed out, answered as the day under the calendar shows it (AttendanceTapSerializer), so the
-    # sheet can show it at once: read afresh by tap_line, as a worker's month reads its taps, its laptop, photo, doubt
-    # and who added or crossed it out. Only answers: what a fix sends is AddTapSerializer's and VoidTapSerializer's.
+class TapAnswer(AttendanceTapSerializer):
+    # A tap added or crossed out, answered as the day under the calendar shows it, so the sheet can show it at once:
+    # read afresh by tap_line, as a worker's month reads its taps, its laptop, photo, doubt and who added or crossed it
+    # out. The fields are AttendanceTapSerializer's own, so the schema describes the answer by itself, and the route
+    # needs no `create` of its own to name it (AttendanceTapViewSet, whose key check rests on that). Only answers: what
+    # a fix sends is AddTapSerializer's and VoidTapSerializer's.
     def to_representation(self, instance: AttendanceEvent) -> Any:
-        return AttendanceTapSerializer(tap_line(instance)).data
+        return super().to_representation(tap_line(instance))

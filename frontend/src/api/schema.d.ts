@@ -1818,6 +1818,23 @@ export interface components {
          * @enum {string}
          */
         StaffStatusEnum: "active" | "suspended" | "left";
+        TapAnswer: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            date: string;
+            kind: components["schemas"]["ClockKindEnum"];
+            /** Format: time */
+            time: string | null;
+            /** Format: time */
+            laptop_time: string | null;
+            laptop: string | null;
+            photo: components["schemas"]["TapPhoto"] | null;
+            no_photo: (components["schemas"]["NoPhotoEnum"] | components["schemas"]["NullEnum"]) | null;
+            doubt: (components["schemas"]["TapDoubtEnum"] | components["schemas"]["NullEnum"]) | null;
+            entered: components["schemas"]["TapStamp"] | null;
+            voided: components["schemas"]["TapStamp"] | null;
+        };
         /**
          * @description * `not_working` - Suspended or gone
          *     * `clock_disagrees` - A later tap disagrees
@@ -3382,7 +3399,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AttendanceTap"];
+                    "application/json": components["schemas"]["TapAnswer"];
                 };
             };
             default: {
@@ -3416,7 +3433,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AttendanceTap"];
+                    "application/json": components["schemas"]["TapAnswer"];
                 };
             };
             default: {

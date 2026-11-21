@@ -27,7 +27,6 @@ from apps.staffpay.api.serializers import (
     AddTapSerializer,
     AttendanceMonthAnswer,
     AttendanceMonthQuery,
-    AttendanceTapSerializer,
     DayDecisionSerializer,
     DecideDaySerializer,
     PayRateCreateSerializer,
@@ -225,16 +224,14 @@ class AttendanceTapViewSet(CreateOnceMixin[AttendanceEvent]):
         # key again, for every action, before anything is read: a create sent again hands back the tap it made before
         # (CreateOnceMixin), and asks no key for that, so a seller sending the id of a tap their laptop made, as a new
         # tap's, would be handed it, its time and its photo's id. Refused here instead, as the pay rates' route does
-        # (WAGE-1's review).
+        # (WAGE-1's review). This is the check that refuses her: the route keeps CreateOnceMixin's own `create`, which
+        # asks the create's key only after it looks for a tap sent before, so the base leaves that key to it
+        # (ShopViewSet.initial). A `create` written here, even to describe it, would make the base ask instead, and
+        # leave this line unreached (ATT-13's review): the answer describes itself (TapAnswer).
         super().initial(request, *args, **kwargs)
         if Permission.ATTENDANCE_MANAGE not in self.held.on(None):
             # English for the logs; the screens translate the code (ADR-0032).
             raise exceptions.PermissionDenied(f"This person may not {Permission.ATTENDANCE_MANAGE} here.")
-
-    @extend_schema(request=AddTapSerializer, responses={201: AttendanceTapSerializer})
-    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        # CreateOnceMixin's own, named here only to describe it in the schema.
-        return super().create(request, *args, **kwargs)
 
     def create_row(self, data: dict[str, Any]) -> AttendanceEvent:
         # The worker is one of the visit's shop (WorkerField); add_tap checks the rest, and refuses with its codes.
@@ -249,7 +246,7 @@ class AttendanceTapViewSet(CreateOnceMixin[AttendanceEvent]):
             by=cast(StaffMember, self.actor),
         )
 
-    @extend_schema(request=VoidTapSerializer, responses=AttendanceTapSerializer)
+    @extend_schema(request=VoidTapSerializer, responses=TapAnswer)
     @action(detail=True, methods=["post"])
     def void(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         # The tap first, through the guard: another shop's, or an id no shop has, is "not found" alike, whatever was

@@ -2253,7 +2253,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/AttendanceTap"
+                                    "$ref": "#/components/schemas/TapAnswer"
                                 }
                             }
                         },
@@ -2311,7 +2311,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/AttendanceTap"
+                                    "$ref": "#/components/schemas/TapAnswer"
                                 }
                             }
                         },
@@ -5518,6 +5518,95 @@
                 ],
                 "type": "string",
                 "description": "* `active` - Active\n* `suspended` - Suspended\n* `left` - Left"
+            },
+            "TapAnswer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/ClockKindEnum"
+                    },
+                    "time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "laptop_time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "laptop": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "photo": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapPhoto"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "no_photo": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/NoPhotoEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "doubt": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/TapDoubtEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "entered": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapStamp"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapStamp"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "date",
+                    "doubt",
+                    "entered",
+                    "id",
+                    "kind",
+                    "laptop",
+                    "laptop_time",
+                    "no_photo",
+                    "photo",
+                    "time",
+                    "voided"
+                ]
             },
             "TapDoubtEnum": {
                 "enum": [
