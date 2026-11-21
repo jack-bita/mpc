@@ -4,10 +4,12 @@ pushed later (ATT-1; 02 §12).
     who    in/out  laptop          laptop's time  trusted time  check
     Asha   in      Laptop ya Dawa  07:20          07:20         device_ok
     Juma   in      Laptop ya Dawa  07:30          —             unverified
+    Juma   out     —               —              18:45         entered     added by Baba: "Alisahau kubonyeza Toka"
 
-A ledger: a line is written once, by the clock document's saving code (apps/staffpay/documents.py), and never
-changed or deleted, only voided once, with who and why (T2, ADR-0021). A late fine is worked out from these lines
-(ATT-4), so each keeps the laptop's own time, the evidence about it, and the time the server trusts.
+A ledger: a line is written once, by the clock document's saving code (apps/staffpay/documents.py), or by a manager in
+the office for a tap a worker forgot (ATT-13), and never changed or deleted, only voided once, with who and why (T2,
+ADR-0021). A late fine is worked out from these lines (ATT-4), so each keeps the laptop's own time, the evidence about
+it, and the time the server trusts; a line entered in the office has no laptop, and keeps who entered it and why.
 
 It also owns the names of what a day was (DayStatus): on time, late, half, absent, off or needs review, which the
 day's rule answers (apps/staffpay/calculations.py), and of why a day needs review (ReviewReason, ATT-5); and the book of
@@ -53,6 +55,9 @@ class TimeCheck(models.TextChoices):
     SERVER = "server", "The server's time"  # sent at once: the server's time of the tap, its arrival less the wait
     DEVICE_OK = "device_ok", "The laptop's time, checked"  # sent later, and no sign its clock moved
     UNVERIFIED = "unverified", "Not verified"  # a sign its clock moved: a manager decides
+    # Entered in the office by a manager, for a tap the worker forgot (ATT-13): the minute they typed, trusted, as the
+    # person who may fix attendance says so. An Ingia added at 07:50 takes the late fine, as a real tap would.
+    ENTERED = "entered", "Entered in the office"
 
 
 class NoPhoto(models.TextChoices):
@@ -65,6 +70,8 @@ class NoPhoto(models.TextChoices):
     # Version 1 of the clock-in, from an app with no camera yet: the server's word, never a laptop's choice.
     OLD_APP = "old_app", "App before photos"
     DEMO = "demo", "Demo"  # on the demo a visitor's face never leaves their laptop (Jack: A)
+    # Entered in the office by a manager (ATT-13): no laptop, so no camera, ever. The server's word, never a laptop's.
+    ENTERED = "entered", "Entered in the office"
 
 
 class DayStatus(models.TextChoices):
@@ -135,12 +142,31 @@ DECISION_OF: dict[DayChoice, tuple[DayStatus, str]] = {
 class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
     # One tap of Ingia or Toka. AppendOnly first, so its save() and delete() run first and refuse a change;
     # CounterRecord gives the laptop, its number for the line and both clocks (03 §5.3). created_by (ShopScoped):
-    # who tapped, on the laptop, by their PIN (X3).
+    # who tapped, on the laptop, by their PIN (X3); or, on a tap entered in the office, who entered it (ATT-13), as
+    # created_by names whoever made any row: so no `entered_by` column, one fact kept once.
 
-    # Whose attendance it is: today always the one who tapped. A column of its own all the same, as a manager
-    # entering a missed clock-in for someone (ATT-13) writes a line about another person, and a ledger's lines can't
-    # be filled in later. PROTECT: nothing is deleted (rule 7). No index of its own: indexes lead with `shop`, and the
-    # one the book of days reads a month by is below (Meta).
+    # A tap a manager enters in the office (ATT-13) has no laptop: none made it, numbered it or timed it. So three of
+    # the facts CounterRecord gives every counter record may be empty here, on this table alone: Django lets a table
+    # write over a field it takes from an abstract base. The time it was entered is `received_at`, which stays, the
+    # server's clock as the line is kept. Which line is whose, a laptop's with all of them or the office's with none,
+    # is a rule below (Meta). The type checker holds a field written over to its base's type, which is never empty,
+    # so each of the three lines tells it this table's may be.
+    device = models.ForeignKey(  # type: ignore[assignment]
+        "people.Device",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        editable=False,
+        db_index=False,
+    )
+    device_seq = models.PositiveBigIntegerField(null=True, blank=True, editable=False)  # type: ignore[assignment]
+    client_time = models.DateTimeField(null=True, blank=True, editable=False)  # type: ignore[assignment]
+
+    # Whose attendance it is: on a laptop's tap, the one who tapped; on one entered in the office (ATT-13), the worker
+    # it was entered for, as the manager who entered it is `created_by`. A column of its own for that, as a ledger's
+    # lines can't be filled in later. PROTECT: nothing is deleted (rule 7). No index of its own: indexes lead with
+    # `shop`, and the one the book of days reads a month by is below (Meta).
     staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
     kind = models.CharField(max_length=3, choices=ClockKind)
     # The time the server trusts, and how far (TimeCheck): for a clock-in sent at once, the server's time of the tap,
@@ -152,8 +178,9 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
     # The evidence about the laptop's clock, kept as it was read (02 §12), so a manager can see why a line wasn't
     # trusted: the last server time the laptop had seen when the worker tapped, and how far off the laptop's clock
     # was as it sent the push (its clock minus the server's: 40 minutes slow is minus 40 minutes).
-    last_server_time = models.DateTimeField()
-    clock_error = models.DurationField()
+    # Both empty on a tap entered in the office, which no laptop clock timed (ATT-13).
+    last_server_time = models.DateTimeField(null=True, blank=True)
+    clock_error = models.DurationField(null=True, blank=True)
     # The record this tap's time disagrees with (ATT-11): the laptop's record numbered just before it, whose time is
     # later. Juma's Toka says 18:45, then Asha's says 18:30: a clock moved between the two, and the server can't tell
     # whose, so hers is `unverified`, and its flag names him too (ATT-1's review). A flag names people, not records, so
@@ -165,6 +192,9 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
     # Why the tap has no photo, or empty when its photo came (NoPhoto, ATT-3). Written once with the line, as the rest
     # of it is: a photo that arrives late changes nothing here, as its row is the one that waits (CTRL-3).
     no_photo = models.CharField(max_length=9, choices=NoPhoto, blank=True)
+    # Why a manager entered the tap in the office (ATT-13), "Alisahau kubonyeza Toka"; empty on a laptop's tap, whose
+    # worker tapped it themselves. Written once with the line, as the rest of it is.
+    entry_reason = models.TextField(blank=True)
     # The void stamp (03 §5.6): empty while the line counts, filled once when it is voided, then frozen, as the
     # trigger in this table's migration makes PostgreSQL hold it. A clock-in tapped twice by mistake is voided, never
     # deleted (T3). Who voided it: a staff member, as created_by is; PROTECT, as nothing is deleted. That they are of
@@ -201,6 +231,8 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
                         time_check=TimeCheck.DEVICE_OK, trusted_time__isnull=False, trusted_time=models.F("client_time")
                     )
                     | models.Q(time_check=TimeCheck.UNVERIFIED, trusted_time__isnull=True)
+                    # Entered in the office (ATT-13): the minute the manager typed, its only time.
+                    | models.Q(time_check=TimeCheck.ENTERED, trusted_time__isnull=False)
                 ),
                 name="staffpay_attendanceevent_trusted_time_fits_its_check",
             ),
@@ -224,6 +256,39 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
             # another table, and comes in the same transaction, after the line it is pinned to.
             models.CheckConstraint(
                 condition=models.Q(no_photo__in=["", *NoPhoto.values]), name="staffpay_attendanceevent_no_photo_known"
+            ),
+            # A line is a laptop's or the office's, never half of each (ATT-13). A laptop's has every fact a laptop
+            # gives, its laptop, its number, its clock and the evidence about it, and no entry reason, check or photo
+            # reason of the office's. The office's has none of those facts, says who entered it and why (T3), with a
+            # reason that isn't spaces alone, as a void's, and is `entered` by its check and by its photo reason. Each
+            # fact said to be there or not, never compared with an empty one: a comparison with an empty value is
+            # "unknown", which a rule lets through, so the trusted time's rule alone would let an office line pass as
+            # `device_ok`, its laptop time empty.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        device__isnull=False,
+                        device_seq__isnull=False,
+                        client_time__isnull=False,
+                        last_server_time__isnull=False,
+                        clock_error__isnull=False,
+                        entry_reason="",
+                    )
+                    & ~models.Q(time_check=TimeCheck.ENTERED)
+                    & ~models.Q(no_photo=NoPhoto.ENTERED)
+                )
+                | models.Q(
+                    device__isnull=True,
+                    device_seq__isnull=True,
+                    client_time__isnull=True,
+                    last_server_time__isnull=True,
+                    clock_error__isnull=True,
+                    created_by__isnull=False,
+                    entry_reason__regex=r"\S",
+                    time_check=TimeCheck.ENTERED,
+                    no_photo=NoPhoto.ENTERED,
+                ),
+                name="staffpay_attendanceevent_from_a_laptop_or_the_office",
             ),
         ]
         # How the book of days finds a month of taps (ATT-10): the shop's lines by the time the server trusts, from

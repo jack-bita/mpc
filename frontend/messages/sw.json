@@ -649,6 +649,7 @@
     "notInYet": "Hujaingia kazini leo.",
     "inSince": "Uliingia kazini saa {time}.",
     "outSince": "Ulitoka kazini saa {time}.",
+    "doneToday": "Umeshatoka leo. Mwambie meneja.",
     "timeOfDay": "{time} {part, select, morning {asubuhi} afternoon {mchana} evening {jioni} other {usiku}}",
     "savedIn": "Umeingia kazini saa {time}.",
     "savedOut": "Umetoka kazini saa {time}. Kwaheri!",
@@ -799,6 +800,28 @@
       "out": "Toka"
     },
     "tapLine": "{kind} {time} · {laptop}",
+    "tapLineNoLaptop": "{kind} {time}",
+    "voidTap": "Batilisha",
+    "voidSheetTitle": "Batilisha {kind} ya {name}",
+    "voidSheetAbout": "{weekday} {date} · {tap}",
+    "voidedBy": "Imebatilishwa na {by}, {date} · Sababu: {reason}",
+    "voidedByNoDate": "Imebatilishwa na {by} · Sababu: {reason}",
+    "fixHint": "Kwa nini, kwa maneno yako.",
+    "readyTapReason": {
+      "forgot_tap": "Alisahau kubonyeza",
+      "wrong_tap": "Alibonyeza kwa makosa"
+    },
+    "tapsChanged": "Ingia au Toka zimebadilika baada ya uamuzi.",
+    "addTap": "Ongeza Ingia au Toka",
+    "addSheetTitle": "Ongeza Ingia au Toka ya {name}",
+    "addTapSave": "Ongeza",
+    "addKindLabel": "Ingia au Toka",
+    "timeLabel": "Saa",
+    "timeHint": "Saa ya duka, kama 18:45.",
+    "timeMissing": "Andika saa.",
+    "timeSaid": "Itahifadhiwa kama: {tap}",
+    "tapLineEntered": "{kind} {time} · imeongezwa na {by}, {date}",
+    "tapLineEnteredNoDate": "{kind} {time} · imeongezwa na {by}",
     "laptopTime": "{time} (saa ya kompyuta, haiaminiki)",
     "doubt": "Shaka: {why}",
     "doubtWhy": {
@@ -814,7 +837,8 @@
       "blocked": "kamera imezuiwa",
       "failed": "kamera haikufanya kazi",
       "old_app": "programu ya zamani, kabla ya picha",
-      "demo": "hii ni demo, picha haitumwi"
+      "demo": "hii ni demo, picha haitumwi",
+      "entered": "imeongezwa ofisini"
     },
     "noTaps": "Hakuna Ingia wala Toka siku hii.",
     "noIn": "Hakuna Ingia.",
@@ -1194,6 +1218,12 @@
       "not_working_day": "Siku hii haiamuliwi: si siku ya kazi iliyokwisha.",
       "choice_not_offered": "Siku hii haiwezi kuamuliwa hivyo.",
       "reason_missing": "Andika sababu ya uamuzi huu."
+    },
+    "tap": {
+      "own": "Huwezi kurekebisha Ingia au Toka zako mwenyewe.",
+      "not_working_day": "Siku hii si siku ya kazi ya mfanyakazi huyu.",
+      "in_future": "Saa hii bado haijafika.",
+      "reason_missing": "Andika sababu."
     },
     "attachment": {
       "not_found": "Seva haina picha hii.",

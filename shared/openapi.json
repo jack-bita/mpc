@@ -2226,6 +2226,110 @@
                 }
             }
         },
+        "/api/v1/staffpay/attendance-taps/": {
+            "post": {
+                "operationId": "staffpay_attendance_taps_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AddTapRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TapAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/staffpay/attendance-taps/{id}/void/": {
+            "post": {
+                "operationId": "staffpay_attendance_taps_void_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this attendance event.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VoidTapRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TapAnswer"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/staffpay/attendance-worker/{id}/": {
             "get": {
                 "operationId": "staffpay_attendance_worker_retrieve",
@@ -2388,6 +2492,42 @@
                 "type": "string",
                 "description": "* `office_duty` - Office duty\n* `permission` - Permission\n* `no_show` - No-show"
             },
+            "AddTapRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/ClockKindEnum"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "time": {
+                        "type": "string",
+                        "format": "time"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "date",
+                    "id",
+                    "kind",
+                    "reason",
+                    "staff",
+                    "time"
+                ]
+            },
             "ApiError": {
                 "type": "object",
                 "properties": {
@@ -2489,10 +2629,12 @@
                     },
                     "laptop_time": {
                         "type": "string",
-                        "format": "time"
+                        "format": "time",
+                        "nullable": true
                     },
                     "laptop": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "photo": {
                         "allOf": [
@@ -2523,18 +2665,36 @@
                                 "$ref": "#/components/schemas/NullEnum"
                             }
                         ]
+                    },
+                    "entered": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapStamp"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapStamp"
+                            }
+                        ],
+                        "nullable": true
                     }
                 },
                 "required": [
                     "date",
                     "doubt",
+                    "entered",
                     "id",
                     "kind",
                     "laptop",
                     "laptop_time",
                     "no_photo",
                     "photo",
-                    "time"
+                    "time",
+                    "voided"
                 ]
             },
             "BootstrapAnswer": {
@@ -3699,10 +3859,11 @@
                     "blocked",
                     "failed",
                     "old_app",
-                    "demo"
+                    "demo",
+                    "entered"
                 ],
                 "type": "string",
-                "description": "* `no_camera` - No camera\n* `blocked` - Camera blocked\n* `failed` - Camera failed\n* `old_app` - App before photos\n* `demo` - Demo"
+                "description": "* `no_camera` - No camera\n* `blocked` - Camera blocked\n* `failed` - Camera failed\n* `old_app` - App before photos\n* `demo` - Demo\n* `entered` - Entered in the office"
             },
             "NullEnum": {
                 "enum": [
@@ -4403,6 +4564,13 @@
                 "type": "string",
                 "description": "* `accepted` - Accepted\n* `invalid` - Invalid"
             },
+            "ReadyAddReasonsEnum": {
+                "enum": [
+                    "forgot_tap"
+                ],
+                "type": "string",
+                "description": "* `forgot_tap` - forgot_tap"
+            },
             "ReadyReasonsEnum": {
                 "enum": [
                     "forgot_toka",
@@ -4411,6 +4579,13 @@
                 ],
                 "type": "string",
                 "description": "* `forgot_toka` - forgot_toka\n* `away_on_work` - away_on_work\n* `owner_allowed` - owner_allowed"
+            },
+            "ReadyVoidReasonsEnum": {
+                "enum": [
+                    "wrong_tap"
+                ],
+                "type": "string",
+                "description": "* `wrong_tap` - wrong_tap"
             },
             "ReasonEnum": {
                 "enum": [
@@ -5344,6 +5519,95 @@
                 "type": "string",
                 "description": "* `active` - Active\n* `suspended` - Suspended\n* `left` - Left"
             },
+            "TapAnswer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/ClockKindEnum"
+                    },
+                    "time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "laptop_time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "laptop": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "photo": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapPhoto"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "no_photo": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/NoPhotoEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "doubt": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/TapDoubtEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "entered": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapStamp"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapStamp"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "date",
+                    "doubt",
+                    "entered",
+                    "id",
+                    "kind",
+                    "laptop",
+                    "laptop_time",
+                    "no_photo",
+                    "photo",
+                    "time",
+                    "voided"
+                ]
+            },
             "TapDoubtEnum": {
                 "enum": [
                     "not_working",
@@ -5368,6 +5632,26 @@
                     "state"
                 ]
             },
+            "TapStamp": {
+                "type": "object",
+                "properties": {
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "at",
+                    "by",
+                    "reason"
+                ]
+            },
             "TemporaryPasswordRequest": {
                 "type": "object",
                 "properties": {
@@ -5385,6 +5669,18 @@
                 },
                 "required": [
                     "password",
+                    "reason"
+                ]
+            },
+            "VoidTapRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
                     "reason"
                 ]
             },
@@ -5483,13 +5779,29 @@
                             "$ref": "#/components/schemas/ReadyReasonsEnum"
                         },
                         "description": "On the demo, the ready reasons a decision may take, as codes; elsewhere none (ATT-6)."
+                    },
+                    "ready_add_reasons": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ReadyAddReasonsEnum"
+                        },
+                        "description": "On the demo, the ready reasons a tap added may take, as codes; elsewhere none (ATT-13)."
+                    },
+                    "ready_void_reasons": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ReadyVoidReasonsEnum"
+                        },
+                        "description": "On the demo, the ready reasons a tap crossed out may take, as codes; elsewhere none (ATT-13)."
                     }
                 },
                 "required": [
                     "days",
                     "left_on",
                     "month",
+                    "ready_add_reasons",
                     "ready_reasons",
+                    "ready_void_reasons",
                     "started_on",
                     "taps",
                     "today",
@@ -5550,6 +5862,10 @@
                         "items": {
                             "$ref": "#/components/schemas/DayOption"
                         }
+                    },
+                    "taps_changed": {
+                        "type": "boolean",
+                        "description": "Whether a tap of the day was added, arrived or was crossed out after the day was decided (ATT-13)."
                     }
                 },
                 "required": [
@@ -5561,7 +5877,8 @@
                     "first_out",
                     "id",
                     "reason",
-                    "status"
+                    "status",
+                    "taps_changed"
                 ]
             },
             "WorkerMonth": {

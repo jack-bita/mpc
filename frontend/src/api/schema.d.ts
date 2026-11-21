@@ -682,6 +682,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staffpay/attendance-taps/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_attendance_taps_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staffpay/attendance-taps/{id}/void/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).
+         *
+         *     The client makes the new row's id and sends it with the row. A phone whose answer was lost sends the
+         *     same request again, with the same id, and gets the stored row back, with the same 201: the row as it is
+         *     now, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat
+         *     gets the stored row whatever else it carries. A route that makes rows builds on this, names what a
+         *     create sends (`create_serializer_class`), and writes create_row(), which calls its service.
+         */
+        post: operations["staffpay_attendance_taps_void_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staffpay/attendance-worker/{id}/": {
         parameters: {
             query?: never;
@@ -743,6 +793,18 @@ export interface components {
          * @enum {string}
          */
         AbsenceTypeEnum: "office_duty" | "permission" | "no_show";
+        AddTapRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            staff: string;
+            kind: components["schemas"]["ClockKindEnum"];
+            /** Format: date */
+            date: string;
+            /** Format: time */
+            time: string;
+            reason: string;
+        };
         ApiError: {
             code: string;
             message: string;
@@ -772,11 +834,13 @@ export interface components {
             /** Format: time */
             time: string | null;
             /** Format: time */
-            laptop_time: string;
-            laptop: string;
+            laptop_time: string | null;
+            laptop: string | null;
             photo: components["schemas"]["TapPhoto"] | null;
             no_photo: (components["schemas"]["NoPhotoEnum"] | components["schemas"]["NullEnum"]) | null;
             doubt: (components["schemas"]["TapDoubtEnum"] | components["schemas"]["NullEnum"]) | null;
+            entered: components["schemas"]["TapStamp"] | null;
+            voided: components["schemas"]["TapStamp"] | null;
         };
         BootstrapAnswer: {
             /**
@@ -1147,9 +1211,10 @@ export interface components {
          *     * `failed` - Camera failed
          *     * `old_app` - App before photos
          *     * `demo` - Demo
+         *     * `entered` - Entered in the office
          * @enum {string}
          */
-        NoPhotoEnum: "no_camera" | "blocked" | "failed" | "old_app" | "demo";
+        NoPhotoEnum: "no_camera" | "blocked" | "failed" | "old_app" | "demo" | "entered";
         /** @enum {unknown} */
         NullEnum: null;
         OutageEnvelopeRequest: {
@@ -1450,12 +1515,22 @@ export interface components {
          */
         PushedStatusEnum: "accepted" | "invalid";
         /**
+         * @description * `forgot_tap` - forgot_tap
+         * @enum {string}
+         */
+        ReadyAddReasonsEnum: "forgot_tap";
+        /**
          * @description * `forgot_toka` - forgot_toka
          *     * `away_on_work` - away_on_work
          *     * `owner_allowed` - owner_allowed
          * @enum {string}
          */
         ReadyReasonsEnum: "forgot_toka" | "away_on_work" | "owner_allowed";
+        /**
+         * @description * `wrong_tap` - wrong_tap
+         * @enum {string}
+         */
+        ReadyVoidReasonsEnum: "wrong_tap";
         /**
          * @description * `outside_job` - Outside the job's days
          *     * `closed_day` - The shop was closed
@@ -1743,6 +1818,23 @@ export interface components {
          * @enum {string}
          */
         StaffStatusEnum: "active" | "suspended" | "left";
+        TapAnswer: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            date: string;
+            kind: components["schemas"]["ClockKindEnum"];
+            /** Format: time */
+            time: string | null;
+            /** Format: time */
+            laptop_time: string | null;
+            laptop: string | null;
+            photo: components["schemas"]["TapPhoto"] | null;
+            no_photo: (components["schemas"]["NoPhotoEnum"] | components["schemas"]["NullEnum"]) | null;
+            doubt: (components["schemas"]["TapDoubtEnum"] | components["schemas"]["NullEnum"]) | null;
+            entered: components["schemas"]["TapStamp"] | null;
+            voided: components["schemas"]["TapStamp"] | null;
+        };
         /**
          * @description * `not_working` - Suspended or gone
          *     * `clock_disagrees` - A later tap disagrees
@@ -1754,8 +1846,17 @@ export interface components {
             id: string;
             state: components["schemas"]["PhotoStateEnum"];
         };
+        TapStamp: {
+            by: string;
+            /** Format: date-time */
+            at: string;
+            reason: string;
+        };
         TemporaryPasswordRequest: {
             password: string;
+            reason: string;
+        };
+        VoidTapRequest: {
             reason: string;
         };
         WhoIsHere: {
@@ -1784,6 +1885,10 @@ export interface components {
             yours: boolean;
             /** @description On the demo, the ready reasons a decision may take, as codes; elsewhere none (ATT-6). */
             ready_reasons: components["schemas"]["ReadyReasonsEnum"][];
+            /** @description On the demo, the ready reasons a tap added may take, as codes; elsewhere none (ATT-13). */
+            ready_add_reasons: components["schemas"]["ReadyAddReasonsEnum"][];
+            /** @description On the demo, the ready reasons a tap crossed out may take, as codes; elsewhere none (ATT-13). */
+            ready_void_reasons: components["schemas"]["ReadyVoidReasonsEnum"][];
         };
         WorkerDay: {
             /** Format: uuid */
@@ -1800,6 +1905,8 @@ export interface components {
             first_out: string | null;
             decision: components["schemas"]["DayDecision"] | null;
             choices: components["schemas"]["DayOption"][];
+            /** @description Whether a tap of the day was added, arrived or was crossed out after the day was decided (ATT-13). */
+            taps_changed: boolean;
         };
         WorkerMonth: {
             /** Format: uuid */
@@ -3262,6 +3369,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttendanceMonthAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_attendance_taps_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddTapRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TapAnswer"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_attendance_taps_void_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this attendance event. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidTapRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TapAnswer"];
                 };
             };
             default: {

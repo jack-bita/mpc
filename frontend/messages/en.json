@@ -649,6 +649,7 @@
     "notInYet": "You haven't clocked in today.",
     "inSince": "You clocked in at {time}.",
     "outSince": "You clocked out at {time}.",
+    "doneToday": "You've already left for today. Tell the manager.",
     "timeOfDay": "{time}{part, select, other {}}",
     "savedIn": "Clocked in at {time}.",
     "savedOut": "Clocked out at {time}. Goodbye!",
@@ -799,6 +800,28 @@
       "out": "Toka"
     },
     "tapLine": "{kind} {time} · {laptop}",
+    "tapLineNoLaptop": "{kind} {time}",
+    "voidTap": "Cross out",
+    "voidSheetTitle": "Cross out {name}'s {kind}",
+    "voidSheetAbout": "{weekday} {date} · {tap}",
+    "voidedBy": "Crossed out by {by}, {date} · Reason: {reason}",
+    "voidedByNoDate": "Crossed out by {by} · Reason: {reason}",
+    "fixHint": "Why, in your own words.",
+    "readyTapReason": {
+      "forgot_tap": "Forgot to tap",
+      "wrong_tap": "Tapped by mistake"
+    },
+    "tapsChanged": "An Ingia or Toka changed after the decision.",
+    "addTap": "Add an Ingia or Toka",
+    "addSheetTitle": "Add {name}'s Ingia or Toka",
+    "addTapSave": "Add",
+    "addKindLabel": "Ingia or Toka",
+    "timeLabel": "Time",
+    "timeHint": "The shop's clock, as 18:45.",
+    "timeMissing": "Write the time.",
+    "timeSaid": "It will be saved as: {tap}",
+    "tapLineEntered": "{kind} {time} · added by {by}, {date}",
+    "tapLineEnteredNoDate": "{kind} {time} · added by {by}",
     "laptopTime": "{time} (the laptop's clock, not trusted)",
     "doubt": "In doubt: {why}",
     "doubtWhy": {
@@ -814,7 +837,8 @@
       "blocked": "the camera is blocked",
       "failed": "the camera didn't work",
       "old_app": "an app from before photos",
-      "demo": "this is the demo, the photo isn't sent"
+      "demo": "this is the demo, the photo isn't sent",
+      "entered": "added in the office"
     },
     "noTaps": "No Ingia or Toka this day.",
     "noIn": "No Ingia.",
@@ -1194,6 +1218,12 @@
       "not_working_day": "This day can't be decided: it isn't a working day that is over.",
       "choice_not_offered": "This day can't be decided that way.",
       "reason_missing": "Write why you decided this."
+    },
+    "tap": {
+      "own": "You can't fix your own Ingia or Toka.",
+      "not_working_day": "This day isn't one of this worker's working days.",
+      "in_future": "This time hasn't come yet.",
+      "reason_missing": "Write why."
     },
     "attachment": {
       "not_found": "The server has no such photo.",

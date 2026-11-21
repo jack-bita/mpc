@@ -114,7 +114,7 @@ export interface PersonsDay {
   staffId: string;
   /** Their first clock-in today: when they came. Null for a clock-out with none before it. */
   cameAt: string | null;
-  /** Their last clock-out, while they are out: null while they are in, back from lunch too. */
+  /** Their last clock-out, while they are out: null while they are in, back in after a clock-out too. */
   leftAt: string | null;
 }
 
@@ -133,7 +133,8 @@ export function peopleToday(taps: readonly Tap[]): PersonsDay[] {
     }
     if (tap.kind === "in") {
       day.cameAt ??= tap.at;
-      // Back in after a clock-out, as after lunch: here again, so no leaving time.
+      // Back in after a clock-out: here again, so no leaving time. Mahudhurio no longer offers it, as Toka
+      // ends the day (ATT-13), but taps from an app before that, on the day a laptop updates, can say so.
       day.leftAt = null;
     } else day.leftAt = tap.at;
   }

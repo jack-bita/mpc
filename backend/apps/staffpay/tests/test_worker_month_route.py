@@ -104,6 +104,9 @@ def test_the_workers_month_as_the_page_reads_it(
                 "photo": None,
                 "no_photo": "demo",
                 "doubt": None,
+                # A laptop's tap, never crossed out (ATT-13).
+                "entered": None,
+                "voided": None,
             }
         ],
     }
@@ -127,6 +130,8 @@ def test_the_workers_month_as_the_page_reads_it(
             {"choice": choice, "fine": nothing}
             for choice in ("on_time", "late", "half", "office_duty", "permission", "no_show")
         ],
+        # Nobody decided it, so no tap changed since (ATT-13).
+        "taps_changed": False,
     }
     assert answer["days"][0] == {
         "id": kept["2026-10-01"],
@@ -141,6 +146,7 @@ def test_the_workers_month_as_the_page_reads_it(
             {"choice": choice, "fine": nothing}
             for choice in ("on_time", "half", "office_duty", "permission", "no_show")
         ],
+        "taps_changed": False,
     }
     # Staff A, the owner, looks at Asha's month, not their own; and this is no demo, so no ready reasons.
     assert (answer["yours"], answer["ready_reasons"]) == (False, [])

@@ -1,11 +1,12 @@
 """apps/staffpay/api/views.py — the staffpay routes an office screen calls, under /api/v1/staffpay/ (WAGE-1; 03 §5.10).
 
-Four: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of attendance,
-read on Mahudhurio ya mwezi (ATT-5); one worker's month, their calendar and its days' taps (ATT-12); and a decision on
-one of their days, sent from the sheet under the calendar (ATT-6). Thin, as every route is (ADR-0015): who may set a
+Five: a worker's daily pay rates, read and set on the worker's page (Malipo kwa siku, WAGE-1); a month of attendance,
+read on Mahudhurio ya mwezi (ATT-5); one worker's month, their calendar and its days' taps (ATT-12); a decision on one
+of their days, sent from the sheet under the calendar (ATT-6); and a manager's fixes to the taps, a tap added and a tap
+crossed out, each sent from its sheet under the calendar (ATT-13). Thin, as every route is (ADR-0015): who may set a
 rate, and what it may be, are set_pay_rate's (apps/staffpay/services.py); which rate is in force, the selectors'; what a
 month holds, attendance_month's; what a worker's month holds, worker_attendance's; who may decide a day, and how,
-decide_day's.
+decide_day's; who may fix a tap, and how, add_tap's and void_tap's.
 """
 
 from typing import Any, cast
@@ -23,6 +24,7 @@ from apps.people.models import StaffMember
 from apps.shops.models import Shop
 from apps.shops.selectors import shop_today
 from apps.staffpay.api.serializers import (
+    AddTapSerializer,
     AttendanceMonthAnswer,
     AttendanceMonthQuery,
     DayDecisionSerializer,
@@ -31,11 +33,21 @@ from apps.staffpay.api.serializers import (
     PayRatesAnswer,
     PayRateSerializer,
     PayRatesQuery,
+    TapAnswer,
+    VoidTapSerializer,
     WorkerAttendanceAnswer,
 )
-from apps.staffpay.models import AttendanceDay, DayChoice, PayRate
+from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayChoice, PayRate
 from apps.staffpay.selectors import NEWEST_FIRST, rate_in_force
-from apps.staffpay.services import attendance_month, decide_day, decision_of, set_pay_rate, worker_attendance
+from apps.staffpay.services import (
+    add_tap,
+    attendance_month,
+    decide_day,
+    decision_of,
+    set_pay_rate,
+    void_tap,
+    worker_attendance,
+)
 
 
 class PayRateViewSet(CreateOnceMixin[PayRate]):
@@ -186,3 +198,62 @@ class AttendanceDayViewSet(ShopViewSet[AttendanceDay]):
         # The decision as the day will show it, the decider named by their nickname: the page asks the month again
         # after it, and this answer lets it show the decision at once.
         return Response(DayDecisionSerializer(decision_of(decided, {by.pk: by.display_name})).data)
+
+
+class AttendanceTapViewSet(CreateOnceMixin[AttendanceEvent]):
+    # POST attendance-taps/: a manager adds a tap a worker forgot (ATT-13), from the sheet under the worker's calendar:
+    # Juma's Toka of 18:45, "Alisahau kubonyeza Toka". POST attendance-taps/{id}/void/: a manager crosses out a tap
+    # made by mistake, Juma's Toka of 10:00, "Alibonyeza kwa makosa"; the tap in the address, one of the visit's shop,
+    # found through the guard (get_object): another shop's, or an id no shop has, is "not found" alike (03 §5.4). No
+    # list and no read of a tap alone: the taps are read through the worker's month (ATT-12). Each answers the tap as
+    # the day shows it (TapAnswer).
+    model = AttendanceEvent
+    # Attendance belongs to the whole shop, as its rules do (02 §12): no side.
+    side_field = None
+    # The key to fix attendance, on the whole shop, as the month's routes ask it (ATT-5, ATT-12, ATT-6). The services
+    # ask it again, inside their transactions, and refuse one's own taps (as ATT-6's own day).
+    action_permissions = {
+        "create": Permission.ATTENDANCE_MANAGE,
+        "void": Permission.ATTENDANCE_MANAGE,
+    }
+    serializer_class = TapAnswer
+    create_serializer_class = AddTapSerializer
+
+    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
+        # The base's checks first: the login, the action named, and its key above (apps/core/api/base.py). Then the same
+        # key again, for every action, before anything is read: a create sent again hands back the tap it made before
+        # (CreateOnceMixin), and asks no key for that, so a seller sending the id of a tap their laptop made, as a new
+        # tap's, would be handed it, its time and its photo's id. Refused here instead, as the pay rates' route does
+        # (WAGE-1's review). This is the check that refuses her: the route keeps CreateOnceMixin's own `create`, which
+        # asks the create's key only after it looks for a tap sent before, so the base leaves that key to it
+        # (ShopViewSet.initial). A `create` written here, even to describe it, would make the base ask instead, and
+        # leave this line unreached (ATT-13's review): the answer describes itself (TapAnswer).
+        super().initial(request, *args, **kwargs)
+        if Permission.ATTENDANCE_MANAGE not in self.held.on(None):
+            # English for the logs; the screens translate the code (ADR-0032).
+            raise exceptions.PermissionDenied(f"This person may not {Permission.ATTENDANCE_MANAGE} here.")
+
+    def create_row(self, data: dict[str, Any]) -> AttendanceEvent:
+        # The worker is one of the visit's shop (WorkerField); add_tap checks the rest, and refuses with its codes.
+        # cast: the login leaves the staff member acting in `request.auth`, which mypy reads as an Actor.
+        return add_tap(
+            data["staff"],
+            tap_id=data["id"],
+            kind=ClockKind(data["kind"]),
+            date=data["date"],
+            minute=data["time"],
+            reason=data["reason"],
+            by=cast(StaffMember, self.actor),
+        )
+
+    @extend_schema(request=VoidTapSerializer, responses=TapAnswer)
+    @action(detail=True, methods=["post"])
+    def void(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # The tap first, through the guard: another shop's, or an id no shop has, is "not found" alike, whatever was
+        # sent (03 §5.4). Before the body is read, so the tenancy sweep's empty request reaches the guard, never stops
+        # at a 400 that would answer every tap the same and prove nothing (as ATT-6's review asked of deciding a day).
+        tap = self.get_object()
+        sent = VoidTapSerializer(data=request.data)
+        sent.is_valid(raise_exception=True)
+        voided = void_tap(tap, reason=sent.validated_data["reason"], by=cast(StaffMember, self.actor))
+        return Response(TapAnswer(voided).data)

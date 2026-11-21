@@ -59,10 +59,11 @@ from apps.shops.services import add_closure, add_side, set_setting
 from apps.staffpay.api.views import (
     AttendanceDayViewSet,
     AttendanceMonthViewSet,
+    AttendanceTapViewSet,
     AttendanceWorkerViewSet,
     PayRateViewSet,
 )
-from apps.staffpay.models import PayRate
+from apps.staffpay.models import AttendanceEvent, PayRate
 from apps.staffpay.tests.days import job, kept_day, switch_on
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
@@ -77,6 +78,8 @@ PAY_RATES = "/api/v1/staffpay/pay-rates/"
 ATTENDANCE_MONTH = "/api/v1/staffpay/attendance-month/"
 ATTENDANCE_WORKER = "/api/v1/staffpay/attendance-worker/{}/"
 ATTENDANCE_DAY_DECIDE = "/api/v1/staffpay/attendance-days/{}/decide/"
+ATTENDANCE_TAPS = "/api/v1/staffpay/attendance-taps/"
+ATTENDANCE_TAP_VOID = "/api/v1/staffpay/attendance-taps/{}/void/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -1214,3 +1217,47 @@ def test_attendance_day_route_names_its_permission() -> None:
     # Deciding a day's one action, a change, behind the key to fix attendance (ATT-6), as the month's read is. Written
     # out in full, as above.
     assert AttendanceDayViewSet.action_permissions == {"decide": Permission.ATTENDANCE_MANAGE}
+
+
+@pytest.mark.django_db
+def test_fixing_taps_needs_attendance_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # Fixing a tap (ATT-13) is for whoever fixes attendance: Asha, a seller on Dawa, may neither add a tap nor cross one
+    # out, even with the address typed in; a Manager on every side does both, on Juma's Monday: in at 07:50 on the
+    # shop's laptop, made the way the shop makes one (apps/staffpay/tests/days.py), on this file's Dawa.
+    with shop_context(shop_a):
+        Device.objects.create(shop=shop_a, home_side=sides["D"], name="Laptop ya Dawa", code=1, key_hash="a" * 64)
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    switch_on(shop_a)
+    juma = job(shop_a, "Juma")
+    kept_day(juma)
+    with shop_context(shop_a):
+        ingia = AttendanceEvent.objects.get(staff=juma)
+    added = {
+        "id": str(uuid.uuid7()),
+        "staff": str(juma.pk),
+        "kind": "out",
+        "date": "2026-11-16",
+        "time": "18:45",
+        "reason": "Alisahau kubonyeza Toka",
+    }
+    crossed = {"reason": "Alibonyeza kwa makosa"}
+    for refused in (
+        client_for(staff_a).post(ATTENDANCE_TAPS, added, format="json"),
+        client_for(staff_a).post(ATTENDANCE_TAP_VOID.format(ingia.pk), crossed, format="json"),
+    ):
+        assert refused.status_code == 403
+        assert refused.json()["code"] == "permission_denied"
+    assert client_for(staff_a2).post(ATTENDANCE_TAPS, added, format="json").status_code == 201
+    assert client_for(staff_a2).post(ATTENDANCE_TAP_VOID.format(ingia.pk), crossed, format="json").status_code == 200
+
+
+def test_attendance_tap_route_names_its_permission() -> None:
+    # Fixing a tap's two actions, both changes, behind the key to fix attendance (ATT-13), as deciding a day is. Written
+    # out in full, as above.
+    assert AttendanceTapViewSet.action_permissions == {
+        "create": Permission.ATTENDANCE_MANAGE,
+        "void": Permission.ATTENDANCE_MANAGE,
+    }

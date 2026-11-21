@@ -50,6 +50,7 @@ function day(date: number, status: WorkerDay["status"]): WorkerDay {
     first_out: null,
     decision: null,
     choices: [],
+    taps_changed: false,
   };
 }
 
@@ -93,6 +94,8 @@ const JUMAS_NOVEMBER: WorkerAttendance = {
   taps: [],
   yours: false,
   ready_reasons: [],
+  ready_add_reasons: [],
+  ready_void_reasons: [],
 };
 
 /** Each row of the calendar, as its seven places' text: the day's number, its mark for the eye, and the mark in

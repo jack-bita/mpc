@@ -1,6 +1,6 @@
 """apps/staffpay/services.py — the writes of attendance and pay: the book of days (ATT-10; 02 §12), the month the month
-page shows, worked out through it (ATT-5), a worker's own month (ATT-12), a person's decision on a day (ATT-6), and
-each worker's daily pay rate (WAGE-1).
+page shows, worked out through it (ATT-5), a worker's own month (ATT-12), a person's decision on a day (ATT-6), a
+manager's fixes to the taps (ATT-13), and each worker's daily pay rate (WAGE-1).
 
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
@@ -32,6 +32,12 @@ Juma's Thursday with no Toka is a full day, "Alisahau kubonyeza Toka". The decis
 out, which stays visible (A2), in columns the book never writes (DECISION), and a day decided late or half takes the
 fine its first Ingia gives by its own rules (day_choices, T4). No line in the change log: no laptop keeps a day.
 
+A tap is fixed by a person, the owner or a manager, never on their own taps (ATT-13): Juma tapped Toka at 10:00 by
+mistake and worked on to 18:45, so Baba crosses out the 10:00 Toka (void_tap) and adds Toka 18:45 (add_tap), each
+with a reason. An added tap is a line of the attendance book like a laptop's, with no laptop, its time the minute typed,
+trusted; a tap crossed out stays in the book, voided once with who, when and why, and counts for nothing (T2). The book
+reads both the next time it works the day out, as it reads every tap.
+
 A pay rate is typed by a person, the owner (set_pay_rate): from 10 Nov, Juma earns 10,000 a day. Whoever sets it sets a
 worker's pay, so who may is the PIN's rule, asked by the people app (02 §5). No line in the change log either: a
 worker's pay never sits on a shared device (03 §6.1).
@@ -49,12 +55,13 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from apps.control.models import ATTACHMENT_KINDS, Attachment, AttachmentKind, Flag, FlagKind
 from apps.core.acting import acting_as
+from apps.core.changes import record_change, recording_changes
 from apps.core.editing import VersionConflict
 from apps.core.links import table_of
 from apps.core.permissions import Permission
@@ -64,7 +71,7 @@ from apps.people.models import StaffMember, StaffStatus
 from apps.people.permissions import require
 from apps.people.services import lock_worker_for_a_change
 from apps.shops.models import Shop
-from apps.shops.selectors import closed_days, shop_settings_between, shop_today
+from apps.shops.selectors import closed_days, get_setting, shop_settings_between, shop_today
 from apps.staffpay.calculations import (
     NO_FINE,
     TIME_IN_DOUBT,
@@ -331,12 +338,17 @@ def _falls_between(first: dt.date, last: dt.date, zone: ZoneInfo) -> Q:
 
 
 def _where_it_falls(
-    trusted_time: dt.datetime | None, client_time: dt.datetime, zone: ZoneInfo
+    trusted_time: dt.datetime | None, client_time: dt.datetime | None, zone: ZoneInfo
 ) -> tuple[dt.date, dt.time | None]:
     # A tap's date on the shop's calendar, by its trusted time, or by the laptop's for one with none; and its minute on
     # the shop's clock, its seconds dropped, as the counter showed it (shop_minute): 07:35:40 is 07:35, on time. No
-    # minute for a tap with no trusted time, which sends its day to review (ATT-4).
-    day = (trusted_time if trusted_time is not None else client_time).astimezone(zone).date()
+    # minute for a tap with no trusted time, which sends its day to review (ATT-4). A tap entered in the office has no
+    # laptop time, but always its trusted one (ATT-13); a laptop's always has its own: the table's rule
+    # (from_a_laptop_or_the_office) holds one of the two there, so a tap with neither is a bug, and fails loudly.
+    moment = trusted_time if trusted_time is not None else client_time
+    if moment is None:
+        raise ValueError("A tap with neither a trusted time nor a laptop's: the table's rules forbid it.")
+    day = moment.astimezone(zone).date()
     minute = shop_minute(trusted_time, zone) if trusted_time is not None else None
     return day, minute
 
@@ -520,7 +532,7 @@ def _line(staff_id: uuid.UUID, display_name: str, kinds: Counter[str]) -> Worker
 def _counted_as(day: AttendanceDay) -> str:
     # What a day counts as on a worker's line of the month (ATT-5, ATT-12): the decision once there is one (ATT-6), else
     # the book's answer. An absence by its kind: office duty is a full day paid, so it counts with ✓; permission and a
-    # no-show are unpaid, so they count with H (Claude's default, the plan Jack approved). The calendar marks each day
+    # no-show are unpaid, so they count with H (a default, in the plan Jack approved). The calendar marks each day
     # by its kind (O, R, H); the line keeps its five counts.
     if day.absence_type == AbsenceType.OFFICE_DUTY:
         return DayStatus.ON_TIME
@@ -544,21 +556,37 @@ class TapPhoto:
 
 
 @dataclass(frozen=True)
+class TapStamp:
+    # Who added a tap in the office, or crossed one out (ATT-13), by nickname on this shop, as every name on these pages
+    # is; when, the server's moment; and why: "imeongezwa na Baba, 19/11 · Sababu: Alisahau kubonyeza Toka". On the
+    # demo the reason is a ready one's code (`forgot_tap`), which the page says in words.
+    by: str
+    at: dt.datetime
+    reason: str
+
+
+@dataclass(frozen=True)
 class TapLine:
     # One tap, as the day under a worker's calendar shows it (ATT-12): "Ingia 07:20 asubuhi · Laptop ya Dawa", then its
     # photo or why it has none. `date` and `time` on the shop's calendar and clock, by the time the server trusts; a
     # tap with none has no `time`, and its date is the laptop's, as the book places it. `laptop_time` is the laptop's
-    # own clock, on the shop's, the only time an untrusted tap has. `doubt`: why the tap itself is in doubt (ATT-11),
-    # the push's flag or a later tap's disagreement, or None.
+    # own clock, on the shop's, the only time an untrusted tap has. A tap entered in the office (ATT-13) has neither a
+    # laptop nor its clock, so `laptop` and `laptop_time` are None, and its `time` is the one the manager typed.
+    # `doubt`: why the tap itself is in doubt (ATT-11), the push's flag or a later tap's disagreement, or None.
     id: uuid.UUID
     date: dt.date
     kind: ClockKind
     time: dt.time | None
-    laptop_time: dt.time
-    laptop: str
+    laptop_time: dt.time | None
+    laptop: str | None
     photo: TapPhoto | None
     no_photo: NoPhoto | None
     doubt: ReviewReason | None
+    # Who entered it in the office, when and why, or None for a laptop's tap (ATT-13); and who crossed it out, when and
+    # why, or None while it counts. A tap crossed out still shows, struck through (A2), and is never in doubt, as it
+    # counts for nothing.
+    entered: TapStamp | None
+    voided: TapStamp | None
 
 
 @dataclass(frozen=True)
@@ -600,6 +628,10 @@ class WorkerDay:
     # What the day may be decided as, each with its fine (day_choices), in the sheet's order: none on an off day, or
     # when the month is the viewer's own, as nobody decides their own day (Jack, ATT-6).
     choices: list[DayOption]
+    # Whether a tap of the day was added, arrived from a laptop, or was crossed out after the day was decided (Jack: A,
+    # ATT-13): the decision stays, as the book never writes over one, and the day says its taps changed since, for
+    # whoever looks to decide it again. False on a day nobody decided.
+    taps_changed: bool
 
 
 @dataclass(frozen=True)
@@ -620,13 +652,17 @@ class WorkerAttendance:
     # On the demo, the three ready reasons a decision may take (DEMO_REASONS, Jack: A), as codes the page says in
     # words; elsewhere none, and a person types their own.
     ready_reasons: list[str]
+    # The same for a tap added and a tap crossed out (DEMO_ADD_REASONS, DEMO_VOID_REASONS, ATT-13): one each.
+    ready_add_reasons: list[str]
+    ready_void_reasons: list[str]
 
 
 def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: StaffMember | None) -> WorkerAttendance:
     """One job's month of `month`, any day of it, as their calendar and its days show it (ATT-12): the book's days of
     the job, worked out through the book as the month page's are (work_out_days), so it writes as the book does, and
-    asked twice writes nothing the second time; their counts; and every tap of the job in the month, today's too, none
-    voided, each with its laptop, its photo or why none, and whether it is in doubt. Each day with its decision and
+    asked twice writes nothing the second time; their counts; and every tap of the job in the month, today's too, the
+    crossed-out ones among them (ATT-13), each with its laptop, or who added it in the office, its photo or why none,
+    whether it is in doubt, and who crossed it out, when and why. Each day with its decision and
     what it may be decided as (ATT-6), as `viewer` may decide it: the person looking, or None for the system. The shop
     must be open, and the job one of it."""
     # The job is the shop's: the route finds it through the guard, so another shop's never comes here; but a service
@@ -661,52 +697,21 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
     # Not one transaction with the book: the book's lock would then be held for this read too, and every other run of
     # the book, a month page or the night's job, would wait for it.
     # The job's taps of the month, in one read, today's too: the book keeps no day until it is over (ATT-10), so
-    # today's taps are read here as they come. Each with its laptop's name, joined in the same read, and the two
-    # questions of doubt the book asks (_doubt_questions). A voided tap counts for nothing (T2), and the book doesn't
-    # read it, so nor does this: ATT-13, which voids one, shows them crossed out (A2). In the order they were made, by
-    # the moment the book places them by; two of one moment, rare, as on two laptops at once, by their ids, which each
-    # laptop makes in time order (UUIDv7, ADR-0007): never by a laptop's own numbering, which says nothing between two
-    # laptops (ATT-12's review).
-    asks_not_working, asks_disputed = _doubt_questions(shop)
-    lines = (
+    # today's taps are read here as they come; the crossed-out ones too (ATT-13), and those added in the office, as
+    # _tap_lines reads every tap.
+    read = (
         []
         if taps_until < first
-        else list(
-            AttendanceEvent.objects.filter(shop=shop, staff=job, voided_at__isnull=True)
-            .filter(_falls_between(first, taps_until, zone))
-            .annotate(maker_not_working=asks_not_working, disagreed_with=asks_disputed)
-            .order_by(Coalesce("trusted_time", "client_time"), "pk")
-            .values_list(
-                "pk",
-                "kind",
-                "trusted_time",
-                "client_time",
-                "time_check",
-                "device__name",
-                "no_photo",
-                "maker_not_working",
-                "disagreed_with",
-            )
+        else _tap_lines(
+            shop, AttendanceEvent.objects.filter(shop=shop, staff=job).filter(_falls_between(first, taps_until, zone))
         )
     )
-    photos = _photos_of(shop, [line[0] for line in lines])
-    taps = []
-    for tap_id, kind, trusted_time, client_time, time_check, laptop, no_photo, maker_not_working, disagreed in lines:
-        day, minute = _where_it_falls(trusted_time, client_time, zone)
-        taps.append(
-            TapLine(
-                id=tap_id,
-                date=day,
-                kind=ClockKind(kind),
-                time=minute,
-                laptop_time=shop_minute(client_time, zone),
-                laptop=laptop,
-                photo=photos.get(tap_id),
-                # Empty when its photo came (ATT-3): said as no reason at all.
-                no_photo=NoPhoto(no_photo) if no_photo else None,
-                doubt=_doubt_of(maker_not_working, disagreed, time_check),
-            )
-        )
+    taps = [tap for tap, _ in read]
+    # When each day's taps last changed: a tap kept (a laptop's arriving, or one added in the office) or crossed out.
+    # A day decided before that moment says its taps changed since (ATT-13).
+    changed: dict[dt.date, dt.datetime] = {}
+    for tap, moment in read:
+        changed[tap.date] = max(changed.get(tap.date, moment), moment)
     return WorkerAttendance(
         month=first,
         today=today,
@@ -732,13 +737,91 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
                         day.first_in, rules_from_text(day.rules_used), time_in_doubt=day.review_reason in TIME_IN_DOUBT
                     ).items()
                 ],
+                taps_changed=day.decided_at is not None and day.date in changed and changed[day.date] > day.decided_at,
             )
             for day in days
         ],
         taps=taps,
         yours=yours,
         ready_reasons=list(DEMO_REASONS) if settings.DEMO_SEED else [],
+        ready_add_reasons=list(DEMO_ADD_REASONS) if settings.DEMO_SEED else [],
+        ready_void_reasons=list(DEMO_VOID_REASONS) if settings.DEMO_SEED else [],
     )
+
+
+def _tap_lines(shop: Shop, taps: QuerySet[AttendanceEvent]) -> list[tuple[TapLine, dt.datetime]]:
+    # Each of `taps` as the day under a worker's calendar shows it (ATT-12), with the moment it last changed: when it
+    # was kept (a laptop's push arriving, or a manager entering it) or, later, crossed out (ATT-13). In one read,
+    # whatever their number: each with its laptop's name, joined in, and the two questions of doubt the book asks
+    # (_doubt_questions), so the calendar's ! and the tap's own line never disagree; the crossed-out ones too, each with
+    # who, when and why, for the day to show struck through (A2), though the book doesn't read them, as they count for
+    # nothing (T2); and those added in the office with who entered it, when and why, both names joined in the same
+    # read; then their photos in one more (_photos_of). In the order they were made, by the moment the book places them
+    # by; two of one moment, rare, as on two laptops at once, by their ids, which each laptop makes in time order
+    # (UUIDv7, ADR-0007): never by a laptop's own numbering, which says nothing between two laptops (ATT-12's review).
+    zone = ZoneInfo(shop.timezone)
+    asks_not_working, asks_disputed = _doubt_questions(shop)
+    # Rows named by their columns (`named=True`), as there are fifteen. Any: the type checker's Django plugin can't
+    # read the joined names' types.
+    lines: list[Any] = list(
+        taps.annotate(maker_not_working=asks_not_working, disagreed_with=asks_disputed)
+        .order_by(Coalesce("trusted_time", "client_time"), "pk")
+        .values_list(
+            "pk",
+            "kind",
+            "trusted_time",
+            "client_time",
+            "time_check",
+            "device__name",
+            "no_photo",
+            "maker_not_working",
+            "disagreed_with",
+            "received_at",
+            "created_by__display_name",
+            "entry_reason",
+            "voided_at",
+            "voided_by__display_name",
+            "void_reason",
+            named=True,
+        )
+    )
+    photos = _photos_of(shop, [line.pk for line in lines])
+    answered = []
+    for line in lines:
+        day, minute = _where_it_falls(line.trusted_time, line.client_time, zone)
+        voided = (
+            None
+            if line.voided_at is None
+            else TapStamp(by=line.voided_by__display_name, at=line.voided_at, reason=line.void_reason)
+        )
+        tap = TapLine(
+            id=line.pk,
+            date=day,
+            kind=ClockKind(line.kind),
+            time=minute,
+            # None for a tap entered in the office, which no laptop clock timed (ATT-13).
+            laptop_time=shop_minute(line.client_time, zone) if line.client_time is not None else None,
+            laptop=line.device__name,
+            photo=photos.get(line.pk),
+            # Empty when its photo came (ATT-3): said as no reason at all.
+            no_photo=NoPhoto(line.no_photo) if line.no_photo else None,
+            # A tap crossed out counts for nothing, so nothing about it is in doubt.
+            doubt=None if voided else _doubt_of(line.maker_not_working, line.disagreed_with, line.time_check),
+            entered=TapStamp(by=line.created_by__display_name, at=line.received_at, reason=line.entry_reason)
+            if line.time_check == TimeCheck.ENTERED
+            else None,
+            voided=voided,
+        )
+        answered.append((tap, max(line.received_at, line.voided_at or line.received_at)))
+    return answered
+
+
+def tap_line(tap: AttendanceEvent) -> TapLine:
+    """One tap as the day under a worker's calendar shows it (ATT-13), read afresh as a worker's month reads its taps
+    (_tap_lines): what the routes that add and cross out a tap answer, so the sheet shows the tap as the day will. The
+    shop must be open, and be the tap's."""
+    shop = Shop.objects.get(pk=tap.shop_id)
+    return _tap_lines(shop, AttendanceEvent.objects.filter(shop=shop, pk=tap.pk))[0][0]
 
 
 def decision_of(day: AttendanceDay, deciders: dict[uuid.UUID, str]) -> DayDecision | None:
@@ -874,6 +957,147 @@ def decide_day(
         # trigger keeps the change, and the decision before it, if there was one (ADR-0036).
         day.save(update_fields=DECISION)
     return day
+
+
+# On the demo, the ready reason a fix to a tap takes, kept as its code, which the page says in words (as DEMO_REASONS,
+# Jack: A, 21 Nov 2026): adding a tap the worker forgot, *Alisahau kubonyeza*; crossing out one tapped by mistake,
+# *Alibonyeza kwa makosa*. Each fix its own, so neither sheet offers the other's.
+DEMO_ADD_REASONS = ("forgot_tap",)
+DEMO_VOID_REASONS = ("wrong_tap",)
+
+
+def add_tap(
+    staff: StaffMember,
+    *,
+    tap_id: uuid.UUID,
+    kind: ClockKind,
+    date: dt.date,
+    minute: dt.time,
+    reason: str,
+    by: StaffMember,
+) -> AttendanceEvent:
+    """Add a tap a worker forgot, entered in the office (ATT-13, 02 §12): Juma's Toka at 18:45 on Thursday, "Alisahau
+    kubonyeza Toka". A line of the attendance book like a laptop's, with no laptop: `by` entered it (`created_by`), its
+    time is `minute` on `date` on the shop's clock, trusted (`entered`), and it has no photo (`entered`). The book reads
+    it the next time it works the day out. `tap_id`: the client's (ADR-0007), so the route answers a request sent twice
+    with the tap it made (CreateOnceMixin). `by`: who adds it, with attendance.manage on the whole shop, never for
+    themselves. Refuses: one's own tap (tap.own); a Sunday, a day outside the job's, or one attendance was off
+    (tap.not_working_day); and, all together, each beside its box, a minute still to come (tap.in_future), no reason
+    (tap.reason_missing), or on the demo a reason not the ready one (demo.ready_reasons). Returns the tap as saved."""
+    # A job of another shop adding to this shop's book is a bug in the calling code (T1), never a person's mistake: the
+    # route finds the worker and the person in the one shop open. A server error, before anything is read.
+    if by.shop_id != staff.shop_id:
+        raise ShopMismatch("add_tap was given a person of another shop.")
+    # Spaces around a reason say nothing, and "  " is no reason, as the table's own rule holds.
+    reason = reason.strip()
+    shop = Shop.objects.get(pk=staff.shop_id)
+    # One transaction, as the push saves a laptop's tap: recording_changes, whose change line no laptop pulls today,
+    # as no device keeps the book (apps/sync/registry.py), and which the push writes for each tap all the same.
+    with recording_changes(shop):
+        job = _ready_to_fix(staff.pk, by)
+        # A day the job works, as the book counts it (02 §5): from its first day to its last, as they are now, and
+        # never a Sunday, when the shop is shut and a tap counts nothing (01 §8.1). A closed day takes one: Juma came
+        # the morning of a funeral, and the book sends that day to review, as it would a laptop's tap (ATT-10). And a
+        # day attendance was switched on, a dated rule read on that day (ADR-0033): the book keeps no day while it is
+        # off, so a tap there would be kept and count nothing (ATT-13's review).
+        if date.weekday() == SUNDAY or not _ran_on(job, date) or not get_setting(ATTENDANCE_ON, shop, on=date):
+            raise ValidationError("Only a working day of the job takes a tap.", code="tap.not_working_day")
+        # A worker suspended or gone takes one too, and it counts (Jack: A, ATT-13's review): a laptop's tap let through
+        # while a worker is suspended sends its day to review (X2, the push's flag), as nobody chose it; this one a
+        # manager adds on purpose, with their name and why on it, so it counts as their word. Refusing it would also
+        # block mending the worker's days from before the suspension.
+        # The minute on the shop's clock, made a moment with the shop's zone, here, never the phone's (03 §5.10); its
+        # seconds dropped, as the counter shows a minute (shop_minute): 07:35:40 is 07:35, on time.
+        moment = dt.datetime.combine(date, minute.replace(second=0, microsecond=0), tzinfo=ZoneInfo(shop.timezone))
+        now = timezone.now()
+        # The boxes, all together, so a person who got two wrong sees both at once, each beside its box (ADR-0040).
+        errors: dict[str, list[ValidationError]] = {}
+        # A tap is added once it is true: at 10:05, Juma's Toka of 18:45 hasn't happened yet.
+        if moment > now:
+            errors["time"] = [ValidationError("A tap is added once it has happened.", code="tap.in_future")]
+        if not reason:
+            errors["reason"] = [ValidationError("A tap added says why.", code="tap.reason_missing")]
+        elif settings.DEMO_SEED and reason not in DEMO_ADD_REASONS:
+            errors["reason"] = [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]
+        if errors:
+            raise ValidationError(errors)
+        tap = AttendanceEvent(
+            id=tap_id,
+            shop=shop,
+            # When it was entered, the server's clock, as a laptop's tap keeps when its push arrived. A day decided
+            # before this moment says its taps changed since (ATT-13).
+            received_at=now,
+            created_by=by,
+            staff=job,
+            kind=kind,
+            trusted_time=moment,
+            time_check=TimeCheck.ENTERED,
+            no_photo=NoPhoto.ENTERED,
+            entry_reason=reason,
+        )
+        # An INSERT, never an UPDATE, as the push saves a laptop's: an id another row holds clashes on the primary key,
+        # loudly, and never overwrites it (03 §5.4).
+        tap.save(force_insert=True)
+        record_change(tap)
+    return tap
+
+
+def void_tap(tap: AttendanceEvent, *, reason: str, by: StaffMember) -> AttendanceEvent:
+    """Cross out a tap made by mistake (ATT-13, 02 §12, T2): Juma's Toka at 10:00, "Alibonyeza kwa makosa". The tap
+    stays in the book, voided once with who, when and why, and counts for nothing; the page shows it struck through
+    (A2). Never brought back: a mistake is mended by adding a tap (add_tap). An added tap is crossed out like any other.
+    `by`: who crosses it out, with attendance.manage on the whole shop, never on their own tap. A tap crossed out
+    already, by this request sent twice or by someone a moment before, is answered as it was crossed out, never stamped
+    again (CORE-3's Watch out). Refuses: one's own tap (tap.own); no reason (tap.reason_missing), or on the demo a
+    reason not the ready one (demo.ready_reasons), beside the reason's box. Returns the tap as saved."""
+    # Who voids is a staff member of the tap's own shop (T1): the void rule in the database checks only that the stamp
+    # is filled whole, so this is the check it can't make with one column (v1.58). Another shop's person here is a bug
+    # in the calling code, as the route finds both in the one shop open: a server error, before anything is read.
+    if by.shop_id != tap.shop_id:
+        raise ShopMismatch("void_tap was given a person of another shop.")
+    reason = reason.strip()
+    with recording_changes(tap.shop_id):
+        _ready_to_fix(tap.staff_id, by)
+        if not reason:
+            raise ValidationError(
+                {"reason": [ValidationError("A tap crossed out says why.", code="tap.reason_missing")]}
+            )
+        if settings.DEMO_SEED and reason not in DEMO_VOID_REASONS:
+            raise ValidationError(
+                {"reason": [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]}
+            )
+        # The stamp, filled once, by one guarded UPDATE (CORE-3's Watch out): only while the tap is not crossed out, so
+        # two voids never both write it, whatever their order. Never save(), which AppendOnly refuses; the void trigger
+        # lets this UPDATE change the stamp and nothing else (ADR-0021).
+        stamped = AttendanceEvent.objects.filter(pk=tap.pk, voided_at__isnull=True).update(
+            voided_at=timezone.now(), voided_by=by, void_reason=reason
+        )
+        # Read back as it is now: crossed out by this request, or, when no row was stamped, by the same request sent
+        # before, its answer lost, or by someone a moment before, whose void the page is then shown (03 §5.5).
+        tap = AttendanceEvent.objects.get(pk=tap.pk)
+        if stamped:
+            record_change(tap)
+    return tap
+
+
+def _ready_to_fix(staff_id: uuid.UUID, by: StaffMember) -> StaffMember:
+    # The checks every fix to a tap starts with, inside its transaction (ATT-13). Who may, asked afresh, as decide_day
+    # asks: a key taken away a moment ago counts, and someone without it sets nothing to work. attendance.manage on the
+    # whole shop, as attendance belongs to the whole shop.
+    require(by, Permission.ATTENDANCE_MANAGE, None)
+    # Then the job, locked as the book locks every job of the shop while it works the days out (work_out_days): a fix,
+    # a run of the book and a decision take turns, so the book never keeps a day from the taps as they were a moment
+    # before a fix, and a decision made meanwhile is either seen by the fix or sees it. One job, so no other job's lock
+    # is waited for while it is held, and no two runs each hold what the other waits for (a deadlock); the one lock
+    # taken after it is the shop's change numbers, at the block's end, which no run of the book or decision holds.
+    # FOR NO KEY UPDATE, the light lock (backend rules): a laptop's tap pushed meanwhile still saves. Read afresh with
+    # it, as its first and last day may have just moved (PPL-10).
+    job = StaffMember.objects.select_for_update(no_key=True).get(pk=staff_id)
+    # Never one's own taps (as ATT-6's day.own): a manager who came late would otherwise add himself an Ingia on time.
+    # By the person, not the job: someone hired again (PPL-11) has two jobs, and neither's taps are theirs to fix.
+    if job.user_id == by.user_id:
+        raise ValidationError("Nobody fixes their own taps.", code="tap.own")
+    return job
 
 
 def set_pay_rate(

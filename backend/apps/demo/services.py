@@ -436,7 +436,8 @@ def _holds_its_taps(shop: Shop) -> bool:
     # whose seed sends them must not keep a demo an older seed made that morning, with no day before today, or the month
     # page would list nobody until the next morning. Counted: the taps of the seed's own people (created by nobody, as
     # for the keys), timed before today, at least as many as this seed sends. Nothing a visitor does lowers it: a
-    # visitor's tap is today's, and a tap is never deleted, only voided (ATT-13).
+    # visitor's tap at the counter is today's; one a visitor adds in the office, on a day gone by (ATT-13), has no
+    # laptop time, so this count, by the laptop's time, never reads it; and a tap is never deleted, only voided.
     zone = ZoneInfo(shop.timezone)
     today = shop_today(shop)
     with shop_context(shop):

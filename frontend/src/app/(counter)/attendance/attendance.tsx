@@ -7,11 +7,13 @@
 // internet. The sync takes it to the server later, by itself (SYNC-8, SYNC-9). The screen never calls the
 // server (rule 5, ADR-0019): it reads the laptop's database and its note of who is here only.
 //
-// Which button: from the person's last tap today on this laptop (clock-today.ts). None, or "out" (back from
-// lunch), Ingia kazini; "in", Toka kazini. Once tapped, the button goes for the rest of this visit and the
-// screen says what it saved: a quick double tap would otherwise land on the button that comes next, and
-// clock her out a moment after she came. Toka kazini says goodbye, then logs her out by itself: she is
-// leaving the shop, and the laptop must not stay open in her name (Jack, SYNC-11).
+// Which button: from the person's last tap today on this laptop (clock-today.ts). None, Ingia kazini; "in",
+// Toka kazini; "out", none at all: Toka ends the day (Jack, ATT-4's review), so a second Ingia would count for
+// nothing, and the screen says so instead, *Umeshatoka leo. Mwambie meneja.*, as only a manager mends a day's
+// taps, in the office (ATT-13). Once tapped, the button goes for the rest of this visit and the screen says
+// what it saved: a quick double tap would otherwise land on the button that comes next, and clock her out a
+// moment after she came. Toka kazini says goodbye, then logs her out by itself: she is leaving the shop, and
+// the laptop must not stay open in her name (Jack, SYNC-11).
 //
 // The tap carries the last time the server had told the laptop, at its last pull (meta.ts): the server's
 // evidence that the laptop's clock didn't move back (ATT-1's time check). A laptop with none yet, filled by a
@@ -140,9 +142,17 @@ export function AttendanceScreen() {
         })
       : "";
 
-  // The one button that fits: none before her taps and the switch are read, and none once this visit saved one.
+  // Whether her day is over: her last tap today is a Toka, so there is nothing left to tap (ATT-13). Not
+  // during the goodbye of a Toka this visit saved, which says goodbye instead.
+  const outForTheDay = !saved && attendanceOn === true && last?.kind === "out";
+  // The one button that fits: none before her taps and the switch are read, none once this visit saved one,
+  // and none once her day is over.
   const next: ClockKind | null =
-    row === undefined || today === undefined || attendanceOn !== true || saved
+    row === undefined ||
+    today === undefined ||
+    attendanceOn !== true ||
+    saved ||
+    outForTheDay
       ? null
       : last?.kind === "in"
         ? "out"
@@ -284,6 +294,8 @@ export function AttendanceScreen() {
       <p role="status" className={status ? "text-lg" : "sr-only"}>
         {status}
       </p>
+      {/* Her day is over: why there is no button, and who mends a tap she still needs (ATT-13). */}
+      {outForTheDay && <p className="text-lg">{t("doneToday")}</p>}
       {/* The photo kept with her tap, small, under the line that says it was saved (Jack, ATT-3). Through
           Next's Image, as every picture of the app is; never resized by a server, as the app has none
           (images.unoptimized). */}

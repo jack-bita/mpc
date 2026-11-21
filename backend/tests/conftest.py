@@ -25,8 +25,9 @@ The shops and their staff come from backend/conftest.py. Fake data only: the rep
 import hashlib
 import uuid
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.utils import timezone
@@ -43,6 +44,7 @@ from apps.people.services import Outage, add_staff, confirm_pairing, record_outa
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side
+from apps.staffpay.models import AttendanceEvent, ClockKind, NoPhoto, TimeCheck
 from apps.staffpay.services import set_pay_rate, work_out_days
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
@@ -157,9 +159,12 @@ def sweep_attendance(sweep_sides: tuple[Shop, Shop]) -> tuple[Shop, Shop]:
     # (sweep_queries), the last day the book keeps. Their days are worked out here, as the page's first visit would,
     # so shop A has days in the book for the sweep to look for. The switch is saved as set_setting saves a rule, but on
     # a day gone by, which the service refuses, as sweep_settings does; the worker and the rate through the services.
-    for shop, name, amount in (
-        (sweep_sides[0], "Mhudhuriaji Mfano", "11223"),
-        (sweep_sides[1], "Mhudhuriaji Jirani", "33221"),
+    # And a tap of yesterday's entered in the office, with a reason only that shop holds, which a worker's month shows
+    # and the routes that fix taps are asked about (ATT-13): written past add_tap, whose maker would need a key, as
+    # the switch is written past its service.
+    for shop, name, amount, why in (
+        (sweep_sides[0], "Mhudhuriaji Mfano", "11223", "Sababu ya Mfano"),
+        (sweep_sides[1], "Mhudhuriaji Jirani", "33221", "Sababu ya Jirani"),
     ):
         with shop_context(shop):
             row = Setting(shop=shop, key=ATTENDANCE_ON.key, value="true", effective_from=date(2026, 1, 1))
@@ -169,7 +174,19 @@ def sweep_attendance(sweep_sides: tuple[Shop, Shop]) -> tuple[Shop, Shop]:
             user = User.objects.create_user(full_name=f"{name} Demo")
             worker = add_staff(shop=shop, user=user, display_name=name, started_on=started, by=None)
             set_pay_rate(worker, daily_rate=Decimal(amount), effective_from=started, by=None)
-            work_out_days(shop, started, shop_today(shop) - timedelta(days=1))
+            yesterday = shop_today(shop) - timedelta(days=1)
+            AttendanceEvent.objects.create(
+                shop=shop,
+                received_at=timezone.now(),
+                created_by=worker,
+                staff=worker,
+                kind=ClockKind.IN,
+                trusted_time=datetime.combine(yesterday, time(7, 20), tzinfo=ZoneInfo(shop.timezone)),
+                time_check=TimeCheck.ENTERED,
+                no_photo=NoPhoto.ENTERED,
+                entry_reason=why,
+            )
+            work_out_days(shop, started, yesterday)
     return sweep_sides
 
 

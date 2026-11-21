@@ -164,7 +164,9 @@ class Editable(ShopScoped):
 class CounterRecord(ShopScoped):
     # The base of every record made at a shop's counter, on a device, and pushed later (02 §1, 03 §5.3): a sale, a
     # repayment, a clock-in. ShopScoped plus four facts only the push can give it, and it fills all four (SYNC-4):
-    # editable=False keeps them out of every form and every API field, as created_by is.
+    # editable=False keeps them out of every form and every API field, as created_by is. One table writes three of them
+    # over as possibly empty: the attendance book, for a tap a manager enters in the office, which no laptop made
+    # (AttendanceEvent, ATT-13).
 
     # The device that made it, the one whose key sent the push. Named, not imported: `core` is layer 0 (ADR-0043).
     # PROTECT: nothing is deleted (rule 7), so every record keeps naming the laptop it came from. No index of its own:
