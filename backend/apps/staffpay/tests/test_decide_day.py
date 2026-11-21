@@ -28,11 +28,11 @@ from pytest_django import Settings
 from apps.control.models import EditEvent
 from apps.core.acting import acting_as
 from apps.core.editing import VersionConflict
-from apps.core.permissions import RoleTemplate
+from apps.core.permissions import Permission, RoleTemplate
 from apps.core.settings_registry import LATE_FINE
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
-from apps.people.services import change_worker
+from apps.people.services import change_worker, grant_permission, hire_again, mark_left, suspend
 from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import (
@@ -298,6 +298,42 @@ def test_a_seller_is_refused(shop_a: Shop, side_a: Side, give_role: GiveRole, ju
     give_role(asha, RoleTemplate.SELLER, side_a)
     with pytest.raises(PermissionDenied):
         decide(kept_day(juma), asha)
+
+
+def test_a_suspended_manager_is_refused(meneja: StaffMember, juma: StaffMember) -> None:
+    # Meneja is suspended this morning: his keys stop at once (X2), read afresh inside the decision, so he may not
+    # decide Juma's day, though his copy of himself, loaded before the suspension, still says "active".
+    with shop_context(meneja.shop_id):
+        suspend(meneja, by=None, reason="Uchunguzi wa hesabu")
+    with pytest.raises(PermissionDenied):
+        decide(kept_day(juma), meneja)
+
+
+def test_a_key_on_one_side_decides_nothing(shop_a: Shop, side_a: Side, juma: StaffMember) -> None:
+    # Hamisi may fix attendance on Dawa only (X1): attendance is the whole shop's, as one list holds Dawa's Juma and
+    # Vyakula's Baraka, so a key on one side decides no day at all.
+    hamisi = job(shop_a, "Hamisi")
+    with shop_context(shop_a):
+        grant_permission(hamisi, Permission.ATTENDANCE_MANAGE, side=side_a, by=None)
+    with pytest.raises(PermissionDenied):
+        decide(kept_day(juma), hamisi)
+
+
+def test_a_person_hired_again_decides_neither_jobs_day(shop_a: Shop, give_role: GiveRole, baba: StaffMember) -> None:
+    # Baraka sold until Tuesday 17th, and comes back on the 18th as a manager (PPL-11): one person, two jobs. His old
+    # job's Monday waits for a decision, and his new job holds the key, but the day is still his own, so the owner
+    # decides it: the rule reads the person, never the job (Jack: A).
+    old = job(shop_a, "Baraka")
+    day = kept_day(old)
+    with shop_context(shop_a):
+        mark_left(old, left_on=dt.date(2026, 11, 17), by=None, reason="Ameacha kazi")
+        old.refresh_from_db()
+        new = hire_again(old, display_name="Baraka", started_on=dt.date(2026, 11, 18), by=None)
+    give_role(new, RoleTemplate.MANAGER, None)
+    with pytest.raises(ValidationError) as refused:
+        decide(day, new)
+    assert refused.value.code == "day.own"
+    decide(day, baba)
 
 
 def test_a_person_of_another_shop_is_a_bug(staff_b: StaffMember, juma: StaffMember) -> None:
