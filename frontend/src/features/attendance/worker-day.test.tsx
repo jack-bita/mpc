@@ -494,6 +494,12 @@ describe("a day under the calendar", () => {
       { started_on: "2026-11-13" },
     ],
     ["one's own month", "2026-11-12", "Alhamisi 12/11/2026", { yours: true }],
+    [
+      "a day after the job's last",
+      "2026-11-12",
+      "Alhamisi 12/11/2026",
+      { left_on: "2026-11-11" },
+    ],
   ] as const)(
     "offers no Ongeza on %s (ATT-13)",
     async (_, date, name, fields) => {

@@ -241,6 +241,27 @@ describe("a clock-in the server refused", () => {
       }),
     ).toBeDefined();
   });
+
+  it("a Toka refused doesn't end her day: she is offered Toka kazini again (ATT-13's review)", async () => {
+    // In at 07:55; her Toka set aside by the push never reached the attendance book, so she is still in, and no
+    // "Umeshatoka leo" sends her to the manager for a day that isn't over.
+    await tappedEarlier(ASHA, "in", MORNING);
+    await tappedEarlier(ASHA, "out", EVENING);
+    const toka = (await db().outbox.toArray()).at(-1);
+    await db().outbox.update(toka?.id ?? "", {
+      status: "needs_attention",
+      last_error: "document.maker_unknown",
+    });
+    vi.setSystemTime(new Date("2026-11-13T15:10:00Z"));
+
+    await theScreen();
+
+    expect(
+      await screen.findByText("Uliingia kazini saa 07:55 asubuhi."),
+    ).toBeDefined();
+    expect(clockOut()).not.toBeNull();
+    expect(screen.queryByText("Umeshatoka leo. Mwambie meneja.")).toBeNull();
+  });
 });
 
 describe("clocking out", () => {
