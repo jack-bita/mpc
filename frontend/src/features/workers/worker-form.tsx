@@ -1,5 +1,6 @@
-// worker-form.tsx — Ongeza: a new worker joins the shop (PPL-6, PPL-4). Opens under Ongeza on Wafanyakazi. And Mwajiri
-// tena (PPL-11): the same boxes, for a worker who left and is hired again, opened on his old job's page (`again`).
+// worker-form.tsx — Ongeza: a new worker joins the shop (PPL-6, PPL-4), on its own page, Mfanyakazi mpya
+// (new-worker-screen.tsx, UI-11). And Mwajiri tena (PPL-11): the same boxes, for a worker who left and is hired again,
+// opened on his old job's page (`again`).
 //
 // Five boxes: Jina kamili, the person's whole name, as the PIN tiles show it without a photo (02 §5); Jina la kuitwa,
 // the nickname the shop calls them by, on every laptop and every record; Kazi, a job title, which may be empty, as
@@ -115,7 +116,8 @@ export function WorkerForm({
   /** This is the demo, where no worker gets a phone: Simu is off. */
   demo?: boolean;
   onSaved: (worker: Worker) => void;
-  onCancel: () => void;
+  /** Ghairi, for the form inside a worker's page. None on a page of the form's own, whose arrow leaves (UI-11). */
+  onCancel?: () => void;
 }) {
   const t = useTranslations("workers.form");
   const actions = useTranslations("workers.actions");
@@ -243,7 +245,7 @@ export function WorkerForm({
           autoComplete="off"
           // As the server keeps it (User.full_name, 150 characters).
           maxLength={150}
-          // The person just asked for this form: the keyboard starts in its first box, where Ongeza was.
+          // The person just asked for this form: the keyboard starts in its first box, as the page opens.
           autoFocus
         />
       ) : (
@@ -356,9 +358,11 @@ export function WorkerForm({
         <Button type="submit" disabled={save.isPending || !online}>
           {t("save")}
         </Button>
-        <Button kind="second" onClick={onCancel}>
-          {t("cancel")}
-        </Button>
+        {onCancel ? (
+          <Button kind="second" onClick={onCancel}>
+            {t("cancel")}
+          </Button>
+        ) : null}
       </div>
     </form>
   );

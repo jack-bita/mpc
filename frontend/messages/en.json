@@ -414,6 +414,7 @@
     "leftHeading": "Those who left ({count})",
     "nobody": "Nobody.",
     "add": "Add",
+    "newTitle": "New worker",
     "added": "{name} has been added. Their name shows on the shop's laptops once they are given a PIN.",
     "form": {
       "fullName": "Full name",

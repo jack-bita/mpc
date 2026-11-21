@@ -1,6 +1,7 @@
 // workers.spec.ts — the demo's manager adds a worker and suspends him, end to end (PPL-6): on the manager's phone,
-// Wafanyakazi lists the seed's people; Ongeza adds Juma, who comes at the top; his name opens his own page; Simamisha,
-// with a reason, suspends him, and Rudisha takes its place; Rudisha, with a reason, brings him back. The card's Done
+// Wafanyakazi lists the seed's people; Ongeza, on the title's row, opens Mfanyakazi mpya, whose Hifadhi adds Juma and
+// lands on his own page (UI-11); Simamisha, with a reason, suspends him, and Rudisha takes its place; back on the list
+// he is at the top, suspended; Rudisha, with a reason, brings him back. The card's Done
 // when, through the real server: PPL-4's routes, their key (staff.manage on the whole shop, which the seed gives the
 // demo's Meneja), and their rules. Since UI-10, Simamisha, Rudisha and Ondoa each open a sheet over the page, its main
 // button naming the action, and a tap on the dimmed page, a real browser's, leaves it open with what was typed.
@@ -83,38 +84,37 @@ test("the demo's manager adds a worker and suspends him", async ({
     await expect(rowLink(phone, "Baraka", "Baraka Mfano")).toBeVisible();
   });
 
-  const firstDay = await test.step("Ongeza: Juma, and Hifadhi", async () => {
-    await phone.getByRole("button", { name: WORKERS.add, exact: true }).click();
-    await phone
-      .getByLabel(WORKERS.form.fullName, { exact: true })
-      .fill("Juma Mfano");
-    await phone.getByLabel(WORKERS.form.nickname, { exact: true }).fill("Juma");
-    await phone
-      .getByLabel(WORKERS.form.jobTitle, { exact: true })
-      .fill("Muuzaji wa dawa");
-    // The box starts at the shop's today, as the page reads it: the test never leans on its own clock or zone.
-    const today = await phone
-      .getByLabel(WORKERS.form.firstDay, { exact: true })
-      .inputValue();
-    await phone
-      .getByRole("button", { name: WORKERS.form.save, exact: true })
-      .click();
-    await expect(
-      phone.getByText(words(WORKERS.added, { name: "Juma" })),
-    ).toBeVisible();
-    // At the top: the list comes newest first.
-    await expect(
-      phone.getByRole("list").first().getByRole("listitem").first(),
-    ).toContainText(
-      words(WORKERS.names, { nickname: "Juma", fullName: "Juma Mfano" }),
-    );
-    return today;
-  });
+  const firstDay =
+    await test.step("Ongeza opens Mfanyakazi mpya: Juma, and Hifadhi", async () => {
+      await phone.getByRole("link", { name: WORKERS.add, exact: true }).click();
+      await expect(
+        phone.getByRole("heading", { name: WORKERS.newTitle, level: 1 }),
+      ).toBeVisible();
+      await phone
+        .getByLabel(WORKERS.form.fullName, { exact: true })
+        .fill("Juma Mfano");
+      await phone
+        .getByLabel(WORKERS.form.nickname, { exact: true })
+        .fill("Juma");
+      await phone
+        .getByLabel(WORKERS.form.jobTitle, { exact: true })
+        .fill("Muuzaji wa dawa");
+      // The box starts at the shop's today, as the page reads it: the test never leans on its own clock or zone.
+      const today = await phone
+        .getByLabel(WORKERS.form.firstDay, { exact: true })
+        .inputValue();
+      await phone
+        .getByRole("button", { name: WORKERS.form.save, exact: true })
+        .click();
+      return today;
+    });
 
-  await test.step("his name opens his own page, with everything of his", async () => {
-    await rowLink(phone, "Juma", "Juma Mfano").click();
+  await test.step("Hifadhi lands on his own page, with everything of his and the line that he was added", async () => {
     await expect(
       phone.getByRole("heading", { name: "Juma", level: 1 }),
+    ).toBeVisible();
+    await expect(
+      phone.getByText(words(WORKERS.added, { name: "Juma" })),
     ).toBeVisible();
     await expect(valueOf(phone, WORKERS.form.fullName)).toHaveText(
       "Juma Mfano",
@@ -176,11 +176,17 @@ test("the demo's manager adds a worker and suspends him", async ({
     ).toBeVisible();
   });
 
-  await test.step("back on the list, he shows as suspended", async () => {
+  await test.step("back on the list, never in the form, he is at the top, suspended", async () => {
+    // Mfanyakazi mpya gave its place to his page (UI-11): the arrow leads to the list.
     await phone.getByRole("button", { name: sw.pageHeader.back }).click();
-    const juma = phone
-      .getByRole("listitem")
-      .filter({ has: rowLink(phone, "Juma", "Juma Mfano") });
+    await expect(
+      phone.getByRole("heading", { name: WORKERS.title, level: 1 }),
+    ).toBeVisible();
+    // At the top: the list comes newest first.
+    const juma = phone.getByRole("list").first().getByRole("listitem").first();
+    await expect(juma).toContainText(
+      words(WORKERS.names, { nickname: "Juma", fullName: "Juma Mfano" }),
+    );
     await expect(juma).toContainText(WORKERS.status.suspended);
   });
 
@@ -223,8 +229,8 @@ test("the demo's manager gives a role and takes it away", async ({
   await test.step("Meneja logs in on the phone and opens Wafanyakazi", () =>
     openWorkers(phone));
 
-  await test.step("Ongeza: Zawadi, a worker of the visitor's own", async () => {
-    await phone.getByRole("button", { name: WORKERS.add, exact: true }).click();
+  await test.step("Ongeza: Zawadi, a worker of the visitor's own, and her page", async () => {
+    await phone.getByRole("link", { name: WORKERS.add, exact: true }).click();
     await phone
       .getByLabel(WORKERS.form.fullName, { exact: true })
       .fill("Zawadi Mfano");
@@ -234,7 +240,10 @@ test("the demo's manager gives a role and takes it away", async ({
     await phone
       .getByRole("button", { name: WORKERS.form.save, exact: true })
       .click();
-    await rowLink(phone, "Zawadi", "Zawadi Mfano").click();
+    // Hifadhi lands on her own page (UI-11).
+    await expect(
+      phone.getByRole("heading", { name: "Zawadi", level: 1 }),
+    ).toBeVisible();
     await expect(cardPart(phone, WORKERS.view.roles)).toContainText(
       WORKERS.noRole,
     );

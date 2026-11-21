@@ -39,6 +39,13 @@ export const MANAGES_STAFF = "staff.manage";
 /** The list's place in the store of server answers. Ongeza and each change ask it again. */
 export const WORKERS = ["people", "staff"] as const;
 
+/** Wafanyakazi, the list: where a worker's page and Mfanyakazi mpya lead back when the person didn't come from inside
+ * the app. */
+export const LIST_PAGE = "/workers/";
+
+/** Mfanyakazi mpya, Ongeza's own page (UI-11). */
+export const NEW_WORKER_PAGE = "/workers/new/";
+
 /** A worker's own page, by their job's id: a query string, as the app is plain files with no page per id (ADR-0016).
  * The list's names link to it, and so do a job that ended and the page Mwajiri tena moves to (PPL-11). */
 export function workerPage(id: string): string {

@@ -18,11 +18,14 @@
 // the person came from the list (useWorker). The back arrow leads to the list when the page was opened from outside
 // the app, as from a link in a message.
 //
+// A long form's own page lands here once it is saved (UI-11), and leaves the line that says what it did as a note
+// (page-news.ts): the page takes it as it opens, and the card it names shows it, with the keyboard on it.
+//
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -31,15 +34,13 @@ import { askDemoOpen, DEMO_OPEN } from "@/features/devices/demo";
 import { useWhoIsHere } from "@/features/people/who-is-here";
 import { formatDay, formatPhone } from "@/lib/format";
 
+import { forgetNews, type PageNews, peekNews } from "./page-news";
 import { maySeePay, usePayRates } from "./pay-rates";
 import { WorkerActions } from "./worker-actions";
 import { WorkerLogins } from "./worker-logins";
 import { WorkerPay } from "./worker-pay";
 import { WorkerRoles } from "./worker-roles";
-import { useRoles, useWorker, type Worker } from "./workers";
-
-/** Where the back arrow leads when the person didn't come from inside the app. */
-const THE_LIST = "/workers/";
+import { LIST_PAGE, useRoles, useWorker, type Worker } from "./workers";
 
 export function WorkerScreen({ id }: { id: string | null }) {
   const t = useTranslations("workers");
@@ -50,6 +51,19 @@ export function WorkerScreen({ id }: { id: string | null }) {
   // Until both answer the first time, through the store's own tries too, as on the list (workers-screen.tsx); with no
   // id, nothing is asked, so nothing is waited for. The list's copy, shown at once, is no wait (useWorker).
   const waiting = who.isPending || (id !== null && worker.isPending);
+  // The line a form's own page left as it landed here (UI-11, page-news.ts), kept until the cards show, as they wait
+  // for the worker. Read as the page draws for a worker, and again when the address's id changes with the page still on
+  // the screen (the browser's back and forward), as React's docs keep a value from an earlier draw: by then the note is
+  // spent, so a line never shows twice. Forgotten once the page is on the screen, whoever it names: a note for another
+  // worker never shows on theirs later.
+  const [arrival, setArrival] = useState(() => ({ id, news: peekNews() }));
+  if (arrival.id !== id) setArrival({ id, news: peekNews() });
+  useEffect(() => forgetNews(), [id]);
+  /** The line for one card of this worker's, if the note names it. */
+  const arrivedOn = (card: PageNews["card"], worker: Worker) =>
+    arrival.news?.card === card && arrival.news.worker === worker.id
+      ? arrival.news.sentence
+      : null;
   // Badilisha's form is open (worker-actions.tsx), which asks whether this is the demo, below.
   const [editing, setEditing] = useState(false);
   // Whether the page offers Weka PIN and Nenosiri la muda (PPL-12): a worker working or suspended, never one's own
@@ -111,7 +125,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
       {/* The worker's nickname as the title, the name the shop calls them by; until it comes, "Mfanyakazi". */}
       <PageHeader
         title={worker.data?.display_name ?? t("view.title")}
-        fallback={THE_LIST}
+        fallback={LIST_PAGE}
       />
       <p role="status" className={waiting ? "text-lg" : "sr-only"}>
         {waiting ? loginWords("waiting") : null}
@@ -136,6 +150,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
             me={who.data}
             details={<WorkerDetails worker={worker.data} />}
             demo={demo.data === true}
+            arrived={arrivedOn("details", worker.data)}
             onEditing={setEditing}
             onForm={actionsForm}
             buttonsHidden={elsewhere("actions")}

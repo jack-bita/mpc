@@ -105,6 +105,7 @@ export function WorkerActions({
   me,
   details,
   demo = false,
+  arrived = null,
   onEditing,
   onForm,
   buttonsHidden = false,
@@ -115,6 +116,8 @@ export function WorkerActions({
   details?: ReactNode;
   /** This is the demo, where no worker gets a phone (worker-details-form.tsx). */
   demo?: boolean;
+  /** The line a form's own page left as it landed here, "Juma ameongezwa…" (UI-11, page-news.ts). */
+  arrived?: string | null;
   /** Badilisha's form opened (true) or closed (false): the card leaves the details out itself; the page asks, from
    * then on, whether this is the demo, for the form's phone box (worker-page.tsx). */
   onEditing?: (editing: boolean) => void;
@@ -135,7 +138,8 @@ export function WorkerActions({
     null,
   );
   // The line that says what the last change did, or that someone else changed the worker first.
-  const [news, setNews] = useState<string | null>(null);
+  // From its first draw, the line a form's own page left, if it left one (UI-11).
+  const [news, setNews] = useState<string | null>(arrived);
 
   // Where the keyboard goes when a form in the page closes, Badilisha's or Mwajiri tena's (a sheet moves it itself, its
   // finalFocus below). Ghairi: back to the button that opened it. A change: to the line that says what happened. A new
@@ -148,6 +152,12 @@ export function WorkerActions({
     if (backTo.to === "news") newsLine.current?.focus();
     else buttons.current.get(backTo.to)?.focus();
   }, [backTo]);
+  // The line a form's own page left (UI-11) is on the card from its first draw, and the keyboard goes to it, as after a
+  // change made here: a screen reader says what it is put on, as a status box that comes with its words in it may go
+  // unsaid (offline-banner.tsx).
+  useEffect(() => {
+    if (arrived) newsLine.current?.focus();
+  }, [arrived]);
   // Gone from the page with Badilisha's form open, as at a new read's wait: the page learns it is closed.
   useEffect(() => () => onEditing?.(false), [onEditing]);
   // Gone from the page with a form open in it: the page lets the other cards' buttons show again.

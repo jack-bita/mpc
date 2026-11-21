@@ -24,19 +24,12 @@ afterEach(() => {
 /** The shop's today in these tests: Wednesday 18 Nov 2026. */
 const TODAY = "2026-11-18";
 
-/** The form, opened on the shop's today; on the demo if told so. */
+/** The form, opened on the shop's today, as Mfanyakazi mpya draws it, with no Ghairi (UI-11); on the demo if told
+ * so. */
 function openForm({ demo = false }: { demo?: boolean } = {}) {
   const onSaved = vi.fn();
-  const onCancel = vi.fn();
-  render(
-    <WorkerForm
-      today={TODAY}
-      demo={demo}
-      onSaved={onSaved}
-      onCancel={onCancel}
-    />,
-  );
-  return { onSaved, onCancel };
+  render(<WorkerForm today={TODAY} demo={demo} onSaved={onSaved} />);
+  return { onSaved };
 }
 
 /** What the app sent to add a worker, as the server would read it. */
@@ -291,8 +284,15 @@ describe("Ongeza", () => {
     expect((save() as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("closes on Ghairi, with nothing sent", async () => {
-    const { onCancel } = openForm();
+  it("has no Ghairi on a page of its own, whose arrow leaves (UI-11)", () => {
+    openForm();
+
+    expect(screen.queryByRole("button", { name: "Ghairi" })).toBeNull();
+  });
+
+  it("closes on Ghairi, with nothing sent, where a worker's page asks for one (Mwajiri tena, until it has a page)", async () => {
+    const onCancel = vi.fn();
+    render(<WorkerForm today={TODAY} onSaved={vi.fn()} onCancel={onCancel} />);
 
     typeJuma();
     tap(screen.getByRole("button", { name: "Ghairi" }));
