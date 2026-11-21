@@ -772,8 +772,8 @@ export interface components {
             /** Format: time */
             time: string | null;
             /** Format: time */
-            laptop_time: string;
-            laptop: string;
+            laptop_time: string | null;
+            laptop: string | null;
             photo: components["schemas"]["TapPhoto"] | null;
             no_photo: (components["schemas"]["NoPhotoEnum"] | components["schemas"]["NullEnum"]) | null;
             doubt: (components["schemas"]["TapDoubtEnum"] | components["schemas"]["NullEnum"]) | null;
@@ -1147,9 +1147,10 @@ export interface components {
          *     * `failed` - Camera failed
          *     * `old_app` - App before photos
          *     * `demo` - Demo
+         *     * `entered` - Entered in the office
          * @enum {string}
          */
-        NoPhotoEnum: "no_camera" | "blocked" | "failed" | "old_app" | "demo";
+        NoPhotoEnum: "no_camera" | "blocked" | "failed" | "old_app" | "demo" | "entered";
         /** @enum {unknown} */
         NullEnum: null;
         OutageEnvelopeRequest: {

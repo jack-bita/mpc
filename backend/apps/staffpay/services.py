@@ -331,12 +331,17 @@ def _falls_between(first: dt.date, last: dt.date, zone: ZoneInfo) -> Q:
 
 
 def _where_it_falls(
-    trusted_time: dt.datetime | None, client_time: dt.datetime, zone: ZoneInfo
+    trusted_time: dt.datetime | None, client_time: dt.datetime | None, zone: ZoneInfo
 ) -> tuple[dt.date, dt.time | None]:
     # A tap's date on the shop's calendar, by its trusted time, or by the laptop's for one with none; and its minute on
     # the shop's clock, its seconds dropped, as the counter showed it (shop_minute): 07:35:40 is 07:35, on time. No
-    # minute for a tap with no trusted time, which sends its day to review (ATT-4).
-    day = (trusted_time if trusted_time is not None else client_time).astimezone(zone).date()
+    # minute for a tap with no trusted time, which sends its day to review (ATT-4). A tap entered in the office has no
+    # laptop time, but always its trusted one (ATT-13); a laptop's always has its own: the table's rule
+    # (from_a_laptop_or_the_office) holds one of the two there, so a tap with neither is a bug, and fails loudly.
+    moment = trusted_time if trusted_time is not None else client_time
+    if moment is None:
+        raise ValueError("A tap with neither a trusted time nor a laptop's: the table's rules forbid it.")
+    day = moment.astimezone(zone).date()
     minute = shop_minute(trusted_time, zone) if trusted_time is not None else None
     return day, minute
 
@@ -548,14 +553,15 @@ class TapLine:
     # One tap, as the day under a worker's calendar shows it (ATT-12): "Ingia 07:20 asubuhi · Laptop ya Dawa", then its
     # photo or why it has none. `date` and `time` on the shop's calendar and clock, by the time the server trusts; a
     # tap with none has no `time`, and its date is the laptop's, as the book places it. `laptop_time` is the laptop's
-    # own clock, on the shop's, the only time an untrusted tap has. `doubt`: why the tap itself is in doubt (ATT-11),
-    # the push's flag or a later tap's disagreement, or None.
+    # own clock, on the shop's, the only time an untrusted tap has. A tap entered in the office (ATT-13) has neither a
+    # laptop nor its clock, so `laptop` and `laptop_time` are None, and its `time` is the one the manager typed.
+    # `doubt`: why the tap itself is in doubt (ATT-11), the push's flag or a later tap's disagreement, or None.
     id: uuid.UUID
     date: dt.date
     kind: ClockKind
     time: dt.time | None
-    laptop_time: dt.time
-    laptop: str
+    laptop_time: dt.time | None
+    laptop: str | None
     photo: TapPhoto | None
     no_photo: NoPhoto | None
     doubt: ReviewReason | None
@@ -699,7 +705,8 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
                 date=day,
                 kind=ClockKind(kind),
                 time=minute,
-                laptop_time=shop_minute(client_time, zone),
+                # None for a tap entered in the office, which no laptop clock timed (ATT-13).
+                laptop_time=shop_minute(client_time, zone) if client_time is not None else None,
                 laptop=laptop,
                 photo=photos.get(tap_id),
                 # Empty when its photo came (ATT-3): said as no reason at all.

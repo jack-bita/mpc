@@ -799,6 +799,7 @@
       "out": "Toka"
     },
     "tapLine": "{kind} {time} · {laptop}",
+    "tapLineNoLaptop": "{kind} {time}",
     "laptopTime": "{time} (the laptop's clock, not trusted)",
     "doubt": "In doubt: {why}",
     "doubtWhy": {
@@ -814,7 +815,8 @@
       "blocked": "the camera is blocked",
       "failed": "the camera didn't work",
       "old_app": "an app from before photos",
-      "demo": "this is the demo, the photo isn't sent"
+      "demo": "this is the demo, the photo isn't sent",
+      "entered": "added in the office"
     },
     "noTaps": "No Ingia or Toka this day.",
     "noIn": "No Ingia.",

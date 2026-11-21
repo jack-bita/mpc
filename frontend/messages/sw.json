@@ -799,6 +799,7 @@
       "out": "Toka"
     },
     "tapLine": "{kind} {time} · {laptop}",
+    "tapLineNoLaptop": "{kind} {time}",
     "laptopTime": "{time} (saa ya kompyuta, haiaminiki)",
     "doubt": "Shaka: {why}",
     "doubtWhy": {
@@ -814,7 +815,8 @@
       "blocked": "kamera imezuiwa",
       "failed": "kamera haikufanya kazi",
       "old_app": "programu ya zamani, kabla ya picha",
-      "demo": "hii ni demo, picha haitumwi"
+      "demo": "hii ni demo, picha haitumwi",
+      "entered": "imeongezwa ofisini"
     },
     "noTaps": "Hakuna Ingia wala Toka siku hii.",
     "noIn": "Hakuna Ingia.",

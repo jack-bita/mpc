@@ -305,6 +305,48 @@ describe("a day under the calendar", () => {
     ).toBeNull();
   });
 
+  it("shows a tap entered in the office with no laptop, and why it has no photo (ATT-13)", async () => {
+    // Juma forgot his Toka, and Baba added it in the office: no laptop made it, so the answer names none, nor a
+    // laptop's clock; its time is the one Baba typed, trusted.
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [
+          day({
+            date: "2026-11-12",
+            status: "on_time",
+            first_in: "07:20",
+            first_out: "18:30",
+          }),
+        ],
+        [
+          tap({ date: "2026-11-12", kind: "in", time: "07:20" }),
+          tap({
+            date: "2026-11-12",
+            kind: "out",
+            time: "18:30",
+            laptop: null,
+            laptop_time: null,
+            no_photo: "entered",
+          }),
+        ],
+      ),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-12" />,
+    );
+
+    const open = await theDay("Alhamisi 12/11/2026");
+    expect(within(open).getByText("Toka 18:30 jioni")).toBeTruthy();
+    expect(
+      within(open).getByText("Hakuna picha: imeongezwa ofisini"),
+    ).toBeTruthy();
+    // The laptop's tap beside it keeps its laptop.
+    expect(
+      within(open).getByText("Ingia 07:20 asubuhi · Laptop ya Dawa"),
+    ).toBeTruthy();
+  });
+
   it("says why a tap is in doubt, and shows an untrusted time as the laptop's", async () => {
     answer("GET", JUMAS_MONTH, {
       status: 200,

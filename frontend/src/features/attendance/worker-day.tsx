@@ -299,17 +299,26 @@ function Tap({ tap, name }: { tap: AttendanceTap; name: string }) {
   const t = useTranslations("attendanceWorker");
   const attendance = useTranslations("attendance");
   // The time the server trusts, with its part of the day, so nobody reads 13:20 as Swahili time (Jack, SYNC-11); or,
-  // for a tap whose time it doesn't trust, the laptop's own, said to be the laptop's.
-  const clock = tap.time ?? tap.laptop_time;
-  const said = attendance("timeOfDay", { time: clock, part: clockPart(clock) });
-  const time = tap.time === null ? t("laptopTime", { time: said }) : said;
+  // for a tap whose time it doesn't trust, the laptop's own, said to be the laptop's. A tap entered in the office
+  // (ATT-13) has no laptop clock, but always the time the manager typed, trusted; the server never sends neither.
+  const said = (clock: string) =>
+    attendance("timeOfDay", { time: clock, part: clockPart(clock) });
+  const time =
+    tap.time !== null
+      ? said(tap.time)
+      : t("laptopTime", { time: said(tap.laptop_time ?? "") });
   const kind = t(`tapKind.${tap.kind}`);
   // Whether the browser failed to open the photo the answer said is kept: a request of its own, which the route can
   // refuse though the month was read (no network now, a login ended, the key taken away, the file gone from the disk).
   const [photoFailed, setPhotoFailed] = useState(false);
   return (
     <div className="grid gap-2">
-      <p>{t("tapLine", { kind, time, laptop: tap.laptop })}</p>
+      {/* Its laptop, or none for a tap entered in the office, which no laptop made (ATT-13). */}
+      <p>
+        {tap.laptop === null
+          ? t("tapLineNoLaptop", { kind, time })
+          : t("tapLine", { kind, time, laptop: tap.laptop })}
+      </p>
       {/* The tap itself in doubt (ATT-11): its worker was suspended or gone, or a later tap's time disagrees, said in
           words of its own, as the day's "saa yake ina shaka" after "Shaka:" said doubt twice (ATT-12's review). */}
       {tap.doubt !== null ? (

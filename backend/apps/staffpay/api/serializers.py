@@ -211,12 +211,13 @@ class AttendanceTapSerializer(serializers.Serializer[Any]):
     # One tap, as the day under the calendar shows it: "Ingia 07:20 asubuhi · Laptop ya Dawa", then its photo or why it
     # has none. Minutes on the shop's clock, "07:20", worked out on the server, so a phone in another zone never moves
     # them; `time` null for a tap whose time the server doesn't trust, which shows its laptop's own (`laptop_time`).
+    # `laptop` and `laptop_time` null for a tap a manager entered in the office, which no laptop made (ATT-13).
     id = serializers.UUIDField()
     date = serializers.DateField()
     kind = serializers.ChoiceField(choices=ClockKind.choices)
     time = serializers.TimeField(format="%H:%M", allow_null=True)
-    laptop_time = serializers.TimeField(format="%H:%M")
-    laptop = serializers.CharField()
+    laptop_time = serializers.TimeField(format="%H:%M", allow_null=True)
+    laptop = serializers.CharField(allow_null=True)
     photo = TapPhotoSerializer(allow_null=True)
     no_photo = serializers.ChoiceField(choices=NoPhoto.choices, allow_null=True)
     doubt = serializers.ChoiceField(choices=TAP_DOUBTS, allow_null=True)

@@ -2489,10 +2489,12 @@
                     },
                     "laptop_time": {
                         "type": "string",
-                        "format": "time"
+                        "format": "time",
+                        "nullable": true
                     },
                     "laptop": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "photo": {
                         "allOf": [
@@ -3699,10 +3701,11 @@
                     "blocked",
                     "failed",
                     "old_app",
-                    "demo"
+                    "demo",
+                    "entered"
                 ],
                 "type": "string",
-                "description": "* `no_camera` - No camera\n* `blocked` - Camera blocked\n* `failed` - Camera failed\n* `old_app` - App before photos\n* `demo` - Demo"
+                "description": "* `no_camera` - No camera\n* `blocked` - Camera blocked\n* `failed` - Camera failed\n* `old_app` - App before photos\n* `demo` - Demo\n* `entered` - Entered in the office"
             },
             "NullEnum": {
                 "enum": [
