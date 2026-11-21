@@ -108,7 +108,6 @@ export function WorkerActions({
   me,
   details,
   arrived = null,
-  buttonsHidden = false,
 }: {
   worker: Worker;
   me: WhoIsHere;
@@ -116,9 +115,6 @@ export function WorkerActions({
   details?: ReactNode;
   /** The line a form's own page left as it landed here, "Juma ameongezwa…" (UI-11, page-news.ts). */
   arrived?: string | null;
-  /** Another card's form is open: its buttons stay off the page meanwhile, so one change is made at a time (PPL-8's
-   * review). */
-  buttonsHidden?: boolean;
 }) {
   const t = useTranslations("workers.actions");
   const view = useTranslations("workers.view");
@@ -174,8 +170,8 @@ export function WorkerActions({
   }
 
   // Badilisha, on the heading's row: for a worker working or suspended, as one who left keeps what they were then
-  // (PPL-11); while no form is open in the page, on another card.
-  const editOffered = !own && worker.status !== "left" && !buttonsHidden;
+  // (PPL-11).
+  const editOffered = !own && worker.status !== "left";
 
   return (
     <Card>
@@ -227,7 +223,7 @@ export function WorkerActions({
                     {t("hireAgain")}
                   </ButtonLink>
                 </div>
-              ) : !buttonsHidden ? (
+              ) : (
                 <div className="flex flex-wrap gap-3">
                   {OFFERED[worker.status].map((action) => (
                     <Button
@@ -246,7 +242,7 @@ export function WorkerActions({
                     </Button>
                   ))}
                 </div>
-              ) : null}
+              )}
               {/* Mounted only while open, so a sheet closed with Ghairi forgets what was typed (as the day's,
                   ATT-6). */}
               {open !== null ? (

@@ -5,8 +5,8 @@
 // when, through the real server: PPL-4's routes, their key (staff.manage on the whole shop, which the seed gives the
 // demo's Meneja), and their rules. Since UI-10, Simamisha, Rudisha and Ondoa each open a sheet over the page, its main
 // button naming the action, and a tap on the dimmed page, a real browser's, leaves it open with what was typed.
-// And roles (PPL-8): Meneja adds Zawadi, gives Zawadi the Seller role on Dawa with Ongeza kazi, and takes it away again
-// with Ondoa and a reason, through PPL-7's routes: the giver rule, the give's own id, the end's reason. And on Zawadi's
+// And roles (PPL-8): Meneja adds Zawadi, gives Zawadi the Seller role on Dawa on Ongeza kazi's own page (UI-11), back on
+// her page with its line, and takes it away again with Ondoa and a reason, through PPL-7's routes: the giver rule, the give's own id, the end's reason. And on Zawadi's
 // page, Kuingia (PPL-12): on the demo, Weka PIN and Nenosiri la muda are both off, with the one line saying why, as
 // every visitor shares the seed's logins (Jack, PPL-12: A); a PIN or a password itself is checked by hand on the
 // laptop's own stack, as the demo can show neither.
@@ -266,14 +266,21 @@ test("the demo's manager gives a role and takes it away", async ({
     await expect(phone.getByText(sw.errors.demo.logins_fixed)).toBeVisible();
   });
 
-  await test.step("Ongeza kazi: the Seller role on Dawa, shown at once", async () => {
+  await test.step("Ongeza kazi opens its own page: the Seller role on Dawa, and back on her page", async () => {
     await phone
-      .getByRole("button", { name: WORKERS.giving.add, exact: true })
+      .getByRole("link", { name: WORKERS.giving.add, exact: true })
       .click();
+    // Its own page since UI-11, titled with what and who.
+    await expect(
+      phone.getByRole("heading", {
+        name: words(WORKERS.giving.title, { name: "Zawadi" }),
+        level: 1,
+      }),
+    ).toBeVisible();
     await phone
       .getByRole("radio", { name: WORKERS.giving.aRole, exact: true })
       .click();
-    // The shop's roles are asked as the form opens: the Seller's row comes with their answer.
+    // The shop's roles are asked as the page opens: the Seller's row comes with their answer.
     await phone
       .getByRole("radio", { name: WORKERS.roles.seller, exact: true })
       .click();
@@ -285,6 +292,10 @@ test("the demo's manager gives a role and takes it away", async ({
     await phone
       .getByRole("button", { name: WORKERS.actions.save, exact: true })
       .click();
+    // Back on Zawadi's page, where the person came from, its line on Cheo: the note went with the move (UI-11).
+    await expect(
+      phone.getByRole("heading", { name: "Zawadi", level: 1 }),
+    ).toBeVisible();
     await expect(
       phone.getByText(
         words(WORKERS.giving.done, { name: "Zawadi", what: seller }),

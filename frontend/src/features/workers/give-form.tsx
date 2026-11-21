@@ -1,6 +1,7 @@
 // give-form.tsx — Ongeza kazi (PPL-8): give a worker one of the shop's roles, or one extra key, on one side or on every
-// side, through PPL-7's routes (POST …/staff/{id}/give-role/ and …/give-key/). Opens under the worker's roles and
-// keys (worker-roles.tsx).
+// side, through PPL-7's routes (POST …/staff/{id}/give-role/ and …/give-key/). On a page of its own since UI-11, Ongeza
+// kazi kwa Juma (give-screen.tsx), which gives the title and the way back, its arrow: no Ghairi (Jack's yes to the
+// screens, 21 Nov 2026).
 //
 // As Jack pictured it (19 Nov 2026): Anapewa nini? first, Cheo or Ruhusa moja ya ziada; then the role or the key;
 // then Upande, Pande zote and each side by its name, with its band. No side is picked at first (Jack: yes), so a role
@@ -24,14 +25,15 @@
 // permission.already_given (another manager got there first), role.superuser_only, staff.temporary_password_open
 // (whoever set Juma's temporary password lacks this key: he chooses his own first), demo.people_fixed, id.taken, and
 // the giver rule's bare 403 (permission_denied), which the lists make rare. The give has no box of the server's own, so
-// a field's code (id.taken comes on `id`) shows there too. staff.left closes the form, says it, and reads the worker
-// again: someone marked them left since the page read them, and a worker who left keeps what they held as history.
+// a field's code (id.taken comes on `id`) shows there too. staff.left ends the form, its line on the worker's page, and
+// reads the worker again: someone marked them left since the page read them, and a worker who left keeps what they held
+// as history.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useEffect, useId, useRef, useState } from "react";
+import { type FormEvent, useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -89,17 +91,15 @@ export function GiveForm({
   roles,
   onDone,
   onChangedMeanwhile,
-  onCancel,
 }: {
   worker: Worker;
   me: WhoIsHere;
-  /** The shop's roles, asked by the page as this form opens (worker-page.tsx) and handed down. */
+  /** The shop's roles, asked by the page this form is on (give-screen.tsx) and handed down. */
   roles: RolesRead;
   /** Given: the line that says what, in the person's words. */
   onDone: (sentence: string) => void;
   /** Someone else changed the worker first: what the server's code says. */
   onChangedMeanwhile: (sentence: string) => void;
-  onCancel: () => void;
 }) {
   const t = useTranslations("workers.giving");
   const workerWords = useTranslations("workers");
@@ -120,10 +120,6 @@ export function GiveForm({
   const [own, setOwn] = useState<Checks>({});
   // The id each set of choices was sent under, by those choices (see the top). A handful at most: a form is short-lived.
   const sentIds = useRef(new Map<string, string>());
-
-  // The title takes the keyboard as the form opens, so a screen reader says what opened where the button was.
-  const title = useRef<HTMLHeadingElement>(null);
-  useEffect(() => title.current?.focus(), []);
 
   // What is picked, as the lists allow it now (see the top). The side first, as it narrows the roles and keys.
   const side: Side | undefined =
@@ -245,13 +241,6 @@ export function GiveForm({
   return (
     // noValidate: the browser's own checks would speak its language, not the shop's.
     <form noValidate onSubmit={send} className="grid gap-6">
-      <h2
-        ref={title}
-        tabIndex={-1}
-        className="text-lg font-semibold outline-none"
-      >
-        {t("title", { name: worker.display_name })}
-      </h2>
       <Choice
         label={t("what")}
         hint={t("whatHint")}
@@ -355,7 +344,7 @@ export function GiveForm({
       {/* Who may and what is already there (see the top), no network, the server's own problem. */}
       <ApiErrorAlert
         error={
-          // staff.left closes the form instead (see the top).
+          // staff.left ends the form instead (see the top).
           give.error instanceof ApiRefusal &&
           give.error.body.code === "staff.left"
             ? null
@@ -372,9 +361,6 @@ export function GiveForm({
           disabled={give.isPending || !online || nothingToPick}
         >
           {workerWords("actions.save")}
-        </Button>
-        <Button kind="second" onClick={onCancel}>
-          {workerWords("actions.cancel")}
         </Button>
       </div>
     </form>

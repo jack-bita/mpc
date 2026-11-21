@@ -7,8 +7,8 @@
 //     they left; and whether the superuser switched them off. Badilisha on the heading's row opens the details' form on
 //     a page of its own (PPL-10, UI-11, edit-worker-screen.tsx); under them, the status's buttons (worker-actions.tsx);
 //   - Kuingia: whether they have a PIN, Weka PIN and Nenosiri la muda (PPL-12, worker-logins.tsx);
-//   - Cheo: their roles, then their extra keys, each by its name and side, with Ongeza kazi on the heading's row
-//     (PPL-8, worker-roles.tsx);
+//   - Cheo: their roles, then their extra keys, each by its name and side, with Ongeza kazi on the heading's row,
+//     which opens its form on a page of its own (PPL-8, UI-11, worker-roles.tsx, give-screen.tsx);
 //   - Malipo kwa siku: their daily pay rate and its history, for whoever holds settings.manage and staff.manage
 //     (WAGE-1, worker-pay.tsx).
 // Later cards add here: the photo (PPL-9), and the pay so far (WAGE-2), so the owner pays one who leaves at once.
@@ -25,7 +25,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -40,7 +40,7 @@ import { WorkerActions } from "./worker-actions";
 import { WorkerLogins } from "./worker-logins";
 import { WorkerPay } from "./worker-pay";
 import { WorkerRoles } from "./worker-roles";
-import { LIST_PAGE, useRoles, useWorker, type Worker } from "./workers";
+import { LIST_PAGE, useWorker, type Worker } from "./workers";
 
 export function WorkerScreen({ id }: { id: string | null }) {
   const t = useTranslations("workers");
@@ -82,18 +82,9 @@ export function WorkerScreen({ id }: { id: string | null }) {
     staleTime: Infinity,
     enabled: loginsOffered,
   });
-  // Ongeza kazi's form has opened (PPL-8): the shop's roles are asked from then on, here, the part always on the page,
-  // and handed down, as the demo's answer is. Opening a worker's page alone asks for none.
-  const [giving, setGiving] = useState(false);
-  // Each of its values read here, so the page draws again when any changes (RolesRead, workers.ts).
-  const rolesRead = useRoles(giving);
-  const roles = {
-    data: rolesRead.data,
-    error: rolesRead.error,
-    isPending: rolesRead.isPending,
-  };
   // The worker's pay rates (WAGE-1), for whoever may see them: asked here, the part always on the page, and handed down
-  // by their values, as the roles are; asked for nobody else, as the server would refuse them.
+  // by their values (RolesRead, workers.ts); asked for nobody else, as the server would refuse them. The shop's roles
+  // are asked by Ongeza kazi's own page (give-screen.tsx, UI-11): opening a worker's page asks for none.
   const seesPay = who.data !== undefined && maySeePay(who.data);
   const ratesRead = usePayRates(id, seesPay);
   const rates = {
@@ -101,19 +92,9 @@ export function WorkerScreen({ id }: { id: string | null }) {
     error: ratesRead.error,
     isPending: ratesRead.isPending,
   };
-  // Which card has a form open in the page itself, if any (PPL-8's review): one form at a time on the page, so a person
-  // never meets two Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other cards'
-  // buttons hide meanwhile. A sheet isn't counted (UI-10): it shuts the whole page off behind it, so Kuingia and
-  // Malipo kwa siku, whose forms are all sheets, never tell the page. Each card's own callback, kept the same between
-  // draws, as each says "closed" as it goes (its unmount). Since UI-11, Taarifa zake opens no form in the page: Badilisha
-  // and Mwajiri tena have pages of their own.
-  const [formIn, setFormIn] = useState<Card | null>(null);
-  const rolesForm = useCallback(
-    (open: boolean) => setFormIn((now) => opened("roles", open, now)),
-    [],
-  );
-  /** Another card than this one has a form open: this one's buttons hide. */
-  const elsewhere = (card: Card) => formIn !== null && formIn !== card;
+  // No form opens inside this page (UI-11): the four long ones have pages of their own, and the short ones are sheets,
+  // which shut the page off behind them (UI-10). So one change is made at a time with no rule of the page's own, where
+  // until UI-11 an open form in the page hid the other cards' buttons (PPL-8's review).
 
   return (
     <div className="grid max-w-2xl gap-6">
@@ -144,7 +125,6 @@ export function WorkerScreen({ id }: { id: string | null }) {
             me={who.data}
             details={<WorkerDetails worker={worker.data} />}
             arrived={arrivedOn("details", worker.data)}
-            buttonsHidden={formIn !== null}
           />
           {/* Between the status buttons and the roles, as Jack chose (PPL-12: A): a way in is neither. A worker of its
               own, as each card: Asha's open form never goes on to Baraka's page. */}
@@ -153,7 +133,6 @@ export function WorkerScreen({ id }: { id: string | null }) {
             worker={worker.data}
             me={who.data}
             demo={demo.data === true}
-            buttonsHidden={formIn !== null}
           />
           {/* Under Kuingia, as Jack chose (PPL-8, PPL-12): each set of buttons beside what it changes. A worker of its
               own, as WorkerActions: Asha's open form never goes on to Baraka's page. Its key apart from WorkerActions',
@@ -162,10 +141,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
             key={`${worker.data.id}-roles`}
             worker={worker.data}
             me={who.data}
-            roles={roles}
-            onGiving={setGiving}
-            onForm={rolesForm}
-            buttonsHidden={elsewhere("roles")}
+            arrived={arrivedOn("roles", worker.data)}
           />
           {/* Under the roles, as Jack pictured it (WAGE-1), for whoever may see a worker's pay. A worker of its own, as
               the cards above: Asha's open form never goes on to Baraka's page. */}
@@ -175,22 +151,12 @@ export function WorkerScreen({ id }: { id: string | null }) {
               worker={worker.data}
               me={who.data}
               rates={rates}
-              buttonsHidden={formIn !== null}
             />
           ) : null}
         </>
       ) : null}
     </div>
   );
-}
-
-/** The cards that open a form in the page itself, each in its own place on it. */
-type Card = "roles";
-
-/** What a card's "opened" (true) or "closed" (false) makes of the card with a form open: a close of a card that holds
- * none changes nothing, as each card says "closed" as it goes. */
-function opened(card: Card, open: boolean, now: Card | null): Card | null {
-  return open ? card : now === card ? null : now;
 }
 
 /** Everything of the worker's, as label and value pairs: a description list, which a screen reader reads as pairs.

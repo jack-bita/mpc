@@ -66,6 +66,11 @@ export function editWorkerPage(id: string): string {
   return `/workers/edit/?id=${id}`;
 }
 
+/** Ongeza kazi's own page, for one worker (UI-11). */
+export function giveWorkerPage(id: string): string {
+  return `/workers/give/?id=${id}`;
+}
+
 /** Hifadhi on a form's own page (UI-11) goes where the page's arrow goes: back to the worker's page the person came
  * from, or, from a bookmark, to that page in the form's place (replace), so the form's page never sits in the tab's
  * history between the list and the worker, and the arrow on the worker's page never leads back into a form already

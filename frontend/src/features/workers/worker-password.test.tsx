@@ -285,8 +285,10 @@ describe("Nenosiri la muda", () => {
 
     fireEvent.click(await findButton("Nenosiri la muda"));
     // Only the sheet's buttons can be reached: the page behind stays drawn, but shut off (UI-10).
-    for (const name of ["Simamisha", "Ongeza kazi", "Weka PIN"])
+    for (const name of ["Simamisha", "Weka PIN"])
       expect(screen.queryByRole("button", { name })).toBeNull();
+    // A link since UI-11, shut off behind the sheet all the same.
+    expect(screen.queryByRole("link", { name: "Ongeza kazi" })).toBeNull();
     expect(sheetButton("Weka nenosiri")).toBeTruthy();
     fireEvent.click(sheetButton("Ghairi"));
 

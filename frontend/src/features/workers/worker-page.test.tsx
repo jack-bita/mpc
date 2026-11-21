@@ -123,9 +123,9 @@ describe("a worker's own page", () => {
         screen.getByRole("heading", { level: 2, name: heading })
           .parentElement as HTMLElement,
       ).getByRole(role, { name });
-    // Badilisha a link, as it opens a page of its own (UI-11).
+    // Badilisha and Ongeza kazi links, as each opens a page of its own (UI-11).
     expect(besideHeading("Taarifa zake", "Badilisha", "link")).toBeDefined();
-    expect(besideHeading("Cheo", "Ongeza kazi")).toBeDefined();
+    expect(besideHeading("Cheo", "Ongeza kazi", "link")).toBeDefined();
     expect(besideHeading("Malipo kwa siku", "Badilisha malipo")).toBeDefined();
     // Simamisha and Ameondoka under the details, inside Taarifa zake; Kuingia's two buttons in its own card.
     const details = screen.getByRole("region", { name: "Taarifa zake" });

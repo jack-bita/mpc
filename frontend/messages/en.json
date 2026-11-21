@@ -467,7 +467,6 @@
       "lastDay": "Last day",
       "lastDayHint": "Their last day at work. It can't be a day ahead.",
       "save": "Save",
-      "cancel": "Cancel",
       "nothingChanged": "Nothing was changed.",
       "changedMeanwhile": "{name}'s details changed since you opened them. These are their details now: try again if something still needs fixing.",
       "done": {
