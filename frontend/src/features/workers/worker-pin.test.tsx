@@ -138,7 +138,7 @@ describe("the Kuingia card", () => {
     });
     theServerHas(left);
     const second = render(<WorkerScreen id={left.id} />);
-    await findButton("Mwajiri tena");
+    await screen.findByRole("link", { name: "Mwajiri tena" });
     expect(screen.queryByRole("button", { name: "Weka PIN" })).toBeNull();
     second.unmount();
 

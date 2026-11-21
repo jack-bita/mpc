@@ -105,12 +105,9 @@ export function WorkerScreen({ id }: { id: string | null }) {
   // never meets two Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other cards'
   // buttons hide meanwhile. A sheet isn't counted (UI-10): it shuts the whole page off behind it, so Kuingia and
   // Malipo kwa siku, whose forms are all sheets, never tell the page. Each card's own callback, kept the same between
-  // draws, as each says "closed" as it goes (its unmount).
+  // draws, as each says "closed" as it goes (its unmount). Since UI-11, Taarifa zake opens no form in the page: Badilisha
+  // and Mwajiri tena have pages of their own.
   const [formIn, setFormIn] = useState<Card | null>(null);
-  const actionsForm = useCallback(
-    (open: boolean) => setFormIn((now) => opened("actions", open, now)),
-    [],
-  );
   const rolesForm = useCallback(
     (open: boolean) => setFormIn((now) => opened("roles", open, now)),
     [],
@@ -147,8 +144,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
             me={who.data}
             details={<WorkerDetails worker={worker.data} />}
             arrived={arrivedOn("details", worker.data)}
-            onForm={actionsForm}
-            buttonsHidden={elsewhere("actions")}
+            buttonsHidden={formIn !== null}
           />
           {/* Between the status buttons and the roles, as Jack chose (PPL-12: A): a way in is neither. A worker of its
               own, as each card: Asha's open form never goes on to Baraka's page. */}
@@ -189,7 +185,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
 }
 
 /** The cards that open a form in the page itself, each in its own place on it. */
-type Card = "actions" | "roles";
+type Card = "roles";
 
 /** What a card's "opened" (true) or "closed" (false) makes of the card with a form open: a close of a card that holds
  * none changes nothing, as each card says "closed" as it goes. */

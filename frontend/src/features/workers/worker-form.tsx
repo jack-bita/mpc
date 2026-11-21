@@ -1,6 +1,7 @@
 // worker-form.tsx — Ongeza: a new worker joins the shop (PPL-6, PPL-4), on its own page, Mfanyakazi mpya
-// (new-worker-screen.tsx, UI-11). And Mwajiri tena (PPL-11): the same boxes, for a worker who left and is hired again,
-// opened on his old job's page (`again`).
+// (new-worker-screen.tsx, UI-11). And Mwajiri tena (PPL-11): the same boxes, for a worker who left and is hired again
+// (`again`), on the same page, Mwajiri tena Baraka, opened from his old job's page. The page gives the title and the way
+// back, its arrow: the form has no Ghairi (Jack's yes to the screens, 21 Nov 2026).
 //
 // Five boxes: Jina kamili, the person's whole name, as the PIN tiles show it without a photo (02 §5); Jina la kuitwa,
 // the nickname the shop calls them by, on every laptop and every record; Kazi, a job title, which may be empty, as
@@ -29,8 +30,8 @@
 // form has no Jina kamili box (Badilisha fixes it); his nickname and job title start as his old job's, and the first day
 // at today. The old job's id goes with the new job's own (`hire_again`), and the server gives the same person a new job.
 // A first day before his last day is said at once (staff.back_before_left); the server says it too when a later job of
-// his ended after it. Another manager who hired him first: the server's staff.already_member above the buttons; Ghairi
-// reads the worker again (worker-actions.tsx), and his old page then links to the new one.
+// his ended after it. Another manager who hired him first: the server's staff.already_member above the buttons; his old
+// page, which the arrow goes back to, reads him again, and then links to the new one.
 //
 // And from Ongeza itself: Baba, who forgot Baraka worked here, types him in as new, with his phone. The server makes
 // nobody and names Baraka's old job (staff.left_here, with his full name and last day), and under Simu the form says
@@ -107,7 +108,6 @@ export function WorkerForm({
   again,
   demo = false,
   onSaved,
-  onCancel,
 }: {
   /** The shop's today, in its own time zone: where the first day's box starts. */
   today: string;
@@ -115,13 +115,12 @@ export function WorkerForm({
   again?: Worker;
   /** This is the demo, where no worker gets a phone: Simu is off. */
   demo?: boolean;
-  onSaved: (worker: Worker) => void;
-  /** Ghairi, for the form inside a worker's page. None on a page of the form's own, whose arrow leaves (UI-11). */
-  onCancel?: () => void;
+  /** Saved: the job the server made, and whether it hired someone again, from `again` or from the phone Ongeza found,
+   * as the page then says so in other words (UI-11). */
+  onSaved: (worker: Worker, hiredAgain: boolean) => void;
 }) {
   const t = useTranslations("workers.form");
   const actions = useTranslations("workers.actions");
-  const titles = useTranslations("workers.actions.title");
   const codes = useCodeWords();
   const { fieldMessages } = useApiErrorWords();
   const online = useOnline();
@@ -143,12 +142,12 @@ export function WorkerForm({
   const save = useMutation({
     mutationFn: (body: components["schemas"]["StaffAddRequest"]) =>
       answerOf(api.POST("/api/v1/people/staff/", { body })),
-    onSuccess: (worker) => {
+    onSuccess: (worker, body) => {
       // At the top of the list at once, newest first, then the list asks again (workers.ts): for one hired again,
       // his old job's link to the new one with it.
       keepWorker(store, worker);
       void store.invalidateQueries({ queryKey: WORKERS });
-      onSaved(worker);
+      onSaved(worker, body.hire_again !== undefined);
     },
     onError: (error) => {
       // The phone found a worker who left: kept, so a later refusal or a lost answer doesn't take Mwajiri tena away.
@@ -248,12 +247,7 @@ export function WorkerForm({
           // The person just asked for this form: the keyboard starts in its first box, as the page opens.
           autoFocus
         />
-      ) : (
-        // On the old job's page, as the status forms are: whom the form hires again.
-        <h2 className="text-lg font-semibold">
-          {titles("hireAgain", { name: again.display_name })}
-        </h2>
-      )}
+      ) : null}
       <Field
         label={t("nickname")}
         hint={t("nicknameHint")}
@@ -267,7 +261,7 @@ export function WorkerForm({
         autoComplete="off"
         // As the server keeps it (StaffMember.display_name, 40 characters).
         maxLength={40}
-        // Mwajiri tena has no Jina kamili: the keyboard starts here, where the button was.
+        // Mwajiri tena has no Jina kamili: the keyboard starts here, as the page opens.
         autoFocus={again !== undefined}
       />
       <Field
@@ -358,11 +352,6 @@ export function WorkerForm({
         <Button type="submit" disabled={save.isPending || !online}>
           {t("save")}
         </Button>
-        {onCancel ? (
-          <Button kind="second" onClick={onCancel}>
-            {t("cancel")}
-          </Button>
-        ) : null}
       </div>
     </form>
   );

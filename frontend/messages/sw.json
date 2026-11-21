@@ -430,8 +430,7 @@
       "newPhoneHint": "Si lazima. Kama 0712 345 678.",
       "foundLeft": "Simu hii ni ya {name}, aliyeondoka {day}.",
       "farDay": "{day} iko mbali na leo. Kama ni sahihi, bonyeza Hifadhi tena.",
-      "save": "Hifadhi",
-      "cancel": "Ghairi"
+      "save": "Hifadhi"
     },
     "view": {
       "title": "Mfanyakazi",
@@ -475,7 +474,8 @@
         "edit": "Taarifa za {name} zimehifadhiwa.",
         "suspend": "{name} amesimamishwa.",
         "unsuspend": "{name} amerudishwa kazini.",
-        "leave": "{name} ameondoka. Siku yake ya mwisho ni {day}."
+        "leave": "{name} ameondoka. Siku yake ya mwisho ni {day}.",
+        "hireAgain": "{name} ameajiriwa tena."
       },
       "back": "{name} amerudi kazini.",
       "backLink": "Fungua ukurasa wake wa sasa"

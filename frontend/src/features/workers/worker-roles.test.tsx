@@ -1092,7 +1092,7 @@ describe("who sees the buttons", () => {
 
     render(<WorkerScreen id={JUMA.id} />);
 
-    await screen.findByRole("button", { name: "Mwajiri tena" });
+    await screen.findByRole("link", { name: "Mwajiri tena" });
     expect(linesUnder("Cheo")).toEqual(["Muuzaji (Dawa)"]);
     expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull();
     expect(

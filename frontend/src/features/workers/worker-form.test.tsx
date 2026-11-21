@@ -85,7 +85,8 @@ describe("Ongeza", () => {
     typeInto(jobTitleBox(), "Muuzaji wa dawa ");
     tap(save());
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(juma));
+    // A new worker, not one hired again: his page says he was added (UI-11).
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(juma, false));
     const [body] = await sentBodies();
     // The spaces around each off, as the server keeps them; the first day today, as the box started.
     expect(body).toEqual({
@@ -289,17 +290,6 @@ describe("Ongeza", () => {
 
     expect(screen.queryByRole("button", { name: "Ghairi" })).toBeNull();
   });
-
-  it("closes on Ghairi, with nothing sent, where a worker's page asks for one (Mwajiri tena, until it has a page)", async () => {
-    const onCancel = vi.fn();
-    render(<WorkerForm today={TODAY} onSaved={vi.fn()} onCancel={onCancel} />);
-
-    typeJuma();
-    tap(screen.getByRole("button", { name: "Ghairi" }));
-
-    expect(onCancel).toHaveBeenCalled();
-    expect(await sentBodies()).toEqual([]);
-  });
 });
 
 /** Baraka's job that ended on 12 Mar 2026, as the server names it when his phone is typed (staff.left_here). */
@@ -377,7 +367,8 @@ describe("Simu on Ongeza", () => {
     tap(save());
     tap(await screen.findByRole("button", { name: "Mwajiri tena" }));
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(back));
+    // Hired again, from Ongeza itself: his new page says so in its own words (UI-11).
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(back, true));
     const [, again] = await sentBodies();
     // The same person keeps his own full name and phone: neither is sent.
     expect(again).toEqual({
@@ -428,7 +419,7 @@ describe("Simu on Ongeza", () => {
     ).toBeTruthy();
     tap(screen.getByRole("button", { name: "Mwajiri tena" }));
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(back));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(back, true));
     const [, lost, again] = await sentBodies();
     expect(again).toEqual(lost);
     expect(again?.hire_again).toBe(BARAKAS_OLD_JOB);

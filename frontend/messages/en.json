@@ -430,8 +430,7 @@
       "newPhoneHint": "Optional. Like 0712 345 678.",
       "foundLeft": "This phone belongs to {name}, who left on {day}.",
       "farDay": "{day} is far from today. If it is right, press Save again.",
-      "save": "Save",
-      "cancel": "Cancel"
+      "save": "Save"
     },
     "view": {
       "title": "Worker",
@@ -475,7 +474,8 @@
         "edit": "{name}'s details are saved.",
         "suspend": "{name} is suspended.",
         "unsuspend": "{name} is back at work.",
-        "leave": "{name} has left. Their last day was {day}."
+        "leave": "{name} has left. Their last day was {day}.",
+        "hireAgain": "{name} has been hired again."
       },
       "back": "{name} is back at work.",
       "backLink": "Open their page now"

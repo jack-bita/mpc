@@ -49,6 +49,12 @@ export const LIST_PAGE = "/workers/";
 /** Mfanyakazi mpya, Ongeza's own page (UI-11). */
 export const NEW_WORKER_PAGE = "/workers/new/";
 
+/** Mwajiri tena's page, Ongeza's own with the job that ended (UI-11): the person hired again keeps his own full name
+ * and phone, so the same page asks only the new job's boxes. */
+export function hireAgainPage(oldJob: string): string {
+  return `${NEW_WORKER_PAGE}?again=${oldJob}`;
+}
+
 /** A worker's own page, by their job's id: a query string, as the app is plain files with no page per id (ADR-0016).
  * The list's names link to it, and so do a job that ended and the page Mwajiri tena moves to (PPL-11). */
 export function workerPage(id: string): string {

@@ -16,9 +16,8 @@
 // Badilisha is a link to its own page, Badilisha taarifa za Juma (edit-worker-screen.tsx, UI-11), as a long form keeps
 // a page of its own; once done, that page comes back here and leaves its line on this card (`arrived`, page-news.ts).
 //
-// Mwajiri tena opens Ongeza's own form (worker-form.tsx), its boxes filled from the old job, under the buttons' place;
-// saved, the page moves to the new job's page, where the person now works. A long form, which keeps the page until it
-// gets a page of its own (UI-11).
+// Mwajiri tena is a link to its own page too, Mwajiri tena Baraka (new-worker-screen.tsx, UI-11): Ongeza's own form, its
+// boxes filled from the old job; saved, it lands on the new job's page, where the person now works.
 //
 // Simamisha, Rudisha and Ameondoka are short: each opens a sheet over the page (UI-10, sheet.tsx), titled with what and
 // who, "Simamisha Asha", with Sababu, and for Ameondoka the last day, which starts at the shop's today and offers
@@ -40,7 +39,6 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
@@ -61,30 +59,24 @@ import { useOnline } from "@/offline/network";
 import { shopToday } from "@/offline/rules";
 
 import { CardHeading } from "./card-heading";
-import { WorkerForm } from "./worker-form";
 import {
   editWorkerPage,
+  hireAgainPage,
   keepWorker,
   type Worker,
   workerPage,
   WORKERS,
 } from "./workers";
 
-type Action = "suspend" | "unsuspend" | "leave" | "hireAgain";
 /** The three that change a worker's status, each with its own route, and each in a sheet (UI-10). */
-type StatusAction = Exclude<Action, "hireAgain">;
+type StatusAction = "suspend" | "unsuspend" | "leave";
 
-/** Whether an action is one of the three short ones, which open a sheet; Mwajiri tena keeps the page. */
-function isStatusAction(action: Action): action is StatusAction {
-  return action === "suspend" || action === "unsuspend" || action === "leave";
-}
-
-/** The buttons under the details each status offers, in their order on the page. Badilisha isn't among them: it sits
- * on the heading's row, for a worker working or suspended (UI-10). */
-const OFFERED: Record<Worker["status"], Action[]> = {
+/** The status buttons under the details, in their order on the page, for a worker working or suspended. Badilisha
+ * isn't among them: it sits on the heading's row (UI-10); nor Mwajiri tena, a link to its own page, for one who left
+ * (UI-11). */
+const OFFERED: Record<"active" | "suspended", StatusAction[]> = {
   active: ["suspend", "leave"],
   suspended: ["unsuspend", "leave"],
-  left: ["hireAgain"],
 };
 
 /** The whole request's codes that are about one box: shown beside it, not above the buttons. The services raise them
@@ -105,7 +97,7 @@ const CHANGED_MEANWHILE = new Set([
 /** The form's own checks, by box, as the codes the server would send. */
 type Checks = { reason?: string; left_on?: string };
 
-/** The shop's today, read at the tap that opens a form. Out here, as React's check of what a draw may call can't tell
+/** The shop's today, read at the tap that opens a sheet. Out here, as React's check of what a draw may call can't tell
  * that a button's handler is only ever called by a tap, never while the page draws. */
 function todayAt(zone: string): string {
   return shopToday(zone, Date.now());
@@ -116,7 +108,6 @@ export function WorkerActions({
   me,
   details,
   arrived = null,
-  onForm,
   buttonsHidden = false,
 }: {
   worker: Worker;
@@ -125,9 +116,6 @@ export function WorkerActions({
   details?: ReactNode;
   /** The line a form's own page left as it landed here, "Juma ameongezwa…" (UI-11, page-news.ts). */
   arrived?: string | null;
-  /** A form in the page opened (true) or closed (false), Mwajiri tena's, never a sheet: the page keeps one form open
-   * at a time (worker-page.tsx). */
-  onForm?: (open: boolean) => void;
   /** Another card's form is open: its buttons stay off the page meanwhile, so one change is made at a time (PPL-8's
    * review). */
   buttonsHidden?: boolean;
@@ -136,42 +124,26 @@ export function WorkerActions({
   const view = useTranslations("workers.view");
   const codes = useCodeWords();
   const store = useQueryClient();
-  const router = useRouter();
   const titleId = useId();
-  const [open, setOpen] = useState<{ action: Action; today: string } | null>(
-    null,
-  );
-  // The line that says what the last change did, or that someone else changed the worker first.
-  // From its first draw, the line a form's own page left, if it left one (UI-11).
+  // The sheet open, if any, with the shop's today as it opened.
+  const [open, setOpen] = useState<{
+    action: StatusAction;
+    today: string;
+  } | null>(null);
+  // The line that says what the last change did, or that someone else changed the worker first. From its first draw,
+  // the line a form's own page left, if it left one (UI-11).
   const [news, setNews] = useState<string | null>(arrived);
 
-  // Where the keyboard goes when a form in the page closes, Mwajiri tena's (a sheet moves it itself, its finalFocus
-  // below). Ghairi: back to the button that opened it. A change: to the line that says what happened. A new
-  // object each time, so each close moves it.
-  const buttons = useRef(new Map<Action, HTMLButtonElement>());
+  // The status buttons, for a sheet to give the keyboard back to the very one that opened it (its finalFocus below),
+  // and the done line, for it to go to after a change.
+  const buttons = useRef(new Map<StatusAction, HTMLButtonElement>());
   const newsLine = useRef<HTMLDivElement>(null);
-  const [backTo, setBackTo] = useState<{ to: Action | "news" } | null>(null);
-  useEffect(() => {
-    if (backTo === null) return;
-    if (backTo.to === "news") newsLine.current?.focus();
-    else buttons.current.get(backTo.to)?.focus();
-  }, [backTo]);
   // The line a form's own page left (UI-11) is on the card from its first draw, and the keyboard goes to it, as after a
   // change made here: a screen reader says what it is put on, as a status box that comes with its words in it may go
   // unsaid (offline-banner.tsx).
   useEffect(() => {
     if (arrived) newsLine.current?.focus();
   }, [arrived]);
-  // Gone from the page with a form open in it: the page lets the other cards' buttons show again.
-  useEffect(() => () => onForm?.(false), [onForm]);
-
-  /** A form opens, or (null) closes: the page learns whether one is open in the page itself, as the other cards'
-   * buttons then hide (worker-page.tsx). A sheet hides nothing: it is modal, so the page behind it can't be used while
-   * it is open (UI-10). */
-  function show(form: { action: Action; today: string } | null) {
-    setOpen(form);
-    onForm?.(form !== null && !isStatusAction(form.action));
-  }
 
   // Nobody changes their own job (PPL-4): no button, and the server's own sentence says why, under the details.
   const own = worker.id === me.staff.id;
@@ -182,36 +154,28 @@ export function WorkerActions({
 
   function said(sentence: string) {
     afterChange.current = true;
-    // A sheet moves the keyboard itself as it goes; a form in the page needs it moved.
-    const fromASheet = open !== null && isStatusAction(open.action);
-    show(null);
+    setOpen(null);
     setNews(sentence);
-    if (!fromASheet) setBackTo({ to: "news" });
   }
 
-  function cancelled(action: Action) {
-    if (!isStatusAction(action)) setBackTo({ to: action });
-    show(null);
+  function cancelled() {
+    setOpen(null);
     // Asked again: a send whose answer was lost may have changed the worker, and the page would go on showing
-    // Simamisha for a worker the server suspended (PPL-6's review), as Ongeza's Ghairi asks the list again.
+    // Simamisha for a worker the server suspended (PPL-6's review).
     void store.invalidateQueries({ queryKey: WORKERS });
   }
 
-  /** A button opens its form. The shop's today is read as the form opens: a page left open overnight starts on the new
+  /** A button opens its sheet. The shop's today is read as it opens: a page left open overnight starts on the new
    * day. */
-  function openForm(action: Action) {
+  function openSheet(action: StatusAction) {
     afterChange.current = false;
     setNews(null);
-    show({ action, today: todayAt(me.shop.timezone) });
+    setOpen({ action, today: todayAt(me.shop.timezone) });
   }
 
-  // A form open in the page itself, Mwajiri tena's, which takes the buttons' place; a sheet leaves them where they are,
-  // under it.
-  const inPlace = open !== null && !isStatusAction(open.action);
   // Badilisha, on the heading's row: for a worker working or suspended, as one who left keeps what they were then
-  // (PPL-11); while no form is open in the page, on this card or another.
-  const editOffered =
-    !own && worker.status !== "left" && !inPlace && !buttonsHidden;
+  // (PPL-11); while no form is open in the page, on another card.
+  const editOffered = !own && worker.status !== "left" && !buttonsHidden;
 
   return (
     <Card>
@@ -248,16 +212,7 @@ export function WorkerActions({
                   {news ? <AlertDescription>{news}</AlertDescription> : null}
                 </Alert>
               </div>
-              {open?.action === "hireAgain" ? (
-                <WorkerForm
-                  today={open.today}
-                  again={worker}
-                  // He works on his new job now: its page. Its back arrow returns here when this page was reached
-                  // inside the app, else to the list (in-app-moves.tsx), as for any page.
-                  onSaved={(back) => router.push(workerPage(back.id))}
-                  onCancel={() => cancelled("hireAgain")}
-                />
-              ) : worker.hired_again_as !== null ? (
+              {worker.hired_again_as !== null ? (
                 // Back already: the old job links to the new one in place of Mwajiri tena.
                 <p>
                   {t("back", { name: worker.display_name })}{" "}
@@ -265,6 +220,13 @@ export function WorkerActions({
                     {t("backLink")}
                   </TextLink>
                 </p>
+              ) : worker.status === "left" ? (
+                // A link, as it opens a page of its own (UI-11), where he comes back with a new job (PPL-11).
+                <div>
+                  <ButtonLink href={hireAgainPage(worker.id)} kind="second">
+                    {t("hireAgain")}
+                  </ButtonLink>
+                </div>
               ) : !buttonsHidden ? (
                 <div className="flex flex-wrap gap-3">
                   {OFFERED[worker.status].map((action) => (
@@ -278,7 +240,7 @@ export function WorkerActions({
                       }}
                       // Leaving is for good: the danger kind, as the device's Zuia.
                       kind={action === "leave" ? "danger" : "second"}
-                      onClick={() => openForm(action)}
+                      onClick={() => openSheet(action)}
                     >
                       {t(action)}
                     </Button>
@@ -287,7 +249,7 @@ export function WorkerActions({
               ) : null}
               {/* Mounted only while open, so a sheet closed with Ghairi forgets what was typed (as the day's,
                   ATT-6). */}
-              {open !== null && isStatusAction(open.action) ? (
+              {open !== null ? (
                 <ActionSheet
                   action={open.action}
                   worker={worker}
@@ -305,7 +267,7 @@ export function WorkerActions({
                     )
                   }
                   onChangedMeanwhile={said}
-                  onCancel={() => cancelled(open.action)}
+                  onCancel={cancelled}
                   // After a change, the done line; after Ghairi, the very button that opened it, named, never left to
                   // Base UI's guess, which on a phone's tap may be an element of an earlier opening (UI-10's review).
                   finalFocus={() =>

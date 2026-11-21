@@ -300,7 +300,7 @@ describe("Nenosiri la muda", () => {
     theServerHas(left);
     render(<WorkerScreen id={left.id} />);
 
-    await findButton("Mwajiri tena");
+    await screen.findByRole("link", { name: "Mwajiri tena" });
     expect(
       screen.queryByRole("button", { name: "Nenosiri la muda" }),
     ).toBeNull();
