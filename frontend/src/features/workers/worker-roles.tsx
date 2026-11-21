@@ -16,10 +16,10 @@
 // they are back (PPL-7); none for one who left, whose roles stay as history; none on one's own page, where the status
 // buttons' line already says why (staff.own, worker-actions.tsx), as nobody changes their own job.
 //
-// Beside each role and each key, Ondoa opens its form under the lists (end-form.tsx), its title naming what goes; never
-// beside Mmiliki, which only the superuser takes away (PPL-7, PPL-13). Shown for the same workers as Ongeza kazi. While
-// a form is open, no other button shows, on this card or the status buttons' (worker-page.tsx), so one change is made
-// at a time.
+// Beside each role and each key, Ondoa opens its sheet over the page (end-form.tsx, UI-10), its title naming what goes;
+// never beside Mmiliki, which only the superuser takes away (PPL-7, PPL-13). Shown for the same workers as Ongeza kazi.
+// One change is made at a time: while Ongeza kazi's form is open in the page, no other button shows, on this card or
+// the others (worker-page.tsx); while Ondoa's sheet is open, the page behind it is shut off.
 //
 // After a change, one line says what it did, and that the shop's laptops learn it at their next sync, as a worker's
 // keys travel on their staff row (SYNC-15); the keyboard goes to it, as after the status buttons. Ghairi gives the
@@ -77,10 +77,11 @@ export function WorkerRoles({
   const rolesId = useId();
   const keysId = useId();
   const [open, setOpenHere] = useState<Open | null>(null);
-  /** A form opens, or (null) closes: the page learns, for the other card's buttons. */
+  /** A form opens, or (null) closes: the page learns whether Ongeza kazi's is open in the page, for the other cards'
+   * buttons. Ondoa's sheet isn't told: it shuts the whole page off behind it (UI-10). */
   function setOpen(form: Open | null) {
     setOpenHere(form);
-    onForm?.(form !== null);
+    onForm?.(form?.form === "give");
   }
   // Gone from the page with a form open: the page lets the other card's buttons show again.
   useEffect(() => () => onForm?.(false), [onForm]);
@@ -99,11 +100,17 @@ export function WorkerRoles({
     else buttons.current.get(backTo.to)?.focus();
   }, [backTo]);
 
-  // Who may see the buttons (see the top); none while a form is open.
+  // Who may see the buttons (see the top); none while Ongeza kazi's form is open in the page. They stay under Ondoa's
+  // sheet, so Ghairi gives the keyboard back to the very row's Ondoa.
   const mayChange = worker.status !== "left" && worker.id !== me.staff.id;
-  const showButtons = mayChange && open === null && !buttonsHidden;
+  const showButtons = mayChange && open?.form !== "give" && !buttonsHidden;
+
+  // Whether the last close was a change, for Ondoa's sheet to give the keyboard to the done line: read as the sheet
+  // goes, after the draw that took it away, so a ref, not the state (worker-actions.tsx).
+  const afterChange = useRef(false);
 
   function said(sentence: string) {
+    afterChange.current = true;
     setOpen(null);
     setNews(sentence);
     setBackTo({ to: "news" });
@@ -130,6 +137,7 @@ export function WorkerRoles({
         size="normal"
         aria-label={t("ending.removeWhat", { what: ending.words })}
         onClick={() => {
+          afterChange.current = false;
           setNews(null);
           setOpen({ form: "end", ending });
         }}
@@ -231,12 +239,15 @@ export function WorkerRoles({
             onCancel={() => cancelled(ADD)}
           />
         ) : open?.form === "end" ? (
+          // A sheet, mounted only while open, so Ghairi forgets what was typed (UI-10).
           <EndForm
             worker={worker}
             ending={open.ending}
             onDone={said}
             onChangedMeanwhile={said}
             onCancel={() => cancelled(open.ending.id)}
+            // After a change, the done line, as the row and its Ondoa are gone; after Ghairi, the row's Ondoa.
+            finalFocus={() => (afterChange.current ? newsLine.current : null)}
           />
         ) : null}
       </CardContent>

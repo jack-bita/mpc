@@ -149,6 +149,10 @@ function linesUnder(heading: string): string[] {
   );
 }
 
+/** A button inside the open sheet: Ondoa, its main one, or Ghairi (UI-10). */
+const sheetButton = (name: string) =>
+  within(screen.getByRole("dialog")).getByRole("button", { name });
+
 /** Opens Ongeza kazi once the page has drawn. */
 async function openTheGive() {
   fireEvent.click(await screen.findByRole("button", { name: "Ongeza kazi" }));
@@ -675,19 +679,22 @@ describe("Ondoa", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
     );
+    // A sheet over the page, its title naming what goes and whose (UI-10).
     expect(
-      screen.getByRole("heading", { name: "Ondoa Muuzaji (Dawa) kwa Juma" }),
+      screen.getByRole("dialog", { name: "Ondoa Muuzaji (Dawa) kwa Juma" }),
     ).toBeTruthy();
     // The keyboard starts in Sababu.
     expect(document.activeElement).toBe(screen.getByLabelText("Sababu"));
     fireEvent.change(screen.getByLabelText("Sababu"), {
       target: { value: "  Amehamia Vyakula  " },
     });
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ondoa"));
 
     const line =
       "Umemwondolea Juma Muuzaji (Dawa). Kompyuta za duka zitajua baada ya kusawazisha.";
+    // The sheet gone, and the keyboard on the line, as the row's Ondoa went with the role.
     await waitFor(() => expect(document.activeElement?.textContent).toBe(line));
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(await posted()).toEqual([
       { role_given: SELLER_ON_DAWA.id, reason: "Amehamia Vyakula" },
     ]);
@@ -712,7 +719,7 @@ describe("Ondoa", () => {
     fireEvent.change(screen.getByLabelText("Sababu"), {
       target: { value: "Hesabu imeisha" },
     });
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ondoa"));
 
     await screen.findByText(
       "Umemwondolea Juma Kuhesabu mzigo (Vyakula). Kompyuta za duka zitajua baada ya kusawazisha.",
@@ -758,7 +765,7 @@ describe("Ondoa", () => {
       fireEvent.change(screen.getByLabelText("Sababu"), {
         target: { value: "Amehamia Vyakula" },
       });
-      fireEvent.click(button("Hifadhi"));
+      fireEvent.click(sheetButton("Ondoa"));
 
       await screen.findByText(
         `Umemwondolea Juma ${what}. Kompyuta za duka zitajua baada ya kusawazisha.`,
@@ -784,7 +791,7 @@ describe("Ondoa", () => {
     fireEvent.change(screen.getByLabelText("Sababu"), {
       target: { value: "   " },
     });
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ondoa"));
 
     // The server's own sentence for it, staff.reason_required, as it never sends `blank` here (StaffReasonSerializer).
     expect(screen.getByText(sentence("staff.reason_required"))).toBeTruthy();
@@ -806,7 +813,7 @@ describe("Ondoa", () => {
     fireEvent.change(screen.getByLabelText("Sababu"), {
       target: { value: "x" },
     });
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ondoa"));
 
     const box = screen.getByLabelText("Sababu");
     await waitFor(() => expect(box.getAttribute("aria-invalid")).toBe("true"));
@@ -833,7 +840,7 @@ describe("Ondoa", () => {
       fireEvent.change(screen.getByLabelText("Sababu"), {
         target: { value: "Amehamia Vyakula" },
       });
-      fireEvent.click(button("Hifadhi"));
+      fireEvent.click(sheetButton("Ondoa"));
 
       expect((await screen.findByRole("alert")).textContent).toContain(
         sentence(code),
@@ -842,7 +849,7 @@ describe("Ondoa", () => {
     },
   );
 
-  it("shows a refusal of the row it names above the buttons, as the form has no box for it (PPL-8's review)", async () => {
+  it("shows a refusal of the row it names above the sheet's buttons, as it has no box for it (PPL-8's review)", async () => {
     // Juma's role, ended and given again elsewhere meanwhile: the server finds no such row of his.
     theServerHas(JUMA_WITH_BOTH);
     answer(
@@ -858,7 +865,7 @@ describe("Ondoa", () => {
     fireEvent.change(screen.getByLabelText("Sababu"), {
       target: { value: "Amehamia Vyakula" },
     });
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ondoa"));
 
     expect((await screen.findByRole("alert")).textContent).toContain(
       sentence("does_not_exist"),
@@ -879,7 +886,7 @@ describe("Ondoa", () => {
     }
   });
 
-  it("switches Hifadhi off while the end is on its way, so a second tap sends nothing", async () => {
+  it("holds the sheet's Ondoa while the end is on its way, so a second tap sends nothing", async () => {
     theServerHas(JUMA_WITH_BOTH);
     // The server takes its time.
     answer(
@@ -895,12 +902,12 @@ describe("Ondoa", () => {
     fireEvent.change(screen.getByLabelText("Sababu"), {
       target: { value: "Amehamia Vyakula" },
     });
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ondoa"));
 
     await waitFor(() =>
-      expect(button("Hifadhi").hasAttribute("disabled")).toBe(true),
+      expect(sheetButton("Ondoa").hasAttribute("disabled")).toBe(true),
     );
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ondoa"));
     expect(sent.filter((request) => request.method === "POST")).toHaveLength(1);
   });
 
@@ -921,7 +928,7 @@ describe("Ondoa", () => {
     fireEvent.change(screen.getByLabelText("Sababu"), {
       target: { value: "Amehamia Vyakula" },
     });
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ondoa"));
 
     await waitFor(() =>
       expect(document.activeElement?.textContent).toBe(sentence("staff.left")),
@@ -935,7 +942,7 @@ describe("Ondoa", () => {
     expect(linesUnder("Cheo")).toEqual(["Muuzaji (Dawa)"]);
   });
 
-  it("switches Hifadhi off offline", async () => {
+  it("switches the sheet's Ondoa off offline", async () => {
     theServerHas(JUMA_WITH_BOTH);
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
 
@@ -944,10 +951,10 @@ describe("Ondoa", () => {
       await screen.findByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
     );
 
-    expect(button("Hifadhi").hasAttribute("disabled")).toBe(true);
+    expect(sheetButton("Ondoa").hasAttribute("disabled")).toBe(true);
   });
 
-  it("gives the keyboard back to its Ondoa on Ghairi, and shows the other buttons again", async () => {
+  it("gives the keyboard back to its Ondoa on Ghairi, and shuts the page off behind the sheet", async () => {
     theServerHas(JUMA_WITH_BOTH);
 
     render(<WorkerScreen id={JUMA.id} />);
@@ -956,12 +963,11 @@ describe("Ondoa", () => {
         name: "Ondoa Kuhesabu mzigo (Vyakula)",
       }),
     );
-    // One change at a time: no other button while the form is open.
-    expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull();
+    // One change at a time: only the sheet's two buttons can be reached while it is open (UI-10).
     expect(
-      screen.queryByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
-    ).toBeNull();
-    fireEvent.click(button("Ghairi"));
+      screen.getAllByRole("button").map((each) => each.textContent),
+    ).toEqual(["Ghairi", "Ondoa"]);
+    fireEvent.click(sheetButton("Ghairi"));
 
     await waitFor(() =>
       expect(document.activeElement).toBe(

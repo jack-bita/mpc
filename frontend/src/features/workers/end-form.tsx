@@ -1,6 +1,7 @@
 // end-form.tsx — Ondoa (PPL-8): take a role or an extra key away from a worker, with a reason, through PPL-7's routes
-// (POST …/staff/{id}/end-role/ and …/end-key/). Opens under the worker's roles and keys (worker-roles.tsx), its title
-// naming what goes: "Ondoa Muuzaji (Dawa) kwa Juma".
+// (POST …/staff/{id}/end-role/ and …/end-key/). Opens from the row's own Ondoa (worker-roles.tsx), in a sheet over the
+// worker's page (UI-10, sheet.tsx), its title naming what goes and whose: "Ondoa Muuzaji (Dawa) kwa Juma"; then
+// Sababu, Ghairi and Ondoa, red, as PPL-8 drew it: the worker loses something they could do.
 //
 // Taking away is an edit, never a delete (rule 7): the server keeps the row, marked ended, with who, when and this
 // reason, and the worker holds none of it from then on; their laptop drops it at its next sync (PPL-7). Who may is
@@ -14,8 +15,8 @@
 //
 // An end has no id of its own (PPL-7's review): an end whose answer the network lost, sent again, hears
 // role.already_ended or permission.already_ended. That is taken as done: the worker is read again, and the done line
-// said, as what the person asked for has happened, whoever got there first. staff.left closes the form, says it, and
-// reads the worker again, as Simamisha's form does. Every other refusal shows above the buttons, in its sentence:
+// said, as what the person asked for has happened, whoever got there first. staff.left closes the sheet, says it, and
+// reads the worker again, as Simamisha's does. Every other refusal shows above the sheet's buttons, in its sentence:
 // staff.own, staff.superuser_only, staff.more_keys, demo.people_fixed (the seed's people keep their roles on the demo),
 // and the bare 403 of a person without staff.manage.
 //
@@ -23,15 +24,15 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { useApiErrorWords } from "@/api/errors";
 import { answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
-import { Button } from "@/components/design/button";
 import { Field } from "@/components/design/field";
+import { Sheet } from "@/components/design/sheet";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { useOnline } from "@/offline/network";
 
@@ -55,6 +56,7 @@ export function EndForm({
   onDone,
   onChangedMeanwhile,
   onCancel,
+  finalFocus,
 }: {
   worker: Worker;
   ending: Ending;
@@ -62,7 +64,10 @@ export function EndForm({
   onDone: (sentence: string) => void;
   /** Someone else changed the worker first: what the server's code says. */
   onChangedMeanwhile: (sentence: string) => void;
+  /** Ghairi or Esc. */
   onCancel: () => void;
+  /** Where the keyboard goes as the sheet goes (sheet.tsx). */
+  finalFocus: () => HTMLElement | null;
 }) {
   const t = useTranslations("workers.ending");
   const actionWords = useTranslations("workers.actions");
@@ -111,9 +116,8 @@ export function EndForm({
     },
   });
 
-  function send(event: FormEvent) {
-    // The browser would send the form itself and load a new page; the app sends it instead.
-    event.preventDefault();
+  /** The sheet's Ondoa, or Enter in its box: the sheet's own form stops the browser's send (sheet.tsx). */
+  function send() {
     // The last send's refusal is about what was sent then: each tap shows only what it finds (setting-form.tsx).
     end.reset();
     // Spaces alone are no reason, as the server says too.
@@ -125,7 +129,7 @@ export function EndForm({
   }
 
   // Where each refusal shows: beside Sababu, the form's own first, then the server's, by its code or its field. The
-  // codes that close the form show nothing here; everything else is ApiErrorAlert's, above the buttons.
+  // codes that close the sheet show nothing here; everything else is ApiErrorAlert's, above the sheet's buttons.
   const code =
     end.error instanceof ApiRefusal ? end.error.body.code : undefined;
   const closes =
@@ -136,11 +140,20 @@ export function EndForm({
     closes || besideBox ? null : aboutTheChange(end.error, ["reason"]);
 
   return (
-    // noValidate: the browser's own checks would speak its language, not the shop's.
-    <form noValidate onSubmit={send} className="grid gap-6">
-      <h2 className="text-lg font-semibold">
-        {t("title", { what: ending.words, name: worker.display_name })}
-      </h2>
+    <Sheet
+      open
+      onClose={onCancel}
+      title={t("title", { what: ending.words, name: worker.display_name })}
+      actionLabel={t("remove")}
+      // Danger, as Ameondoka: a worker loses what they could do (PPL-8).
+      actionKind="danger"
+      onAction={send}
+      // Held while it is sent, so a second tap sends nothing, and the sheet stays until its answer comes.
+      busy={end.isPending}
+      // Offline, nothing is sent, so nothing waits unsent while it looks done (setting-form.tsx).
+      actionDisabled={!online}
+      finalFocus={finalFocus}
+    >
       <Field
         label={actionWords("reason")}
         hint={actionWords("reasonHint")}
@@ -154,22 +167,12 @@ export function EndForm({
         autoComplete="off"
         // As the ended row keeps it (StaffReasonSerializer, 500 characters).
         maxLength={500}
-        // The person just asked for this form: the keyboard starts in its box, where the button was.
+        // The person just asked for this sheet: the keyboard starts in its box.
         autoFocus
       />
       {/* Who may (staff.own, staff.more_keys, staff.superuser_only, demo.people_fixed), no network, the server's own
           problem. */}
       <ApiErrorAlert error={above} />
-      <div className="flex flex-wrap gap-3">
-        {/* Switched off while it is sent, so a second tap sends nothing, and while offline, so nothing waits unsent
-            while it looks done (setting-form.tsx). Danger, as Ameondoka: a worker loses what they could do. */}
-        <Button type="submit" kind="danger" disabled={end.isPending || !online}>
-          {actionWords("save")}
-        </Button>
-        <Button kind="second" onClick={onCancel}>
-          {actionWords("cancel")}
-        </Button>
-      </div>
-    </form>
+    </Sheet>
   );
 }
