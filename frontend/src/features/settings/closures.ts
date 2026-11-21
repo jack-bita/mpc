@@ -16,7 +16,7 @@ import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
-import { answerOf, ApiRefusal } from "@/api/refusal";
+import { answerOf } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { formatDay } from "@/lib/format";
 
@@ -80,17 +80,4 @@ export function dropClosure(store: QueryClient, id: string): void {
         closures: list.closures.filter((each) => each.id !== id),
       },
   );
-}
-
-/** What a form shows above its buttons, ApiErrorAlert's: the failure, unless it is a refusal about its fields only. The
- * server names the first problem with the whole request as the refusal's code, and puts the fields' codes beside it,
- * calling a refusal of fields alone `invalid` (apps/core/api/errors.py). So a clash with a demo's refusal of today
- * comes as `closure.overlaps` with `first_day` beside it: the form says both at once, not the clash on the next try
- * (ATT-9's review). */
-export function aboutTheWholeRequest(error: unknown): unknown {
-  return error instanceof ApiRefusal &&
-    error.body.code === "invalid" &&
-    Object.keys(error.body.fields).length > 0
-    ? null
-    : error;
 }

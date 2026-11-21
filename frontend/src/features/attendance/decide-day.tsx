@@ -35,13 +35,12 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { useApiErrorWords } from "@/api/errors";
-import { answerOf, ApiRefusal } from "@/api/refusal";
+import { aboutTheWholeRequest, answerOf, ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
 import { Sheet } from "@/components/design/sheet";
-import { aboutTheWholeRequest } from "@/features/settings/closures";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { Decimal } from "@/lib/decimal";
 import { clockPart, formatDay, formatMoney, weekdayOf } from "@/lib/format";

@@ -33,14 +33,13 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { useApiErrorWords } from "@/api/errors";
-import { answerOf, ApiRefusal } from "@/api/refusal";
+import { aboutTheWholeRequest, answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Alert, AlertDescription } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
 import { Field } from "@/components/design/field";
 import { TextLink } from "@/components/design/text-link";
 import type { WhoIsHere } from "@/features/people/who-is-here";
-import { aboutTheWholeRequest } from "@/features/settings/closures";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { formatDay } from "@/lib/format";
 import { useOnline } from "@/offline/network";

@@ -28,7 +28,7 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { useApiErrorWords } from "@/api/errors";
-import { answerOf, ApiRefusal } from "@/api/refusal";
+import { aboutTheWholeRequest, answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
@@ -36,13 +36,7 @@ import { Field } from "@/components/design/field";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { useOnline } from "@/offline/network";
 
-import {
-  aboutTheWholeRequest,
-  type Closure,
-  CLOSURES,
-  dropClosure,
-  useDaysOf,
-} from "./closures";
+import { type Closure, CLOSURES, dropClosure, useDaysOf } from "./closures";
 
 export function ClosureCancel({
   closure,
@@ -149,7 +143,7 @@ export function ClosureCancel({
         </Alert>
       ) : null}
       {/* What no field names: a closure already begun, the demo's today, no network, the server's own
-          problem. Shown beside a box's refusal too, when the server sends both (aboutTheWholeRequest, closures.ts). */}
+          problem. Shown beside a box's refusal too, when the server sends both (aboutTheWholeRequest, src/api/refusal.ts). */}
       <ApiErrorAlert error={aboutTheWholeRequest(cancel.error)} />
       <div className="flex flex-wrap gap-3">
         {/* The colour of a change that can't be called back: the days open at once. Off while it is sent, so a second
