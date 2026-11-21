@@ -77,6 +77,8 @@ export function AddTap({
   const [time, setTime] = useState("");
   const [reason, setReason] = useState("");
   // Made once, as the sheet opens: the same id on every try, so a repeat after a lost answer adds one tap (ADR-0007).
+  // So a repeat answers the tap the first try made, whatever was changed in the sheet between the two: a time changed
+  // after an answer lost is not saved, and the day, read again, shows the time kept, for the manager to fix again.
   const [id] = useState(newId);
   // The form's own checks, as the server would refuse them, shown once the person has tried to send.
   const [tried, setTried] = useState(false);

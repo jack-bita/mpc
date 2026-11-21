@@ -660,8 +660,9 @@ class WorkerAttendance:
 def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: StaffMember | None) -> WorkerAttendance:
     """One job's month of `month`, any day of it, as their calendar and its days show it (ATT-12): the book's days of
     the job, worked out through the book as the month page's are (work_out_days), so it writes as the book does, and
-    asked twice writes nothing the second time; their counts; and every tap of the job in the month, today's too, none
-    voided, each with its laptop, its photo or why none, and whether it is in doubt. Each day with its decision and
+    asked twice writes nothing the second time; their counts; and every tap of the job in the month, today's too, the
+    crossed-out ones among them (ATT-13), each with its laptop, or who added it in the office, its photo or why none,
+    whether it is in doubt, and who crossed it out, when and why. Each day with its decision and
     what it may be decided as (ATT-6), as `viewer` may decide it: the person looking, or None for the system. The shop
     must be open, and the job one of it."""
     # The job is the shop's: the route finds it through the guard, so another shop's never comes here; but a service
@@ -1086,10 +1087,11 @@ def _ready_to_fix(staff_id: uuid.UUID, by: StaffMember) -> StaffMember:
     require(by, Permission.ATTENDANCE_MANAGE, None)
     # Then the job, locked as the book locks every job of the shop while it works the days out (work_out_days): a fix,
     # a run of the book and a decision take turns, so the book never keeps a day from the taps as they were a moment
-    # before a fix, and a decision made meanwhile is either seen by the fix or sees it. One job, so no other lock is
-    # waited for while it is held, and no two runs each hold what the other waits for (a deadlock). FOR NO KEY UPDATE,
-    # the light lock (backend rules): a laptop's tap pushed meanwhile still saves. Read afresh with it, as its first
-    # and last day may have just moved (PPL-10).
+    # before a fix, and a decision made meanwhile is either seen by the fix or sees it. One job, so no other job's lock
+    # is waited for while it is held, and no two runs each hold what the other waits for (a deadlock); the one lock
+    # taken after it is the shop's change numbers, at the block's end, which no run of the book or decision holds.
+    # FOR NO KEY UPDATE, the light lock (backend rules): a laptop's tap pushed meanwhile still saves. Read afresh with
+    # it, as its first and last day may have just moved (PPL-10).
     job = StaffMember.objects.select_for_update(no_key=True).get(pk=staff_id)
     # Never one's own taps (as ATT-6's day.own): a manager who came late would otherwise add himself an Ingia on time.
     # By the person, not the job: someone hired again (PPL-11) has two jobs, and neither's taps are theirs to fix.

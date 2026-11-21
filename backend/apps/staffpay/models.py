@@ -4,7 +4,7 @@ pushed later (ATT-1; 02 §12).
     who    in/out  laptop          laptop's time  trusted time  check
     Asha   in      Laptop ya Dawa  07:20          07:20         device_ok
     Juma   in      Laptop ya Dawa  07:30          —             unverified
-    Juma   out     —               —              18:30         entered     added by Baba: "Alisahau kubonyeza Toka"
+    Juma   out     —               —              18:45         entered     added by Baba: "Alisahau kubonyeza Toka"
 
 A ledger: a line is written once, by the clock document's saving code (apps/staffpay/documents.py), or by a manager in
 the office for a tap a worker forgot (ATT-13), and never changed or deleted, only voided once, with who and why (T2,
