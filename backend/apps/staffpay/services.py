@@ -780,8 +780,9 @@ def decide_day(
     "Alisahau kubonyeza Toka". The decision is kept beside what the book worked out, which stays as it was (A2), with
     its fine (day_choices, from the day's first Ingia and its own rules, T4), who, when and why. `replaces`: when the
     decision the person saw was made, or None if they saw none. `by`: who decides, with attendance.manage on the whole
-    shop, and never the day's own worker. Refuses: one's own day (day.own); a day that isn't a working day gone by
-    (day.not_working_day); someone else decided it since (VersionConflict, 409); and, all together, each beside its
+    shop, and never the day's own worker. The same decision sent again by its maker, its first answer lost, is answered
+    as done. Refuses: one's own day (day.own); a day that isn't a working day gone by (day.not_working_day); someone
+    else decided it since (VersionConflict, 409); and, all together, each beside its
     box, a choice the day can't take (day.choice_not_offered), no reason (day.reason_missing), or on the demo a reason
     not one of the ready ones (demo.ready_reasons). Returns the day as saved."""
     # A job of another shop deciding this shop's day is a bug in the calling code (T1), never a person's mistake: the
@@ -813,6 +814,17 @@ def decide_day(
         # over: the book keeps it only once it is (ATT-10), so a row of today would be a bug, refused all the same.
         if day.status == DayStatus.OFF or day.date >= shop_today(job.shop):
             raise ValidationError("Only a working day that is over can be decided.", code="day.not_working_day")
+        # The same decision sent again, as a phone does when the network lost the first one's answer: the day holds it
+        # already, made by this person, with the same choice and the same reason. Answered as done, writing nothing and
+        # no second line in the edit history, never refused below as if someone else had decided it (ATT-6's review).
+        status, absence = DECISION_OF[choice]
+        if (day.decided_by_id, day.decided_status, day.absence_type, day.decision_reason) == (
+            by.pk,
+            status,
+            absence,
+            reason,
+        ):
+            return day
         # Two managers on the same day at once: the second decided on a page that showed no decision, or an older one,
         # so theirs would write over a decision they never saw. Refused as an edit on an old copy is (409), so the page
         # reads the day again and shows them what was decided.
@@ -833,7 +845,7 @@ def decide_day(
             errors["reason"] = [ValidationError("On the demo, pick a ready reason.", code="demo.ready_reasons")]
         if errors:
             raise ValidationError(errors)
-        day.decided_status, day.absence_type = DECISION_OF[choice]
+        day.decided_status, day.absence_type = status, absence
         day.decided_fine = offered[choice]
         day.decided_by = by
         day.decided_at = timezone.now()

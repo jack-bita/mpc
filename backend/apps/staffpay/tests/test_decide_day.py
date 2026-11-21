@@ -246,6 +246,24 @@ def test_a_change_names_the_decision_it_replaces(baba: StaffMember, juma: StaffM
         decide(day, baba, DayChoice.HALF, "Aliondoka mchana", replaces=first.decided_at - dt.timedelta(seconds=1))
 
 
+def test_the_same_decision_sent_again_is_answered_as_done(
+    baba: StaffMember, meneja: StaffMember, juma: StaffMember
+) -> None:
+    # Baba saves a full day; the network loses the answer, and his phone sends it again, still saying it saw no
+    # decision. It is his own, the same choice and reason: answered as done, nothing written again, one line in the
+    # edit history. Not so a different reason of his, nor the same words from Meneja: those are refused as before.
+    day = kept_day(juma)
+    first = decide(day, baba)
+    again = decide(day, baba)
+    assert again.decided_at == first.decided_at
+    with shop_context(day.shop_id):
+        assert EditEvent.objects.filter(subject_type="attendance_day", subject_id=day.pk).count() == 1
+    with pytest.raises(VersionConflict):
+        decide(day, baba, reason="Sababu nyingine")
+    with pytest.raises(VersionConflict):
+        decide(day, meneja)
+
+
 # Who may.
 
 
