@@ -9,6 +9,7 @@ These helpers make a day the way the shop does: taps on the shop's laptop, then 
     kept_day(juma)        Monday 16 Nov: in at 07:50, no Toka, waiting for a decision
     kept_day(juma, (ClockKind.OUT, 18, 45))   the same Monday with the taps named instead
     absent_day(juma)      a day with no tap: absent, or off on a Sunday
+    doubted_tap(juma, 7, 20)  an Ingia whose time the server doesn't trust, for a day whose time is in doubt
 
 The shop must hold one laptop (the `device_a` fixture for shop A). Fake data only: the repo is public.
 """
@@ -84,6 +85,28 @@ def kept_day(staff: StaffMember, *taps: tuple[ClockKind, int, int], date: dt.dat
                 no_photo="demo",
             ).save()
     return absent_day(staff, date)
+
+
+def doubted_tap(staff: StaffMember, hour: int, minute: int, date: dt.date = MONDAY) -> None:
+    """An Ingia whose time the server doesn't trust (`unverified`, ATT-1): the laptop's clock moved for it, so it keeps
+    only the laptop's time, and its day waits for a decision with the reason time_unknown (ATT-4)."""
+    moment = dt.datetime(date.year, date.month, date.day, hour, minute, tzinfo=ARUSHA)
+    with shop_context(staff.shop_id):
+        AttendanceEvent(
+            shop_id=staff.shop_id,
+            device=Device.objects.get(shop=staff.shop_id),
+            device_seq=next(_numbers),
+            client_time=moment,
+            received_at=moment + dt.timedelta(hours=1),
+            created_by=staff,
+            staff=staff,
+            kind=ClockKind.IN,
+            trusted_time=None,
+            time_check=TimeCheck.UNVERIFIED,
+            last_server_time=moment - dt.timedelta(minutes=30),
+            clock_error=dt.timedelta(0),
+            no_photo="demo",
+        ).save()
 
 
 def absent_day(staff: StaffMember, date: dt.date = MONDAY) -> AttendanceDay:

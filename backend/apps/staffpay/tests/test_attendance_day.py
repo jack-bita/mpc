@@ -398,3 +398,13 @@ def test_decided_late_with_no_fine_set_is_still_late() -> None:
     # A shop starts with no fine (ATT-2): late is still offered, and takes 0, as the rule's late day does.
     no_fines = dataclasses.replace(OWNERS_DAY, late_fine=NO_FINE, second_fine=NO_FINE)
     assert day_choices(at("07:50"), no_fines)[DayChoice.LATE] == NO_FINE
+
+
+def test_decided_late_is_not_offered_when_the_time_is_in_doubt() -> None:
+    # Asha's 07:50 is by a laptop's clock that moved, or follows an Ingia whose time the server can't trust: nobody
+    # knows when she came, so no fine is offered from it (Jack: A, ATT-6's review). A full day, a half day with no fine,
+    # or an absence.
+    offered = day_choices(at("07:50"), OWNERS_DAY, time_in_doubt=True)
+    assert DayChoice.LATE not in offered
+    assert offered[DayChoice.HALF] == NO_FINE
+    assert list(offered) == [choice for choice in DayChoice if choice != DayChoice.LATE]

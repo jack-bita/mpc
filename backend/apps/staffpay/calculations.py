@@ -23,6 +23,7 @@ first Ingia gives, by the rules that day used (T4):
     in 08:10  → Amechelewa: the second fine    Nusu siku: the second fine
     in 07:20  → Amechelewa: not offered        Nusu siku: no fine
     in 12:20  → Amechelewa: the second fine    Nusu siku: no fine, the afternoon's half
+    a time in doubt → Amechelewa: not offered  Nusu siku: no fine (Jack, ATT-6's review)
 """
 
 import datetime as dt
@@ -248,10 +249,22 @@ def work_out_day(taps: Sequence[Tap], rules: DayRules) -> DayResult:
     return dharura(ReviewReason.NO_OUT if first_out is None else ReviewReason.LEFT_EARLY)
 
 
-def day_choices(first_in: dt.time | None, rules: DayRules) -> dict[DayChoice, Decimal]:
+# The reasons a day waits for that put its time itself in doubt (ATT-5): a tap whose time the server can't trust, and a
+# tap a later one's time disagrees with, as a laptop's clock moved. On such a day the first Ingia the book read may not
+# be when the worker came: a trusted Ingia at 09:00 after an untrusted one at 07:20, or a 07:50 by a clock that moved.
+TIME_IN_DOUBT = (ReviewReason.TIME_UNKNOWN, ReviewReason.CLOCK_DISAGREES)
+
+
+def day_choices(first_in: dt.time | None, rules: DayRules, *, time_in_doubt: bool = False) -> dict[DayChoice, Decimal]:
     """The choices a manager may decide a day as (ATT-6), each with the fine it takes, in the sheet's order: from the
     day's first Ingia with a trusted time (`first_in`, ATT-4) and the rules the day used (`rules_used`, T4), never
-    today's. A choice the day can't take is left out: *Amechelewa* with no Ingia known, or an Ingia on time."""
+    today's. A choice the day can't take is left out: *Amechelewa* with no Ingia known, or an Ingia on time.
+    `time_in_doubt`: the day waits for one of TIME_IN_DOUBT's reasons, so its Ingia counts as none known."""
+    # A time in doubt fines nobody (Jack: A, ATT-6's review): a worker is never fined by a clock the system itself
+    # doesn't trust. So the day is decided as one with no Ingia known: no Amechelewa, and a half day with no fine. Rare,
+    # as a laptop's clock seldom moves, and the manager still sees the taps and their doubt beside the day.
+    if time_in_doubt:
+        first_in = None
     # A day sent to review carries no fine (NO_FINE, ATT-4), so deciding it late reads the fine again, as the rule
     # would have: by on_time_until no fine; after it and before second_fine_from the first; from second_fine_from on
     # the second. Past the rule's own windows (from review_from, 08:30, the owner's dharura) a late arrival is later

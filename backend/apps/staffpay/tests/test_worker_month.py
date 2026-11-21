@@ -482,6 +482,20 @@ def test_each_day_offers_its_choices_with_their_fines(
     assert answer.yours is False
 
 
+def test_a_day_whose_time_is_in_doubt_offers_no_fine(
+    shop_a: Shop, device_a: Device, asha: StaffMember, baba: StaffMember
+) -> None:
+    # Tuesday 6th: an Ingia at 07:20 whose time the server can't trust, then one at 07:50 it does. The sheet offers no
+    # Amechelewa from that 07:50, and a half day with no fine (Jack: A, ATT-6's review).
+    tap(device_a, asha, ClockKind.IN, on(6, 7, 20), check=TimeCheck.UNVERIFIED)
+    tap(device_a, asha, ClockKind.IN, on(6, 7, 50))
+    sixth = day_of(month_of(shop_a, asha, viewer=baba), 6)
+    assert sixth.reason == ReviewReason.TIME_UNKNOWN
+    offered = {option.choice: option.fine for option in sixth.choices}
+    assert DayChoice.LATE not in offered
+    assert offered[DayChoice.HALF] == Decimal("0.00")
+
+
 def test_ones_own_month_offers_nothing_to_decide(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
     # Asha opens her own month (a manager would): she may see it, but decide none of it (Jack, ATT-6).
     tap(device_a, asha, ClockKind.IN, on(6, 7, 50))

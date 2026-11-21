@@ -44,7 +44,7 @@ from apps.staffpay.models import (
     ReviewReason,
 )
 from apps.staffpay.services import decide_day
-from apps.staffpay.tests.days import FIRST_FINE, SUNDAY, absent_day, job, kept_day, rule, switch_on
+from apps.staffpay.tests.days import FIRST_FINE, SUNDAY, absent_day, doubted_tap, job, kept_day, rule, switch_on
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
@@ -396,6 +396,19 @@ def test_late_is_refused_with_no_late_ingia(baba: StaffMember, juma: StaffMember
         decide(day, baba, DayChoice.LATE, reason="   ")
     assert codes_of(refused) == {"choice": {"day.choice_not_offered"}, "reason": {"day.reason_missing"}}
     assert fresh(day).decided_status == ""
+
+
+def test_a_day_whose_time_is_in_doubt_takes_no_fine(baba: StaffMember, juma: StaffMember) -> None:
+    # Juma's Monday: an Ingia at 07:20 whose time the server can't trust, then one at 07:50 that it does. Nobody knows
+    # when he came, so the day can't be decided late from 07:50 (Jack: A); a half day takes no fine.
+    doubted_tap(juma, 7, 20)
+    day = kept_day(juma)
+    assert day.review_reason == ReviewReason.TIME_UNKNOWN
+    with pytest.raises(ValidationError) as refused:
+        decide(day, baba, DayChoice.LATE, "Alichelewa")
+    assert codes_of(refused) == {"choice": {"day.choice_not_offered"}}
+    decide(day, baba, DayChoice.HALF, "Aliondoka mchana")
+    assert (fresh(day).decided_status, fresh(day).decided_fine) == (DayStatus.HALF, Decimal("0.00"))
 
 
 # The demo.

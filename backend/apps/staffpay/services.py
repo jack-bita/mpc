@@ -65,7 +65,15 @@ from apps.people.permissions import require
 from apps.people.services import lock_worker_for_a_change
 from apps.shops.models import Shop
 from apps.shops.selectors import closed_days, shop_settings_between, shop_today
-from apps.staffpay.calculations import NO_FINE, DayResult, Tap, day_choices, shop_minute, work_out_day
+from apps.staffpay.calculations import (
+    NO_FINE,
+    TIME_IN_DOUBT,
+    DayResult,
+    Tap,
+    day_choices,
+    shop_minute,
+    work_out_day,
+)
 from apps.staffpay.models import (
     DECISION_OF,
     AbsenceType,
@@ -720,7 +728,9 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
                 if yours or day.status == DayStatus.OFF
                 else [
                     DayOption(choice=choice, fine=fine)
-                    for choice, fine in day_choices(day.first_in, rules_from_text(day.rules_used)).items()
+                    for choice, fine in day_choices(
+                        day.first_in, rules_from_text(day.rules_used), time_in_doubt=day.review_reason in TIME_IN_DOUBT
+                    ).items()
                 ],
             )
             for day in days
@@ -839,8 +849,10 @@ def decide_day(
         if day.decided_at != replaces:
             raise VersionConflict()
         # The choices this day may take, each with its fine, from the day's own rules (T4): a day sent to review keeps
-        # its first Ingia and the rules it read, for this (ATT-10).
-        offered = day_choices(day.first_in, rules_from_text(day.rules_used))
+        # its first Ingia and the rules it read, for this (ATT-10); and none fined when its time is in doubt (Jack: A).
+        offered = day_choices(
+            day.first_in, rules_from_text(day.rules_used), time_in_doubt=day.review_reason in TIME_IN_DOUBT
+        )
         # The boxes, all together, so a person who got two wrong sees both at once, each beside its box (ADR-0040).
         errors: dict[str, list[ValidationError]] = {}
         if choice not in offered:
