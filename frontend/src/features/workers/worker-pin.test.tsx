@@ -90,6 +90,12 @@ function errorOf(box: HTMLElement): string {
 const button = (name: string) =>
   screen.getByRole("button", { name }) as HTMLButtonElement;
 const findButton = (name: string) => screen.findByRole("button", { name });
+/** The line that says what happened, found on its own card, never only somewhere on the page (UI-10's review). */
+const onTheCard = (card: string, line: string) =>
+  waitFor(() =>
+    within(screen.getByRole("region", { name: card })).getByText(line),
+  );
+
 /** A button inside the open sheet: Weka PIN, its main one, or Ghairi (UI-10). */
 const sheetButton = (name: string) =>
   within(screen.getByRole("dialog")).getByRole("button", {
@@ -198,7 +204,8 @@ describe("Weka PIN", () => {
 
     // The whole line: a laptop with no network keeps its lock and the old PIN until it syncs (src/offline/pin.ts), so
     // "now" is promised only where there is a network (PPL-12's review).
-    const done = await screen.findByText(
+    const done = await onTheCard(
+      "Kuingia",
       "PIN ya Asha imewekwa. Kila kompyuta ya duka itamwonyesha ikishasawazisha. Kwenye kompyuta yenye mtandao, kifungo chake kimeondoka na PIN yake ya zamani haifanyi kazi tena; isiyo na mtandao itajua ikishasawazisha.",
     );
     // The sheet gone, and the keyboard on the line, not taken back to Weka PIN by the sheet a moment later.

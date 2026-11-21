@@ -149,6 +149,14 @@ function linesUnder(heading: string): string[] {
   );
 }
 
+/** The whole roles card, Cheo's and Ruhusa za ziada's sections and the done line under them: the card itself, as the
+ * line sits in neither section. */
+function theRolesCard(): HTMLElement {
+  return screen
+    .getByRole("heading", { level: 2, name: "Cheo" })
+    .closest('[data-slot="card"]') as HTMLElement;
+}
+
 /** A button inside the open sheet: Ondoa, its main one, or Ghairi (UI-10). */
 const sheetButton = (name: string) =>
   within(screen.getByRole("dialog")).getByRole("button", { name });
@@ -694,9 +702,11 @@ describe("Ondoa", () => {
 
     const line =
       "Umemwondolea Juma Muuzaji (Dawa). Kompyuta za duka zitajua baada ya kusawazisha.";
-    // The sheet gone, and the keyboard on the line, as the row's Ondoa went with the role.
+    // The sheet gone, and the keyboard on the line, as the row's Ondoa went with the role; the line on the roles card
+    // itself (UI-10's review).
     await waitFor(() => expect(document.activeElement?.textContent).toBe(line));
     expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(theRolesCard()).getByText(line)).toBeTruthy();
     expect(await posted()).toEqual([
       { role_given: SELLER_ON_DAWA.id, reason: "Amehamia Vyakula" },
     ]);

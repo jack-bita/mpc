@@ -79,6 +79,12 @@ function errorOf(box: HTMLElement): string {
 const button = (name: string) =>
   screen.getByRole("button", { name }) as HTMLButtonElement;
 const findButton = (name: string) => screen.findByRole("button", { name });
+/** The line that says what happened, found on its own card, never only somewhere on the page (UI-10's review). */
+const onTheCard = (card: string, line: string) =>
+  waitFor(() =>
+    within(screen.getByRole("region", { name: card })).getByText(line),
+  );
+
 /** A button inside the open sheet: Weka nenosiri, its main one, or Ghairi (UI-10). */
 const sheetButton = (name: string) =>
   within(screen.getByRole("dialog")).getByRole("button", {
@@ -116,7 +122,8 @@ describe("Nenosiri la muda", () => {
     expect(passwordBox().autocomplete).toBe("new-password");
     fireEvent.click(sheetButton("Weka nenosiri"));
 
-    const done = await screen.findByText(
+    const done = await onTheCard(
+      "Kuingia",
       "Nenosiri la muda la Asha limewekwa. Mwambie nenosiri hili. Ataingia kwa simu yake, 0712 345 678, au kwa barua pepe yake, kisha atachagua nenosiri lake mwenyewe.",
     );
     // The sheet gone, and the keyboard on the line, as after every change on the page.

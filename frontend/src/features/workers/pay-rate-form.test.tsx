@@ -125,6 +125,12 @@ describe("Weka malipo", () => {
     await waitFor(() =>
       expect(plain(document.activeElement?.textContent ?? "")).toBe(line),
     );
+    // On Malipo kwa siku itself, never only somewhere on the page (UI-10's review).
+    expect(
+      within(screen.getByRole("region", { name: "Malipo kwa siku" })).getByText(
+        line,
+      ),
+    ).toBeTruthy();
     const [body] = await posted();
     expect(body).toEqual({
       id: expect.stringMatching(/^[0-9a-f-]{36}$/) as unknown,

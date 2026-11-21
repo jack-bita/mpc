@@ -84,6 +84,12 @@ function typeInto(box: HTMLElement, text: string) {
 const button = (name: string) => screen.getByRole("button", { name });
 const findButton = (name: string) => screen.findByRole("button", { name });
 const reasonBox = () => screen.getByLabelText("Sababu");
+/** The line that says what happened, found on its own card, never only somewhere on the page (UI-10's review). */
+const onTheCard = (card: string, line: string) =>
+  waitFor(() =>
+    within(screen.getByRole("region", { name: card })).getByText(line),
+  );
+
 /** The sheet open over the page, named by its title (UI-10). */
 const theSheet = (name: string) => screen.getByRole("dialog", { name });
 /** A button inside the open sheet: its main one, which names the action, or Ghairi. */
@@ -152,7 +158,7 @@ describe("the buttons on a worker's page", () => {
     );
     fireEvent.click(sheetButton("Simamisha"));
 
-    expect(await screen.findByText("Asha amesimamishwa.")).toBeTruthy();
+    expect(await onTheCard("Taarifa zake", "Asha amesimamishwa.")).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
     const [body] = await sentBodies();
     // The spaces around the reason off, as the server keeps it.
@@ -182,7 +188,9 @@ describe("the buttons on a worker's page", () => {
     typeInto(reasonBox(), "Ameomba radhi");
     fireEvent.click(sheetButton("Mrudishe"));
 
-    expect(await screen.findByText("Asha amerudishwa kazini.")).toBeTruthy();
+    expect(
+      await onTheCard("Taarifa zake", "Asha amerudishwa kazini."),
+    ).toBeTruthy();
     await findButton("Simamisha");
   });
 
@@ -206,7 +214,8 @@ describe("the buttons on a worker's page", () => {
     fireEvent.click(sheetButton("Ameondoka"));
 
     expect(
-      await screen.findByText(
+      await onTheCard(
+        "Taarifa zake",
         "Asha ameondoka. Siku yake ya mwisho ni 18/11/2026.",
       ),
     ).toBeTruthy();
