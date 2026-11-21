@@ -162,8 +162,8 @@ function TabsSample() {
   );
 }
 
-/** A sheet that opens from its button and closes on Ghairi, Esc, a tap outside, or its main button, as a screen's
- * does (ATT-6): the main button here only closes it, as this page sends nothing. */
+/** A sheet that opens from its button and closes on Ghairi, Esc or its main button, never on a tap outside (UI-10), as
+ * a screen's does (ATT-6): the main button here only closes it, as this page sends nothing. */
 function SheetSample() {
   const t = useTranslations("design");
   const [open, setOpen] = useState(false);

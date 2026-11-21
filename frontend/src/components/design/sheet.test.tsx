@@ -1,5 +1,6 @@
-// sheet.test.tsx — the sheet piece: a short task over its own page, named for a screen reader, closed by Ghairi, Esc
-// or a tap outside, sent by its main button or Enter, and held while its action is on its way (ADR-0039, ATT-6).
+// sheet.test.tsx — the sheet piece: a short task over its own page, named for a screen reader, closed by Ghairi or
+// Esc but never by a tap on the dimmed page (UI-10), sent by its main button or Enter, and held while its action is on
+// its way (ADR-0039, ATT-6).
 //
 // jsdom paints nothing, so where the sheet sits (the bottom, a phone's width on a wide screen) is checked by its
 // classes here, and by eye on /design and a phone.
@@ -68,6 +69,27 @@ describe("the sheet", () => {
     fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(2);
     expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it("stays open on a tap on the dimmed page, keeping what was typed (UI-10)", () => {
+    const { onClose } = open();
+    const box = screen.getByRole("textbox", { name: "Sababu" });
+    fireEvent.change(box, { target: { value: "Alichelewa mara tatu" } });
+    // The dimmed page behind the sheet: Base UI's backdrop, outside the dialog. A press is the whole tap, as a
+    // finger's comes: down, up, then the click.
+    const dimmed = document.querySelector('[data-slot="sheet-overlay"]');
+    expect(dimmed).not.toBeNull();
+    for (const press of [
+      fireEvent.pointerDown,
+      fireEvent.mouseDown,
+      fireEvent.pointerUp,
+      fireEvent.mouseUp,
+      fireEvent.click,
+    ])
+      press(dimmed as Element);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeDefined();
+    expect((box as HTMLInputElement).value).toBe("Alichelewa mara tatu");
   });
 
   it("sends by its main button, and by Enter in a box, as a form does", () => {

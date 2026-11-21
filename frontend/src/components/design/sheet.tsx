@@ -11,16 +11,18 @@
 //
 // shadcn's sheet (components/ui/sheet.tsx) gives the behaviour, through Base UI's dialog: the page behind it is shut
 // off while it is open (a modal, so Tab stays inside it and a screen reader reads only it), the focus moves into it as
-// it opens and back to the button that opened it as it closes, and Esc or a tap on the dimmed page closes it, as
-// Ghairi does. This piece sets the look and the two buttons:
+// it opens and back to the button that opened it as it closes, and Esc closes it, as Ghairi does. This piece sets the
+// look and the two buttons:
 //   - always from the bottom, as on a phone, where a thumb reaches it; on a laptop's wide screen its contents keep a
 //     phone's width in the middle, so a line of the form is never a metre long;
 //   - no ✕ in the corner, which shadcn draws in English: Ghairi is the one way to close it in words, beside the main
 //     button, where every sheet has it (Jack: "Sheet with cancel and CTA");
 //   - the two buttons are a form's: Enter in a box sends it, as the main button does;
-//   - while the main action is on its way (`busy`), both buttons are held and nothing closes it, Esc and a tap outside
-//     included: a decision being saved can't be left half-seen, and the screen shows its answer, or why it failed,
-//     inside the sheet.
+//   - a tap on the dimmed page closes nothing (Jack, UI-10): every sheet holds a form, and a thumb that lands beside
+//     it would throw away a half-typed reason. Ghairi and Esc close it, both on purpose;
+//   - while the main action is on its way (`busy`), both buttons are held and nothing closes it, Esc included: a
+//     decision being saved can't be left half-seen, and the screen shows its answer, or why it failed, inside the
+//     sheet.
 //
 // A screen gives the words: the title, what it's about, the main button's words, and the form. Ghairi's word is the
 // sheet's own (sheet.cancel).
@@ -64,7 +66,7 @@ export function Sheet({
 }: {
   /** Whether it is on the screen: the screen keeps this, opening it from its own button. */
   open: boolean;
-  /** Ghairi, Esc or a tap on the dimmed page: the screen closes it, forgetting what was typed. */
+  /** Ghairi or Esc: the screen closes it, forgetting what was typed. */
   onClose: () => void;
   title: string;
   description?: ReactNode;
@@ -90,7 +92,9 @@ export function Sheet({
   return (
     <ShadcnSheet
       open={open}
-      // Base UI asks to close on Esc and on a tap outside. Never while the main action is on its way.
+      // A tap on the dimmed page is no way to close it (Jack, UI-10): it would throw away what was typed.
+      disablePointerDismissal
+      // Base UI asks to close on Esc. Never while the main action is on its way.
       onOpenChange={(next) => {
         if (!next && !busy) onClose();
       }}
