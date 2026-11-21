@@ -298,8 +298,11 @@ describe("a day under the calendar", () => {
     expect(
       within(open).getByText("Ingia 07:25 asubuhi · Laptop ya Dawa"),
     ).toBeTruthy();
-    // Today isn't over, so no Toka is missing yet.
+    // Today isn't over, so no Toka is missing yet, and nothing is decided before it is (ATT-6's card, Done when 6).
     expect(within(open).queryByText("Hakuna Toka.")).toBeNull();
+    expect(
+      within(open).queryByRole("button", { name: "Amua siku hii" }),
+    ).toBeNull();
   });
 
   it("says why a tap is in doubt, and shows an untrusted time as the laptop's", async () => {
