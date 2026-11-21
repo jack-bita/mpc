@@ -352,8 +352,9 @@ describe("a day under the calendar", () => {
     ).toBeTruthy();
   });
 
-  it("lists no crossed-out tap among the day's taps (ATT-13)", async () => {
-    // Juma's 10:00 Toka was crossed out: it counts for nothing, so the day has an Ingia and no Toka.
+  it("shows a crossed-out tap struck through, with who, when and why, and counts the day without it (ATT-13)", async () => {
+    // Juma's 10:00 Toka was crossed out by Baba: it stays on the day, struck through (A2), counts for nothing, so the day
+    // has an Ingia and no Toka; and it offers no Batilisha of its own, as it is never brought back.
     answer("GET", JUMAS_MONTH, {
       status: 200,
       body: november(
@@ -385,11 +386,117 @@ describe("a day under the calendar", () => {
     );
 
     const open = await theDay("Alhamisi 12/11/2026");
+    const crossed = within(open).getByText(
+      "Toka 10:00 asubuhi · Laptop ya Dawa",
+    );
+    expect(crossed.tagName).toBe("S");
+    expect(
+      within(open).getByText(
+        "Imebatilishwa na Baba, 12/11/2026 · Sababu: Alibonyeza kwa makosa",
+      ),
+    ).toBeTruthy();
+    expect(within(open).getByText("Hakuna Toka.")).toBeTruthy();
+    // One Batilisha: the Ingia's, which counts.
+    expect(
+      within(open).getAllByRole("button", { name: "Batilisha" }),
+    ).toHaveLength(1);
+  });
+
+  it("offers Batilisha under a tap, which opens its sheet over the day (ATT-13)", async () => {
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [
+          day({
+            date: "2026-11-12",
+            status: "needs_review",
+            reason: "left_early",
+            first_in: "07:20",
+            first_out: "10:00",
+          }),
+        ],
+        [
+          tap({ date: "2026-11-12", kind: "in", time: "07:20" }),
+          tap({ date: "2026-11-12", kind: "out", time: "10:00" }),
+        ],
+      ),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-12" />,
+    );
+
+    const open = await theDay("Alhamisi 12/11/2026");
+    const buttons = within(open).getAllByRole("button", { name: "Batilisha" });
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[1]!);
+    const sheet = await screen.findByRole("dialog", {
+      name: "Batilisha Toka ya Juma",
+    });
+    expect(sheet.textContent).toContain(
+      "Alhamisi 12/11/2026 · Toka 10:00 asubuhi",
+    );
+  });
+
+  it("offers no Batilisha on one's own month (ATT-13)", async () => {
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: {
+        ...november(
+          [day({ date: "2026-11-12", status: "on_time", first_in: "07:20" })],
+          [tap({ date: "2026-11-12", kind: "in", time: "07:20" })],
+        ),
+        yours: true,
+      },
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-12" />,
+    );
+
+    const open = await theDay("Alhamisi 12/11/2026");
     expect(
       within(open).getByText("Ingia 07:20 asubuhi · Laptop ya Dawa"),
     ).toBeTruthy();
-    expect(within(open).queryByText(/Toka 10:00/)).toBeNull();
-    expect(within(open).getByText("Hakuna Toka.")).toBeTruthy();
+    expect(
+      within(open).queryByRole("button", { name: "Batilisha" }),
+    ).toBeNull();
+  });
+
+  it("says a decided day's taps changed after the decision (Jack: A, ATT-13)", async () => {
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [
+          day({
+            date: "2026-11-12",
+            status: "needs_review",
+            reason: "no_out",
+            first_in: "07:20",
+            decision: {
+              status: "on_time",
+              absence_type: null,
+              fine: "0.00",
+              by: "Baba",
+              at: "2026-11-13T06:00:00Z",
+              reason: "Alisahau kubonyeza Toka",
+            },
+            taps_changed: true,
+          }),
+        ],
+        [tap({ date: "2026-11-12", kind: "in", time: "07:20" })],
+      ),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-12" />,
+    );
+
+    const open = await theDay("Alhamisi 12/11/2026");
+    expect(
+      within(open).getByText("Ingia au Toka zimebadilika baada ya uamuzi."),
+    ).toBeTruthy();
+    // The decision stays, as the book never writes over one (ATT-6).
+    expect(
+      within(open).getByText("Siku kamili · uamuzi wa Baba, 13/11/2026"),
+    ).toBeTruthy();
   });
 
   it("says why a tap is in doubt, and shows an untrusted time as the laptop's", async () => {

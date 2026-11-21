@@ -25,6 +25,19 @@
 // The button shows only where the server offers choices: never on a day the shop was shut, nor on the viewer's own
 // month, which says its days aren't theirs to decide (Jack: A), in words true for the owner's own month too.
 //
+// A tap is fixed from here too (ATT-13), as Jack pictured it (21 Nov 2026): *Batilisha* under a tap that counts opens
+// the sheet that crosses it out (void-tap.tsx); a tap crossed out stays on the day, struck through, with who, when and
+// why, and counts for nothing (A2), so the day says what is missing as if it weren't there. A day decided before one of
+// its taps changed keeps its decision, which says so, for whoever looks to decide it again (Jack: A):
+//
+//   Ingia 07:20 asubuhi · Laptop ya Dawa
+//   [ Batilisha ]
+//   ~~Toka 10:00 asubuhi · Laptop ya Dawa~~
+//   Imebatilishwa na Baba, 19/11/2026 · Sababu: Alibonyeza kwa makosa
+//   Hakuna Toka.
+//
+// No button on the viewer's own month, as nobody fixes their own taps; the server refuses them all the same.
+//
 // Everything comes from the server's one answer for the month (worker-month.ts): the page never works out what a day
 // was, nor moves a time by the phone's zone. The photo is opened from its own route, which asks attendance.manage
 // again and keeps no copy (CTRL-3), and only once the answer says its file came: a photo still on its way, or taken
@@ -50,6 +63,7 @@ import {
 
 import type { Weekday } from "./attendance-month";
 import { DecideDay } from "./decide-day";
+import { VoidTap } from "./void-tap";
 import type {
   AttendanceTap,
   WorkerAttendance,
@@ -78,11 +92,10 @@ export function TheDay({
   // The day as the book kept it, or none for today, which the book keeps only once it is over.
   const kept = answer.days.find((each) => each.date === day);
   const isToday = day === answer.today;
-  // The day's taps, in the order they were made, as the server sent them. Not one crossed out (ATT-13): it counts for
-  // nothing, so it is never listed as a tap the day has.
-  const taps = answer.taps.filter(
-    (tap) => tap.date === day && tap.voided === null,
-  );
+  // The day's taps, in the order they were made, as the server sent them, the crossed-out ones too, struck through
+  // (ATT-13); and those that count, without them, for what the day is missing.
+  const taps = answer.taps.filter((tap) => tap.date === day);
+  const counted = taps.filter((tap) => tap.voided === null);
   // A day opened, by a tap on the calendar or from a line of Zinahitaji uamuzi, takes the focus: a phone scrolls it
   // into view under the calendar, and a screen reader reads where it now is. Once per day opened, not each time the
   // month is asked again.
@@ -115,12 +128,12 @@ export function TheDay({
         <ul role="list" aria-label={t("tapsLabel")} className="grid gap-4">
           {taps.map((tap) => (
             <li key={tap.id}>
-              <Tap tap={tap} name={answer.worker.display_name} />
+              <Tap tap={tap} answer={answer} timezone={timezone} />
             </li>
           ))}
         </ul>
       ) : null}
-      <Missing kept={kept} taps={taps} isToday={isToday} />
+      <Missing kept={kept} taps={counted} isToday={isToday} />
     </section>
   );
 }
@@ -267,6 +280,11 @@ function Decided({
       </p>
       <p>{t("decisionReason", { reason })}</p>
       <p className="text-muted-foreground">{said}</p>
+      {/* A tap added, arrived or crossed out after the decision (Jack: A, ATT-13): the decision stays, and says so,
+          for whoever looks to decide the day again. */}
+      {day.taps_changed ? (
+        <p className="font-semibold">{t("tapsChanged")}</p>
+      ) : null}
     </>
   );
 }
@@ -297,10 +315,22 @@ function useWhyWords(day: WorkerDay): string | null {
   return monthWords(`reason.${day.reason}`, { time });
 }
 
-/** One tap: "Ingia 07:20 asubuhi · Laptop ya Dawa", why it is in doubt, then its photo or why there is none. */
-function Tap({ tap, name }: { tap: AttendanceTap; name: string }) {
+/** One tap: "Ingia 07:20 asubuhi · Laptop ya Dawa", why it is in doubt, then its photo or why there is none; struck
+ * through once crossed out, with who, when and why; and the way to cross it out, while it counts (ATT-13). */
+function Tap({
+  tap,
+  answer,
+  timezone,
+}: {
+  tap: AttendanceTap;
+  answer: WorkerAttendance;
+  timezone: string | null;
+}) {
   const t = useTranslations("attendanceWorker");
   const attendance = useTranslations("attendance");
+  const name = answer.worker.display_name;
+  // Whether the sheet that crosses it out is open over the day: opened by Batilisha, closed by Ghairi or once done.
+  const [crossing, setCrossing] = useState(false);
   // The time the server trusts, with its part of the day, so nobody reads 13:20 as Swahili time (Jack, SYNC-11); or,
   // for a tap whose time it doesn't trust, the laptop's own, said to be the laptop's. A tap entered in the office
   // (ATT-13) has no laptop clock, but always the time the manager typed, trusted; the server never sends neither.
@@ -311,17 +341,24 @@ function Tap({ tap, name }: { tap: AttendanceTap; name: string }) {
       ? said(tap.time)
       : t("laptopTime", { time: said(tap.laptop_time ?? "") });
   const kind = t(`tapKind.${tap.kind}`);
+  const line =
+    tap.laptop === null
+      ? t("tapLineNoLaptop", { kind, time })
+      : t("tapLine", { kind, time, laptop: tap.laptop });
   // Whether the browser failed to open the photo the answer said is kept: a request of its own, which the route can
   // refuse though the month was read (no network now, a login ended, the key taken away, the file gone from the disk).
   const [photoFailed, setPhotoFailed] = useState(false);
   return (
     <div className="grid gap-2">
-      {/* Its laptop, or none for a tap entered in the office, which no laptop made (ATT-13). */}
-      <p>
-        {tap.laptop === null
-          ? t("tapLineNoLaptop", { kind, time })
-          : t("tapLine", { kind, time, laptop: tap.laptop })}
+      {/* Its laptop, or none for a tap entered in the office, which no laptop made (ATT-13). Struck through once crossed
+          out (<s>, what is no longer right), with who, when and why on the line under it, which a screen reader says
+          too, as it says no strike (ATT-13). */}
+      <p className={tap.voided === null ? undefined : "text-muted-foreground"}>
+        {tap.voided === null ? line : <s>{line}</s>}
       </p>
+      {tap.voided !== null ? (
+        <p>{voidedWords(tap.voided, answer, timezone, t)}</p>
+      ) : null}
       {/* The tap itself in doubt (ATT-11): its worker was suspended or gone, or a later tap's time disagrees, said in
           words of its own, as the day's "saa yake ina shaka" after "Shaka:" said doubt twice (ATT-12's review). */}
       {tap.doubt !== null ? (
@@ -354,8 +391,50 @@ function Tap({ tap, name }: { tap: AttendanceTap; name: string }) {
           {t("noPhoto", { why: t(`noPhotoWhy.${tap.no_photo}`) })}
         </p>
       ) : null}
+      {/* While it counts, and never on the viewer's own month (as nobody decides their own day, ATT-6). */}
+      {tap.voided === null && !answer.yours ? (
+        <Button
+          kind="second"
+          size="normal"
+          className="justify-self-start"
+          onClick={() => setCrossing(true)}
+        >
+          {t("voidTap")}
+        </Button>
+      ) : null}
+      {/* Mounted only while open, so a sheet closed with Ghairi forgets what was typed (as the decision's). */}
+      {crossing ? (
+        <VoidTap
+          tap={tap}
+          said={{ kind, time }}
+          answer={answer}
+          onClose={() => setCrossing(false)}
+        />
+      ) : null}
     </div>
   );
+}
+
+/** Who crossed a tap out, when and why: "Imebatilishwa na Baba, 19/11/2026 · Sababu: Alibonyeza kwa makosa". On the
+ * demo the reason is a ready one's code, said in words here. */
+function voidedWords(
+  voided: NonNullable<AttendanceTap["voided"]>,
+  answer: WorkerAttendance,
+  timezone: string | null,
+  t: ReturnType<typeof useTranslations<"attendanceWorker">>,
+): string {
+  const ready = answer.ready_void_reasons.find(
+    (code) => code === voided.reason,
+  );
+  const reason =
+    ready === undefined ? voided.reason : t(`readyTapReason.${ready}`);
+  return timezone === null
+    ? t("voidedByNoDate", { by: voided.by, reason })
+    : t("voidedBy", {
+        by: voided.by,
+        date: formatDate(voided.at, timezone),
+        reason,
+      });
 }
 
 /** What a day that is over is missing: no tap at all on a working day, or no Ingia, or no Toka. Today isn't over, so

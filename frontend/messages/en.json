@@ -801,6 +801,17 @@
     },
     "tapLine": "{kind} {time} · {laptop}",
     "tapLineNoLaptop": "{kind} {time}",
+    "voidTap": "Cross out",
+    "voidSheetTitle": "Cross out {name}'s {kind}",
+    "voidSheetAbout": "{weekday} {date} · {tap}",
+    "voidedBy": "Crossed out by {by}, {date} · Reason: {reason}",
+    "voidedByNoDate": "Crossed out by {by} · Reason: {reason}",
+    "fixHint": "Why, in your own words.",
+    "readyTapReason": {
+      "forgot_tap": "Forgot to tap",
+      "wrong_tap": "Tapped by mistake"
+    },
+    "tapsChanged": "An Ingia or Toka changed after the decision.",
     "laptopTime": "{time} (the laptop's clock, not trusted)",
     "doubt": "In doubt: {why}",
     "doubtWhy": {

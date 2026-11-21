@@ -801,6 +801,17 @@
     },
     "tapLine": "{kind} {time} · {laptop}",
     "tapLineNoLaptop": "{kind} {time}",
+    "voidTap": "Batilisha",
+    "voidSheetTitle": "Batilisha {kind} ya {name}",
+    "voidSheetAbout": "{weekday} {date} · {tap}",
+    "voidedBy": "Imebatilishwa na {by}, {date} · Sababu: {reason}",
+    "voidedByNoDate": "Imebatilishwa na {by} · Sababu: {reason}",
+    "fixHint": "Kwa nini, kwa maneno yako.",
+    "readyTapReason": {
+      "forgot_tap": "Alisahau kubonyeza",
+      "wrong_tap": "Alibonyeza kwa makosa"
+    },
+    "tapsChanged": "Ingia au Toka zimebadilika baada ya uamuzi.",
     "laptopTime": "{time} (saa ya kompyuta, haiaminiki)",
     "doubt": "Shaka: {why}",
     "doubtWhy": {
