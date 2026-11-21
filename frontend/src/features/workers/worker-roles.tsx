@@ -88,9 +88,10 @@ export function WorkerRoles({
   // The line that says what the last change did, or that someone else changed the worker first.
   const [news, setNews] = useState<string | null>(null);
 
-  // Where the keyboard goes when a form closes (worker-actions.tsx): Ghairi, back to the button that opened it; a
-  // change, to the line that says what happened, as an Ondoa's row is gone. A new object each time, so each close
-  // moves it.
+  // Where the keyboard goes when Ongeza kazi's form in the page closes (worker-actions.tsx): Ghairi, back to its
+  // button; a change, to the line that says what happened. A new object each time, so each close moves it. Ondoa's
+  // sheet moves it itself (its finalFocus below): to the line, as the row and its Ondoa are gone, or back to the
+  // row's Ondoa.
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const newsLine = useRef<HTMLDivElement>(null);
   const [backTo, setBackTo] = useState<{ to: string } | null>(null);
@@ -111,14 +112,16 @@ export function WorkerRoles({
 
   function said(sentence: string) {
     afterChange.current = true;
+    // Ondoa's sheet moves the keyboard itself as it goes; Ongeza kazi's form in the page needs it moved.
+    const fromASheet = open?.form === "end";
     setOpen(null);
     setNews(sentence);
-    setBackTo({ to: "news" });
+    if (!fromASheet) setBackTo({ to: "news" });
   }
 
   function cancelled(button: string) {
+    if (open?.form !== "end") setBackTo({ to: button });
     setOpen(null);
-    setBackTo({ to: button });
     // Asked again: a change whose answer was lost may have been made (worker-actions.tsx).
     void store.invalidateQueries({ queryKey: WORKERS });
   }
@@ -246,8 +249,13 @@ export function WorkerRoles({
             onDone={said}
             onChangedMeanwhile={said}
             onCancel={() => cancelled(open.ending.id)}
-            // After a change, the done line, as the row and its Ondoa are gone; after Ghairi, the row's Ondoa.
-            finalFocus={() => (afterChange.current ? newsLine.current : null)}
+            // After a change, the done line, as the row and its Ondoa are gone; after Ghairi, the row's Ondoa itself,
+            // named (worker-actions.tsx).
+            finalFocus={() =>
+              afterChange.current
+                ? newsLine.current
+                : (buttons.current.get(open.ending.id) ?? null)
+            }
           />
         ) : null}
       </CardContent>

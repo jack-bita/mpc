@@ -30,7 +30,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -69,16 +69,10 @@ export function WorkerPay({
   // The line that says what the last save did.
   const [news, setNews] = useState<string | null>(null);
 
-  // Where the keyboard goes when the form closes (worker-roles.tsx): Ghairi, back to the button; a save, to the line
-  // that says what was saved. A new object each time, so each close moves it.
+  // Where the keyboard goes as the sheet closes, which the sheet alone moves (its finalFocus, worker-actions.tsx):
+  // Ghairi, back to the button; a save, to the line that says what was saved.
   const button = useRef<HTMLButtonElement>(null);
   const newsLine = useRef<HTMLDivElement>(null);
-  const [backTo, setBackTo] = useState<{ to: "button" | "news" } | null>(null);
-  useEffect(() => {
-    if (backTo === null) return;
-    if (backTo.to === "news") newsLine.current?.focus();
-    else button.current?.focus();
-  }, [backTo]);
 
   // Who may see the button (see the top); none before the rates came, as the form starts from them. It stays under
   // the open sheet, so Ghairi gives the keyboard back to it.
@@ -181,16 +175,16 @@ export function WorkerPay({
                 afterSave.current = true;
                 setOpen(false);
                 setNews(sentence);
-                setBackTo({ to: "news" });
               }}
               onCancel={() => {
                 setOpen(false);
-                setBackTo({ to: "button" });
                 // Asked again: a save whose answer was lost may have been made (worker-roles.tsx).
                 void store.invalidateQueries({ queryKey: PAY_RATES });
               }}
-              // After a save, the done line; after Ghairi, the button, the sheet's own way.
-              finalFocus={() => (afterSave.current ? newsLine.current : null)}
+              // After a save, the done line; after Ghairi, the button itself, named (worker-actions.tsx).
+              finalFocus={() =>
+                afterSave.current ? newsLine.current : button.current
+              }
             />
           ) : null}
         </section>

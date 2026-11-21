@@ -23,8 +23,9 @@
 // who, "Simamisha Asha", with Sababu, and for Ameondoka the last day, which starts at the shop's today and offers
 // nothing after it (staff.left_in_future) nor before the first day (staff.left_before_start). Its main button names the
 // action, Simamisha, Mrudishe or Ameondoka, red for Ameondoka, as leaving is for good (Jack: yes, UI-10). The buttons
-// stay on the page under the sheet, so Ghairi gives the keyboard back to the very button that opened it; a change gives
-// it to the done line (the sheet's finalFocus), as the button is gone: Simamisha becomes Rudisha.
+// stay on the page under the sheet. As it closes, the sheet alone moves the keyboard (its finalFocus): after a change,
+// to the done line, as the button is gone (Simamisha becomes Rudisha); after Ghairi, back to the very button that
+// opened it. Base UI moves it a moment after the sheet goes, so a second mover of ours would race it (UI-10's review).
 // What the sheet can see is said at once, beside its box, and nothing is sent. The server's own refusals of who may
 // (staff.own, staff.more_keys, staff.superuser_only, demo.people_fixed…) show inside the sheet, above its buttons; the
 // three that say the worker changed since the page read them (staff.not_active, staff.not_suspended, staff.left), as
@@ -133,9 +134,9 @@ export function WorkerActions({
   // The line that says what the last change did, or that someone else changed the worker first.
   const [news, setNews] = useState<string | null>(null);
 
-  // Where the keyboard goes when a form closes. Ghairi: back to the button that opened it. A change: to the line
-  // that says what happened, as the button may be gone (Simamisha becomes Rudisha; after Ameondoka, none is left).
-  // A new object each time, so each close moves it.
+  // Where the keyboard goes when a form in the page closes, Badilisha's or Mwajiri tena's (a sheet moves it itself, its
+  // finalFocus below). Ghairi: back to the button that opened it. A change: to the line that says what happened. A new
+  // object each time, so each close moves it.
   const buttons = useRef(new Map<Action, HTMLButtonElement>());
   const newsLine = useRef<HTMLDivElement>(null);
   const [backTo, setBackTo] = useState<{ to: Action | "news" } | null>(null);
@@ -167,13 +168,15 @@ export function WorkerActions({
 
   function said(sentence: string) {
     afterChange.current = true;
+    // A sheet moves the keyboard itself as it goes; a form in the page needs it moved.
+    const fromASheet = open !== null && isStatusAction(open.action);
     show(null);
     setNews(sentence);
-    setBackTo({ to: "news" });
+    if (!fromASheet) setBackTo({ to: "news" });
   }
 
   function cancelled(action: Action) {
-    setBackTo({ to: action });
+    if (!isStatusAction(action)) setBackTo({ to: action });
     show(null);
     // Asked again: a send whose answer was lost may have changed the worker, and the page would go on showing
     // Simamisha for a worker the server suspended (PPL-6's review), as Ongeza's Ghairi asks the list again.
@@ -306,9 +309,12 @@ export function WorkerActions({
                   }
                   onChangedMeanwhile={said}
                   onCancel={() => cancelled(open.action)}
-                  // After a change, the done line; after Ghairi, the button that opened it, the sheet's own way.
+                  // After a change, the done line; after Ghairi, the very button that opened it, named, never left to
+                  // Base UI's guess, which on a phone's tap may be an element of an earlier opening (UI-10's review).
                   finalFocus={() =>
-                    afterChange.current ? newsLine.current : null
+                    afterChange.current
+                      ? newsLine.current
+                      : (buttons.current.get(open.action) ?? null)
                   }
                 />
               ) : null}

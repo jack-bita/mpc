@@ -16,15 +16,16 @@
 // the demo and hands the answer down; unknown, or not answered, the buttons are on, and the server refuses all the
 // same.
 //
-// After a change, one line says what it did, and the keyboard goes to it, as after the status buttons: the sheet is
-// told so (finalFocus), or it would take the keyboard back to Weka PIN, which stays. Ghairi gives the keyboard back to
-// the button that opened the sheet, and reads the worker again: a change whose answer was lost may have been made.
+// After a change, one line says what it did, and the keyboard goes to it, as after the status buttons; Ghairi gives
+// the keyboard back to the button that opened the sheet, and reads the worker again: a change whose answer was lost may
+// have been made. The sheet alone moves the keyboard (its finalFocus), as it would take it back to Weka PIN, which
+// stays, a moment after any move of ours (UI-10's review).
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Alert, AlertDescription } from "@/components/design/alert";
@@ -66,16 +67,10 @@ export function WorkerLogins({
   // The line that says what the last change did.
   const [news, setNews] = useState<string | null>(null);
 
-  // Where the keyboard goes when a form closes (worker-actions.tsx): Ghairi, back to the button that opened it; a
-  // change, to the line that says what happened. A new object each time, so each close moves it.
+  // Where the keyboard goes as a sheet closes, which the sheet alone moves (its finalFocus, worker-actions.tsx): Ghairi,
+  // back to the button that opened it; a change, to the line that says what happened.
   const buttons = useRef(new Map<Form, HTMLButtonElement>());
   const newsLine = useRef<HTMLDivElement>(null);
-  const [backTo, setBackTo] = useState<{ to: Form | "news" } | null>(null);
-  useEffect(() => {
-    if (backTo === null) return;
-    if (backTo.to === "news") newsLine.current?.focus();
-    else buttons.current.get(backTo.to)?.focus();
-  }, [backTo]);
 
   // Who may see the buttons (see the top); they stay under an open sheet, so Ghairi gives the keyboard back to the very
   // button that opened it.
@@ -85,18 +80,15 @@ export function WorkerLogins({
   // Whether the last close was a change, for the sheet to give the keyboard to the done line: read as the sheet goes,
   // after the draw that took it away, so a ref, not the state (worker-actions.tsx).
   const afterChange = useRef(false);
-  const toTheLine = () => (afterChange.current ? newsLine.current : null);
 
   function said(sentence: string) {
     afterChange.current = true;
     setOpen(null);
     setNews(sentence);
-    setBackTo({ to: "news" });
   }
 
-  function cancelled(form: Form) {
+  function cancelled() {
     setOpen(null);
-    setBackTo({ to: form });
     // Asked again: a change whose answer was lost may have been made (worker-actions.tsx).
     void store.invalidateQueries({ queryKey: WORKERS });
   }
@@ -162,8 +154,13 @@ export function WorkerLogins({
               onDone={(changed) =>
                 said(t("pinDone", { name: changed.display_name }))
               }
-              onCancel={() => cancelled("pin")}
-              finalFocus={toTheLine}
+              onCancel={cancelled}
+              // After a change, the done line; after Ghairi, Weka PIN itself, named (worker-actions.tsx).
+              finalFocus={() =>
+                afterChange.current
+                  ? newsLine.current
+                  : (buttons.current.get("pin") ?? null)
+              }
             />
           ) : open === "password" ? (
             <PasswordForm
@@ -179,8 +176,12 @@ export function WorkerLogins({
                       }),
                 )
               }
-              onCancel={() => cancelled("password")}
-              finalFocus={toTheLine}
+              onCancel={cancelled}
+              finalFocus={() =>
+                afterChange.current
+                  ? newsLine.current
+                  : (buttons.current.get("password") ?? null)
+              }
             />
           ) : null}
         </section>
