@@ -13,12 +13,12 @@
 // the heading's row (card-heading.tsx), as it changes the whole card; the worker's details, which the page hands in
 // (`details`); and under them the buttons of the worker's status, as they act on the person the details describe.
 //
-// Mwajiri tena opens Ongeza's own form (worker-form.tsx), its boxes filled from the old job, under the buttons' place;
-// saved, the page moves to the new job's page, where the person now works.
+// Badilisha is a link to its own page, Badilisha taarifa za Juma (edit-worker-screen.tsx, UI-11), as a long form keeps
+// a page of its own; once done, that page comes back here and leaves its line on this card (`arrived`, page-news.ts).
 //
-// Badilisha opens its own form (worker-details-form.tsx) in place of the worker's details, which the card leaves out
-// while it is open, as the same details are then in its boxes; the page learns of it (onEditing). Badilisha and
-// Mwajiri tena are long forms, which keep the page until UI-11 gives each a page of its own.
+// Mwajiri tena opens Ongeza's own form (worker-form.tsx), its boxes filled from the old job, under the buttons' place;
+// saved, the page moves to the new job's page, where the person now works. A long form, which keeps the page until it
+// gets a page of its own (UI-11).
 //
 // Simamisha, Rudisha and Ameondoka are short: each opens a sheet over the page (UI-10, sheet.tsx), titled with what and
 // who, "Simamisha Asha", with Sababu, and for Ameondoka the last day, which starts at the shop's today and offers
@@ -49,7 +49,7 @@ import { useApiErrorWords } from "@/api/errors";
 import { aboutTheWholeRequest, answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Alert, AlertDescription } from "@/components/design/alert";
-import { Button } from "@/components/design/button";
+import { Button, ButtonLink } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
 import { Field } from "@/components/design/field";
 import { Sheet } from "@/components/design/sheet";
@@ -61,15 +61,20 @@ import { useOnline } from "@/offline/network";
 import { shopToday } from "@/offline/rules";
 
 import { CardHeading } from "./card-heading";
-import { DetailsForm } from "./worker-details-form";
 import { WorkerForm } from "./worker-form";
-import { keepWorker, type Worker, workerPage, WORKERS } from "./workers";
+import {
+  editWorkerPage,
+  keepWorker,
+  type Worker,
+  workerPage,
+  WORKERS,
+} from "./workers";
 
-type Action = "edit" | "suspend" | "unsuspend" | "leave" | "hireAgain";
+type Action = "suspend" | "unsuspend" | "leave" | "hireAgain";
 /** The three that change a worker's status, each with its own route, and each in a sheet (UI-10). */
-type StatusAction = Exclude<Action, "edit" | "hireAgain">;
+type StatusAction = Exclude<Action, "hireAgain">;
 
-/** Whether an action is one of the three short ones, which open a sheet; Badilisha and Mwajiri tena keep the page. */
+/** Whether an action is one of the three short ones, which open a sheet; Mwajiri tena keeps the page. */
 function isStatusAction(action: Action): action is StatusAction {
   return action === "suspend" || action === "unsuspend" || action === "leave";
 }
@@ -100,29 +105,28 @@ const CHANGED_MEANWHILE = new Set([
 /** The form's own checks, by box, as the codes the server would send. */
 type Checks = { reason?: string; left_on?: string };
 
+/** The shop's today, read at the tap that opens a form. Out here, as React's check of what a draw may call can't tell
+ * that a button's handler is only ever called by a tap, never while the page draws. */
+function todayAt(zone: string): string {
+  return shopToday(zone, Date.now());
+}
+
 export function WorkerActions({
   worker,
   me,
   details,
-  demo = false,
   arrived = null,
-  onEditing,
   onForm,
   buttonsHidden = false,
 }: {
   worker: Worker;
   me: WhoIsHere;
-  /** The worker's details, as the page draws them: under the card's heading, unless Badilisha's form is open. */
+  /** The worker's details, as the page draws them: under the card's heading. */
   details?: ReactNode;
-  /** This is the demo, where no worker gets a phone (worker-details-form.tsx). */
-  demo?: boolean;
   /** The line a form's own page left as it landed here, "Juma ameongezwa…" (UI-11, page-news.ts). */
   arrived?: string | null;
-  /** Badilisha's form opened (true) or closed (false): the card leaves the details out itself; the page asks, from
-   * then on, whether this is the demo, for the form's phone box (worker-page.tsx). */
-  onEditing?: (editing: boolean) => void;
-  /** A form in the page opened (true) or closed (false), Badilisha's or Mwajiri tena's, never a sheet: the page keeps
-   * one form open at a time (worker-page.tsx). */
+  /** A form in the page opened (true) or closed (false), Mwajiri tena's, never a sheet: the page keeps one form open
+   * at a time (worker-page.tsx). */
   onForm?: (open: boolean) => void;
   /** Another card's form is open: its buttons stay off the page meanwhile, so one change is made at a time (PPL-8's
    * review). */
@@ -141,8 +145,8 @@ export function WorkerActions({
   // From its first draw, the line a form's own page left, if it left one (UI-11).
   const [news, setNews] = useState<string | null>(arrived);
 
-  // Where the keyboard goes when a form in the page closes, Badilisha's or Mwajiri tena's (a sheet moves it itself, its
-  // finalFocus below). Ghairi: back to the button that opened it. A change: to the line that says what happened. A new
+  // Where the keyboard goes when a form in the page closes, Mwajiri tena's (a sheet moves it itself, its finalFocus
+  // below). Ghairi: back to the button that opened it. A change: to the line that says what happened. A new
   // object each time, so each close moves it.
   const buttons = useRef(new Map<Action, HTMLButtonElement>());
   const newsLine = useRef<HTMLDivElement>(null);
@@ -158,17 +162,14 @@ export function WorkerActions({
   useEffect(() => {
     if (arrived) newsLine.current?.focus();
   }, [arrived]);
-  // Gone from the page with Badilisha's form open, as at a new read's wait: the page learns it is closed.
-  useEffect(() => () => onEditing?.(false), [onEditing]);
   // Gone from the page with a form open in it: the page lets the other cards' buttons show again.
   useEffect(() => () => onForm?.(false), [onForm]);
 
-  /** A form opens, or (null) closes: the page learns whether Badilisha's is the one open, and whether one is open in
-   * the page itself, as the other cards' buttons then hide (worker-page.tsx). A sheet hides nothing: it is modal, so
-   * the page behind it can't be used while it is open (UI-10). */
+  /** A form opens, or (null) closes: the page learns whether one is open in the page itself, as the other cards'
+   * buttons then hide (worker-page.tsx). A sheet hides nothing: it is modal, so the page behind it can't be used while
+   * it is open (UI-10). */
   function show(form: { action: Action; today: string } | null) {
     setOpen(form);
-    onEditing?.(form?.action === "edit");
     onForm?.(form !== null && !isStatusAction(form.action));
   }
 
@@ -201,11 +202,11 @@ export function WorkerActions({
   function openForm(action: Action) {
     afterChange.current = false;
     setNews(null);
-    show({ action, today: shopToday(me.shop.timezone, Date.now()) });
+    show({ action, today: todayAt(me.shop.timezone) });
   }
 
-  // A form open in the page itself, Badilisha's or Mwajiri tena's, which takes the buttons' place; a sheet leaves them
-  // where they are, under it.
+  // A form open in the page itself, Mwajiri tena's, which takes the buttons' place; a sheet leaves them where they are,
+  // under it.
   const inPlace = open !== null && !isStatusAction(open.action);
   // Badilisha, on the heading's row: for a worker working or suspended, as one who left keeps what they were then
   // (PPL-11); while no form is open in the page, on this card or another.
@@ -219,36 +220,18 @@ export function WorkerActions({
         <section aria-labelledby={titleId} className="grid gap-4">
           <CardHeading id={titleId} title={view("details")}>
             {editOffered ? (
-              <Button
-                ref={(element) => {
-                  if (element) buttons.current.set("edit", element);
-                  else buttons.current.delete("edit");
-                }}
+              // A link, as it opens a page of its own (UI-11). Normal, on the heading's row, which a big one would
+              // crowd.
+              <ButtonLink
+                href={editWorkerPage(worker.id)}
                 kind="second"
-                // Normal, on the heading's row, which a big one would crowd.
                 size="normal"
-                onClick={() => openForm("edit")}
               >
                 {t("edit")}
-              </Button>
+              </ButtonLink>
             ) : null}
           </CardHeading>
-          {open?.action === "edit" ? (
-            <DetailsForm
-              worker={worker}
-              today={open.today}
-              demo={demo}
-              // The worker as the server answered: their nickname as it is now.
-              onDone={(changed) =>
-                said(t("done.edit", { name: changed.display_name }))
-              }
-              onNothingChanged={() => said(t("nothingChanged"))}
-              onChangedMeanwhile={said}
-              onCancel={() => cancelled("edit")}
-            />
-          ) : (
-            details
-          )}
+          {details}
           {own ? (
             <p>{codeMessage(codes, "staff.own")}</p>
           ) : (
@@ -265,7 +248,7 @@ export function WorkerActions({
                   {news ? <AlertDescription>{news}</AlertDescription> : null}
                 </Alert>
               </div>
-              {open?.action === "edit" ? null : open?.action === "hireAgain" ? (
+              {open?.action === "hireAgain" ? (
                 <WorkerForm
                   today={open.today}
                   again={worker}

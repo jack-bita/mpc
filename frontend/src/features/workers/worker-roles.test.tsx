@@ -1059,7 +1059,7 @@ describe("one form at a time on the page", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Ongeza kazi" }));
     expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Badilisha" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Badilisha" })).toBeNull();
     expect(screen.getAllByRole("button", { name: "Hifadhi" })).toHaveLength(1);
     fireEvent.click(button("Ghairi"));
 

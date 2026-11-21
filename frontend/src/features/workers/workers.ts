@@ -21,9 +21,12 @@ import {
 } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import type { useRouter } from "next/navigation";
+
 import { api } from "@/api/client";
 import { answerOf, ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
+import { mayGoBack } from "@/components/in-app-moves";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 
 export type Worker = components["schemas"]["Staff"];
@@ -50,6 +53,23 @@ export const NEW_WORKER_PAGE = "/workers/new/";
  * The list's names link to it, and so do a job that ended and the page Mwajiri tena moves to (PPL-11). */
 export function workerPage(id: string): string {
   return `/workers/view/?id=${id}`;
+}
+
+/** Badilisha's own page, for one worker (UI-11). */
+export function editWorkerPage(id: string): string {
+  return `/workers/edit/?id=${id}`;
+}
+
+/** Hifadhi on a form's own page (UI-11) goes where the page's arrow goes: back to the worker's page the person came
+ * from, or, from a bookmark, to that page in the form's place (replace), so the form's page never sits in the tab's
+ * history between the list and the worker, and the arrow on the worker's page never leads back into a form already
+ * sent. */
+export function backToWorker(
+  router: ReturnType<typeof useRouter>,
+  id: string,
+): void {
+  if (mayGoBack()) router.back();
+  else router.replace(workerPage(id));
 }
 
 /** Whether the person may open the workers' page: staff.manage on the whole shop, not on one side, as a worker

@@ -35,7 +35,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode, Ref } from "react";
 import { useTranslations } from "use-intl";
 
-import { movedInApp } from "@/components/in-app-moves";
+import { mayGoBack } from "@/components/in-app-moves";
 
 import { Button } from "./button";
 
@@ -76,7 +76,7 @@ export function PageHeader({
   function goBack() {
     if (onBack) return onBack();
     // Both: the note says the page before is ours; a history of more than this page says there is one.
-    if (movedInApp() && window.history.length > 1) router.back();
+    if (mayGoBack()) router.back();
     else router.push(fallback);
   }
 

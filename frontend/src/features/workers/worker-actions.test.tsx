@@ -105,7 +105,8 @@ describe("the buttons on a worker's page", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     await findButton("Simamisha");
-    expect(button("Badilisha")).toBeTruthy();
+    // A link, to its own page (UI-11).
+    expect(screen.getByRole("link", { name: "Badilisha" })).toBeTruthy();
     expect(button("Ameondoka")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Rudisha" })).toBeNull();
   });
@@ -118,7 +119,7 @@ describe("the buttons on a worker's page", () => {
 
     await findButton("Rudisha");
     // A suspended worker's details can still be fixed (02 §5, PPL-10).
-    expect(button("Badilisha")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Badilisha" })).toBeTruthy();
     expect(button("Ameondoka")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
     unmount();
@@ -134,7 +135,8 @@ describe("the buttons on a worker's page", () => {
     render(<WorkerScreen id={hamisi.id} />);
 
     await findButton("Mwajiri tena");
-    for (const name of ["Badilisha", "Simamisha", "Rudisha", "Ameondoka"])
+    expect(screen.queryByRole("link", { name: "Badilisha" })).toBeNull();
+    for (const name of ["Simamisha", "Rudisha", "Ameondoka"])
       expect(screen.queryByRole("button", { name })).toBeNull();
   });
 
@@ -419,7 +421,7 @@ describe("the buttons on a worker's page", () => {
         "Huwezi kubadilisha hali yako ya kazi, taarifa zako, malipo yako, wala vyeo na ruhusa zako mwenyewe.",
       ),
     ).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Badilisha" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Badilisha" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Ameondoka" })).toBeNull();
   });

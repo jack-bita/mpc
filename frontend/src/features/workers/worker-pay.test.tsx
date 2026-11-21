@@ -163,9 +163,7 @@ describe("Malipo kwa siku", () => {
 
     render(<WorkerScreen id={JUMA.id} />);
 
-    expect(
-      await screen.findByRole("button", { name: "Badilisha" }),
-    ).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Badilisha" })).toBeTruthy();
     expect(
       screen.queryByRole("region", { name: "Malipo kwa siku" }),
     ).toBeNull();
@@ -248,7 +246,8 @@ describe("Malipo kwa siku", () => {
     const card = await theCard();
     await within(card).findByRole("button", { name: "Weka malipo" });
 
-    for (const other of ["Badilisha", "Ongeza kazi"]) {
+    // Ongeza kazi's form opens in the page until it has a page of its own (UI-11); Badilisha's has one now.
+    for (const other of ["Ongeza kazi"]) {
       fireEvent.click(await screen.findByRole("button", { name: other }));
       await waitFor(() =>
         expect(

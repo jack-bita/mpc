@@ -4,8 +4,8 @@
 // As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Since UI-10 (20 Nov 2026, his
 // "professional"), four cards, each under its heading, so a manager's phone finds each thing by its name:
 //   - Taarifa zake: their full name, nickname, job title, first day and phone; their status, and their last day once
-//     they left; and whether the superuser switched them off. Badilisha on the heading's row turns the details into
-//     boxes, in their place (PPL-10, worker-details-form.tsx); under them, the status's buttons (worker-actions.tsx);
+//     they left; and whether the superuser switched them off. Badilisha on the heading's row opens the details' form on
+//     a page of its own (PPL-10, UI-11, edit-worker-screen.tsx); under them, the status's buttons (worker-actions.tsx);
 //   - Kuingia: whether they have a PIN, Weka PIN and Nenosiri la muda (PPL-12, worker-logins.tsx);
 //   - Cheo: their roles, then their extra keys, each by its name and side, with Ongeza kazi on the heading's row
 //     (PPL-8, worker-roles.tsx);
@@ -64,8 +64,6 @@ export function WorkerScreen({ id }: { id: string | null }) {
     arrival.news?.card === card && arrival.news.worker === worker.id
       ? arrival.news.sentence
       : null;
-  // Badilisha's form is open (worker-actions.tsx), which asks whether this is the demo, below.
-  const [editing, setEditing] = useState(false);
   // Whether the page offers Weka PIN and Nenosiri la muda (PPL-12): a worker working or suspended, never one's own
   // page, as the Kuingia card decides too (worker-logins.tsx).
   const loginsOffered =
@@ -73,16 +71,16 @@ export function WorkerScreen({ id }: { id: string | null }) {
     worker.data !== undefined &&
     worker.data.status !== "left" &&
     worker.data.id !== who.data.staff.id;
-  // Whether this is the demo, where no worker gets a phone (Jack, PPL-10: A), and nobody's PIN or password changes
-  // (Jack, PPL-12: A). Asked here, the part always on the page, and handed down (PPL-6's list, #272), only once a form
-  // opens or the Kuingia card shows its buttons, which are off on the demo before anyone taps (Jack, PPL-12: A); and
-  // once a visit: it changes only on a deploy, as for Jaribu demo (try-the-demo.tsx). Unknown, or not answered, the
-  // box and the buttons are on: the server refuses on the demo all the same (demo.phones_fixed, demo.logins_fixed).
+  // Whether this is the demo, where nobody's PIN or password changes (Jack, PPL-12: A). Asked here, the part always on
+  // the page, and handed down (PPL-6's list, #272), only once the Kuingia card shows its buttons, which are off on the
+  // demo before anyone taps (Jack, PPL-12: A); and once a visit: it changes only on a deploy, as for Jaribu demo
+  // (try-the-demo.tsx). Unknown, or not answered, the buttons are on: the server refuses on the demo all the same
+  // (demo.logins_fixed). Badilisha's page asks it for its phone box itself (edit-worker-screen.tsx).
   const demo = useQuery({
     queryKey: DEMO_OPEN,
     queryFn: askDemoOpen,
     staleTime: Infinity,
-    enabled: editing || loginsOffered,
+    enabled: loginsOffered,
   });
   // Ongeza kazi's form has opened (PPL-8): the shop's roles are asked from then on, here, the part always on the page,
   // and handed down, as the demo's answer is. Opening a worker's page alone asks for none.
@@ -140,18 +138,15 @@ export function WorkerScreen({ id }: { id: string | null }) {
       {who.data && worker.data && !waiting ? (
         <>
           {/* Taarifa zake: the details, and Badilisha, Simamisha, Rudisha and Ameondoka, as the worker's status allows
-              (worker-actions.tsx), which leaves the details out while Badilisha's boxes hold them. */}
+              (worker-actions.tsx). */}
           <WorkerActions
             // A worker of its own: on another worker's page, as the browser's back and forward move the address, any
-            // form open on the last one closes, its boxes and its version with it, so Asha's boxes never go to
-            // Baraka; its unmount tells the page Badilisha's form is closed (onEditing).
+            // form open on the last one closes, its boxes with it, so Asha's boxes never go to Baraka.
             key={worker.data.id}
             worker={worker.data}
             me={who.data}
             details={<WorkerDetails worker={worker.data} />}
-            demo={demo.data === true}
             arrived={arrivedOn("details", worker.data)}
-            onEditing={setEditing}
             onForm={actionsForm}
             buttonsHidden={elsewhere("actions")}
           />

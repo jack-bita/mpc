@@ -150,7 +150,7 @@ describe("the Kuingia card", () => {
     expect(screen.queryByRole("button", { name: "Weka PIN" })).toBeNull();
   });
 
-  it("hides its two buttons while a form is open in the page, Badilisha's or Ongeza kazi's, and shows them after (UI-10's review)", async () => {
+  it("hides its two buttons while a form is open in the page, Ongeza kazi's, and shows them after (UI-10's review)", async () => {
     // One form at a time on the page (PPL-8's review): a form in the page, not a sheet, leaves the rest of the page
     // in use, so Kuingia's buttons step aside until it closes (worker-page.tsx, buttonsHidden).
     theServerHas(ASHA);
@@ -160,7 +160,8 @@ describe("the Kuingia card", () => {
     const kuingia = await screen.findByRole("region", { name: "Kuingia" });
     await within(kuingia).findByRole("button", { name: "Weka PIN" });
 
-    for (const other of ["Badilisha", "Ongeza kazi"]) {
+    // Badilisha's form has a page of its own (UI-11); Ongeza kazi's opens in the page until it has one.
+    for (const other of ["Ongeza kazi"]) {
       fireEvent.click(await findButton(other));
       // Open in the page itself: no sheet, and the rest of the page still in reach.
       expect(screen.queryByRole("dialog")).toBeNull();

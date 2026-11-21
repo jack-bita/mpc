@@ -114,12 +114,17 @@ describe("a worker's own page", () => {
       screen.getByRole("heading", { level: 3, name: "Ruhusa za ziada" }),
     ).toBeDefined();
     // The button that changes a card's whole subject sits beside its heading, on one row (its parent).
-    const besideHeading = (heading: string, button: string) =>
+    const besideHeading = (
+      heading: string,
+      name: string,
+      role: "button" | "link" = "button",
+    ) =>
       within(
         screen.getByRole("heading", { level: 2, name: heading })
           .parentElement as HTMLElement,
-      ).getByRole("button", { name: button });
-    expect(besideHeading("Taarifa zake", "Badilisha")).toBeDefined();
+      ).getByRole(role, { name });
+    // Badilisha a link, as it opens a page of its own (UI-11).
+    expect(besideHeading("Taarifa zake", "Badilisha", "link")).toBeDefined();
     expect(besideHeading("Cheo", "Ongeza kazi")).toBeDefined();
     expect(besideHeading("Malipo kwa siku", "Badilisha malipo")).toBeDefined();
     // Simamisha and Ameondoka under the details, inside Taarifa zake; Kuingia's two buttons in its own card.

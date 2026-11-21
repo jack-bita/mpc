@@ -1,10 +1,16 @@
 // in-app-moves.test.tsx — the tab's note that the person moved between the app's own pages: set by a move
-// inside the app, or by a page loaded from one of ours; never by a page opened fresh (page-header.tsx).
+// inside the app, or by a page loaded from one of ours; never by a page opened fresh (page-header.tsx). And whether
+// going back stays in the app, which the arrow and a form page's Hifadhi ask (UI-11).
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { render } from "@/test/render";
 
-import { InAppMoves, MOVED_IN_APP, movedInApp } from "./in-app-moves";
+import {
+  InAppMoves,
+  mayGoBack,
+  MOVED_IN_APP,
+  movedInApp,
+} from "./in-app-moves";
 
 // The address, as Next.js's router would give it; each test sets it.
 const where = vi.hoisted(() => ({ path: "/office/" }));
@@ -77,5 +83,23 @@ describe("the app's own moves", () => {
       throw new Error("refused");
     });
     expect(movedInApp()).toBe(false);
+  });
+});
+
+describe("going back", () => {
+  it("stays in the app with the note and a page before this one", () => {
+    window.sessionStorage.setItem(MOVED_IN_APP, "1");
+    historyOf(3);
+    expect(mayGoBack()).toBe(true);
+  });
+
+  it("would leave the app, or do nothing, without the note or without a page before", () => {
+    // A bookmark opened from Chrome's new tab: two pages, the first not ours.
+    historyOf(2);
+    expect(mayGoBack()).toBe(false);
+    // The note, but this page alone in the tab, as a link opened in a new tab.
+    window.sessionStorage.setItem(MOVED_IN_APP, "1");
+    historyOf(1);
+    expect(mayGoBack()).toBe(false);
   });
 });
