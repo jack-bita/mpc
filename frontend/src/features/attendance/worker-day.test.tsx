@@ -101,6 +101,8 @@ function november(
     taps: dayTaps,
     yours: false,
     ready_reasons: [],
+    ready_add_reasons: [],
+    ready_void_reasons: [],
     ...fields,
   };
 }

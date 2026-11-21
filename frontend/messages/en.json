@@ -1197,6 +1197,12 @@
       "choice_not_offered": "This day can't be decided that way.",
       "reason_missing": "Write why you decided this."
     },
+    "tap": {
+      "own": "You can't fix your own Ingia or Toka.",
+      "not_working_day": "This day isn't one of this worker's working days.",
+      "in_future": "This time hasn't come yet.",
+      "reason_missing": "Write why."
+    },
     "attachment": {
       "not_found": "The server has no such photo.",
       "too_big": "This photo is too big: a photo can be at most 1 MB.",

@@ -123,6 +123,10 @@ const CODES_THE_API_SENDS = [
   "day.choice_not_offered",
   "day.reason_missing",
   "demo.ready_reasons",
+  "tap.own",
+  "tap.not_working_day",
+  "tap.in_future",
+  "tap.reason_missing",
   // A photo's file, sent by a laptop after the record that named it (CTRL-3): an id this shop doesn't hold, or whose
   // record hasn't arrived yet; over 1 MB; not a JPEG or a WebP by its first bytes; or not the file its record named.
   "attachment.not_found",

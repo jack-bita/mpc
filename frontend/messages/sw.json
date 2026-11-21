@@ -1197,6 +1197,12 @@
       "choice_not_offered": "Siku hii haiwezi kuamuliwa hivyo.",
       "reason_missing": "Andika sababu ya uamuzi huu."
     },
+    "tap": {
+      "own": "Huwezi kurekebisha Ingia au Toka zako mwenyewe.",
+      "not_working_day": "Siku hii si siku ya kazi ya mfanyakazi huyu.",
+      "in_future": "Saa hii bado haijafika.",
+      "reason_missing": "Andika sababu."
+    },
     "attachment": {
       "not_found": "Seva haina picha hii.",
       "too_big": "Picha hii ni kubwa mno: picha isizidi MB 1.",

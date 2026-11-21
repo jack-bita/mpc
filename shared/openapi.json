@@ -2226,6 +2226,110 @@
                 }
             }
         },
+        "/api/v1/staffpay/attendance-taps/": {
+            "post": {
+                "operationId": "staffpay_attendance_taps_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AddTapRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AttendanceTap"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/staffpay/attendance-taps/{id}/void/": {
+            "post": {
+                "operationId": "staffpay_attendance_taps_void_create",
+                "description": "POST: make a row once, however many times the same request arrives (ADR-0007, 03 §5.10).\n\nThe client makes the new row's id and sends it with the row. A phone whose answer was lost sends the\nsame request again, with the same id, and gets the stored row back, with the same 201: the row as it is\nnow, so if someone edited it in between, the answer shows the edit. The id names the create: a repeat\ngets the stored row whatever else it carries. A route that makes rows builds on this, names what a\ncreate sends (`create_serializer_class`), and writes create_row(), which calls its service.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this attendance event.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "staffpay"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VoidTapRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AttendanceTap"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/staffpay/attendance-worker/{id}/": {
             "get": {
                 "operationId": "staffpay_attendance_worker_retrieve",
@@ -2387,6 +2491,42 @@
                 ],
                 "type": "string",
                 "description": "* `office_duty` - Office duty\n* `permission` - Permission\n* `no_show` - No-show"
+            },
+            "AddTapRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "staff": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/ClockKindEnum"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "time": {
+                        "type": "string",
+                        "format": "time"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "date",
+                    "id",
+                    "kind",
+                    "reason",
+                    "staff",
+                    "time"
+                ]
             },
             "ApiError": {
                 "type": "object",
@@ -4424,6 +4564,13 @@
                 "type": "string",
                 "description": "* `accepted` - Accepted\n* `invalid` - Invalid"
             },
+            "ReadyAddReasonsEnum": {
+                "enum": [
+                    "forgot_tap"
+                ],
+                "type": "string",
+                "description": "* `forgot_tap` - forgot_tap"
+            },
             "ReadyReasonsEnum": {
                 "enum": [
                     "forgot_toka",
@@ -4432,6 +4579,13 @@
                 ],
                 "type": "string",
                 "description": "* `forgot_toka` - forgot_toka\n* `away_on_work` - away_on_work\n* `owner_allowed` - owner_allowed"
+            },
+            "ReadyVoidReasonsEnum": {
+                "enum": [
+                    "wrong_tap"
+                ],
+                "type": "string",
+                "description": "* `wrong_tap` - wrong_tap"
             },
             "ReasonEnum": {
                 "enum": [
@@ -5429,6 +5583,18 @@
                     "reason"
                 ]
             },
+            "VoidTapRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "reason"
+                ]
+            },
             "WhoIsHere": {
                 "type": "object",
                 "properties": {
@@ -5524,13 +5690,29 @@
                             "$ref": "#/components/schemas/ReadyReasonsEnum"
                         },
                         "description": "On the demo, the ready reasons a decision may take, as codes; elsewhere none (ATT-6)."
+                    },
+                    "ready_add_reasons": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ReadyAddReasonsEnum"
+                        },
+                        "description": "On the demo, the ready reasons a tap added may take, as codes; elsewhere none (ATT-13)."
+                    },
+                    "ready_void_reasons": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ReadyVoidReasonsEnum"
+                        },
+                        "description": "On the demo, the ready reasons a tap crossed out may take, as codes; elsewhere none (ATT-13)."
                     }
                 },
                 "required": [
                     "days",
                     "left_on",
                     "month",
+                    "ready_add_reasons",
                     "ready_reasons",
+                    "ready_void_reasons",
                     "started_on",
                     "taps",
                     "today",

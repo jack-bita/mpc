@@ -10,7 +10,9 @@ And the month page's month (AttendanceMonthAnswer, ATT-5), worked out by attenda
 (apps/staffpay/services.py), for the month named in the address (AttendanceMonthQuery). And a worker's own month, their
 calendar's days and each tap (WorkerAttendanceAnswer, ATT-12), worked out by worker_attendance, for the same month,
 each day with its decision and what it may be decided as (ATT-6). And a decision on a day (DecideDaySerializer, ATT-6),
-which decide_day checks and keeps, answered as the day shows it (DayDecisionSerializer).
+which decide_day checks and keeps, answered as the day shows it (DayDecisionSerializer). And a manager's fixes to the
+taps (ATT-13): a tap added (AddTapSerializer) and a tap crossed out (VoidTapSerializer), which add_tap and void_tap
+check and keep, each answered as the day shows the tap (TapAnswer).
 """
 
 import re
@@ -24,14 +26,27 @@ from rest_framework import serializers
 from apps.core.api.ids import uuid7_only
 from apps.core.api.times import ZonedDateTimeField
 from apps.people.models import StaffMember
-from apps.staffpay.models import DECIDED, AbsenceType, ClockKind, DayChoice, DayStatus, NoPhoto, PayRate, ReviewReason
-from apps.staffpay.services import DEMO_REASONS, PhotoState
+from apps.staffpay.models import (
+    DECIDED,
+    AbsenceType,
+    AttendanceEvent,
+    ClockKind,
+    DayChoice,
+    DayStatus,
+    NoPhoto,
+    PayRate,
+    ReviewReason,
+)
+from apps.staffpay.services import DEMO_ADD_REASONS, DEMO_REASONS, DEMO_VOID_REASONS, PhotoState, tap_line
 
 
+# A job's id, as the schema says: a field with no model can't tell the schema its type by itself, as in the sheet that
+# adds a tap (AddTapSerializer, ATT-13), so it says so here, as a uuid, which is what a model's field already gives it.
+@extend_schema_field({"type": "string", "format": "uuid"})
 class WorkerField(serializers.PrimaryKeyRelatedField[StaffMember]):
     """A worker, sent by their job's id: one of the visit's shop. Any other id is "not found" (does_not_exist), another
     shop's worker and an id no shop has alike, so the answer never tells that such a worker exists (03 §5.4). Whether
-    the person may set this worker's rate is the service's own check, after this one."""
+    the person may set this worker's rate, or fix their taps, is the service's own check, after this one."""
 
     def get_queryset(self) -> QuerySet[StaffMember]:
         # Read on each visit, inside the visit's open shop, through the guard: named in the field's arguments, the jobs
@@ -259,6 +274,14 @@ class WorkerAttendanceAnswer(serializers.Serializer[Any]):
         child=serializers.ChoiceField(choices=DEMO_REASONS),
         help_text="On the demo, the ready reasons a decision may take, as codes; elsewhere none (ATT-6).",
     )
+    ready_add_reasons = serializers.ListField(
+        child=serializers.ChoiceField(choices=DEMO_ADD_REASONS),
+        help_text="On the demo, the ready reasons a tap added may take, as codes; elsewhere none (ATT-13).",
+    )
+    ready_void_reasons = serializers.ListField(
+        child=serializers.ChoiceField(choices=DEMO_VOID_REASONS),
+        help_text="On the demo, the ready reasons a tap crossed out may take, as codes; elsewhere none (ATT-13).",
+    )
 
 
 class DecideDaySerializer(serializers.Serializer[Any]):
@@ -270,3 +293,30 @@ class DecideDaySerializer(serializers.Serializer[Any]):
     reason = serializers.CharField(max_length=200, allow_blank=True)
     # A time the server sent, sent back: with its zone, as every time a client sends must name one (ATT-1's review).
     replaces = ZonedDateTimeField(allow_null=True)
+
+
+class AddTapSerializer(serializers.Serializer[Any]):
+    # A tap added in the office, as the sheet sends it (ATT-13): its id, made on the phone (ADR-0007), required and a
+    # UUIDv7, as every create's; whose tap, a job of the visit's shop (WorkerField: another shop's "not found", as an
+    # id no shop has); Ingia or Toka; the day; the minute on the shop's clock, "18:45", never with seconds, as the sheet
+    # sends a minute; and why. The reason may come empty here: add_tap refuses it with its own code
+    # (tap.reason_missing), beside the box, as it refuses the rest.
+    id = serializers.UUIDField(validators=[uuid7_only])
+    staff = WorkerField()
+    kind = serializers.ChoiceField(choices=ClockKind.choices)
+    date = serializers.DateField()
+    time = serializers.TimeField(input_formats=["%H:%M"])
+    reason = serializers.CharField(max_length=200, allow_blank=True)
+
+
+class VoidTapSerializer(serializers.Serializer[Any]):
+    # A tap crossed out, as the sheet sends it (ATT-13): why. Empty here is void_tap's to refuse, beside the box.
+    reason = serializers.CharField(max_length=200, allow_blank=True)
+
+
+class TapAnswer(serializers.BaseSerializer[AttendanceEvent]):
+    # A tap added or crossed out, answered as the day under the calendar shows it (AttendanceTapSerializer), so the
+    # sheet can show it at once: read afresh by tap_line, as a worker's month reads its taps, its laptop, photo, doubt
+    # and who added or crossed it out. Only answers: what a fix sends is AddTapSerializer's and VoidTapSerializer's.
+    def to_representation(self, instance: AttendanceEvent) -> Any:
+        return AttendanceTapSerializer(tap_line(instance)).data
