@@ -4,8 +4,8 @@
 // the real server: the demo seed's three weeks of taps (DATA-8), worked out by the book of days (ATT-10), the worker's
 // month's route (ATT-12), and the page.
 //
-// The seed gives Asha one day to decide, her latest working day before today, an Ingia with no Toka, from Laptop ya
-// Dawa, with the demo's reason for no photo (DemoPerson in backend/apps/demo/services.py). On a month's first days that
+// The seed gives three days to decide (attendance-month.spec.ts says which); the latest is Asha's, an Ingia with no
+// Toka, from Laptop ya Dawa, with the demo's reason for no photo (DemoPerson in backend/apps/demo/services.py). On a month's first days that
 // day falls in the month before, and the month page says no working day is over yet: the test goes back a month, as
 // attendance-month.spec.ts does, so it never reads the clock of the machine it runs on.
 //
@@ -30,6 +30,13 @@ import {
 const MONTH = sw.attendanceMonth;
 const WORKER = sw.attendanceWorker;
 
+// "Zinahitaji uamuzi (3)", or (1) or (2): the three latest working days may fall across two months.
+const TO_DECIDE = new RegExp(
+  `^${MONTH.toDecide.replace("({count})", "\\(\\d\\)")}$`,
+);
+// Asha's line of the list, her latest day, an Ingia with no Toka: "Asha · Ijumaa 20/11 · hakuna Toka".
+const ASHAS_NO_TOKA = new RegExp(`^Asha · .+ · ${MONTH.reason.no_out}$`);
+
 test("Meneja opens Asha's day to decide under her calendar, and comes back to the month", async ({
   managersPhone,
 }) => {
@@ -49,9 +56,7 @@ test("Meneja opens Asha's day to decide under her calendar, and comes back to th
       .click();
     await phone.getByRole("link", { name: MONTH.title, exact: true }).click();
     const nothingOver = phone.getByText(MONTH.nothingOverYet, { exact: true });
-    const toDecide = phone.getByRole("list", {
-      name: words(MONTH.toDecide, { count: "1" }),
-    });
+    const toDecide = phone.getByRole("list", { name: TO_DECIDE });
     // One of the two, once the server has answered; on a month's first days, back to the month before.
     await expect(toDecide.or(nothingOver)).toBeVisible();
     if (await nothingOver.isVisible()) {
@@ -65,11 +70,7 @@ test("Meneja opens Asha's day to decide under her calendar, and comes back to th
   });
 
   await test.step("Asha's day to decide opens under her calendar", async () => {
-    await phone
-      .getByRole("link", {
-        name: new RegExp(`^Asha · .+ · ${MONTH.reason.no_out}$`),
-      })
-      .click();
+    await phone.getByRole("link", { name: ASHAS_NO_TOKA }).click();
     await expect(
       phone.getByRole("heading", { name: "Asha", level: 1 }),
     ).toBeVisible();
@@ -129,9 +130,7 @@ test("Meneja decides Asha's day in a sheet, and it waits no more", async ({
       .click();
     await phone.getByRole("link", { name: MONTH.title, exact: true }).click();
     const nothingOver = phone.getByText(MONTH.nothingOverYet, { exact: true });
-    const toDecide = phone.getByRole("list", {
-      name: words(MONTH.toDecide, { count: "1" }),
-    });
+    const toDecide = phone.getByRole("list", { name: TO_DECIDE });
     // On a month's first days, the day is in the month before, as in the test above.
     await expect(toDecide.or(nothingOver)).toBeVisible();
     if (await nothingOver.isVisible()) {
@@ -140,11 +139,7 @@ test("Meneja decides Asha's day in a sheet, and it waits no more", async ({
         .click();
       await expect(toDecide).toBeVisible();
     }
-    await phone
-      .getByRole("link", {
-        name: new RegExp(`^Asha · .+ · ${MONTH.reason.no_out}$`),
-      })
-      .click();
+    await phone.getByRole("link", { name: ASHAS_NO_TOKA }).click();
   });
 
   await test.step("the sheet slides up with the day's choices, and Meneja decides a full day", async () => {
@@ -200,8 +195,15 @@ test("Meneja decides Asha's day in a sheet, and it waits no more", async ({
     await expect(
       phone.getByRole("heading", { name: MONTH.title, level: 1 }),
     ).toBeVisible();
+    // The list, or the words for none, once the server has answered; and Asha's day with no Toka no longer in it. The
+    // seed's other days to decide may still be there, in this month or the one before (attendance-month.spec.ts).
     await expect(
-      phone.getByText(MONTH.noneToDecide, { exact: true }),
+      phone
+        .getByRole("list", { name: TO_DECIDE })
+        .or(phone.getByText(MONTH.noneToDecide, { exact: true })),
     ).toBeVisible();
+    await expect(phone.getByRole("link", { name: ASHAS_NO_TOKA })).toHaveCount(
+      0,
+    );
   });
 });

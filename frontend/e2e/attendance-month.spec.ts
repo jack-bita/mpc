@@ -3,14 +3,20 @@
 // top. The card's last Done when: through the real server, the demo seed's three weeks of taps (sent by its laptop
 // through the push), worked out by the book of days (ATT-10), and the month's route (ATT-5).
 //
-// The seed gives Asha one day to decide, her latest working day before today, an Ingia with no Toka (DemoPerson in
-// backend/apps/demo/services.py). The page opens on this month, whose counts reach yesterday. On a month's first day,
+// The seed gives three days to decide, on the three latest working days before today (DemoPerson in
+// backend/apps/demo/services.py): Asha out at 15:00, Baraka in at 09:10, and, the latest, Asha's Ingia with no Toka.
+// Near a month's start they fall across two months, so the test asks for what always holds: Asha's day with no Toka
+// is in the list of the month that holds her latest day. The page opens on this month, whose counts reach yesterday. On
+// a month's first day,
 // or a Monday the 2nd after a Sunday the 1st, no working day of it is over yet, and that day falls in the month before:
 // the page says so, and the test goes back one month, as a person would. So it never reads the clock of the machine it
 // runs on, nor its zone: the page's words decide.
 //
 // The tests share one database (the-shop.ts). Others clock Asha in today, which no month counts until it is over, and
-// none moves a day of the seed's weeks: the seed's people stay as made on the demo (demo.people_fixed).
+// none moves a day of the seed's weeks: the seed's people stay as made on the demo (demo.people_fixed). But
+// attendance-worker.spec.ts decides Asha's day with no Toka (ATT-6), and a decision is never taken back: it runs after
+// this file, as files run in their names' order, one at a time (playwright.config.ts). A new spec that reads the days
+// to decide must run before it too.
 import sw from "../messages/sw.json";
 
 import {
@@ -63,29 +69,46 @@ test("Meneja sees the demo's month, a line per worker and Asha's day to decide",
     }
   });
 
-  await test.step("Asha's day to decide is at the top: an Ingia with no Toka", async () => {
+  await test.step("the days to decide, Asha's Ingia with no Toka among them", async () => {
+    // One, two or three, as the three latest working days fall in this month or across two (see the top of this file).
     const toDecide = phone.getByRole("list", {
-      name: words(MONTH.toDecide, { count: "1" }),
+      name: shaped(MONTH.toDecide),
     });
-    await expect(toDecide.getByRole("listitem")).toHaveCount(1);
-    await expect(toDecide.getByRole("listitem")).toHaveText(
-      shaped(
-        words(MONTH.dayToDecide, { name: "Asha", why: MONTH.reason.no_out }),
-      ),
+    await expect(
+      toDecide.getByRole("listitem").filter({
+        hasText: shaped(
+          words(MONTH.dayToDecide, {
+            name: "Asha",
+            why: MONTH.reason.no_out,
+          }),
+        ),
+      }),
+    ).toHaveCount(1);
+    // And each line is one of the seed's three, every one with its reason.
+    const seeded: [string, string][] = [
+      ["Asha", MONTH.reason.no_out],
+      ["Baraka", MONTH.reason.came_late],
+      ["Asha", MONTH.reason.left_early],
+    ];
+    const shapes = seeded.map(([name, why]) =>
+      shaped(words(MONTH.dayToDecide, { name, why })),
     );
+    for (const line of await toDecide.getByRole("listitem").allTextContents())
+      expect(shapes.some((shape) => shape.test(line))).toBe(true);
   });
 
-  await test.step("a line per worker paid by the day, Asha's with her one day to decide", async () => {
+  await test.step("a line per worker paid by the day, Asha's with her days to decide", async () => {
     const workers = phone.getByRole("table", { name: MONTH.workersCaption });
     for (const name of ["Asha", "Baraka", "Meneja"]) {
       await expect(
         workers.getByRole("rowheader", { name, exact: true }),
       ).toBeVisible();
     }
-    // The line's last count is the days to decide (✓ Ch ½ H !, month-screen.tsx).
+    // The line's last count is the days to decide (✓ Ch ½ H !, month-screen.tsx): her latest, and her third latest
+    // too when it falls in the same month.
     const asha = workers.getByRole("row").filter({
       has: phone.getByRole("rowheader", { name: "Asha", exact: true }),
     });
-    await expect(asha.getByRole("cell").last()).toHaveText("1");
+    await expect(asha.getByRole("cell").last()).toHaveText(/^[12]$/);
   });
 });

@@ -178,17 +178,21 @@ PEOPLE = (
         pin="2580",
         daily_rate="10000",
         # The days the month page shows a visitor (ATT-5), against the demo's rules (DEMO_RULES, and the attendance
-        # day's own times: on time to 07:35, the second fine from 08:00, closing 18:40): the day to decide, her
-        # latest, an Ingia with no Toka (no_out), at the top of Zinahitaji uamuzi; late, the first fine; late after
-        # 08:00, the second; and the morning's half day, out between 13:00 and 13:30.
+        # day's own times: on time to 07:35, the second fine from 08:00, closing 18:40): a day to decide, her latest,
+        # an Ingia with no Toka (no_out); another, her third latest, out at 15:00, before closing (left_early), so a
+        # visitor who decides one still finds days to decide, each with a reason of its own (Jack: A, ATT-6's
+        # review); late, the first fine; late after 08:00, the second; and the morning's half day, out between 13:00
+        # and 13:30.
         odd_days=(
             OddDay(1, came=time(7, 25), left=None),
+            OddDay(3, came=time(7, 20), left=time(15, 0)),
             OddDay(4, came=time(7, 50), left=time(18, 50)),
             OddDay(9, came=time(8, 10), left=time(18, 45)),
             OddDay(13, came=time(7, 20), left=time(13, 10)),
         ),
     ),
-    # Late once, and absent once: no tap at all, so the book answers absent (ATT-4).
+    # Late once, and absent once: no tap at all, so the book answers absent (ATT-4). And a day to decide, his second
+    # latest: in at 09:10, after 08:30, the owner's dharura (came_late, ATT-6's review).
     DemoPerson(
         "Baraka Mfano",
         "Baraka",
@@ -196,7 +200,11 @@ PEOPLE = (
         side="F",
         pin="1470",
         daily_rate="10000",
-        odd_days=(OddDay(6, came=time(7, 45), left=time(18, 55)), OddDay(11, came=None, left=None)),
+        odd_days=(
+            OddDay(2, came=time(9, 10), left=time(18, 45)),
+            OddDay(6, came=time(7, 45), left=time(18, 55)),
+            OddDay(11, came=None, left=None),
+        ),
     ),
 )
 

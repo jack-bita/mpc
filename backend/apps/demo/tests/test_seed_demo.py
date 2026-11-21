@@ -767,13 +767,19 @@ def test_seed_demo_gives_three_weeks_of_taps(three_weeks: None) -> None:
     }
     assert kinds == {
         "Asha": {
-            DayStatus.ON_TIME: 14,
+            DayStatus.ON_TIME: 13,
             DayStatus.LATE: 2,
             DayStatus.HALF: 1,
+            DayStatus.NEEDS_REVIEW: 2,
+            DayStatus.OFF: 3,
+        },
+        "Baraka": {
+            DayStatus.ON_TIME: 15,
+            DayStatus.LATE: 1,
+            DayStatus.ABSENT: 1,
             DayStatus.NEEDS_REVIEW: 1,
             DayStatus.OFF: 3,
         },
-        "Baraka": {DayStatus.ON_TIME: 16, DayStatus.LATE: 1, DayStatus.ABSENT: 1, DayStatus.OFF: 3},
         "Meneja": {DayStatus.ON_TIME: 17, DayStatus.LATE: 1, DayStatus.OFF: 3},
     }
     # Each late day takes its fine: Asha's 08:10 the second, 1,500, the others the first, 500 (DEMO_RULES).
@@ -783,17 +789,22 @@ def test_seed_demo_gives_three_weeks_of_taps(three_weeks: None) -> None:
         ("Baraka", Decimal("500.00")),
         ("Meneja", Decimal("500.00")),
     ]
-    # The one day to decide is Asha's latest working day, the day before today, or Saturday when today is Monday: an
-    # Ingia with no Toka. So the month page's list always shows it, at the top of the latest month (ATT-5).
-    latest = today - timedelta(days=2 if today.weekday() == 0 else 1)
-    to_decide = [(day.staff.display_name, day.date, day.review_reason) for day in days if day.review_reason]
-    assert to_decide == [("Asha", latest, ReviewReason.NO_OUT)]
+    # Three days to decide, on the three latest working days (Jack: A, ATT-6's review), so a visitor who decides one
+    # still finds others: Asha out at 15:00 on the third latest, Baraka in at 09:10 on the second, and Asha's Ingia with
+    # no Toka on the latest, the day before today, or Saturday when today is Monday.
+    first, second, third = services._working_days_back(today)[:3]
+    to_decide = sorted((day.date, day.staff.display_name, day.review_reason) for day in days if day.review_reason)
+    assert to_decide == [
+        (third, "Asha", ReviewReason.LEFT_EARLY),
+        (second, "Baraka", ReviewReason.CAME_LATE),
+        (first, "Asha", ReviewReason.NO_OUT),
+    ]
 
 
 def test_seed_demo_fills_the_month_page(three_weeks: None) -> None:
     # The card's first box, as the month page reads it (attendance_month, ATT-5), not only the book: the 21 days fall in
     # one month or two, and over them each of the three people is listed, by their daily rate, with the card's counts,
-    # and the one day to decide is Asha's latest working day, with no Toka (DATA-8's review).
+    # and the three days to decide on the three latest working days (DATA-8's review, ATT-6's).
     seed_demo(fresh=True)
 
     shop = the_demo_shop()
@@ -812,12 +823,17 @@ def test_seed_demo_fills_the_month_page(three_weeks: None) -> None:
         for name in listed
     }
     # ✓ Ch ½ H !, as the page shows them.
-    assert counted == {"Asha": [14, 2, 1, 0, 1], "Baraka": [16, 1, 0, 1, 0], "Meneja": [17, 1, 0, 0, 0]}
-    latest = today - timedelta(days=2 if today.weekday() == 0 else 1)
+    assert counted == {"Asha": [13, 2, 1, 0, 2], "Baraka": [15, 1, 0, 1, 1], "Meneja": [17, 1, 0, 0, 0]}
+    # The three days to decide, oldest first, as the list shows them, in one month or across two (ATT-6's review).
+    first, second, third = services._working_days_back(today)[:3]
     to_decide = [
         (day.staff.display_name, day.date, day.review_reason) for answer in answers for day in answer.to_decide
     ]
-    assert to_decide == [("Asha", latest, ReviewReason.NO_OUT)]
+    assert to_decide == [
+        ("Asha", third, ReviewReason.LEFT_EARLY),
+        ("Baraka", second, ReviewReason.CAME_LATE),
+        ("Asha", first, ReviewReason.NO_OUT),
+    ]
 
 
 def test_every_odd_day_falls_in_the_weeks(three_weeks: None) -> None:
