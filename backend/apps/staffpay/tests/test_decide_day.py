@@ -22,6 +22,7 @@ from decimal import Decimal
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from pytest_django import Settings
 
 from apps.control.models import EditEvent
@@ -44,6 +45,7 @@ from apps.staffpay.models import (
 )
 from apps.staffpay.services import decide_day
 from apps.staffpay.tests.days import FIRST_FINE, SUNDAY, absent_day, job, kept_day, rule, switch_on
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -232,6 +234,47 @@ def test_the_same_decision_sent_again_is_answered_as_done(
         decide(day, baba, reason="Sababu nyingine")
     with pytest.raises(VersionConflict):
         decide(day, meneja)
+
+
+def _decide_in_another_visit(day: AttendanceDay, by: StaffMember, choice: DayChoice) -> object:
+    # A decision in a transaction of its own, on a connection of its own, as a second manager's phone sends one: what it
+    # answers, the decision's status, or the refusal it raised, which in_another_transaction hands back to the test.
+    with shop_context(day.shop_id):
+        return decide_day(day, choice=choice, reason="Uamuzi wa pili", replaces=None, by=by).decided_status
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_managers_at_once_take_turns(baba: StaffMember, meneja: StaffMember, juma: StaffMember) -> None:
+    # Baba and Meneja both tap Hifadhi on Juma's Monday at the same moment, each having seen no decision. Baba's is
+    # under way, holding the locks it takes, when Meneja's arrives: it must wait for Baba's to be saved, then find his
+    # decision there and be refused (409), never pass its check before Baba's lands and write over it. Without the
+    # locks, Meneja's would read the day as it was, with no decision, and save its half day over Baba's full one.
+    day = kept_day(juma)
+    with shop_context(day.shop_id), transaction.atomic():
+        decide_day(day, choice=DayChoice.ON_TIME, reason="Alisahau kubonyeza Toka", replaces=None, by=baba)
+        second, ended = in_another_transaction(lambda: _decide_in_another_visit(day, meneja, DayChoice.HALF))
+        # Meneja's truly waits on the locks: committed earlier, it would run after, and pass with no lock at all.
+        wait_until_someone_waits_for_me()
+    second.join(timeout=10)
+    assert len(ended) == 1 and isinstance(ended[0], VersionConflict)
+    assert (fresh(day).decided_status, fresh(day).decided_by_id) == (DayStatus.ON_TIME, baba.pk)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_decision_waits_for_the_book_and_reads_its_day_afresh(baba: StaffMember, juma: StaffMember) -> None:
+    # A manager opens the month, and the book is working it out, holding the shop's jobs, when Baba decides Juma's
+    # Monday; meanwhile Juma's Toka arrives from a laptop that was offline. Baba's decision waits for the book, then
+    # works the day out again itself, with the Toka: the day it decides is late (in at 07:50, out at 18:45), as the
+    # book now says, not the "no Toka" it was a moment before.
+    day = kept_day(juma)
+    with shop_context(day.shop_id), transaction.atomic():
+        list(StaffMember.objects.filter(shop=day.shop_id).order_by("pk").select_for_update(no_key=True))
+        second, ended = in_another_transaction(lambda: _decide_in_another_visit(day, baba, DayChoice.HALF))
+        wait_until_someone_waits_for_me()
+        kept_day(juma, (ClockKind.OUT, 18, 45))
+    second.join(timeout=10)
+    assert ended == [DayStatus.HALF]
+    assert (fresh(day).status, fresh(day).review_reason) == (DayStatus.LATE, "")
 
 
 # Who may.
