@@ -97,6 +97,33 @@ describe("Mfanyakazi mpya", () => {
     expect(store.getQueryData(workerKey(JUMA.id))).toEqual(JUMA);
   });
 
+  it("lands once when Hifadhi is tapped again before the move (UI-11's review)", async () => {
+    // The same boxes go under the same id, which the server answers with Juma again: no second move, no second line.
+    answer("GET", ME, { status: 200, body: MANAGER });
+    answer("POST", STAFF, { status: 201, body: JUMA });
+    render(<NewWorkerScreen />);
+
+    await typeJuma();
+    fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "Hifadhi" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Hifadhi" }));
+    await waitFor(() => expect(adds()).toHaveLength(2));
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "Hifadhi" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+
+    expect(router.replace).toHaveBeenCalledOnce();
+  });
+
   it("stays, and leaves no line, when the server refuses", async () => {
     answer("GET", ME, { status: 200, body: MANAGER });
     answer("POST", STAFF, refusal(400, "staff.display_name_taken"));

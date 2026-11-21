@@ -31,7 +31,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -134,6 +134,11 @@ function HireAgain({ me, old }: { me: WhoIsHere; old: Worker }) {
 function NewWorker({ me, again }: { me: WhoIsHere; again?: Worker }) {
   const t = useTranslations("workers");
   const router = useRouter();
+  // Done once: Hifadhi is on again as soon as its answer comes, a moment before the move, so a second tap can send
+  // again, and that send's answer comes after the first went back. Ignored, it never goes back twice, past the
+  // worker's page to the list, nor leaves a second line, as a second add, answered for its own id, would (UI-11's
+  // review).
+  const done = useRef(false);
   // The shop's today, read as the form opens, not as the app did: a phone left on this page overnight still starts on
   // the day it was opened, as the form did inside the list. Read once, so a draw never moves a box being typed.
   const [today] = useState(() => shopToday(me.shop.timezone, Date.now()));
@@ -154,6 +159,8 @@ function NewWorker({ me, again }: { me: WhoIsHere; again?: Worker }) {
           again={again}
           demo={demo.data === true}
           onSaved={(worker, hiredAgain) => {
+            if (done.current) return;
+            done.current = true;
             leaveNews({
               worker: worker.id,
               card: "details",

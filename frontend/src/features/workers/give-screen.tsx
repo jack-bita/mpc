@@ -129,8 +129,16 @@ function Give({
   const router = useRouter();
   useEffect(() => heading.current?.focus(), [heading]);
 
-  /** Done: the line for Cheo, then back to the worker's page. */
+  // Done once: Hifadhi is on again as soon as its answer comes, a moment before the move, so a second tap can send
+  // again, and that send's answer comes after the first went back. Ignored, it never goes back twice, past the
+  // worker's page to the list, nor leaves a second line, as a second give, answered for its own id, would (UI-11's
+  // review).
+  const done = useRef(false);
+
+  /** Done: the line for Cheo, then back to the worker's page; once. */
   function back(sentence: string) {
+    if (done.current) return;
+    done.current = true;
     leaveNews({ worker: worker.id, card: "roles", sentence });
     backToWorker(router, worker.id);
   }

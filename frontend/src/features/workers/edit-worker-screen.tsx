@@ -28,7 +28,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -114,8 +114,16 @@ function Fix({ worker, me }: { worker: Worker; me: WhoIsHere }) {
     staleTime: Infinity,
   });
 
-  /** Done: the line for Taarifa zake, then back to the worker's page. */
+  // Done once: Hifadhi is on again as soon as its answer comes, a moment before the move, so a second tap can send
+  // again, and that send's answer comes after the first went back. Ignored, it never goes back twice, past the
+  // worker's page to the list, nor leaves a second line, as a second Badilisha's version_conflict would (UI-11's
+  // review).
+  const done = useRef(false);
+
+  /** Done: the line for Taarifa zake, then back to the worker's page; once. */
   function back(sentence: string) {
+    if (done.current) return;
+    done.current = true;
     leaveNews({ worker: worker.id, card: "details", sentence });
     backToWorker(router, worker.id);
   }

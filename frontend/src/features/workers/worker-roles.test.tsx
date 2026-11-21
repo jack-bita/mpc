@@ -661,6 +661,30 @@ describe("Ongeza kazi", () => {
     );
   });
 
+  it("goes back once, and gives nothing again, when Hifadhi is tapped again before the move (UI-11's review)", async () => {
+    // The give's answer puts the role on Juma at once (keepWorker), so the lists no longer offer what he now holds:
+    // the second tap finds no pick, and sends nothing. The page goes back once all the same (give-screen.tsx).
+    const server = theServerHas(JUMA);
+    givesAreSaved(server);
+    window.sessionStorage.setItem(MOVED_IN_APP, "1");
+    vi.spyOn(window.history, "length", "get").mockReturnValue(3);
+
+    await openTheGive();
+    await pickRole("Muuzaji");
+    pick("Dawa");
+    fireEvent.click(button("Hifadhi"));
+    await landedWith();
+    await waitFor(() =>
+      expect(button("Hifadhi").hasAttribute("disabled")).toBe(false),
+    );
+    fireEvent.click(button("Hifadhi"));
+
+    // Asked again beside its question: Seller on Dawa is his now, so nothing is picked.
+    expect(errorOfGroup("Cheo gani?")).toBe("Jaza sehemu hii.");
+    expect(await posted()).toHaveLength(1);
+    expect(router.back).toHaveBeenCalledOnce();
+  });
+
   it("has no Ghairi: the arrow goes back to Juma's page, with nothing sent and no line (Jack's yes to the screens)", async () => {
     theServerHas(JUMA);
     window.sessionStorage.setItem(MOVED_IN_APP, "1");

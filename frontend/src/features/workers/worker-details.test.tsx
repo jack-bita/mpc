@@ -481,6 +481,39 @@ describe("Badilisha", () => {
     expect(peekNews()).toBeNull();
   });
 
+  it("goes back once, with its first line, when Hifadhi is tapped again before the move (UI-11's review)", async () => {
+    // The second send carries the version the form opened on, which the first fix just moved past: the server says
+    // someone changed her, which must neither go back a second time, past her page to the list, nor take the line's place.
+    let fixes = 0;
+    theServerHas(ASHA);
+    answer("PATCH", ASHAS, () => {
+      fixes += 1;
+      return fixes === 1
+        ? Response.json({ ...ASHA, job_title: "Muuzaji", version: 2 })
+        : Response.json(refusal(409, "version_conflict").body, { status: 409 });
+    });
+    cameFromHerPage();
+    await openTheFix();
+
+    typeInto(box("Kazi"), "Muuzaji");
+    typeInto(box("Sababu"), WHY);
+    fireEvent.click(button("Hifadhi"));
+    await landedWith();
+    // The page is still on the screen for a moment: Hifadhi is on again.
+    await waitFor(() =>
+      expect((button("Hifadhi") as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.click(button("Hifadhi"));
+    await waitFor(() => expect(fixes).toBe(2));
+    // Its answer settled, and ignored.
+    await waitFor(() =>
+      expect((button("Hifadhi") as HTMLButtonElement).disabled).toBe(false),
+    );
+
+    expect(router.back).toHaveBeenCalledOnce();
+    expect(peekNews()?.sentence).toBe("Taarifa za Asha zimehifadhiwa.");
+  });
+
   it("leads from a bookmark to Asha's page in its own place, so her page's arrow never goes back into the form (UI-11's review)", async () => {
     theServerHas(ASHA);
     // A bookmark opened from Chrome's new tab: two pages, the first not ours.
