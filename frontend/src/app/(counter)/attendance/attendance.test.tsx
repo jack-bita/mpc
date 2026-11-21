@@ -91,9 +91,9 @@ async function switchedOffFrom(day: string): Promise<void> {
   });
 }
 
-/** The screen, inside the counter's frame, with Asha logged in at the home page before it opened. */
-async function theScreen() {
-  arriveAtCounter(ASHA, 15, "server");
+/** The screen, inside the counter's frame, with Asha, or `who`, logged in at the home page before it opened. */
+async function theScreen(who: typeof ASHA = ASHA) {
+  arriveAtCounter(who, 15, "server");
   const view = render(
     <CounterLayout>
       <AttendancePage />
@@ -320,7 +320,8 @@ describe("clocking out", () => {
 
   it("follows the tap she made last, even when the laptop's clock went back between the two", async () => {
     // In at 08:00 by the laptop's clock; then the clock is set back 10 minutes, and she clocks out at what it
-    // calls 07:50. Her last tap is the out, by its number on the laptop, whatever the clock says.
+    // calls 07:50. Her last tap is the out, by its number on the laptop, whatever the clock says: so she is out
+    // for the day, and offered neither button. By the clock, the in would be last, and she'd be offered Toka.
     await tappedEarlier(ASHA, "in", new Date("2026-11-13T05:00:00Z"));
     await tappedEarlier(ASHA, "out", new Date("2026-11-13T04:50:00Z"));
     vi.setSystemTime(new Date("2026-11-13T05:10:00Z"));
@@ -330,10 +331,14 @@ describe("clocking out", () => {
     expect(
       await screen.findByText("Ulitoka kazini saa 07:50 asubuhi."),
     ).toBeDefined();
-    expect(clockIn()).not.toBeNull();
+    expect(screen.getByText("Umeshatoka leo. Mwambie meneja.")).toBeDefined();
+    expect(clockIn()).toBeNull();
+    expect(clockOut()).toBeNull();
   });
 
-  it("offers Ingia kazini again after she clocked out, as after lunch", async () => {
+  it("offers no Ingia kazini after she clocked out: Toka ends the day (ATT-13)", async () => {
+    // Out at 12:30 for lunch, as ATT-4's rule reads it, ends her day (Jack, ATT-4's review): a second Ingia would
+    // count for nothing, so the screen says so and sends her to the manager, who fixes her taps in the office.
     await tappedEarlier(ASHA, "in", MORNING);
     await tappedEarlier(ASHA, "out", new Date("2026-11-13T09:30:00Z"));
     vi.setSystemTime(new Date("2026-11-13T10:25:00Z"));
@@ -343,7 +348,22 @@ describe("clocking out", () => {
     expect(
       await screen.findByText("Ulitoka kazini saa 12:30 mchana."),
     ).toBeDefined();
+    expect(screen.getByText("Umeshatoka leo. Mwambie meneja.")).toBeDefined();
+    expect(clockIn()).toBeNull();
+    expect(clockOut()).toBeNull();
+  });
+
+  it("still offers Ingia kazini to the next person, whose day isn't over", async () => {
+    // Asha is out for the day; Juma, on the same laptop, hasn't come in yet: her Toka says nothing about him.
+    await tappedEarlier(ASHA, "in", MORNING);
+    await tappedEarlier(ASHA, "out", new Date("2026-11-13T09:30:00Z"));
+    vi.setSystemTime(new Date("2026-11-13T10:25:00Z"));
+
+    await theScreen(JUMA);
+
+    expect(await screen.findByText("Hujaingia kazini leo.")).toBeDefined();
     expect(clockIn()).not.toBeNull();
+    expect(screen.queryByText("Umeshatoka leo. Mwambie meneja.")).toBeNull();
   });
 });
 

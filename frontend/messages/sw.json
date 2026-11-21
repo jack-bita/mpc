@@ -649,6 +649,7 @@
     "notInYet": "Hujaingia kazini leo.",
     "inSince": "Uliingia kazini saa {time}.",
     "outSince": "Ulitoka kazini saa {time}.",
+    "doneToday": "Umeshatoka leo. Mwambie meneja.",
     "timeOfDay": "{time} {part, select, morning {asubuhi} afternoon {mchana} evening {jioni} other {usiku}}",
     "savedIn": "Umeingia kazini saa {time}.",
     "savedOut": "Umetoka kazini saa {time}. Kwaheri!",

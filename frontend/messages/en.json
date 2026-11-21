@@ -649,6 +649,7 @@
     "notInYet": "You haven't clocked in today.",
     "inSince": "You clocked in at {time}.",
     "outSince": "You clocked out at {time}.",
+    "doneToday": "You've already left for today. Tell the manager.",
     "timeOfDay": "{time}{part, select, other {}}",
     "savedIn": "Clocked in at {time}.",
     "savedOut": "Clocked out at {time}. Goodbye!",
