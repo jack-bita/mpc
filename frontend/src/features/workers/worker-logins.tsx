@@ -8,8 +8,8 @@
 // working or suspended, as a suspended one may be given a PIN for when they are back; none for one who left; none on
 // one's own page, where the status buttons' line already says why (staff.own), as nobody sets their own PIN here
 // (pin.own).
-// While a sheet is open, the page behind it is shut off, so one change is made at a time; while another card's form is
-// open in the page (Badilisha, Ongeza kazi, until UI-11), these buttons hide (worker-page.tsx).
+// While a sheet is open, the page behind it is shut off, so one change is made at a time; the long forms have pages of
+// their own (UI-11), so no form opens in the page beside this card.
 //
 // On the demo (Jack, PPL-12: A), PINs and passwords stay as the seed made them, so every visitor can log in: the
 // buttons are off, with demo.logins_fixed's own sentence under them, as a visitor's worker given a PIN would show his
@@ -51,14 +51,11 @@ export function WorkerLogins({
   worker,
   me,
   demo = false,
-  buttonsHidden = false,
 }: {
   worker: Worker;
   me: WhoIsHere;
   /** This is the demo, where nobody's PIN or password changes. */
   demo?: boolean;
-  /** Another card's form is open in the page: this card's buttons stay off the page meanwhile (PPL-8's review). */
-  buttonsHidden?: boolean;
 }) {
   const t = useTranslations("workers.logins");
   const codes = useCodeWords();
@@ -76,8 +73,7 @@ export function WorkerLogins({
 
   // Who may see the buttons (see the top); they stay under an open sheet, so Ghairi gives the keyboard back to the very
   // button that opened it.
-  const mayChange = worker.status !== "left" && worker.id !== me.staff.id;
-  const showButtons = mayChange && !buttonsHidden;
+  const showButtons = worker.status !== "left" && worker.id !== me.staff.id;
 
   // Whether the last close was a change, for the sheet to give the keyboard to the done line: read as the sheet goes,
   // after the draw that took it away, so a ref, not the state (worker-actions.tsx).

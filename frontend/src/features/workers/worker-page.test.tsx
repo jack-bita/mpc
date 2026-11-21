@@ -1,8 +1,10 @@
 // worker-page.test.tsx — one worker's own page (PPL-6): everything of theirs, the list's copy at once, the server's
 // answer after, and what it says with no worker or an unknown one. Their roles and extra keys, each by its name and
-// side, in a card of their own (PPL-8).
+// side, in a card of their own (PPL-8). The line a long form's own page left as it landed here, shown once, on the
+// card and the worker it names (UI-11).
 import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { forgetTheLastPerson, makeQueryClient } from "@/api/query-client";
@@ -13,6 +15,7 @@ import { render } from "@/test/render";
 import { router } from "@/test/router";
 import { BABA, MANAGER, role, STAFF, worker } from "@/test/workers";
 
+import { leaveNews, peekNews } from "./page-news";
 import { WorkerScreen } from "./worker-page";
 import { workerKey, WORKERS } from "./workers";
 
@@ -107,13 +110,18 @@ describe("a worker's own page", () => {
       screen.getByRole("heading", { level: 3, name: "Ruhusa za ziada" }),
     ).toBeDefined();
     // The button that changes a card's whole subject sits beside its heading, on one row (its parent).
-    const besideHeading = (heading: string, button: string) =>
+    const besideHeading = (
+      heading: string,
+      name: string,
+      role: "button" | "link" = "button",
+    ) =>
       within(
         screen.getByRole("heading", { level: 2, name: heading })
           .parentElement as HTMLElement,
-      ).getByRole("button", { name: button });
-    expect(besideHeading("Taarifa zake", "Badilisha")).toBeDefined();
-    expect(besideHeading("Cheo", "Ongeza kazi")).toBeDefined();
+      ).getByRole(role, { name });
+    // Badilisha and Ongeza kazi links, as each opens a page of its own (UI-11).
+    expect(besideHeading("Taarifa zake", "Badilisha", "link")).toBeDefined();
+    expect(besideHeading("Cheo", "Ongeza kazi", "link")).toBeDefined();
     expect(besideHeading("Malipo kwa siku", "Badilisha malipo")).toBeDefined();
     // Simamisha and Ameondoka under the details, inside Taarifa zake; Kuingia's two buttons in its own card.
     const details = screen.getByRole("region", { name: "Taarifa zake" });
@@ -352,5 +360,81 @@ describe("a worker's own page", () => {
     await detailsShown();
     fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
     expect(router.push).toHaveBeenCalledWith("/workers/");
+  });
+});
+
+describe("the line a form's own page left (UI-11)", () => {
+  /** What Mfanyakazi mpya leaves for Asha's page as it lands there. */
+  const ADDED =
+    "Asha ameongezwa. Jina lake litaonekana kwenye kompyuta za duka baada ya kupewa PIN.";
+
+  it("shows on Taarifa zake, with the keyboard on it, as after a change made on the page", async () => {
+    leaveNews({ worker: ASHA.id, card: "details", sentence: ADDED });
+    theServerHas(ASHA);
+
+    render(<WorkerScreen id={ASHA.id} />);
+
+    const line = await screen.findByText(ADDED);
+    const details = screen.getByRole("region", { name: "Taarifa zake" });
+    expect(details.contains(line)).toBe(true);
+    // Read by a screen reader as its words come (role="status"), and where the keyboard goes.
+    await waitFor(() =>
+      expect(document.activeElement?.contains(line)).toBe(true),
+    );
+  });
+
+  it("shows once when React draws the page twice, as it does in development, and is spent after (UI-11's review)", async () => {
+    // StrictMode draws each part twice and runs each effect twice: whichever draw and effect come last, the line shows
+    // once, and the note is spent after (page-news.ts).
+    leaveNews({ worker: ASHA.id, card: "details", sentence: ADDED });
+    theServerHas(ASHA);
+
+    render(
+      <StrictMode>
+        <WorkerScreen id={ASHA.id} />
+      </StrictMode>,
+    );
+
+    expect(await screen.findAllByText(ADDED)).toHaveLength(1);
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toBe(ADDED),
+    );
+    expect(peekNews()).toBeNull();
+  });
+
+  it("shows once: gone after a move to another worker's page and back", async () => {
+    const baraka = worker({ display_name: "Baraka" });
+    leaveNews({ worker: ASHA.id, card: "details", sentence: ADDED });
+    theServerHas(ASHA);
+    answer("GET", `${STAFF}${baraka.id}/`, { status: 200, body: baraka });
+
+    const { rerender } = render(<WorkerScreen id={ASHA.id} />);
+    await screen.findByText(ADDED);
+
+    // The browser's back and forward move the address's id with the page still on the screen.
+    rerender(<WorkerScreen id={baraka.id} />);
+    await screen.findByRole("heading", { level: 1, name: "Baraka" });
+    expect(screen.queryByText(ADDED)).toBeNull();
+    rerender(<WorkerScreen id={ASHA.id} />);
+    await screen.findByRole("heading", { level: 1, name: "Asha" });
+    await detailsShown();
+    expect(screen.queryByText(ADDED)).toBeNull();
+  });
+
+  it("drops a line left for another worker, so it never shows on theirs later", async () => {
+    // Juma's page never came: the person left Mfanyakazi mpya's move by another way, and opened Asha's.
+    leaveNews({
+      worker: "019a8302-0000-7000-8000-0000000000ff",
+      card: "details",
+      sentence: "Juma ameongezwa.",
+    });
+    theServerHas(ASHA);
+
+    render(<WorkerScreen id={ASHA.id} />);
+
+    await detailsShown();
+    expect(screen.queryByText("Juma ameongezwa.")).toBeNull();
+    // Forgotten, all the same: nobody's page shows it now.
+    expect(peekNews()).toBeNull();
   });
 });

@@ -1,18 +1,23 @@
 // worker-roles.test.tsx — a worker's roles and extra keys on their page, and the buttons that change them (PPL-8).
-// Ongeza kazi: a role on a side and a key on every side, each shown at once; the same id for a try of the same choices
-// and a new one for a change; only what the person may give, never Mmiliki; a side narrowing the lists; what the form
-// says itself; each refusal of the server's; who sees the button; offline; Ghairi. Ondoa: a role and a key taken away
-// with a reason; an end sent again after a lost answer taken as done; no reason, no send; each refusal; never beside
-// Mmiliki.
+// Ongeza kazi, on a page of its own since UI-11 (give-screen.tsx): a role on a side and a key on every side, each
+// landing back on the worker's page with its line on Cheo; the same id for a try of the same choices and a new one for
+// a change; only what the person may give, never Mmiliki; a side narrowing the lists; what the form says itself; each
+// refusal of the server's; who sees the link; offline; no Ghairi; what the page says for a worker it can't act on.
+// Ondoa: a role and a key taken away with a reason; an end sent again after a lost answer taken as done; no reason, no
+// send; each refusal; never beside Mmiliki.
+import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { makeQueryClient } from "@/api/query-client";
 import type { components } from "@/api/schema";
+import { MOVED_IN_APP } from "@/components/in-app-moves";
 import { MESSAGES } from "@/i18n/language";
 import { DAWA, VYAKULA } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { PAY_RATES_ROUTE, payRates } from "@/test/pay-rates";
 import { render } from "@/test/render";
+import { router } from "@/test/router";
 import {
   BABA,
   NEEMA_ON_DAWA,
@@ -25,6 +30,8 @@ import {
   worker,
 } from "@/test/workers";
 
+import { GiveScreen } from "./give-screen";
+import { peekNews } from "./page-news";
 import { WorkerScreen } from "./worker-page";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -161,10 +168,22 @@ function theRolesCard(): HTMLElement {
 const sheetButton = (name: string) =>
   within(screen.getByRole("dialog")).getByRole("button", { name });
 
-/** Opens Ongeza kazi once the page has drawn. */
-async function openTheGive() {
-  fireEvent.click(await screen.findByRole("button", { name: "Ongeza kazi" }));
-  await screen.findByRole("heading", { name: "Ongeza kazi kwa Juma" });
+/** Opens Ongeza kazi kwa Juma, its own page (UI-11), and waits for its form. */
+async function openTheGive(id: string = JUMA.id) {
+  render(<GiveScreen id={id} />);
+  await screen.findByRole("radiogroup", { name: "Anapewa nini?" });
+}
+
+/** Waits for the give's move back to the worker's page, and gives the line it left for Cheo there. */
+async function landedWith(): Promise<string | undefined> {
+  await waitFor(() =>
+    expect(
+      router.back.mock.calls.length + router.replace.mock.calls.length,
+    ).toBe(1),
+  );
+  const news = peekNews();
+  expect(news?.card).toBe("roles");
+  return news?.sentence;
 }
 
 /** Picks a role, waiting for the shop's roles, asked as the form opened. */
@@ -174,37 +193,57 @@ async function pickRole(name: string) {
 }
 
 describe("Ongeza kazi", () => {
-  it("gives Juma the Seller role on Dawa, shown at once (the card's second Done when)", async () => {
+  it("gives Juma the Seller role on Dawa, and goes back to his page, which shows it on Cheo with its line (PPL-8's third Done when)", async () => {
     const server = theServerHas(JUMA);
     givesAreSaved(server);
-
-    render(<WorkerScreen id={JUMA.id} />);
-    await openTheGive();
-    // The form's title takes the keyboard, where the button was.
-    expect(document.activeElement?.textContent).toBe("Ongeza kazi kwa Juma");
+    // Juma's page came before this one, in the app: Hifadhi goes back to it, as the arrow does.
+    window.sessionStorage.setItem(MOVED_IN_APP, "1");
+    vi.spyOn(window.history, "length", "get").mockReturnValue(3);
+    // One store for both pages, as the app has.
+    const store = makeQueryClient();
+    const { unmount } = render(
+      <QueryClientProvider client={store}>
+        <GiveScreen id={JUMA.id} />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("radiogroup", { name: "Anapewa nini?" });
+    // The page's title, its one heading, takes the keyboard as the form shows (UI-11).
+    const title = screen.getByRole("heading", { level: 1 });
+    expect(title.textContent).toBe("Ongeza kazi kwa Juma");
+    await waitFor(() => expect(document.activeElement).toBe(title));
+    expect(screen.queryByRole("button", { name: "Ghairi" })).toBeNull();
     await pickRole("Muuzaji");
     pick("Dawa");
     fireEvent.click(button("Hifadhi"));
 
     const line =
       "Juma amepewa Muuzaji (Dawa). Kompyuta za duka zitajua baada ya kusawazisha.";
-    await waitFor(() => expect(document.activeElement?.textContent).toBe(line));
+    expect(await landedWith()).toBe(line);
+    expect(router.back).toHaveBeenCalledOnce();
     const [sentOnce] = await posted();
     expect(sentOnce).toEqual({
       id: expect.stringMatching(/^[0-9a-f-]{36}$/),
       role: SELLER_ROLE.id,
       side: DAWA.id,
     });
+
+    // His page, as the move lands on it: the role on Cheo, the line on its card, and the keyboard on it.
+    unmount();
+    render(
+      <QueryClientProvider client={store}>
+        <WorkerScreen id={JUMA.id} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(document.activeElement?.textContent).toBe(line));
+    expect(theRolesCard().contains(document.activeElement)).toBe(true);
     expect(linesUnder("Cheo")).toEqual(["Muuzaji (Dawa)"]);
-    // The form closed; Ongeza kazi is back for the next.
-    expect(button("Ongeza kazi")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Ongeza kazi" })).toBeTruthy();
   });
 
-  it("gives one extra key on every side, shown at once", async () => {
+  it("gives one extra key on every side, and goes back with its line", async () => {
     const server = theServerHas(JUMA);
     givesAreSaved(server);
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     pick("Ruhusa moja ya ziada");
     // Under its group's heading.
@@ -218,7 +257,7 @@ describe("Ongeza kazi", () => {
     pick("Pande zote");
     fireEvent.click(button("Hifadhi"));
 
-    await screen.findByText(
+    expect(await landedWith()).toBe(
       "Juma amepewa Kuhesabu mzigo (Pande zote). Kompyuta za duka zitajua baada ya kusawazisha.",
     );
     const [sentOnce] = await posted();
@@ -227,9 +266,6 @@ describe("Ongeza kazi", () => {
       permission: "stock.count",
       side: null,
     });
-    expect(linesUnder("Ruhusa za ziada")).toEqual([
-      "Kuhesabu mzigo (Pande zote)",
-    ]);
   });
 
   it("sends the same id for a try of the same choices, and a new one once a choice changed", async () => {
@@ -239,7 +275,6 @@ describe("Ongeza kazi", () => {
       throw new TypeError("Failed to fetch");
     });
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     await pickRole("Muuzaji");
     pick("Dawa");
@@ -288,7 +323,6 @@ describe("Ongeza kazi", () => {
       );
     }
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     await pickRole("Muuzaji");
     pick("Dawa");
@@ -315,7 +349,6 @@ describe("Ongeza kazi", () => {
     // A refusal the server means (no retry by the store, query-client.ts): the read has failed for good.
     answer("GET", ROLES_ROUTE, refusal(403, "permission_denied"));
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     pick("Cheo");
 
@@ -330,7 +363,6 @@ describe("Ongeza kazi", () => {
   it("switches Hifadhi off while there is no role left to give there, the line saying why", async () => {
     theServerHas(JUMA, NEEMA_ON_DAWA);
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     pick("Vyakula");
     pick("Cheo");
@@ -351,11 +383,10 @@ describe("Ongeza kazi", () => {
       () => new Promise<Response>((settle) => (answerRoles = settle)),
     );
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     const line = within(
       screen
-        .getByRole("heading", { name: "Ongeza kazi kwa Juma" })
+        .getByRole("radiogroup", { name: "Anapewa nini?" })
         .closest("form") as HTMLElement,
     ).getByRole("status");
     expect(line.textContent).toBe("");
@@ -366,14 +397,15 @@ describe("Ongeza kazi", () => {
     expect(line.textContent).toBe("");
   });
 
-  it("asks the shop's roles only once the form opens", async () => {
+  it("asks the shop's roles on its own page, never on the worker's (UI-11)", async () => {
     theServerHas(JUMA);
 
-    render(<WorkerScreen id={JUMA.id} />);
-    await screen.findByRole("button", { name: "Ongeza kazi" });
+    const { unmount } = render(<WorkerScreen id={JUMA.id} />);
+    await screen.findByRole("link", { name: "Ongeza kazi" });
     expect(sent.some((request) => request.url.includes(ROLES_ROUTE))).toBe(
       false,
     );
+    unmount();
     await openTheGive();
     await pickRole("Muuzaji");
     expect(
@@ -381,10 +413,9 @@ describe("Ongeza kazi", () => {
     ).toHaveLength(1);
   });
 
-  it("offers the owner every role but Mmiliki, as the templates come (the card's third Done when)", async () => {
+  it("offers the owner every role but Mmiliki, as the templates come (PPL-8's third Done when)", async () => {
     theServerHas(JUMA);
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     await pickRole("Muuzaji");
 
@@ -398,11 +429,10 @@ describe("Ongeza kazi", () => {
     expect(screen.queryByRole("radio", { name: "Mmiliki" })).toBeNull();
   });
 
-  it("offers Neema only what she may give, and only where (the card's third Done when)", async () => {
+  it("offers Neema only what she may give, and only where (PPL-8's third Done when)", async () => {
     // A Dawa seller trusted with the workers: staff.manage on the whole shop, the Seller's keys on Dawa alone.
     theServerHas(JUMA, NEEMA_ON_DAWA);
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     await pickRole("Muuzaji");
 
@@ -422,7 +452,6 @@ describe("Ongeza kazi", () => {
   it("narrows the roles and keys to the side picked", async () => {
     theServerHas(JUMA, NEEMA_ON_DAWA);
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     // Vyakula first: Neema holds only staff.manage there, which no role is made of alone.
     pick("Vyakula");
@@ -458,7 +487,6 @@ describe("Ongeza kazi", () => {
       NEEMA_ON_DAWA,
     );
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     pick("Vyakula");
     pick("Ruhusa moja ya ziada");
@@ -474,7 +502,6 @@ describe("Ongeza kazi", () => {
       roles: [role("seller", VYAKULA.id, { role: SELLER_ROLE.id })],
     });
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     await pickRole("Muuzaji");
     pick("Ruhusa moja ya ziada");
@@ -502,7 +529,6 @@ describe("Ongeza kazi", () => {
       roles: [role("seller", DAWA.id, { role: SELLER_ROLE.id })],
     });
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     await pickRole("Muuzaji");
 
@@ -512,7 +538,6 @@ describe("Ongeza kazi", () => {
   it("says at once what is missing, and sends nothing", async () => {
     theServerHas(JUMA);
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     fireEvent.click(button("Hifadhi"));
     // Anapewa nini? and Upande, each beside its question.
@@ -540,7 +565,6 @@ describe("Ongeza kazi", () => {
       refusal(code === "permission_denied" ? 403 : 400, code),
     );
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     if (route === "give-role") await pickRole("Muuzaji");
     else {
@@ -565,7 +589,6 @@ describe("Ongeza kazi", () => {
       refusal(400, "invalid", {}, { id: ["id.taken"] }),
     );
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     await pickRole("Muuzaji");
     pick("Dawa");
@@ -576,7 +599,7 @@ describe("Ongeza kazi", () => {
     );
   });
 
-  it("closes the form on staff.left, says so, and reads the worker again", async () => {
+  it("goes back to Juma's page on staff.left, which says so and reads him again", async () => {
     // Another manager marked Juma left since the page read him.
     const server = theServerHas(JUMA);
     answer("POST", `${STAFF}${JUMA.id}/give-role/`, () => {
@@ -587,19 +610,17 @@ describe("Ongeza kazi", () => {
       );
     });
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     await pickRole("Muuzaji");
     pick("Dawa");
     fireEvent.click(button("Hifadhi"));
 
-    await waitFor(() =>
-      expect(document.activeElement?.textContent).toBe(sentence("staff.left")),
-    );
-    // Read again: a worker who left keeps their roles as history, with no button.
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull(),
-    );
+    expect(await landedWith()).toBe(sentence("staff.left"));
+    // Read again: a worker who left keeps their roles as history, and this page offers no form for him.
+    expect(await screen.findByText(sentence("staff.left"))).toBeTruthy();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Anapewa nini?" }),
+    ).toBeNull();
   });
 
   it("switches Hifadhi off while the give is on its way, so a second tap sends nothing", async () => {
@@ -611,7 +632,6 @@ describe("Ongeza kazi", () => {
       () => new Promise<Response>(() => undefined),
     );
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     await pickRole("Muuzaji");
     pick("Dawa");
@@ -627,7 +647,6 @@ describe("Ongeza kazi", () => {
   it("switches Hifadhi off offline", async () => {
     theServerHas(JUMA);
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
     // The network gone as the form draws again (useOnline reads it as it draws): no "offline" event, which would leave
     // TanStack's own watcher offline for the tests after (PPL-6's lesson).
@@ -639,24 +658,55 @@ describe("Ongeza kazi", () => {
     );
   });
 
-  it("gives the keyboard back to Ongeza kazi on Ghairi, and reads the worker again", async () => {
-    theServerHas(JUMA);
+  it("goes back once, and gives nothing again, when Hifadhi is tapped again before the move (UI-11's review)", async () => {
+    // The give's answer puts the role on Juma at once (keepWorker), so the lists no longer offer what he now holds:
+    // the second tap finds no pick, and sends nothing. The page goes back once all the same (give-screen.tsx).
+    const server = theServerHas(JUMA);
+    givesAreSaved(server);
+    window.sessionStorage.setItem(MOVED_IN_APP, "1");
+    vi.spyOn(window.history, "length", "get").mockReturnValue(3);
 
-    render(<WorkerScreen id={JUMA.id} />);
     await openTheGive();
-    const readsBefore = sent.filter((request) =>
-      request.url.endsWith(`${JUMA.id}/`),
-    ).length;
-    fireEvent.click(button("Ghairi"));
+    await pickRole("Muuzaji");
+    pick("Dawa");
+    fireEvent.click(button("Hifadhi"));
+    await landedWith();
+    await waitFor(() =>
+      expect(button("Hifadhi").hasAttribute("disabled")).toBe(false),
+    );
+    fireEvent.click(button("Hifadhi"));
 
-    await waitFor(() =>
-      expect(document.activeElement).toBe(button("Ongeza kazi")),
-    );
-    await waitFor(() =>
-      expect(
-        sent.filter((request) => request.url.endsWith(`${JUMA.id}/`)).length,
-      ).toBeGreaterThan(readsBefore),
-    );
+    // Asked again beside its question: Seller on Dawa is his now, so nothing is picked.
+    expect(errorOfGroup("Cheo gani?")).toBe("Jaza sehemu hii.");
+    expect(await posted()).toHaveLength(1);
+    expect(router.back).toHaveBeenCalledOnce();
+  });
+
+  it("has no Ghairi: the arrow goes back to Juma's page, with nothing sent and no line (Jack's yes to the screens)", async () => {
+    theServerHas(JUMA);
+    window.sessionStorage.setItem(MOVED_IN_APP, "1");
+    vi.spyOn(window.history, "length", "get").mockReturnValue(3);
+
+    await openTheGive();
+    await pickRole("Muuzaji");
+    expect(screen.queryByRole("button", { name: "Ghairi" })).toBeNull();
+    fireEvent.click(button("Rudi ulipotoka"));
+
+    expect(router.back).toHaveBeenCalledOnce();
+    expect(await posted()).toEqual([]);
+    expect(peekNews()).toBeNull();
+  });
+
+  it("leads from a bookmark to Juma's page, where Ongeza kazi is", async () => {
+    theServerHas(JUMA);
+    vi.spyOn(window.history, "length", "get").mockReturnValue(1);
+
+    await openTheGive();
+    fireEvent.click(button("Rudi ulipotoka"));
+
+    // In this page's place, so the form never stays in the tab's history (UI-11's review).
+    expect(router.replace).toHaveBeenCalledWith(`/workers/view/?id=${JUMA.id}`);
+    expect(router.push).not.toHaveBeenCalled();
   });
 });
 
@@ -986,7 +1036,7 @@ describe("Ondoa", () => {
         button("Ondoa Kuhesabu mzigo (Vyakula)"),
       ),
     );
-    expect(button("Ongeza kazi")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Ongeza kazi" })).toBeTruthy();
   });
 
   it("never shows Ondoa beside Mmiliki, which only the superuser takes away", async () => {
@@ -1014,35 +1064,41 @@ describe("Ondoa", () => {
 });
 
 describe("a move to another worker", () => {
-  it("closes a give open on Juma when the page moves to Baraka, so his choices never go to Baraka", async () => {
+  it("starts the give afresh on Baraka when the address moves from Juma's, so his choices never go to Baraka", async () => {
     // The browser's back and forward move the address while the page stays: the same screen, another worker
-    // (worker-details.test.tsx). The roles card has a key of its own, beside the status buttons' (worker-page.tsx).
+    // (worker-details.test.tsx).
     theServerHas(JUMA);
     const baraka = worker({
       full_name: "Baraka Mfano",
       display_name: "Baraka",
     });
     answer("GET", `${STAFF}${baraka.id}/`, { status: 200, body: baraka });
-    const { rerender } = render(<WorkerScreen id={baraka.id} />);
-    expect(await screen.findByText("Baraka Mfano")).toBeTruthy();
-    rerender(<WorkerScreen id={JUMA.id} />);
-    await openTheGive();
+    const { rerender } = render(<GiveScreen id={JUMA.id} />);
+    await screen.findByRole("radiogroup", { name: "Anapewa nini?" });
+    pick("Cheo");
 
-    rerender(<WorkerScreen id={baraka.id} />);
+    rerender(<GiveScreen id={baraka.id} />);
 
-    expect(await screen.findByText("Baraka Mfano")).toBeTruthy();
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Ongeza kazi kwa Baraka",
+    });
+    const what = await screen.findByRole("radiogroup", {
+      name: "Anapewa nini?",
+    });
+    // Nothing picked: a form of Baraka's own.
     expect(
-      screen.queryByRole("heading", { name: "Ongeza kazi kwa Juma" }),
-    ).toBeNull();
-    expect(button("Ongeza kazi")).toBeTruthy();
-    // Both cards drew: the status buttons' and the roles'.
-    expect(button("Simamisha")).toBeTruthy();
+      within(what)
+        .getAllByRole("radio")
+        .filter((each) => each.getAttribute("aria-checked") === "true"),
+    ).toEqual([]);
   });
 });
 
-describe("one form at a time on the page", () => {
-  it("shuts the page off behind a status sheet, and hides the status buttons while a give is open", async () => {
-    // Two Hifadhi on one page would leave a person, or a screen reader, unsure which one saves what (PPL-8's review).
+describe("one change at a time on the page", () => {
+  it("shuts the page off behind a status sheet, and opens no form in the page itself (UI-11)", async () => {
+    // Two Hifadhi on one page would leave a person, or a screen reader, unsure which one saves what (PPL-8's review):
+    // the short forms are sheets, which shut the page off, and the long ones pages of their own.
     theServerHas(JUMA_WITH_BOTH);
 
     render(<WorkerScreen id={JUMA.id} />);
@@ -1050,24 +1106,20 @@ describe("one form at a time on the page", () => {
     // A sheet is modal (UI-10): the page stays drawn behind it, its buttons in their places, so nothing jumps; but
     // only the sheet's two buttons can be reached, by a finger, the keyboard or a screen reader.
     expect(
-      screen.getByRole("button", { name: "Ongeza kazi", hidden: true }),
+      screen.getByRole("link", { name: "Ongeza kazi", hidden: true }),
     ).toBeTruthy();
     expect(
       screen.getAllByRole("button").map((each) => each.textContent),
     ).toEqual(["Ghairi", "Simamisha"]);
     fireEvent.click(button("Ghairi"));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Ongeza kazi" }));
-    expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Badilisha" })).toBeNull();
-    expect(screen.getAllByRole("button", { name: "Hifadhi" })).toHaveLength(1);
-    fireEvent.click(button("Ghairi"));
-
-    // Closed: both sets back.
+    // Closed: every button back, and each long form's way in a link to its own page, none a form here.
     expect(
       await screen.findByRole("button", { name: "Simamisha" }),
     ).toBeTruthy();
-    expect(button("Ongeza kazi")).toBeTruthy();
+    for (const name of ["Badilisha", "Ongeza kazi"])
+      expect(screen.getByRole("link", { name })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Hifadhi" })).toBeNull();
   });
 });
 
@@ -1078,7 +1130,7 @@ describe("who sees the buttons", () => {
     render(<WorkerScreen id={JUMA.id} />);
 
     expect(
-      await screen.findByRole("button", { name: "Ongeza kazi" }),
+      await screen.findByRole("link", { name: "Ongeza kazi" }),
     ).toBeTruthy();
   });
 
@@ -1092,9 +1144,9 @@ describe("who sees the buttons", () => {
 
     render(<WorkerScreen id={JUMA.id} />);
 
-    await screen.findByRole("button", { name: "Mwajiri tena" });
+    await screen.findByRole("link", { name: "Mwajiri tena" });
     expect(linesUnder("Cheo")).toEqual(["Muuzaji (Dawa)"]);
-    expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Ongeza kazi" })).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Ondoa Muuzaji (Dawa)" }),
     ).toBeNull();
@@ -1113,7 +1165,50 @@ describe("who sees the buttons", () => {
     render(<WorkerScreen id={own.id} />);
 
     await screen.findByText(sentence("staff.own"));
-    expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Ongeza kazi" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Ondoa/ })).toBeNull();
+  });
+});
+
+describe("a page that can't act (UI-11)", () => {
+  it("says why for a worker who left, whose roles stay as history, and offers no form", async () => {
+    theServerHas({ ...JUMA, status: "left", left_on: "2026-11-10" });
+
+    render(<GiveScreen id={JUMA.id} />);
+
+    expect(await screen.findByText(sentence("staff.left"))).toBeTruthy();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Anapewa nini?" }),
+    ).toBeNull();
+  });
+
+  it("says why on one's own job, and offers no form", async () => {
+    const own = { ...JUMA, id: BABA.staff.id, display_name: "Neema" };
+    theServerHas(own);
+
+    render(<GiveScreen id={own.id} />);
+
+    expect(await screen.findByText(sentence("staff.own"))).toBeTruthy();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Anapewa nini?" }),
+    ).toBeNull();
+  });
+
+  it("says no worker was chosen, and asks nothing, with no id in the address", async () => {
+    answer("GET", ME, { status: 200, body: BABA });
+
+    render(<GiveScreen id={null} />);
+
+    expect(
+      await screen.findByText(
+        "Hakuna mfanyakazi aliyechaguliwa. Rudi kwenye orodha ya wafanyakazi.",
+      ),
+    ).toBeTruthy();
+    expect(
+      sent.filter(
+        (request) =>
+          request.url.includes(STAFF) || request.url.includes(ROLES_ROUTE),
+      ),
+    ).toEqual([]);
   });
 });

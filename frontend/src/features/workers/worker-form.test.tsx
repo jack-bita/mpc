@@ -24,19 +24,12 @@ afterEach(() => {
 /** The shop's today in these tests: Wednesday 18 Nov 2026. */
 const TODAY = "2026-11-18";
 
-/** The form, opened on the shop's today; on the demo if told so. */
+/** The form, opened on the shop's today, as Mfanyakazi mpya draws it, with no Ghairi (UI-11); on the demo if told
+ * so. */
 function openForm({ demo = false }: { demo?: boolean } = {}) {
   const onSaved = vi.fn();
-  const onCancel = vi.fn();
-  render(
-    <WorkerForm
-      today={TODAY}
-      demo={demo}
-      onSaved={onSaved}
-      onCancel={onCancel}
-    />,
-  );
-  return { onSaved, onCancel };
+  render(<WorkerForm today={TODAY} demo={demo} onSaved={onSaved} />);
+  return { onSaved };
 }
 
 /** What the app sent to add a worker, as the server would read it. */
@@ -92,7 +85,8 @@ describe("Ongeza", () => {
     typeInto(jobTitleBox(), "Muuzaji wa dawa ");
     tap(save());
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(juma));
+    // A new worker, not one hired again: his page says he was added (UI-11).
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(juma, false));
     const [body] = await sentBodies();
     // The spaces around each off, as the server keeps them; the first day today, as the box started.
     expect(body).toEqual({
@@ -291,14 +285,10 @@ describe("Ongeza", () => {
     expect((save() as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("closes on Ghairi, with nothing sent", async () => {
-    const { onCancel } = openForm();
+  it("has no Ghairi on a page of its own, whose arrow leaves (UI-11)", () => {
+    openForm();
 
-    typeJuma();
-    tap(screen.getByRole("button", { name: "Ghairi" }));
-
-    expect(onCancel).toHaveBeenCalled();
-    expect(await sentBodies()).toEqual([]);
+    expect(screen.queryByRole("button", { name: "Ghairi" })).toBeNull();
   });
 });
 
@@ -377,7 +367,8 @@ describe("Simu on Ongeza", () => {
     tap(save());
     tap(await screen.findByRole("button", { name: "Mwajiri tena" }));
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(back));
+    // Hired again, from Ongeza itself: his new page says so in its own words (UI-11).
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(back, true));
     const [, again] = await sentBodies();
     // The same person keeps his own full name and phone: neither is sent.
     expect(again).toEqual({
@@ -428,7 +419,7 @@ describe("Simu on Ongeza", () => {
     ).toBeTruthy();
     tap(screen.getByRole("button", { name: "Mwajiri tena" }));
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(back));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(back, true));
     const [, lost, again] = await sentBodies();
     expect(again).toEqual(lost);
     expect(again?.hire_again).toBe(BARAKAS_OLD_JOB);

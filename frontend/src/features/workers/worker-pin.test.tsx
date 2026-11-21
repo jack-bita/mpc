@@ -23,6 +23,7 @@ import {
   worker,
 } from "@/test/workers";
 
+import { GiveScreen } from "./give-screen";
 import { WorkerScreen } from "./worker-page";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -138,7 +139,7 @@ describe("the Kuingia card", () => {
     });
     theServerHas(left);
     const second = render(<WorkerScreen id={left.id} />);
-    await findButton("Mwajiri tena");
+    await screen.findByRole("link", { name: "Mwajiri tena" });
     expect(screen.queryByRole("button", { name: "Weka PIN" })).toBeNull();
     second.unmount();
 
@@ -148,31 +149,6 @@ describe("the Kuingia card", () => {
     render(<WorkerScreen id={own.id} />);
     await screen.findByText(sentence("staff.own"));
     expect(screen.queryByRole("button", { name: "Weka PIN" })).toBeNull();
-  });
-
-  it("hides its two buttons while a form is open in the page, Badilisha's or Ongeza kazi's, and shows them after (UI-10's review)", async () => {
-    // One form at a time on the page (PPL-8's review): a form in the page, not a sheet, leaves the rest of the page
-    // in use, so Kuingia's buttons step aside until it closes (worker-page.tsx, buttonsHidden).
-    theServerHas(ASHA);
-    answer("GET", DEMO_OPEN, { status: 200, body: { open: false } });
-    answer("GET", ROLES_ROUTE, { status: 200, body: rolesPage(SHOP_ROLES) });
-    render(<WorkerScreen id={ASHA.id} />);
-    const kuingia = await screen.findByRole("region", { name: "Kuingia" });
-    await within(kuingia).findByRole("button", { name: "Weka PIN" });
-
-    for (const other of ["Badilisha", "Ongeza kazi"]) {
-      fireEvent.click(await findButton(other));
-      // Open in the page itself: no sheet, and the rest of the page still in reach.
-      expect(screen.queryByRole("dialog")).toBeNull();
-      await waitFor(() =>
-        expect(within(kuingia).queryAllByRole("button")).toEqual([]),
-      );
-      fireEvent.click(button("Ghairi"));
-      for (const name of ["Weka PIN", "Nenosiri la muda"])
-        expect(
-          await within(kuingia).findByRole("button", { name }),
-        ).toBeTruthy();
-    }
   });
 });
 
@@ -353,7 +329,7 @@ describe("Weka PIN", () => {
       expect(document.activeElement).toBe(button("Weka PIN")),
     );
     expect(button("Simamisha")).toBeTruthy();
-    expect(button("Ongeza kazi")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Ongeza kazi" })).toBeTruthy();
   });
 });
 
@@ -386,11 +362,11 @@ describe("Ongeza kazi, once the worker has a PIN", () => {
   it("says to set a fresh PIN after a big role or key, as whoever set the old one knows it", async () => {
     answer("GET", ROLES_ROUTE, { status: 200, body: rolesPage(SHOP_ROLES) });
     theServerHas({ ...ASHA, has_pin: true });
-    const { unmount } = render(<WorkerScreen id={ASHA.id} />);
+    // On Ongeza kazi's own page (UI-11).
+    const { unmount } = render(<GiveScreen id={ASHA.id} />);
 
-    fireEvent.click(await findButton("Ongeza kazi"));
     expect(
-      screen.getByText(
+      await screen.findByText(
         "Asha ana PIN tayari. Kama mtu mwingine ndiye aliyeiweka na unampa cheo au ruhusa kubwa, baada ya hapa mwekee PIN mpya wewe mwenyewe.",
       ),
     ).toBeTruthy();
@@ -398,8 +374,8 @@ describe("Ongeza kazi, once the worker has a PIN", () => {
 
     // No PIN, nothing to say.
     theServerHas(ASHA);
-    render(<WorkerScreen id={ASHA.id} />);
-    fireEvent.click(await findButton("Ongeza kazi"));
+    render(<GiveScreen id={ASHA.id} />);
+    await screen.findByRole("radiogroup", { name: "Anapewa nini?" });
     expect(screen.queryByText(/ana PIN tayari/)).toBeNull();
   });
 });

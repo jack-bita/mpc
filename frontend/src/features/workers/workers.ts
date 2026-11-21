@@ -1,8 +1,9 @@
 // workers.ts — the shop's workers as the office reads them (PPL-6, 03 §5.10): the list's place in the store of
 // server answers, the reading of every page, one worker for their own page and its address, a saved worker kept in
-// both at once, the key the page asks, and the words for each role and its side. For PPL-8: the shop's roles, read
-// when Ongeza kazi opens (ROLES, useRoles, RolesRead, handed down as values), how a role or a key is written on its
-// side (useOnSide), and what a roles form shows above its buttons (aboutTheChange).
+// both at once, the key the page asks, and the words for each role and its side. For PPL-8: the shop's roles, read by
+// Ongeza kazi's own page (ROLES, useRoles, RolesRead, handed down as values, UI-11), how a role or a key is written on
+// its side (useOnSide), and what a roles form shows above its buttons (aboutTheChange). For UI-11: each long form's
+// own page's address, and the way back from it (backToWorker).
 //
 // GET /api/v1/people/staff/ answers everyone the shop has had, those who left included, newest first, in pages of
 // 50 (CursorPage, PPL-4). A shop has tens of workers over the years, not hundreds, so one screen holds them all,
@@ -21,9 +22,12 @@ import {
 } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import type { useRouter } from "next/navigation";
+
 import { api } from "@/api/client";
 import { answerOf, ApiRefusal } from "@/api/refusal";
 import type { components } from "@/api/schema";
+import { mayGoBack } from "@/components/in-app-moves";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 
 export type Worker = components["schemas"]["Staff"];
@@ -39,10 +43,45 @@ export const MANAGES_STAFF = "staff.manage";
 /** The list's place in the store of server answers. Ongeza and each change ask it again. */
 export const WORKERS = ["people", "staff"] as const;
 
+/** Wafanyakazi, the list: where a worker's page and Mfanyakazi mpya lead back when the person didn't come from inside
+ * the app. */
+export const LIST_PAGE = "/workers/";
+
+/** Mfanyakazi mpya, Ongeza's own page (UI-11). */
+export const NEW_WORKER_PAGE = "/workers/new/";
+
+/** Mwajiri tena's page, Ongeza's own with the job that ended (UI-11): the person hired again keeps his own full name
+ * and phone, so the same page asks only the new job's boxes. */
+export function hireAgainPage(oldJob: string): string {
+  return `${NEW_WORKER_PAGE}?again=${oldJob}`;
+}
+
 /** A worker's own page, by their job's id: a query string, as the app is plain files with no page per id (ADR-0016).
  * The list's names link to it, and so do a job that ended and the page Mwajiri tena moves to (PPL-11). */
 export function workerPage(id: string): string {
   return `/workers/view/?id=${id}`;
+}
+
+/** Badilisha's own page, for one worker (UI-11). */
+export function editWorkerPage(id: string): string {
+  return `/workers/edit/?id=${id}`;
+}
+
+/** Ongeza kazi's own page, for one worker (UI-11). */
+export function giveWorkerPage(id: string): string {
+  return `/workers/give/?id=${id}`;
+}
+
+/** Hifadhi on a form's own page (UI-11) goes where the page's arrow goes: back to the worker's page the person came
+ * from, or, from a bookmark, to that page in the form's place (replace), so the form's page never sits in the tab's
+ * history between the list and the worker, and the arrow on the worker's page never leads back into a form already
+ * sent. */
+export function backToWorker(
+  router: ReturnType<typeof useRouter>,
+  id: string,
+): void {
+  if (mayGoBack()) router.back();
+  else router.replace(workerPage(id));
 }
 
 /** Whether the person may open the workers' page: staff.manage on the whole shop, not on one side, as a worker
@@ -118,7 +157,7 @@ async function allRoles(): Promise<Role[]> {
   return roles;
 }
 
-/** The roles' read as the page hands it down: its three values, read by the page itself (worker-page.tsx). Never the
+/** The roles' read as the page hands it down: its three values, read by the page itself (give-screen.tsx). Never the
  * query's whole result: TanStack draws a part again only when a value that part has read changes, so a result handed
  * down and read only later, by a form that opened after the read had failed, kept showing it on its way (PPL-8's
  * review). */
@@ -128,8 +167,9 @@ export type RolesRead = {
   isPending: boolean;
 };
 
-/** The shop's roles, for Ongeza kazi (PPL-8): asked only once `enabled`, when the form opens, so opening a worker's
- * page costs no read of them. Asked by the page, the part always on the screen, and handed down (worker-page.tsx). */
+/** The shop's roles, for Ongeza kazi (PPL-8): asked by its own page from its first draw, the part always on the screen,
+ * and handed down (give-screen.tsx, UI-11), so opening a worker's page costs no read of them; only once `enabled`, as a
+ * page with no worker to give to asks nothing. */
 export function useRoles(enabled: boolean) {
   return useQuery({ queryKey: ROLES, queryFn: allRoles, enabled });
 }

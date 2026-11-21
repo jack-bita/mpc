@@ -410,9 +410,11 @@
       "left": "Ameondoka"
     },
     "switchedOff": "Amezimwa na msimamizi wa mfumo. Hawezi kuingia.",
-    "leftHeading": "Walioondoka",
-    "noneLeft": "Hakuna.",
+    "hereHeading": "Wanaofanya kazi ({count})",
+    "leftHeading": "Walioondoka ({count})",
+    "nobody": "Hakuna.",
     "add": "Ongeza",
+    "newTitle": "Mfanyakazi mpya",
     "added": "{name} ameongezwa. Jina lake litaonekana kwenye kompyuta za duka baada ya kupewa PIN.",
     "form": {
       "fullName": "Jina kamili",
@@ -428,8 +430,7 @@
       "newPhoneHint": "Si lazima. Kama 0712 345 678.",
       "foundLeft": "Simu hii ni ya {name}, aliyeondoka {day}.",
       "farDay": "{day} iko mbali na leo. Kama ni sahihi, bonyeza Hifadhi tena.",
-      "save": "Hifadhi",
-      "cancel": "Ghairi"
+      "save": "Hifadhi"
     },
     "view": {
       "title": "Mfanyakazi",
@@ -466,14 +467,14 @@
       "lastDay": "Siku ya mwisho",
       "lastDayHint": "Siku yake ya mwisho kazini. Haiwezi kuwa siku ijayo.",
       "save": "Hifadhi",
-      "cancel": "Ghairi",
       "nothingChanged": "Hukubadilisha chochote.",
       "changedMeanwhile": "Taarifa za {name} zimebadilika tangu ulipozifungua. Hizi ndizo taarifa zake sasa: jaribu tena kama bado kuna cha kurekebisha.",
       "done": {
         "edit": "Taarifa za {name} zimehifadhiwa.",
         "suspend": "{name} amesimamishwa.",
         "unsuspend": "{name} amerudishwa kazini.",
-        "leave": "{name} ameondoka. Siku yake ya mwisho ni {day}."
+        "leave": "{name} ameondoka. Siku yake ya mwisho ni {day}.",
+        "hireAgain": "{name} ameajiriwa tena."
       },
       "back": "{name} amerudi kazini.",
       "backLink": "Fungua ukurasa wake wa sasa"

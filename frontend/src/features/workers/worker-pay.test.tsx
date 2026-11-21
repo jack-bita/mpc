@@ -1,7 +1,7 @@
 // worker-pay.test.tsx — Malipo kwa siku on a worker's page (WAGE-1): the rate in force today and the history, newest
 // first; a worker with none, or with one still to come; the cook; who sees the card at all, and who gets its button.
 // The form behind the button is pay-rate-form.test.tsx's.
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
@@ -10,15 +10,7 @@ import { formatMoney } from "@/lib/format";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { PAY_RATES_ROUTE, payRate, payRates } from "@/test/pay-rates";
 import { render } from "@/test/render";
-import {
-  BABA,
-  MANAGER,
-  ROLES_ROUTE,
-  rolesPage,
-  SHOP_ROLES,
-  STAFF,
-  worker,
-} from "@/test/workers";
+import { BABA, MANAGER, STAFF, worker } from "@/test/workers";
 
 import { WorkerScreen } from "./worker-page";
 
@@ -163,9 +155,7 @@ describe("Malipo kwa siku", () => {
 
     render(<WorkerScreen id={JUMA.id} />);
 
-    expect(
-      await screen.findByRole("button", { name: "Badilisha" }),
-    ).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Badilisha" })).toBeTruthy();
     expect(
       screen.queryByRole("region", { name: "Malipo kwa siku" }),
     ).toBeNull();
@@ -231,35 +221,6 @@ describe("Malipo kwa siku", () => {
       ),
     ).toBeTruthy();
     expect(within(card).queryByRole("button")).toBeNull();
-  });
-
-  it("hides Weka malipo while another card's form is open in the page, and brings it back after", async () => {
-    // One form at a time on the page (PPL-8's review): Badilisha or Ongeza kazi open in the page, Malipo kwa siku's
-    // button stays off it, so a person never meets two Hifadhi; Ghairi brings it back. A sheet (Weka PIN, UI-10) shuts
-    // the whole page off instead (worker-pin.test.tsx).
-    theServerHas(JUMA, payRates([], null));
-    answer("GET", ROLES_ROUTE, { status: 200, body: rolesPage(SHOP_ROLES) });
-    answer("GET", "/api/devices/v1/demo/open/", {
-      status: 200,
-      body: { open: false },
-    });
-
-    render(<WorkerScreen id={JUMA.id} />);
-    const card = await theCard();
-    await within(card).findByRole("button", { name: "Weka malipo" });
-
-    for (const other of ["Badilisha", "Ongeza kazi"]) {
-      fireEvent.click(await screen.findByRole("button", { name: other }));
-      await waitFor(() =>
-        expect(
-          within(card).queryByRole("button", { name: "Weka malipo" }),
-        ).toBeNull(),
-      );
-      fireEvent.click(screen.getByRole("button", { name: "Ghairi" }));
-      expect(
-        await within(card).findByRole("button", { name: "Weka malipo" }),
-      ).toBeTruthy();
-    }
   });
 
   it("says why when the rates can't be read", async () => {

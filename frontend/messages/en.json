@@ -410,9 +410,11 @@
       "left": "Left"
     },
     "switchedOff": "Switched off by the system admin. They can't log in.",
-    "leftHeading": "Those who left",
-    "noneLeft": "Nobody.",
+    "hereHeading": "Working here ({count})",
+    "leftHeading": "Those who left ({count})",
+    "nobody": "Nobody.",
     "add": "Add",
+    "newTitle": "New worker",
     "added": "{name} has been added. Their name shows on the shop's laptops once they are given a PIN.",
     "form": {
       "fullName": "Full name",
@@ -428,8 +430,7 @@
       "newPhoneHint": "Optional. Like 0712 345 678.",
       "foundLeft": "This phone belongs to {name}, who left on {day}.",
       "farDay": "{day} is far from today. If it is right, press Save again.",
-      "save": "Save",
-      "cancel": "Cancel"
+      "save": "Save"
     },
     "view": {
       "title": "Worker",
@@ -466,14 +467,14 @@
       "lastDay": "Last day",
       "lastDayHint": "Their last day at work. It can't be a day ahead.",
       "save": "Save",
-      "cancel": "Cancel",
       "nothingChanged": "Nothing was changed.",
       "changedMeanwhile": "{name}'s details changed since you opened them. These are their details now: try again if something still needs fixing.",
       "done": {
         "edit": "{name}'s details are saved.",
         "suspend": "{name} is suspended.",
         "unsuspend": "{name} is back at work.",
-        "leave": "{name} has left. Their last day was {day}."
+        "leave": "{name} has left. Their last day was {day}.",
+        "hireAgain": "{name} has been hired again."
       },
       "back": "{name} is back at work.",
       "backLink": "Open their page now"

@@ -391,10 +391,10 @@ describe("leaving the form", () => {
     theServerHas(payRates([], null));
     await openTheForm("Weka malipo");
 
-    expect(screen.queryByRole("button", { name: "Badilisha" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Badilisha" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Ongeza kazi" })).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Ongeza kazi", hidden: true }),
+      screen.getByRole("link", { name: "Ongeza kazi", hidden: true }),
     ).toBeTruthy();
   });
 });

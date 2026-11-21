@@ -1,6 +1,7 @@
-// worker-details-form.tsx — Badilisha on a worker's own page (PPL-10): the owner fixes a worker's details, typed wrong
-// when they were added, or changed since. Opens in place of the worker's details, as Jack pictured it (18 Nov 2026):
-// the same details, now in boxes, already filled in, with Sababu, Hifadhi and Ghairi.
+// worker-details-form.tsx — Badilisha (PPL-10): the owner fixes a worker's details, typed wrong when they were added,
+// or changed since: the same details as the worker's page shows them, now in boxes, already filled in, with Sababu and
+// Hifadhi (Jack, 18 Nov 2026). On a page of its own since UI-11, Badilisha taarifa za Juma (edit-worker-screen.tsx),
+// which gives the title and the way back, its arrow: no Ghairi (Jack's yes to the screens, 21 Nov 2026).
 //
 // Five boxes: Jina kamili and Simu, which are the person's own and follow them to every shop where they work; Jina la
 // kuitwa, Kazi and Siku ya kwanza, which are their job's here. The phone shows as the shop writes it, "0712 345 678",
@@ -9,17 +10,18 @@
 // have no other history.
 //
 // Only the boxes that changed are sent, with the version of the worker the form opened on (apps/core/editing.py). If
-// someone else fixed them since, the server refuses it (409 version_conflict): the form closes, one line says they
-// changed since the form opened, and the page reads them again, so nobody's fix is undone by an old copy. The version and
-// each box's start are kept from the moment the form opened, never the page's newer read: sending a newer version
-// with boxes typed on an older copy would undo the other person's fix all the same.
+// someone else fixed them since, the server refuses it (409 version_conflict): the form is done, one line on the
+// worker's page says they changed since the form opened, and the page reads them again, so nobody's fix is undone by an
+// old copy. The version and each box's start are kept from the moment the form opened, never the page's newer read:
+// sending a newer version with boxes typed on an older copy would undo the other person's fix all the same.
 //
 // What the form can see is said at once, beside its box, in the server's own sentences, and nothing is sent: an empty
 // name or nickname (`blank`), an empty first day (`required`), an empty Sababu (staff.reason_required). A first day
 // moved more than 30 days from both today and the day it was is asked about once, as a year typed wrong would be on
-// Ongeza (worker-form.tsx); fixing a long-time worker's first day by a few days asks nothing (PPL-10's review). The server says the rest:
-// a wrong phone (phone.invalid) and one another person has (`unique`) beside Simu, a nickname another current worker
-// has (staff.display_name_taken) beside Jina la kuitwa, and who may (staff.own, staff.more_keys…) above the buttons.
+// Ongeza (worker-form.tsx); fixing a long-time worker's first day by a few days asks nothing (PPL-10's review). The
+// server says the rest: a wrong phone (phone.invalid) and one another person has (`unique`) beside Simu, a nickname
+// another current worker has (staff.display_name_taken) beside Jina la kuitwa, and who may (staff.own,
+// staff.more_keys…) above the buttons.
 //
 // On the demo, the phone box is off and says why (demo.phones_fixed, Jack, PPL-10: A): every visitor logs in as
 // Meneja, so a stranger's real number would show to every later visitor. The page learns the demo's sign and hands it
@@ -100,7 +102,6 @@ export function DetailsForm({
   onDone,
   onNothingChanged,
   onChangedMeanwhile,
-  onCancel,
 }: {
   worker: Worker;
   /** The shop's today: what a far first day is measured from. */
@@ -112,7 +113,6 @@ export function DetailsForm({
   onNothingChanged: () => void;
   /** Someone else changed the worker first: what to say. */
   onChangedMeanwhile: (sentence: string) => void;
-  onCancel: () => void;
 }) {
   const t = useTranslations("workers");
   const codes = useCodeWords();
@@ -207,7 +207,8 @@ export function DetailsForm({
   }
 
   // Where each refusal shows: beside its box, the form's own first, then the server's, by field or by its code (see
-  // BESIDE_A_BOX). Everything else is ApiErrorAlert's, above the buttons; a change meanwhile closes the form instead.
+  // BESIDE_A_BOX). Everything else is ApiErrorAlert's, above the buttons; a change meanwhile ends the form, its line on
+  // the worker's page.
   const byField = fieldMessages(fix.error);
   const said = (code?: string) =>
     code === undefined ? undefined : codeMessage(codes, code);
@@ -228,9 +229,6 @@ export function DetailsForm({
   return (
     // noValidate: the browser's own checks would speak its language, not the shop's.
     <form noValidate onSubmit={send} className="grid gap-6">
-      <h2 className="text-lg font-semibold">
-        {t("actions.title.edit", { name: worker.display_name })}
-      </h2>
       <Field
         label={t("form.fullName")}
         hint={t("form.fullNameHint")}
@@ -315,9 +313,6 @@ export function DetailsForm({
             while it looks done (setting-form.tsx). */}
         <Button type="submit" disabled={fix.isPending || !online}>
           {t("actions.save")}
-        </Button>
-        <Button kind="second" onClick={onCancel}>
-          {t("actions.cancel")}
         </Button>
       </div>
     </form>

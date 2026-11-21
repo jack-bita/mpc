@@ -1,7 +1,7 @@
 // worker-actions.test.tsx — Simamisha, Rudisha and Ameondoka on a worker's own page (PPL-6): which show for which
 // status, each in its sheet (UI-10) with its reason, the last day's limits, where each refusal shows, and a worker
-// someone else changed first read again. And Mwajiri tena on a worker who left (PPL-11): the boxes filled from the old
-// job, what is sent, the move to the new job's page, and the old job's link to it once the person is back.
+// someone else changed first read again. And Mwajiri tena on a worker who left (PPL-11): a link to its own page (UI-11,
+// whose form new-worker-screen.test.tsx tests), and the old job's link to the new one once the person is back.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,7 +9,6 @@ import type { components } from "@/api/schema";
 import { DAWA } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
 import { render } from "@/test/render";
-import { router } from "@/test/router";
 import { MANAGER, role, STAFF, worker } from "@/test/workers";
 
 import { WorkerScreen } from "./worker-page";
@@ -105,7 +104,8 @@ describe("the buttons on a worker's page", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     await findButton("Simamisha");
-    expect(button("Badilisha")).toBeTruthy();
+    // A link, to its own page (UI-11).
+    expect(screen.getByRole("link", { name: "Badilisha" })).toBeTruthy();
     expect(button("Ameondoka")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Rudisha" })).toBeNull();
   });
@@ -118,7 +118,7 @@ describe("the buttons on a worker's page", () => {
 
     await findButton("Rudisha");
     // A suspended worker's details can still be fixed (02 §5, PPL-10).
-    expect(button("Badilisha")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Badilisha" })).toBeTruthy();
     expect(button("Ameondoka")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
     unmount();
@@ -133,8 +133,9 @@ describe("the buttons on a worker's page", () => {
     theServerHas(hamisi);
     render(<WorkerScreen id={hamisi.id} />);
 
-    await findButton("Mwajiri tena");
-    for (const name of ["Badilisha", "Simamisha", "Rudisha", "Ameondoka"])
+    await screen.findByRole("link", { name: "Mwajiri tena" });
+    expect(screen.queryByRole("link", { name: "Badilisha" })).toBeNull();
+    for (const name of ["Simamisha", "Rudisha", "Ameondoka"])
       expect(screen.queryByRole("button", { name })).toBeNull();
   });
 
@@ -419,7 +420,7 @@ describe("the buttons on a worker's page", () => {
         "Huwezi kubadilisha hali yako ya kazi, taarifa zako, malipo yako, wala vyeo na ruhusa zako mwenyewe.",
       ),
     ).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Badilisha" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Badilisha" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Simamisha" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Ameondoka" })).toBeNull();
   });
@@ -488,120 +489,21 @@ const BARAKA = worker({
   left_on: "2026-03-12",
 });
 
-const firstDayBox = () =>
-  screen.getByLabelText("Siku ya kwanza") as HTMLInputElement;
-
 describe("Mwajiri tena", () => {
-  it("opens the add's boxes filled from his old job, and today as the first day, with no full name", async () => {
+  it("is a link to its own page, Mwajiri tena Baraka, for one who left (UI-11)", async () => {
     theServerHas(BARAKA);
     render(<WorkerScreen id={BARAKA.id} />);
 
-    fireEvent.click(await findButton("Mwajiri tena"));
-
-    expect(
-      screen.getByRole("heading", { level: 2, name: "Mwajiri tena Baraka" }),
-    ).toBeTruthy();
-    expect(
-      (screen.getByLabelText("Jina la kuitwa") as HTMLInputElement).value,
-    ).toBe("Baraka");
-    expect((screen.getByLabelText("Kazi") as HTMLInputElement).value).toBe(
-      "Muuzaji wa dawa",
-    );
-    expect(firstDayBox().value).toBe("2026-11-18");
-    // The person keeps his own full name: Badilisha fixes it (PPL-10).
-    expect(screen.queryByLabelText("Jina kamili")).toBeNull();
-  });
-
-  it("hires him again as the same person, and opens his new job's page (the card's first Done when)", async () => {
-    theServerHas(BARAKA);
-    const back = worker({
-      full_name: "Baraka Mfano",
-      display_name: "Baraka",
-      job_title: "Muuzaji",
-      started_on: "2026-11-18",
-    });
-    answer("POST", STAFF, { status: 201, body: back });
-    render(<WorkerScreen id={BARAKA.id} />);
-
-    fireEvent.click(await findButton("Mwajiri tena"));
-    typeInto(screen.getByLabelText("Kazi"), "Muuzaji");
-    fireEvent.click(button("Hifadhi"));
-
-    await waitFor(() =>
-      expect(router.push).toHaveBeenCalledWith(`/workers/view/?id=${back.id}`),
-    );
-    const [body] = await sentBodies();
-    // The old job's id, and the new job's own (ADR-0007): no full name, as he keeps his own.
-    expect(body).toEqual({
-      id: expect.stringMatching(/^[0-9a-f-]{36}$/),
-      hire_again: BARAKA.id,
-      display_name: "Baraka",
-      job_title: "Muuzaji",
-      started_on: "2026-11-18",
-    });
-  });
-
-  it("says a first day before his last day at once, beside its box, and sends nothing", async () => {
-    theServerHas(BARAKA);
-    render(<WorkerScreen id={BARAKA.id} />);
-
-    fireEvent.click(await findButton("Mwajiri tena"));
-    typeInto(firstDayBox(), "2026-03-11");
-    fireEvent.click(button("Hifadhi"));
-
-    expect(errorOf(firstDayBox())).toBe(
-      "Siku ya kwanza haiwezi kuwa kabla ya siku yake ya mwisho ya kazi iliyopita.",
-    );
-    expect(await sentBodies()).toEqual([]);
-  });
-
-  it("shows the server's refusal of the first day beside its box, as when a later job ended after it", async () => {
-    theServerHas(BARAKA);
-    answer(
-      "POST",
-      STAFF,
-      refusal(400, "invalid", {}, { started_on: ["staff.back_before_left"] }),
-    );
-    render(<WorkerScreen id={BARAKA.id} />);
-
-    fireEvent.click(await findButton("Mwajiri tena"));
-    fireEvent.click(button("Hifadhi"));
-
-    await waitFor(() =>
-      expect(errorOf(firstDayBox())).toBe(
-        "Siku ya kwanza haiwezi kuwa kabla ya siku yake ya mwisho ya kazi iliyopita.",
-      ),
-    );
-  });
-
-  it("says another manager hired him first, and reads the old job again, which then links to the new one", async () => {
-    const server = theServerHas(BARAKA);
-    const elsewhere = "019a8302-0000-7000-8000-00000000ffff";
-    answer("POST", STAFF, () => {
-      server.now({ ...BARAKA, hired_again_as: elsewhere });
-      return Response.json(refusal(400, "staff.already_member").body, {
-        status: 400,
-      });
-    });
-    render(<WorkerScreen id={BARAKA.id} />);
-
-    fireEvent.click(await findButton("Mwajiri tena"));
-    fireEvent.click(button("Hifadhi"));
-
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      "Mtu huyu tayari anafanya kazi hapa.",
-    );
-    fireEvent.click(button("Ghairi"));
-    const link = await screen.findByRole("link", {
-      name: "Fungua ukurasa wake wa sasa",
-    });
+    const link = await screen.findByRole("link", { name: "Mwajiri tena" });
     // The app is built with trailing slashes; Next.js's Link in a test drops them (text-link.test.tsx).
     expect(link.getAttribute("href")).toMatch(
-      new RegExp(`^/workers/view/?\\?id=${elsewhere}$`),
+      new RegExp(`^/workers/new/?\\?again=${BARAKA.id}$`),
     );
+    // No form in the page any more.
+    expect(screen.queryByLabelText("Jina la kuitwa")).toBeNull();
   });
 
-  it("shows, once he is back, a link to his new job's page in place of the button (Jack: A)", async () => {
+  it("shows, once he is back, a link to his new job's page in place of Mwajiri tena (Jack: A)", async () => {
     const now = "019a8302-0000-7000-8000-00000000fffe";
     theServerHas({ ...BARAKA, hired_again_as: now });
     render(<WorkerScreen id={BARAKA.id} />);
@@ -614,18 +516,6 @@ describe("Mwajiri tena", () => {
     expect(link.getAttribute("href")).toMatch(
       new RegExp(`^/workers/view/?\\?id=${now}$`),
     );
-    expect(screen.queryByRole("button", { name: "Mwajiri tena" })).toBeNull();
-  });
-
-  it("closes on Ghairi, sends nothing, and gives the keyboard back to the button", async () => {
-    theServerHas(BARAKA);
-    render(<WorkerScreen id={BARAKA.id} />);
-
-    fireEvent.click(await findButton("Mwajiri tena"));
-    fireEvent.click(button("Ghairi"));
-
-    expect(screen.queryByLabelText("Jina la kuitwa")).toBeNull();
-    expect(document.activeElement).toBe(button("Mwajiri tena"));
-    expect(await sentBodies()).toEqual([]);
+    expect(screen.queryByRole("link", { name: "Mwajiri tena" })).toBeNull();
   });
 });

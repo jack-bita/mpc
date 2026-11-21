@@ -37,6 +37,13 @@ export function movedInApp(): boolean {
   }
 }
 
+/** Whether going back stays inside the app: the tab's note says the person moved between its pages, and the tab's
+ * history holds a page before this one. The page header's arrow asks it, and so does a form's own page, whose Hifadhi
+ * goes where the arrow goes (UI-11). */
+export function mayGoBack(): boolean {
+  return movedInApp() && window.history.length > 1;
+}
+
 function noteMove(): void {
   try {
     window.sessionStorage.setItem(MOVED_IN_APP, "1");
