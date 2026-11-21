@@ -1,6 +1,7 @@
 // pay-rate-form.test.tsx — Weka malipo and Badilisha malipo on a worker's page (WAGE-1): where the boxes start, what is
-// sent and what is said after; what the form sees itself and sends nothing for; the server's refusals, beside their
-// boxes or above the buttons; the same id for a try of the same rate; offline; Ghairi.
+// sent and what is said after, in a sheet over the page (UI-10); what the sheet sees itself and sends nothing for; the
+// server's refusals, beside their boxes or above the sheet's buttons; the same id for a try of the same rate; offline;
+// Ghairi.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -87,12 +88,16 @@ function typeInto(element: HTMLElement, text: string) {
   fireEvent.change(element, { target: { value: text } });
 }
 
-/** Opens the form by its button's name, on Juma's page. */
+/** Opens the sheet by its button's name, on Juma's page. */
 async function openTheForm(name: "Weka malipo" | "Badilisha malipo") {
   render(<WorkerScreen id={JUMA.id} />);
   fireEvent.click(await screen.findByRole("button", { name }));
-  await screen.findByRole("heading", { name: "Malipo mapya ya Juma" });
+  await screen.findByRole("dialog", { name: "Malipo mapya ya Juma" });
 }
+
+/** A button inside the open sheet: Hifadhi malipo, its main one, or Ghairi (UI-10). */
+const sheetButton = (name: string) =>
+  within(screen.getByRole("dialog")).getByRole("button", { name });
 
 describe("Weka malipo", () => {
   it("starts on the first day, sharing the meals, and saves the rate", async () => {
@@ -100,15 +105,17 @@ describe("Weka malipo", () => {
     theServerHas(payRates([], null));
     await openTheForm("Weka malipo");
 
-    // The keyboard is on the form's title, where the button was.
-    expect(document.activeElement?.textContent).toBe("Malipo mapya ya Juma");
+    // The keyboard is in the sheet's first box, Base UI's own on a laptop; on a phone, on the sheet itself.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(box("Kiasi kwa siku")),
+    );
     expect(box("Kiasi kwa siku").value).toBe("");
     expect(box("Kuanzia").value).toBe("2026-11-10");
     expect(radio("Ndiyo").getAttribute("aria-checked")).toBe("true");
 
     const before = reads();
     typeInto(box("Kiasi kwa siku"), "10,000");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
 
     // Spaces as a reader reads them: money is written with a space that never breaks ("TSh 10,000").
     const plain = (text: string) => text.replace(/\s+/g, " ");
@@ -127,8 +134,8 @@ describe("Weka malipo", () => {
       shares_meals: true,
       note: "",
     });
-    // The form is gone, and the rates are asked again, so the new one shows where it belongs.
-    expect(screen.queryByRole("button", { name: "Hifadhi" })).toBeNull();
+    // The sheet is gone, and the rates are asked again, so the new one shows where it belongs.
+    expect(screen.queryByRole("dialog")).toBeNull();
     await waitFor(() => expect(reads()).toBeGreaterThan(before));
   });
 });
@@ -150,12 +157,13 @@ describe("after a save", () => {
     await openTheForm("Weka malipo");
 
     typeInto(box("Kiasi kwa siku"), "10000");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
 
     // Spaces as a reader reads them: money is written with a space that never breaks ("TSh 10,000").
     const plain = (text: string) => text.replace(/\s+/g, " ");
     const tsh = plain(formatMoney(new Decimal("10000")));
-    const card = screen.getByRole("region", { name: "Malipo kwa siku" });
+    // Once the sheet has gone, and the page behind it can be read again.
+    const card = await screen.findByRole("region", { name: "Malipo kwa siku" });
     expect(
       await within(card).findByText(
         `Sasa: ${tsh} kwa siku · anachangia chakula`,
@@ -193,7 +201,7 @@ describe("Badilisha malipo", () => {
     typeInto(box("Kiasi kwa siku"), "9000");
     typeInto(box("Kuanzia"), "2026-12-01");
     typeInto(box("Sababu (si lazima)"), "Ameongezewa");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
 
     await waitFor(async () =>
       expect(await posted()).toEqual([
@@ -221,7 +229,7 @@ describe("Badilisha malipo", () => {
 
     render(<WorkerScreen id={zawadi.id} />);
     fireEvent.click(await screen.findByRole("button", { name: "Weka malipo" }));
-    await screen.findByRole("heading", { name: "Malipo mapya ya Zawadi" });
+    await screen.findByRole("dialog", { name: "Malipo mapya ya Zawadi" });
 
     expect(box("Kuanzia").value).toBe("2026-11-25");
   });
@@ -232,7 +240,7 @@ describe("Badilisha malipo", () => {
     await openTheForm("Badilisha malipo");
 
     fireEvent.click(radio("Hapana, ni mpishi"));
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
 
     await waitFor(async () =>
       expect(await posted()).toEqual([
@@ -253,7 +261,7 @@ describe("what the form says itself", () => {
     await openTheForm("Weka malipo");
 
     typeInto(box("Kiasi kwa siku"), typed);
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
 
     expect(errorOf(box("Kiasi kwa siku"))).toBe(
       sentence("pay_rate.amount_invalid"),
@@ -267,11 +275,11 @@ describe("what the form says itself", () => {
     typeInto(box("Kiasi kwa siku"), "10000");
 
     typeInto(box("Kuanzia"), "2026-11-09");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
     expect(errorOf(box("Kuanzia"))).toBe(sentence("pay_rate.before_first_day"));
 
     typeInto(box("Kuanzia"), "");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
     expect(errorOf(box("Kuanzia"))).toBe(sentence("required"));
 
     expect(await posted()).toEqual([]);
@@ -296,7 +304,7 @@ describe("the server's refusals", () => {
 
     typeInto(box("Kiasi kwa siku"), "10000");
     typeInto(box("Sababu (si lazima)"), "Ameongezewa");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
 
     await waitFor(() =>
       expect(errorOf(box("Sababu (si lazima)"))).toBe(sentence("demo.no_note")),
@@ -305,17 +313,18 @@ describe("the server's refusals", () => {
     expect(box("Kiasi kwa siku").value).toBe("10000");
   });
 
-  it("shows who may above the buttons, in the server's sentence", async () => {
+  it("shows who may above the sheet's buttons, in the server's sentence", async () => {
     // Juma holds a key Meneja lacks: the server's rule, the same as for his details (staff.more_keys).
     theServerHas(payRates([], null));
     answer("POST", PAY_RATES_ROUTE, refusal(400, "staff.more_keys"));
     await openTheForm("Weka malipo");
 
     typeInto(box("Kiasi kwa siku"), "10000");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
 
-    const form = screen.getByRole("region", { name: "Malipo mapya ya Juma" });
-    expect((await within(form).findByRole("alert")).textContent).toContain(
+    // Inside the sheet, which stays open, above its buttons.
+    const sheet = screen.getByRole("dialog", { name: "Malipo mapya ya Juma" });
+    expect((await within(sheet).findByRole("alert")).textContent).toContain(
       sentence("staff.more_keys"),
     );
   });
@@ -328,12 +337,12 @@ describe("the server's refusals", () => {
     await openTheForm("Weka malipo");
 
     typeInto(box("Kiasi kwa siku"), "10000");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
     await screen.findByRole("alert");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
     await waitFor(async () => expect(await posted()).toHaveLength(2));
     typeInto(box("Kiasi kwa siku"), "12000");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Hifadhi malipo"));
 
     await waitFor(async () => expect(await posted()).toHaveLength(3));
     const [first, again, changed] = (await posted()).map((body) => body.id);
@@ -343,7 +352,7 @@ describe("the server's refusals", () => {
 });
 
 describe("leaving the form", () => {
-  it("switches Hifadhi off offline", async () => {
+  it("switches the sheet's Hifadhi malipo off offline", async () => {
     theServerHas(payRates([], null));
     await openTheForm("Weka malipo");
     // The network gone as the form draws again (useOnline reads it as it draws): no "offline" event, which would leave
@@ -352,7 +361,7 @@ describe("leaving the form", () => {
     typeInto(box("Kiasi kwa siku"), "10000");
 
     await waitFor(() =>
-      expect(button("Hifadhi").hasAttribute("disabled")).toBe(true),
+      expect(sheetButton("Hifadhi malipo").hasAttribute("disabled")).toBe(true),
     );
   });
 
@@ -361,7 +370,7 @@ describe("leaving the form", () => {
     await openTheForm("Weka malipo");
     const before = reads();
 
-    fireEvent.click(button("Ghairi"));
+    fireEvent.click(sheetButton("Ghairi"));
 
     await waitFor(() =>
       expect(document.activeElement).toBe(button("Weka malipo")),
@@ -370,12 +379,16 @@ describe("leaving the form", () => {
     expect(await posted()).toEqual([]);
   });
 
-  it("keeps one form open at a time on the page", async () => {
-    // While Malipo mapya is open, the other cards' buttons stay off the page (PPL-8's review).
+  it("keeps one form open at a time on the page, the page shut off behind the sheet", async () => {
+    // While Malipo mapya is open, only its own buttons can be reached (PPL-8's review, UI-10): the others stay drawn,
+    // in their places, behind it.
     theServerHas(payRates([], null));
     await openTheForm("Weka malipo");
 
     expect(screen.queryByRole("button", { name: "Badilisha" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Ongeza kazi", hidden: true }),
+    ).toBeTruthy();
   });
 });

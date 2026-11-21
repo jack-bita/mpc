@@ -20,9 +20,11 @@
 // The button shows as the roles card's do (worker-roles.tsx): for a worker working or suspended, as a suspended one
 // still has days to pay; none for one who left, whose pay up to their last day is worked out with the rates they had;
 // none on one's own page, as nobody sets their own pay (staff.own). Who else may is the server's (the PIN's rule), and
-// a refusal shows on the form. While a form is open, here or on another card, it hides, so one change is made at a
-// time. After a save, one line says what was saved, and the keyboard goes to it; Ghairi gives the keyboard back to the
-// button, and asks the rates again, as a save whose answer was lost may have been made.
+// a refusal shows inside the sheet. One change is made at a time: while another card's form is open in the page
+// (Badilisha, Ongeza kazi, until UI-11), it hides; its own form is a sheet (UI-10), which shuts the page off behind it,
+// the button staying in its place. After a save, one line says what was saved, and the keyboard goes to it (the
+// sheet's finalFocus, as the button stays); Ghairi gives the keyboard back to the button, and asks the rates again, as
+// a save whose answer was lost may have been made.
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
@@ -48,16 +50,13 @@ export function WorkerPay({
   worker,
   me,
   rates,
-  onForm,
   buttonsHidden = false,
 }: {
   worker: Worker;
   me: WhoIsHere;
   /** The worker's rates, asked by the page and handed down (worker-page.tsx). */
   rates: PayRatesRead;
-  /** The form opened (true) or closed (false): the page keeps one form open at a time (worker-page.tsx). */
-  onForm?: (open: boolean) => void;
-  /** Another card's form is open: this card's button stays off the page meanwhile. */
+  /** Another card's form is open in the page: this card's button stays off the page meanwhile. */
   buttonsHidden?: boolean;
 }) {
   const t = useTranslations("workers.pay");
@@ -65,14 +64,8 @@ export function WorkerPay({
   const store = useQueryClient();
   const titleId = useId();
   const historyId = useId();
-  const [open, setOpenHere] = useState(false);
-  /** The form opens, or closes: the page learns, for the other cards' buttons. */
-  function setOpen(now: boolean) {
-    setOpenHere(now);
-    onForm?.(now);
-  }
-  // Gone from the page with the form open: the page lets the other cards' buttons show again.
-  useEffect(() => () => onForm?.(false), [onForm]);
+  // The sheet is open. The page isn't told: a sheet hides no other card's buttons, as it shuts the page off.
+  const [open, setOpen] = useState(false);
   // The line that says what the last save did.
   const [news, setNews] = useState<string | null>(null);
 
@@ -87,12 +80,15 @@ export function WorkerPay({
     else button.current?.focus();
   }, [backTo]);
 
-  // Who may see the button (see the top); none while a form is open, nor before the rates came, as the form starts
-  // from them.
+  // Who may see the button (see the top); none before the rates came, as the form starts from them. It stays under
+  // the open sheet, so Ghairi gives the keyboard back to it.
   const mayChange = worker.status !== "left" && worker.id !== me.staff.id;
   const answer = rates.data;
   const inForce = answer?.rates.find((rate) => rate.id === answer.in_force);
-  const showButton = mayChange && !open && !buttonsHidden && answer;
+  const showButton = mayChange && !buttonsHidden && answer;
+  // Whether the last close was a save, for the sheet to give the keyboard to the done line: read as the sheet goes,
+  // after the draw that took it away, so a ref, not the state (worker-actions.tsx).
+  const afterSave = useRef(false);
 
   return (
     <Card>
@@ -109,6 +105,7 @@ export function WorkerPay({
                   // Normal, on the heading's row, which a big one would crowd (worker-actions.tsx).
                   size="normal"
                   onClick={() => {
+                    afterSave.current = false;
                     setNews(null);
                     setOpen(true);
                   }}
@@ -181,6 +178,7 @@ export function WorkerPay({
               worker={worker}
               rates={answer}
               onDone={(sentence) => {
+                afterSave.current = true;
                 setOpen(false);
                 setNews(sentence);
                 setBackTo({ to: "news" });
@@ -191,6 +189,8 @@ export function WorkerPay({
                 // Asked again: a save whose answer was lost may have been made (worker-roles.tsx).
                 void store.invalidateQueries({ queryKey: PAY_RATES });
               }}
+              // After a save, the done line; after Ghairi, the button, the sheet's own way.
+              finalFocus={() => (afterSave.current ? newsLine.current : null)}
             />
           ) : null}
         </section>

@@ -91,8 +91,8 @@ export function WorkerScreen({ id }: { id: string | null }) {
   };
   // Which card has a form open in the page itself, if any (PPL-8's review): one form at a time on the page, so a person
   // never meets two Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other cards'
-  // buttons hide meanwhile. A sheet isn't counted (UI-10): it shuts the whole page off behind it, so Kuingia, whose two
-  // forms are sheets, never tells the page. Each card's own callback, kept the same between draws, as each says
+  // buttons hide meanwhile. A sheet isn't counted (UI-10): it shuts the whole page off behind it, so Kuingia and
+  // Malipo kwa siku, whose forms are all sheets, never tell the page. Each card's own callback, kept the same between draws, as each says
   // "closed" as it goes (its unmount).
   const [formIn, setFormIn] = useState<Card | null>(null);
   const actionsForm = useCallback(
@@ -101,10 +101,6 @@ export function WorkerScreen({ id }: { id: string | null }) {
   );
   const rolesForm = useCallback(
     (open: boolean) => setFormIn((now) => opened("roles", open, now)),
-    [],
-  );
-  const payForm = useCallback(
-    (open: boolean) => setFormIn((now) => opened("pay", open, now)),
     [],
   );
   /** Another card than this one has a form open: this one's buttons hide. */
@@ -173,8 +169,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
               worker={worker.data}
               me={who.data}
               rates={rates}
-              onForm={payForm}
-              buttonsHidden={elsewhere("pay")}
+              buttonsHidden={formIn !== null}
             />
           ) : null}
         </>
@@ -184,7 +179,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
 }
 
 /** The cards that open a form in the page itself, each in its own place on it. */
-type Card = "actions" | "roles" | "pay";
+type Card = "actions" | "roles";
 
 /** What a card's "opened" (true) or "closed" (false) makes of the card with a form open: a close of a card that holds
  * none changes nothing, as each card says "closed" as it goes. */

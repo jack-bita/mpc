@@ -644,8 +644,7 @@
         "mealsNo": "No, the cook",
         "note": "Reason (optional)",
         "noteHint": "Such as: A raise.",
-        "save": "Save",
-        "cancel": "Cancel"
+        "save": "Save the pay"
       }
     }
   },
