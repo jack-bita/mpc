@@ -33,7 +33,7 @@ import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
 import { Sheet } from "@/components/design/sheet";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
-import { formatDay, weekdayOf } from "@/lib/format";
+import { clockPart, formatDay, weekdayOf } from "@/lib/format";
 import { newId } from "@/lib/ids";
 import { useOnline } from "@/offline/network";
 
@@ -61,6 +61,7 @@ export function AddTap({
 }) {
   const t = useTranslations("attendanceWorker");
   const monthWords = useTranslations("attendanceMonth");
+  const attendance = useTranslations("attendance");
   const codes = useCodeWords();
   const { fieldMessages } = useApiErrorWords();
   const online = useOnline();
@@ -146,10 +147,24 @@ export function AddTap({
         value={kind}
         onValueChange={(value) => setKind(value as Kind)}
       />
-      {/* A minute on the shop's clock, 24 hours, as every time in the app (formatTime): the phone's own picker. */}
+      {/* The phone's own time box, which shows the time as the phone is set, often with AM/PM: so 06:45 could be
+          picked for the evening. Its hint says the tap back as the day will show it, 24 hours with its part of the day,
+          "Toka 18:45 jioni", before Ongeza (ATT-13's review); the box always hands the page 24 hours, "18:45". */}
       <Field
         label={t("timeLabel")}
-        hint={t("timeHint")}
+        hint={
+          time === ""
+            ? t("timeHint")
+            : t("timeSaid", {
+                tap: t("tapLineNoLaptop", {
+                  kind: t(`tapKind.${kind}`),
+                  time: attendance("timeOfDay", {
+                    time,
+                    part: clockPart(time),
+                  }),
+                }),
+              })
+        }
         error={timeError}
         type="time"
         value={time}

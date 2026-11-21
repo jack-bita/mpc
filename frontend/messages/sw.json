@@ -819,6 +819,7 @@
     "timeLabel": "Saa",
     "timeHint": "Saa ya duka, kama 18:45.",
     "timeMissing": "Andika saa.",
+    "timeSaid": "Itahifadhiwa kama: {tap}",
     "tapLineEntered": "{kind} {time} · imeongezwa na {by}, {date}",
     "tapLineEnteredNoDate": "{kind} {time} · imeongezwa na {by}",
     "laptopTime": "{time} (saa ya kompyuta, haiaminiki)",

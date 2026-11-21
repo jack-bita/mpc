@@ -181,6 +181,23 @@ describe("Ongeza Ingia au Toka", () => {
     expect(second?.id).toBe(first?.id);
   });
 
+  it("says the minute back as the day will show it, with its part of the day (ATT-13's review)", () => {
+    // A phone's own time box may show AM/PM, so 06:45 could be picked for the evening: the hint says the tap back in
+    // the app's own words, 24 hours with asubuhi or jioni, before Ongeza.
+    openOn();
+    const box = timeBox();
+    expect(within(sheet()).getByText("Saa ya duka, kama 18:45.")).toBeTruthy();
+    fireEvent.change(box, { target: { value: "06:45" } });
+    expect(
+      within(sheet()).getByText("Itahifadhiwa kama: Toka 06:45 asubuhi"),
+    ).toBeTruthy();
+    fireEvent.click(within(kinds()).getByText("Ingia"));
+    fireEvent.change(box, { target: { value: "18:45" } });
+    expect(
+      within(sheet()).getByText("Itahifadhiwa kama: Ingia 18:45 jioni"),
+    ).toBeTruthy();
+  });
+
   it("says an empty time and an empty reason at once, and sends nothing", async () => {
     const { onClose } = openOn();
 

@@ -819,6 +819,7 @@
     "timeLabel": "Time",
     "timeHint": "The shop's clock, as 18:45.",
     "timeMissing": "Write the time.",
+    "timeSaid": "It will be saved as: {tap}",
     "tapLineEntered": "{kind} {time} · added by {by}, {date}",
     "tapLineEnteredNoDate": "{kind} {time} · added by {by}",
     "laptopTime": "{time} (the laptop's clock, not trusted)",
