@@ -1,12 +1,8 @@
 // page-news.test.ts — the note a form's own page leaves for the worker's page it lands on (UI-11): read as that page
 // draws, as many times as React draws it, until it is forgotten; the newest note winning.
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { forgetNews, leaveNews, peekNews } from "./page-news";
-
-afterEach(() => {
-  forgetNews();
-});
 
 describe("a form's page's note", () => {
   it("reads the same on every draw until it is forgotten, then nothing", () => {

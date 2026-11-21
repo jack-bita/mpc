@@ -31,7 +31,7 @@ import {
 } from "@/test/workers";
 
 import { GiveScreen } from "./give-screen";
-import { forgetNews, peekNews } from "./page-news";
+import { peekNews } from "./page-news";
 import { WorkerScreen } from "./worker-page";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -41,9 +41,6 @@ vi.mock("@/api/client", async (importOriginal) =>
 afterEach(() => {
   // A test that takes the network away puts it back after (navigator.onLine's spy).
   vi.restoreAllMocks();
-  // A line left by a test is never read by the next one's page; nor a move noted by one, by the next one's way back.
-  forgetNews();
-  window.sessionStorage.clear();
 });
 
 type Worker = components["schemas"]["Staff"];

@@ -14,6 +14,7 @@ import { afterEach, vi } from "vitest";
 
 import { leaveHeard, nobodyAtCounter } from "@/features/login/at-the-counter";
 import { endOfflineSession } from "@/features/login/offline-session";
+import { forgetNews } from "@/features/workers/page-news";
 import { forgetTooOld } from "@/offline/sync/too-old";
 import { closeShopDatabases } from "@/offline/this-shop";
 import { forgetCsrfToken } from "@/test/csrf";
@@ -45,6 +46,9 @@ afterEach(async () => {
   // The same for the device's saved copy (src/features/devices/this-device.ts), so each test starts as
   // a new device, not yet registered.
   if (typeof window !== "undefined") window.localStorage.clear();
+  // And the tab's own memory (sessionStorage): the note that the person moved between the app's pages
+  // (in-app-moves.tsx), so no test's back arrow follows another's moves.
+  if (typeof window !== "undefined") window.sessionStorage.clear();
   // The CSRF token's cookie a sync test started with (src/test/csrf.ts), so the next test starts with
   // none, as a new device does. Tests that set their own expire it too, which does no harm twice.
   if (typeof document !== "undefined") forgetCsrfToken();
@@ -61,4 +65,7 @@ afterEach(async () => {
   leaveHeard();
   // A sync's finding that the app is too old (too-old.ts, SYNC-13), kept in memory the same way.
   forgetTooOld();
+  // The line a long form's own page left for the worker's page (page-news.ts, UI-11), kept in memory the
+  // same way, so a test whose page never landed leaves no line for the next test's page.
+  forgetNews();
 });

@@ -17,7 +17,7 @@ import { router } from "@/test/router";
 import { MANAGER, role, STAFF, worker } from "@/test/workers";
 
 import { EditWorkerScreen } from "./edit-worker-screen";
-import { forgetNews, peekNews } from "./page-news";
+import { peekNews } from "./page-news";
 import { WorkerScreen } from "./worker-page";
 import { workerPage, WORKERS } from "./workers";
 
@@ -45,9 +45,6 @@ afterEach(() => {
   focusManager.setFocused(undefined);
   // A test that takes the network away puts it back after (navigator.onLine's spy).
   vi.restoreAllMocks();
-  // A line left by a test is never read by the next one's page; nor a move noted by one, by the next one's way back.
-  forgetNews();
-  window.sessionStorage.clear();
 });
 
 /** Asha, a seller on Dawa since 3 Nov, with no phone yet, never fixed since she was added (version 1). */

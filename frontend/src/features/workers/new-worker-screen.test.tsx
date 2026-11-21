@@ -15,7 +15,7 @@ import { router } from "@/test/router";
 import { MANAGER, STAFF, worker } from "@/test/workers";
 
 import { NewWorkerScreen } from "./new-worker-screen";
-import { forgetNews, peekNews } from "./page-news";
+import { peekNews } from "./page-news";
 import { workerKey, workerPage, WORKERS } from "./workers";
 
 vi.mock("@/api/client", async (importOriginal) =>
@@ -28,8 +28,6 @@ const ME = "/api/auth/me/";
 const JUMA = worker({ display_name: "Juma", full_name: "Juma Mfano" });
 
 afterEach(() => {
-  // A note left by a test is never read by the next one's page.
-  forgetNews();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -72,6 +70,9 @@ describe("Mfanyakazi mpya", () => {
     answer("GET", ME, { status: 200, body: MANAGER });
     answer("POST", STAFF, { status: 201, body: JUMA });
     const store = makeQueryClient();
+    // The list as Baba read it before he tapped Ongeza.
+    const asha = worker({ display_name: "Asha", full_name: "Asha Mfano" });
+    store.setQueryData(WORKERS, [asha]);
     render(
       <QueryClientProvider client={store}>
         <NewWorkerScreen />
@@ -93,8 +94,10 @@ describe("Mfanyakazi mpya", () => {
       sentence:
         "Juma ameongezwa. Jina lake litaonekana kwenye kompyuta za duka baada ya kupewa PIN.",
     });
-    // His page shows him at once, from the server's answer, before it asks again (keepWorker).
+    // His page shows him at once, from the server's answer, before it asks again (keepWorker); and the list, at its
+    // top, newest first, so a list whose read after the add fails still shows him (PPL-6's review).
     expect(store.getQueryData(workerKey(JUMA.id))).toEqual(JUMA);
+    expect(store.getQueryData(WORKERS)).toEqual([JUMA, asha]);
   });
 
   it("lands once when Hifadhi is tapped again before the move (UI-11's review)", async () => {
