@@ -168,11 +168,13 @@ class AttendanceDayViewSet(ShopViewSet[AttendanceDay]):
     @extend_schema(request=DecideDaySerializer, responses=DayDecisionSerializer)
     @action(detail=True, methods=["post"])
     def decide(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        sent = DecideDaySerializer(data=request.data)
-        # A choice that is none of the six, a reason too long, or a time with no zone: 400, each beside its box, before
-        # the day is looked for, so the answer is the same for any day, this shop's or not.
-        sent.is_valid(raise_exception=True)
+        # The day first, through the guard: another shop's, or an id no shop has, is "not found" alike, whatever was
+        # sent (03 §5.4). Before the body is read, so the tenancy sweep's empty request reaches the guard, never stops
+        # at a 400 that would answer every day the same and prove nothing (ATT-6's review).
         day = self.get_object()
+        sent = DecideDaySerializer(data=request.data)
+        # A choice that is none of the six, a reason too long, or a time with no zone: 400, each beside its box.
+        sent.is_valid(raise_exception=True)
         # An office visit's actor is always a staff member, as for the pay rate's route.
         by = cast(StaffMember, self.actor)
         data = sent.validated_data

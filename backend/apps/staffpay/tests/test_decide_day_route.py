@@ -128,7 +128,7 @@ def test_refusals_come_beside_their_boxes(staff_client_a: APIClient, juma: Staff
 
 def test_a_request_the_sheet_never_sends_is_refused(staff_client_a: APIClient, juma: StaffMember) -> None:
     # A choice that is none of the six, a reason past 200 characters, and a time with no zone: refused by the
-    # serializer, each beside its box, before the day is looked for.
+    # serializer, each beside its box, once the day is found.
     day = kept_day(juma)
     reply = staff_client_a.post(
         decide_url(day.pk), sheet("holiday", "x" * 201, replaces="2026-11-20T09:00:00"), format="json"
@@ -162,3 +162,14 @@ def test_another_shops_day_is_not_found(staff_client_a: APIClient, shop_b: Shop,
     assert theirs.json() == nobodys.json()
     with shop_context(shop_b):
         assert AttendanceDay.objects.get(pk=bahati_day.pk).decided_status == ""
+
+
+def test_another_shops_day_is_not_found_whatever_is_sent(staff_client_a: APIClient, shop_b: Shop) -> None:
+    # An empty request, as the tenancy sweep sends one, about Bahati's day: "not found", as about a day no shop has. The
+    # route looks for the day before it reads what was sent, so the guard is what answers, never the body's 400, which
+    # would answer every day alike and hide whether the guard ever ran (ATT-6's review).
+    bahati_day = kept_day(worker(shop_b, "Bahati"))
+    theirs = staff_client_a.post(decide_url(bahati_day.pk), {}, format="json")
+    nobodys = staff_client_a.post(decide_url(uuid.uuid7()), {}, format="json")
+    assert theirs.status_code == 404
+    assert theirs.json() == nobodys.json()
