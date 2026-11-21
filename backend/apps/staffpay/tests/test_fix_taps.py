@@ -36,7 +36,7 @@ from apps.people.services import grant_permission, hire_again, mark_left, suspen
 from apps.shops.models import Closure, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import AttendanceEvent, ClockKind, DayStatus, NoPhoto, ReviewReason, TimeCheck
-from apps.staffpay.services import add_tap, void_tap, work_out_days
+from apps.staffpay.services import _where_it_falls, add_tap, void_tap, work_out_days
 from apps.staffpay.tests.days import ARUSHA, FIRST_FINE, MONDAY, SUNDAY, absent_day, job, kept_day, rule, switch_on
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
@@ -523,3 +523,39 @@ def test_a_fix_waits_for_the_book(baba: StaffMember, juma: StaffMember) -> None:
         wait_until_someone_waits_for_me()
     second.join(timeout=10)
     assert ended == [baba.pk]
+
+
+def _add_in_another_visit(staff: StaffMember, by: StaffMember) -> object:
+    # A tap added in a transaction of its own, on a connection of its own, as a second phone sends one: whose it is,
+    # or the refusal it raised.
+    with shop_context(staff.shop_id):
+        return add_tap(
+            staff,
+            tap_id=uuid.uuid7(),
+            kind=ClockKind.OUT,
+            date=MONDAY,
+            minute=dt.time(18, 45),
+            reason="Alisahau kubonyeza Toka",
+            by=by,
+        ).staff_id
+
+
+@pytest.mark.django_db(transaction=True)
+def test_adding_a_tap_waits_for_the_book_too(baba: StaffMember, juma: StaffMember) -> None:
+    # The same as crossing out, for adding: while the book holds the shop's jobs, working the month out for a manager
+    # who opened it, Baba's Toka for Juma waits, so the book never keeps his day from the taps as they were a moment
+    # before it; then it is saved. Without the job's lock it would pass at once, and the test would never see it wait.
+    kept_day(juma, (ClockKind.IN, 7, 20))
+    with shop_context(juma.shop_id), transaction.atomic():
+        list(StaffMember.objects.filter(shop=juma.shop_id).order_by("pk").select_for_update(no_key=True))
+        second, ended = in_another_transaction(lambda: _add_in_another_visit(juma, baba))
+        wait_until_someone_waits_for_me()
+    second.join(timeout=10)
+    assert ended == [juma.pk]
+
+
+def test_a_tap_with_neither_time_is_a_bug() -> None:
+    # Every tap has its trusted time or the laptop's, as the table's rule holds (from_a_laptop_or_the_office): a line
+    # with neither, from a bug or a rule taken away, fails loudly where the book places it, never on a made-up day.
+    with pytest.raises(ValueError, match="neither a trusted time nor a laptop's"):
+        _where_it_falls(None, None, ARUSHA)

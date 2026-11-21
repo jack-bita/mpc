@@ -340,6 +340,21 @@ def test_a_tap_entered_in_the_office_has_its_time(shop_a: Model, staff_a: StaffM
         _office_tap(shop_a, staff_a2, staff_a, trusted_time=None).save()
 
 
+def test_a_tap_entered_in_the_office_never_changes(shop_a: Model, staff_a: StaffMember, staff_a2: StaffMember) -> None:
+    # Why Baba entered it, and the minute he typed, are written once with the line, as the rest of it is (T2): nobody
+    # can later rewrite "Alisahau kubonyeza Toka" or move 18:30 to 17:00, whatever sends the change; only the void
+    # stamp may be filled (ATT-13's review).
+    tap = _office_tap(shop_a, staff_a2, staff_a)
+    tap.save()
+    with shop_context(shop_a):
+        rows = AttendanceEvent.objects.filter(pk=tap.pk)
+        for change in ({"entry_reason": "Sababu nyingine"}, {"trusted_time": ENTERED_TIME - dt.timedelta(hours=1)}):
+            with pytest.raises(IntegrityError, match="only the void stamp may change"), transaction.atomic():
+                rows.update(**change)
+    tap.refresh_from_db()
+    assert (tap.entry_reason, tap.trusted_time) == ("Alisahau kubonyeza Toka", ENTERED_TIME)
+
+
 def test_a_tap_entered_in_the_office_is_voided_like_any_other(
     shop_a: Model, staff_a: StaffMember, staff_a2: StaffMember
 ) -> None:
