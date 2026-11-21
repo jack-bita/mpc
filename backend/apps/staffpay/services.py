@@ -1001,6 +1001,10 @@ def add_tap(
         # off, so a tap there would be kept and count nothing (ATT-13's review).
         if date.weekday() == SUNDAY or not _ran_on(job, date) or not get_setting(ATTENDANCE_ON, shop, on=date):
             raise ValidationError("Only a working day of the job takes a tap.", code="tap.not_working_day")
+        # A worker suspended or gone takes one too, and it counts (Jack: A, ATT-13's review): a laptop's tap let through
+        # while a worker is suspended sends its day to review (X2, the push's flag), as nobody chose it; this one a
+        # manager adds on purpose, with their name and why on it, so it counts as their word. Refusing it would also
+        # block mending the worker's days from before the suspension.
         # The minute on the shop's clock, made a moment with the shop's zone, here, never the phone's (03 §5.10); its
         # seconds dropped, as the counter shows a minute (shop_minute): 07:35:40 is 07:35, on time.
         moment = dt.datetime.combine(date, minute.replace(second=0, microsecond=0), tzinfo=ZoneInfo(shop.timezone))

@@ -207,6 +207,22 @@ def test_a_closed_day_takes_a_tap_and_waits_for_a_decision(shop_a: Shop, baba: S
     assert (day.status, day.review_reason) == (DayStatus.NEEDS_REVIEW, ReviewReason.CLOSED_DAY)
 
 
+def test_a_tap_added_for_a_suspended_worker_counts_as_the_managers_word(
+    shop_a: Shop, baba: StaffMember, juma: StaffMember
+) -> None:
+    # Juma came at 07:20 on Monday and forgot his Toka; Baba suspended him the next day. A laptop's tap let through
+    # while a worker is suspended sends its day to review (X2, the push's flag), but this one Baba adds on purpose,
+    # with his name and why on it: it counts, as his word (Jack: A, ATT-13's review), and the day is a full day. A
+    # refusal would also block mending Juma's days from before the suspension.
+    kept_day(juma, (ClockKind.IN, 7, 20))
+    with shop_context(shop_a):
+        suspend(juma, by=None, reason="Uchunguzi wa hesabu")
+    add(juma, baba)
+    day = absent_day(juma)
+    assert (day.status, day.review_reason) == (DayStatus.ON_TIME, "")
+
+
+# Who may.
 # Who may.
 
 
