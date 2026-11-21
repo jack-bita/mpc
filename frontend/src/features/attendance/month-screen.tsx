@@ -3,8 +3,8 @@
 // line per worker paid by the day with the month's counts, under marks a phone has room for (✓ Ch ½ H !), and what each
 // mark means under them.
 //
-// As Jack pictured it (19 Nov 2026). It only shows: deciding a day is ATT-6's. A worker's name opens their own month
-// as a calendar (worker-month-screen.tsx, ATT-12).
+// As Jack pictured it (19 Nov 2026). It only shows: a day is decided under the worker's calendar, which a worker's
+// name opens (worker-month-screen.tsx, ATT-12; the decision, ATT-6).
 // The server works the month out from the book of days and lists only workers with a daily pay rate, so Baba, who
 // never clocks in, is not on it; the page shows the counts it is given and never adds them up itself.
 //

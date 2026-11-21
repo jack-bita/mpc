@@ -1,5 +1,5 @@
-// decide-day.tsx — Amua siku hii: a manager or the owner decides a worker's day in a sheet over the day (ATT-6), as Jack
-// pictured it (20 Nov 2026):
+// decide-day.tsx — Amua siku hii: a manager or the owner decides a worker's day in a sheet over the day (ATT-6), as
+// Jack pictured it (20 Nov 2026):
 //
 //   ┌──────────────────────────────────┐
 //   │ Amua siku ya Juma                │
@@ -17,8 +17,8 @@
 //
 // The choices, and each one's fine, are the server's (day_choices, apps/staffpay/calculations.py): the page shows them
 // as they come, so Amechelewa never shows on a day it can't take, and no fine is worked out here (rule 4). On the demo,
-// the reason is one of three ready ones to tap (the answer's ready_reasons, Jack: A), as a typed one would show to every
-// visitor after them; elsewhere it is typed. Deciding again (Badilisha uamuzi) opens with the decision picked, and asks
+// the reason is one of three ready ones to tap (the answer's ready_reasons, Jack: A), as a typed one would show to
+// every visitor after them; elsewhere it is typed. Deciding again (Badilisha uamuzi) opens with the decision picked, and asks
 // for a new reason, as each decision says its own why.
 //
 // The decision is sent with when the decision on the screen as the sheet opened was made, or none (`replaces`), read

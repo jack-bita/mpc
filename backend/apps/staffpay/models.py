@@ -306,7 +306,7 @@ class AttendanceDay(ShopScoped):
     decided_status = models.CharField(max_length=12, choices=DayStatus, blank=True)
     # Why the worker was away, on a day decided absent, and only there: office duty is paid, the other two are not.
     absence_type = models.CharField(max_length=11, choices=AbsenceType, blank=True)
-    # The fine of a day decided late or half, read from the day's first Ingia and the rules it used (decided_fine,
+    # The fine of a day decided late or half, read from the day's first Ingia and the rules it used (day_choices,
     # apps/staffpay/calculations.py; T4), and kept: a tap that comes later doesn't change what was decided. 0 on the
     # other decisions. Money, so numeric(14,2) (rule 3).
     decided_fine = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)

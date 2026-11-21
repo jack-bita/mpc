@@ -1,10 +1,11 @@
 // worker-month-screen.tsx — one worker's month as a calendar, on the owner's or a manager's phone (ATT-12, 03 §5.10),
 // opened from the worker's name on Mahudhurio ya mwezi (month-screen.tsx): the worker's name as the page's title, the
 // month, the month's counts as on their line (✓ 11 · Ch 2 · …), then the month Monday first (Jt Jn Jtn Al Ij Jm Jp),
-// each day its mark, a decided day by its decision (O office duty, R permission, ATT-6), and what the marks mean under it. A day tapped opens under the calendar (worker-day.tsx): its
-// status, why, and each tap with its laptop and photo.
+// each day its mark, a decided day by its decision (O office duty, R permission, ATT-6), and what the marks mean under
+// it. A day tapped opens under the calendar (worker-day.tsx): its status, why, and each tap with its laptop and photo;
+// and there a manager decides it, in a sheet over the day (decide-day.tsx, ATT-6).
 //
-// As Jack pictured it (19 Nov 2026) and approved as a screen (20 Nov 2026). It only shows: deciding a day is ATT-6's.
+// As Jack pictured it (19 Nov 2026) and approved as a screen (20 Nov 2026).
 // The server works the month out from the book of days, and the page draws the marks it is given, never deciding
 // itself what a day was: – a Sunday or a closed day (`off`), • today, which the book keeps only once it is over, and
 // nothing for a day the book doesn't answer, a day to come, before the worker's first day or after their last.
@@ -308,8 +309,8 @@ function markOf(
   kept: WorkerDay | undefined,
   answer: WorkerAttendance,
 ): Mark {
-  // A decided day by its decision (ATT-6): an absence by its kind, O for office duty, which is paid, apart from R and H,
-  // which aren't; any other by what was decided. The book's own answer stays on the day itself (A2).
+  // A decided day by its decision (ATT-6): an absence by its kind, O for office duty, which is paid, apart from R and
+  // H, which aren't; any other by what was decided. The book's own answer stays on the day itself (A2).
   if (kept?.decision) return kept.decision.absence_type ?? kept.decision.status;
   if (kept !== undefined) return kept.status;
   const worksThatDay =

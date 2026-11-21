@@ -101,7 +101,8 @@ class PayRateViewSet(CreateOnceMixin[PayRate]):
 
 class AttendanceMonthViewSet(ShopViewSet[AttendanceDay]):
     # GET attendance-month/?month=2026-11: the month page's month (ATT-5), a line per worker the shop pays by the day,
-    # with the month's counts, and the days a person must decide, each with why. Only a read: deciding a day is ATT-6's.
+    # with the month's counts, and the days a person must decide, each with why. Only a read: a day is decided through
+    # attendance-days/{id}/decide/ (AttendanceDayViewSet, below, ATT-6).
     # It works the month out through the book, which keeps the days it works out (work_out_days), so this GET writes;
     # it is safe to send again, as a month asked for twice writes nothing the second time (ATT-10).
     model = AttendanceDay
@@ -127,7 +128,8 @@ class AttendanceMonthViewSet(ShopViewSet[AttendanceDay]):
 class AttendanceWorkerViewSet(ShopViewSet[StaffMember]):
     # GET attendance-worker/{id}/?month=2026-11: one worker's month (ATT-12), as their calendar shows it, opened from
     # their name on Mahudhurio ya mwezi: their days, their counts, and every tap of the month, today's too. Only a
-    # read: deciding a day is ATT-6's. It works the month out through the book, as the month's route does, so this GET
+    # read: a day is decided through attendance-days/{id}/decide/ (ATT-6), with the choices and the decision this
+    # answers for each day. It works the month out through the book, as the month's route does, so this GET
     # writes too, and is safe to send again (ATT-10).
     # The worker in the address, a job of the visit's shop, found through the guard (get_object): another shop's, or
     # an id no shop has, is "not found" alike, so the answer never tells that such a worker exists (03 §5.4).

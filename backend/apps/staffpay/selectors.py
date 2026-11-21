@@ -83,7 +83,10 @@ def rules_from_text(kept: dict[str, str]) -> DayRules:
     """A day's own copy of its rules (`rules_used`), read back as the rules the day was judged by, for the fine of a
     day decided late (ATT-6, T4): the rules of that day, never today's, which the owner may have changed since. Each
     read by its own setting's kind, as rules_as_text wrote it. Never on an off day, which keeps no copy: a missing part
-    is a KeyError, a bug in our code."""
+    is a KeyError, a bug in our code. Today the book writes a day's copy afresh each time it works the day out, so a
+    copy always holds every rule there is. Once WAGE-3 locks an approved month, its days keep their copies as they
+    were: a tenth day rule added after would be missing from them, and this would fail on every locked day, so that
+    card decides what an old copy's missing rule reads as (ATT-6's review)."""
     return DayRules(**{part: key.kind.parse(kept[part]) for part, key in DAY_RULE_SETTINGS.items()})
 
 

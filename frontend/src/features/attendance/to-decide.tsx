@@ -3,9 +3,9 @@
 // before he reads anyone's counts.
 //
 // The days come from the server, worked out by the book, each with why (its review_reason): oldest first, as the
-// oldest has waited longest, by name on a day. The page keeps that order and only says each in words. It only shows:
-// deciding a day is ATT-6's. Each line is a link that opens its day under the worker's calendar, with its taps and
-// their photos (ATT-12).
+// oldest has waited longest, by name on a day. The page keeps that order and only says each in words; a day someone
+// decided waits no more, and the server leaves it out (ATT-6). Each line is a link that opens its day under the
+// worker's calendar, with its taps and their photos (ATT-12), where it is decided (ATT-6).
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
