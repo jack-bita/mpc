@@ -23,7 +23,7 @@
 //   [ Badilisha uamuzi ]
 //
 // The button shows only where the server offers choices: never on a day the shop was shut, nor on the viewer's own
-// month, which says the owner decides it (Jack: A).
+// month, which says its days aren't theirs to decide (Jack: A), in words true for the owner's own month too.
 //
 // Everything comes from the server's one answer for the month (worker-month.ts): the page never works out what a day
 // was, nor moves a time by the phone's zone. The photo is opened from its own route, which asks attendance.manage

@@ -681,13 +681,13 @@ describe("deciding a day (ATT-6)", () => {
     ).toBeTruthy();
   });
 
-  it("offers nothing on the viewer's own month, and says the owner decides it", async () => {
+  it("offers nothing on the viewer's own month, and says it is not theirs to decide", async () => {
     // Meneja opens his own month: the server sends no choices, and says it is his.
     openThursday([waiting({ choices: [] })], { yours: true });
     const thursday = await theDay("Alhamisi 12/11/2026");
     expect(within(thursday).queryByRole("button")).toBeNull();
     expect(
-      within(thursday).getByText("Siku zako huamuliwa na mwenye duka."),
+      within(thursday).getByText("Huwezi kuamua siku zako mwenyewe."),
     ).toBeTruthy();
   });
 

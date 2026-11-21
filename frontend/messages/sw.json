@@ -844,7 +844,7 @@
     "decisionReason": "Sababu: {reason}",
     "systemSaid": "Mfumo ulisema: {said}",
     "systemSaidWhy": "Mfumo ulisema: {said} · {why}",
-    "yours": "Siku zako huamuliwa na mwenye duka.",
+    "yours": "Huwezi kuamua siku zako mwenyewe.",
     "sheetTitle": "Amua siku ya {name}",
     "sheetAbout": "{weekday} {date}",
     "sheetAboutIn": "{weekday} {date} · Ingia {time}",
@@ -1190,7 +1190,7 @@
       "before_first_day": "Malipo hayawezi kuanza kabla ya siku ya kwanza ya kazi ya mfanyakazi huyu."
     },
     "day": {
-      "own": "Huwezi kuamua siku yako mwenyewe. Mwenye duka ataiamua.",
+      "own": "Huwezi kuamua siku yako mwenyewe.",
       "not_working_day": "Siku hii haiamuliwi: si siku ya kazi iliyokwisha.",
       "choice_not_offered": "Siku hii haiwezi kuamuliwa hivyo.",
       "reason_missing": "Andika sababu ya uamuzi huu."

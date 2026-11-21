@@ -844,7 +844,7 @@
     "decisionReason": "Reason: {reason}",
     "systemSaid": "The system said: {said}",
     "systemSaidWhy": "The system said: {said} · {why}",
-    "yours": "Your days are decided by the owner.",
+    "yours": "You can't decide your own days.",
     "sheetTitle": "Decide {name}'s day",
     "sheetAbout": "{weekday} {date}",
     "sheetAboutIn": "{weekday} {date} · Clock-in {time}",
@@ -1190,7 +1190,7 @@
       "before_first_day": "A rate can't start before this worker's first day."
     },
     "day": {
-      "own": "You can't decide your own day. The owner decides it.",
+      "own": "You can't decide your own day.",
       "not_working_day": "This day can't be decided: it isn't a working day that is over.",
       "choice_not_offered": "This day can't be decided that way.",
       "reason_missing": "Write why you decided this."
