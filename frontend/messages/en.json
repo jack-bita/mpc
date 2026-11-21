@@ -433,6 +433,7 @@
     },
     "view": {
       "title": "Worker",
+      "details": "Their details",
       "noWorker": "No worker chosen. Go back to the list of workers.",
       "noJobTitle": "None",
       "noPhone": "None",

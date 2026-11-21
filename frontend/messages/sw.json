@@ -433,6 +433,7 @@
     },
     "view": {
       "title": "Mfanyakazi",
+      "details": "Taarifa zake",
       "noWorker": "Hakuna mfanyakazi aliyechaguliwa. Rudi kwenye orodha ya wafanyakazi.",
       "noJobTitle": "Hakuna",
       "noPhone": "Hakuna",

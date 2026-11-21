@@ -8,7 +8,9 @@
 //    Historia
 //    Kuanzia 01/12/2026 · TSh 12,000 · anachangia chakula · Ameongezewa
 //    Kuanzia 10/11/2026 · TSh 10,000 · anachangia chakula
-//    [ Badilisha malipo ]
+//
+// with its button on the heading's row since UI-10 (card-heading.tsx), Malipo kwa siku [ Badilisha malipo ], as it
+// changes what the whole card shows; its form opens under the history, and the button leaves the row meanwhile.
 //
 // A worker with no rate today says so (Bado hana malipo kwa siku.), and their button reads Weka malipo; one with a rate
 // still to come shows it in the history, as it counts from its own day. Which rate is in force is the server's answer,
@@ -37,6 +39,7 @@ import type { WhoIsHere } from "@/features/people/who-is-here";
 import { Decimal } from "@/lib/decimal";
 import { formatDay, formatMoney } from "@/lib/format";
 
+import { CardHeading } from "./card-heading";
 import { PayRateForm } from "./pay-rate-form";
 import { PAY_RATES, type PayRate, type PayRatesRead } from "./pay-rates";
 import type { Worker } from "./workers";
@@ -98,9 +101,22 @@ export function WorkerPay({
       <CardContent>
         <section aria-labelledby={titleId} className="grid gap-6">
           <div className="grid gap-3">
-            <h2 id={titleId} className="text-lg font-semibold">
-              {t("title")}
-            </h2>
+            <CardHeading id={titleId} title={t("title")}>
+              {showButton ? (
+                <Button
+                  ref={button}
+                  kind="second"
+                  // Normal, on the heading's row, which a big one would crowd (worker-actions.tsx).
+                  size="normal"
+                  onClick={() => {
+                    setNews(null);
+                    setOpen(true);
+                  }}
+                >
+                  {inForce ? t("change") : t("set")}
+                </Button>
+              ) : null}
+            </CardHeading>
             {/* Until the first answer, through the store's own tries too (worker-page.tsx). */}
             {rates.isPending ? (
               <p role="status">{loginWords("waiting")}</p>
@@ -176,19 +192,6 @@ export function WorkerPay({
                 void store.invalidateQueries({ queryKey: PAY_RATES });
               }}
             />
-          ) : showButton ? (
-            <div>
-              <Button
-                ref={button}
-                kind="second"
-                onClick={() => {
-                  setNews(null);
-                  setOpen(true);
-                }}
-              >
-                {inForce ? t("change") : t("set")}
-              </Button>
-            </div>
           ) : null}
         </section>
       </CardContent>

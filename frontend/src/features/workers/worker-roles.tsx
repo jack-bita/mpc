@@ -2,14 +2,16 @@
 // "Muuzaji (Dawa)"; then Ruhusa za ziada, each key given apart from a role, by its name and side, "Kuhesabu mzigo
 // (Vyakula)", where PPL-6 only counted them.
 //
-// A card of its own under the status buttons (Jack, PPL-8: the page order), not inside the details: Badilisha hides
-// the details while its form is open (worker-page.tsx), and the roles stay on the page all the same, as Badilisha
-// changes none of them.
+// A card of its own under Taarifa zake and Kuingia (Jack, PPL-8 and PPL-12: the page order), not inside the details:
+// Badilisha leaves the details out while its form is open (worker-actions.tsx), and the roles stay on the page all the
+// same, as Badilisha changes none of them.
 //
 // What a worker holds is a role's codes plus their extra keys, on each side (02 §5). The page shows them as given,
 // one line each, so a manager sees exactly what was given and where.
 //
-// Under the lists, Ongeza kazi opens its form in the button's place (give-form.tsx). The button shows as PPL-6's do
+// Cheo is the card's heading, and Ruhusa za ziada a heading a level under it, as the keys are part of what the worker
+// may do (UI-10). On Cheo's row sits Ongeza kazi (card-heading.tsx), as it adds to the whole card, roles and keys
+// alike; its form opens under the lists (give-form.tsx), and the button leaves the row meanwhile. It shows as PPL-6's do
 // (the card's default): for a worker working or suspended, as a suspended one may be given a role, which counts once
 // they are back (PPL-7); none for one who left, whose roles stay as history; none on one's own page, where the status
 // buttons' line already says why (staff.own, worker-actions.tsx), as nobody changes their own job.
@@ -36,6 +38,7 @@ import { Button } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 
+import { CardHeading } from "./card-heading";
 import { EndForm, type Ending } from "./end-form";
 import { GiveForm } from "./give-form";
 import { isOwnerRole } from "./giving";
@@ -140,9 +143,27 @@ export function WorkerRoles({
     <Card>
       <CardContent className="grid gap-6">
         <section aria-labelledby={rolesId} className="grid gap-2">
-          <h2 id={rolesId} className="text-lg font-semibold">
-            {t("view.roles")}
-          </h2>
+          <CardHeading id={rolesId} title={t("view.roles")}>
+            {showButtons ? (
+              <Button
+                ref={(button) => {
+                  // Its place among the buttons, for the keyboard to come back to (worker-actions.tsx).
+                  if (button) buttons.current.set(ADD, button);
+                  else buttons.current.delete(ADD);
+                }}
+                kind="second"
+                // Normal, on the heading's row, which a big one would crowd (worker-actions.tsx).
+                size="normal"
+                onClick={() => {
+                  setNews(null);
+                  setOpen({ form: "give" });
+                  onGiving?.(true);
+                }}
+              >
+                {t("giving.add")}
+              </Button>
+            ) : null}
+          </CardHeading>
           {worker.roles.length === 0 ? (
             <p>{t("noRole")}</p>
           ) : (
@@ -165,10 +186,11 @@ export function WorkerRoles({
             </ul>
           )}
         </section>
+        {/* A section of its own, beside the roles', not inside it: each list reads alone, Cheo's without the keys. */}
         <section aria-labelledby={keysId} className="grid gap-2">
-          <h2 id={keysId} className="text-lg font-semibold">
+          <h3 id={keysId} className="font-semibold">
             {t("view.extraKeys")}
-          </h2>
+          </h3>
           {worker.keys.length === 0 ? (
             <p>{t("view.noExtraKeys")}</p>
           ) : (
@@ -216,25 +238,7 @@ export function WorkerRoles({
             onChangedMeanwhile={said}
             onCancel={() => cancelled(open.ending.id)}
           />
-        ) : !showButtons ? null : (
-          <div>
-            <Button
-              ref={(button) => {
-                // Its place among the buttons, for the keyboard to come back to (worker-actions.tsx).
-                if (button) buttons.current.set(ADD, button);
-                else buttons.current.delete(ADD);
-              }}
-              kind="second"
-              onClick={() => {
-                setNews(null);
-                setOpen({ form: "give" });
-                onGiving?.(true);
-              }}
-            >
-              {t("giving.add")}
-            </Button>
-          </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );
