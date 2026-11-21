@@ -456,6 +456,11 @@
         "leave": "{name} ameondoka kazini",
         "hireAgain": "Mwajiri tena {name}"
       },
+      "confirm": {
+        "suspend": "Simamisha",
+        "unsuspend": "Mrudishe",
+        "leave": "Ameondoka"
+      },
       "reason": "Sababu",
       "reasonHint": "Itahifadhiwa pamoja na jina lako na muda.",
       "lastDay": "Siku ya mwisho",

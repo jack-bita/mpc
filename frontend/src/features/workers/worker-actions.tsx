@@ -16,15 +16,21 @@
 // saved, the page moves to the new job's page, where the person now works.
 //
 // Badilisha opens its own form (worker-details-form.tsx) in place of the worker's details, which the card leaves out
-// while it is open, as the same details are then in its boxes; the page learns of it (onEditing). The other buttons
-// open their form in place of the buttons: Sababu, and for Ameondoka the last day, which starts at the shop's today and
-// offers nothing after it
-// (staff.left_in_future) nor before the first day (staff.left_before_start).
-// What the form can see is said at once, beside its box, and nothing is sent. The server's own refusals of who may
-// (staff.own, staff.more_keys, staff.superuser_only, demo.people_fixed…) show above the buttons; the three that say
-// the worker changed since the page read them (staff.not_active, staff.not_suspended, staff.left), as another manager
-// got there first, close the form, say it in one line, and read the worker again, so the buttons fit them as they are.
-// A suspension sent twice, its first answer lost, ends there too: the second finds Asha already suspended.
+// while it is open, as the same details are then in its boxes; the page learns of it (onEditing). Badilisha and
+// Mwajiri tena are long forms, which keep the page until UI-11 gives each a page of its own.
+//
+// Simamisha, Rudisha and Ameondoka are short: each opens a sheet over the page (UI-10, sheet.tsx), titled with what and
+// who, "Simamisha Asha", with Sababu, and for Ameondoka the last day, which starts at the shop's today and offers
+// nothing after it (staff.left_in_future) nor before the first day (staff.left_before_start). Its main button names the
+// action, Simamisha, Mrudishe or Ameondoka, red for Ameondoka, as leaving is for good (Jack: yes, UI-10). The buttons
+// stay on the page under the sheet, so Ghairi gives the keyboard back to the very button that opened it; a change gives
+// it to the done line (the sheet's finalFocus), as the button is gone: Simamisha becomes Rudisha.
+// What the sheet can see is said at once, beside its box, and nothing is sent. The server's own refusals of who may
+// (staff.own, staff.more_keys, staff.superuser_only, demo.people_fixed…) show inside the sheet, above its buttons; the
+// three that say the worker changed since the page read them (staff.not_active, staff.not_suspended, staff.left), as
+// another manager got there first, close the sheet, say it in one line on the card, and read the worker again, so the
+// buttons fit them as they are. A suspension sent twice, its first answer lost, ends there too: the second finds Asha
+// already suspended.
 //
 // No id of the client's: these change a worker, they make nothing, and the status itself refuses a second one.
 //
@@ -33,14 +39,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import {
-  type FormEvent,
-  type ReactNode,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -51,6 +50,7 @@ import { Alert, AlertDescription } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
 import { Field } from "@/components/design/field";
+import { Sheet } from "@/components/design/sheet";
 import { TextLink } from "@/components/design/text-link";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
@@ -64,8 +64,13 @@ import { WorkerForm } from "./worker-form";
 import { keepWorker, type Worker, workerPage, WORKERS } from "./workers";
 
 type Action = "edit" | "suspend" | "unsuspend" | "leave" | "hireAgain";
-/** The three that change a worker's status, each with its own route. */
+/** The three that change a worker's status, each with its own route, and each in a sheet (UI-10). */
 type StatusAction = Exclude<Action, "edit" | "hireAgain">;
+
+/** Whether an action is one of the three short ones, which open a sheet; Badilisha and Mwajiri tena keep the page. */
+function isStatusAction(action: Action): action is StatusAction {
+  return action === "suspend" || action === "unsuspend" || action === "leave";
+}
 
 /** The buttons under the details each status offers, in their order on the page. Badilisha isn't among them: it sits
  * on the heading's row, for a worker working or suspended (UI-10). */
@@ -144,17 +149,24 @@ export function WorkerActions({
   // Gone from the page with a form open: the page lets the other card's buttons show again.
   useEffect(() => () => onForm?.(false), [onForm]);
 
-  /** A form opens, or (null) closes: the page learns whether Badilisha's is the one open. */
+  /** A form opens, or (null) closes: the page learns whether Badilisha's is the one open, and whether one is open in
+   * the page itself, as the other cards' buttons then hide (worker-page.tsx). A sheet hides nothing: it is modal, so
+   * the page behind it can't be used while it is open (UI-10). */
   function show(form: { action: Action; today: string } | null) {
     setOpen(form);
     onEditing?.(form?.action === "edit");
-    onForm?.(form !== null);
+    onForm?.(form !== null && !isStatusAction(form.action));
   }
 
   // Nobody changes their own job (PPL-4): no button, and the server's own sentence says why, under the details.
   const own = worker.id === me.staff.id;
 
+  // Whether the last close was a change, for the sheet to give the keyboard to the done line: read as the sheet goes,
+  // which is after the draw that took it away, so a ref, not the state.
+  const afterChange = useRef(false);
+
   function said(sentence: string) {
+    afterChange.current = true;
     show(null);
     setNews(sentence);
     setBackTo({ to: "news" });
@@ -171,14 +183,18 @@ export function WorkerActions({
   /** A button opens its form. The shop's today is read as the form opens: a page left open overnight starts on the new
    * day. */
   function openForm(action: Action) {
+    afterChange.current = false;
     setNews(null);
     show({ action, today: shopToday(me.shop.timezone, Date.now()) });
   }
 
+  // A form open in the page itself, Badilisha's or Mwajiri tena's, which takes the buttons' place; a sheet leaves them
+  // where they are, under it.
+  const inPlace = open !== null && !isStatusAction(open.action);
   // Badilisha, on the heading's row: for a worker working or suspended, as one who left keeps what they were then
-  // (PPL-11); while no form is open, on this card or another.
+  // (PPL-11); while no form is open in the page, on this card or another.
   const editOffered =
-    !own && worker.status !== "left" && open === null && !buttonsHidden;
+    !own && worker.status !== "left" && !inPlace && !buttonsHidden;
 
   return (
     <Card>
@@ -242,26 +258,6 @@ export function WorkerActions({
                   onSaved={(back) => router.push(workerPage(back.id))}
                   onCancel={() => cancelled("hireAgain")}
                 />
-              ) : open !== null ? (
-                <ActionForm
-                  action={open.action}
-                  worker={worker}
-                  today={open.today}
-                  onDone={(action, changed) =>
-                    // The worker as the server answered: a last day only once they left.
-                    said(
-                      t(`done.${action}`, {
-                        name: changed.display_name,
-                        day:
-                          changed.left_on === null
-                            ? ""
-                            : formatDay(changed.left_on),
-                      }),
-                    )
-                  }
-                  onChangedMeanwhile={said}
-                  onCancel={() => cancelled(open.action)}
-                />
               ) : worker.hired_again_as !== null ? (
                 // Back already: the old job links to the new one in place of Mwajiri tena.
                 <p>
@@ -290,6 +286,32 @@ export function WorkerActions({
                   ))}
                 </div>
               ) : null}
+              {/* Mounted only while open, so a sheet closed with Ghairi forgets what was typed (as the day's, ATT-6). */}
+              {open !== null && isStatusAction(open.action) ? (
+                <ActionSheet
+                  action={open.action}
+                  worker={worker}
+                  today={open.today}
+                  onDone={(action, changed) =>
+                    // The worker as the server answered: a last day only once they left.
+                    said(
+                      t(`done.${action}`, {
+                        name: changed.display_name,
+                        day:
+                          changed.left_on === null
+                            ? ""
+                            : formatDay(changed.left_on),
+                      }),
+                    )
+                  }
+                  onChangedMeanwhile={said}
+                  onCancel={() => cancelled(open.action)}
+                  // After a change, the done line; after Ghairi, the button that opened it, the sheet's own way.
+                  finalFocus={() =>
+                    afterChange.current ? newsLine.current : null
+                  }
+                />
+              ) : null}
             </>
           )}
         </section>
@@ -298,13 +320,15 @@ export function WorkerActions({
   );
 }
 
-function ActionForm({
+/** Simamisha, Rudisha or Ameondoka, in a sheet over the worker's page (UI-10). */
+function ActionSheet({
   action,
   worker,
   today,
   onDone,
   onChangedMeanwhile,
   onCancel,
+  finalFocus,
 }: {
   action: StatusAction;
   worker: Worker;
@@ -315,7 +339,10 @@ function ActionForm({
   onDone: (action: StatusAction, worker: Worker) => void;
   /** Someone else changed the worker first: what the server's code says. */
   onChangedMeanwhile: (sentence: string) => void;
+  /** Ghairi or Esc. */
   onCancel: () => void;
+  /** Where the keyboard goes as the sheet goes (sheet.tsx). */
+  finalFocus: () => HTMLElement | null;
 }) {
   const t = useTranslations("workers.actions");
   const codes = useCodeWords();
@@ -368,9 +395,8 @@ function ActionForm({
     },
   });
 
-  function send(event: FormEvent) {
-    // The browser would send the form itself and load a new page; the app sends it instead.
-    event.preventDefault();
+  /** The sheet's main button, or Enter in a box: the sheet's own form stops the browser's send (sheet.tsx). */
+  function send() {
     // The last send's refusal is about what was sent then: each tap shows only what it finds (setting-form.tsx).
     change.reset();
     // Spaces alone are no reason, as the server says too.
@@ -390,8 +416,8 @@ function ActionForm({
   }
 
   // Where each refusal shows: beside its box, the form's own first, then the server's, by field or by its code (see
-  // BESIDE_A_BOX). Everything else is ApiErrorAlert's, above the buttons; the codes of a change meanwhile close the
-  // form instead.
+  // BESIDE_A_BOX). Everything else is ApiErrorAlert's, above the sheet's buttons; the codes of a change meanwhile close
+  // the sheet instead.
   const byField = fieldMessages(change.error);
   const sayCode = (code?: string) =>
     code === undefined ? undefined : codeMessage(codes, code);
@@ -402,11 +428,20 @@ function ActionForm({
     besideBox !== undefined ? null : aboutTheWholeRequest(change.error);
 
   return (
-    // noValidate: the browser's own checks would speak its language, not the shop's.
-    <form noValidate onSubmit={send} className="grid gap-6">
-      <h2 className="text-lg font-semibold">
-        {t(`title.${action}`, { name: worker.display_name })}
-      </h2>
+    <Sheet
+      open
+      onClose={onCancel}
+      title={t(`title.${action}`, { name: worker.display_name })}
+      // Names the action, as the last tap should say what it does (UI-10); red for Ameondoka, as leaving is for good.
+      actionLabel={t(`confirm.${action}`)}
+      actionKind={action === "leave" ? "danger" : "main"}
+      onAction={send}
+      // Held while it is sent, so a second tap sends nothing, and the sheet stays until its answer comes.
+      busy={change.isPending}
+      // Offline, nothing is sent, so nothing waits unsent while it looks done (setting-form.tsx).
+      actionDisabled={!online}
+      finalFocus={finalFocus}
+    >
       <Field
         label={t("reason")}
         hint={t("reasonHint")}
@@ -420,7 +455,7 @@ function ActionForm({
         autoComplete="off"
         // As the audit line keeps it (StaffReasonSerializer, 500 characters).
         maxLength={500}
-        // The person just asked for this form: the keyboard starts in its first box, where the button was.
+        // The person just asked for this sheet: the keyboard starts in its first box.
         autoFocus
       />
       {action === "leave" ? (
@@ -443,20 +478,6 @@ function ActionForm({
       {/* Who may (staff.own, staff.more_keys, staff.superuser_only, demo.people_fixed), no network, the server's own
           problem. */}
       <ApiErrorAlert error={above} />
-      <div className="flex flex-wrap gap-3">
-        {/* Switched off while it is sent, so a second tap sends nothing, and while offline, so nothing waits unsent
-            while it looks done (setting-form.tsx). */}
-        <Button
-          type="submit"
-          kind={action === "leave" ? "danger" : "main"}
-          disabled={change.isPending || !online}
-        >
-          {t("save")}
-        </Button>
-        <Button kind="second" onClick={onCancel}>
-          {t("cancel")}
-        </Button>
-      </div>
-    </form>
+    </Sheet>
   );
 }

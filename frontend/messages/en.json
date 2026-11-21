@@ -456,6 +456,11 @@
         "leave": "{name} left work",
         "hireAgain": "Hire {name} again"
       },
+      "confirm": {
+        "suspend": "Suspend",
+        "unsuspend": "Bring back",
+        "leave": "Mark as left"
+      },
       "reason": "Reason",
       "reasonHint": "Kept with your name and the time.",
       "lastDay": "Last day",

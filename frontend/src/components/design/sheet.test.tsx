@@ -4,7 +4,8 @@
 //
 // jsdom paints nothing, so where the sheet sits (the bottom, a phone's width on a wide screen) is checked by its
 // classes here, and by eye on /design and a phone.
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { useRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { setLanguage } from "@/i18n/language";
@@ -122,6 +123,67 @@ describe("the sheet", () => {
     expect(onAction).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Ghairi" }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the boxes' checks to the screen, which says them in the shop's words (UI-10)", () => {
+    // A box's own limits (a last day's max) would stop the send with the browser's bubble, in the browser's language.
+    open();
+    const form = screen.getByRole("textbox").closest("form");
+    expect(form?.noValidate).toBe(true);
+  });
+
+  it("draws its main button red for an action that is for good, as Ameondoka (UI-10)", () => {
+    open({ actionKind: "danger", actionLabel: "Ameondoka" });
+    const main = screen.getByRole("button", { name: "Ameondoka" });
+    // The danger kind's look (button.tsx), and still the form's send.
+    expect(main.className).toContain("text-destructive");
+    expect(main.getAttribute("type")).toBe("submit");
+  });
+
+  it("gives the keyboard, as it closes, to what the screen names, or else back to where it was (UI-10)", async () => {
+    // A screen whose sheet, once done, takes the button that opened it away (Simamisha becomes Rudisha) names its
+    // done line; one that names nothing gets Base UI's own: back to the button.
+    function Screen({ to }: { to: "line" | "nothing" }) {
+      const [isOpen, setOpen] = useState(false);
+      const line = useRef<HTMLParagraphElement>(null);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Fungua
+          </button>
+          <p ref={line} tabIndex={-1}>
+            Imehifadhiwa.
+          </p>
+          <Sheet
+            open={isOpen}
+            onClose={() => setOpen(false)}
+            onAction={() => setOpen(false)}
+            title="Simamisha Asha"
+            actionLabel="Simamisha"
+            finalFocus={to === "line" ? () => line.current : undefined}
+          >
+            <input aria-label="Sababu" />
+          </Sheet>
+        </>
+      );
+    }
+
+    const { unmount } = render(<Screen to="line" />);
+    const opener = screen.getByRole("button", { name: "Fungua" });
+    opener.focus();
+    fireEvent.click(opener);
+    fireEvent.click(await screen.findByRole("button", { name: "Simamisha" }));
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toBe("Imehifadhiwa."),
+    );
+    unmount();
+
+    render(<Screen to="nothing" />);
+    const again = screen.getByRole("button", { name: "Fungua" });
+    again.focus();
+    fireEvent.click(again);
+    fireEvent.click(await screen.findByRole("button", { name: "Ghairi" }));
+    await waitFor(() => expect(document.activeElement).toBe(again));
   });
 
   it("says Ghairi in the open book's language", () => {

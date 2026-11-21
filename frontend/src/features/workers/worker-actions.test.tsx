@@ -1,8 +1,8 @@
 // worker-actions.test.tsx — Simamisha, Rudisha and Ameondoka on a worker's own page (PPL-6): which show for which
-// status, each with its reason, the last day's limits, where each refusal shows, and a worker someone else changed
-// first read again. And Mwajiri tena on a worker who left (PPL-11): the boxes filled from the old job, what is sent, the
+// status, each in its sheet (UI-10) with its reason, the last day's limits, where each refusal shows, and a worker
+// someone else changed first read again. And Mwajiri tena on a worker who left (PPL-11): the boxes filled from the old job, what is sent, the
 // move to the new job's page, and the old job's link to it once the person is back.
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { components } from "@/api/schema";
@@ -84,6 +84,11 @@ function typeInto(box: HTMLElement, text: string) {
 const button = (name: string) => screen.getByRole("button", { name });
 const findButton = (name: string) => screen.findByRole("button", { name });
 const reasonBox = () => screen.getByLabelText("Sababu");
+/** The sheet open over the page, named by its title (UI-10). */
+const theSheet = (name: string) => screen.getByRole("dialog", { name });
+/** A button inside the open sheet: its main one, which names the action, or Ghairi. */
+const sheetButton = (name: string) =>
+  within(screen.getByRole("dialog")).getByRole("button", { name });
 const lastDayBox = () =>
   screen.getByLabelText("Siku ya mwisho") as HTMLInputElement;
 
@@ -137,15 +142,18 @@ describe("the buttons on a worker's page", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     fireEvent.click(await findButton("Simamisha"));
-    expect(
-      screen.getByRole("heading", { level: 2, name: "Simamisha Asha" }),
-    ).toBeTruthy();
-    // The keyboard starts in Sababu, where the button was.
+    // A sheet over the page, its title saying what and who; the keyboard starts in Sababu.
+    expect(theSheet("Simamisha Asha")).toBeTruthy();
     expect(document.activeElement).toBe(reasonBox());
     typeInto(reasonBox(), "  Hakuja siku tatu bila ruhusa ");
-    fireEvent.click(button("Hifadhi"));
+    // Its main button names the action (UI-10), the main green, as a suspension is undone by Rudisha.
+    expect(sheetButton("Simamisha").className).not.toContain(
+      "text-destructive",
+    );
+    fireEvent.click(sheetButton("Simamisha"));
 
     expect(await screen.findByText("Asha amesimamishwa.")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
     const [body] = await sentBodies();
     // The spaces around the reason off, as the server keeps it.
     expect(body).toEqual({ reason: "Hakuja siku tatu bila ruhusa" });
@@ -153,8 +161,11 @@ describe("the buttons on a worker's page", () => {
     expect(
       screen.getByText("Amesimamishwa", { selector: "span" }),
     ).toBeTruthy();
-    // The keyboard on the line that says what happened, as Simamisha is gone.
-    expect(document.activeElement?.textContent).toBe("Asha amesimamishwa.");
+    // The keyboard on the line that says what happened, as Simamisha is gone; still there once the sheet's own
+    // return of it (a moment later) is over.
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toBe("Asha amesimamishwa."),
+    );
   });
 
   it("brings Asha back with a reason", async () => {
@@ -167,11 +178,9 @@ describe("the buttons on a worker's page", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     fireEvent.click(await findButton("Rudisha"));
-    expect(
-      screen.getByRole("heading", { level: 2, name: "Mrudishe Asha kazini" }),
-    ).toBeTruthy();
+    expect(theSheet("Mrudishe Asha kazini")).toBeTruthy();
     typeInto(reasonBox(), "Ameomba radhi");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Mrudishe"));
 
     expect(await screen.findByText("Asha amerudishwa kazini.")).toBeTruthy();
     await findButton("Simamisha");
@@ -187,11 +196,14 @@ describe("the buttons on a worker's page", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     fireEvent.click(await findButton("Ameondoka"));
+    expect(theSheet("Asha ameondoka kazini")).toBeTruthy();
     expect(lastDayBox().value).toBe("2026-11-18");
     expect(lastDayBox().max).toBe("2026-11-18");
     expect(lastDayBox().min).toBe("2026-11-03");
     typeInto(reasonBox(), "Amepata kazi nyingine");
-    fireEvent.click(button("Hifadhi"));
+    // Red, as leaving is for good (UI-10).
+    expect(sheetButton("Ameondoka").className).toContain("text-destructive");
+    fireEvent.click(sheetButton("Ameondoka"));
 
     expect(
       await screen.findByText(
@@ -217,7 +229,7 @@ describe("the buttons on a worker's page", () => {
     fireEvent.click(await findButton("Simamisha"));
     // Spaces alone are no reason, as the server says too.
     typeInto(reasonBox(), "   ");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Simamisha"));
 
     expect(errorOf(reasonBox())).toBe("Andika sababu.");
     expect(await sentBodies()).toEqual([]);
@@ -230,13 +242,13 @@ describe("the buttons on a worker's page", () => {
     fireEvent.click(await findButton("Ameondoka"));
     typeInto(reasonBox(), "Amepata kazi nyingine");
     typeInto(lastDayBox(), "2026-11-19");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ameondoka"));
     expect(errorOf(lastDayBox())).toBe(
       "Siku ya mwisho ya kazi haiwezi kuwa siku ijayo.",
     );
 
     typeInto(lastDayBox(), "2026-11-02");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ameondoka"));
     expect(errorOf(lastDayBox())).toBe(
       "Siku ya mwisho iko kabla ya siku aliyoanza kazi.",
     );
@@ -252,7 +264,7 @@ describe("the buttons on a worker's page", () => {
 
     fireEvent.click(await findButton("Ameondoka"));
     typeInto(reasonBox(), "Amepata kazi nyingine");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ameondoka"));
 
     await waitFor(() =>
       expect(errorOf(lastDayBox())).toBe(
@@ -271,7 +283,7 @@ describe("the buttons on a worker's page", () => {
 
     fireEvent.click(await findButton("Ameondoka"));
     typeInto(reasonBox(), "Amepata kazi nyingine");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ameondoka"));
 
     await waitFor(() =>
       expect(errorOf(lastDayBox())).toBe(
@@ -290,13 +302,13 @@ describe("the buttons on a worker's page", () => {
 
     fireEvent.click(await findButton("Simamisha"));
     typeInto(reasonBox(), "Hakuja siku tatu");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Simamisha"));
 
     await waitFor(() => expect(errorOf(reasonBox())).toBe("Andika sababu."));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("shows a refusal of who may above the buttons, as the demo's of its own people", async () => {
+  it("shows a refusal of who may inside the sheet, as the demo's of its own people", async () => {
     // On the demo, Asha stays as the seed made her, so every visitor can log in as her (PPL-4).
     theServerHas(ASHA);
     answer("POST", route("suspend"), refusal(400, "demo.people_fixed"));
@@ -304,12 +316,13 @@ describe("the buttons on a worker's page", () => {
 
     fireEvent.click(await findButton("Simamisha"));
     typeInto(reasonBox(), "Kujaribu");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Simamisha"));
 
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      "Kwenye demo, wafanyakazi wa mwanzo hawabadilishwi",
-    );
-    // The form stays open, with what was typed.
+    expect(
+      (await within(theSheet("Simamisha Asha")).findByRole("alert"))
+        .textContent,
+    ).toContain("Kwenye demo, wafanyakazi wa mwanzo hawabadilishwi");
+    // The sheet stays open, with what was typed.
     expect((reasonBox() as HTMLInputElement).value).toBe("Kujaribu");
   });
 
@@ -327,13 +340,14 @@ describe("the buttons on a worker's page", () => {
 
     fireEvent.click(await findButton("Simamisha"));
     typeInto(reasonBox(), "Hakuja siku tatu");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Simamisha"));
 
     expect(
       await screen.findByText("Mfanyakazi huyu tayari amesimamishwa."),
     ).toBeTruthy();
-    // The buttons fit her as she is now.
+    // The sheet closed, and the buttons fit her as she is now.
     await findButton("Rudisha");
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByLabelText("Sababu")).toBeNull();
   });
 
@@ -352,7 +366,7 @@ describe("the buttons on a worker's page", () => {
 
     fireEvent.click(await findButton("Rudisha"));
     typeInto(reasonBox(), "Ameomba radhi");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Mrudishe"));
 
     expect(
       await screen.findByText("Mfanyakazi huyu hajasimamishwa."),
@@ -376,7 +390,7 @@ describe("the buttons on a worker's page", () => {
 
     fireEvent.click(await findButton("Ameondoka"));
     typeInto(reasonBox(), "Amepata kazi nyingine");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Ameondoka"));
 
     expect(await screen.findByText("Mtu huyu ameshaacha kazi.")).toBeTruthy();
     await screen.findByText("Ameondoka", { selector: "span" });
@@ -401,7 +415,7 @@ describe("the buttons on a worker's page", () => {
     expect(screen.queryByRole("button", { name: "Ameondoka" })).toBeNull();
   });
 
-  it("switches Hifadhi off while there is no network, so nothing waits unsent while it looks done", async () => {
+  it("switches the sheet's main button off while there is no network, so nothing waits unsent while it looks done", async () => {
     theServerHas(ASHA);
     render(<WorkerScreen id={ASHA.id} />);
 
@@ -411,7 +425,9 @@ describe("the buttons on a worker's page", () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     fireEvent.click(simamisha);
 
-    expect((button("Hifadhi") as HTMLButtonElement).disabled).toBe(true);
+    expect((sheetButton("Simamisha") as HTMLButtonElement).disabled).toBe(true);
+    // Ghairi stays free.
+    expect((sheetButton("Ghairi") as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("reads the worker again on Ghairi, as a send whose answer was lost may have changed them (PPL-6's review)", async () => {
@@ -426,9 +442,9 @@ describe("the buttons on a worker's page", () => {
 
     fireEvent.click(await findButton("Simamisha"));
     typeInto(reasonBox(), "Hakuja siku tatu");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Simamisha"));
     await screen.findByRole("alert");
-    fireEvent.click(button("Ghairi"));
+    fireEvent.click(sheetButton("Ghairi"));
 
     await findButton("Rudisha");
     expect(
@@ -442,10 +458,13 @@ describe("the buttons on a worker's page", () => {
 
     fireEvent.click(await findButton("Ameondoka"));
     typeInto(reasonBox(), "Amepata kazi nyingine");
-    fireEvent.click(button("Ghairi"));
+    fireEvent.click(sheetButton("Ghairi"));
 
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByLabelText("Sababu")).toBeNull();
-    expect(document.activeElement).toBe(button("Ameondoka"));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(button("Ameondoka")),
+    );
     expect(await sentBodies()).toEqual([]);
   });
 });

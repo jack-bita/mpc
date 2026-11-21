@@ -1023,15 +1023,20 @@ describe("a move to another worker", () => {
 });
 
 describe("one form at a time on the page", () => {
-  it("hides the roles' buttons while a status form is open, and the status buttons while a give is", async () => {
+  it("shuts the page off behind a status sheet, and hides the status buttons while a give is open", async () => {
     // Two Hifadhi on one page would leave a person, or a screen reader, unsure which one saves what (PPL-8's review).
     theServerHas(JUMA_WITH_BOTH);
 
     render(<WorkerScreen id={JUMA.id} />);
     fireEvent.click(await screen.findByRole("button", { name: "Simamisha" }));
-    expect(screen.queryByRole("button", { name: "Ongeza kazi" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Ondoa/ })).toBeNull();
-    expect(screen.getAllByRole("button", { name: "Hifadhi" })).toHaveLength(1);
+    // A sheet is modal (UI-10): the page stays drawn behind it, its buttons in their places, so nothing jumps; but
+    // only the sheet's two buttons can be reached, by a finger, the keyboard or a screen reader.
+    expect(
+      screen.getByRole("button", { name: "Ongeza kazi", hidden: true }),
+    ).toBeTruthy();
+    expect(
+      screen.getAllByRole("button").map((each) => each.textContent),
+    ).toEqual(["Ghairi", "Simamisha"]);
     fireEvent.click(button("Ghairi"));
 
     fireEvent.click(await screen.findByRole("button", { name: "Ongeza kazi" }));
