@@ -1,6 +1,6 @@
-// page-header.test.tsx — the top of a page: the title as its one heading, the words under it, and an arrow
+// page-header.test.tsx — the top of a page: the title as its one heading, the words under it, an arrow
 // that goes back to where the person was, but only to the app's own page: else to the office's home (Jack,
-// 17 Nov 2026).
+// 17 Nov 2026), and the page's one main button on the title's row (UI-11).
 import { fireEvent, screen } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,7 @@ import { MOVED_IN_APP } from "@/components/in-app-moves";
 import { render } from "@/test/render";
 import { router } from "@/test/router";
 
+import { ButtonLink } from "./button";
 import { BACK_FALLBACK, PageHeader } from "./page-header";
 
 /** Pretends the tab holds `pages` pages, this one last. */
@@ -112,6 +113,36 @@ describe("the page header", () => {
     expect(heading.current?.tagName).toBe("H1");
     // -1: focus by code, as a page arriving does; Tab passes it by.
     expect(heading.current?.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("puts the page's one action on the title's row, after the title", () => {
+    // Wafanyakazi's Ongeza (UI-11): beside the title, at the top, whatever the list's length.
+    render(
+      <PageHeader
+        title="Wafanyakazi"
+        intro="Wanaofanya kazi dukani."
+        action={<ButtonLink href="/workers/new/">Ongeza</ButtonLink>}
+      />,
+    );
+    const title = screen.getByRole("heading", { level: 1 });
+    const action = screen.getByRole("link", { name: "Ongeza" });
+    // The same row as the title, and after it, so the arrow, the title and the button read in that order.
+    const row = title.parentElement;
+    expect(row?.contains(action)).toBe(true);
+    expect(
+      title.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Not under the intro: the intro is outside the row.
+    expect(row?.contains(screen.getByText("Wanaofanya kazi dukani."))).toBe(
+      false,
+    );
+  });
+
+  it("draws nothing at the row's end for a page with no action", () => {
+    render(<PageHeader title="Vifaa" />);
+    const row = screen.getByRole("heading", { level: 1 }).parentElement;
+    // The arrow and the title, nothing more.
+    expect(row?.children).toHaveLength(2);
   });
 
   it("leaves the title out of focus when no page asks", () => {

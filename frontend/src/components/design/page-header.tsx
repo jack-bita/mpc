@@ -1,5 +1,6 @@
 // page-header.tsx — the top of a page under the green bar: a back arrow on the far left, the page's title
-// beside it, and the page's few words of explanation under the title (Jack, 17 Nov 2026). Mipangilio ya
+// beside it, the page's one main button at the row's far end, if it has one, and the page's few words of
+// explanation under the title (Jack, 17 Nov 2026). Mipangilio ya
 // duka wears it first; every page that is reached from another, as each office screen is from the office's
 // home, wears the same, so the way back is always in the same place.
 //
@@ -21,12 +22,17 @@
 // that is on its way out by itself leaves it out for that moment (`arrow={false}`), its title kept: the
 // clock-out's goodbye, which logs the seller out (attendance.tsx).
 //
+// A page with one main thing to do puts its button at the far end of the title's row (`action`), as
+// Wafanyakazi's Ongeza does (UI-11): beside the title it belongs to, always at the top, and never in the
+// list's way as the list grows. Only one: a second would crowd the title on a phone. The title gives way,
+// wrapping its words, so the button keeps its size.
+//
 // "use client": it asks use-intl for the arrow's name, and moves to another page in the browser.
 "use client";
 
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 import { useTranslations } from "use-intl";
 
 import { movedInApp } from "@/components/in-app-moves";
@@ -44,6 +50,7 @@ export function PageHeader({
   onBack,
   backDisabled = false,
   arrow = true,
+  action,
 }: {
   /** The page's title, its one <h1>. */
   title: string;
@@ -60,6 +67,8 @@ export function PageHeader({
   backDisabled?: boolean;
   /** False leaves the arrow out, the title kept: a page on its way out by itself (the goodbye). */
   arrow?: boolean;
+  /** The page's one main button, at the far end of the title's row (Ongeza on Wafanyakazi). */
+  action?: ReactNode;
 }) {
   const t = useTranslations("pageHeader");
   const router = useRouter();
@@ -99,6 +108,8 @@ export function PageHeader({
         >
           {title}
         </h1>
+        {/* Pushed to the row's far end (ml-auto); shrink-0, so a long title wraps instead of squeezing it. */}
+        {action ? <div className="ml-auto shrink-0">{action}</div> : null}
       </div>
       {intro ? <p className="text-muted-foreground">{intro}</p> : null}
     </div>
