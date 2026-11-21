@@ -82,6 +82,8 @@ export function GiveScreen({ id }: { id: string | null }) {
         }
         fallback={id === null ? LIST_PAGE : workerPage(id)}
         headingRef={heading}
+        // In this page's place, as Hifadhi goes: the form never stays in the history (page-header.tsx).
+        fallbackInPlace
       />
       <p role="status" className={waiting ? "text-lg" : "sr-only"}>
         {waiting ? loginWords("waiting") : null}

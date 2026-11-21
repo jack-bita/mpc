@@ -11,6 +11,11 @@
 // bookmark, a typed address or another website, going back would leave the app, or do nothing, so the arrow
 // goes to `fallback` instead: the office's home unless the page says otherwise.
 //
+// A form's own page (UI-11) puts its fallback in its own place (`fallbackInPlace`, router.replace), as its Hifadhi
+// does, rather than adding a page after it: from a bookmark, a push would leave the form in the tab's history behind
+// the worker's page, so that page's own arrow, going back, would land in the form again, and one tap more would leave
+// the app (UI-11's review).
+//
 // The browser's history alone can't tell: it doesn't say whose its pages are, and Chrome leaves its new-tab
 // page in a tab's history, so a bookmark opened from it has a page before it that isn't ours (the branch's
 // review, 17 Nov 2026).
@@ -50,6 +55,7 @@ export function PageHeader({
   onBack,
   backDisabled = false,
   arrow = true,
+  fallbackInPlace = false,
   action,
 }: {
   /** The page's title, its one <h1>. */
@@ -67,6 +73,8 @@ export function PageHeader({
   backDisabled?: boolean;
   /** False leaves the arrow out, the title kept: a page on its way out by itself (the goodbye). */
   arrow?: boolean;
+  /** The fallback replaces this page instead of adding one after it: a form's own page (UI-11). */
+  fallbackInPlace?: boolean;
   /** The page's one main button, at the far end of the title's row (Ongeza on Wafanyakazi). */
   action?: ReactNode;
 }) {
@@ -77,6 +85,7 @@ export function PageHeader({
     if (onBack) return onBack();
     // Both: the note says the page before is ours; a history of more than this page says there is one.
     if (mayGoBack()) router.back();
+    else if (fallbackInPlace) router.replace(fallback);
     else router.push(fallback);
   }
 

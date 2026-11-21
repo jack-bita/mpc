@@ -76,6 +76,38 @@ describe("the page header", () => {
     expect(router.push).toHaveBeenCalledWith("/");
   });
 
+  it("puts the fallback in this page's place for a form's own page, so the form never stays behind (UI-11's review)", () => {
+    // Badilisha's page opened from a bookmark: back would leave the app, and a push would keep the form in the
+    // history, for the worker's page's own arrow to go back into.
+    historyOf(2);
+    render(
+      <PageHeader
+        title="Badilisha taarifa za Juma"
+        fallback="/workers/view/?id=juma"
+        fallbackInPlace
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
+    expect(router.replace).toHaveBeenCalledWith("/workers/view/?id=juma");
+    expect(router.push).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
+  });
+
+  it("still goes back from a form's own page reached inside the app", () => {
+    historyOf(3);
+    movedInTheApp();
+    render(
+      <PageHeader
+        title="Badilisha taarifa za Juma"
+        fallback="/workers/view/?id=juma"
+        fallbackInPlace
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
+    expect(router.back).toHaveBeenCalledOnce();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
   it("goes back to the step before, for a step inside one page", () => {
     // The PIN pad, inside the home page: back to the tiles, never to another page (OPS-13).
     historyOf(3);

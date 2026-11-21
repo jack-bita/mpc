@@ -63,7 +63,9 @@ describe("Mfanyakazi mpya", () => {
       "Mfanyakazi mpya",
     );
     fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
-    expect(router.push).toHaveBeenCalledWith("/workers/");
+    // In this page's place, so the form never stays in the tab's history (UI-11's review).
+    expect(router.replace).toHaveBeenCalledWith("/workers/");
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   it("adds Juma and lands on his page in its own place, with the line that says he gets a tile with a PIN (the card's first Done when)", async () => {
@@ -378,7 +380,9 @@ describe("Mwajiri tena", () => {
     await screen.findByLabelText("Kazi");
     fireEvent.click(screen.getByRole("button", { name: "Rudi ulipotoka" }));
 
-    expect(router.push).toHaveBeenCalledWith(workerPage(BARAKA.id));
+    // In this page's place, so the form never stays in the tab's history (UI-11's review).
+    expect(router.replace).toHaveBeenCalledWith(workerPage(BARAKA.id));
+    expect(router.push).not.toHaveBeenCalled();
   });
 });
 

@@ -81,6 +81,8 @@ export function NewWorkerScreen({ again = null }: { again?: string | null }) {
               : t("view.title")
         }
         fallback={again === null ? LIST_PAGE : workerPage(again)}
+        // In this page's place, as Hifadhi goes: the form never stays in the history (page-header.tsx).
+        fallbackInPlace
       />
       {/* On the page from the start, only its words change, as on the list (workers-screen.tsx). */}
       <p role="status" className={waiting ? "text-lg" : "sr-only"}>

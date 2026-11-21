@@ -481,6 +481,19 @@ describe("Badilisha", () => {
     expect(peekNews()).toBeNull();
   });
 
+  it("leads from a bookmark to Asha's page in its own place, so her page's arrow never goes back into the form (UI-11's review)", async () => {
+    theServerHas(ASHA);
+    // A bookmark opened from Chrome's new tab: two pages, the first not ours.
+    vi.spyOn(window.history, "length", "get").mockReturnValue(2);
+    await openTheFix();
+
+    fireEvent.click(button("Rudi ulipotoka"));
+
+    expect(router.replace).toHaveBeenCalledWith(workerPage(ASHA.id));
+    expect(router.push).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
+  });
+
   it("opens on Asha's own read, never the list's older copy, as the version it sends decides whose fix wins", async () => {
     // The list, read before Baba fixed her, still holds version 1; the server holds his fix, version 2.
     const store = makeQueryClient();

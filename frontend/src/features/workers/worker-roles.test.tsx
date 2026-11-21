@@ -683,7 +683,9 @@ describe("Ongeza kazi", () => {
     await openTheGive();
     fireEvent.click(button("Rudi ulipotoka"));
 
-    expect(router.push).toHaveBeenCalledWith(`/workers/view/?id=${JUMA.id}`);
+    // In this page's place, so the form never stays in the tab's history (UI-11's review).
+    expect(router.replace).toHaveBeenCalledWith(`/workers/view/?id=${JUMA.id}`);
+    expect(router.push).not.toHaveBeenCalled();
   });
 });
 
