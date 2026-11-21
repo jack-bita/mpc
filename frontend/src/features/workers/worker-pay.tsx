@@ -10,7 +10,7 @@
 //    Kuanzia 10/11/2026 · TSh 10,000 · anachangia chakula
 //
 // with its button on the heading's row since UI-10 (card-heading.tsx), Malipo kwa siku [ Badilisha malipo ], as it
-// changes what the whole card shows; its form opens under the history, and the button leaves the row meanwhile.
+// changes what the whole card shows; its form opens in a sheet over the page, and the button stays in its place.
 //
 // A worker with no rate today says so (Bado hana malipo kwa siku.), and their button reads Weka malipo; one with a rate
 // still to come shows it in the history, as it counts from its own day. Which rate is in force is the server's answer,

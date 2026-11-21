@@ -35,6 +35,7 @@ import type { WhoIsHere } from "@/features/people/who-is-here";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { formatPhone } from "@/lib/format";
 
+import { CardHeading } from "./card-heading";
 import { PasswordForm } from "./password-form";
 import { PinForm } from "./pin-form";
 import { type Worker, WORKERS } from "./workers";
@@ -97,9 +98,8 @@ export function WorkerLogins({
     <Card>
       <CardContent>
         <section aria-labelledby={titleId} className="grid gap-4">
-          <h2 id={titleId} className="text-lg font-semibold">
-            {t("title")}
-          </h2>
+          {/* No button on the heading's row: its two sit under the PIN's line, each changing one way in (UI-10). */}
+          <CardHeading id={titleId} title={t("title")} />
           {/* A label and its value, as the worker's details are: a screen reader reads them as a pair. */}
           <dl className="grid gap-1">
             <dt className="text-muted-foreground">{t("pin")}</dt>
