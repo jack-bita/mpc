@@ -36,6 +36,14 @@
 //   Imebatilishwa na Baba, 19/11/2026 · Sababu: Alibonyeza kwa makosa
 //   Hakuna Toka.
 //
+// Under the taps, *Ongeza Ingia au Toka* opens the sheet that adds one a worker forgot (add-tap.tsx), on any of the
+// job's days up to today but a Sunday, as the server takes it; the tap added says who added it, when and why:
+//
+//   Toka 18:45 jioni · imeongezwa na Baba, 19/11/2026
+//   Sababu: Alisahau kubonyeza Toka
+//   Hakuna picha: imeongezwa ofisini
+//   [ Ongeza Ingia au Toka ]
+//
 // No button on the viewer's own month, as nobody fixes their own taps; the server refuses them all the same.
 //
 // Everything comes from the server's one answer for the month (worker-month.ts): the page never works out what a day
@@ -62,6 +70,7 @@ import {
 } from "@/lib/format";
 
 import type { Weekday } from "./attendance-month";
+import { AddTap } from "./add-tap";
 import { DecideDay } from "./decide-day";
 import { VoidTap } from "./void-tap";
 import type {
@@ -96,6 +105,8 @@ export function TheDay({
   // (ATT-13); and those that count, without them, for what the day is missing.
   const taps = answer.taps.filter((tap) => tap.date === day);
   const counted = taps.filter((tap) => tap.voided === null);
+  // Whether the sheet that adds a tap is open over the day: opened by its button, closed by Ghairi or once added.
+  const [adding, setAdding] = useState(false);
   // A day opened, by a tap on the calendar or from a line of Zinahitaji uamuzi, takes the focus: a phone scrolls it
   // into view under the calendar, and a screen reader reads where it now is. Once per day opened, not each time the
   // month is asked again.
@@ -134,9 +145,39 @@ export function TheDay({
         </ul>
       ) : null}
       <Missing kept={kept} taps={counted} isToday={isToday} />
+      {mayAddOn(day, answer) ? (
+        <Button
+          kind="second"
+          size="normal"
+          className="justify-self-start"
+          onClick={() => setAdding(true)}
+        >
+          {t("addTap")}
+        </Button>
+      ) : null}
+      {/* Mounted only while open, so a sheet closed with Ghairi forgets what was typed (as the decision's). */}
+      {adding ? (
+        <AddTap day={day} answer={answer} onClose={() => setAdding(false)} />
+      ) : null}
     </section>
   );
 }
+
+/** Whether a tap may be added on `day`, as the server takes one (add_tap): one of the job's days, from its first to its
+ * last, up to today, and never a Sunday, when the shop is shut and a tap counts nothing; never on the viewer's own
+ * month. The server checks again, and refuses with its own words. */
+function mayAddOn(day: string, answer: WorkerAttendance): boolean {
+  return (
+    !answer.yours &&
+    day <= answer.today &&
+    answer.started_on <= day &&
+    (answer.left_on === null || day <= answer.left_on) &&
+    weekdayOf(day) !== SUNDAY
+  );
+}
+
+/** Sunday, as weekdayOf numbers the days (JavaScript's own, Sunday 0). */
+const SUNDAY = 0;
 
 /** The day as the book kept it, or as someone decided it: the decision first, who and when, its reason, and what the
  * system said beside it (A2); else its status and fine, then why it waits, and the worker's days for one outside them.
@@ -341,10 +382,20 @@ function Tap({
       ? said(tap.time)
       : t("laptopTime", { time: said(tap.laptop_time ?? "") });
   const kind = t(`tapKind.${tap.kind}`);
+  // A laptop's tap names its laptop; one added in the office who added it and when (ATT-13).
   const line =
-    tap.laptop === null
-      ? t("tapLineNoLaptop", { kind, time })
-      : t("tapLine", { kind, time, laptop: tap.laptop });
+    tap.entered !== null
+      ? timezone === null
+        ? t("tapLineEnteredNoDate", { kind, time, by: tap.entered.by })
+        : t("tapLineEntered", {
+            kind,
+            time,
+            by: tap.entered.by,
+            date: formatDate(tap.entered.at, timezone),
+          })
+      : tap.laptop === null
+        ? t("tapLineNoLaptop", { kind, time })
+        : t("tapLine", { kind, time, laptop: tap.laptop });
   // Whether the browser failed to open the photo the answer said is kept: a request of its own, which the route can
   // refuse though the month was read (no network now, a login ended, the key taken away, the file gone from the disk).
   const [photoFailed, setPhotoFailed] = useState(false);
@@ -358,6 +409,14 @@ function Tap({
       </p>
       {tap.voided !== null ? (
         <p>{voidedWords(tap.voided, answer, timezone, t)}</p>
+      ) : null}
+      {/* Why it was added: on the demo a ready reason's code, said in words. */}
+      {tap.entered !== null ? (
+        <p>
+          {t("decisionReason", {
+            reason: readyWords(tap.entered.reason, answer.ready_add_reasons, t),
+          })}
+        </p>
       ) : null}
       {/* The tap itself in doubt (ATT-11): its worker was suspended or gone, or a later tap's time disagrees, said in
           words of its own, as the day's "saa yake ina shaka" after "Shaka:" said doubt twice (ATT-12's review). */}
@@ -423,11 +482,7 @@ function voidedWords(
   timezone: string | null,
   t: ReturnType<typeof useTranslations<"attendanceWorker">>,
 ): string {
-  const ready = answer.ready_void_reasons.find(
-    (code) => code === voided.reason,
-  );
-  const reason =
-    ready === undefined ? voided.reason : t(`readyTapReason.${ready}`);
+  const reason = readyWords(voided.reason, answer.ready_void_reasons, t);
   return timezone === null
     ? t("voidedByNoDate", { by: voided.by, reason })
     : t("voidedBy", {
@@ -459,4 +514,16 @@ function Missing({
       {hasOut ? null : <p>{t("noOut")}</p>}
     </>
   );
+}
+
+/** A fix's reason in words: on the demo, a ready reason's code, said in words; elsewhere the words typed. */
+function readyWords(
+  reason: string,
+  ready: readonly string[],
+  t: ReturnType<typeof useTranslations<"attendanceWorker">>,
+): string {
+  const code = ready.find((each) => each === reason);
+  return code === undefined
+    ? reason
+    : t(`readyTapReason.${code as "forgot_tap" | "wrong_tap"}`);
 }

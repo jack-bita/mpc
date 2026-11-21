@@ -812,6 +812,15 @@
       "wrong_tap": "Alibonyeza kwa makosa"
     },
     "tapsChanged": "Ingia au Toka zimebadilika baada ya uamuzi.",
+    "addTap": "Ongeza Ingia au Toka",
+    "addSheetTitle": "Ongeza Ingia au Toka ya {name}",
+    "addTapSave": "Ongeza",
+    "addKindLabel": "Ingia au Toka",
+    "timeLabel": "Saa",
+    "timeHint": "Saa ya duka, kama 18:45.",
+    "timeMissing": "Andika saa.",
+    "tapLineEntered": "{kind} {time} · imeongezwa na {by}, {date}",
+    "tapLineEnteredNoDate": "{kind} {time} · imeongezwa na {by}",
     "laptopTime": "{time} (saa ya kompyuta, haiaminiki)",
     "doubt": "Shaka: {why}",
     "doubtWhy": {

@@ -812,6 +812,15 @@
       "wrong_tap": "Tapped by mistake"
     },
     "tapsChanged": "An Ingia or Toka changed after the decision.",
+    "addTap": "Add an Ingia or Toka",
+    "addSheetTitle": "Add {name}'s Ingia or Toka",
+    "addTapSave": "Add",
+    "addKindLabel": "Ingia or Toka",
+    "timeLabel": "Time",
+    "timeHint": "The shop's clock, as 18:45.",
+    "timeMissing": "Write the time.",
+    "tapLineEntered": "{kind} {time} · added by {by}, {date}",
+    "tapLineEnteredNoDate": "{kind} {time} · added by {by}",
     "laptopTime": "{time} (the laptop's clock, not trusted)",
     "doubt": "In doubt: {why}",
     "doubtWhy": {
