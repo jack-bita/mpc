@@ -17,6 +17,11 @@
 // uamuzi. A decision is never taken back, so it runs last of the tests that read Asha's day to decide: after
 // attendance-month.spec.ts, as the tests run one at a time, file by file in their names' order (playwright.config.ts),
 // and after the test above, in this file's order. No later file reads the month.
+//
+// The third fixes the taps of another of Asha's days to decide, her third latest, out at 15:00 (ATT-13): Meneja crosses
+// out the 15:00 Toka in its sheet, as tapped by mistake, adds Toka 18:45, as she left after closing, and the day is a
+// full day, on time, its crossed-out Toka struck through, and waits no more. A fix is never taken back either, so it
+// runs last of all, after the decision above.
 import sw from "../messages/sw.json";
 
 import {
@@ -36,6 +41,15 @@ const TO_DECIDE = new RegExp(
 );
 // Asha's line of the list, her latest day, an Ingia with no Toka: "Asha · Ijumaa 20/11 · hakuna Toka".
 const ASHAS_NO_TOKA = new RegExp(`^Asha · .+ · ${MONTH.reason.no_out}$`);
+// Her third latest, out at 15:00, before closing: "Asha · Jumanne 17/11 · aliondoka saa 15:00 mchana".
+const ASHAS_EARLY_TOKA = new RegExp(
+  `^Asha · .+ · ${MONTH.reason.left_early.replace("{time}", "15:00 .+")}$`,
+);
+// A sentence of the book with a date in it, "… na Meneja, 20/11/2026 …", whatever day the test runs on.
+function withADate(sentence: string, values: Record<string, string>): RegExp {
+  const [before, after] = words(sentence, { ...values, date: "@" }).split("@");
+  return new RegExp(`^${before}\\d\\d/\\d\\d/\\d{4}${after}$`);
+}
 
 test("Meneja opens Asha's day to decide under her calendar, and comes back to the month", async ({
   managersPhone,
@@ -205,5 +219,122 @@ test("Meneja decides Asha's day in a sheet, and it waits no more", async ({
     await expect(phone.getByRole("link", { name: ASHAS_NO_TOKA })).toHaveCount(
       0,
     );
+  });
+});
+
+test("Meneja crosses out Asha's Toka tapped by mistake and adds her true one, and the day waits no more", async ({
+  managersPhone,
+}) => {
+  const phone = await managersPhone.newPage();
+  // Her day out at 15:00: the region whose taps hold that Toka, before the fixes and after.
+  const day = phone.getByRole("region").filter({
+    hasText: new RegExp(`${WORKER.tapKind.out} 15:00`),
+  });
+
+  await test.step("Meneja opens Asha's day out at 15:00, from Mahudhurio ya mwezi", async () => {
+    await phone.goto("/login/");
+    await phone.getByLabel(sw.login.password.name).fill(MANAGER_EMAIL);
+    await phone
+      .getByLabel(sw.login.password.password, { exact: true })
+      .fill(MANAGER_PASSWORD);
+    await phone
+      .getByRole("button", { name: sw.login.password.send, exact: true })
+      .click();
+    await phone.getByRole("link", { name: MONTH.title, exact: true }).click();
+    const nothingOver = phone.getByText(MONTH.nothingOverYet, { exact: true });
+    const toDecide = phone.getByRole("list", { name: TO_DECIDE });
+    // On a month's first days, the day is in the month before, as in the tests above; and it may be the month before
+    // even later in a month, as it is her third latest working day.
+    await expect(toDecide.or(nothingOver)).toBeVisible();
+    const early = phone.getByRole("link", { name: ASHAS_EARLY_TOKA });
+    if (!(await early.isVisible())) {
+      await phone
+        .getByRole("button", { name: MONTH.before, exact: true })
+        .click();
+    }
+    await early.click();
+    await expect(day).toBeVisible();
+  });
+
+  await test.step("he crosses out the 15:00 Toka in its sheet, with the demo's ready reason", async () => {
+    const toka = day.getByRole("listitem").filter({
+      hasText: new RegExp(`^${WORKER.tapKind.out} 15:00`),
+    });
+    await toka
+      .getByRole("button", { name: WORKER.voidTap, exact: true })
+      .click();
+    const sheet = phone.getByRole("dialog", {
+      name: words(WORKER.voidSheetTitle, {
+        kind: WORKER.tapKind.out,
+        name: "Asha",
+      }),
+    });
+    await expect(sheet).toBeVisible();
+    // On the demo, the reason is the ready one to tap (Jack: A), never typed.
+    await sheet
+      .getByText(WORKER.readyTapReason.wrong_tap, { exact: true })
+      .click();
+    await sheet
+      .getByRole("button", { name: WORKER.voidTap, exact: true })
+      .click();
+    await expect(sheet).toBeHidden();
+    // Struck through, with who, when and why, and the day now has no Toka.
+    await expect(
+      day.getByText(
+        withADate(WORKER.voidedBy, {
+          by: "Meneja",
+          reason: WORKER.readyTapReason.wrong_tap,
+        }),
+      ),
+    ).toBeVisible();
+    await expect(day.getByText(WORKER.noOut, { exact: true })).toBeVisible();
+  });
+
+  await test.step("he adds Toka 18:45 in its sheet, and the day is a full day", async () => {
+    await day.getByRole("button", { name: WORKER.addTap, exact: true }).click();
+    const sheet = phone.getByRole("dialog", {
+      name: words(WORKER.addSheetTitle, { name: "Asha" }),
+    });
+    await expect(sheet).toBeVisible();
+    // Toka is picked already, as the day has an Ingia.
+    await expect(
+      sheet.getByRole("radio", { name: WORKER.tapKind.out, exact: true }),
+    ).toHaveAttribute("aria-checked", "true");
+    await sheet.getByLabel(WORKER.timeLabel, { exact: true }).fill("18:45");
+    await sheet
+      .getByText(WORKER.readyTapReason.forgot_tap, { exact: true })
+      .click();
+    await sheet
+      .getByRole("button", { name: WORKER.addTapSave, exact: true })
+      .click();
+    await expect(sheet).toBeHidden();
+    await expect(
+      day.getByText(
+        withADate(WORKER.tapLineEntered, {
+          kind: WORKER.tapKind.out,
+          time: "18:45 jioni",
+          by: "Meneja",
+        }),
+      ),
+    ).toBeVisible();
+    // In at 07:20, out at 18:45, after closing at 18:40: on time, and nothing to decide.
+    await expect(
+      day.getByText(WORKER.status.on_time, { exact: true }),
+    ).toBeVisible();
+  });
+
+  await test.step("back on the month, the day waits no more", async () => {
+    await phone.getByRole("button", { name: sw.pageHeader.back }).click();
+    await expect(
+      phone.getByRole("heading", { name: MONTH.title, level: 1 }),
+    ).toBeVisible();
+    await expect(
+      phone
+        .getByRole("list", { name: TO_DECIDE })
+        .or(phone.getByText(MONTH.noneToDecide, { exact: true })),
+    ).toBeVisible();
+    await expect(
+      phone.getByRole("link", { name: ASHAS_EARLY_TOKA }),
+    ).toHaveCount(0);
   });
 });
