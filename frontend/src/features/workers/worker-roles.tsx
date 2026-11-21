@@ -3,8 +3,7 @@
 // (Vyakula)", where PPL-6 only counted them.
 //
 // A card of its own under Taarifa zake and Kuingia (Jack, PPL-8 and PPL-12: the page order), not inside the details:
-// Badilisha leaves the details out while its form is open (worker-actions.tsx), and the roles stay on the page all the
-// same, as Badilisha changes none of them.
+// what a worker may do reads apart from who they are, under its own heading (UI-10).
 //
 // What a worker holds is a role's codes plus their extra keys, on each side (02 §5). The page shows them as given,
 // one line each, so a manager sees exactly what was given and where.

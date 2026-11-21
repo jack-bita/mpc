@@ -12,16 +12,16 @@
 // Only the boxes that changed are sent, with the version of the worker the form opened on (apps/core/editing.py). If
 // someone else fixed them since, the server refuses it (409 version_conflict): the form is done, one line on the
 // worker's page says they changed since the form opened, and the page reads them again, so nobody's fix is undone by an
-// old copy. The version and
-// each box's start are kept from the moment the form opened, never the page's newer read: sending a newer version
-// with boxes typed on an older copy would undo the other person's fix all the same.
+// old copy. The version and each box's start are kept from the moment the form opened, never the page's newer read:
+// sending a newer version with boxes typed on an older copy would undo the other person's fix all the same.
 //
 // What the form can see is said at once, beside its box, in the server's own sentences, and nothing is sent: an empty
 // name or nickname (`blank`), an empty first day (`required`), an empty Sababu (staff.reason_required). A first day
 // moved more than 30 days from both today and the day it was is asked about once, as a year typed wrong would be on
-// Ongeza (worker-form.tsx); fixing a long-time worker's first day by a few days asks nothing (PPL-10's review). The server says the rest:
-// a wrong phone (phone.invalid) and one another person has (`unique`) beside Simu, a nickname another current worker
-// has (staff.display_name_taken) beside Jina la kuitwa, and who may (staff.own, staff.more_keys…) above the buttons.
+// Ongeza (worker-form.tsx); fixing a long-time worker's first day by a few days asks nothing (PPL-10's review). The
+// server says the rest: a wrong phone (phone.invalid) and one another person has (`unique`) beside Simu, a nickname
+// another current worker has (staff.display_name_taken) beside Jina la kuitwa, and who may (staff.own,
+// staff.more_keys…) above the buttons.
 //
 // On the demo, the phone box is off and says why (demo.phones_fixed, Jack, PPL-10: A): every visitor logs in as
 // Meneja, so a stranger's real number would show to every later visitor. The page learns the demo's sign and hands it
@@ -207,7 +207,8 @@ export function DetailsForm({
   }
 
   // Where each refusal shows: beside its box, the form's own first, then the server's, by field or by its code (see
-  // BESIDE_A_BOX). Everything else is ApiErrorAlert's, above the buttons; a change meanwhile ends the form, its line on the worker's page.
+  // BESIDE_A_BOX). Everything else is ApiErrorAlert's, above the buttons; a change meanwhile ends the form, its line on
+  // the worker's page.
   const byField = fieldMessages(fix.error);
   const said = (code?: string) =>
     code === undefined ? undefined : codeMessage(codes, code);

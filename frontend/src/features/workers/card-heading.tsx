@@ -1,8 +1,8 @@
 // card-heading.tsx — the heading row of a card on a worker's own page (UI-10): the card's <h2> on the left, and on the
-// right the one button that changes what the whole card is about: Badilisha on Taarifa zake, Ongeza kazi on Cheo,
-// Badilisha malipo on Malipo kwa siku. Jack asked for a page that reads "professional" on a phone (20 Nov 2026): each
-// card named, and its button beside its name, as an app's settings page does, so a manager finds a change where the
-// thing it changes is.
+// right the one button, or link, that changes what the whole card is about: Badilisha on Taarifa zake and Ongeza kazi
+// on Cheo, links to their own pages (UI-11), and Badilisha malipo on Malipo kwa siku, a button for its sheet. Jack
+// asked for a page that reads "professional" on a phone (20 Nov 2026): each card named, and its button beside its name,
+// as an app's settings page does, so a manager finds a change where the thing it changes is.
 //
 // The row wraps: on a narrow phone, a long Swahili heading and its button would squeeze each other, so the button goes
 // under the heading instead. A card with no such button (Kuingia, whose two buttons sit under the PIN's line) still

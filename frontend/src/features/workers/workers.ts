@@ -1,8 +1,9 @@
 // workers.ts — the shop's workers as the office reads them (PPL-6, 03 §5.10): the list's place in the store of
 // server answers, the reading of every page, one worker for their own page and its address, a saved worker kept in
-// both at once, the key the page asks, and the words for each role and its side. For PPL-8: the shop's roles, read
-// when Ongeza kazi opens (ROLES, useRoles, RolesRead, handed down as values), how a role or a key is written on its
-// side (useOnSide), and what a roles form shows above its buttons (aboutTheChange).
+// both at once, the key the page asks, and the words for each role and its side. For PPL-8: the shop's roles, read by
+// Ongeza kazi's own page (ROLES, useRoles, RolesRead, handed down as values, UI-11), how a role or a key is written on
+// its side (useOnSide), and what a roles form shows above its buttons (aboutTheChange). For UI-11: each long form's
+// own page's address, and the way back from it (backToWorker).
 //
 // GET /api/v1/people/staff/ answers everyone the shop has had, those who left included, newest first, in pages of
 // 50 (CursorPage, PPL-4). A shop has tens of workers over the years, not hundreds, so one screen holds them all,
@@ -156,7 +157,7 @@ async function allRoles(): Promise<Role[]> {
   return roles;
 }
 
-/** The roles' read as the page hands it down: its three values, read by the page itself (worker-page.tsx). Never the
+/** The roles' read as the page hands it down: its three values, read by the page itself (give-screen.tsx). Never the
  * query's whole result: TanStack draws a part again only when a value that part has read changes, so a result handed
  * down and read only later, by a form that opened after the read had failed, kept showing it on its way (PPL-8's
  * review). */
@@ -166,8 +167,9 @@ export type RolesRead = {
   isPending: boolean;
 };
 
-/** The shop's roles, for Ongeza kazi (PPL-8): asked only once `enabled`, when the form opens, so opening a worker's
- * page costs no read of them. Asked by the page, the part always on the screen, and handed down (worker-page.tsx). */
+/** The shop's roles, for Ongeza kazi (PPL-8): asked by its own page from its first draw, the part always on the screen,
+ * and handed down (give-screen.tsx, UI-11), so opening a worker's page costs no read of them; only once `enabled`, as a
+ * page with no worker to give to asks nothing. */
 export function useRoles(enabled: boolean) {
   return useQuery({ queryKey: ROLES, queryFn: allRoles, enabled });
 }

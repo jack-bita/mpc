@@ -8,9 +8,9 @@
 // so the line never shows a second time, as news of a moment should not. Nothing of it reaches the server.
 //
 // Shown once: the next worker's page to open reads it as it draws, then forgets it once it is on the screen, whoever it
-// names, and shows it only if it is that worker's (worker-page.tsx). So a note whose page never came, as when the person
-// left by another way, never shows later on. Read and forgotten in two steps, as React's rule is that a draw changes
-// nothing outside it: React may draw a page more than once before it is on the screen (twice on each draw, in
+// names, and shows it only if it is that worker's (worker-page.tsx). So a note whose page never came, as when the
+// person left by another way, never shows later on. Read and forgotten in two steps, as React's rule is that a draw
+// changes nothing outside it: React may draw a page more than once before it is on the screen (twice on each draw, in
 // development), and a read that also forgot could leave a later draw with nothing.
 
 /** Which of the worker's cards shows the line: Taarifa zake, or Cheo. */

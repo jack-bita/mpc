@@ -21,9 +21,9 @@
 // still has days to pay; none for one who left, whose pay up to their last day is worked out with the rates they had;
 // none on one's own page, as nobody sets their own pay (staff.own). Who else may is the server's (the PIN's rule), and
 // a refusal shows inside the sheet. One change is made at a time: its own form is a sheet (UI-10), which shuts the page
-// off behind it, the button staying in its place, and the long forms have pages of their own (UI-11). After a save, one line says what was saved, and the keyboard goes to it (the
-// sheet's finalFocus, as the button stays); Ghairi gives the keyboard back to the button, and asks the rates again, as
-// a save whose answer was lost may have been made.
+// off behind it, the button staying in its place, and the long forms have pages of their own (UI-11). After a save, one
+// line says what was saved, and the keyboard goes to it (the sheet's finalFocus, as the button stays); Ghairi gives the
+// keyboard back to the button, and asks the rates again, as a save whose answer was lost may have been made.
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";

@@ -1,8 +1,8 @@
-// new-worker-screen.test.tsx — Mfanyakazi mpya, Ongeza's form on a page of its own (UI-11): its title, the shop's today,
-// no Ghairi, and Hifadhi landing on the new worker's page in its place, with the line that says he was added. And
-// Mwajiri tena Baraka, the same page for a worker who left (PPL-11, UI-11): the boxes from his old job, what is sent,
-// the landing on his new job's page with "Baraka ameajiriwa tena.", and what the page says when there is nobody to hire
-// again. The form's own checks are worker-form.test.tsx's.
+// new-worker-screen.test.tsx — Mfanyakazi mpya, Ongeza's form on a page of its own (UI-11): its title, the shop's
+// today, no Ghairi, and Hifadhi landing on the new worker's page in its place, with the line that says he was added.
+// And Mwajiri tena Baraka, the same page for a worker who left (PPL-11, UI-11): the boxes from his old job, what is
+// sent, the landing on his new job's page with "Baraka ameajiriwa tena.", and what the page says when there is nobody
+// to hire again. The form's own checks are worker-form.test.tsx's.
 import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

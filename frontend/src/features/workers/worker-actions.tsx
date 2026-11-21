@@ -16,8 +16,8 @@
 // Badilisha is a link to its own page, Badilisha taarifa za Juma (edit-worker-screen.tsx, UI-11), as a long form keeps
 // a page of its own; once done, that page comes back here and leaves its line on this card (`arrived`, page-news.ts).
 //
-// Mwajiri tena is a link to its own page too, Mwajiri tena Baraka (new-worker-screen.tsx, UI-11): Ongeza's own form, its
-// boxes filled from the old job; saved, it lands on the new job's page, where the person now works.
+// Mwajiri tena is a link to its own page too, Mwajiri tena Baraka (new-worker-screen.tsx, UI-11): Ongeza's own form,
+// its boxes filled from the old job; saved, it lands on the new job's page, where the person now works.
 //
 // Simamisha, Rudisha and Ameondoka are short: each opens a sheet over the page (UI-10, sheet.tsx), titled with what and
 // who, "Simamisha Asha", with Sababu, and for Ameondoka the last day, which starts at the shop's today and offers

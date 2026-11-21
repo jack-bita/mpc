@@ -1,7 +1,7 @@
 // worker-form.tsx — Ongeza: a new worker joins the shop (PPL-6, PPL-4), on its own page, Mfanyakazi mpya
 // (new-worker-screen.tsx, UI-11). And Mwajiri tena (PPL-11): the same boxes, for a worker who left and is hired again
-// (`again`), on the same page, Mwajiri tena Baraka, opened from his old job's page. The page gives the title and the way
-// back, its arrow: the form has no Ghairi (Jack's yes to the screens, 21 Nov 2026).
+// (`again`), on the same page, Mwajiri tena Baraka, opened from his old job's page. The page gives the title and the
+// way back, its arrow: the form has no Ghairi (Jack's yes to the screens, 21 Nov 2026).
 //
 // Five boxes: Jina kamili, the person's whole name, as the PIN tiles show it without a photo (02 §5); Jina la kuitwa,
 // the nickname the shop calls them by, on every laptop and every record; Kazi, a job title, which may be empty, as
@@ -27,11 +27,11 @@
 // can't log in at a laptop until he has one, which the screen says once he is added.
 //
 // Mwajiri tena: Baraka left on 12 March and comes back. He is the same person, so he keeps his own full name, and the
-// form has no Jina kamili box (Badilisha fixes it); his nickname and job title start as his old job's, and the first day
-// at today. The old job's id goes with the new job's own (`hire_again`), and the server gives the same person a new job.
-// A first day before his last day is said at once (staff.back_before_left); the server says it too when a later job of
-// his ended after it. Another manager who hired him first: the server's staff.already_member above the buttons; his old
-// page, which the arrow goes back to, reads him again, and then links to the new one.
+// form has no Jina kamili box (Badilisha fixes it); his nickname and job title start as his old job's, and the first
+// day at today. The old job's id goes with the new job's own (`hire_again`), and the server gives the same person a new
+// job. A first day before his last day is said at once (staff.back_before_left); the server says it too when a later
+// job of his ended after it. Another manager who hired him first: the server's staff.already_member above the buttons;
+// his old page, which the arrow goes back to, reads him again, and then links to the new one.
 //
 // And from Ongeza itself: Baba, who forgot Baraka worked here, types him in as new, with his phone. The server makes
 // nobody and names Baraka's old job (staff.left_here, with his full name and last day), and under Simu the form says

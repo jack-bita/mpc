@@ -1,15 +1,15 @@
 // workers.spec.ts — the demo's manager adds a worker and suspends him, end to end (PPL-6): on the manager's phone,
 // Wafanyakazi lists the seed's people; Ongeza, on the title's row, opens Mfanyakazi mpya, whose Hifadhi adds Juma and
 // lands on his own page (UI-11); Simamisha, with a reason, suspends him, and Rudisha takes its place; back on the list
-// he is at the top, suspended; Rudisha, with a reason, brings him back. The card's Done
-// when, through the real server: PPL-4's routes, their key (staff.manage on the whole shop, which the seed gives the
-// demo's Meneja), and their rules. Since UI-10, Simamisha, Rudisha and Ondoa each open a sheet over the page, its main
-// button naming the action, and a tap on the dimmed page, a real browser's, leaves it open with what was typed.
-// And roles (PPL-8): Meneja adds Zawadi, gives Zawadi the Seller role on Dawa on Ongeza kazi's own page (UI-11), back on
-// her page with its line, and takes it away again with Ondoa and a reason, through PPL-7's routes: the giver rule, the give's own id, the end's reason. And on Zawadi's
-// page, Kuingia (PPL-12): on the demo, Weka PIN and Nenosiri la muda are both off, with the one line saying why, as
-// every visitor shares the seed's logins (Jack, PPL-12: A); a PIN or a password itself is checked by hand on the
-// laptop's own stack, as the demo can show neither.
+// he is at the top, suspended; Rudisha, with a reason, brings him back. The card's Done when, through the real server:
+// PPL-4's routes, their key (staff.manage on the whole shop, which the seed gives the demo's Meneja), and their rules.
+// Since UI-10, Simamisha, Rudisha and Ondoa each open a sheet over the page, its main button naming the action, and a
+// tap on the dimmed page, a real browser's, leaves it open with what was typed. And roles (PPL-8): Meneja adds Zawadi,
+// gives Zawadi the Seller role on Dawa on Ongeza kazi's own page (UI-11), back on her page with its line, and takes it
+// away again with Ondoa and a reason, through PPL-7's routes: the giver rule, the give's own id, the end's reason. And
+// on Zawadi's page, Kuingia (PPL-12): on the demo, Weka PIN and Nenosiri la muda are both off, with the one line saying
+// why, as every visitor shares the seed's logins (Jack, PPL-12: A); a PIN or a password itself is checked by hand on
+// the laptop's own stack, as the demo can show neither.
 //
 // Juma and Zawadi are the visitor's own workers, so the demo lets them change (demo.people_fixed guards only the seed's
 // people, their roles included, PPL-7). The tests share one database (the-shop.ts), made fresh for each run, and no

@@ -1,7 +1,7 @@
 // edit-worker-screen.tsx — Badilisha taarifa za Juma, at /workers/edit/?id=…: Badilisha's form on a page of its own
-// (UI-11), opened from Badilisha on Taarifa zake's heading row. Before UI-11 the form took the details' place inside the
-// worker's page and pushed the rest down the manager's phone; as Jack pictured it (20 Nov 2026), a long form keeps a page
-// of its own.
+// (UI-11), opened from Badilisha on Taarifa zake's heading row. Before UI-11 the form took the details' place inside
+// the worker's page and pushed the rest down the manager's phone; as Jack pictured it (20 Nov 2026), a long form keeps
+// a page of its own.
 //
 // The form itself is worker-details-form.tsx, as PPL-10 built it: its six boxes, its checks, the version it sends, and
 // the refusals beside their boxes. This page gives it a title, the worker, the shop's today, and whether this is the

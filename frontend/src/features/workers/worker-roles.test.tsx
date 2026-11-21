@@ -196,7 +196,7 @@ async function pickRole(name: string) {
 }
 
 describe("Ongeza kazi", () => {
-  it("gives Juma the Seller role on Dawa, and goes back to his page, which shows it on Cheo with its line (the card's third Done when)", async () => {
+  it("gives Juma the Seller role on Dawa, and goes back to his page, which shows it on Cheo with its line (PPL-8's third Done when)", async () => {
     const server = theServerHas(JUMA);
     givesAreSaved(server);
     // Juma's page came before this one, in the app: Hifadhi goes back to it, as the arrow does.
@@ -416,7 +416,7 @@ describe("Ongeza kazi", () => {
     ).toHaveLength(1);
   });
 
-  it("offers the owner every role but Mmiliki, as the templates come (the card's third Done when)", async () => {
+  it("offers the owner every role but Mmiliki, as the templates come (PPL-8's third Done when)", async () => {
     theServerHas(JUMA);
 
     await openTheGive();
@@ -432,7 +432,7 @@ describe("Ongeza kazi", () => {
     expect(screen.queryByRole("radio", { name: "Mmiliki" })).toBeNull();
   });
 
-  it("offers Neema only what she may give, and only where (the card's third Done when)", async () => {
+  it("offers Neema only what she may give, and only where (PPL-8's third Done when)", async () => {
     // A Dawa seller trusted with the workers: staff.manage on the whole shop, the Seller's keys on Dawa alone.
     theServerHas(JUMA, NEEMA_ON_DAWA);
 
