@@ -149,7 +149,8 @@ test("the demo's manager adds a worker and suspends him", async ({
       .getByLabel(WORKERS.actions.reason, { exact: true })
       .fill("Hakuja siku tatu bila ruhusa");
     // A thumb on the dimmed page above the sheet, its top-left corner: the sheet stays, and so does the reason (UI-10).
-    await phone.mouse.click(8, 8);
+    // A finger's tap, as the manager's phone (a Pixel 7, touch on) gives, not a mouse's click (UI-10's review).
+    await phone.touchscreen.tap(8, 8);
     await expect(suspending).toBeVisible();
     await expect(
       suspending.getByLabel(WORKERS.actions.reason, { exact: true }),
