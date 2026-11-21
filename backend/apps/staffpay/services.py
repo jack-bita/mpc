@@ -1,6 +1,6 @@
 """apps/staffpay/services.py — the writes of attendance and pay: the book of days (ATT-10; 02 §12), the month the month
-page shows, worked out through it (ATT-5), a worker's own month (ATT-12), a person's decision on a day (ATT-6), and
-each worker's daily pay rate (WAGE-1).
+page shows, worked out through it (ATT-5), a worker's own month (ATT-12), a person's decision on a day (ATT-6), a
+manager's fixes to the taps (ATT-13), and each worker's daily pay rate (WAGE-1).
 
     work_out_days(MPC, 16 Nov, 22 Nov)  → each job's day of that week, worked out, kept and answered:
     Asha   Mon 16 Nov  late          500.00  07:50  18:45
@@ -32,6 +32,11 @@ Juma's Thursday with no Toka is a full day, "Alisahau kubonyeza Toka". The decis
 out, which stays visible (A2), in columns the book never writes (DECISION), and a day decided late or half takes the
 fine its first Ingia gives by its own rules (day_choices, T4). No line in the change log: no laptop keeps a day.
 
+A tap is fixed by a person, the owner or a manager, never on their own taps (ATT-13): Juma tapped Toka at 10:00 by
+mistake and worked on to 18:45, so Baba crosses out the 10:00 Toka and adds Toka 18:45 (add_tap), each with a reason.
+An added tap is a line of the attendance book like a laptop's, with no laptop, its time the minute typed, trusted. The
+book reads it the next time it works the day out, as it reads every tap.
+
 A pay rate is typed by a person, the owner (set_pay_rate): from 10 Nov, Juma earns 10,000 a day. Whoever sets it sets a
 worker's pay, so who may is the PIN's rule, asked by the people app (02 §5). No line in the change log either: a
 worker's pay never sits on a shared device (03 §6.1).
@@ -55,6 +60,7 @@ from django.utils import timezone
 
 from apps.control.models import ATTACHMENT_KINDS, Attachment, AttachmentKind, Flag, FlagKind
 from apps.core.acting import acting_as
+from apps.core.changes import record_change, recording_changes
 from apps.core.editing import VersionConflict
 from apps.core.links import table_of
 from apps.core.permissions import Permission
@@ -881,6 +887,102 @@ def decide_day(
         # trigger keeps the change, and the decision before it, if there was one (ADR-0036).
         day.save(update_fields=DECISION)
     return day
+
+
+# On the demo, the ready reason a fix to a tap takes, kept as its code, which the page says in words (as DEMO_REASONS,
+# Jack: A, 21 Nov 2026): adding a tap the worker forgot, *Alisahau kubonyeza*; crossing out one tapped by mistake,
+# *Alibonyeza kwa makosa*. Each fix its own, so neither sheet offers the other's.
+DEMO_ADD_REASONS = ("forgot_tap",)
+DEMO_VOID_REASONS = ("wrong_tap",)
+
+
+def add_tap(
+    staff: StaffMember,
+    *,
+    tap_id: uuid.UUID,
+    kind: ClockKind,
+    date: dt.date,
+    minute: dt.time,
+    reason: str,
+    by: StaffMember,
+) -> AttendanceEvent:
+    """Add a tap a worker forgot, entered in the office (ATT-13, 02 §12): Juma's Toka at 18:45 on Thursday, "Alisahau
+    kubonyeza Toka". A line of the attendance book like a laptop's, with no laptop: `by` entered it (`created_by`), its
+    time is `minute` on `date` on the shop's clock, trusted (`entered`), and it has no photo (`entered`). The book reads
+    it the next time it works the day out. `tap_id`: the client's (ADR-0007), so the route answers a request sent twice
+    with the tap it made (CreateOnceMixin). `by`: who adds it, with attendance.manage on the whole shop, never for
+    themselves. Refuses: one's own tap (tap.own); a Sunday, or a day outside the job's (tap.not_working_day); and, all
+    together, each beside its box, a minute still to come (tap.in_future), no reason (tap.reason_missing), or on the
+    demo a reason not the ready one (demo.ready_reasons). Returns the tap as saved."""
+    # A job of another shop adding to this shop's book is a bug in the calling code (T1), never a person's mistake: the
+    # route finds the worker and the person in the one shop open. A server error, before anything is read.
+    if by.shop_id != staff.shop_id:
+        raise ShopMismatch("add_tap was given a person of another shop.")
+    # Spaces around a reason say nothing, and "  " is no reason, as the table's own rule holds.
+    reason = reason.strip()
+    shop = Shop.objects.get(pk=staff.shop_id)
+    # One transaction, as the push saves a laptop's tap: recording_changes, whose change line no laptop pulls today,
+    # as no device keeps the book (apps/sync/registry.py), and which the push writes for each tap all the same.
+    with recording_changes(shop):
+        job = _ready_to_fix(staff, by)
+        # A day the job works, as the book counts it (02 §5): from its first day to its last, as they are now, and
+        # never a Sunday, when the shop is shut and a tap counts nothing (01 §8.1). A closed day takes one: Juma came
+        # the morning of a funeral, and the book sends that day to review, as it would a laptop's tap (ATT-10).
+        if date.weekday() == SUNDAY or not _ran_on(job, date):
+            raise ValidationError("Only a working day of the job takes a tap.", code="tap.not_working_day")
+        # The minute on the shop's clock, made a moment with the shop's zone, here, never the phone's (03 §5.10); its
+        # seconds dropped, as the counter shows a minute (shop_minute): 07:35:40 is 07:35, on time.
+        moment = dt.datetime.combine(date, minute.replace(second=0, microsecond=0), tzinfo=ZoneInfo(shop.timezone))
+        now = timezone.now()
+        # The boxes, all together, so a person who got two wrong sees both at once, each beside its box (ADR-0040).
+        errors: dict[str, list[ValidationError]] = {}
+        # A tap is added once it is true: at 10:05, Juma's Toka of 18:45 hasn't happened yet.
+        if moment > now:
+            errors["time"] = [ValidationError("A tap is added once it has happened.", code="tap.in_future")]
+        if not reason:
+            errors["reason"] = [ValidationError("A tap added says why.", code="tap.reason_missing")]
+        elif settings.DEMO_SEED and reason not in DEMO_ADD_REASONS:
+            errors["reason"] = [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]
+        if errors:
+            raise ValidationError(errors)
+        tap = AttendanceEvent(
+            id=tap_id,
+            shop=shop,
+            # When it was entered, the server's clock, as a laptop's tap keeps when its push arrived. A day decided
+            # before this moment says its taps changed since (ATT-13).
+            received_at=now,
+            created_by=by,
+            staff=job,
+            kind=kind,
+            trusted_time=moment,
+            time_check=TimeCheck.ENTERED,
+            no_photo=NoPhoto.ENTERED,
+            entry_reason=reason,
+        )
+        # An INSERT, never an UPDATE, as the push saves a laptop's: an id another row holds clashes on the primary key,
+        # loudly, and never overwrites it (03 §5.4).
+        tap.save(force_insert=True)
+        record_change(tap)
+    return tap
+
+
+def _ready_to_fix(staff: StaffMember, by: StaffMember) -> StaffMember:
+    # The checks every fix to a tap starts with, inside its transaction (ATT-13). Who may, asked afresh, as decide_day
+    # asks: a key taken away a moment ago counts, and someone without it sets nothing to work. attendance.manage on the
+    # whole shop, as attendance belongs to the whole shop.
+    require(by, Permission.ATTENDANCE_MANAGE, None)
+    # Then the job, locked as the book locks every job of the shop while it works the days out (work_out_days): a fix,
+    # a run of the book and a decision take turns, so the book never keeps a day from the taps as they were a moment
+    # before a fix, and a decision made meanwhile is either seen by the fix or sees it. One job, so no other lock is
+    # waited for while it is held, and no two runs each hold what the other waits for (a deadlock). FOR NO KEY UPDATE,
+    # the light lock (backend rules): a laptop's tap pushed meanwhile still saves. Read afresh with it, as its first
+    # and last day may have just moved (PPL-10).
+    job = StaffMember.objects.select_for_update(no_key=True).get(pk=staff.pk)
+    # Never one's own taps (as ATT-6's day.own): a manager who came late would otherwise add himself an Ingia on time.
+    # By the person, not the job: someone hired again (PPL-11) has two jobs, and neither's taps are theirs to fix.
+    if job.user_id == by.user_id:
+        raise ValidationError("Nobody fixes their own taps.", code="tap.own")
+    return job
 
 
 def set_pay_rate(
