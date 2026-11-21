@@ -3,7 +3,8 @@
 // openapi-fetch hands a refusal back as a value, `{ error, response }`, and throws only when the network
 // drops. TanStack Query sees a failure only when something is thrown. So office screens call the server
 // through answerOf(), which gives back the answer, or throws an ApiRefusal that keeps the status and the
-// one error shape (apps/core/api/errors.py). When no answer came at all, the client throws NoConnection.
+// one error shape (apps/core/api/errors.py). When no answer came at all, the client throws NoConnection. And every
+// office form asks aboutTheWholeRequest() which failure it shows above its buttons, the rest being beside its boxes.
 import type { components } from "./schema";
 
 /** The one error shape, as the server's description gives it: `{code, message, fields, params}`. */
@@ -77,4 +78,18 @@ function isApiError(body: unknown): body is ApiError {
 // A plain JSON object: not nothing, and not a list, which typeof also calls "object".
 function isMap(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** What a form shows above its buttons, ApiErrorAlert's: the failure, unless it is a refusal about its fields only. The
+ * server names the first problem with the whole request as the refusal's code, and puts the fields' codes beside it,
+ * calling a refusal of fields alone `invalid` (apps/core/api/errors.py). So a clash with a demo's refusal of today
+ * comes as `closure.overlaps` with `first_day` beside it: the form says both at once, not the clash on the next try
+ * (ATT-9's review). Shared by every office form: it began with the closures' (ATT-9), and moved here once the
+ * workers' and the attendance sheet's forms used it too (ATT-6's review). */
+export function aboutTheWholeRequest(error: unknown): unknown {
+  return error instanceof ApiRefusal &&
+    error.body.code === "invalid" &&
+    Object.keys(error.body.fields).length > 0
+    ? null
+    : error;
 }

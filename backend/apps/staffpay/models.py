@@ -20,7 +20,13 @@ per day, which keeps each answer with the rules it used:
     Juma   Mon 16 Nov  needs_review  0.00    07:20  —
 
 The events are the truth and the days only answers worked out from them: a day is worked out again, from its taps and
-its date's rules, as often as it is asked, until its pay run is approved (WAGE-3).
+its date's rules, as often as it is asked, until its pay run is approved (WAGE-3). Beside the answer, a day keeps a
+manager's or the owner's decision (ATT-6), which the book never writes, and why an absent worker was away
+(AbsenceType):
+
+    who    date        book says     decided   absence      fine  by    why
+    Juma   Mon 16 Nov  needs_review  on_time   —            0.00  Baba  Alisahau kubonyeza Toka
+    Asha   Tue 17 Nov  absent        absent    office_duty  0.00  Baba  Alienda benki
 
 And each worker's daily pay rate, dated (PayRate, WAGE-1), a ledger like the events: a raise is a new row from its day,
 and the old one stays, so a month with a raise on the 15th pays each day at its own rate (WAGE-2):
@@ -88,6 +94,42 @@ class ReviewReason(models.TextChoices):
     LEFT_EARLY = "left_early", "Left early"  # out before closing, outside the half day's windows
 
 
+class AbsenceType(models.TextChoices):
+    # Why a worker wasn't there, on a day a manager or the owner decides absent (ATT-6, 02 §12). Only a person can say
+    # it: no tap tells the bank errand from a no-show, so the book's own `absent` keeps none. The pay reads it (WAGE-2).
+    OFFICE_DUTY = "office_duty", "Office duty"  # out on the shop's own work, sent to the bank: paid as a full day
+    PERMISSION = "permission", "Permission"  # allowed to stay away: unpaid
+    NO_SHOW = "no_show", "No-show"  # away with no word: unpaid
+
+
+# What a manager may decide a day was (ATT-6): a full day, a late one, a half day, or absent with its kind. Never `off`,
+# which is the shop's calendar (a Sunday, a closed day), nor `needs_review`, which is what a decision ends.
+DECIDED = [DayStatus.ON_TIME, DayStatus.LATE, DayStatus.HALF, DayStatus.ABSENT]
+
+
+class DayChoice(models.TextChoices):
+    # The six choices of the sheet a manager decides a day in (ATT-6), in the sheet's order: *Siku kamili*,
+    # *Amechelewa*, *Nusu siku*, then the three absences. Not a column: each is kept as a decided status and, for an
+    # absence, its kind (DECISION_OF), so the pay reads one status, whatever the sheet called it.
+    ON_TIME = "on_time", "Full day"
+    LATE = "late", "Late"
+    HALF = "half", "Half day"
+    OFFICE_DUTY = "office_duty", "Office duty"
+    PERMISSION = "permission", "Permission"
+    NO_SHOW = "no_show", "No-show"
+
+
+# Each choice as the day keeps it: the decided status, and the absence's kind, or "" for none.
+DECISION_OF: dict[DayChoice, tuple[DayStatus, str]] = {
+    DayChoice.ON_TIME: (DayStatus.ON_TIME, ""),
+    DayChoice.LATE: (DayStatus.LATE, ""),
+    DayChoice.HALF: (DayStatus.HALF, ""),
+    DayChoice.OFFICE_DUTY: (DayStatus.ABSENT, AbsenceType.OFFICE_DUTY),
+    DayChoice.PERMISSION: (DayStatus.ABSENT, AbsenceType.PERMISSION),
+    DayChoice.NO_SHOW: (DayStatus.ABSENT, AbsenceType.NO_SHOW),
+}
+
+
 # The type checker's Django plugin calls the two bases' get_next_by_created_at() a clash, as on PushedDocument
 # (apps/sync/models.py): one and the same method, from ShopScoped. Ignored on this line only.
 class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
@@ -96,7 +138,7 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
     # who tapped, on the laptop, by their PIN (X3).
 
     # Whose attendance it is: today always the one who tapped. A column of its own all the same, as a manager
-    # entering a missed clock-in for someone (ATT-6) writes a line about another person, and a ledger's lines can't
+    # entering a missed clock-in for someone (ATT-13) writes a line about another person, and a ledger's lines can't
     # be filled in later. PROTECT: nothing is deleted (rule 7). No index of its own: indexes lead with `shop`, and the
     # one the book of days reads a month by is below (Meta).
     staff = models.ForeignKey("people.StaffMember", on_delete=models.PROTECT, related_name="+", db_index=False)
@@ -126,7 +168,7 @@ class AttendanceEvent(AppendOnly, CounterRecord):  # type: ignore[misc]
     # The void stamp (03 §5.6): empty while the line counts, filled once when it is voided, then frozen, as the
     # trigger in this table's migration makes PostgreSQL hold it. A clock-in tapped twice by mistake is voided, never
     # deleted (T3). Who voided it: a staff member, as created_by is; PROTECT, as nothing is deleted. That they are of
-    # this line's shop is the void service's check (T1, ATT-6): the database can't hold it with one column. The fourth
+    # this line's shop is the void service's check (T1, ATT-13): the database can't hold it with one column. The fourth
     # part, `void_approval`, comes with the Approval table (R1), in a migration of its own.
     voided_at = models.DateTimeField(null=True, blank=True)
     voided_by = models.ForeignKey(
@@ -212,21 +254,24 @@ class AttendanceDay(ShopScoped):
     #
     # Not a ledger: a day is worked out again freely until its pay run is approved (WAGE-3), as what it is worked out
     # from can still change after it is kept: a tap comes late, from a laptop that was offline; a manager voids a tap
-    # (ATT-6); a job's first or last day is moved (PPL-10). Never a rule: a rule never starts on a day gone by
+    # (ATT-13); a job's first or last day is moved (PPL-10). Never a rule: a rule never starts on a day gone by
     # (setting.date_past, SHOP-3), and the book keeps only days gone by. So its row changes, and the edit history's
     # trigger in this table's migration keeps each change (ADR-0036): Asha's 16 Nov went from needs review to on time,
     # the day her Toka arrived from a laptop that had been offline. The trigger writes nothing when a day comes out the
     # same.
-    # Not Editable: no screen types over a day, so no version is needed to keep two people's edits apart; a manager's
-    # decision on a day is ATT-6's `override`, beside what the book worked out, which stays visible (A2).
+    # A manager's decision (ATT-6) sits in columns of its own, beside what the book worked out, and the book never
+    # writes them (it writes only WORKED_OUT, apps/staffpay/services.py), so what the system said stays visible (A2):
+    # "Siku kamili, uamuzi wa Baba · Mfumo ulisema: inahitaji uamuzi". Not Editable all the same: a version of the
+    # whole row would move each time the book worked the day out again, and refuse a manager's decision for a change
+    # he never saw. Two managers deciding at once are kept apart by the decision each saw (decide_day).
     # Never deleted (rule 7): nothing links to a day yet, so PROTECT can't keep it, and a trigger in the same migration
     # refuses a DELETE instead. A day that no longer counts, as its job's first day was moved later (PPL-10), keeps its
     # row, and the book no longer answers it.
     # Not on the laptops: no laptop works out a day (03 §6.6), and a worker's pay never sits on a shared device
     # (03 §6.1), so the book writes no line in the change log.
     #
-    # Later cards add their columns, each with its migration: `override` and `absence_type` (ATT-6), `meal_share`
-    # (WAGE-7), and the lock of an approved pay run (WAGE-3).
+    # Later cards add their columns, each with its migration: `meal_share` (WAGE-7), and the lock of an approved pay run
+    # (WAGE-3).
 
     # Whose day it is: a job, not a person, as an event's `staff` is. A person who left and is hired again the same day
     # has two jobs, so two days on that date, each read from its own taps (PPL-11). PROTECT: nothing is deleted.
@@ -254,10 +299,31 @@ class AttendanceDay(ShopScoped):
     # the book works that day out again and writes its reason (a reason is one of the day's answers, WORKED_OUT).
     review_reason = models.CharField(max_length=15, choices=ReviewReason, blank=True)
 
+    # A manager's or the owner's decision on the day (ATT-6, 02 §12's `override`): what the day was, whatever the book
+    # worked out. Empty until someone decides; whole once they do (a rule below). Deciding again writes over it, and the
+    # edit history's trigger keeps the decision before (ADR-0036), as it keeps every change of this row.
+    # What they decided: one of DECIDED.
+    decided_status = models.CharField(max_length=12, choices=DayStatus, blank=True)
+    # Why the worker was away, on a day decided absent, and only there: office duty is paid, the other two are not.
+    absence_type = models.CharField(max_length=11, choices=AbsenceType, blank=True)
+    # The fine of a day decided late or half, read from the day's first Ingia and the rules it used (day_choices,
+    # apps/staffpay/calculations.py; T4), and kept: a tap that comes later doesn't change what was decided. 0 on the
+    # other decisions. Money, so numeric(14,2) (rule 3).
+    decided_fine = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    # Who decided: a job of this shop, never the day's own worker (decide_day, T1). PROTECT: nothing is deleted. No
+    # index: nothing searches days by who decided them, and nothing is deleted, so PROTECT never has to.
+    decided_by = models.ForeignKey(
+        "people.StaffMember", on_delete=models.PROTECT, null=True, blank=True, related_name="+", db_index=False
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    # Why, in their own words: "Alisahau kubonyeza Toka". Every decision says why (rule 7's who, when and why).
+    decision_reason = models.TextField(blank=True)
+
     class Meta(ShopScoped.Meta):
         # Built on ShopScoped.Meta, so `objects`, with the guard, stays the default manager (CORE-2). No error codes on
-        # these rules: only the book writes a day, so a broken rule is a bug in our code, a server error and a log
-        # line, never a person's mistake (ADR-0032).
+        # these rules: only the book writes what a day was, and only decide_day writes a decision, after its own checks
+        # with their codes, so a broken rule is a bug in our code, a server error and a log line, never a person's
+        # mistake (ADR-0032).
         constraints = [
             # One day per job and date, however often the book runs: two managers opening the month at once, or the
             # night's job beside them, end with the same row (an upsert keyed by these three). Leads with `shop`, then
@@ -310,6 +376,43 @@ class AttendanceDay(ShopScoped):
                     | models.Q(status=DayStatus.NEEDS_REVIEW, review_reason__in=ReviewReason.values)
                 ),
                 name="staffpay_attendanceday_reason_only_to_decide",
+            ),
+            # A decision is whole or none (ATT-6): all six parts empty, or what, its fine, who, when and why all filled,
+            # as a void's stamp is. Each filled part said to be there, as a comparison with an empty value passes a
+            # rule. A reason holds at least one character that isn't a space: spaces alone are no reason (as a void's).
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        decided_status="",
+                        absence_type="",
+                        decided_fine__isnull=True,
+                        decided_by__isnull=True,
+                        decided_at__isnull=True,
+                        decision_reason="",
+                    )
+                    | models.Q(
+                        decided_status__in=DECIDED,
+                        decided_fine__isnull=False,
+                        decided_by__isnull=False,
+                        decided_at__isnull=False,
+                        decision_reason__regex=r"\S",
+                    )
+                ),
+                name="staffpay_attendanceday_decision_whole_or_none",
+            ),
+            # And it fits what was decided: absent, with its kind, and no fine; a full day, no fine; late or half, a
+            # fine of 0 or more, as the book's own (a shop starts with no fine, ATT-2). An absence kind only on an
+            # absent decision. An empty decision passes here, and the rule above holds it whole.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(decided_status="")
+                    | models.Q(decided_status=DayStatus.ABSENT, absence_type__in=AbsenceType.values, decided_fine=0)
+                    | models.Q(decided_status=DayStatus.ON_TIME, absence_type="", decided_fine=0)
+                    | models.Q(
+                        decided_status__in=[DayStatus.LATE, DayStatus.HALF], absence_type="", decided_fine__gte=0
+                    )
+                ),
+                name="staffpay_attendanceday_decision_fits_its_status",
             ),
         ]
 

@@ -23,7 +23,7 @@ from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff
 from apps.shops.models import Setting, Shop
 from apps.shops.selectors import shop_today
-from apps.staffpay.models import AttendanceEvent, ClockKind, TimeCheck
+from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, TimeCheck
 from apps.staffpay.services import set_pay_rate
 
 pytestmark = pytest.mark.django_db
@@ -109,22 +109,41 @@ def test_the_workers_month_as_the_page_reads_it(
     }
     # Every day of October the book answers, Sundays too; the 2nd waits for a decision, the 1st was a day away.
     assert len(answer["days"]) == 31
+    # Each with no decision yet, and the sheet's lines it may take (ATT-6), each with its fine: this shop has typed no
+    # fine, so every one is 0.00; the 1st, with no Ingia, can't be called late.
+    nothing = "0.00"
+    with shop_context(shop_a):
+        kept = {str(day.date): str(day.pk) for day in AttendanceDay.objects.filter(staff=asha, date__month=10)}
     assert answer["days"][1] == {
+        "id": kept["2026-10-02"],
         "date": "2026-10-02",
         "status": "needs_review",
         "reason": "came_late",
         "fine": "0.00",
         "first_in": "09:10",
         "first_out": None,
+        "decision": None,
+        "choices": [
+            {"choice": choice, "fine": nothing}
+            for choice in ("on_time", "late", "half", "office_duty", "permission", "no_show")
+        ],
     }
     assert answer["days"][0] == {
+        "id": kept["2026-10-01"],
         "date": "2026-10-01",
         "status": "absent",
         "reason": None,
         "fine": "0.00",
         "first_in": None,
         "first_out": None,
+        "decision": None,
+        "choices": [
+            {"choice": choice, "fine": nothing}
+            for choice in ("on_time", "half", "office_duty", "permission", "no_show")
+        ],
     }
+    # Staff A, the owner, looks at Asha's month, not their own; and this is no demo, so no ready reasons.
+    assert (answer["yours"], answer["ready_reasons"]) == (False, [])
     assert "13579" not in reply.content.decode()
 
 

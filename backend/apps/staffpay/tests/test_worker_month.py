@@ -9,7 +9,8 @@
 
 worker_attendance (apps/staffpay/services.py) asks the book for the month (work_out_days), as the month page does, and
 answers one job's days and counts, and every tap of the job in the month, today's too, each with its time on the shop's
-clock, its laptop, its photo or why it has none, and whether it is in doubt. What a day was is the book's and the
+clock, its laptop, its photo or why it has none, and whether it is in doubt; and each day's decision and what it may
+be decided as, with each choice's fine (ATT-6). What a day was is the book's and the
 rule's (test_attendance_book.py, test_attendance_day.py); here, only what a worker's month makes of them. October 2026
 starts on a Thursday; its Sundays are the 4th, 11th, 18th and 25th. Times are Arusha's, three hours ahead of UTC. The
 fine is a made-up 500 (rule 10). Fake data only: the repo is public.
@@ -19,6 +20,7 @@ import datetime as dt
 import hashlib
 import itertools
 import uuid
+from collections.abc import Callable
 from decimal import Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
@@ -27,20 +29,42 @@ import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
+from pytest_django import Settings
 
 from apps.control.models import Attachment, AttachmentKind, AttachmentType, FlagKind
 from apps.control.services import expect_attachment, raise_flag, receive_attachment_file, remove_attachment_file
 from apps.core.links import table_of
+from apps.core.permissions import RoleTemplate
 from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SettingKey
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, hire_again, mark_left
 from apps.shops.models import Setting, Shop, Side
 from apps.shops.selectors import shop_today
-from apps.staffpay.models import AttendanceEvent, ClockKind, DayStatus, NoPhoto, ReviewReason, TimeCheck
-from apps.staffpay.services import PhotoState, TapLine, WorkerAttendance, worker_attendance
+from apps.staffpay.models import (
+    AttendanceDay,
+    AttendanceEvent,
+    ClockKind,
+    DayChoice,
+    DayStatus,
+    NoPhoto,
+    ReviewReason,
+    TimeCheck,
+)
+from apps.staffpay.services import (
+    DayDecision,
+    DayOption,
+    PhotoState,
+    TapLine,
+    WorkerAttendance,
+    WorkerDay,
+    decide_day,
+    worker_attendance,
+)
 
 pytestmark = pytest.mark.django_db
+
+GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
 ARUSHA = ZoneInfo("Africa/Dar_es_Salaam")
 OCTOBER = dt.date(2026, 10, 1)
@@ -119,9 +143,12 @@ def tap(
     return event
 
 
-def month_of(shop: Shop, staff: StaffMember, month: dt.date = OCTOBER) -> WorkerAttendance:
+def month_of(
+    shop: Shop, staff: StaffMember, month: dt.date = OCTOBER, viewer: StaffMember | None = None
+) -> WorkerAttendance:
+    # As the route asks it, by `viewer`, the person looking; None for the system, whose own month none is.
     with shop_context(shop):
-        return worker_attendance(shop, staff, month)
+        return worker_attendance(shop, staff, month, viewer=viewer)
 
 
 def tap_of(answer: WorkerAttendance, event: AttendanceEvent) -> TapLine:
@@ -306,8 +333,8 @@ def test_the_tap_a_later_one_disagrees_with_says_so(
 
 
 def test_a_voided_tap_is_left_out(shop_a: Shop, device_a: Device, asha: StaffMember, staff_a: StaffMember) -> None:
-    # A clock-in tapped twice by mistake, the second voided by a manager (ATT-6): it counts for nothing (T2), so the
-    # day doesn't show it, as the book doesn't read it. ATT-6 shows voided taps, crossed out (A2).
+    # A clock-in tapped twice by mistake, the second voided by a manager (ATT-13): it counts for nothing (T2), so the
+    # day doesn't show it, as the book doesn't read it. ATT-13 shows voided taps, crossed out (A2).
     first = tap(device_a, asha, ClockKind.IN, on(1, 7, 20))
     tap(
         device_a,
@@ -388,4 +415,104 @@ def test_another_shops_worker_is_refused(shop_a: Shop, shop_b: Shop, attendance_
     # sends one, as its worker is found through the guard (test_worker_month_route.py).
     bahati = worker(shop_b, "Bahati")
     with shop_context(shop_a), pytest.raises(ShopMismatch):
-        worker_attendance(shop_a, bahati, OCTOBER)
+        worker_attendance(shop_a, bahati, OCTOBER, viewer=None)
+
+
+# A decision on a day (ATT-6).
+
+
+@pytest.fixture
+def baba(shop_a: Shop, give_role: GiveRole) -> StaffMember:
+    # The owner, who decides days: attendance.manage on the whole shop.
+    staff = worker(shop_a, "Baba")
+    give_role(staff, RoleTemplate.OWNER, None)
+    return staff
+
+
+def day_of(answer: WorkerAttendance, day: int) -> WorkerDay:
+    return next(each for each in answer.days if each.date == dt.date(2026, 10, day))
+
+
+def test_a_decided_day_comes_with_its_decision(
+    shop_a: Shop, device_a: Device, asha: StaffMember, baba: StaffMember
+) -> None:
+    # Asha came at 07:50 on Tuesday 6 October and never tapped Toka. Baba decides it late: the day shows his decision,
+    # with its fine from the day's own rules, his name, when and why, beside what the book said, which stays (A2). Her
+    # line counts it late, no longer to decide.
+    tap(device_a, asha, ClockKind.IN, on(6, 7, 50))
+    kept = next(day for day in _book(shop_a, asha) if day.date == dt.date(2026, 10, 6))
+    with shop_context(shop_a):
+        decided = decide_day(kept, choice=DayChoice.LATE, reason="Alisahau kubonyeza Toka", replaces=None, by=baba)
+    answer = month_of(shop_a, asha, viewer=baba)
+    sixth = day_of(answer, 6)
+    assert decided.decided_at is not None
+    assert sixth.decision == DayDecision(
+        status=DayStatus.LATE,
+        absence_type=None,
+        fine=Decimal("500.00"),
+        by="Baba",
+        at=decided.decided_at,
+        reason="Alisahau kubonyeza Toka",
+    )
+    assert (sixth.status, sixth.reason) == (DayStatus.NEEDS_REVIEW, ReviewReason.NO_OUT)
+    assert (answer.worker.late, answer.worker.needs_review) == (1, 0)
+    assert day_of(answer, 5).decision is None
+
+
+def test_each_day_offers_its_choices_with_their_fines(
+    shop_a: Shop, device_a: Device, asha: StaffMember, baba: StaffMember
+) -> None:
+    # The sheet's lines, from the server (ATT-6): Tuesday 6th, in at 07:50, may be late or half with the first fine;
+    # Thursday 1st, on time, can't be called late; Sunday 4th is the shop's calendar, with nothing to decide.
+    tap(device_a, asha, ClockKind.IN, on(6, 7, 50))
+    tap(device_a, asha, ClockKind.IN, on(1, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, on(1, 18, 45))
+    answer = month_of(shop_a, asha, viewer=baba)
+    nothing, fine = Decimal("0.00"), Decimal("500.00")
+    assert day_of(answer, 6).choices == [
+        DayOption(DayChoice.ON_TIME, nothing),
+        DayOption(DayChoice.LATE, fine),
+        DayOption(DayChoice.HALF, fine),
+        DayOption(DayChoice.OFFICE_DUTY, nothing),
+        DayOption(DayChoice.PERMISSION, nothing),
+        DayOption(DayChoice.NO_SHOW, nothing),
+    ]
+    assert DayChoice.LATE not in {option.choice for option in day_of(answer, 1).choices}
+    assert day_of(answer, 4).choices == []
+    assert answer.yours is False
+
+
+def test_a_day_whose_time_is_in_doubt_offers_no_fine(
+    shop_a: Shop, device_a: Device, asha: StaffMember, baba: StaffMember
+) -> None:
+    # Tuesday 6th: an Ingia at 07:20 whose time the server can't trust, then one at 07:50 it does. The sheet offers no
+    # Amechelewa from that 07:50, and a half day with no fine (Jack: A, ATT-6's review).
+    tap(device_a, asha, ClockKind.IN, on(6, 7, 20), check=TimeCheck.UNVERIFIED)
+    tap(device_a, asha, ClockKind.IN, on(6, 7, 50))
+    sixth = day_of(month_of(shop_a, asha, viewer=baba), 6)
+    assert sixth.reason == ReviewReason.TIME_UNKNOWN
+    offered = {option.choice: option.fine for option in sixth.choices}
+    assert DayChoice.LATE not in offered
+    assert offered[DayChoice.HALF] == Decimal("0.00")
+
+
+def test_ones_own_month_offers_nothing_to_decide(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
+    # Asha opens her own month (a manager would): she may see it, but decide none of it (Jack, ATT-6).
+    tap(device_a, asha, ClockKind.IN, on(6, 7, 50))
+    answer = month_of(shop_a, asha, viewer=asha)
+    assert answer.yours is True
+    assert all(day.choices == [] for day in answer.days)
+
+
+def test_the_demo_offers_its_ready_reasons(settings: Settings, shop_a: Shop, asha: StaffMember) -> None:
+    # On the demo a reason is one of three ready ones (Jack: A); elsewhere a person types their own, and none is sent.
+    assert month_of(shop_a, asha).ready_reasons == []
+    settings.DEMO_SEED = True
+    assert month_of(shop_a, asha).ready_reasons == ["forgot_toka", "away_on_work", "owner_allowed"]
+
+
+def _book(shop: Shop, staff: StaffMember) -> list[AttendanceDay]:
+    # The worker's October as the book keeps it, after the month is asked for once.
+    month_of(shop, staff)
+    with shop_context(shop):
+        return list(AttendanceDay.objects.filter(staff=staff, date__month=10))

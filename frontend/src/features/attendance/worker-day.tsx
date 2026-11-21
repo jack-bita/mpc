@@ -11,7 +11,19 @@
 // Its status, and its fine on a day with one; why it waits, on a day to decide, with the worker's working days for a
 // day outside them; then each tap, Ingia or Toka, its time on the shop's clock with its part of the day (SYNC-11),
 // the laptop, why the tap itself is in doubt, and its photo, or why there is none. Today says it isn't over, and shows
-// its taps as they came. It only shows: deciding the day is ATT-6's.
+// its taps as they came.
+//
+// A day that is over is decided from here (ATT-6), as Jack pictured it (20 Nov 2026): *Amua siku hii* opens the sheet
+// (decide-day.tsx); once decided, the day shows the decision first, who made it and when, its reason, then what the
+// system worked out (*Mfumo ulisema:*), which stays (A2), and *Badilisha uamuzi*:
+//
+//   ✓ Siku kamili · uamuzi wa Baba, 20/11/2026
+//   Sababu: Alisahau kubonyeza Toka
+//   Mfumo ulisema: Inahitaji uamuzi · hakuna Toka
+//   [ Badilisha uamuzi ]
+//
+// The button shows only where the server offers choices: never on a day the shop was shut, nor on the viewer's own
+// month, which says its days aren't theirs to decide (Jack: A), in words true for the owner's own month too.
 //
 // Everything comes from the server's one answer for the month (worker-month.ts): the page never works out what a day
 // was, nor moves a time by the phone's zone. The photo is opened from its own route, which asks attendance.manage
@@ -27,9 +39,17 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Decimal } from "@/lib/decimal";
-import { clockPart, formatDay, formatMoney, weekdayOf } from "@/lib/format";
+import { Button } from "@/components/design/button";
+import {
+  clockPart,
+  formatDate,
+  formatDay,
+  formatMoney,
+  weekdayOf,
+} from "@/lib/format";
 
 import type { Weekday } from "./attendance-month";
+import { DecideDay } from "./decide-day";
 import type {
   AttendanceTap,
   WorkerAttendance,
@@ -44,9 +64,12 @@ export function photoAddress(id: string): string {
 export function TheDay({
   day,
   answer,
+  timezone,
 }: {
   day: string;
   answer: WorkerAttendance;
+  /** The shop's zone, for the date a decision was made on; none while the page doesn't know the shop yet. */
+  timezone: string | null;
 }) {
   const t = useTranslations("attendanceWorker");
   const monthWords = useTranslations("attendanceMonth");
@@ -82,7 +105,7 @@ export function TheDay({
       {isToday ? <p>{t("notOverYet")}</p> : null}
       {/* A day the book doesn't count, opened for its taps alone (the calendar's +): it says so. */}
       {!isToday && kept === undefined ? <p>{t("notCounted")}</p> : null}
-      {kept ? <Kept day={kept} answer={answer} /> : null}
+      {kept ? <Kept day={kept} answer={answer} timezone={timezone} /> : null}
       {taps.length > 0 ? (
         // A list, named, so a screen reader says how many taps the day had. role="list" written out, as Safari with
         // VoiceOver stops calling a styled <ul> a list (workers-screen.tsx).
@@ -99,22 +122,69 @@ export function TheDay({
   );
 }
 
-/** The day as the book kept it: its status and fine, then why it waits, and the worker's days for one outside them. */
-function Kept({ day, answer }: { day: WorkerDay; answer: WorkerAttendance }) {
+/** The day as the book kept it, or as someone decided it: the decision first, who and when, its reason, and what the
+ * system said beside it (A2); else its status and fine, then why it waits, and the worker's days for one outside them.
+ * Then the way to decide it, where the server offers one. */
+function Kept({
+  day,
+  answer,
+  timezone,
+}: {
+  day: WorkerDay;
+  answer: WorkerAttendance;
+  timezone: string | null;
+}) {
+  const t = useTranslations("attendanceWorker");
+  // Whether the sheet is open over the day: opened by the button below, closed by Ghairi or once decided.
+  const [deciding, setDeciding] = useState(false);
+  return (
+    <>
+      {day.decision !== null ? (
+        <Decided day={day} answer={answer} timezone={timezone} />
+      ) : (
+        <BookSays day={day} answer={answer} />
+      )}
+      {day.choices.length > 0 ? (
+        <Button
+          kind={day.decision === null ? "main" : "second"}
+          size="normal"
+          className="justify-self-start"
+          onClick={() => setDeciding(true)}
+        >
+          {day.decision === null ? t("decide") : t("changeDecision")}
+        </Button>
+      ) : null}
+      {/* The viewer's own month: they may see it, never decide it (Jack: A). Said on a working day, as nothing on a
+          shut day waits for anyone. */}
+      {answer.yours && day.status !== "off" ? <p>{t("yours")}</p> : null}
+      {/* Opened afresh each time, with the decision on the screen picked and an empty reason: mounted only while open,
+          so a sheet closed with Ghairi forgets what was typed. */}
+      {deciding ? (
+        <DecideDay
+          day={day}
+          answer={answer}
+          open
+          onClose={() => setDeciding(false)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/** What the system worked out, as ATT-12 showed it: the status and its fine, why it waits, and the worker's days for a
+ * day outside them. */
+function BookSays({
+  day,
+  answer,
+}: {
+  day: WorkerDay;
+  answer: WorkerAttendance;
+}) {
   const t = useTranslations("attendanceWorker");
   const monthWords = useTranslations("attendanceMonth");
-  const attendance = useTranslations("attendance");
-  // A fine only on a day with one: a late day, or a late morning's half day (the owner, ATT-4). The shop's own rule,
-  // which anyone working there may read; never the worker's rate or the day's pay (WAGE-1).
-  const fine = new Decimal(day.fine);
-  const status = t(`status.${day.status}`);
-  // The time a reason names, "alifika saa 09:10 asubuhi", as the month page's list says it (to-decide.tsx): only
-  // came_late and left_early name one, and the book keeps that tap for them.
-  const tap = day.reason === "left_early" ? day.first_out : day.first_in;
-  const time =
-    tap === null
-      ? ""
-      : attendance("timeOfDay", { time: tap, part: clockPart(tap) });
+  // Asked on every drawing, never inside a condition (React's rule for its hooks).
+  const statusWords = useStatusWords(day);
+  const whyWords = useWhyWords(day);
   return (
     <>
       <p className="flex gap-2 text-lg">
@@ -124,15 +194,9 @@ function Kept({ day, answer }: { day: WorkerDay; answer: WorkerAttendance }) {
             ? t("mark.off")
             : monthWords(`mark.${day.status}`)}
         </span>
-        <span>
-          {fine.gt(new Decimal("0"))
-            ? t("statusWithFine", { status, amount: formatMoney(fine) })
-            : status}
-        </span>
+        <span>{statusWords}</span>
       </p>
-      {day.reason !== null ? (
-        <p>{t("why", { why: monthWords(`reason.${day.reason}`, { time }) })}</p>
-      ) : null}
+      {whyWords !== null ? <p>{t("why", { why: whyWords })}</p> : null}
       {/* Outside the job's days (ATT-11): the days as they are now, for whoever decides whether to pay it. */}
       {day.reason === "outside_job" ? (
         <p>
@@ -146,6 +210,88 @@ function Kept({ day, answer }: { day: WorkerDay; answer: WorkerAttendance }) {
       ) : null}
     </>
   );
+}
+
+/** A decided day: "✓ Siku kamili · uamuzi wa Baba, 20/11/2026", its reason, then what the system said (A2). */
+function Decided({
+  day,
+  answer,
+  timezone,
+}: {
+  day: WorkerDay;
+  answer: WorkerAttendance;
+  timezone: string | null;
+}) {
+  const t = useTranslations("attendanceWorker");
+  const monthWords = useTranslations("attendanceMonth");
+  const decision = day.decision;
+  const statusWords = useStatusWords(day);
+  const whyWords = useWhyWords(day);
+  if (decision === null) return null;
+  // An absence by its kind, office duty paid; a late or half day with its fine, where it has one.
+  const fine = new Decimal(decision.fine);
+  const what = t(`decision.${decision.absence_type ?? decision.status}`);
+  const words = fine.gt(new Decimal("0"))
+    ? t("option.withFine", { decision: what, amount: formatMoney(fine) })
+    : what;
+  // On the demo, a ready reason is kept as its code (the answer's ready_reasons): said in words here.
+  const ready = answer.ready_reasons.find((code) => code === decision.reason);
+  const reason =
+    ready === undefined ? decision.reason : t(`readyReason.${ready}`);
+  // What the system worked out, kept beside the decision (A2): its status, and why it waited, if it did.
+  const said =
+    whyWords === null
+      ? t("systemSaid", { said: statusWords })
+      : t("systemSaidWhy", { said: statusWords, why: whyWords });
+  return (
+    <>
+      <p className="flex gap-2 text-lg">
+        {/* The calendar's mark for it: an absence by its kind, O, R or H; else what was decided. */}
+        <span aria-hidden className="font-semibold">
+          {decision.absence_type === null
+            ? monthWords(`mark.${decision.status}`)
+            : t(`mark.${decision.absence_type}`)}
+        </span>
+        <span>
+          {timezone === null
+            ? t("decidedByNoDate", { decision: words, by: decision.by })
+            : t("decidedBy", {
+                decision: words,
+                by: decision.by,
+                date: formatDate(decision.at, timezone),
+              })}
+        </span>
+      </p>
+      <p>{t("decisionReason", { reason })}</p>
+      <p className="text-muted-foreground">{said}</p>
+    </>
+  );
+}
+
+/** A day's status in words, with its fine on a day with one: a late day, or a late morning's half day (the owner,
+ * ATT-4). The shop's own rule, which anyone working there may read; never the worker's rate or the day's pay
+ * (WAGE-1). */
+function useStatusWords(day: WorkerDay): string {
+  const t = useTranslations("attendanceWorker");
+  const fine = new Decimal(day.fine);
+  const status = t(`status.${day.status}`);
+  return fine.gt(new Decimal("0"))
+    ? t("statusWithFine", { status, amount: formatMoney(fine) })
+    : status;
+}
+
+/** Why a day waits, as the month page's list says it, "alifika saa 09:10 asubuhi": only came_late and left_early name
+ * a time, and the book keeps that tap for them (to-decide.tsx). None on a day that didn't wait. */
+function useWhyWords(day: WorkerDay): string | null {
+  const monthWords = useTranslations("attendanceMonth");
+  const attendance = useTranslations("attendance");
+  if (day.reason === null) return null;
+  const tap = day.reason === "left_early" ? day.first_out : day.first_in;
+  const time =
+    tap === null
+      ? ""
+      : attendance("timeOfDay", { time: tap, part: clockPart(tap) });
+  return monthWords(`reason.${day.reason}`, { time });
 }
 
 /** One tap: "Ingia 07:20 asubuhi · Laptop ya Dawa", why it is in doubt, then its photo or why there is none. */

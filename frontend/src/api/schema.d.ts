@@ -650,6 +650,22 @@ export interface paths {
         patch: operations["shops_sides_partial_update"];
         trace?: never;
     };
+    "/api/v1/staffpay/attendance-days/{id}/decide/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["staffpay_attendance_days_decide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staffpay/attendance-month/": {
         parameters: {
             query?: never;
@@ -720,6 +736,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description * `office_duty` - Office duty
+         *     * `permission` - Permission
+         *     * `no_show` - No-show
+         * @enum {string}
+         */
+        AbsenceTypeEnum: "office_duty" | "permission" | "no_show";
         ApiError: {
             code: string;
             message: string;
@@ -798,6 +821,16 @@ export interface components {
          */
         ChangeOpEnum: "upsert" | "archive";
         /**
+         * @description * `on_time` - Full day
+         *     * `late` - Late
+         *     * `half` - Half day
+         *     * `office_duty` - Office duty
+         *     * `permission` - Permission
+         *     * `no_show` - No-show
+         * @enum {string}
+         */
+        ChoiceEnum: "on_time" | "late" | "half" | "office_duty" | "permission" | "no_show";
+        /**
          * @description * `in` - In
          *     * `out` - Out
          * @enum {string}
@@ -839,6 +872,29 @@ export interface components {
          * @enum {string}
          */
         ClosureStatusEnum: "active" | "cancelled";
+        DayDecision: {
+            status: components["schemas"]["DayDecisionStatusEnum"];
+            absence_type: (components["schemas"]["AbsenceTypeEnum"] | components["schemas"]["NullEnum"]) | null;
+            /** Format: decimal */
+            fine: string;
+            by: string;
+            /** Format: date-time */
+            at: string;
+            reason: string;
+        };
+        /**
+         * @description * `on_time` - On time
+         *     * `late` - Late
+         *     * `half` - Half day
+         *     * `absent` - Absent
+         * @enum {string}
+         */
+        DayDecisionStatusEnum: "on_time" | "late" | "half" | "absent";
+        DayOption: {
+            choice: components["schemas"]["ChoiceEnum"];
+            /** Format: decimal */
+            fine: string;
+        };
         /**
          * @description * `on_time` - On time
          *     * `late` - Late
@@ -860,6 +916,12 @@ export interface components {
             first_in: string | null;
             /** Format: time */
             first_out: string | null;
+        };
+        DecideDayRequest: {
+            choice: components["schemas"]["ChoiceEnum"];
+            reason: string;
+            /** Format: date-time */
+            replaces: string | null;
         };
         DemoDevice: {
             readonly pins: components["schemas"]["DemoPin"][];
@@ -1388,6 +1450,13 @@ export interface components {
          */
         PushedStatusEnum: "accepted" | "invalid";
         /**
+         * @description * `forgot_toka` - forgot_toka
+         *     * `away_on_work` - away_on_work
+         *     * `owner_allowed` - owner_allowed
+         * @enum {string}
+         */
+        ReadyReasonsEnum: "forgot_toka" | "away_on_work" | "owner_allowed";
+        /**
          * @description * `outside_job` - Outside the job's days
          *     * `closed_day` - The shop was closed
          *     * `not_working` - Suspended or gone
@@ -1711,8 +1780,14 @@ export interface components {
             left_on: string | null;
             days: components["schemas"]["WorkerDay"][];
             taps: components["schemas"]["AttendanceTap"][];
+            /** @description Whether the month is the viewer's own: then none of its days is theirs to decide (ATT-6). */
+            yours: boolean;
+            /** @description On the demo, the ready reasons a decision may take, as codes; elsewhere none (ATT-6). */
+            ready_reasons: components["schemas"]["ReadyReasonsEnum"][];
         };
         WorkerDay: {
+            /** Format: uuid */
+            id: string;
             /** Format: date */
             date: string;
             status: components["schemas"]["DayStatusEnum"];
@@ -1723,6 +1798,8 @@ export interface components {
             first_in: string | null;
             /** Format: time */
             first_out: string | null;
+            decision: components["schemas"]["DayDecision"] | null;
+            choices: components["schemas"]["DayOption"][];
         };
         WorkerMonth: {
             /** Format: uuid */
@@ -3121,6 +3198,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Side"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    staffpay_attendance_days_decide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this attendance day. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideDayRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayDecision"];
                 };
             };
             default: {

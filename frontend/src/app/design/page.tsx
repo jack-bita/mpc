@@ -35,6 +35,7 @@ import { Field } from "@/components/design/field";
 import { PasswordField } from "@/components/design/password-field";
 import { Input } from "@/components/design/input";
 import { PageHeader } from "@/components/design/page-header";
+import { Sheet } from "@/components/design/sheet";
 import { SIDE_BAND_LOOKS, SideBand } from "@/components/design/side-band";
 import { Tabs } from "@/components/design/tabs";
 import { ON_GREEN, TopBar } from "@/components/design/top-bar";
@@ -158,6 +159,30 @@ function TabsSample() {
       value={open}
       onChange={setOpen}
     />
+  );
+}
+
+/** A sheet that opens from its button and closes on Ghairi, Esc, a tap outside, or its main button, as a screen's
+ * does (ATT-6): the main button here only closes it, as this page sends nothing. */
+function SheetSample() {
+  const t = useTranslations("design");
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button kind="second" onClick={() => setOpen(true)}>
+        {t("sheet.open")}
+      </Button>
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title={t("sheet.sampleTitle")}
+        description={t("sheet.sampleDescription")}
+        actionLabel={t("sheet.sampleAction")}
+        onAction={() => setOpen(false)}
+      >
+        <Field label={t("sheet.sampleReason")} />
+      </Sheet>
+    </>
   );
 }
 
@@ -334,6 +359,11 @@ export default function DesignPage() {
       <Section title={t("tabs.title")}>
         <p className="text-sm text-muted-foreground">{t("tabs.hint")}</p>
         <TabsSample />
+      </Section>
+
+      <Section title={t("sheet.title")}>
+        <p className="text-sm text-muted-foreground">{t("sheet.hint")}</p>
+        <SheetSample />
       </Section>
 
       <Section title={t("topBar.title")}>

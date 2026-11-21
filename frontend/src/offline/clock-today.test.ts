@@ -235,7 +235,7 @@ describe("each person's day so far", () => {
   });
 
   it("shows a clock-out with no clock-in before it, as one who forgot to clock in", () => {
-    // The manager enters the missing clock-in later (ATT-6); the list shows what this laptop holds.
+    // The manager enters the missing clock-in later (ATT-13); the list shows what this laptop holds.
     const taps = [
       read(
         "019a5e00-0000-7000-8000-000000000307",

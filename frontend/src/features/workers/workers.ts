@@ -75,7 +75,7 @@ export function useWorkers() {
 }
 
 /** What a roles form (give-form.tsx, end-form.tsx) shows above its buttons: the failure, with one more step than
- * aboutTheWholeRequest (settings/closures.ts). A refusal of fields alone (`invalid`) names fields the form may have no
+ * aboutTheWholeRequest (src/api/refusal.ts). A refusal of fields alone (`invalid`) names fields the form may have no
  * box for, as id.taken comes on `id`, or a role or side no longer there on `role`, `role_given`, `key` or `side`: the
  * first such field's code is about the whole change, so it shows in the code's place, never nowhere (PPL-8's review).
  * A refusal of the form's own boxes (`boxes`) alone shows beside them instead: nothing above. */

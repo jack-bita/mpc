@@ -8,7 +8,9 @@ force today (PayRatesAnswer), for the worker named in the address (PayRatesQuery
 
 And the month page's month (AttendanceMonthAnswer, ATT-5), worked out by attendance_month
 (apps/staffpay/services.py), for the month named in the address (AttendanceMonthQuery). And a worker's own month, their
-calendar's days and each tap (WorkerAttendanceAnswer, ATT-12), worked out by worker_attendance, for the same month.
+calendar's days and each tap (WorkerAttendanceAnswer, ATT-12), worked out by worker_attendance, for the same month,
+each day with its decision and what it may be decided as (ATT-6). And a decision on a day (DecideDaySerializer, ATT-6),
+which decide_day checks and keeps, answered as the day shows it (DayDecisionSerializer).
 """
 
 import re
@@ -20,9 +22,10 @@ from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
 
 from apps.core.api.ids import uuid7_only
+from apps.core.api.times import ZonedDateTimeField
 from apps.people.models import StaffMember
-from apps.staffpay.models import ClockKind, DayStatus, NoPhoto, PayRate, ReviewReason
-from apps.staffpay.services import PhotoState
+from apps.staffpay.models import DECIDED, AbsenceType, ClockKind, DayChoice, DayStatus, NoPhoto, PayRate, ReviewReason
+from apps.staffpay.services import DEMO_REASONS, PhotoState
 
 
 class WorkerField(serializers.PrimaryKeyRelatedField[StaffMember]):
@@ -154,17 +157,43 @@ class AttendanceMonthAnswer(serializers.Serializer[Any]):
     to_decide = DayToDecideSerializer(many=True)
 
 
+class DayDecisionSerializer(serializers.Serializer[Any]):
+    # A person's decision on a day (ATT-6), as the day shows it: "Siku kamili · uamuzi wa Baba, 20/11 · Sababu: …". What
+    # was decided, one of the four a person may decide; the absence's kind on an absent day, else null; its fine, a
+    # string (rule 3); who, by nickname; when, which the page sends back as `replaces` when it decides again; and why.
+    # On the demo the reason is a ready one's code (`forgot_toka`), which the page says in words.
+    status = serializers.ChoiceField(choices=[(status.value, status.label) for status in DECIDED])
+    absence_type = serializers.ChoiceField(choices=AbsenceType.choices, allow_null=True)
+    fine = serializers.DecimalField(max_digits=14, decimal_places=2)
+    by = serializers.CharField()
+    at = serializers.DateTimeField()
+    reason = serializers.CharField()
+
+
+class DayOptionSerializer(serializers.Serializer[Any]):
+    # One line of the sheet (ATT-6): a choice and the fine it takes, worked out on the server from the day's first Ingia
+    # and its own rules (day_choices), so the sheet shows "Amechelewa · faini 500" with no sum of its own.
+    choice = serializers.ChoiceField(choices=DayChoice.choices)
+    fine = serializers.DecimalField(max_digits=14, decimal_places=2)
+
+
 class WorkerDaySerializer(serializers.Serializer[Any]):
     # One of a worker's days, as their calendar marks it (ATT-12): what it was, why it waits on a day to decide (one of
     # the book's codes, which the page says in its language, ADR-0040), else null, and its fine, a string (rule 3). The
     # fine is the shop's own rule, which anyone working there may read; never the worker's rate or the day's pay. And
     # the two taps the rule read, as minutes on the shop's clock, for "alifika saa 09:10", as DayToDecide sends them.
+    # Its id, the address the sheet sends a decision on it to (attendance-days/{id}/decide/, ATT-6).
+    id = serializers.UUIDField()
     date = serializers.DateField()
     status = serializers.ChoiceField(choices=DayStatus.choices)
     reason = serializers.ChoiceField(choices=ReviewReason.choices, allow_null=True)
     fine = serializers.DecimalField(max_digits=14, decimal_places=2)
     first_in = serializers.TimeField(format="%H:%M", allow_null=True)
     first_out = serializers.TimeField(format="%H:%M", allow_null=True)
+    # A person's decision, beside what the book said, which stays (A2), or null; and what the day may be decided as,
+    # in the sheet's order: none on an off day, or on the viewer's own month (ATT-6).
+    decision = DayDecisionSerializer(allow_null=True)
+    choices = DayOptionSerializer(many=True)
 
 
 class TapPhotoSerializer(serializers.Serializer[Any]):
@@ -207,3 +236,21 @@ class WorkerAttendanceAnswer(serializers.Serializer[Any]):
     left_on = serializers.DateField(allow_null=True)
     days = WorkerDaySerializer(many=True)
     taps = AttendanceTapSerializer(many=True)
+    yours = serializers.BooleanField(
+        help_text="Whether the month is the viewer's own: then none of its days is theirs to decide (ATT-6)."
+    )
+    ready_reasons = serializers.ListField(
+        child=serializers.ChoiceField(choices=DEMO_REASONS),
+        help_text="On the demo, the ready reasons a decision may take, as codes; elsewhere none (ATT-6).",
+    )
+
+
+class DecideDaySerializer(serializers.Serializer[Any]):
+    # A decision on a day, as the sheet sends it (ATT-6): one of the sheet's six choices; why, in the person's own
+    # words, or a ready reason's code on the demo; and when the decision the page showed was made, or null for none,
+    # so a decision made meanwhile by someone else is never written over (409). The reason may come empty here:
+    # decide_day refuses it with its own code (day.reason_missing), beside the box, as it refuses the rest.
+    choice = serializers.ChoiceField(choices=DayChoice.choices)
+    reason = serializers.CharField(max_length=200, allow_blank=True)
+    # A time the server sent, sent back: with its zone, as every time a client sends must name one (ATT-1's review).
+    replaces = ZonedDateTimeField(allow_null=True)

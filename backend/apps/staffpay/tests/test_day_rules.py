@@ -4,7 +4,8 @@
     on 1 Dec:  late_fine 500.00, closing 18:00
 
 day_rules reads each of the nine rules of 02 §12 with get_setting on the day's own date; rules_as_text writes them as
-the day keeps its copy (T4). The fine is the demo's made-up 500 (rule 10). Fake data only: the repo is public.
+the day keeps its copy (T4), and rules_from_text reads that copy back for a day decided late (ATT-6). The fine is the
+demo's made-up 500 (rule 10). Fake data only: the repo is public.
 """
 
 import datetime as dt
@@ -18,7 +19,7 @@ from apps.core.settings_registry import CLOSING, LATE_FINE, SettingKey
 from apps.core.tenancy import shop_context
 from apps.shops.models import Setting, Shop
 from apps.staffpay.calculations import DayRules
-from apps.staffpay.selectors import day_rules, rules_as_text
+from apps.staffpay.selectors import day_rules, rules_as_text, rules_from_text
 
 pytestmark = pytest.mark.django_db
 
@@ -85,3 +86,10 @@ def test_a_days_rules_are_kept_as_text() -> None:
         "late_fine": "500.00",
         "second_fine": "1500.00",
     }
+
+
+def test_a_days_copy_reads_back_as_its_rules() -> None:
+    # A day decided late reads its fine from its own copy (ATT-6, T4): the copy read back is the very rules it was
+    # judged by, a time to its minute and a fine to its shilling, whatever the owner has typed since.
+    rules = replace(DEFAULT_RULES, late_fine=Decimal("500.00"), second_fine=Decimal("1500.00"))
+    assert rules_from_text(rules_as_text(rules)) == rules

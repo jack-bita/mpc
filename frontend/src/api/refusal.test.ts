@@ -1,9 +1,10 @@
 // refusal.test.ts — answerOf() gives back the answer, or throws the server's refusal in the one error
-// shape, even when the body came from something in front of Django (UI-2).
+// shape, even when the body came from something in front of Django (UI-2); and aboutTheWholeRequest() says which
+// failure a form shows above its buttons, not beside a box (ATT-9, moved here in ATT-6's review).
 import { describe, expect, it } from "vitest";
 
 import { createApiClient } from "./client";
-import { ApiRefusal, answerOf } from "./refusal";
+import { aboutTheWholeRequest, ApiRefusal, answerOf } from "./refusal";
 
 const LOCKED = {
   code: "pin.locked",
@@ -89,5 +90,39 @@ describe("answerOf", () => {
       const refusal = await refusalOf(answerOf(answer(404, { error })));
       expect(refusal.body.code, JSON.stringify(error)).toBe("server_error");
     }
+  });
+});
+
+describe("aboutTheWholeRequest", () => {
+  /** A refusal in the one error shape, with its code and the codes beside its boxes. */
+  function refused(code: string, fields: Record<string, string[]> = {}) {
+    return new ApiRefusal(400, { code, message: code, fields, params: {} });
+  }
+
+  it("leaves to the boxes a refusal of the boxes alone", () => {
+    // Every problem is beside a box: the form shows them there, and nothing above its buttons.
+    expect(
+      aboutTheWholeRequest(
+        refused("invalid", { reason: ["day.reason_missing"] }),
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps a refusal about the whole request, even with boxes beside it", () => {
+    // A demo's refusal of today, with first_day beside it: the form says both at once (ATT-9's review).
+    const both = refused("closure.overlaps", {
+      first_day: ["demo.closures_from_tomorrow"],
+    });
+    expect(aboutTheWholeRequest(both)).toBe(both);
+    const whole = refused("day.own");
+    expect(aboutTheWholeRequest(whole)).toBe(whole);
+  });
+
+  it("keeps an invalid with no box to show it beside, and any other failure", () => {
+    const nowhere = refused("invalid");
+    expect(aboutTheWholeRequest(nowhere)).toBe(nowhere);
+    const offline = new TypeError("Failed to fetch");
+    expect(aboutTheWholeRequest(offline)).toBe(offline);
+    expect(aboutTheWholeRequest(null)).toBeNull();
   });
 });

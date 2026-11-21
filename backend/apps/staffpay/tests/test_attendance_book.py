@@ -15,6 +15,7 @@ the demo's made-up 500 and 1,500 (rule 10). Fake data only: the repo is public.
 
 import datetime as dt
 import itertools
+from collections.abc import Callable
 from decimal import Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
@@ -29,14 +30,23 @@ from apps.control.services import dismiss_flag, raise_flag
 from apps.core.acting import acting_as
 from apps.core.links import table_of
 from apps.core.models import ShopScoped
+from apps.core.permissions import RoleTemplate
 from apps.core.settings_registry import ATTENDANCE_ON, LATE_FINE, SettingKey
 from apps.core.tenancy import ShopMismatch, shop_context, system_context
 from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, change_worker, hire_again, mark_left
 from apps.shops.models import Closure, Setting, Shop, Side
 from apps.shops.selectors import shop_today
-from apps.staffpay.models import AttendanceDay, AttendanceEvent, ClockKind, DayStatus, ReviewReason, TimeCheck
-from apps.staffpay.services import work_out_days
+from apps.staffpay.models import (
+    AttendanceDay,
+    AttendanceEvent,
+    ClockKind,
+    DayChoice,
+    DayStatus,
+    ReviewReason,
+    TimeCheck,
+)
+from apps.staffpay.services import decide_day, work_out_days
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
@@ -165,6 +175,132 @@ def test_database_refuses_to_delete_a_day(shop_a: Shop, staff_a: StaffMember) ->
         with pytest.raises(IntegrityError, match="never deleted"), transaction.atomic():
             AttendanceDay.objects.filter(pk=row.pk).delete()
         assert AttendanceDay.objects.filter(pk=row.pk).exists()
+
+
+# A manager's decision on a day (ATT-6): Juma's Monday, sent to review with no Toka, decided a full day by Baba, with
+# why. The decision sits beside what the book worked out, which keeps its own status, fine and reason.
+DECIDED_AT = dt.datetime(2026, 11, 20, 9, 0, tzinfo=dt.UTC)
+
+
+def _decided(shop: Shop, staff: StaffMember, by: StaffMember, **changes: object) -> AttendanceDay:
+    # The day as the book sent it to review, with a whole decision on it; `changes` overrides a part.
+    decision: dict[str, object] = {
+        "decided_status": DayStatus.ON_TIME,
+        "decided_fine": Decimal("0.00"),
+        "decided_by": by,
+        "decided_at": DECIDED_AT,
+        "decision_reason": "Alisahau kubonyeza Toka",
+    }
+    decision.update(changes)
+    return _day(
+        shop,
+        staff,
+        status=DayStatus.NEEDS_REVIEW,
+        fine=Decimal("0.00"),
+        first_out=None,
+        review_reason=ReviewReason.NO_OUT,
+        **decision,
+    )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        # Who, when, how much and why: each part of a decision, missing.
+        {"decided_by": None},
+        {"decided_at": None},
+        {"decided_fine": None},
+        {"decision_reason": ""},
+        # Spaces alone are no reason.
+        {"decision_reason": "   "},
+        # And no part of a decision without the decision itself.
+        {
+            "decided_status": "",
+            "decided_fine": None,
+            "decided_by": None,
+            "decided_at": None,
+            "decision_reason": "Alienda benki",
+        },
+        {
+            "decided_status": "",
+            "decided_fine": None,
+            "decided_at": None,
+            "decision_reason": "",
+        },
+    ],
+)
+def test_a_decision_is_whole_or_none(
+    shop_a: Shop, staff_a: StaffMember, staff_a2: StaffMember, changes: dict[str, object]
+) -> None:
+    # Every decision says who, when and why (rule 7), as a void's stamp does: only decide_day writes one, after its
+    # own checks, so half of one is a bug in our code, which the database refuses as the last guard (03 §5.6).
+    with pytest.raises(IntegrityError, match="decision_whole_or_none"), transaction.atomic():
+        _decided(shop_a, staff_a, staff_a2, **changes).save()
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        # Absent says why they were away: office duty is paid, the other two are not, so the pay needs to know.
+        {"decided_status": DayStatus.ABSENT},
+        # And takes no fine, nor does a full day.
+        {"decided_status": DayStatus.ABSENT, "absence_type": "no_show", "decided_fine": Decimal("500.00")},
+        {"decided_fine": Decimal("500.00")},
+        # A fine is never below 0.
+        {"decided_status": DayStatus.LATE, "decided_fine": Decimal("-500.00")},
+        # An absence kind only on an absent day: a full day with "permission" would read as both.
+        {"absence_type": "permission"},
+        {"decided_status": DayStatus.HALF, "absence_type": "office_duty"},
+        # And only the kinds there are.
+        {"decided_status": DayStatus.ABSENT, "absence_type": "sick"},
+        # Only what a person may decide: never the shop's calendar, nor "still to decide", nor a status there isn't.
+        # The whole-or-none rule refuses these too; PostgreSQL checks a table's rules in the order of their names, so
+        # it names this one.
+        {"decided_status": DayStatus.OFF},
+        {"decided_status": DayStatus.NEEDS_REVIEW},
+        {"decided_status": "holiday"},
+    ],
+)
+def test_a_decision_fits_what_was_decided(
+    shop_a: Shop, staff_a: StaffMember, staff_a2: StaffMember, changes: dict[str, object]
+) -> None:
+    # A decision the pay would read wrong (WAGE-2): a paid absence with no kind, a full day with a fine, or a status
+    # nobody may decide.
+    with pytest.raises(IntegrityError, match="decision_fits_its_status"), transaction.atomic():
+        _decided(shop_a, staff_a, staff_a2, **changes).save()
+
+
+def test_each_decision_saves_beside_what_the_book_said(
+    shop_a: Shop, staff_a: StaffMember, staff_a2: StaffMember
+) -> None:
+    # The six choices of the sheet (ATT-6), as decide_day writes them: a full day; late with the first fine, or with
+    # none as a shop starts with (ATT-2); half with a late arrival's fine; absent with each of its three kinds. Each
+    # keeps the book's own answer beside it, needs review with no Toka, which the decision never changes (A2).
+    decisions: list[dict[str, object]] = [
+        {},
+        {"decided_status": DayStatus.LATE, "decided_fine": Decimal("500.00")},
+        {"decided_status": DayStatus.LATE, "decided_fine": Decimal("0.00")},
+        {"decided_status": DayStatus.HALF, "decided_fine": Decimal("500.00")},
+        {"decided_status": DayStatus.ABSENT, "absence_type": "office_duty"},
+        {"decided_status": DayStatus.ABSENT, "absence_type": "permission"},
+        {"decided_status": DayStatus.ABSENT, "absence_type": "no_show"},
+    ]
+    for offset, changes in enumerate(decisions):
+        _decided(shop_a, staff_a, staff_a2, date=MONDAY + dt.timedelta(days=offset), **changes).save()
+    with shop_context(shop_a):
+        kept = list(AttendanceDay.objects.order_by("date"))
+    assert [day.decided_status for day in kept] == ["on_time", "late", "late", "half", "absent", "absent", "absent"]
+    assert {(day.status, day.review_reason) for day in kept} == {(DayStatus.NEEDS_REVIEW, ReviewReason.NO_OUT)}
+
+
+def test_a_day_with_no_decision_keeps_its_parts_empty(shop_a: Shop, staff_a: StaffMember) -> None:
+    # The book writes a day with no decision, as every day already kept has after the migration: all six parts empty.
+    row = _day(shop_a, staff_a)
+    row.save()
+    with shop_context(shop_a):
+        kept = AttendanceDay.objects.get(pk=row.pk)
+    assert (kept.decided_status, kept.absence_type, kept.decision_reason) == ("", "", "")
+    assert (kept.decided_fine, kept.decided_by_id, kept.decided_at) == (None, None, None)
 
 
 # The book's work (work_out_days). Arusha's clock, as the shop's: a minute here is what the counter showed.
@@ -378,6 +514,31 @@ def test_a_day_follows_a_tap_that_came_late(shop_a: Shop, device_a: Device, asha
     assert _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)].status == DayStatus.NEEDS_REVIEW
     tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
     assert _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)].status == DayStatus.ON_TIME
+
+
+def test_the_book_never_writes_over_a_decision(
+    shop_a: Shop,
+    device_a: Device,
+    asha: StaffMember,
+    give_role: Callable[[StaffMember, RoleTemplate, Side | None], None],
+) -> None:
+    # Asha's Monday waits with no Toka, and Baba decides it a half day (ATT-6). Her Toka then arrives from a laptop
+    # that was offline: the book works the day out again, on time, and writes only what it works out (WORKED_OUT), so
+    # Baba's decision stays as he made it, beside the book's new answer (A2).
+    baba = _worker(shop_a, "Baba")
+    give_role(baba, RoleTemplate.OWNER, None)
+    tap(device_a, asha, ClockKind.IN, at(MONDAY, 7, 20))
+    monday = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    with shop_context(shop_a):
+        decide_day(monday, choice=DayChoice.HALF, reason="Aliondoka mchana", replaces=None, by=baba)
+    tap(device_a, asha, ClockKind.OUT, at(MONDAY, 18, 45))
+    again = _days(shop_a, MONDAY, MONDAY)[("Asha", MONDAY)]
+    assert (again.status, again.review_reason) == (DayStatus.ON_TIME, "")
+    assert (again.decided_status, again.decided_by_id, again.decision_reason) == (
+        DayStatus.HALF,
+        baba.pk,
+        "Aliondoka mchana",
+    )
 
 
 def test_the_book_writes_as_nobody(shop_a: Shop, device_a: Device, asha: StaffMember, juma: StaffMember) -> None:
@@ -744,7 +905,7 @@ def test_another_flag_on_the_line_sends_nothing(shop_a: Shop, device_a: Device, 
 def test_a_voided_flagged_tap_sends_nothing(
     shop_a: Shop, device_a: Device, staff_a: StaffMember, juma: StaffMember
 ) -> None:
-    # Juma's flagged Ingia is voided by a manager (T2, ATT-6): a voided tap counts for nothing, so it sends nothing
+    # Juma's flagged Ingia is voided by a manager (T2, ATT-13): a voided tap counts for nothing, so it sends nothing
     # either. With no tap left, his Tuesday is absent.
     ingia = tap(
         device_a,

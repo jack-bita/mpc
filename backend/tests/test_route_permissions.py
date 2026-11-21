@@ -50,14 +50,20 @@ from apps.core.api import base
 from apps.core.api.base import CreateOnceMixin, ShopViewSet
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
-from apps.people.models import StaffMember, User
+from apps.people.models import Device, StaffMember, User
 from apps.people.services import add_staff, grant_permission, mark_left, suspend
 from apps.shops.api.views import ClosureViewSet, SettingViewSet, SideViewSet
 from apps.shops.models import Closure, ClosureStatus, Setting, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_closure, add_side, set_setting
-from apps.staffpay.api.views import AttendanceMonthViewSet, AttendanceWorkerViewSet, PayRateViewSet
+from apps.staffpay.api.views import (
+    AttendanceDayViewSet,
+    AttendanceMonthViewSet,
+    AttendanceWorkerViewSet,
+    PayRateViewSet,
+)
 from apps.staffpay.models import PayRate
+from apps.staffpay.tests.days import job, kept_day, switch_on
 from tests.probe.api import NoteCreateSerializer, NoteSerializer
 from tests.probe.models import Note
 from tests.test_tenancy_sweep import addresses
@@ -70,6 +76,7 @@ WORKERS = "/api/v1/people/staff/"
 PAY_RATES = "/api/v1/staffpay/pay-rates/"
 ATTENDANCE_MONTH = "/api/v1/staffpay/attendance-month/"
 ATTENDANCE_WORKER = "/api/v1/staffpay/attendance-worker/{}/"
+ATTENDANCE_DAY_DECIDE = "/api/v1/staffpay/attendance-days/{}/decide/"
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
 
@@ -1179,3 +1186,31 @@ def test_attendance_worker_route_names_its_permission() -> None:
     # A worker's month's one action, a read, behind the key to fix attendance, as the month's (ATT-12). Written out in
     # full, as above.
     assert AttendanceWorkerViewSet.action_permissions == {"retrieve": Permission.ATTENDANCE_MANAGE}
+
+
+@pytest.mark.django_db
+def test_deciding_a_day_needs_attendance_manage(
+    shop_a: Shop, sides: dict[str, Side], staff_a: StaffMember, staff_a2: StaffMember, give_role: GiveRole
+) -> None:
+    # Deciding a day (ATT-6) is for whoever fixes attendance: Asha, a seller on Dawa, may not decide anyone's, even
+    # with the address typed in; a Manager on every side decides Juma's. His Monday, in at 07:50 with no Toka, waits,
+    # made the way the shop makes one: a tap on the shop's laptop, then the book (apps/staffpay/tests/days.py). The
+    # laptop is made here, on this file's Dawa, as device_a would make a Dawa of its own beside it.
+    with shop_context(shop_a):
+        Device.objects.create(shop=shop_a, home_side=sides["D"], name="Laptop ya Dawa", code=1, key_hash="a" * 64)
+    give_role(staff_a, RoleTemplate.SELLER, sides["D"])
+    give_role(staff_a2, RoleTemplate.MANAGER, None)
+    switch_on(shop_a)
+    day = kept_day(job(shop_a, "Juma"))
+    sent = {"choice": "on_time", "reason": "Alisahau kubonyeza Toka", "replaces": None}
+    refused = client_for(staff_a).post(ATTENDANCE_DAY_DECIDE.format(day.pk), sent, format="json")
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "permission_denied"
+    decided = client_for(staff_a2).post(ATTENDANCE_DAY_DECIDE.format(day.pk), sent, format="json")
+    assert decided.status_code == 200
+
+
+def test_attendance_day_route_names_its_permission() -> None:
+    # Deciding a day's one action, a change, behind the key to fix attendance (ATT-6), as the month's read is. Written
+    # out in full, as above.
+    assert AttendanceDayViewSet.action_permissions == {"decide": Permission.ATTENDANCE_MANAGE}

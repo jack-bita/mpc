@@ -147,6 +147,9 @@
   "passwordField": {
     "show": "Show password"
   },
+  "sheet": {
+    "cancel": "Cancel"
+  },
   "password": {
     "chooseTitle": "Choose your password",
     "chooseIntro": "The password you were given is temporary. Choose your own, then go on.",
@@ -760,11 +763,17 @@
       "0": "Su"
     },
     "mark": {
+      "office_duty": "O",
+      "permission": "P",
+      "no_show": "A",
       "off": "–",
       "today": "•",
       "tapped": "+"
     },
     "kind": {
+      "office_duty": "office duty, paid",
+      "permission": "permission, unpaid",
+      "no_show": "no-show",
       "off": "shop closed",
       "today": "today",
       "tapped": "has an Ingia or Toka, not counted"
@@ -812,7 +821,44 @@
     "noOut": "No Toka.",
     "dayButton": "{weekday} {date}: {kind}",
     "notCounted": "This day isn't counted, but it has an Ingia or Toka.",
-    "photoFailed": "The photo didn't open. Try again later."
+    "photoFailed": "The photo didn't open. Try again later.",
+    "decide": "Decide this day",
+    "changeDecision": "Change the decision",
+    "decision": {
+      "on_time": "Full day",
+      "late": "Late",
+      "half": "Half day",
+      "absent": "Absent",
+      "office_duty": "Office duty",
+      "permission": "Permission",
+      "no_show": "No-show"
+    },
+    "option": {
+      "withFine": "{decision} · fine {amount}",
+      "office_duty": "Office duty · paid as a full day",
+      "permission": "Permission · unpaid",
+      "no_show": "No-show · unpaid"
+    },
+    "decidedBy": "{decision} · decided by {by}, {date}",
+    "decidedByNoDate": "{decision} · decided by {by}",
+    "decisionReason": "Reason: {reason}",
+    "systemSaid": "The system said: {said}",
+    "systemSaidWhy": "The system said: {said} · {why}",
+    "yours": "You can't decide your own days.",
+    "sheetTitle": "Decide {name}'s day",
+    "sheetAbout": "{weekday} {date}",
+    "sheetAboutIn": "{weekday} {date} · Clock-in {time}",
+    "choiceLabel": "This day was",
+    "pickOne": "Pick one decision.",
+    "reasonLabel": "Reason",
+    "reasonHint": "Why you decided so, in your own words.",
+    "readyHint": "On the demo, pick a ready reason.",
+    "readyReason": {
+      "forgot_toka": "Forgot to tap Toka",
+      "away_on_work": "Was out on the shop's work",
+      "owner_allowed": "Allowed by the owner"
+    },
+    "save": "Save the decision"
   },
   "needsAttention": {
     "title": "Records the server refused",
@@ -983,6 +1029,15 @@
         "blue": "Dawa",
         "striped": "Vyakula"
       }
+    },
+    "sheet": {
+      "title": "Bottom sheet",
+      "hint": "A short task opens from the bottom, over its own page: pick, type why, save. Cancel, Esc or a tap outside closes it.",
+      "open": "Open the sheet",
+      "sampleTitle": "Decide Juma's day",
+      "sampleDescription": "Thursday 12/11 · Clock-in 07:50 morning",
+      "sampleReason": "Reason",
+      "sampleAction": "Save the decision"
     }
   },
   "apiError": {
@@ -1117,7 +1172,8 @@
       "phones_fixed": "On the demo, workers get no phone number, so nobody's real number is shown to every visitor.",
       "rules_from_tomorrow": "On the demo, a new value starts tomorrow or later, so every visitor today finds the shop as it is.",
       "no_note": "On the demo, notes aren't kept. Leave this box empty.",
-      "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is."
+      "closures_from_tomorrow": "On the demo, only days from tomorrow on can be closed or opened, so every visitor today finds the shop as it is.",
+      "ready_reasons": "On the demo, pick one of the ready reasons."
     },
     "closure": {
       "date_past": "A day that has already passed can't be changed.",
@@ -1132,6 +1188,12 @@
     "pay_rate": {
       "amount_invalid": "Type a whole number of shillings, above 0.",
       "before_first_day": "A rate can't start before this worker's first day."
+    },
+    "day": {
+      "own": "You can't decide your own day.",
+      "not_working_day": "This day can't be decided: it isn't a working day that is over.",
+      "choice_not_offered": "This day can't be decided that way.",
+      "reason_missing": "Write why you decided this."
     },
     "attachment": {
       "not_found": "The server has no such photo.",

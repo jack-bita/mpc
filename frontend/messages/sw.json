@@ -147,6 +147,9 @@
   "passwordField": {
     "show": "Onyesha nenosiri"
   },
+  "sheet": {
+    "cancel": "Ghairi"
+  },
   "password": {
     "chooseTitle": "Chagua nenosiri lako",
     "chooseIntro": "Nenosiri ulilopewa ni la muda. Chagua lako mwenyewe, kisha uendelee.",
@@ -760,11 +763,17 @@
       "0": "Jp"
     },
     "mark": {
+      "office_duty": "O",
+      "permission": "R",
+      "no_show": "H",
       "off": "–",
       "today": "•",
       "tapped": "+"
     },
     "kind": {
+      "office_duty": "kazi ya ofisi, analipwa",
+      "permission": "ruhusa, halipwi",
+      "no_show": "hakuja bila taarifa",
       "off": "duka limefungwa",
       "today": "leo",
       "tapped": "ina Ingia au Toka, haihesabiwi"
@@ -812,7 +821,44 @@
     "noOut": "Hakuna Toka.",
     "dayButton": "{weekday} {date}: {kind}",
     "notCounted": "Siku hii haihesabiwi, lakini ina Ingia au Toka.",
-    "photoFailed": "Picha haikufunguka. Jaribu tena baadaye."
+    "photoFailed": "Picha haikufunguka. Jaribu tena baadaye.",
+    "decide": "Amua siku hii",
+    "changeDecision": "Badilisha uamuzi",
+    "decision": {
+      "on_time": "Siku kamili",
+      "late": "Amechelewa",
+      "half": "Nusu siku",
+      "absent": "Hakuja",
+      "office_duty": "Kazi ya ofisi",
+      "permission": "Ruhusa",
+      "no_show": "Hakuja bila taarifa"
+    },
+    "option": {
+      "withFine": "{decision} · faini {amount}",
+      "office_duty": "Kazi ya ofisi · analipwa siku kamili",
+      "permission": "Ruhusa · halipwi",
+      "no_show": "Hakuja bila taarifa · halipwi"
+    },
+    "decidedBy": "{decision} · uamuzi wa {by}, {date}",
+    "decidedByNoDate": "{decision} · uamuzi wa {by}",
+    "decisionReason": "Sababu: {reason}",
+    "systemSaid": "Mfumo ulisema: {said}",
+    "systemSaidWhy": "Mfumo ulisema: {said} · {why}",
+    "yours": "Huwezi kuamua siku zako mwenyewe.",
+    "sheetTitle": "Amua siku ya {name}",
+    "sheetAbout": "{weekday} {date}",
+    "sheetAboutIn": "{weekday} {date} · Ingia {time}",
+    "choiceLabel": "Siku hii ilikuwa",
+    "pickOne": "Chagua uamuzi mmoja.",
+    "reasonLabel": "Sababu",
+    "reasonHint": "Kwa nini umeamua hivi, kwa maneno yako.",
+    "readyHint": "Kwenye demo, chagua sababu iliyo tayari.",
+    "readyReason": {
+      "forgot_toka": "Alisahau kubonyeza Toka",
+      "away_on_work": "Alikuwa kazini nje",
+      "owner_allowed": "Ameruhusiwa na mwenye duka"
+    },
+    "save": "Hifadhi uamuzi"
   },
   "needsAttention": {
     "title": "Kumbukumbu zilizokataliwa na seva",
@@ -983,6 +1029,15 @@
         "blue": "Dawa",
         "striped": "Vyakula"
       }
+    },
+    "sheet": {
+      "title": "Dirisha la chini",
+      "hint": "Kazi fupi hufunguka kutoka chini, juu ya ukurasa wake: chagua, andika sababu, hifadhi. Ghairi, Esc au kugusa nje hulifunga.",
+      "open": "Fungua dirisha",
+      "sampleTitle": "Amua siku ya Juma",
+      "sampleDescription": "Alhamisi 12/11 · Ingia 07:50 asubuhi",
+      "sampleReason": "Sababu",
+      "sampleAction": "Hifadhi uamuzi"
     }
   },
   "apiError": {
@@ -1117,7 +1172,8 @@
       "phones_fixed": "Kwenye demo, wafanyakazi hawawekewi namba ya simu, ili namba halisi ya mtu isionekane kwa kila mgeni.",
       "rules_from_tomorrow": "Kwenye demo, thamani mpya huanza kesho au baadaye, ili kila mgeni wa leo akute duka lilivyo.",
       "no_note": "Kwenye demo, maelezo hayahifadhiwi. Acha kisanduku hiki wazi.",
-      "closures_from_tomorrow": "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo."
+      "closures_from_tomorrow": "Kwenye demo, ni siku za kuanzia kesho tu zinazoweza kufungwa au kufunguliwa, ili kila mgeni wa leo akute duka lilivyo.",
+      "ready_reasons": "Kwenye demo, chagua moja ya sababu zilizo tayari."
     },
     "closure": {
       "date_past": "Siku iliyoshapita haiwezi kubadilishwa.",
@@ -1132,6 +1188,12 @@
     "pay_rate": {
       "amount_invalid": "Andika kiasi cha shilingi nzima, zaidi ya sifuri.",
       "before_first_day": "Malipo hayawezi kuanza kabla ya siku ya kwanza ya kazi ya mfanyakazi huyu."
+    },
+    "day": {
+      "own": "Huwezi kuamua siku yako mwenyewe.",
+      "not_working_day": "Siku hii haiamuliwi: si siku ya kazi iliyokwisha.",
+      "choice_not_offered": "Siku hii haiwezi kuamuliwa hivyo.",
+      "reason_missing": "Andika sababu ya uamuzi huu."
     },
     "attachment": {
       "not_found": "Seva haina picha hii.",

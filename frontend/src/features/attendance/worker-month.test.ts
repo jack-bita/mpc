@@ -108,6 +108,8 @@ describe("how often a worker's month is asked again", () => {
       left_on: null,
       days: [],
       taps: [],
+      yours: false,
+      ready_reasons: [],
     };
   }
 

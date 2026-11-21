@@ -30,7 +30,7 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { useApiErrorWords } from "@/api/errors";
-import { answerOf, ApiRefusal } from "@/api/refusal";
+import { aboutTheWholeRequest, answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
 import { Button } from "@/components/design/button";
@@ -39,12 +39,7 @@ import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { newId } from "@/lib/ids";
 import { useOnline } from "@/offline/network";
 
-import {
-  aboutTheWholeRequest,
-  type Closure,
-  CLOSURES,
-  keepClosure,
-} from "./closures";
+import { type Closure, CLOSURES, keepClosure } from "./closures";
 
 // The fields with a box, beside which their refusals show. A refusal of any other field shows above the buttons.
 const ON_A_BOX = new Set(["first_day", "last_day", "name"]);
@@ -189,7 +184,7 @@ export function ClosureForm({
         </Alert>
       ) : null}
       {/* What no field names: days another closure has, no network, no key, the server's own problem.
-          Shown beside a box's refusal too, when the server sends both (aboutTheWholeRequest, closures.ts). */}
+          Shown beside a box's refusal too, when the server sends both (aboutTheWholeRequest, src/api/refusal.ts). */}
       <ApiErrorAlert error={aboutTheWholeRequest(save.error)} />
       <div className="flex flex-wrap gap-3">
         {/* Switched off while it is sent, so a second tap sends nothing, and while offline, so nothing waits unsent

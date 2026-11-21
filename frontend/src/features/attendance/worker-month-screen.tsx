@@ -1,10 +1,11 @@
 // worker-month-screen.tsx — one worker's month as a calendar, on the owner's or a manager's phone (ATT-12, 03 §5.10),
 // opened from the worker's name on Mahudhurio ya mwezi (month-screen.tsx): the worker's name as the page's title, the
 // month, the month's counts as on their line (✓ 11 · Ch 2 · …), then the month Monday first (Jt Jn Jtn Al Ij Jm Jp),
-// each day its mark, and what the marks mean under it. A day tapped opens under the calendar (worker-day.tsx): its
-// status, why, and each tap with its laptop and photo.
+// each day its mark, a decided day by its decision (O office duty, R permission, ATT-6), and what the marks mean under
+// it. A day tapped opens under the calendar (worker-day.tsx): its status, why, and each tap with its laptop and photo;
+// and there a manager decides it, in a sheet over the day (decide-day.tsx, ATT-6).
 //
-// As Jack pictured it (19 Nov 2026) and approved as a screen (20 Nov 2026). It only shows: deciding a day is ATT-6's.
+// As Jack pictured it (19 Nov 2026) and approved as a screen (20 Nov 2026).
 // The server works the month out from the book of days, and the page draws the marks it is given, never deciding
 // itself what a day was: – a Sunday or a closed day (`off`), • today, which the book keeps only once it is over, and
 // nothing for a day the book doesn't answer, a day to come, before the worker's first day or after their last.
@@ -51,12 +52,21 @@ import {
 /** The weekdays as the calendar's columns run, Monday first, as the word books number them (Sunday "0"). */
 const MONDAY_FIRST: Weekday[] = ["1", "2", "3", "4", "5", "6", "0"];
 
-/** What a day of the calendar shows: one of the five kinds the line counts, a day the shop was shut, today, a day with
- * taps the book doesn't count, or nothing. */
-type Mark = (typeof KINDS)[number] | "off" | "today" | "tapped" | null;
+/** The kind of a decided absence (ATT-6): O office duty, paid; R permission; H a no-show, as an absence the book saw. */
+type Absence = "office_duty" | "permission" | "no_show";
+
+/** What a day of the calendar shows: one of the five kinds the line counts, a decided absence by its kind, a day the shop
+ * was shut, today, a day with taps the book doesn't count, or nothing. */
+type Mark =
+  (typeof KINDS)[number] | Absence | "off" | "today" | "tapped" | null;
 
 /** The marks of this page's own book, beside the line's five from the month page's. */
-type OwnMark = "off" | "today" | "tapped";
+type OwnMark = Absence | "off" | "today" | "tapped";
+
+/** Whether a mark is this page's own, not one of the line's five. */
+function isOwn(mark: Exclude<Mark, null>): mark is OwnMark {
+  return !(KINDS as readonly string[]).includes(mark);
+}
 
 export function WorkerMonthScreen({
   staff,
@@ -117,6 +127,7 @@ export function WorkerMonthScreen({
           answer={answer.data}
           chosen={chosen}
           onChoose={choose}
+          timezone={who.data?.shop.timezone ?? null}
         />
       ) : null}
     </div>
@@ -144,10 +155,13 @@ function TheWorkersMonth({
   answer,
   chosen,
   onChoose,
+  timezone,
 }: {
   answer: WorkerAttendance;
   chosen: string | null;
   onChoose: (day: string) => void;
+  /** The shop's zone, read once by the screen, for the date a decision was made on (ATT-6). */
+  timezone: string | null;
 }) {
   const monthWords = useTranslations("attendanceMonth");
   const [year, number] = answer.month.split("-") as [string, MonthNumber];
@@ -179,7 +193,9 @@ function TheWorkersMonth({
         onChoose={onChoose}
       />
       <MarksKey />
-      {open !== null ? <TheDay day={open} answer={answer} /> : null}
+      {open !== null ? (
+        <TheDay day={open} answer={answer} timezone={timezone} />
+      ) : null}
     </>
   );
 }
@@ -293,6 +309,9 @@ function markOf(
   kept: WorkerDay | undefined,
   answer: WorkerAttendance,
 ): Mark {
+  // A decided day by its decision (ATT-6): an absence by its kind, O for office duty, which is paid, apart from R and
+  // H, which aren't; any other by what was decided. The book's own answer stays on the day itself (A2).
+  if (kept?.decision) return kept.decision.absence_type ?? kept.decision.status;
   if (kept !== undefined) return kept.status;
   const worksThatDay =
     answer.started_on <= day &&
@@ -350,8 +369,6 @@ function DayOfTheMonth({
 function DaysNumberAndMark({ day, mark }: { day: string; mark: Mark }) {
   const t = useTranslations("attendanceWorker");
   const monthWords = useTranslations("attendanceMonth");
-  const isWorkersOwn =
-    mark !== null && mark !== "off" && mark !== "today" && mark !== "tapped";
   return (
     <span className="grid gap-0.5">
       <span className="text-sm">{Number(day.slice(8))}</span>
@@ -368,9 +385,7 @@ function DaysNumberAndMark({ day, mark }: { day: string; mark: Mark }) {
                 : "h-7 text-lg font-semibold"
             }
           >
-            {isWorkersOwn
-              ? monthWords(`mark.${mark}`)
-              : t(`mark.${mark as OwnMark}`)}
+            {isOwn(mark) ? t(`mark.${mark}`) : monthWords(`mark.${mark}`)}
           </span>
           <span className="sr-only">{kindOf(mark, t, monthWords)}</span>
         </>
@@ -379,18 +394,18 @@ function DaysNumberAndMark({ day, mark }: { day: string; mark: Mark }) {
   );
 }
 
-/** A mark in words: one of the line's five kinds from the month page's book, a shut day's or today's from this one. */
+/** A mark in words: one of the line's five kinds from the month page's book; a decided absence's kind, a shut day's or
+ * today's from this one. */
 function kindOf(
   mark: Exclude<Mark, null>,
   t: ReturnType<typeof useTranslations<"attendanceWorker">>,
   monthWords: ReturnType<typeof useTranslations<"attendanceMonth">>,
 ): string {
-  return mark === "off" || mark === "today" || mark === "tapped"
-    ? t(`kind.${mark}`)
-    : monthWords(`kind.${mark}`);
+  return isOwn(mark) ? t(`kind.${mark}`) : monthWords(`kind.${mark}`);
 }
 
-/** What each mark means, under the calendar: the line's five, then a shut day's, today's, and a day not counted. */
+/** What each mark means, under the calendar: the line's five, then a decided absence's two of its own (O, R; a no-show
+ * is H, as any absence), a shut day's, today's, and a day not counted. */
 function MarksKey() {
   const t = useTranslations("attendanceWorker");
   const monthWords = useTranslations("attendanceMonth");
@@ -406,11 +421,13 @@ function MarksKey() {
           {monthWords(`mark.${kind}`)} {monthWords(`kind.${kind}`)}
         </li>
       ))}
-      {(["off", "today", "tapped"] as const).map((extra) => (
-        <li key={extra}>
-          {t(`mark.${extra}`)} {t(`kind.${extra}`)}
-        </li>
-      ))}
+      {(["office_duty", "permission", "off", "today", "tapped"] as const).map(
+        (extra) => (
+          <li key={extra}>
+            {t(`mark.${extra}`)} {t(`kind.${extra}`)}
+          </li>
+        ),
+      )}
     </ul>
   );
 }
