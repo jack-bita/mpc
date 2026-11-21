@@ -433,6 +433,7 @@
     },
     "view": {
       "title": "Worker",
+      "details": "Their details",
       "noWorker": "No worker chosen. Go back to the list of workers.",
       "noJobTitle": "None",
       "noPhone": "None",
@@ -454,6 +455,11 @@
         "unsuspend": "Bring {name} back to work",
         "leave": "{name} left work",
         "hireAgain": "Hire {name} again"
+      },
+      "confirm": {
+        "suspend": "Suspend",
+        "unsuspend": "Bring back",
+        "leave": "Mark as left"
       },
       "reason": "Reason",
       "reasonHint": "Kept with your name and the time.",
@@ -479,6 +485,7 @@
       "pinNotSet": "Not set",
       "setPin": "Set PIN",
       "pinTitle": "Set {name}'s PIN",
+      "pinSave": "Set PIN",
       "handOver": "Hand {name} this phone to type their own PIN.",
       "newPin": "New PIN",
       "newPinHint": "Four digits.",
@@ -487,6 +494,7 @@
       "pinDone": "{name}'s PIN is set. Each shop computer shows them once it syncs. On a computer with a network, any lock is lifted and their old PIN no longer works; one without a network learns it once it syncs.",
       "temporaryPassword": "Temporary password",
       "passwordTitle": "Temporary password for {name}",
+      "passwordSave": "Set password",
       "passwordIntro": "Type a password, then tell it to {name} face to face. They choose their own once they log in.",
       "password": "Password",
       "noPhone": "{name} has no phone number. If they have no email either, add their phone with Edit first.",
@@ -636,8 +644,7 @@
         "mealsNo": "No, the cook",
         "note": "Reason (optional)",
         "noteHint": "Such as: A raise.",
-        "save": "Save",
-        "cancel": "Cancel"
+        "save": "Save pay rate"
       }
     }
   },

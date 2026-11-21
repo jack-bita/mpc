@@ -233,9 +233,10 @@ describe("Malipo kwa siku", () => {
     expect(within(card).queryByRole("button")).toBeNull();
   });
 
-  it("hides Weka malipo while another card's form is open, and brings it back after", async () => {
-    // One form at a time on the page (PPL-8's review): Badilisha, Weka PIN (PPL-12) or Ongeza kazi open, Malipo kwa
-    // siku's button stays off the page, so a person never meets two Hifadhi; Ghairi brings it back.
+  it("hides Weka malipo while another card's form is open in the page, and brings it back after", async () => {
+    // One form at a time on the page (PPL-8's review): Badilisha or Ongeza kazi open in the page, Malipo kwa siku's
+    // button stays off it, so a person never meets two Hifadhi; Ghairi brings it back. A sheet (Weka PIN, UI-10) shuts
+    // the whole page off instead (worker-pin.test.tsx).
     theServerHas(JUMA, payRates([], null));
     answer("GET", ROLES_ROUTE, { status: 200, body: rolesPage(SHOP_ROLES) });
     answer("GET", "/api/devices/v1/demo/open/", {
@@ -247,7 +248,7 @@ describe("Malipo kwa siku", () => {
     const card = await theCard();
     await within(card).findByRole("button", { name: "Weka malipo" });
 
-    for (const other of ["Badilisha", "Weka PIN", "Ongeza kazi"]) {
+    for (const other of ["Badilisha", "Ongeza kazi"]) {
       fireEvent.click(await screen.findByRole("button", { name: other }));
       await waitFor(() =>
         expect(

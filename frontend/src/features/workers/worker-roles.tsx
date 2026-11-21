@@ -2,22 +2,24 @@
 // "Muuzaji (Dawa)"; then Ruhusa za ziada, each key given apart from a role, by its name and side, "Kuhesabu mzigo
 // (Vyakula)", where PPL-6 only counted them.
 //
-// A card of its own under the status buttons (Jack, PPL-8: the page order), not inside the details: Badilisha hides
-// the details while its form is open (worker-page.tsx), and the roles stay on the page all the same, as Badilisha
-// changes none of them.
+// A card of its own under Taarifa zake and Kuingia (Jack, PPL-8 and PPL-12: the page order), not inside the details:
+// Badilisha leaves the details out while its form is open (worker-actions.tsx), and the roles stay on the page all the
+// same, as Badilisha changes none of them.
 //
 // What a worker holds is a role's codes plus their extra keys, on each side (02 §5). The page shows them as given,
 // one line each, so a manager sees exactly what was given and where.
 //
-// Under the lists, Ongeza kazi opens its form in the button's place (give-form.tsx). The button shows as PPL-6's do
-// (the card's default): for a worker working or suspended, as a suspended one may be given a role, which counts once
+// Cheo is the card's heading, and Ruhusa za ziada a heading a level under it, as the keys are part of what the worker
+// may do (UI-10). On Cheo's row sits Ongeza kazi (card-heading.tsx), as it adds to the whole card, roles and keys
+// alike; its form opens under the lists (give-form.tsx), and the button leaves the row meanwhile. It shows as PPL-6's
+// do (the card's default): for a worker working or suspended, as a suspended one may be given a role, which counts once
 // they are back (PPL-7); none for one who left, whose roles stay as history; none on one's own page, where the status
 // buttons' line already says why (staff.own, worker-actions.tsx), as nobody changes their own job.
 //
-// Beside each role and each key, Ondoa opens its form under the lists (end-form.tsx), its title naming what goes; never
-// beside Mmiliki, which only the superuser takes away (PPL-7, PPL-13). Shown for the same workers as Ongeza kazi. While
-// a form is open, no other button shows, on this card or the status buttons' (worker-page.tsx), so one change is made
-// at a time.
+// Beside each role and each key, Ondoa opens its sheet over the page (end-form.tsx, UI-10), its title naming what goes;
+// never beside Mmiliki, which only the superuser takes away (PPL-7, PPL-13). Shown for the same workers as Ongeza kazi.
+// One change is made at a time: while Ongeza kazi's form is open in the page, no other button shows, on this card or
+// the others (worker-page.tsx); while Ondoa's sheet is open, the page behind it is shut off.
 //
 // After a change, one line says what it did, and that the shop's laptops learn it at their next sync, as a worker's
 // keys travel on their staff row (SYNC-15); the keyboard goes to it, as after the status buttons. Ghairi gives the
@@ -36,6 +38,7 @@ import { Button } from "@/components/design/button";
 import { Card, CardContent } from "@/components/design/card";
 import type { WhoIsHere } from "@/features/people/who-is-here";
 
+import { CardHeading } from "./card-heading";
 import { EndForm, type Ending } from "./end-form";
 import { GiveForm } from "./give-form";
 import { isOwnerRole } from "./giving";
@@ -62,7 +65,8 @@ export function WorkerRoles({
   roles: RolesRead;
   /** Ongeza kazi's form opened (true): the page asks the shop's roles from then on. */
   onGiving?: (giving: boolean) => void;
-  /** A form opened (true) or closed (false): the page keeps one form open at a time (worker-page.tsx). */
+  /** Ongeza kazi's form, in the page, opened (true) or closed (false), never Ondoa's sheet: the page keeps one form
+   * open at a time (worker-page.tsx). */
   onForm?: (open: boolean) => void;
   /** Another card's form is open: this card's buttons stay off the page meanwhile (PPL-8's review). */
   buttonsHidden?: boolean;
@@ -74,19 +78,21 @@ export function WorkerRoles({
   const rolesId = useId();
   const keysId = useId();
   const [open, setOpenHere] = useState<Open | null>(null);
-  /** A form opens, or (null) closes: the page learns, for the other card's buttons. */
+  /** A form opens, or (null) closes: the page learns whether Ongeza kazi's is open in the page, for the other cards'
+   * buttons. Ondoa's sheet isn't told: it shuts the whole page off behind it (UI-10). */
   function setOpen(form: Open | null) {
     setOpenHere(form);
-    onForm?.(form !== null);
+    onForm?.(form?.form === "give");
   }
   // Gone from the page with a form open: the page lets the other card's buttons show again.
   useEffect(() => () => onForm?.(false), [onForm]);
   // The line that says what the last change did, or that someone else changed the worker first.
   const [news, setNews] = useState<string | null>(null);
 
-  // Where the keyboard goes when a form closes (worker-actions.tsx): Ghairi, back to the button that opened it; a
-  // change, to the line that says what happened, as an Ondoa's row is gone. A new object each time, so each close
-  // moves it.
+  // Where the keyboard goes when Ongeza kazi's form in the page closes (worker-actions.tsx): Ghairi, back to its
+  // button; a change, to the line that says what happened. A new object each time, so each close moves it. Ondoa's
+  // sheet moves it itself (its finalFocus below): to the line, as the row and its Ondoa are gone, or back to the
+  // row's Ondoa.
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const newsLine = useRef<HTMLDivElement>(null);
   const [backTo, setBackTo] = useState<{ to: string } | null>(null);
@@ -96,19 +102,27 @@ export function WorkerRoles({
     else buttons.current.get(backTo.to)?.focus();
   }, [backTo]);
 
-  // Who may see the buttons (see the top); none while a form is open.
+  // Who may see the buttons (see the top); none while Ongeza kazi's form is open in the page. They stay under Ondoa's
+  // sheet, so Ghairi gives the keyboard back to the very row's Ondoa.
   const mayChange = worker.status !== "left" && worker.id !== me.staff.id;
-  const showButtons = mayChange && open === null && !buttonsHidden;
+  const showButtons = mayChange && open?.form !== "give" && !buttonsHidden;
+
+  // Whether the last close was a change, for Ondoa's sheet to give the keyboard to the done line: read as the sheet
+  // goes, after the draw that took it away, so a ref, not the state (worker-actions.tsx).
+  const afterChange = useRef(false);
 
   function said(sentence: string) {
+    afterChange.current = true;
+    // Ondoa's sheet moves the keyboard itself as it goes; Ongeza kazi's form in the page needs it moved.
+    const fromASheet = open?.form === "end";
     setOpen(null);
     setNews(sentence);
-    setBackTo({ to: "news" });
+    if (!fromASheet) setBackTo({ to: "news" });
   }
 
   function cancelled(button: string) {
+    if (open?.form !== "end") setBackTo({ to: button });
     setOpen(null);
-    setBackTo({ to: button });
     // Asked again: a change whose answer was lost may have been made (worker-actions.tsx).
     void store.invalidateQueries({ queryKey: WORKERS });
   }
@@ -127,6 +141,7 @@ export function WorkerRoles({
         size="normal"
         aria-label={t("ending.removeWhat", { what: ending.words })}
         onClick={() => {
+          afterChange.current = false;
           setNews(null);
           setOpen({ form: "end", ending });
         }}
@@ -140,9 +155,27 @@ export function WorkerRoles({
     <Card>
       <CardContent className="grid gap-6">
         <section aria-labelledby={rolesId} className="grid gap-2">
-          <h2 id={rolesId} className="text-lg font-semibold">
-            {t("view.roles")}
-          </h2>
+          <CardHeading id={rolesId} title={t("view.roles")}>
+            {showButtons ? (
+              <Button
+                ref={(button) => {
+                  // Its place among the buttons, for the keyboard to come back to (worker-actions.tsx).
+                  if (button) buttons.current.set(ADD, button);
+                  else buttons.current.delete(ADD);
+                }}
+                kind="second"
+                // Normal, on the heading's row, which a big one would crowd (worker-actions.tsx).
+                size="normal"
+                onClick={() => {
+                  setNews(null);
+                  setOpen({ form: "give" });
+                  onGiving?.(true);
+                }}
+              >
+                {t("giving.add")}
+              </Button>
+            ) : null}
+          </CardHeading>
           {worker.roles.length === 0 ? (
             <p>{t("noRole")}</p>
           ) : (
@@ -165,10 +198,11 @@ export function WorkerRoles({
             </ul>
           )}
         </section>
+        {/* A section of its own, beside the roles', not inside it: each list reads alone, Cheo's without the keys. */}
         <section aria-labelledby={keysId} className="grid gap-2">
-          <h2 id={keysId} className="text-lg font-semibold">
+          <h3 id={keysId} className="font-semibold">
             {t("view.extraKeys")}
-          </h2>
+          </h3>
           {worker.keys.length === 0 ? (
             <p>{t("view.noExtraKeys")}</p>
           ) : (
@@ -209,32 +243,22 @@ export function WorkerRoles({
             onCancel={() => cancelled(ADD)}
           />
         ) : open?.form === "end" ? (
+          // A sheet, mounted only while open, so Ghairi forgets what was typed (UI-10).
           <EndForm
             worker={worker}
             ending={open.ending}
             onDone={said}
             onChangedMeanwhile={said}
             onCancel={() => cancelled(open.ending.id)}
+            // After a change, the done line, as the row and its Ondoa are gone; after Ghairi, the row's Ondoa itself,
+            // named (worker-actions.tsx).
+            finalFocus={() =>
+              afterChange.current
+                ? newsLine.current
+                : (buttons.current.get(open.ending.id) ?? null)
+            }
           />
-        ) : !showButtons ? null : (
-          <div>
-            <Button
-              ref={(button) => {
-                // Its place among the buttons, for the keyboard to come back to (worker-actions.tsx).
-                if (button) buttons.current.set(ADD, button);
-                else buttons.current.delete(ADD);
-              }}
-              kind="second"
-              onClick={() => {
-                setNews(null);
-                setOpen({ form: "give" });
-                onGiving?.(true);
-              }}
-            >
-              {t("giving.add")}
-            </Button>
-          </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

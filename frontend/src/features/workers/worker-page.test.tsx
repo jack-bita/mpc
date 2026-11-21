@@ -8,9 +8,10 @@ import { describe, expect, it, vi } from "vitest";
 import { forgetTheLastPerson, makeQueryClient } from "@/api/query-client";
 import { DAWA, VYAKULA, whoIsHere } from "@/test/devices";
 import { answer, refusal, sent } from "@/test/fake-server";
+import { PAY_RATES_ROUTE, payRate, payRates } from "@/test/pay-rates";
 import { render } from "@/test/render";
 import { router } from "@/test/router";
-import { MANAGER, role, STAFF, worker } from "@/test/workers";
+import { BABA, MANAGER, role, STAFF, worker } from "@/test/workers";
 
 import { WorkerScreen } from "./worker-page";
 import { workerKey, WORKERS } from "./workers";
@@ -80,6 +81,48 @@ describe("a worker's own page", () => {
     expect(linesUnder("Cheo")).toEqual(["Muuzaji (Dawa)", "Keshia (Vyakula)"]);
     // Still working here: no last day.
     expect(screen.queryByText("Siku ya mwisho")).toBeNull();
+  });
+
+  it("cuts the page into four headed cards, each button on its heading's row (UI-10)", async () => {
+    // Baba sees Juma's pay too (maySeePay), so all four cards show: Juma works, with a rate in force.
+    const juma = worker({ started_on: "2026-11-10" });
+    const rate = payRate({ staff: juma.id });
+    answer("GET", ME, { status: 200, body: BABA });
+    answer("GET", `${STAFF}${juma.id}/`, { status: 200, body: juma });
+    answer("GET", PAY_RATES_ROUTE, {
+      status: 200,
+      body: payRates([rate], rate),
+    });
+
+    render(<WorkerScreen id={juma.id} />);
+
+    await screen.findByRole("button", { name: "Badilisha malipo" });
+    // One <h2> a card, in the page's order, under the nickname's <h1>; Ruhusa za ziada is Cheo's own, a level down.
+    expect(
+      screen
+        .getAllByRole("heading", { level: 2 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Taarifa zake", "Kuingia", "Cheo", "Malipo kwa siku"]);
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Ruhusa za ziada" }),
+    ).toBeDefined();
+    // The button that changes a card's whole subject sits beside its heading, on one row (its parent).
+    const besideHeading = (heading: string, button: string) =>
+      within(
+        screen.getByRole("heading", { level: 2, name: heading })
+          .parentElement as HTMLElement,
+      ).getByRole("button", { name: button });
+    expect(besideHeading("Taarifa zake", "Badilisha")).toBeDefined();
+    expect(besideHeading("Cheo", "Ongeza kazi")).toBeDefined();
+    expect(besideHeading("Malipo kwa siku", "Badilisha malipo")).toBeDefined();
+    // Simamisha and Ameondoka under the details, inside Taarifa zake; Kuingia's two buttons in its own card.
+    const details = screen.getByRole("region", { name: "Taarifa zake" });
+    expect(within(details).getByText("Jina kamili")).toBeDefined();
+    for (const name of ["Simamisha", "Ameondoka"])
+      expect(within(details).getByRole("button", { name })).toBeDefined();
+    const logins = screen.getByRole("region", { name: "Kuingia" });
+    for (const name of ["Weka PIN", "Nenosiri la muda"])
+      expect(within(logins).getByRole("button", { name })).toBeDefined();
   });
 
   it("shows a last day for one who left, and says when there is no title, role or key", async () => {

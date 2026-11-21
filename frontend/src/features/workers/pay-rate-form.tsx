@@ -1,12 +1,14 @@
 // pay-rate-form.tsx — Weka malipo and Badilisha malipo (WAGE-1): give a worker a daily pay rate from a day on, through
-// POST /api/v1/staffpay/pay-rates/. Opens in its button's place on Malipo kwa siku (worker-pay.tsx).
+// POST /api/v1/staffpay/pay-rates/. Opens from Malipo kwa siku's button (worker-pay.tsx), in a sheet over the worker's
+// page (UI-10, sheet.tsx), titled "Malipo mapya ya Juma".
 //
-// As Jack pictured it (19 Nov 2026): Kiasi kwa siku, Kuanzia, Anachangia chakula? (Ndiyo, or Hapana, ni mpishi: the cook
-// pays no share of the meals, WAGE-7), Sababu (si lazima), then Hifadhi and Ghairi. A first rate starts on the worker's
-// first day, as Juma, hired on the 10th, is paid from the 10th though Baba types it on the 19th; a change starts today,
-// or on the first day for a worker who hasn't started yet, with the amount and the meals of the rate in force, so a
-// raise to 12,000 is a change of one digit (WAGE-1's defaults). The date box offers nothing before the worker's first day: a day gone by is fine, as the days before
-// today are paid at the rate their own day had (rates_between), but no day before the job.
+// As Jack pictured it (19 Nov 2026): Kiasi kwa siku, Kuanzia, Anachangia chakula? (Ndiyo, or Hapana, ni mpishi: the
+// cook pays no share of the meals, WAGE-7), Sababu (si lazima), then Ghairi and Hifadhi malipo, which names what it
+// saves (UI-10). A first rate starts on the worker's first day, as Juma, hired on the 10th, is paid from the 10th
+// though Baba types it on the 19th; a change starts today, or on the first day for a worker who hasn't started yet,
+// with the amount and the meals of the rate in force, so a raise to 12,000 is a change of one digit (WAGE-1's
+// defaults). The date box offers nothing before the worker's first day: a day gone by is fine, as the days before today
+// are paid at the rate their own day had (rates_between), but no day before the job.
 //
 // A rate is never changed: a mistake is mended by a new rate for the same day, which counts, as the newest (rule 2).
 // So the form always adds one.
@@ -14,8 +16,8 @@
 // What the form can see itself is said at once, in the server's own sentences, and nothing is sent: an amount that is
 // empty, 0, or has cents (pay_rate.amount_invalid), an empty day (required), a day before the first
 // (pay_rate.before_first_day). The server says the rest: who may (staff.own, staff.superuser_only, staff.more_keys,
-// staff.left, on the demo demo.people_fixed, and a bare permission_denied), above the buttons, as they are about the
-// person, not a box; and on the demo, a note (demo.no_note), beside its box.
+// staff.left, on the demo demo.people_fixed, and a bare permission_denied), above the sheet's buttons, as they are
+// about the person, not a box; and on the demo, a note (demo.no_note), beside its box.
 //
 // The id is sent again with every try of the same amount, day, meals and note (ADR-0007): a send whose answer the
 // network lost, tried again, gets the stored rate back, never a second one. A changed try gets a new id, as the server
@@ -26,7 +28,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CircleAlert } from "lucide-react";
-import { type FormEvent, useEffect, useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
@@ -35,9 +37,9 @@ import { answerOf } from "@/api/refusal";
 import type { components } from "@/api/schema";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Alert, AlertDescription, AlertTitle } from "@/components/design/alert";
-import { Button } from "@/components/design/button";
 import { Choice } from "@/components/design/choice";
 import { Field } from "@/components/design/field";
+import { Sheet } from "@/components/design/sheet";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { Decimal } from "@/lib/decimal";
 import { formatDay, formatMoney } from "@/lib/format";
@@ -54,7 +56,8 @@ import type { Worker } from "./workers";
 
 type Sent = components["schemas"]["PayRateCreateRequest"];
 
-// The fields with a box, beside which their refusals show. A refusal of any other field shows above the buttons.
+// The fields with a box, beside which their refusals show. A refusal of any other field shows above the sheet's
+// buttons.
 const ON_A_BOX = new Set([
   "daily_rate",
   "effective_from",
@@ -74,13 +77,17 @@ export function PayRateForm({
   rates,
   onDone,
   onCancel,
+  finalFocus,
 }: {
   worker: Worker;
   /** The worker's rates as the page read them: the one in force, if any, and the shop's today. */
   rates: PayRates;
   /** Saved: the line that says what, in the person's words. */
   onDone: (sentence: string) => void;
+  /** Ghairi or Esc. */
   onCancel: () => void;
+  /** Where the keyboard goes as the sheet goes (sheet.tsx). */
+  finalFocus: () => HTMLElement | null;
 }) {
   const t = useTranslations("workers.pay");
   const apiError = useTranslations("apiError");
@@ -88,7 +95,6 @@ export function PayRateForm({
   const { fieldMessages } = useApiErrorWords();
   const online = useOnline();
   const store = useQueryClient();
-  const titleId = useId();
 
   // The rate in force today, which a change starts from (see the top).
   const inForce = rates.rates.find((rate) => rate.id === rates.in_force);
@@ -109,10 +115,6 @@ export function PayRateForm({
   // The last send: its id, and what it carried, so a try of the same keeps its id (see the top).
   const lastSend = useRef<{ id: string; carried: string } | null>(null);
 
-  // The title takes the keyboard as the form opens, so a screen reader says what opened where the button was.
-  const title = useRef<HTMLHeadingElement>(null);
-  useEffect(() => title.current?.focus(), []);
-
   const save = useMutation({
     mutationFn: (body: Sent) =>
       answerOf(api.POST("/api/v1/staffpay/pay-rates/", { body })),
@@ -129,9 +131,8 @@ export function PayRateForm({
     },
   });
 
-  function send(event: FormEvent) {
-    // The browser would send the form itself and load a new page; the app sends it instead.
-    event.preventDefault();
+  /** The sheet's Hifadhi malipo, or Enter in a box: the sheet's own form stops the browser's send (sheet.tsx). */
+  function send() {
     // The last send's refusal is about what was sent then: each tap shows only what it finds (setting-form.tsx).
     save.reset();
     const amount = typedAmount(typed);
@@ -163,7 +164,7 @@ export function PayRateForm({
   }
 
   // Where each refusal shows: beside its box, the form's own first, then the server's; a field with no box above the
-  // buttons, in its own sentence; a refusal of the whole request, with no field, as who may, is ApiErrorAlert's
+  // sheet's buttons, in its own sentence; a refusal of the whole request, with no field, as who may, is ApiErrorAlert's
   // (setting-form.tsx says why).
   const byField = fieldMessages(save.error);
   const said = (code?: string) =>
@@ -174,79 +175,70 @@ export function PayRateForm({
   const aboutAField = Object.keys(byField).length > 0;
 
   return (
-    <section aria-labelledby={titleId} className="grid gap-4">
-      <h3
-        id={titleId}
-        ref={title}
-        tabIndex={-1}
-        className="text-lg font-semibold outline-none"
-      >
-        {t("form.title", { name: worker.display_name })}
-      </h3>
-      {/* noValidate: the browser's own checks would speak its language, not the shop's. */}
-      <form noValidate onSubmit={send} className="grid gap-6">
-        <Field
-          label={t("form.amount")}
-          hint={t("form.amountHint")}
-          error={said(own.daily_rate) ?? byField.daily_rate}
-          value={typed}
-          onChange={(event) => setTyped(event.target.value)}
-          // Digits only on a phone's keypad: a day's pay is whole shillings.
-          inputMode="numeric"
-          autoComplete="off"
-        />
-        <Field
-          label={t("form.from")}
-          hint={t("form.fromHint")}
-          error={said(own.effective_from) ?? byField.effective_from}
-          type="date"
-          // The phone's calendar offers nothing before the worker's first day.
-          min={worker.started_on}
-          value={day}
-          onChange={(event) => setDay(event.target.value)}
-        />
-        <Choice
-          label={t("form.meals")}
-          error={byField.shares_meals}
-          options={[
-            { value: YES, label: t("form.mealsYes") },
-            { value: NO, label: t("form.mealsNo") },
-          ]}
-          value={meals}
-          onValueChange={setMeals}
-        />
-        <Field
-          label={t("form.note")}
-          hint={t("form.noteHint")}
-          error={byField.note}
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          autoComplete="off"
-          // As the server keeps it (PayRate.note, 200 characters).
-          maxLength={200}
-        />
-        {noBox.length > 0 ? (
-          <Alert kind="danger">
-            {/* The icon says what the title says, so a screen reader skips it (api-error-alert.tsx). */}
-            <CircleAlert aria-hidden="true" />
-            <AlertTitle>{apiError("title")}</AlertTitle>
-            <AlertDescription>{noBox.join(" ")}</AlertDescription>
-          </Alert>
-        ) : (
-          // What no field names: who may, no network, the server's own problem.
-          <ApiErrorAlert error={aboutAField ? null : save.error} />
-        )}
-        <div className="flex flex-wrap gap-3">
-          {/* Off while it is sent, so a second tap sends nothing, and while offline, so nothing waits unsent while it
-              looks done (setting-form.tsx); the id would save it once anyway. */}
-          <Button type="submit" disabled={save.isPending || !online}>
-            {t("form.save")}
-          </Button>
-          <Button kind="second" onClick={onCancel}>
-            {t("form.cancel")}
-          </Button>
-        </div>
-      </form>
-    </section>
+    <Sheet
+      open
+      onClose={onCancel}
+      title={t("form.title", { name: worker.display_name })}
+      actionLabel={t("form.save")}
+      onAction={send}
+      // Held while it is sent, so a second tap sends nothing, and the sheet stays until its answer comes; the id would
+      // save it once anyway.
+      busy={save.isPending}
+      // Offline, nothing is sent, so nothing waits unsent while it looks done (setting-form.tsx).
+      actionDisabled={!online}
+      finalFocus={finalFocus}
+    >
+      <Field
+        label={t("form.amount")}
+        hint={t("form.amountHint")}
+        error={said(own.daily_rate) ?? byField.daily_rate}
+        value={typed}
+        onChange={(event) => setTyped(event.target.value)}
+        // Digits only on a phone's keypad: a day's pay is whole shillings.
+        inputMode="numeric"
+        autoComplete="off"
+      />
+      <Field
+        label={t("form.from")}
+        hint={t("form.fromHint")}
+        error={said(own.effective_from) ?? byField.effective_from}
+        type="date"
+        // The phone's calendar offers nothing before the worker's first day.
+        min={worker.started_on}
+        value={day}
+        onChange={(event) => setDay(event.target.value)}
+      />
+      <Choice
+        label={t("form.meals")}
+        error={byField.shares_meals}
+        options={[
+          { value: YES, label: t("form.mealsYes") },
+          { value: NO, label: t("form.mealsNo") },
+        ]}
+        value={meals}
+        onValueChange={setMeals}
+      />
+      <Field
+        label={t("form.note")}
+        hint={t("form.noteHint")}
+        error={byField.note}
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+        autoComplete="off"
+        // As the server keeps it (PayRate.note, 200 characters).
+        maxLength={200}
+      />
+      {noBox.length > 0 ? (
+        <Alert kind="danger">
+          {/* The icon says what the title says, so a screen reader skips it (api-error-alert.tsx). */}
+          <CircleAlert aria-hidden="true" />
+          <AlertTitle>{apiError("title")}</AlertTitle>
+          <AlertDescription>{noBox.join(" ")}</AlertDescription>
+        </Alert>
+      ) : (
+        // What no field names: who may, no network, the server's own problem.
+        <ApiErrorAlert error={aboutAField ? null : save.error} />
+      )}
+    </Sheet>
   );
 }

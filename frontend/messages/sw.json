@@ -433,6 +433,7 @@
     },
     "view": {
       "title": "Mfanyakazi",
+      "details": "Taarifa zake",
       "noWorker": "Hakuna mfanyakazi aliyechaguliwa. Rudi kwenye orodha ya wafanyakazi.",
       "noJobTitle": "Hakuna",
       "noPhone": "Hakuna",
@@ -454,6 +455,11 @@
         "unsuspend": "Mrudishe {name} kazini",
         "leave": "{name} ameondoka kazini",
         "hireAgain": "Mwajiri tena {name}"
+      },
+      "confirm": {
+        "suspend": "Simamisha",
+        "unsuspend": "Mrudishe",
+        "leave": "Ameondoka"
       },
       "reason": "Sababu",
       "reasonHint": "Itahifadhiwa pamoja na jina lako na muda.",
@@ -479,6 +485,7 @@
       "pinNotSet": "Haijawekwa",
       "setPin": "Weka PIN",
       "pinTitle": "Weka PIN ya {name}",
+      "pinSave": "Weka PIN",
       "handOver": "Mpe {name} simu hii aandike PIN yake mwenyewe.",
       "newPin": "PIN mpya",
       "newPinHint": "Tarakimu nne.",
@@ -487,6 +494,7 @@
       "pinDone": "PIN ya {name} imewekwa. Kila kompyuta ya duka itamwonyesha ikishasawazisha. Kwenye kompyuta yenye mtandao, kifungo chake kimeondoka na PIN yake ya zamani haifanyi kazi tena; isiyo na mtandao itajua ikishasawazisha.",
       "temporaryPassword": "Nenosiri la muda",
       "passwordTitle": "Nenosiri la muda la {name}",
+      "passwordSave": "Weka nenosiri",
       "passwordIntro": "Andika nenosiri, kisha mwambie {name} ana kwa ana. Atachagua lake mwenyewe akishaingia.",
       "password": "Nenosiri",
       "noPhone": "{name} hana namba ya simu. Kama hana barua pepe pia, ongeza simu yake kwa Badilisha kwanza.",
@@ -636,8 +644,7 @@
         "mealsNo": "Hapana, ni mpishi",
         "note": "Sababu (si lazima)",
         "noteHint": "Mfano: Ameongezewa.",
-        "save": "Hifadhi",
-        "cancel": "Ghairi"
+        "save": "Hifadhi malipo"
       }
     }
   },

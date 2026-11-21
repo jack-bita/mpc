@@ -1,13 +1,17 @@
 // worker-page.tsx — one worker's own page, opened by tapping their name on Wafanyakazi (PPL-6): everything of theirs,
-// and under it the buttons that change them (worker-actions.tsx).
+// in four headed cards, each with the buttons that change what it shows (UI-10).
 //
-// As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Their full name, nickname, job
-// title, first day and phone; their status, and their last day once they left; and whether the superuser switched
-// them off. Badilisha turns the details into boxes, in their place (PPL-10, worker-details-form.tsx). Under the
-// buttons, Kuingia: whether they have a PIN, Weka PIN and Nenosiri la muda (PPL-12, worker-logins.tsx); then a card of
-// their roles and extra keys, each by its name and side (PPL-8, worker-roles.tsx); under it, their daily pay rate and
-// its history, for whoever holds settings.manage and staff.manage (WAGE-1, worker-pay.tsx). Later cards add here: the photo (PPL-9), and
-// the pay so far (WAGE-2), so the owner pays one who leaves at once.
+// As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Since UI-10 (20 Nov 2026, his
+// "professional"), four cards, each under its heading, so a manager's phone finds each thing by its name:
+//   - Taarifa zake: their full name, nickname, job title, first day and phone; their status, and their last day once
+//     they left; and whether the superuser switched them off. Badilisha on the heading's row turns the details into
+//     boxes, in their place (PPL-10, worker-details-form.tsx); under them, the status's buttons (worker-actions.tsx);
+//   - Kuingia: whether they have a PIN, Weka PIN and Nenosiri la muda (PPL-12, worker-logins.tsx);
+//   - Cheo: their roles, then their extra keys, each by its name and side, with Ongeza kazi on the heading's row
+//     (PPL-8, worker-roles.tsx);
+//   - Malipo kwa siku: their daily pay rate and its history, for whoever holds settings.manage and staff.manage
+//     (WAGE-1, worker-pay.tsx).
+// Later cards add here: the photo (PPL-9), and the pay so far (WAGE-2), so the owner pays one who leaves at once.
 //
 // At /workers/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address
 // (app/(office)/workers/view/page.tsx). It asks GET /api/v1/people/staff/{id}/, and shows the list's copy at once when
@@ -22,7 +26,6 @@ import { useCallback, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
-import { Card, CardContent } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
 import { askDemoOpen, DEMO_OPEN } from "@/features/devices/demo";
 import { useWhoIsHere } from "@/features/people/who-is-here";
@@ -47,7 +50,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
   // Until both answer the first time, through the store's own tries too, as on the list (workers-screen.tsx); with no
   // id, nothing is asked, so nothing is waited for. The list's copy, shown at once, is no wait (useWorker).
   const waiting = who.isPending || (id !== null && worker.isPending);
-  // Badilisha's form is open: it holds the details in its boxes, so the page doesn't show them twice.
+  // Badilisha's form is open (worker-actions.tsx), which asks whether this is the demo, below.
   const [editing, setEditing] = useState(false);
   // Whether the page offers Weka PIN and Nenosiri la muda (PPL-12): a worker working or suspended, never one's own
   // page, as the Kuingia card decides too (worker-logins.tsx).
@@ -86,24 +89,18 @@ export function WorkerScreen({ id }: { id: string | null }) {
     error: ratesRead.error,
     isPending: ratesRead.isPending,
   };
-  // Which card has a form open, if any (PPL-8's review): one form at a time on the page, so a person never meets two
-  // Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other cards' buttons hide
-  // meanwhile. Each card's own callback, kept the same between draws, as each says "closed" as it goes (its unmount).
+  // Which card has a form open in the page itself, if any (PPL-8's review): one form at a time on the page, so a person
+  // never meets two Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other cards'
+  // buttons hide meanwhile. A sheet isn't counted (UI-10): it shuts the whole page off behind it, so Kuingia and
+  // Malipo kwa siku, whose forms are all sheets, never tell the page. Each card's own callback, kept the same between
+  // draws, as each says "closed" as it goes (its unmount).
   const [formIn, setFormIn] = useState<Card | null>(null);
   const actionsForm = useCallback(
     (open: boolean) => setFormIn((now) => opened("actions", open, now)),
     [],
   );
-  const loginsForm = useCallback(
-    (open: boolean) => setFormIn((now) => opened("logins", open, now)),
-    [],
-  );
   const rolesForm = useCallback(
     (open: boolean) => setFormIn((now) => opened("roles", open, now)),
-    [],
-  );
-  const payForm = useCallback(
-    (open: boolean) => setFormIn((now) => opened("pay", open, now)),
     [],
   );
   /** Another card than this one has a form open: this one's buttons hide. */
@@ -128,15 +125,16 @@ export function WorkerScreen({ id }: { id: string | null }) {
       {who.data && !waiting ? <ApiErrorAlert error={worker.error} /> : null}
       {who.data && worker.data && !waiting ? (
         <>
-          {editing ? null : <WorkerDetails worker={worker.data} />}
-          {/* Badilisha, Simamisha, Rudisha and Ameondoka, as the worker's status allows (worker-actions.tsx). */}
+          {/* Taarifa zake: the details, and Badilisha, Simamisha, Rudisha and Ameondoka, as the worker's status allows
+              (worker-actions.tsx), which leaves the details out while Badilisha's boxes hold them. */}
           <WorkerActions
             // A worker of its own: on another worker's page, as the browser's back and forward move the address, any
             // form open on the last one closes, its boxes and its version with it, so Asha's boxes never go to
-            // Baraka; its unmount tells the page to show the details again (onEditing).
+            // Baraka; its unmount tells the page Badilisha's form is closed (onEditing).
             key={worker.data.id}
             worker={worker.data}
             me={who.data}
+            details={<WorkerDetails worker={worker.data} />}
             demo={demo.data === true}
             onEditing={setEditing}
             onForm={actionsForm}
@@ -149,12 +147,11 @@ export function WorkerScreen({ id }: { id: string | null }) {
             worker={worker.data}
             me={who.data}
             demo={demo.data === true}
-            onForm={loginsForm}
-            buttonsHidden={elsewhere("logins")}
+            buttonsHidden={formIn !== null}
           />
-          {/* Under the buttons, as Jack chose (PPL-8): each set of buttons beside what it changes. A worker of its own, as
-              WorkerActions: Asha's open form never goes on to Baraka's page. Its key apart from WorkerActions', as two
-              siblings with one key are one part to React, which then draws only one of them. */}
+          {/* Under Kuingia, as Jack chose (PPL-8, PPL-12): each set of buttons beside what it changes. A worker of its
+              own, as WorkerActions: Asha's open form never goes on to Baraka's page. Its key apart from WorkerActions',
+              as two siblings with one key are one part to React, which then draws only one of them. */}
           <WorkerRoles
             key={`${worker.data.id}-roles`}
             worker={worker.data}
@@ -172,8 +169,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
               worker={worker.data}
               me={who.data}
               rates={rates}
-              onForm={payForm}
-              buttonsHidden={elsewhere("pay")}
+              buttonsHidden={formIn !== null}
             />
           ) : null}
         </>
@@ -182,8 +178,8 @@ export function WorkerScreen({ id }: { id: string | null }) {
   );
 }
 
-/** The cards that open a form, each in its own place on the page. */
-type Card = "actions" | "logins" | "roles" | "pay";
+/** The cards that open a form in the page itself, each in its own place on it. */
+type Card = "actions" | "roles";
 
 /** What a card's "opened" (true) or "closed" (false) makes of the card with a form open: a close of a card that holds
  * none changes nothing, as each card says "closed" as it goes. */
@@ -191,43 +187,42 @@ function opened(card: Card, open: boolean, now: Card | null): Card | null {
   return open ? card : now === card ? null : now;
 }
 
-/** Everything of the worker's, as label and value pairs: a description list, which a screen reader reads as pairs. */
+/** Everything of the worker's, as label and value pairs: a description list, which a screen reader reads as pairs.
+ * Drawn inside Taarifa zake's card, under its heading (worker-actions.tsx). */
 function WorkerDetails({ worker }: { worker: Worker }) {
   const t = useTranslations("workers");
 
   return (
-    <Card>
-      <CardContent>
-        <dl className="grid gap-4">
-          <Pair label={t("form.fullName")}>{worker.full_name}</Pair>
-          <Pair label={t("form.nickname")}>{worker.display_name}</Pair>
-          <Pair label={t("form.jobTitle")}>
-            {worker.job_title === "" ? t("view.noJobTitle") : worker.job_title}
-          </Pair>
-          <Pair label={t("form.firstDay")}>{formatDay(worker.started_on)}</Pair>
-          {/* As the shop writes it, 0712 345 678; for whoever manages the workers, never a laptop (PPL-10). */}
-          <Pair label={t("form.phone")}>
-            {worker.phone === null
-              ? t("view.noPhone")
-              : formatPhone(worker.phone)}
-          </Pair>
-          <Pair label={t("view.status")}>
-            <span className={STATUS_LOOK[worker.status]}>
-              {t(`status.${worker.status}`)}
-            </span>
-          </Pair>
-          {worker.left_on !== null ? (
-            <Pair label={t("view.lastDay")}>{formatDay(worker.left_on)}</Pair>
-          ) : null}
-        </dl>
-        {/* Apart from the job's status (PPL-4's review): switched off in the admin, on every shop at once. */}
-        {worker.switched_off ? (
-          <p className="mt-4 font-semibold text-destructive">
-            {t("switchedOff")}
-          </p>
+    <div>
+      <dl className="grid gap-4">
+        <Pair label={t("form.fullName")}>{worker.full_name}</Pair>
+        <Pair label={t("form.nickname")}>{worker.display_name}</Pair>
+        <Pair label={t("form.jobTitle")}>
+          {worker.job_title === "" ? t("view.noJobTitle") : worker.job_title}
+        </Pair>
+        <Pair label={t("form.firstDay")}>{formatDay(worker.started_on)}</Pair>
+        {/* As the shop writes it, 0712 345 678; for whoever manages the workers, never a laptop (PPL-10). */}
+        <Pair label={t("form.phone")}>
+          {worker.phone === null
+            ? t("view.noPhone")
+            : formatPhone(worker.phone)}
+        </Pair>
+        <Pair label={t("view.status")}>
+          <span className={STATUS_LOOK[worker.status]}>
+            {t(`status.${worker.status}`)}
+          </span>
+        </Pair>
+        {worker.left_on !== null ? (
+          <Pair label={t("view.lastDay")}>{formatDay(worker.left_on)}</Pair>
         ) : null}
-      </CardContent>
-    </Card>
+      </dl>
+      {/* Apart from the job's status (PPL-4's review): switched off in the admin, on every shop at once. */}
+      {worker.switched_off ? (
+        <p className="mt-4 font-semibold text-destructive">
+          {t("switchedOff")}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
