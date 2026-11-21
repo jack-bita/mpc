@@ -29,6 +29,7 @@ from pytest_django import Settings
 
 from apps.core.acting import acting_as
 from apps.core.permissions import Permission, RoleTemplate
+from apps.core.settings_registry import ATTENDANCE_ON
 from apps.core.tenancy import ShopMismatch, shop_context
 from apps.people.models import Device, StaffMember
 from apps.people.services import grant_permission, hire_again, mark_left, suspend
@@ -36,7 +37,7 @@ from apps.shops.models import Closure, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import AttendanceEvent, ClockKind, DayStatus, NoPhoto, ReviewReason, TimeCheck
 from apps.staffpay.services import add_tap, void_tap, work_out_days
-from apps.staffpay.tests.days import ARUSHA, FIRST_FINE, MONDAY, SUNDAY, absent_day, job, kept_day, switch_on
+from apps.staffpay.tests.days import ARUSHA, FIRST_FINE, MONDAY, SUNDAY, absent_day, job, kept_day, rule, switch_on
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
@@ -296,6 +297,18 @@ def test_a_day_outside_the_job_takes_no_tap(shop_a: Shop, baba: StaffMember, jum
         with pytest.raises(ValidationError) as refused:
             add(worker, baba)
         assert refused.value.code == "tap.not_working_day"
+
+
+def test_a_day_attendance_was_off_takes_no_tap(shop_a: Shop, baba: StaffMember, juma: StaffMember) -> None:
+    # The owner switched attendance off from Tuesday 10 November (ADR-0033): the book keeps no day while it is off, so
+    # a tap added on Monday the 16th would be kept and count nothing. Refused as any day that isn't a working day of
+    # the job (ATT-13's review); the Monday before the switch still takes one.
+    rule(shop_a, ATTENDANCE_ON, False, dt.date(2026, 11, 10))
+    with pytest.raises(ValidationError) as refused:
+        add(juma, baba)
+    assert refused.value.code == "tap.not_working_day"
+    assert taps_of(juma) == []
+    add(juma, baba, date=dt.date(2026, 11, 9))
 
 
 def test_a_minute_to_come_is_refused(shop_a: Shop, baba: StaffMember, juma: StaffMember) -> None:

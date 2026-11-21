@@ -145,7 +145,7 @@ export function TheDay({
         </ul>
       ) : null}
       <Missing kept={kept} taps={counted} isToday={isToday} />
-      {mayAddOn(day, answer) ? (
+      {mayAddOn(day, answer, kept) ? (
         <Button
           kind="second"
           size="normal"
@@ -164,15 +164,22 @@ export function TheDay({
 }
 
 /** Whether a tap may be added on `day`, as the server takes one (add_tap): one of the job's days, from its first to its
- * last, up to today, and never a Sunday, when the shop is shut and a tap counts nothing; never on the viewer's own
- * month. The server checks again, and refuses with its own words. */
-function mayAddOn(day: string, answer: WorkerAttendance): boolean {
+ * last, up to today, and never a Sunday, when the shop is shut and a tap counts nothing; and a day the book keeps, or
+ * today, which it keeps once it is over: so never a day attendance was off, which the book keeps nothing for, as a tap
+ * there would count nothing (ATT-13's review). Never on the viewer's own month. The server checks again, and refuses
+ * with its own words. */
+function mayAddOn(
+  day: string,
+  answer: WorkerAttendance,
+  kept: WorkerDay | undefined,
+): boolean {
   return (
     !answer.yours &&
     day <= answer.today &&
     answer.started_on <= day &&
     (answer.left_on === null || day <= answer.left_on) &&
-    weekdayOf(day) !== SUNDAY
+    weekdayOf(day) !== SUNDAY &&
+    (kept !== undefined || day === answer.today)
   );
 }
 

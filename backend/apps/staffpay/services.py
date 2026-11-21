@@ -71,7 +71,7 @@ from apps.people.models import StaffMember, StaffStatus
 from apps.people.permissions import require
 from apps.people.services import lock_worker_for_a_change
 from apps.shops.models import Shop
-from apps.shops.selectors import closed_days, shop_settings_between, shop_today
+from apps.shops.selectors import closed_days, get_setting, shop_settings_between, shop_today
 from apps.staffpay.calculations import (
     NO_FINE,
     TIME_IN_DOUBT,
@@ -980,9 +980,9 @@ def add_tap(
     time is `minute` on `date` on the shop's clock, trusted (`entered`), and it has no photo (`entered`). The book reads
     it the next time it works the day out. `tap_id`: the client's (ADR-0007), so the route answers a request sent twice
     with the tap it made (CreateOnceMixin). `by`: who adds it, with attendance.manage on the whole shop, never for
-    themselves. Refuses: one's own tap (tap.own); a Sunday, or a day outside the job's (tap.not_working_day); and, all
-    together, each beside its box, a minute still to come (tap.in_future), no reason (tap.reason_missing), or on the
-    demo a reason not the ready one (demo.ready_reasons). Returns the tap as saved."""
+    themselves. Refuses: one's own tap (tap.own); a Sunday, a day outside the job's, or one attendance was off
+    (tap.not_working_day); and, all together, each beside its box, a minute still to come (tap.in_future), no reason
+    (tap.reason_missing), or on the demo a reason not the ready one (demo.ready_reasons). Returns the tap as saved."""
     # A job of another shop adding to this shop's book is a bug in the calling code (T1), never a person's mistake: the
     # route finds the worker and the person in the one shop open. A server error, before anything is read.
     if by.shop_id != staff.shop_id:
@@ -996,8 +996,10 @@ def add_tap(
         job = _ready_to_fix(staff.pk, by)
         # A day the job works, as the book counts it (02 §5): from its first day to its last, as they are now, and
         # never a Sunday, when the shop is shut and a tap counts nothing (01 §8.1). A closed day takes one: Juma came
-        # the morning of a funeral, and the book sends that day to review, as it would a laptop's tap (ATT-10).
-        if date.weekday() == SUNDAY or not _ran_on(job, date):
+        # the morning of a funeral, and the book sends that day to review, as it would a laptop's tap (ATT-10). And a
+        # day attendance was switched on, a dated rule read on that day (ADR-0033): the book keeps no day while it is
+        # off, so a tap there would be kept and count nothing (ATT-13's review).
+        if date.weekday() == SUNDAY or not _ran_on(job, date) or not get_setting(ATTENDANCE_ON, shop, on=date):
             raise ValidationError("Only a working day of the job takes a tap.", code="tap.not_working_day")
         # The minute on the shop's clock, made a moment with the shop's zone, here, never the phone's (03 §5.10); its
         # seconds dropped, as the counter shows a minute (shop_minute): 07:35:40 is 07:35, on time.

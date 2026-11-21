@@ -413,6 +413,49 @@ describe("a day under the calendar", () => {
     expect(within(open).getByText("Sababu: Alisahau kubonyeza")).toBeTruthy();
   });
 
+  it("offers no Ongeza on a day the book keeps nothing for, as attendance was off (ATT-13's review)", async () => {
+    // The owner switched attendance on from the 13th: the book keeps no 12th, so a tap there would count nothing.
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [day({ date: "2026-11-13", status: "absent" })],
+        [
+          tap({
+            date: "2026-11-12",
+            kind: "in",
+            time: "07:20",
+          }),
+        ],
+      ),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-12" />,
+    );
+
+    const open = await theDay("Alhamisi 12/11/2026");
+    expect(
+      within(open).queryByRole("button", { name: "Ongeza Ingia au Toka" }),
+    ).toBeNull();
+  });
+
+  it("offers Ongeza today, which the book keeps once it is over (ATT-13)", async () => {
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [],
+        [tap({ date: "2026-11-20", kind: "in", time: "07:20" })],
+      ),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-20" />,
+    );
+
+    const open = await theDay("Ijumaa 20/11/2026 · leo");
+    expect(
+      within(open).getByRole("button", { name: "Ongeza Ingia au Toka" }),
+    ).toBeTruthy();
+  });
+
   it("offers Ongeza Ingia au Toka on a working day, which opens its sheet over the day (ATT-13)", async () => {
     answer("GET", JUMAS_MONTH, {
       status: 200,
