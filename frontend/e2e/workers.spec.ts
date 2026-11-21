@@ -56,7 +56,7 @@ async function openWorkers(phone: Page) {
     .click();
   await phone.getByRole("link", { name: WORKERS.title, exact: true }).click();
   await expect(
-    phone.getByRole("heading", { name: WORKERS.title, level: 1 }),
+    phone.getByRole("heading", { name: WORKERS.title, level: 1, exact: true }),
   ).toBeVisible();
 }
 
@@ -88,7 +88,11 @@ test("the demo's manager adds a worker and suspends him", async ({
     await test.step("Ongeza opens Mfanyakazi mpya: Juma, and Hifadhi", async () => {
       await phone.getByRole("link", { name: WORKERS.add, exact: true }).click();
       await expect(
-        phone.getByRole("heading", { name: WORKERS.newTitle, level: 1 }),
+        phone.getByRole("heading", {
+          name: WORKERS.newTitle,
+          level: 1,
+          exact: true,
+        }),
       ).toBeVisible();
       await phone
         .getByLabel(WORKERS.form.fullName, { exact: true })
@@ -111,7 +115,7 @@ test("the demo's manager adds a worker and suspends him", async ({
 
   await test.step("Hifadhi lands on his own page, with everything of his and the line that he was added", async () => {
     await expect(
-      phone.getByRole("heading", { name: "Juma", level: 1 }),
+      phone.getByRole("heading", { name: "Juma", level: 1, exact: true }),
     ).toBeVisible();
     await expect(
       phone.getByText(words(WORKERS.added, { name: "Juma" })),
@@ -180,7 +184,11 @@ test("the demo's manager adds a worker and suspends him", async ({
     // Mfanyakazi mpya gave its place to his page (UI-11): the arrow leads to the list.
     await phone.getByRole("button", { name: sw.pageHeader.back }).click();
     await expect(
-      phone.getByRole("heading", { name: WORKERS.title, level: 1 }),
+      phone.getByRole("heading", {
+        name: WORKERS.title,
+        level: 1,
+        exact: true,
+      }),
     ).toBeVisible();
     // At the top: the list comes newest first.
     const juma = phone.getByRole("list").first().getByRole("listitem").first();
@@ -242,7 +250,7 @@ test("the demo's manager gives a role and takes it away", async ({
       .click();
     // Hifadhi lands on her own page (UI-11).
     await expect(
-      phone.getByRole("heading", { name: "Zawadi", level: 1 }),
+      phone.getByRole("heading", { name: "Zawadi", level: 1, exact: true }),
     ).toBeVisible();
     await expect(cardPart(phone, WORKERS.view.roles)).toContainText(
       WORKERS.noRole,
@@ -275,6 +283,7 @@ test("the demo's manager gives a role and takes it away", async ({
       phone.getByRole("heading", {
         name: words(WORKERS.giving.title, { name: "Zawadi" }),
         level: 1,
+        exact: true,
       }),
     ).toBeVisible();
     await phone
@@ -292,9 +301,10 @@ test("the demo's manager gives a role and takes it away", async ({
     await phone
       .getByRole("button", { name: WORKERS.actions.save, exact: true })
       .click();
-    // Back on Zawadi's page, where the person came from, its line on Cheo: the note went with the move (UI-11).
+    // Back on Zawadi's page, where the person came from, its line on Cheo: the note went with the move (UI-11). Exact:
+    // a heading's name matches a part of it by default, and "Ongeza kazi kwa Zawadi" holds "Zawadi" (UI-11's review).
     await expect(
-      phone.getByRole("heading", { name: "Zawadi", level: 1 }),
+      phone.getByRole("heading", { name: "Zawadi", level: 1, exact: true }),
     ).toBeVisible();
     await expect(
       phone.getByText(
