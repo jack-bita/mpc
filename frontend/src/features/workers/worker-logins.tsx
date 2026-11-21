@@ -73,8 +73,7 @@ export function WorkerLogins({
 
   // Who may see the buttons (see the top); they stay under an open sheet, so Ghairi gives the keyboard back to the very
   // button that opened it.
-  const mayChange = worker.status !== "left" && worker.id !== me.staff.id;
-  const showButtons = mayChange;
+  const showButtons = worker.status !== "left" && worker.id !== me.staff.id;
 
   // Whether the last close was a change, for the sheet to give the keyboard to the done line: read as the sheet goes,
   // after the draw that took it away, so a ref, not the state (worker-actions.tsx).

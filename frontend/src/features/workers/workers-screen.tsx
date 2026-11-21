@@ -18,6 +18,7 @@
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
+import { useId } from "react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -105,13 +106,11 @@ function WorkerList({
     <>
       {failure}
       <Group
-        id="workers-here"
         heading={t("hereHeading", { count: here.length })}
         workers={here}
         roleOnSide={roleOnSide}
       />
       <Group
-        id="workers-left"
         heading={t("leftHeading", { count: gone.length })}
         workers={gone}
         roleOnSide={roleOnSide}
@@ -127,17 +126,18 @@ type RoleOnSide = (given: GivenRole) => string;
  * count says at a glance how many work here and how many left, without counting the rows. A region named by its
  * heading, so a screen reader can jump to either group. An empty group says so in words, never a heading alone. */
 function Group({
-  id,
   heading,
   workers,
   roleOnSide,
 }: {
-  id: string;
   heading: string;
   workers: Worker[];
   roleOnSide: RoleOnSide;
 }) {
   const t = useTranslations("workers");
+  // Made by React, never typed: two lists on one page, or this page beside another part with its own heading, can't
+  // share an id, which would name a region by the wrong heading (as each card on a worker's page does, worker-actions.tsx).
+  const id = useId();
   return (
     <section className="grid gap-3" aria-labelledby={id}>
       <h2 id={id} className="text-lg font-semibold">
