@@ -53,6 +53,8 @@ function tap(
     photo: null,
     no_photo: "demo",
     doubt: null,
+    entered: null,
+    voided: null,
     ...fields,
   };
 }
@@ -70,6 +72,7 @@ function day(
     first_out: null,
     decision: null,
     choices: [],
+    taps_changed: false,
     ...fields,
   };
 }
@@ -345,6 +348,46 @@ describe("a day under the calendar", () => {
     expect(
       within(open).getByText("Ingia 07:20 asubuhi · Laptop ya Dawa"),
     ).toBeTruthy();
+  });
+
+  it("lists no crossed-out tap among the day's taps (ATT-13)", async () => {
+    // Juma's 10:00 Toka was crossed out: it counts for nothing, so the day has an Ingia and no Toka.
+    answer("GET", JUMAS_MONTH, {
+      status: 200,
+      body: november(
+        [
+          day({
+            date: "2026-11-12",
+            status: "needs_review",
+            reason: "no_out",
+            first_in: "07:20",
+          }),
+        ],
+        [
+          tap({ date: "2026-11-12", kind: "in", time: "07:20" }),
+          tap({
+            date: "2026-11-12",
+            kind: "out",
+            time: "10:00",
+            voided: {
+              by: "Baba",
+              at: "2026-11-12T16:00:00Z",
+              reason: "Alibonyeza kwa makosa",
+            },
+          }),
+        ],
+      ),
+    });
+    render(
+      <WorkerMonthScreen staff={JUMA} asked="2026-11" askedDay="2026-11-12" />,
+    );
+
+    const open = await theDay("Alhamisi 12/11/2026");
+    expect(
+      within(open).getByText("Ingia 07:20 asubuhi · Laptop ya Dawa"),
+    ).toBeTruthy();
+    expect(within(open).queryByText(/Toka 10:00/)).toBeNull();
+    expect(within(open).getByText("Hakuna Toka.")).toBeTruthy();
   });
 
   it("says why a tap is in doubt, and shows an untrusted time as the laptop's", async () => {

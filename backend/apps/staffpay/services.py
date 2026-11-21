@@ -556,6 +556,16 @@ class TapPhoto:
 
 
 @dataclass(frozen=True)
+class TapStamp:
+    # Who added a tap in the office, or crossed one out (ATT-13), by nickname on this shop, as every name on these pages
+    # is; when, the server's moment; and why: "imeongezwa na Baba, 19/11 · Sababu: Alisahau kubonyeza Toka". On the
+    # demo the reason is a ready one's code (`forgot_tap`), which the page says in words.
+    by: str
+    at: dt.datetime
+    reason: str
+
+
+@dataclass(frozen=True)
 class TapLine:
     # One tap, as the day under a worker's calendar shows it (ATT-12): "Ingia 07:20 asubuhi · Laptop ya Dawa", then its
     # photo or why it has none. `date` and `time` on the shop's calendar and clock, by the time the server trusts; a
@@ -572,6 +582,11 @@ class TapLine:
     photo: TapPhoto | None
     no_photo: NoPhoto | None
     doubt: ReviewReason | None
+    # Who entered it in the office, when and why, or None for a laptop's tap (ATT-13); and who crossed it out, when and
+    # why, or None while it counts. A tap crossed out still shows, struck through (A2), and is never in doubt, as it
+    # counts for nothing.
+    entered: TapStamp | None
+    voided: TapStamp | None
 
 
 @dataclass(frozen=True)
@@ -613,6 +628,10 @@ class WorkerDay:
     # What the day may be decided as, each with its fine (day_choices), in the sheet's order: none on an off day, or
     # when the month is the viewer's own, as nobody decides their own day (Jack, ATT-6).
     choices: list[DayOption]
+    # Whether a tap of the day was added, arrived from a laptop, or was crossed out after the day was decided (Jack: A,
+    # ATT-13): the decision stays, as the book never writes over one, and the day says its taps changed since, for
+    # whoever looks to decide it again. False on a day nobody decided.
+    taps_changed: bool
 
 
 @dataclass(frozen=True)
@@ -675,17 +694,20 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
     # the book, a month page or the night's job, would wait for it.
     # The job's taps of the month, in one read, today's too: the book keeps no day until it is over (ATT-10), so
     # today's taps are read here as they come. Each with its laptop's name, joined in the same read, and the two
-    # questions of doubt the book asks (_doubt_questions). A voided tap counts for nothing (T2), and the book doesn't
-    # read it, so nor does this: ATT-13, which voids one, shows them crossed out (A2). In the order they were made, by
-    # the moment the book places them by; two of one moment, rare, as on two laptops at once, by their ids, which each
-    # laptop makes in time order (UUIDv7, ADR-0007): never by a laptop's own numbering, which says nothing between two
-    # laptops (ATT-12's review).
+    # questions of doubt the book asks (_doubt_questions). The crossed-out ones too (ATT-13), each with who, when and
+    # why, for the day to show struck through (A2), though the book doesn't read them: they count for nothing (T2).
+    # A tap added in the office with who entered it, when and why. Both names joined in the same read. In the order
+    # they were made, by the moment the book places them by; two of one moment, rare, as on two laptops at once, by
+    # their ids, which each laptop makes in time order (UUIDv7, ADR-0007): never by a laptop's own numbering, which says
+    # nothing between two laptops (ATT-12's review).
     asks_not_working, asks_disputed = _doubt_questions(shop)
-    lines = (
+    # Rows named by their columns (`named=True`), as there are fifteen. Any: the type checker's Django plugin can't
+    # match an empty list to a query's own row type, nor read the joined names' types.
+    lines: list[Any] = (
         []
         if taps_until < first
         else list(
-            AttendanceEvent.objects.filter(shop=shop, staff=job, voided_at__isnull=True)
+            AttendanceEvent.objects.filter(shop=shop, staff=job)
             .filter(_falls_between(first, taps_until, zone))
             .annotate(maker_not_working=asks_not_working, disagreed_with=asks_disputed)
             .order_by(Coalesce("trusted_time", "client_time"), "pk")
@@ -699,28 +721,50 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
                 "no_photo",
                 "maker_not_working",
                 "disagreed_with",
+                "received_at",
+                "created_by__display_name",
+                "entry_reason",
+                "voided_at",
+                "voided_by__display_name",
+                "void_reason",
+                named=True,
             )
         )
     )
-    photos = _photos_of(shop, [line[0] for line in lines])
+    photos = _photos_of(shop, [line.pk for line in lines])
     taps = []
-    for tap_id, kind, trusted_time, client_time, time_check, laptop, no_photo, maker_not_working, disagreed in lines:
-        day, minute = _where_it_falls(trusted_time, client_time, zone)
+    # When each day's taps last changed: a tap kept (a laptop's arriving, or one added in the office) or crossed out.
+    # A day decided before that moment says its taps changed since (ATT-13).
+    changed: dict[dt.date, dt.datetime] = {}
+    for line in lines:
+        day, minute = _where_it_falls(line.trusted_time, line.client_time, zone)
+        voided = (
+            None
+            if line.voided_at is None
+            else TapStamp(by=line.voided_by__display_name, at=line.voided_at, reason=line.void_reason)
+        )
         taps.append(
             TapLine(
-                id=tap_id,
+                id=line.pk,
                 date=day,
-                kind=ClockKind(kind),
+                kind=ClockKind(line.kind),
                 time=minute,
                 # None for a tap entered in the office, which no laptop clock timed (ATT-13).
-                laptop_time=shop_minute(client_time, zone) if client_time is not None else None,
-                laptop=laptop,
-                photo=photos.get(tap_id),
+                laptop_time=shop_minute(line.client_time, zone) if line.client_time is not None else None,
+                laptop=line.device__name,
+                photo=photos.get(line.pk),
                 # Empty when its photo came (ATT-3): said as no reason at all.
-                no_photo=NoPhoto(no_photo) if no_photo else None,
-                doubt=_doubt_of(maker_not_working, disagreed, time_check),
+                no_photo=NoPhoto(line.no_photo) if line.no_photo else None,
+                # A tap crossed out counts for nothing, so nothing about it is in doubt.
+                doubt=None if voided else _doubt_of(line.maker_not_working, line.disagreed_with, line.time_check),
+                entered=TapStamp(by=line.created_by__display_name, at=line.received_at, reason=line.entry_reason)
+                if line.time_check == TimeCheck.ENTERED
+                else None,
+                voided=voided,
             )
         )
+        moment = max(line.received_at, line.voided_at or line.received_at)
+        changed[day] = max(changed.get(day, moment), moment)
     return WorkerAttendance(
         month=first,
         today=today,
@@ -746,6 +790,7 @@ def worker_attendance(shop: Shop, job: StaffMember, month: dt.date, *, viewer: S
                         day.first_in, rules_from_text(day.rules_used), time_in_doubt=day.review_reason in TIME_IN_DOUBT
                     ).items()
                 ],
+                taps_changed=day.decided_at is not None and day.date in changed and changed[day.date] > day.decided_at,
             )
             for day in days
         ],

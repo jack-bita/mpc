@@ -50,6 +50,7 @@ function day(date: number, status: WorkerDay["status"]): WorkerDay {
     first_out: null,
     decision: null,
     choices: [],
+    taps_changed: false,
   };
 }
 

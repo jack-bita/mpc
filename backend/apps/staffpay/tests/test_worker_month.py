@@ -56,9 +56,12 @@ from apps.staffpay.services import (
     DayOption,
     PhotoState,
     TapLine,
+    TapStamp,
     WorkerAttendance,
     WorkerDay,
+    add_tap,
     decide_day,
+    void_tap,
     worker_attendance,
 )
 
@@ -202,6 +205,8 @@ def test_each_tap_with_its_time_and_laptop(shop_a: Shop, device_a: Device, asha:
         photo=None,
         no_photo=NoPhoto.DEMO,
         doubt=None,
+        entered=None,
+        voided=None,
     )
 
 
@@ -332,20 +337,78 @@ def test_the_tap_a_later_one_disagrees_with_says_so(
     assert day.reason == ReviewReason.CLOCK_DISAGREES
 
 
-def test_a_voided_tap_is_left_out(shop_a: Shop, device_a: Device, asha: StaffMember, staff_a: StaffMember) -> None:
-    # A clock-in tapped twice by mistake, the second voided by a manager (ATT-13): it counts for nothing (T2), so the
-    # day doesn't show it, as the book doesn't read it. ATT-13 shows voided taps, crossed out (A2).
+def test_a_crossed_out_tap_comes_with_its_void(
+    shop_a: Shop, device_a: Device, asha: StaffMember, staff_a: StaffMember
+) -> None:
+    # Asha tapped Toka at 10:00 by mistake, and a manager crossed it out (ATT-13): it counts for nothing (T2), as the
+    # book doesn't read it, but the day still shows it, struck through, with who, when and why (A2). In its place by
+    # time, among her other taps; never in doubt, as it counts for nothing.
     first = tap(device_a, asha, ClockKind.IN, on(1, 7, 20))
-    tap(
+    wrong = tap(
         device_a,
         asha,
-        ClockKind.IN,
-        on(1, 7, 21),
-        voided_at=on(1, 9, 0),
+        ClockKind.OUT,
+        on(1, 10, 0),
+        voided_at=on(1, 19, 0),
         voided_by=staff_a,
-        void_reason="Aliingia mara mbili",
+        void_reason="Alibonyeza kwa makosa",
     )
-    assert [line.id for line in month_of(shop_a, asha).taps] == [first.pk]
+    answer = month_of(shop_a, asha)
+    assert [line.id for line in answer.taps] == [first.pk, wrong.pk]
+    assert tap_of(answer, wrong).voided == TapStamp(by="Staff A", at=on(1, 19, 0), reason="Alibonyeza kwa makosa")
+    assert (tap_of(answer, wrong).doubt, tap_of(answer, wrong).entered) == (None, None)
+    assert tap_of(answer, first).voided is None
+    # The day as the book reads it: an Ingia and no Toka.
+    assert day_of(answer, 1).reason == ReviewReason.NO_OUT
+
+
+def test_a_tap_added_in_the_office_comes_with_who_and_why(
+    shop_a: Shop, device_a: Device, asha: StaffMember, baba: StaffMember
+) -> None:
+    # Baba added Asha's forgotten Toka of 18:45 (ATT-13): no laptop made it, so none is named, nor a laptop's clock;
+    # its time is the one Baba typed, and it says who added it, when and why, and why it has no photo.
+    tap(device_a, asha, ClockKind.IN, on(1, 7, 20))
+    added = _add(asha, baba, 1)
+    answer = month_of(shop_a, asha)
+    line = tap_of(answer, added)
+    assert (line.time, line.laptop, line.laptop_time, line.no_photo) == (dt.time(18, 45), None, None, NoPhoto.ENTERED)
+    assert line.entered == TapStamp(by="Baba", at=added.received_at, reason="Alisahau kubonyeza Toka")
+    assert line.voided is None
+    assert day_of(answer, 1).status == DayStatus.ON_TIME
+
+
+def test_a_decided_day_says_its_taps_changed_after(
+    shop_a: Shop, device_a: Device, asha: StaffMember, baba: StaffMember
+) -> None:
+    # Baba decided Asha's Tuesday 6th, in at 07:50 with no Toka, a full day. Then a manager adds her Toka of 13:00: the
+    # decision stays, as the book never writes over one (ATT-6), and the day says its taps changed since, for whoever
+    # looks to decide it again (Jack: A, ATT-13). Monday 5th, never decided, says nothing; nor a day decided after its
+    # taps last changed.
+    tap(device_a, asha, ClockKind.IN, on(5, 7, 20))
+    tap(device_a, asha, ClockKind.OUT, on(5, 18, 45))
+    tap(device_a, asha, ClockKind.IN, on(6, 7, 50))
+    kept = next(day for day in _book(shop_a, asha) if day.date == dt.date(2026, 10, 6))
+    with shop_context(shop_a):
+        decide_day(kept, choice=DayChoice.ON_TIME, reason="Alisahau kubonyeza Toka", replaces=None, by=baba)
+    assert day_of(month_of(shop_a, asha), 6).taps_changed is False
+    _add(asha, baba, 6, hour=13, minute=0)
+    answer = month_of(shop_a, asha)
+    assert day_of(answer, 6).taps_changed is True
+    assert day_of(answer, 6).decision is not None
+    assert day_of(answer, 5).taps_changed is False
+
+
+def test_a_tap_crossed_out_after_the_decision_changes_the_day_too(
+    shop_a: Shop, device_a: Device, asha: StaffMember, baba: StaffMember
+) -> None:
+    # The same with a tap crossed out: Asha's 10:00 Toka, crossed out after Baba decided the day.
+    tap(device_a, asha, ClockKind.IN, on(6, 7, 20))
+    wrong = tap(device_a, asha, ClockKind.OUT, on(6, 10, 0))
+    kept = next(day for day in _book(shop_a, asha) if day.date == dt.date(2026, 10, 6))
+    with shop_context(shop_a):
+        decide_day(kept, choice=DayChoice.HALF, reason="Aliondoka mapema", replaces=None, by=baba)
+        void_tap(wrong, reason="Alibonyeza kwa makosa", by=baba)
+    assert day_of(month_of(shop_a, asha), 6).taps_changed is True
 
 
 def test_todays_taps_show_though_the_day_isnt_over(shop_a: Shop, device_a: Device, asha: StaffMember) -> None:
@@ -431,6 +494,20 @@ def baba(shop_a: Shop, give_role: GiveRole) -> StaffMember:
 
 def day_of(answer: WorkerAttendance, day: int) -> WorkerDay:
     return next(each for each in answer.days if each.date == dt.date(2026, 10, day))
+
+
+def _add(staff: StaffMember, by: StaffMember, day: int, hour: int = 18, minute: int = 45) -> AttendanceEvent:
+    # A Toka a manager adds in the office on that day of October (ATT-13), as the route does.
+    with shop_context(staff.shop_id):
+        return add_tap(
+            staff,
+            tap_id=uuid.uuid7(),
+            kind=ClockKind.OUT,
+            date=dt.date(2026, 10, day),
+            minute=dt.time(hour, minute),
+            reason="Alisahau kubonyeza Toka",
+            by=by,
+        )
 
 
 def test_a_decided_day_comes_with_its_decision(

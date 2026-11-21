@@ -40,6 +40,7 @@ const THURSDAYS: WorkerDay = {
   first_in: "07:50",
   first_out: null,
   decision: null,
+  taps_changed: false,
   choices: [
     { choice: "on_time", fine: NOTHING },
     { choice: "late", fine: "500.00" },

@@ -78,8 +78,11 @@ export function TheDay({
   // The day as the book kept it, or none for today, which the book keeps only once it is over.
   const kept = answer.days.find((each) => each.date === day);
   const isToday = day === answer.today;
-  // The day's taps, in the order they were made, as the server sent them.
-  const taps = answer.taps.filter((tap) => tap.date === day);
+  // The day's taps, in the order they were made, as the server sent them. Not one crossed out (ATT-13): it counts for
+  // nothing, so it is never listed as a tap the day has.
+  const taps = answer.taps.filter(
+    (tap) => tap.date === day && tap.voided === null,
+  );
   // A day opened, by a tap on the calendar or from a line of Zinahitaji uamuzi, takes the focus: a phone scrolls it
   // into view under the calendar, and a screen reader reads where it now is. Once per day opened, not each time the
   // month is asked again.

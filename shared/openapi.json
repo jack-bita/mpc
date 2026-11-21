@@ -2525,18 +2525,36 @@
                                 "$ref": "#/components/schemas/NullEnum"
                             }
                         ]
+                    },
+                    "entered": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapStamp"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "voided": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TapStamp"
+                            }
+                        ],
+                        "nullable": true
                     }
                 },
                 "required": [
                     "date",
                     "doubt",
+                    "entered",
                     "id",
                     "kind",
                     "laptop",
                     "laptop_time",
                     "no_photo",
                     "photo",
-                    "time"
+                    "time",
+                    "voided"
                 ]
             },
             "BootstrapAnswer": {
@@ -5371,6 +5389,26 @@
                     "state"
                 ]
             },
+            "TapStamp": {
+                "type": "object",
+                "properties": {
+                    "by": {
+                        "type": "string"
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "at",
+                    "by",
+                    "reason"
+                ]
+            },
             "TemporaryPasswordRequest": {
                 "type": "object",
                 "properties": {
@@ -5553,6 +5591,10 @@
                         "items": {
                             "$ref": "#/components/schemas/DayOption"
                         }
+                    },
+                    "taps_changed": {
+                        "type": "boolean",
+                        "description": "Whether a tap of the day was added, arrived or was crossed out after the day was decided (ATT-13)."
                     }
                 },
                 "required": [
@@ -5564,7 +5606,8 @@
                     "first_out",
                     "id",
                     "reason",
-                    "status"
+                    "status",
+                    "taps_changed"
                 ]
             },
             "WorkerMonth": {

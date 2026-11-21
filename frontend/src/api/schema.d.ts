@@ -777,6 +777,8 @@ export interface components {
             photo: components["schemas"]["TapPhoto"] | null;
             no_photo: (components["schemas"]["NoPhotoEnum"] | components["schemas"]["NullEnum"]) | null;
             doubt: (components["schemas"]["TapDoubtEnum"] | components["schemas"]["NullEnum"]) | null;
+            entered: components["schemas"]["TapStamp"] | null;
+            voided: components["schemas"]["TapStamp"] | null;
         };
         BootstrapAnswer: {
             /**
@@ -1755,6 +1757,12 @@ export interface components {
             id: string;
             state: components["schemas"]["PhotoStateEnum"];
         };
+        TapStamp: {
+            by: string;
+            /** Format: date-time */
+            at: string;
+            reason: string;
+        };
         TemporaryPasswordRequest: {
             password: string;
             reason: string;
@@ -1801,6 +1809,8 @@ export interface components {
             first_out: string | null;
             decision: components["schemas"]["DayDecision"] | null;
             choices: components["schemas"]["DayOption"][];
+            /** @description Whether a tap of the day was added, arrived or was crossed out after the day was decided (ATT-13). */
+            taps_changed: boolean;
         };
         WorkerMonth: {
             /** Format: uuid */
