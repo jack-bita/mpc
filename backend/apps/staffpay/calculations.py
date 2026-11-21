@@ -268,8 +268,8 @@ def day_choices(first_in: dt.time | None, rules: DayRules, *, time_in_doubt: boo
     # A day sent to review carries no fine (NO_FINE, ATT-4), so deciding it late reads the fine again, as the rule
     # would have: by on_time_until no fine; after it and before second_fine_from the first; from second_fine_from on
     # the second. Past the rule's own windows (from review_from, 08:30, the owner's dharura) a late arrival is later
-    # still, so it takes the second fine too, the larger: 09:10 is never cheaper than 08:10 (Claude's default, the
-    # plan Jack approved).
+    # still, so it takes the second fine too, the larger: 09:10 is never cheaper than 08:10 (a default, in the plan
+    # Jack approved).
     arrival_fine: Decimal | None
     if first_in is None or first_in <= rules.on_time_until:
         arrival_fine = None

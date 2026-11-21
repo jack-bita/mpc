@@ -164,7 +164,7 @@ def test_an_added_tap_is_the_offices(baba: StaffMember, juma: StaffMember) -> No
 
 def test_an_added_ingia_takes_its_fine(baba: StaffMember, juma: StaffMember) -> None:
     # Juma forgot his Ingia, and Baba says he came at 07:50: the minute Baba typed is trusted, as a real tap's would
-    # be, so the day is late, with the first fine (a Claude default Jack said yes to).
+    # be, so the day is late, with the first fine (a default Jack said yes to).
     kept_day(juma, (ClockKind.OUT, 18, 45))
     add(juma, baba, ClockKind.IN, 7, 50, reason="Alisahau kubonyeza Ingia")
     day = absent_day(juma)
@@ -357,7 +357,7 @@ def test_baba_mends_jumas_thursday(baba: StaffMember, juma: StaffMember) -> None
 
 def test_an_added_tap_is_crossed_out_like_any_other(baba: StaffMember, juma: StaffMember) -> None:
     # Baba typed 18:45 for 13:45: he crosses his own entry out, and adds the right one. A crossed-out tap is never
-    # brought back; a mistake is mended by adding a tap (a Claude default Jack said yes to).
+    # brought back; a mistake is mended by adding a tap (a default Jack said yes to).
     kept_day(juma, (ClockKind.IN, 7, 20))
     typed = add(juma, baba)
     crossed = cross_out(typed, baba, "Saa si sahihi")

@@ -532,7 +532,7 @@ def _line(staff_id: uuid.UUID, display_name: str, kinds: Counter[str]) -> Worker
 def _counted_as(day: AttendanceDay) -> str:
     # What a day counts as on a worker's line of the month (ATT-5, ATT-12): the decision once there is one (ATT-6), else
     # the book's answer. An absence by its kind: office duty is a full day paid, so it counts with ✓; permission and a
-    # no-show are unpaid, so they count with H (Claude's default, the plan Jack approved). The calendar marks each day
+    # no-show are unpaid, so they count with H (a default, in the plan Jack approved). The calendar marks each day
     # by its kind (O, R, H); the line keeps its five counts.
     if day.absence_type == AbsenceType.OFFICE_DUTY:
         return DayStatus.ON_TIME
