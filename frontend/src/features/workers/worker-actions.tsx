@@ -1,6 +1,7 @@
-// worker-actions.tsx — Badilisha, Simamisha, Rudisha, Ameondoka and Mwajiri tena on a worker's own page (PPL-10, PPL-6,
-// PPL-4, PPL-11): the owner fixes a worker's details, stops a worker for a while, brings them back, or records their last
-// day, each with a reason, which the audit trail keeps with who and when (rule 7); or hires one who left again.
+// worker-actions.tsx — Taarifa zake, a worker's details with Badilisha, Simamisha, Rudisha, Ameondoka and Mwajiri
+// tena, on their own page (PPL-10, PPL-6, PPL-4, PPL-11, UI-10): the owner fixes a worker's details, stops a worker for
+// a while, brings them back, or records their last day, each with a reason, which the audit trail keeps with who and
+// when (rule 7); or hires one who left again.
 //
 // The worker's status decides which show: working, Badilisha, Simamisha and Ameondoka; suspended, Badilisha, Rudisha
 // and Ameondoka; left, Mwajiri tena alone, as leaving is for good and a job that ended keeps what it said then: the
@@ -114,9 +115,11 @@ export function WorkerActions({
   details?: ReactNode;
   /** This is the demo, where no worker gets a phone (worker-details-form.tsx). */
   demo?: boolean;
-  /** Badilisha's form opened (true) or closed (false): the page hides the details while it is open. */
+  /** Badilisha's form opened (true) or closed (false): the card leaves the details out itself; the page asks, from
+   * then on, whether this is the demo, for the form's phone box (worker-page.tsx). */
   onEditing?: (editing: boolean) => void;
-  /** Any of its forms opened (true) or closed (false): the page keeps one form open at a time (worker-page.tsx). */
+  /** A form in the page opened (true) or closed (false), Badilisha's or Mwajiri tena's, never a sheet: the page keeps
+   * one form open at a time (worker-page.tsx). */
   onForm?: (open: boolean) => void;
   /** Another card's form is open: its buttons stay off the page meanwhile, so one change is made at a time (PPL-8's
    * review). */
@@ -145,9 +148,9 @@ export function WorkerActions({
     if (backTo.to === "news") newsLine.current?.focus();
     else buttons.current.get(backTo.to)?.focus();
   }, [backTo]);
-  // Gone from the page with Badilisha's form open, as at a new read's wait: the page shows the details again.
+  // Gone from the page with Badilisha's form open, as at a new read's wait: the page learns it is closed.
   useEffect(() => () => onEditing?.(false), [onEditing]);
-  // Gone from the page with a form open: the page lets the other card's buttons show again.
+  // Gone from the page with a form open in it: the page lets the other cards' buttons show again.
   useEffect(() => () => onForm?.(false), [onForm]);
 
   /** A form opens, or (null) closes: the page learns whether Badilisha's is the one open, and whether one is open in
@@ -289,7 +292,8 @@ export function WorkerActions({
                   ))}
                 </div>
               ) : null}
-              {/* Mounted only while open, so a sheet closed with Ghairi forgets what was typed (as the day's, ATT-6). */}
+              {/* Mounted only while open, so a sheet closed with Ghairi forgets what was typed (as the day's,
+                  ATT-6). */}
               {open !== null && isStatusAction(open.action) ? (
                 <ActionSheet
                   action={open.action}

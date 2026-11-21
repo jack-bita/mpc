@@ -1,7 +1,7 @@
 // worker-actions.test.tsx — Simamisha, Rudisha and Ameondoka on a worker's own page (PPL-6): which show for which
 // status, each in its sheet (UI-10) with its reason, the last day's limits, where each refusal shows, and a worker
-// someone else changed first read again. And Mwajiri tena on a worker who left (PPL-11): the boxes filled from the old job, what is sent, the
-// move to the new job's page, and the old job's link to it once the person is back.
+// someone else changed first read again. And Mwajiri tena on a worker who left (PPL-11): the boxes filled from the old
+// job, what is sent, the move to the new job's page, and the old job's link to it once the person is back.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

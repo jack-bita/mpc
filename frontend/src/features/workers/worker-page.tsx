@@ -1,5 +1,5 @@
 // worker-page.tsx — one worker's own page, opened by tapping their name on Wafanyakazi (PPL-6): everything of theirs,
-// and under it the buttons that change them (worker-actions.tsx).
+// in four headed cards, each with the buttons that change what it shows (UI-10).
 //
 // As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Since UI-10 (20 Nov 2026, his
 // "professional"), four cards, each under its heading, so a manager's phone finds each thing by its name:
@@ -7,8 +7,8 @@
 //     they left; and whether the superuser switched them off. Badilisha on the heading's row turns the details into
 //     boxes, in their place (PPL-10, worker-details-form.tsx); under them, the status's buttons (worker-actions.tsx);
 //   - Kuingia: whether they have a PIN, Weka PIN and Nenosiri la muda (PPL-12, worker-logins.tsx);
-//   - Cheo: their roles, then their extra keys, each by its name and side, with Ongeza kazi on the heading's row (PPL-8,
-//     worker-roles.tsx);
+//   - Cheo: their roles, then their extra keys, each by its name and side, with Ongeza kazi on the heading's row
+//     (PPL-8, worker-roles.tsx);
 //   - Malipo kwa siku: their daily pay rate and its history, for whoever holds settings.manage and staff.manage
 //     (WAGE-1, worker-pay.tsx).
 // Later cards add here: the photo (PPL-9), and the pay so far (WAGE-2), so the owner pays one who leaves at once.
@@ -92,8 +92,8 @@ export function WorkerScreen({ id }: { id: string | null }) {
   // Which card has a form open in the page itself, if any (PPL-8's review): one form at a time on the page, so a person
   // never meets two Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other cards'
   // buttons hide meanwhile. A sheet isn't counted (UI-10): it shuts the whole page off behind it, so Kuingia and
-  // Malipo kwa siku, whose forms are all sheets, never tell the page. Each card's own callback, kept the same between draws, as each says
-  // "closed" as it goes (its unmount).
+  // Malipo kwa siku, whose forms are all sheets, never tell the page. Each card's own callback, kept the same between
+  // draws, as each says "closed" as it goes (its unmount).
   const [formIn, setFormIn] = useState<Card | null>(null);
   const actionsForm = useCallback(
     (open: boolean) => setFormIn((now) => opened("actions", open, now)),
@@ -130,7 +130,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
           <WorkerActions
             // A worker of its own: on another worker's page, as the browser's back and forward move the address, any
             // form open on the last one closes, its boxes and its version with it, so Asha's boxes never go to
-            // Baraka; its unmount tells the page to show the details again (onEditing).
+            // Baraka; its unmount tells the page Badilisha's form is closed (onEditing).
             key={worker.data.id}
             worker={worker.data}
             me={who.data}
@@ -149,9 +149,9 @@ export function WorkerScreen({ id }: { id: string | null }) {
             demo={demo.data === true}
             buttonsHidden={formIn !== null}
           />
-          {/* Under the buttons, as Jack chose (PPL-8): each set of buttons beside what it changes. A worker of its own, as
-              WorkerActions: Asha's open form never goes on to Baraka's page. Its key apart from WorkerActions', as two
-              siblings with one key are one part to React, which then draws only one of them. */}
+          {/* Under Kuingia, as Jack chose (PPL-8, PPL-12): each set of buttons beside what it changes. A worker of its
+              own, as WorkerActions: Asha's open form never goes on to Baraka's page. Its key apart from WorkerActions',
+              as two siblings with one key are one part to React, which then draws only one of them. */}
           <WorkerRoles
             key={`${worker.data.id}-roles`}
             worker={worker.data}

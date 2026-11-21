@@ -11,8 +11,8 @@
 //
 // Cheo is the card's heading, and Ruhusa za ziada a heading a level under it, as the keys are part of what the worker
 // may do (UI-10). On Cheo's row sits Ongeza kazi (card-heading.tsx), as it adds to the whole card, roles and keys
-// alike; its form opens under the lists (give-form.tsx), and the button leaves the row meanwhile. It shows as PPL-6's do
-// (the card's default): for a worker working or suspended, as a suspended one may be given a role, which counts once
+// alike; its form opens under the lists (give-form.tsx), and the button leaves the row meanwhile. It shows as PPL-6's
+// do (the card's default): for a worker working or suspended, as a suspended one may be given a role, which counts once
 // they are back (PPL-7); none for one who left, whose roles stay as history; none on one's own page, where the status
 // buttons' line already says why (staff.own, worker-actions.tsx), as nobody changes their own job.
 //
@@ -65,7 +65,8 @@ export function WorkerRoles({
   roles: RolesRead;
   /** Ongeza kazi's form opened (true): the page asks the shop's roles from then on. */
   onGiving?: (giving: boolean) => void;
-  /** A form opened (true) or closed (false): the page keeps one form open at a time (worker-page.tsx). */
+  /** Ongeza kazi's form, in the page, opened (true) or closed (false), never Ondoa's sheet: the page keeps one form
+   * open at a time (worker-page.tsx). */
   onForm?: (open: boolean) => void;
   /** Another card's form is open: this card's buttons stay off the page meanwhile (PPL-8's review). */
   buttonsHidden?: boolean;

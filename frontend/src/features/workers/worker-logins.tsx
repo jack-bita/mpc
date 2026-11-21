@@ -3,10 +3,11 @@
 // (pin-form.tsx); and Nenosiri la muda, for one who works from their own phone (password-form.tsx). Each opens its
 // form in a sheet over the page (UI-10), and the two buttons stay where they are under it.
 //
-// A card of its own between the status buttons and the roles (Jack, PPL-12: A): a way to log in is neither the job's
-// status nor a role. The PIN's line shows for every worker; the buttons as PPL-8's do: for a worker working or
-// suspended, as a suspended one may be given a PIN for when they are back; none for one who left; none on one's own
-// page, where the status buttons' line already says why (staff.own), as nobody sets their own PIN here (pin.own).
+// A card of its own between Taarifa zake and Cheo (Jack, PPL-12: A, the order kept by UI-10): a way to log in is
+// neither the job's status nor a role. The PIN's line shows for every worker; the buttons as PPL-8's do: for a worker
+// working or suspended, as a suspended one may be given a PIN for when they are back; none for one who left; none on
+// one's own page, where the status buttons' line already says why (staff.own), as nobody sets their own PIN here
+// (pin.own).
 // While a sheet is open, the page behind it is shut off, so one change is made at a time; while another card's form is
 // open in the page (Badilisha, Ongeza kazi, until UI-11), these buttons hide (worker-page.tsx).
 //
@@ -68,8 +69,8 @@ export function WorkerLogins({
   // The line that says what the last change did.
   const [news, setNews] = useState<string | null>(null);
 
-  // Where the keyboard goes as a sheet closes, which the sheet alone moves (its finalFocus, worker-actions.tsx): Ghairi,
-  // back to the button that opened it; a change, to the line that says what happened.
+  // Where the keyboard goes as a sheet closes, which the sheet alone moves (its finalFocus, worker-actions.tsx):
+  // Ghairi, back to the button that opened it; a change, to the line that says what happened.
   const buttons = useRef(new Map<Form, HTMLButtonElement>());
   const newsLine = useRef<HTMLDivElement>(null);
 
@@ -149,8 +150,9 @@ export function WorkerLogins({
           {open === "pin" ? (
             <PinForm
               worker={worker}
-              // What follows, true for every laptop: one with no network keeps its own lock and its own check of the old
-              // PIN until it syncs the new pin_changed_at (src/offline/pin.ts), so "now" is said only of those online.
+              // What follows, true for every laptop: one with no network keeps its own lock and its own check of the
+              // old PIN until it syncs the new pin_changed_at (src/offline/pin.ts), so "now" is said only of those
+              // online.
               onDone={(changed) =>
                 said(t("pinDone", { name: changed.display_name }))
               }

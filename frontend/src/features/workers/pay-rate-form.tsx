@@ -2,13 +2,13 @@
 // POST /api/v1/staffpay/pay-rates/. Opens from Malipo kwa siku's button (worker-pay.tsx), in a sheet over the worker's
 // page (UI-10, sheet.tsx), titled "Malipo mapya ya Juma".
 //
-// As Jack pictured it (19 Nov 2026): Kiasi kwa siku, Kuanzia, Anachangia chakula? (Ndiyo, or Hapana, ni mpishi: the cook
-// pays no share of the meals, WAGE-7), Sababu (si lazima), then Ghairi and Hifadhi malipo, which names what it saves
-// (UI-10). A first rate starts on the worker's
-// first day, as Juma, hired on the 10th, is paid from the 10th though Baba types it on the 19th; a change starts today,
-// or on the first day for a worker who hasn't started yet, with the amount and the meals of the rate in force, so a
-// raise to 12,000 is a change of one digit (WAGE-1's defaults). The date box offers nothing before the worker's first day: a day gone by is fine, as the days before
-// today are paid at the rate their own day had (rates_between), but no day before the job.
+// As Jack pictured it (19 Nov 2026): Kiasi kwa siku, Kuanzia, Anachangia chakula? (Ndiyo, or Hapana, ni mpishi: the
+// cook pays no share of the meals, WAGE-7), Sababu (si lazima), then Ghairi and Hifadhi malipo, which names what it
+// saves (UI-10). A first rate starts on the worker's first day, as Juma, hired on the 10th, is paid from the 10th
+// though Baba types it on the 19th; a change starts today, or on the first day for a worker who hasn't started yet,
+// with the amount and the meals of the rate in force, so a raise to 12,000 is a change of one digit (WAGE-1's
+// defaults). The date box offers nothing before the worker's first day: a day gone by is fine, as the days before today
+// are paid at the rate their own day had (rates_between), but no day before the job.
 //
 // A rate is never changed: a mistake is mended by a new rate for the same day, which counts, as the newest (rule 2).
 // So the form always adds one.

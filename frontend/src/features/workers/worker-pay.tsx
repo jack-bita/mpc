@@ -86,8 +86,8 @@ export function WorkerPay({
 
   return (
     <Card>
-      {/* One region for the whole card, its button and form included, so a screen reader names the button by the card
-          it belongs to, "Malipo kwa siku". */}
+      {/* One region for the whole card, its button included, so a screen reader names the button by the card it
+          belongs to, "Malipo kwa siku". Its form's sheet is drawn over the page, outside the card (sheet.tsx). */}
       <CardContent>
         <section aria-labelledby={titleId} className="grid gap-6">
           <div className="grid gap-3">
