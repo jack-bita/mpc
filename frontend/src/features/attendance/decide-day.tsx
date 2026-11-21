@@ -21,9 +21,10 @@
 // visitor after them; elsewhere it is typed. Deciding again (Badilisha uamuzi) opens with the decision picked, and asks
 // for a new reason, as each decision says its own why.
 //
-// The decision is sent with when the decision on the screen was made, or none (`replaces`): if someone else decided the
-// day meanwhile, the server refuses it (409 version_conflict), the sheet says so, and the month is read again, so the
-// day behind shows what they decided. Its other refusals show beside their box, or above the buttons.
+// The decision is sent with when the decision on the screen as the sheet opened was made, or none (`replaces`), read
+// once as it opens: if someone else decided the day meanwhile, the server refuses it (409 version_conflict), the sheet
+// says so, and the month is read again, so the day behind shows what they decided once the sheet is closed. Its other
+// refusals show beside their box, or above the buttons.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
@@ -91,6 +92,11 @@ export function DecideDay({
     choiceOf(day.decision),
   );
   const [reason, setReason] = useState("");
+  // The decision on the screen as the sheet opened, or none, read once, never again: the month is asked again each
+  // minute while the page is open (worker-month.ts), and hands this sheet a newer day. Read at the save instead, a
+  // decision someone else made meanwhile would be sent as the one this person saw, and written over without a word
+  // (ATT-6's review). Sent as `replaces`, it is refused (409) instead: the person closes the sheet and sees it.
+  const [replaces] = useState(() => day.decision?.at ?? null);
   // The form's own checks, as the server would refuse them, shown once the person has tried to send.
   const [tried, setTried] = useState(false);
   const ready = answer.ready_reasons;
@@ -100,7 +106,7 @@ export function DecideDay({
       answerOf(
         api.POST("/api/v1/staffpay/attendance-days/{id}/decide/", {
           params: { path: { id: day.id } },
-          body: { ...sent, replaces: day.decision?.at ?? null },
+          body: { ...sent, replaces },
         }),
       ),
     onSuccess: (decision) => {

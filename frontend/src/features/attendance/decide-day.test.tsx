@@ -197,6 +197,35 @@ describe("Amua siku hii", () => {
     ]);
   });
 
+  it("sends the decision on the screen as it opened, though the month brings a newer one meanwhile", async () => {
+    // Baba opens the sheet on Juma's Thursday, decided by nobody. Meneja decides it on his own phone, and Baba's page,
+    // asking the month again each minute, hands the open sheet the newer day. Baba's save still says he saw none, so
+    // the server refuses it (409) instead of writing over Meneja's decision without a word (ATT-6's review).
+    answer("POST", DECIDE, refusal(409, "version_conflict"));
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <DecideDay day={THURSDAYS} answer={month()} open onClose={onClose} />,
+    );
+    rerender(
+      <DecideDay
+        day={{ ...THURSDAYS, decision: { ...DECIDED, by: "Meneja" } }}
+        answer={month()}
+        open
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(within(choices()).getByText("Nusu siku · faini TSh 500"));
+    fireEvent.change(reasonBox(), { target: { value: "Aliondoka mchana" } });
+    fireEvent.click(save());
+
+    await screen.findByRole("alert");
+    expect(await sentBodies()).toEqual([
+      { choice: "half", reason: "Aliondoka mchana", replaces: null },
+    ]);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("says someone decided it meanwhile above the buttons, and stays open", async () => {
     answer("POST", DECIDE, refusal(409, "version_conflict"));
     const { onClose } = openOn();
