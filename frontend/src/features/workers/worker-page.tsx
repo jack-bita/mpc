@@ -89,16 +89,14 @@ export function WorkerScreen({ id }: { id: string | null }) {
     error: ratesRead.error,
     isPending: ratesRead.isPending,
   };
-  // Which card has a form open, if any (PPL-8's review): one form at a time on the page, so a person never meets two
-  // Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other cards' buttons hide
-  // meanwhile. Each card's own callback, kept the same between draws, as each says "closed" as it goes (its unmount).
+  // Which card has a form open in the page itself, if any (PPL-8's review): one form at a time on the page, so a person
+  // never meets two Hifadhi and two Ghairi, and a screen reader never hears the same names twice. The other cards'
+  // buttons hide meanwhile. A sheet isn't counted (UI-10): it shuts the whole page off behind it, so Kuingia, whose two
+  // forms are sheets, never tells the page. Each card's own callback, kept the same between draws, as each says
+  // "closed" as it goes (its unmount).
   const [formIn, setFormIn] = useState<Card | null>(null);
   const actionsForm = useCallback(
     (open: boolean) => setFormIn((now) => opened("actions", open, now)),
-    [],
-  );
-  const loginsForm = useCallback(
-    (open: boolean) => setFormIn((now) => opened("logins", open, now)),
     [],
   );
   const rolesForm = useCallback(
@@ -153,8 +151,7 @@ export function WorkerScreen({ id }: { id: string | null }) {
             worker={worker.data}
             me={who.data}
             demo={demo.data === true}
-            onForm={loginsForm}
-            buttonsHidden={elsewhere("logins")}
+            buttonsHidden={formIn !== null}
           />
           {/* Under the buttons, as Jack chose (PPL-8): each set of buttons beside what it changes. A worker of its own, as
               WorkerActions: Asha's open form never goes on to Baraka's page. Its key apart from WorkerActions', as two
@@ -186,8 +183,8 @@ export function WorkerScreen({ id }: { id: string | null }) {
   );
 }
 
-/** The cards that open a form, each in its own place on the page. */
-type Card = "actions" | "logins" | "roles" | "pay";
+/** The cards that open a form in the page itself, each in its own place on it. */
+type Card = "actions" | "roles" | "pay";
 
 /** What a card's "opened" (true) or "closed" (false) makes of the card with a form open: a close of a card that holds
  * none changes nothing, as each card says "closed" as it goes. */

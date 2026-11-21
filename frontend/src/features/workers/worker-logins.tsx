@@ -1,14 +1,14 @@
 // worker-logins.tsx — Kuingia, a worker's ways in, on their own page (PPL-12): whether they have a PIN, Imewekwa or
 // Haijawekwa, so the owner sees who has no tile on the shop's laptops yet; Weka PIN, for a laptop's tile
 // (pin-form.tsx); and Nenosiri la muda, for one who works from their own phone (password-form.tsx). Each opens its
-// form in the buttons' place.
+// form in a sheet over the page (UI-10), and the two buttons stay where they are under it.
 //
 // A card of its own between the status buttons and the roles (Jack, PPL-12: A): a way to log in is neither the job's
 // status nor a role. The PIN's line shows for every worker; the buttons as PPL-8's do: for a worker working or
 // suspended, as a suspended one may be given a PIN for when they are back; none for one who left; none on one's own
 // page, where the status buttons' line already says why (staff.own), as nobody sets their own PIN here (pin.own).
-// While a form is open, no other button shows, on this card or the others (worker-page.tsx), so one change is made at
-// a time.
+// While a sheet is open, the page behind it is shut off, so one change is made at a time; while another card's form is
+// open in the page (Badilisha, Ongeza kazi, until UI-11), these buttons hide (worker-page.tsx).
 //
 // On the demo (Jack, PPL-12: A), PINs and passwords stay as the seed made them, so every visitor can log in: the
 // buttons are off, with demo.logins_fixed's own sentence under them, as a visitor's worker given a PIN would show his
@@ -16,9 +16,9 @@
 // the demo and hands the answer down; unknown, or not answered, the buttons are on, and the server refuses all the
 // same.
 //
-// After a change, one line says what it did, and the keyboard goes to it, as after the status buttons. Ghairi gives
-// the keyboard back to the button that opened the form, and reads the worker again: a change whose answer was lost may
-// have been made.
+// After a change, one line says what it did, and the keyboard goes to it, as after the status buttons: the sheet is
+// told so (finalFocus), or it would take the keyboard back to Weka PIN, which stays. Ghairi gives the keyboard back to
+// the button that opened the sheet, and reads the worker again: a change whose answer was lost may have been made.
 //
 // "use client": it asks use-intl for words (use-client.test.ts).
 "use client";
@@ -48,30 +48,21 @@ export function WorkerLogins({
   worker,
   me,
   demo = false,
-  onForm,
   buttonsHidden = false,
 }: {
   worker: Worker;
   me: WhoIsHere;
   /** This is the demo, where nobody's PIN or password changes. */
   demo?: boolean;
-  /** A form opened (true) or closed (false): the page keeps one form open at a time (worker-page.tsx). */
-  onForm?: (open: boolean) => void;
-  /** Another card's form is open: this card's buttons stay off the page meanwhile (PPL-8's review). */
+  /** Another card's form is open in the page: this card's buttons stay off the page meanwhile (PPL-8's review). */
   buttonsHidden?: boolean;
 }) {
   const t = useTranslations("workers.logins");
   const codes = useCodeWords();
   const store = useQueryClient();
   const titleId = useId();
-  const [open, setOpenHere] = useState<Form | null>(null);
-  /** A form opens, or (null) closes: the page learns, for the other cards' buttons. */
-  function setOpen(form: Form | null) {
-    setOpenHere(form);
-    onForm?.(form !== null);
-  }
-  // Gone from the page with a form open: the page lets the other cards' buttons show again.
-  useEffect(() => () => onForm?.(false), [onForm]);
+  // The sheet open, if any. The page isn't told: a sheet hides no other card's buttons, as it shuts the page off.
+  const [open, setOpen] = useState<Form | null>(null);
   // The line that says what the last change did.
   const [news, setNews] = useState<string | null>(null);
 
@@ -86,11 +77,18 @@ export function WorkerLogins({
     else buttons.current.get(backTo.to)?.focus();
   }, [backTo]);
 
-  // Who may see the buttons (see the top); none while a form is open.
+  // Who may see the buttons (see the top); they stay under an open sheet, so Ghairi gives the keyboard back to the very
+  // button that opened it.
   const mayChange = worker.status !== "left" && worker.id !== me.staff.id;
-  const showButtons = mayChange && open === null && !buttonsHidden;
+  const showButtons = mayChange && !buttonsHidden;
+
+  // Whether the last close was a change, for the sheet to give the keyboard to the done line: read as the sheet goes,
+  // after the draw that took it away, so a ref, not the state (worker-actions.tsx).
+  const afterChange = useRef(false);
+  const toTheLine = () => (afterChange.current ? newsLine.current : null);
 
   function said(sentence: string) {
+    afterChange.current = true;
     setOpen(null);
     setNews(sentence);
     setBackTo({ to: "news" });
@@ -128,6 +126,34 @@ export function WorkerLogins({
               {news ? <AlertDescription>{news}</AlertDescription> : null}
             </Alert>
           </div>
+          {showButtons ? (
+            <div className="grid gap-3">
+              <div className="flex flex-wrap gap-3">
+                {FORMS.map((form) => (
+                  <Button
+                    key={form}
+                    ref={(button) => {
+                      if (button) buttons.current.set(form, button);
+                      else buttons.current.delete(form);
+                    }}
+                    kind="second"
+                    // Off on the demo, with the line under them saying why (see the top).
+                    disabled={demo}
+                    onClick={() => {
+                      afterChange.current = false;
+                      setNews(null);
+                      setOpen(form);
+                    }}
+                  >
+                    {form === "pin" ? t("setPin") : t("temporaryPassword")}
+                  </Button>
+                ))}
+              </div>
+              {/* One line for both buttons: the server's own sentence for the demo's logins. */}
+              {demo ? <p>{codeMessage(codes, "demo.logins_fixed")}</p> : null}
+            </div>
+          ) : null}
+          {/* Mounted only while open, so a sheet closed with Ghairi forgets what was typed, the PIN included. */}
           {open === "pin" ? (
             <PinForm
               worker={worker}
@@ -137,6 +163,7 @@ export function WorkerLogins({
                 said(t("pinDone", { name: changed.display_name }))
               }
               onCancel={() => cancelled("pin")}
+              finalFocus={toTheLine}
             />
           ) : open === "password" ? (
             <PasswordForm
@@ -153,33 +180,8 @@ export function WorkerLogins({
                 )
               }
               onCancel={() => cancelled("password")}
+              finalFocus={toTheLine}
             />
-          ) : null}
-          {showButtons ? (
-            <div className="grid gap-3">
-              <div className="flex flex-wrap gap-3">
-                {FORMS.map((form) => (
-                  <Button
-                    key={form}
-                    ref={(button) => {
-                      if (button) buttons.current.set(form, button);
-                      else buttons.current.delete(form);
-                    }}
-                    kind="second"
-                    // Off on the demo, with the line under them saying why (see the top).
-                    disabled={demo}
-                    onClick={() => {
-                      setNews(null);
-                      setOpen(form);
-                    }}
-                  >
-                    {form === "pin" ? t("setPin") : t("temporaryPassword")}
-                  </Button>
-                ))}
-              </div>
-              {/* One line for both buttons: the server's own sentence for the demo's logins. */}
-              {demo ? <p>{codeMessage(codes, "demo.logins_fixed")}</p> : null}
-            </div>
           ) : null}
         </section>
       </CardContent>

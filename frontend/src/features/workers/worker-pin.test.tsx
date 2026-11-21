@@ -1,10 +1,10 @@
 // worker-pin.test.tsx — Weka PIN on a worker's page (PPL-12): the Kuingia card that says whether the worker has a PIN,
-// the two hidden boxes the worker types their own PIN into, two that differ said at once, the server's strength codes
-// beside the box and who-may codes above the buttons, the line after, who sees the button, the demo, offline, Ghairi,
-// one form at a time on the page, nothing of the PIN kept in the store, and the line under Ongeza kazi once the worker
-// has a PIN.
+// the sheet (UI-10) with the two hidden boxes the worker types their own PIN into, two that differ said at once, the
+// server's strength codes beside the box and who-may codes above the sheet's buttons, the line after, who sees the
+// button, the demo, offline, Ghairi, the page shut off behind the sheet, nothing of the PIN kept in the store, and the
+// line under Ongeza kazi once the worker has a PIN.
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { makeQueryClient } from "@/api/query-client";
@@ -90,6 +90,11 @@ function errorOf(box: HTMLElement): string {
 const button = (name: string) =>
   screen.getByRole("button", { name }) as HTMLButtonElement;
 const findButton = (name: string) => screen.findByRole("button", { name });
+/** A button inside the open sheet: Weka PIN, its main one, or Ghairi (UI-10). */
+const sheetButton = (name: string) =>
+  within(screen.getByRole("dialog")).getByRole("button", {
+    name,
+  }) as HTMLButtonElement;
 const newPin = () => screen.getByLabelText("PIN mpya") as HTMLInputElement;
 const again = () => screen.getByLabelText("Andika tena") as HTMLInputElement;
 
@@ -151,6 +156,11 @@ describe("Weka PIN", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     fireEvent.click(await findButton("Weka PIN"));
+    // A sheet over the page, titled with what and who, saying to hand the phone over (UI-10).
+    const sheet = screen.getByRole("dialog", { name: "Weka PIN ya Asha" });
+    expect(sheet.textContent).toContain(
+      "Mpe Asha simu hii aandike PIN yake mwenyewe.",
+    );
     // Both hidden, with the phone's number pad: the owner stands beside her, and a PIN is four digits. Each a box for a
     // new secret, so the phone never offers the owner's own saved password to her (PPL-12's review).
     for (const box of [newPin(), again()]) {
@@ -159,15 +169,18 @@ describe("Weka PIN", () => {
       expect(box.autocomplete).toBe("new-password");
     }
     ashaTypes("4829");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka PIN"));
 
     // The whole line: a laptop with no network keeps its lock and the old PIN until it syncs (src/offline/pin.ts), so
     // "now" is promised only where there is a network (PPL-12's review).
     const done = await screen.findByText(
       "PIN ya Asha imewekwa. Kila kompyuta ya duka itamwonyesha ikishasawazisha. Kwenye kompyuta yenye mtandao, kifungo chake kimeondoka na PIN yake ya zamani haifanyi kazi tena; isiyo na mtandao itajua ikishasawazisha.",
     );
-    // The keyboard goes to the line, as the button that opened the form may be gone.
-    expect(done.closest("[tabindex='-1']")).toBe(document.activeElement);
+    // The sheet gone, and the keyboard on the line, not taken back to Weka PIN by the sheet a moment later.
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() =>
+      expect(done.closest("[tabindex='-1']")).toBe(document.activeElement),
+    );
     expect(await pinsSent()).toEqual([{ pin: "4829" }]);
     expect(screen.getByText("Imewekwa")).toBeTruthy();
     // The boxes are gone with the form: nothing of the PIN stays on the page.
@@ -180,7 +193,7 @@ describe("Weka PIN", () => {
 
     fireEvent.click(await findButton("Weka PIN"));
     ashaTypes("4829", "4828");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka PIN"));
 
     expect(errorOf(again())).toBe("PIN hizi hazifanani.");
     expect(await pinsSent()).toEqual([]);
@@ -191,7 +204,7 @@ describe("Weka PIN", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     fireEvent.click(await findButton("Weka PIN"));
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka PIN"));
 
     expect(errorOf(newPin())).toBe(sentence("blank"));
     expect(await pinsSent()).toEqual([]);
@@ -206,7 +219,7 @@ describe("Weka PIN", () => {
 
       fireEvent.click(await findButton("Weka PIN"));
       ashaTypes("1234");
-      fireEvent.click(button("Hifadhi"));
+      fireEvent.click(sheetButton("Weka PIN"));
 
       await waitFor(() => expect(errorOf(newPin())).toBe(sentence(code)));
       expect(screen.queryByRole("alert")).toBeNull();
@@ -226,7 +239,7 @@ describe("Weka PIN", () => {
 
     fireEvent.click(await findButton("Weka PIN"));
     ashaTypes("4829");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka PIN"));
 
     expect((await screen.findByRole("alert")).textContent).toContain(
       sentence(code),
@@ -246,9 +259,9 @@ describe("Weka PIN", () => {
 
     fireEvent.click(await findButton("Weka PIN"));
     ashaTypes("1111");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka PIN"));
     await waitFor(() => expect(errorOf(newPin())).not.toBe(""));
-    fireEvent.click(button("Ghairi"));
+    fireEvent.click(sheetButton("Ghairi"));
 
     await waitFor(() =>
       expect(
@@ -275,13 +288,13 @@ describe("Weka PIN", () => {
 
     fireEvent.click(await findButton("Weka PIN"));
     ashaTypes("4829");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka PIN"));
     await screen.findByText(/^PIN ya Asha imewekwa\./);
 
     await waitFor(() => expect(store.getMutationCache().getAll()).toEqual([]));
   });
 
-  it("switches Hifadhi off while there is no network", async () => {
+  it("switches the sheet's Weka PIN off while there is no network", async () => {
     theServerHas(ASHA);
     render(<WorkerScreen id={ASHA.id} />);
 
@@ -290,18 +303,19 @@ describe("Weka PIN", () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     fireEvent.click(weka);
 
-    expect(button("Hifadhi").disabled).toBe(true);
+    expect(sheetButton("Weka PIN").disabled).toBe(true);
   });
 
-  it("gives the keyboard back to Weka PIN on Ghairi, and keeps one form open on the page at a time", async () => {
+  it("gives the keyboard back to Weka PIN on Ghairi, and shuts the page off behind the sheet", async () => {
     theServerHas(ASHA);
     render(<WorkerScreen id={ASHA.id} />);
 
     fireEvent.click(await findButton("Weka PIN"));
-    // While it is open, the other cards' buttons hide: one Hifadhi and one Ghairi on the page (PPL-8's review).
-    for (const name of ["Simamisha", "Ongeza kazi", "Weka PIN"])
-      expect(screen.queryByRole("button", { name })).toBeNull();
-    fireEvent.click(button("Ghairi"));
+    // While it is open, only its two buttons can be reached: one Weka PIN and one Ghairi (PPL-8's review, UI-10).
+    expect(
+      screen.getAllByRole("button").map((each) => each.textContent),
+    ).toEqual(["Ghairi", "Weka PIN"]);
+    fireEvent.click(sheetButton("Ghairi"));
 
     await waitFor(() =>
       expect(document.activeElement).toBe(button("Weka PIN")),

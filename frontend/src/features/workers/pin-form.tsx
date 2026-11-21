@@ -1,6 +1,9 @@
 // pin-form.tsx — Weka PIN (PPL-12): a worker's own PIN, typed by the worker on the owner's phone, sent through
-// POST /api/v1/people/staff/{id}/pin/, so a new worker gets a tile on the shop's laptops. Opens on the Kuingia card
-// (worker-logins.tsx).
+// POST /api/v1/people/staff/{id}/pin/, so a new worker gets a tile on the shop's laptops. Opens from the Kuingia card
+// (worker-logins.tsx), in a sheet over the worker's page (UI-10, sheet.tsx): "Weka PIN ya Asha", the line that says to
+// hand the phone over, the two boxes, Ghairi and Weka PIN. On a phone the sheet itself takes the keyboard as it opens,
+// so no number pad springs up before the worker holds the phone, and a screen reader says its title; on a laptop, the
+// first box does (Base UI's own way).
 //
 // Face to face (the card, v1.35): the owner hands his phone over and the worker types their own PIN, as whoever types
 // it knows it, and nothing makes them change it later. Two boxes, PIN mpya and Andika tena, each hidden, with the
@@ -10,24 +13,25 @@
 // What the form sees, it says at once, beside its box, and sends nothing: an empty first box (blank), two that differ.
 // Whether the PIN is four digits and not too easy is the server's alone (set_pin), so the shop hears one rule from one
 // place; its two codes show beside PIN mpya. Who may (pin.own, pin.superuser_only, pin.more_keys), staff.left and
-// demo.logins_fixed show above the buttons, with no network and the server's own problems.
+// demo.logins_fixed show above the sheet's buttons, with no network and the server's own problems.
 //
 // The PIN is a secret: the change keeps nothing in the store once it is done (gcTime: 0, UI-5), as the store is shared
-// by everyone who uses the phone; and the boxes go with the form when it closes, either way.
+// by everyone who uses the phone; and the boxes go with the sheet when it closes, either way, as it is drawn only while
+// open (worker-logins.tsx).
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/api/client";
 import { useApiErrorWords } from "@/api/errors";
 import { aboutTheWholeRequest, answerOf, ApiRefusal } from "@/api/refusal";
 import { ApiErrorAlert } from "@/components/api-error-alert";
-import { Button } from "@/components/design/button";
 import { Field } from "@/components/design/field";
+import { Sheet } from "@/components/design/sheet";
 import { codeMessage, useCodeWords } from "@/i18n/codes";
 import { useOnline } from "@/offline/network";
 
@@ -43,14 +47,17 @@ export function PinForm({
   worker,
   onDone,
   onCancel,
+  finalFocus,
 }: {
   worker: Worker;
   /** Set: the worker as the server answered, has_pin and all. */
   onDone: (worker: Worker) => void;
+  /** Ghairi or Esc. */
   onCancel: () => void;
+  /** Where the keyboard goes as the sheet goes (sheet.tsx). */
+  finalFocus: () => HTMLElement | null;
 }) {
   const t = useTranslations("workers.logins");
-  const actions = useTranslations("workers.actions");
   const codes = useCodeWords();
   const { fieldMessages } = useApiErrorWords();
   const online = useOnline();
@@ -58,11 +65,6 @@ export function PinForm({
   const [pin, setPin] = useState("");
   const [pinAgain, setPinAgain] = useState("");
   const [own, setOwn] = useState<Checks>({});
-
-  // The title takes the keyboard as the form opens, so a screen reader says what opened where the button was; the
-  // worker, handed the phone, then taps the first box.
-  const title = useRef<HTMLHeadingElement>(null);
-  useEffect(() => title.current?.focus(), []);
 
   const change = useMutation({
     mutationFn: (typed: string) =>
@@ -82,9 +84,8 @@ export function PinForm({
     },
   });
 
-  function send(event: FormEvent) {
-    // The browser would send the form itself and load a new page; the app sends it instead.
-    event.preventDefault();
+  /** The sheet's Weka PIN, or Enter in a box: the sheet's own form stops the browser's send (sheet.tsx). */
+  function send() {
     // The last send's refusal is about what was sent then: each tap shows only what it finds (setting-form.tsx).
     change.reset();
     const checks: Checks = {};
@@ -97,7 +98,7 @@ export function PinForm({
 
   // Where each refusal shows: beside PIN mpya, the form's own first, then a strength code, then the field's own code
   // on `pin`, a safety net this form never meets, as its boxes take four characters and the route takes sixteen;
-  // beside Andika tena, two that differ; everything else above the buttons.
+  // beside Andika tena, two that differ; everything else above the sheet's buttons.
   const code =
     change.error instanceof ApiRefusal ? change.error.body.code : undefined;
   const aboutThePin = code !== undefined && ABOUT_THE_PIN.has(code);
@@ -105,18 +106,19 @@ export function PinForm({
   const above = aboutThePin ? null : aboutTheWholeRequest(change.error);
 
   return (
-    // noValidate: the browser's own checks would speak its language, not the shop's.
-    <form noValidate onSubmit={send} className="grid gap-6">
-      <div className="grid gap-2">
-        <h2
-          ref={title}
-          tabIndex={-1}
-          className="text-lg font-semibold outline-none"
-        >
-          {t("pinTitle", { name: worker.display_name })}
-        </h2>
-        <p>{t("handOver", { name: worker.display_name })}</p>
-      </div>
+    <Sheet
+      open
+      onClose={onCancel}
+      title={t("pinTitle", { name: worker.display_name })}
+      description={t("handOver", { name: worker.display_name })}
+      actionLabel={t("pinSave")}
+      onAction={send}
+      // Held while it is sent, so a second tap sends nothing, and the sheet stays until its answer comes.
+      busy={change.isPending}
+      // Offline, nothing is sent, so nothing waits unsent while it looks done (setting-form.tsx).
+      actionDisabled={!online}
+      finalFocus={finalFocus}
+    >
       <Field
         label={t("newPin")}
         hint={t("newPinHint")}
@@ -151,16 +153,6 @@ export function PinForm({
       {/* Who may (pin.own, pin.superuser_only, pin.more_keys), staff.left, the demo, no network, the server's own
           problem. */}
       <ApiErrorAlert error={above} />
-      <div className="flex flex-wrap gap-3">
-        {/* Switched off while it is sent, so a second tap sends nothing, and while offline, so nothing waits unsent
-            while it looks done (setting-form.tsx). */}
-        <Button type="submit" disabled={change.isPending || !online}>
-          {actions("save")}
-        </Button>
-        <Button kind="second" onClick={onCancel}>
-          {actions("cancel")}
-        </Button>
-      </div>
-    </form>
+    </Sheet>
   );
 }

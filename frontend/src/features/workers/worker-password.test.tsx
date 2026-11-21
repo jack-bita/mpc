@@ -1,9 +1,9 @@
 // worker-password.test.tsx — Nenosiri la muda on a worker's page (PPL-12): the password and Sababu sent through
 // AUTH-6's route, its 204 and the line after it, with the worker's phone or without; a worker with no phone told to add
 // one first; the form's own checks; where each refusal shows; the boxes emptied; nothing of the password kept in the
-// store; the demo; offline; and the one form open at a time on the page.
+// store; the demo; offline; and the page shut off behind its sheet (UI-10).
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { makeQueryClient } from "@/api/query-client";
@@ -79,6 +79,11 @@ function errorOf(box: HTMLElement): string {
 const button = (name: string) =>
   screen.getByRole("button", { name }) as HTMLButtonElement;
 const findButton = (name: string) => screen.findByRole("button", { name });
+/** A button inside the open sheet: Weka nenosiri, its main one, or Ghairi (UI-10). */
+const sheetButton = (name: string) =>
+  within(screen.getByRole("dialog")).getByRole("button", {
+    name,
+  }) as HTMLButtonElement;
 // exact: the eye beside the box is "Onyesha nenosiri", which holds the word too.
 const passwordBox = () =>
   screen.getByLabelText("Nenosiri", { exact: true }) as HTMLInputElement;
@@ -98,21 +103,31 @@ describe("Nenosiri la muda", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     await babaTypes(TEMPORARY, WHY);
+    // A sheet over the page, titled with what and who, saying what Baba does with it (UI-10).
+    const sheet = screen.getByRole("dialog", {
+      name: "Nenosiri la muda la Asha",
+    });
+    expect(sheet.textContent).toContain(
+      "Andika nenosiri, kisha mwambie Asha ana kwa ana.",
+    );
     // Hidden as typed, with the eye every password box has (UI-5). A box for a new password: the owner's phone never
     // fills his own saved one in, as it might with "off", which phones ignore on a password box (PPL-12's review).
     expect(passwordBox().type).toBe("password");
     expect(passwordBox().autocomplete).toBe("new-password");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka nenosiri"));
 
     const done = await screen.findByText(
       "Nenosiri la muda la Asha limewekwa. Mwambie nenosiri hili. Ataingia kwa simu yake, 0712 345 678, au kwa barua pepe yake, kisha atachagua nenosiri lake mwenyewe.",
     );
-    // The keyboard goes to the line, as after every change on the page.
-    expect(done.closest("[tabindex='-1']")).toBe(document.activeElement);
+    // The sheet gone, and the keyboard on the line, as after every change on the page.
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() =>
+      expect(done.closest("[tabindex='-1']")).toBe(document.activeElement),
+    );
     expect(await passwordsSent()).toEqual([
       { password: TEMPORARY, reason: WHY },
     ]);
-    // The form is gone, its boxes with it: the password shows nowhere on the page.
+    // The sheet is gone, its boxes with it: the password shows nowhere on the page.
     expect(screen.queryByLabelText("Nenosiri", { exact: true })).toBeNull();
     expect(document.body.innerHTML).not.toContain(TEMPORARY);
   });
@@ -130,8 +145,8 @@ describe("Nenosiri la muda", () => {
         "Asha hana namba ya simu. Kama hana barua pepe pia, ongeza simu yake kwa Badilisha kwanza.",
       ),
     ).toBeTruthy();
-    expect(button("Hifadhi").disabled).toBe(false);
-    fireEvent.click(button("Hifadhi"));
+    expect(sheetButton("Weka nenosiri").disabled).toBe(false);
+    fireEvent.click(sheetButton("Weka nenosiri"));
 
     await screen.findByText(
       "Nenosiri la muda la Asha limewekwa. Mwambie nenosiri hili. Ataingia kwa barua pepe yake, kisha atachagua nenosiri lake mwenyewe.",
@@ -144,7 +159,7 @@ describe("Nenosiri la muda", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     await babaTypes(TEMPORARY, WHY);
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka nenosiri"));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain(sentence("password.no_login_name"));
@@ -160,7 +175,7 @@ describe("Nenosiri la muda", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     await babaTypes("", "   ");
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka nenosiri"));
 
     expect(errorOf(passwordBox())).toBe(sentence("blank"));
     expect(errorOf(reasonBox())).toBe(sentence("staff.reason_required"));
@@ -177,7 +192,7 @@ describe("Nenosiri la muda", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     await babaTypes("password1", WHY);
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka nenosiri"));
 
     await waitFor(() =>
       expect(errorOf(passwordBox())).toBe(sentence("password_too_common")),
@@ -192,7 +207,7 @@ describe("Nenosiri la muda", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     await babaTypes(TEMPORARY, WHY);
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka nenosiri"));
 
     await waitFor(() =>
       expect(errorOf(reasonBox())).toBe(sentence("staff.reason_required")),
@@ -212,7 +227,7 @@ describe("Nenosiri la muda", () => {
     render(<WorkerScreen id={ASHA.id} />);
 
     await babaTypes(TEMPORARY, WHY);
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka nenosiri"));
 
     expect((await screen.findByRole("alert")).textContent).toContain(
       sentence(code),
@@ -231,7 +246,7 @@ describe("Nenosiri la muda", () => {
     );
 
     await babaTypes(TEMPORARY, WHY);
-    fireEvent.click(button("Hifadhi"));
+    fireEvent.click(sheetButton("Weka nenosiri"));
     await screen.findByText(/^Nenosiri la muda la Asha limewekwa\./);
 
     await waitFor(() =>
@@ -246,7 +261,7 @@ describe("Nenosiri la muda", () => {
     );
   });
 
-  it("switches Hifadhi off while there is no network", async () => {
+  it("switches the sheet's Weka nenosiri off while there is no network", async () => {
     theServerHas(ASHA);
     render(<WorkerScreen id={ASHA.id} />);
 
@@ -254,17 +269,19 @@ describe("Nenosiri la muda", () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     fireEvent.click(open);
 
-    expect(button("Hifadhi").disabled).toBe(true);
+    expect(sheetButton("Weka nenosiri").disabled).toBe(true);
   });
 
-  it("gives the keyboard back on Ghairi, and keeps one form open on the page at a time", async () => {
+  it("gives the keyboard back on Ghairi, and shuts the page off behind the sheet", async () => {
     theServerHas(ASHA);
     render(<WorkerScreen id={ASHA.id} />);
 
     fireEvent.click(await findButton("Nenosiri la muda"));
+    // Only the sheet's buttons can be reached: the page behind stays drawn, but shut off (UI-10).
     for (const name of ["Simamisha", "Ongeza kazi", "Weka PIN"])
       expect(screen.queryByRole("button", { name })).toBeNull();
-    fireEvent.click(button("Ghairi"));
+    expect(sheetButton("Weka nenosiri")).toBeTruthy();
+    fireEvent.click(sheetButton("Ghairi"));
 
     await waitFor(() =>
       expect(document.activeElement).toBe(button("Nenosiri la muda")),
