@@ -33,9 +33,10 @@ out, which stays visible (A2), in columns the book never writes (DECISION), and 
 fine its first Ingia gives by its own rules (day_choices, T4). No line in the change log: no laptop keeps a day.
 
 A tap is fixed by a person, the owner or a manager, never on their own taps (ATT-13): Juma tapped Toka at 10:00 by
-mistake and worked on to 18:45, so Baba crosses out the 10:00 Toka and adds Toka 18:45 (add_tap), each with a reason.
-An added tap is a line of the attendance book like a laptop's, with no laptop, its time the minute typed, trusted. The
-book reads it the next time it works the day out, as it reads every tap.
+mistake and worked on to 18:45, so Baba crosses out the 10:00 Toka (void_tap) and adds Toka 18:45 (add_tap), each
+with a reason. An added tap is a line of the attendance book like a laptop's, with no laptop, its time the minute typed,
+trusted; a tap crossed out stays in the book, voided once with who, when and why, and counts for nothing (T2). The book
+reads both the next time it works the day out, as it reads every tap.
 
 A pay rate is typed by a person, the owner (set_pay_rate): from 10 Nov, Juma earns 10,000 a day. Whoever sets it sets a
 worker's pay, so who may is the PIN's rule, asked by the people app (02 §5). No line in the change log either: a
@@ -924,7 +925,7 @@ def add_tap(
     # One transaction, as the push saves a laptop's tap: recording_changes, whose change line no laptop pulls today,
     # as no device keeps the book (apps/sync/registry.py), and which the push writes for each tap all the same.
     with recording_changes(shop):
-        job = _ready_to_fix(staff, by)
+        job = _ready_to_fix(staff.pk, by)
         # A day the job works, as the book counts it (02 §5): from its first day to its last, as they are now, and
         # never a Sunday, when the shop is shut and a tap counts nothing (01 §8.1). A closed day takes one: Juma came
         # the morning of a funeral, and the book sends that day to review, as it would a laptop's tap (ATT-10).
@@ -966,7 +967,45 @@ def add_tap(
     return tap
 
 
-def _ready_to_fix(staff: StaffMember, by: StaffMember) -> StaffMember:
+def void_tap(tap: AttendanceEvent, *, reason: str, by: StaffMember) -> AttendanceEvent:
+    """Cross out a tap made by mistake (ATT-13, 02 §12, T2): Juma's Toka at 10:00, "Alibonyeza kwa makosa". The tap
+    stays in the book, voided once with who, when and why, and counts for nothing; the page shows it struck through
+    (A2). Never brought back: a mistake is mended by adding a tap (add_tap). An added tap is crossed out like any other.
+    `by`: who crosses it out, with attendance.manage on the whole shop, never on their own tap. A tap crossed out
+    already, by this request sent twice or by someone a moment before, is answered as it was crossed out, never stamped
+    again (CORE-3's Watch out). Refuses: one's own tap (tap.own); no reason (tap.reason_missing), or on the demo a
+    reason not the ready one (demo.ready_reasons), beside the reason's box. Returns the tap as saved."""
+    # Who voids is a staff member of the tap's own shop (T1): the void rule in the database checks only that the stamp
+    # is filled whole, so this is the check it can't make with one column (v1.58). Another shop's person here is a bug
+    # in the calling code, as the route finds both in the one shop open: a server error, before anything is read.
+    if by.shop_id != tap.shop_id:
+        raise ShopMismatch("void_tap was given a person of another shop.")
+    reason = reason.strip()
+    with recording_changes(tap.shop_id):
+        _ready_to_fix(tap.staff_id, by)
+        if not reason:
+            raise ValidationError(
+                {"reason": [ValidationError("A tap crossed out says why.", code="tap.reason_missing")]}
+            )
+        if settings.DEMO_SEED and reason not in DEMO_VOID_REASONS:
+            raise ValidationError(
+                {"reason": [ValidationError("On the demo, pick the ready reason.", code="demo.ready_reasons")]}
+            )
+        # The stamp, filled once, by one guarded UPDATE (CORE-3's Watch out): only while the tap is not crossed out, so
+        # two voids never both write it, whatever their order. Never save(), which AppendOnly refuses; the void trigger
+        # lets this UPDATE change the stamp and nothing else (ADR-0021).
+        stamped = AttendanceEvent.objects.filter(pk=tap.pk, voided_at__isnull=True).update(
+            voided_at=timezone.now(), voided_by=by, void_reason=reason
+        )
+        # Read back as it is now: crossed out by this request, or, when no row was stamped, by the same request sent
+        # before, its answer lost, or by someone a moment before, whose void the page is then shown (03 §5.5).
+        tap = AttendanceEvent.objects.get(pk=tap.pk)
+        if stamped:
+            record_change(tap)
+    return tap
+
+
+def _ready_to_fix(staff_id: uuid.UUID, by: StaffMember) -> StaffMember:
     # The checks every fix to a tap starts with, inside its transaction (ATT-13). Who may, asked afresh, as decide_day
     # asks: a key taken away a moment ago counts, and someone without it sets nothing to work. attendance.manage on the
     # whole shop, as attendance belongs to the whole shop.
@@ -977,7 +1016,7 @@ def _ready_to_fix(staff: StaffMember, by: StaffMember) -> StaffMember:
     # waited for while it is held, and no two runs each hold what the other waits for (a deadlock). FOR NO KEY UPDATE,
     # the light lock (backend rules): a laptop's tap pushed meanwhile still saves. Read afresh with it, as its first
     # and last day may have just moved (PPL-10).
-    job = StaffMember.objects.select_for_update(no_key=True).get(pk=staff.pk)
+    job = StaffMember.objects.select_for_update(no_key=True).get(pk=staff_id)
     # Never one's own taps (as ATT-6's day.own): a manager who came late would otherwise add himself an Ingia on time.
     # By the person, not the job: someone hired again (PPL-11) has two jobs, and neither's taps are theirs to fix.
     if job.user_id == by.user_id:

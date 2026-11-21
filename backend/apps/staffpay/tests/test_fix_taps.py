@@ -24,6 +24,7 @@ from decimal import Decimal
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from pytest_django import Settings
 
 from apps.core.acting import acting_as
@@ -34,8 +35,9 @@ from apps.people.services import grant_permission, hire_again, mark_left, suspen
 from apps.shops.models import Closure, Shop, Side
 from apps.shops.selectors import shop_today
 from apps.staffpay.models import AttendanceEvent, ClockKind, DayStatus, NoPhoto, ReviewReason, TimeCheck
-from apps.staffpay.services import add_tap
+from apps.staffpay.services import add_tap, void_tap, work_out_days
 from apps.staffpay.tests.days import ARUSHA, FIRST_FINE, MONDAY, SUNDAY, absent_day, job, kept_day, switch_on
+from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
 
 pytestmark = pytest.mark.django_db
 
@@ -94,6 +96,19 @@ def add(
             reason=reason,
             by=by,
         )
+
+
+def cross_out(tap: AttendanceEvent, by: StaffMember, reason: str = "Alibonyeza kwa makosa") -> AttendanceEvent:
+    # As the route calls it: inside the shop, in the person's visit.
+    with shop_context(tap.shop_id), acting_as(by):
+        return void_tap(tap, reason=reason, by=by)
+
+
+def the_tap(staff: StaffMember, kind: ClockKind, hour: int, minute: int) -> AttendanceEvent:
+    # The worker's tap of Monday at that minute, as the book keeps it.
+    moment = dt.datetime(2026, 11, 16, hour, minute, tzinfo=ARUSHA)
+    with shop_context(staff.shop_id):
+        return AttendanceEvent.objects.get(staff=staff, kind=kind, trusted_time=moment)
 
 
 def codes_of(refused: pytest.ExceptionInfo[ValidationError]) -> dict[str, set[str]]:
@@ -319,3 +334,163 @@ def test_on_the_demo_a_reason_is_the_ready_one(settings: Settings, baba: StaffMe
     with pytest.raises(ValidationError):
         add(juma, baba, reason="wrong_tap")
     assert add(juma, baba, reason="forgot_tap").entry_reason == "forgot_tap"
+
+
+# A tap crossed out.
+
+
+def test_baba_mends_jumas_thursday(baba: StaffMember, juma: StaffMember) -> None:
+    # The card's story: in at 07:20, Toka at 10:00 by mistake, so the day waits, "aliondoka saa 10:00". Baba crosses
+    # out the 10:00 Toka and adds Toka 18:45: a full day. The crossed-out tap stays, with who, when and why (A2).
+    day = kept_day(juma, (ClockKind.IN, 7, 20), (ClockKind.OUT, 10, 0))
+    assert (day.status, day.review_reason) == (DayStatus.NEEDS_REVIEW, ReviewReason.LEFT_EARLY)
+    wrong = cross_out(the_tap(juma, ClockKind.OUT, 10, 0), baba)
+    assert (wrong.voided_by_id, wrong.void_reason) == (baba.pk, "Alibonyeza kwa makosa")
+    assert wrong.voided_at is not None
+    # The 10:00 Toka counts for nothing now: the day has an Ingia and no Toka.
+    assert (absent_day(juma).status, absent_day(juma).review_reason) == (DayStatus.NEEDS_REVIEW, ReviewReason.NO_OUT)
+    add(juma, baba)
+    assert absent_day(juma).status == DayStatus.ON_TIME
+    # Nothing is deleted (T3): the book keeps all three taps.
+    assert len(taps_of(juma)) == 3
+
+
+def test_an_added_tap_is_crossed_out_like_any_other(baba: StaffMember, juma: StaffMember) -> None:
+    # Baba typed 18:45 for 13:45: he crosses his own entry out, and adds the right one. A crossed-out tap is never
+    # brought back; a mistake is mended by adding a tap (a Claude default Jack said yes to).
+    kept_day(juma, (ClockKind.IN, 7, 20))
+    typed = add(juma, baba)
+    crossed = cross_out(typed, baba, "Saa si sahihi")
+    assert crossed.void_reason == "Saa si sahihi"
+    add(juma, baba, hour=13, minute=45, reason="Aliondoka saa 7 mchana")
+    assert absent_day(juma).first_out == dt.time(13, 45)
+
+
+def test_a_reason_is_kept_without_its_spaces_when_crossing_out(baba: StaffMember, juma: StaffMember) -> None:
+    kept_day(juma, (ClockKind.IN, 7, 20))
+    assert cross_out(the_tap(juma, ClockKind.IN, 7, 20), baba, "  Alibonyeza kwa makosa \n").void_reason == (
+        "Alibonyeza kwa makosa"
+    )
+
+
+def test_the_same_void_sent_twice_is_done_once(baba: StaffMember, juma: StaffMember) -> None:
+    # The phone lost the answer and sends the same void again: the tap is crossed out once, and the void kept is
+    # answered, the same moment and reason, never refused, nor stamped twice (CORE-3's Watch out).
+    kept_day(juma, (ClockKind.IN, 7, 20), (ClockKind.OUT, 10, 0))
+    tap = the_tap(juma, ClockKind.OUT, 10, 0)
+    first = cross_out(tap, baba)
+    again = cross_out(tap, baba)
+    assert (again.voided_at, again.voided_by_id, again.void_reason) == (
+        first.voided_at,
+        baba.pk,
+        "Alibonyeza kwa makosa",
+    )
+
+
+def test_a_tap_crossed_out_first_by_someone_else_answers_their_void(
+    baba: StaffMember, meneja: StaffMember, juma: StaffMember
+) -> None:
+    # Meneja crossed out Juma's 10:00 Toka a moment before Baba did, on a page that still showed it: the tap is crossed
+    # out once, Meneja's void stays, and Baba's page is answered with it.
+    kept_day(juma, (ClockKind.IN, 7, 20), (ClockKind.OUT, 10, 0))
+    tap = the_tap(juma, ClockKind.OUT, 10, 0)
+    cross_out(tap, meneja, "Alibonyeza kwa makosa")
+    answered = cross_out(tap, baba, "Sababu nyingine")
+    assert (answered.voided_by_id, answered.void_reason) == (meneja.pk, "Alibonyeza kwa makosa")
+
+
+def test_crossing_out_the_only_tap_outside_a_jobs_days_leaves_nothing_to_decide(
+    shop_a: Shop, baba: StaffMember
+) -> None:
+    # Neema came on Monday the 16th, then her first day was moved to the 17th (PPL-10), so Monday waits, "outside the
+    # job's days" (ATT-11). Baba crosses that tap out: the book answers no Monday for her any more, so the day leaves
+    # the list to decide, though its row stays as it was, read by nothing (rule 7; ATT-11's review).
+    neema = job(shop_a, "Neema")
+    kept_day(neema, (ClockKind.IN, 7, 20))
+    with shop_context(shop_a):
+        StaffMember.objects.filter(pk=neema.pk).update(started_on=dt.date(2026, 11, 17))
+    neema.refresh_from_db()
+    assert absent_day(neema).review_reason == ReviewReason.OUTSIDE_JOB
+    cross_out(the_tap(neema, ClockKind.IN, 7, 20), baba)
+    with shop_context(shop_a):
+        answered = work_out_days(shop_a, MONDAY, MONDAY)
+    assert [day for day in answered if day.staff_id == neema.pk] == []
+
+
+def test_nobody_crosses_out_their_own_tap(baba: StaffMember, meneja: StaffMember) -> None:
+    # Meneja came at 08:10: crossing out his own Ingia would leave his day to decide, with no fine.
+    kept_day(meneja, (ClockKind.IN, 8, 10))
+    tap = the_tap(meneja, ClockKind.IN, 8, 10)
+    with pytest.raises(ValidationError) as refused:
+        cross_out(tap, meneja)
+    assert refused.value.code == "tap.own"
+    assert the_tap(meneja, ClockKind.IN, 8, 10).voided_at is None
+
+
+def test_a_seller_crosses_out_nothing(shop_a: Shop, side_a: Side, give_role: GiveRole, juma: StaffMember) -> None:
+    asha = job(shop_a, "Asha")
+    give_role(asha, RoleTemplate.SELLER, side_a)
+    kept_day(juma, (ClockKind.IN, 7, 20))
+    with pytest.raises(PermissionDenied):
+        cross_out(the_tap(juma, ClockKind.IN, 7, 20), asha)
+    assert the_tap(juma, ClockKind.IN, 7, 20).voided_at is None
+
+
+def test_a_void_by_a_person_of_another_shop_is_a_bug(staff_b: StaffMember, juma: StaffMember) -> None:
+    # The database holds only that the stamp is complete, not whose shop voided_by is of (v1.58): the service checks
+    # it (T1), before anything is read or written.
+    kept_day(juma, (ClockKind.IN, 7, 20))
+    tap = the_tap(juma, ClockKind.IN, 7, 20)
+    with shop_context(juma.shop_id), pytest.raises(ShopMismatch):
+        void_tap(tap, reason="Alibonyeza kwa makosa", by=staff_b)
+    assert the_tap(juma, ClockKind.IN, 7, 20).voided_at is None
+
+
+def test_crossing_out_says_why(baba: StaffMember, juma: StaffMember) -> None:
+    kept_day(juma, (ClockKind.IN, 7, 20))
+    tap = the_tap(juma, ClockKind.IN, 7, 20)
+    for reason in ("", "   "):
+        with pytest.raises(ValidationError) as refused:
+            cross_out(tap, baba, reason)
+        assert codes_of(refused) == {"reason": {"tap.reason_missing"}}
+    assert the_tap(juma, ClockKind.IN, 7, 20).voided_at is None
+
+
+def test_on_the_demo_crossing_out_takes_its_ready_reason(
+    settings: Settings, baba: StaffMember, juma: StaffMember
+) -> None:
+    # *Alibonyeza kwa makosa*, kept as its code; adding's ready reason is not crossing out's.
+    settings.DEMO_SEED = True
+    kept_day(juma, (ClockKind.IN, 7, 20))
+    tap = the_tap(juma, ClockKind.IN, 7, 20)
+    for typed in ("Maneno ya mgeni", "forgot_tap"):
+        with pytest.raises(ValidationError) as refused:
+            cross_out(tap, baba, typed)
+        assert codes_of(refused) == {"reason": {"demo.ready_reasons"}}
+    assert cross_out(tap, baba, "wrong_tap").void_reason == "wrong_tap"
+
+
+# Taking turns with the book.
+
+
+def _cross_out_in_another_visit(tap: AttendanceEvent, by: StaffMember) -> object:
+    # A void in a transaction of its own, on a connection of its own, as a second phone sends one: who voided it, or
+    # the refusal it raised, which in_another_transaction hands back to the test.
+    with shop_context(tap.shop_id):
+        return void_tap(tap, reason="Alibonyeza kwa makosa", by=by).voided_by_id
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_fix_waits_for_the_book(baba: StaffMember, juma: StaffMember) -> None:
+    # A manager opens the month, and the book is working it out, holding the shop's jobs, when Baba crosses out Juma's
+    # 10:00 Toka. The void waits for the book to keep the days, so the book never keeps Juma's day from a tap crossed
+    # out under it; then it is saved. Without the job's lock, it would pass at once, and the test would never see it
+    # wait.
+    kept_day(juma, (ClockKind.IN, 7, 20), (ClockKind.OUT, 10, 0))
+    tap = the_tap(juma, ClockKind.OUT, 10, 0)
+    with shop_context(tap.shop_id), transaction.atomic():
+        list(StaffMember.objects.filter(shop=tap.shop_id).order_by("pk").select_for_update(no_key=True))
+        second, ended = in_another_transaction(lambda: _cross_out_in_another_visit(tap, baba))
+        wait_until_someone_waits_for_me()
+    second.join(timeout=10)
+    assert ended == [baba.pk]
