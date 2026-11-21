@@ -143,6 +143,31 @@ describe("the Kuingia card", () => {
     await screen.findByText(sentence("staff.own"));
     expect(screen.queryByRole("button", { name: "Weka PIN" })).toBeNull();
   });
+
+  it("hides its two buttons while a form is open in the page, Badilisha's or Ongeza kazi's, and shows them after (UI-10's review)", async () => {
+    // One form at a time on the page (PPL-8's review): a form in the page, not a sheet, leaves the rest of the page
+    // in use, so Kuingia's buttons step aside until it closes (worker-page.tsx, buttonsHidden).
+    theServerHas(ASHA);
+    answer("GET", DEMO_OPEN, { status: 200, body: { open: false } });
+    answer("GET", ROLES_ROUTE, { status: 200, body: rolesPage(SHOP_ROLES) });
+    render(<WorkerScreen id={ASHA.id} />);
+    const kuingia = await screen.findByRole("region", { name: "Kuingia" });
+    await within(kuingia).findByRole("button", { name: "Weka PIN" });
+
+    for (const other of ["Badilisha", "Ongeza kazi"]) {
+      fireEvent.click(await findButton(other));
+      // Open in the page itself: no sheet, and the rest of the page still in reach.
+      expect(screen.queryByRole("dialog")).toBeNull();
+      await waitFor(() =>
+        expect(within(kuingia).queryAllByRole("button")).toEqual([]),
+      );
+      fireEvent.click(button("Ghairi"));
+      for (const name of ["Weka PIN", "Nenosiri la muda"])
+        expect(
+          await within(kuingia).findByRole("button", { name }),
+        ).toBeTruthy();
+    }
+  });
 });
 
 describe("Weka PIN", () => {
