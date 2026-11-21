@@ -16,7 +16,8 @@ describe("a form's page's note", () => {
       sentence: "Juma ameongezwa.",
     });
 
-    // React may draw the page twice before it is on the screen: both draws find the note.
+    // React may draw the page twice before it is on the screen: both draws find the note. The page itself, drawn so,
+    // is worker-page.test.tsx's.
     expect(peekNews()?.sentence).toBe("Juma ameongezwa.");
     expect(peekNews()?.sentence).toBe("Juma ameongezwa.");
     forgetNews();

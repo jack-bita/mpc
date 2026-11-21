@@ -4,6 +4,7 @@
 // card and the worker it names (UI-11).
 import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { forgetTheLastPerson, makeQueryClient } from "@/api/query-client";
@@ -385,6 +386,25 @@ describe("the line a form's own page left (UI-11)", () => {
     await waitFor(() =>
       expect(document.activeElement?.contains(line)).toBe(true),
     );
+  });
+
+  it("shows once when React draws the page twice, as it does in development, and is spent after (UI-11's review)", async () => {
+    // StrictMode draws each part twice and runs each effect twice: whichever draw and effect come last, the line shows
+    // once, and the note is spent after (page-news.ts).
+    leaveNews({ worker: ASHA.id, card: "details", sentence: ADDED });
+    theServerHas(ASHA);
+
+    render(
+      <StrictMode>
+        <WorkerScreen id={ASHA.id} />
+      </StrictMode>,
+    );
+
+    expect(await screen.findAllByText(ADDED)).toHaveLength(1);
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toBe(ADDED),
+    );
+    expect(peekNews()).toBeNull();
   });
 
   it("shows once: gone after a move to another worker's page and back", async () => {
