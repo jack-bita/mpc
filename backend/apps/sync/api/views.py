@@ -13,19 +13,17 @@ apps/sync/bootstrap.py and apps/sync/pull.py, and what is saved, in apps/sync/pu
 import uuid
 from typing import cast
 
-from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django.views.decorators.gzip import gzip_page
-from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
-from rest_framework import exceptions
 from rest_framework.exceptions import NotFound
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.control.models import LARGEST_FILE, Attachment, AttachmentType
+from apps.control.api.uploads import PHOTO_BODY, photo_sent
+from apps.control.models import Attachment
 from apps.control.services import receive_attachment_file
 from apps.people.api.base import DeviceView
 from apps.people.models import Device
@@ -105,46 +103,15 @@ class AttachmentFileView(DeviceView):
     # laptop, and expects the answer an id no shop has gets (DeviceView.model).
     model = Attachment
 
-    @extend_schema(
-        request={AttachmentType.JPEG.value: OpenApiTypes.BINARY, AttachmentType.WEBP.value: OpenApiTypes.BINARY},
-        responses={204: None},
-    )
+    @extend_schema(request=PHOTO_BODY, responses={204: None})
     def put(self, request: Request, pk: uuid.UUID) -> Response:
-        # The file's length first, from the request's head, before a byte of the file is read: a 50 MB upload is
-        # refused unread, and the server's memory never holds it.
-        length = _length_of(request)
-        if length is None:
-            # No length, or one that is no number: Django would read the body as empty, and the photo would be refused
-            # as no image, which the laptop takes as a bad photo and sets aside for good. A request sent in pieces with
-            # no length (chunked, as a proxy on the way may send it) says nothing about the photo, so the laptop is told
-            # to send it again instead (CTRL-6), and nothing is read.
-            raise LengthRequired()
-        if length > LARGEST_FILE:
-            raise ValidationError("A file is kept up to 1 MB.", code="attachment.too_big")
+        # The file's length first, before a byte of it is read (photo_sent).
+        content = photo_sent(request)
         try:
-            # request.body, never request.data: the body is the file's own bytes, which no parser of DRF's should read.
-            receive_attachment_file(pk, content=request.body)
+            receive_attachment_file(pk, content=content)
         except Attachment.DoesNotExist:
             # An id this shop doesn't hold, another shop's included, answers as one no shop has: nothing tells shop B's
             # laptop that shop A's photo exists. The laptop also gets this when it sends a file before its record:
             # it tries again after its next push (CTRL-6).
             raise NotFound("No photo with this id here.", code="attachment.not_found") from None
         return Response(status=204)
-
-
-def _length_of(request: Request) -> int | None:
-    # The body's length as the request's head gives it (Content-Length); None when it gives none, or one that is no
-    # whole number of bytes.
-    try:
-        length = int(request.META.get("CONTENT_LENGTH") or "")
-    except ValueError:
-        return None
-    return length if length >= 0 else None
-
-
-class LengthRequired(exceptions.APIException):
-    # 411 Length Required: HTTP's own answer for a request that must say its length. The one error shape gives it this
-    # code (apps/core/api/errors.py), which the laptop reads as "send it again", not as a refused photo (CTRL-6).
-    status_code = 411
-    default_detail = "Send the photo with its length (Content-Length)."
-    default_code = "attachment.length_required"
