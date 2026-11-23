@@ -17,7 +17,7 @@
 
 # --- Stage 1: build the shop app into plain files, frontend/out/ (ADR-0016).
 # Node 24: the version package.json's "engines" and CI's frontend job use.
-FROM node:24.22.2-trixie-slim AS frontend
+FROM node:24.22.3-trixie-slim AS frontend
 # Next.js would otherwise send anonymous usage data from every build. The Serwist CLI (`serwist build`,
 # part of `pnpm build`) would otherwise ask the npm registry whether a newer version exists (SPIKE-1).
 ENV NEXT_TELEMETRY_DISABLED=1 \
