@@ -1585,7 +1585,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/StaffReasonRequest"
+                                "$ref": "#/components/schemas/RemovePhotoRequest"
                             }
                         }
                     },
@@ -4731,6 +4731,23 @@
                 ],
                 "type": "string",
                 "description": "* `outside_job` - Outside the job's days\n* `closed_day` - The shop was closed\n* `not_working` - Suspended or gone\n* `clock_disagrees` - A later tap disagrees\n* `time_unknown` - Time not trusted\n* `no_in` - No Ingia\n* `came_late` - Came late\n* `no_out` - No Toka\n* `left_early` - Left early"
+            },
+            "RemovePhotoRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 500
+                    },
+                    "photo": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "photo",
+                    "reason"
+                ]
             },
             "Role": {
                 "type": "object",

@@ -40,6 +40,7 @@ from apps.control.models import (
 )
 from apps.control.services import expect_attachment
 from apps.core.acting import acting_as
+from apps.core.editing import VersionConflict
 from apps.core.permissions import RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, User
@@ -214,7 +215,7 @@ def test_a_photo_taken_off_never_comes_back_by_itself(
 ) -> None:
     photo_id = set_photo(asha, by=baba)
     with shop_context(asha.shop_id), django_capture_on_commit_callbacks(execute=True):
-        remove_worker_photo(asha, reason="Hataki picha", by=baba)
+        remove_worker_photo(asha, photo_id=photo_id, reason="Hataki picha", by=baba)
         set_worker_photo(asha, photo_id=photo_id, content=FACE, by=baba)
 
     assert photo_of(asha) is None
@@ -279,7 +280,7 @@ def test_a_photo_taken_off_keeps_its_row(
 ) -> None:
     photo_id = set_photo(asha, by=baba)
     with shop_context(asha.shop_id), django_capture_on_commit_callbacks(execute=True):
-        answer = remove_worker_photo(asha, reason="  Hataki picha  ", by=baba)
+        answer = remove_worker_photo(asha, photo_id=photo_id, reason="  Hataki picha  ", by=baba)
 
     assert answer.photo_id is None
     assert photo_of(asha) is None
@@ -295,16 +296,41 @@ def test_taking_a_photo_off_needs_a_reason(asha: StaffMember, baba: StaffMember,
     photo_id = set_photo(asha, by=baba)
 
     with shop_context(asha.shop_id), pytest.raises(ValidationError) as refused:
-        remove_worker_photo(asha, reason=reason, by=baba)
+        remove_worker_photo(asha, photo_id=photo_id, reason=reason, by=baba)
 
     assert code_of(refused) == "staff.reason_required"
     assert photo_of(asha) == photo_id
 
 
-def test_taking_off_a_photo_nobody_set_changes_nothing(asha: StaffMember, baba: StaffMember) -> None:
-    # Meneja and Mzee both press Ondoa picha: the second finds it gone already, which is what he wanted.
+def test_taking_a_photo_off_twice_is_done_once(asha: StaffMember, baba: StaffMember) -> None:
+    # Meneja and Mzee both press Ondoa picha, or one presses again after an answer that was lost: the second finds it
+    # gone already, which is what was wanted, and the first's reason stays.
+    photo_id = set_photo(asha, by=baba)
     with shop_context(asha.shop_id):
-        assert remove_worker_photo(asha, reason="Hataki picha", by=baba).photo_id is None
+        remove_worker_photo(asha, photo_id=photo_id, reason="Hataki picha", by=baba)
+        again = remove_worker_photo(asha, photo_id=photo_id, reason="Tena", by=baba)
+
+    assert again.photo_id is None
+    assert row_of(asha, photo_id).file_removed_reason == "Hataki picha"
+
+
+def test_a_late_removal_never_takes_off_a_newer_photo(asha: StaffMember, baba: StaffMember) -> None:
+    # Meneja presses Ondoa picha on a slow network. Meanwhile Mzee sets a better photo, which Meneja never saw: it
+    # stays, its file too, and Meneja's page reads the worker again.
+    seen = set_photo(asha, by=baba)
+    newer = set_photo(asha, by=baba, content=BETTER_FACE)
+
+    with shop_context(asha.shop_id), pytest.raises(VersionConflict):
+        remove_worker_photo(asha, photo_id=seen, reason="Hataki picha", by=baba)
+
+    assert photo_of(asha) == newer
+    assert stored_bytes(row_of(asha, newer)) == BETTER_FACE
+
+
+def test_taking_off_a_photo_nobody_set_changes_nothing(asha: StaffMember, baba: StaffMember) -> None:
+    with shop_context(asha.shop_id):
+        answer = remove_worker_photo(asha, photo_id=uuid.uuid7(), reason="Hataki picha", by=baba)
+        assert answer.photo_id is None
         assert not EditEvent.objects.filter(subject_type="staff", subject_id=asha.pk).exists()
 
 
@@ -317,7 +343,7 @@ def test_each_photo_change_names_who_made_it(
         first = set_photo(asha, by=baba)
         second = set_photo(asha, by=baba, content=BETTER_FACE)
         with shop_context(asha.shop_id):
-            remove_worker_photo(asha, reason="Hataki picha", by=baba)
+            remove_worker_photo(asha, photo_id=second, reason="Hataki picha", by=baba)
 
     with shop_context(asha.shop_id):
         of_job = list(EditEvent.objects.filter(subject_type="staff", subject_id=asha.pk).order_by("id"))
@@ -338,9 +364,9 @@ def test_each_photo_change_names_who_made_it(
 def test_a_photo_leaves_the_version_alone(asha: StaffMember, baba: StaffMember) -> None:
     # As a suspension or a PIN does (PPL-10): Mzee sets Asha's photo while Meneja is typing her new phone, and Meneja's
     # fix still saves. The one row that moves is the photo's own column.
-    set_photo(asha, by=baba)
+    photo_id = set_photo(asha, by=baba)
     with shop_context(asha.shop_id):
-        remove_worker_photo(asha, reason="Hataki picha", by=baba)
+        remove_worker_photo(asha, photo_id=photo_id, reason="Hataki picha", by=baba)
         assert StaffMember.objects.get(pk=asha.pk).version == asha.version
 
 
@@ -352,7 +378,7 @@ def test_a_photo_stays_in_its_shop(asha: StaffMember, baba: StaffMember, shop_b:
                 set_worker_photo(asha, photo_id=uuid.uuid7(), content=FACE, by=acting)
             assert code_of(refused) == "staff.other_shop"
             with pytest.raises(ValidationError) as refused:
-                remove_worker_photo(asha, reason="Hataki picha", by=acting)
+                remove_worker_photo(asha, photo_id=uuid.uuid7(), reason="Hataki picha", by=acting)
             assert code_of(refused) == "staff.other_shop"
     assert photo_of(asha) is None
 

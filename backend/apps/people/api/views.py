@@ -97,6 +97,7 @@ from apps.people.api.serializers import (
     PairingStartSerializer,
     PhotoQuery,
     PinLoginSerializer,
+    RemovePhotoSerializer,
     RoleSerializer,
     SetPinSerializer,
     StaffAddSerializer,
@@ -468,13 +469,15 @@ class StaffViewSet(
             )
         return self._answer(changed)
 
-    # Ondoa picha (PPL-9).
-    @extend_schema(request=StaffReasonSerializer, responses=StaffSerializer)
+    # Ondoa picha (PPL-9), of the photo the page shows: a newer one is 409 version_conflict, and stays.
+    @extend_schema(request=RemovePhotoSerializer, responses=StaffSerializer)
     @action(detail=True, methods=["post"], url_path="remove-photo")
     def remove_photo(self, request: Request, pk: str | None = None) -> Response:
         worker = self._worker()
-        sent = self._sent(request, StaffReasonSerializer)
-        return self._answer(remove_worker_photo(worker, reason=sent["reason"], by=self._acting()))
+        sent = self._sent(request, RemovePhotoSerializer)
+        return self._answer(
+            remove_worker_photo(worker, photo_id=sent["photo"], reason=sent["reason"], by=self._acting())
+        )
 
 
 class RoleViewSet(mixins.ListModelMixin, ShopViewSet[Role]):

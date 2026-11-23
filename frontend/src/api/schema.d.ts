@@ -1576,6 +1576,11 @@ export interface components {
          * @enum {string}
          */
         ReasonEnum: "outside_job" | "closed_day" | "not_working" | "clock_disagrees" | "time_unknown" | "no_in" | "came_late" | "no_out" | "left_early";
+        RemovePhotoRequest: {
+            reason: string;
+            /** Format: uuid */
+            photo: string;
+        };
         Role: {
             /** Format: uuid */
             readonly id: string;
@@ -2991,7 +2996,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["StaffReasonRequest"];
+                "application/json": components["schemas"]["RemovePhotoRequest"];
             };
         };
         responses: {

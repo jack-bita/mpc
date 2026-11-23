@@ -689,10 +689,12 @@ def set_worker_photo(staff: StaffMember, *, photo_id: uuid.UUID, content: bytes,
     return staff
 
 
-def remove_worker_photo(staff: StaffMember, *, reason: str, by: StaffMember) -> StaffMember:
+def remove_worker_photo(staff: StaffMember, *, photo_id: uuid.UUID, reason: str, by: StaffMember) -> StaffMember:
     """Take off the photo a worker's job shows (PPL-9): its file goes for good, and its row keeps who, when and why
-    (rule 7). `by`: as for set_worker_photo. A worker with no photo stays as they are: of two managers taking it off at
-    once, the second finds what he wanted done. Returns the job as saved."""
+    (rule 7). `photo_id`: the photo the one acting saw. Another one shows by now: refused (VersionConflict, 409
+    version_conflict), as nobody takes off a face they never saw. A worker with no photo stays as they are: of two
+    managers taking it off at once, the second finds what he wanted done. `by`: as for set_worker_photo. Returns the job
+    as saved."""
     _check_shop(staff.shop_id, by)
     _check_reason(reason)
     with transaction.atomic(), acting_as(by):
@@ -700,6 +702,10 @@ def remove_worker_photo(staff: StaffMember, *, reason: str, by: StaffMember) -> 
         photo = staff.photo
         if photo is None:
             return staff
+        # Asked with both jobs locked, so a photo set at this same moment comes first and is seen here, or waits. Its
+        # file would be gone for good, so a tap held up by a slow network must never reach a newer photo (PPL-9).
+        if photo.pk != photo_id:
+            raise VersionConflict()
         _save_photo(staff, None, by=by)
         remove_attachment_file(photo, reason=reason, by=by)
     return staff

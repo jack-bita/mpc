@@ -566,7 +566,8 @@ def _set_photo(staff: StaffMember, by: StaffMember) -> object:
 
 
 def _take_photo_off(staff: StaffMember, by: StaffMember) -> object:
-    return remove_worker_photo(staff, reason="Hataki picha", by=by)
+    # The photo shown now, as the page names it; any id for a person with none, whom a refusal never gets to ask about.
+    return remove_worker_photo(staff, photo_id=shown(staff) or uuid.uuid7(), reason="Hataki picha", by=by)
 
 
 PhotoAct = Callable[[StaffMember, StaffMember], object]

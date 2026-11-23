@@ -1322,7 +1322,9 @@ def send_photo(
 
 
 def take_photo_off(by: StaffMember, staff: StaffMember, **sent: object) -> Any:
-    return client_for(by).post(act(staff, "remove-photo"), sent or {"reason": "Hataki picha"}, format="json")
+    # As the page sends it: the photo it shows, and why.
+    body = {"photo": str(photo_of(staff) or uuid.uuid7()), "reason": "Hataki picha", **sent}
+    return client_for(by).post(act(staff, "remove-photo"), body, format="json")
 
 
 def photo_of(staff: StaffMember) -> uuid.UUID | None:
@@ -1389,13 +1391,27 @@ def test_taking_a_photo_off_needs_a_reason(baba: StaffMember, asha: StaffMember)
     send_photo(baba, asha)
 
     blank = take_photo_off(baba, asha, reason="  ")
-    missing = client_for(baba).post(act(asha, "remove-photo"), {}, format="json")
+    missing = client_for(baba).post(act(asha, "remove-photo"), {"photo": str(photo_of(asha))}, format="json")
     long = take_photo_off(baba, asha, reason="x" * 501)
 
     assert (blank.status_code, blank.json()["code"]) == (400, "staff.reason_required")
     assert (missing.status_code, missing.json()["fields"]) == (400, {"reason": ["required"]})
     assert (long.status_code, long.json()["fields"]) == (400, {"reason": ["max_length"]})
     assert photo_of(asha) is not None
+
+
+def test_a_removal_names_the_photo_it_takes_off(baba: StaffMember, asha: StaffMember) -> None:
+    # A newer photo than the one the page showed stays, and the page is told it looked at an old copy.
+    seen, newer = uuid.uuid7(), uuid.uuid7()
+    send_photo(baba, asha, photo=seen)
+    send_photo(baba, asha, BETTER_FACE, photo=newer)
+
+    late = take_photo_off(baba, asha, photo=str(seen))
+    nameless = client_for(baba).post(act(asha, "remove-photo"), {"reason": "Hataki picha"}, format="json")
+
+    assert (late.status_code, late.json()["code"]) == (409, "version_conflict")
+    assert (nameless.status_code, nameless.json()["fields"]) == (400, {"photo": ["required"]})
+    assert photo_of(asha) == newer
 
 
 @pytest.mark.parametrize(
