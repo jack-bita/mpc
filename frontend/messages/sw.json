@@ -490,7 +490,11 @@
       "newAlt": "Picha mpya ya {name}, bado haijahifadhiwa",
       "unreadable": "Picha hii haisomeki hapa. Chagua nyingine, au piga mpya.",
       "save": "Hifadhi",
-      "done": "Picha ya {name} imehifadhiwa."
+      "done": "Picha ya {name} imehifadhiwa.",
+      "remove": "Ondoa picha",
+      "removeTitle": "Ondoa picha ya {name}",
+      "removed": "Picha ya {name} imeondolewa.",
+      "changedMeanwhile": "Picha ya {name} imebadilika tangu ulipoifungua. Hii ndiyo picha yake sasa."
     },
     "logins": {
       "title": "Kuingia",

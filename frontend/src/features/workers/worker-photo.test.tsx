@@ -1,7 +1,8 @@
 // worker-photo.test.tsx — Picha on a worker's page (PPL-9): the face, or that there is none; Piga picha, the phone's own
 // camera, and Chagua picha, its gallery; the photo read and shrunk on the phone, shown in a sheet, and sent whole only
 // by Hifadhi, with an id of its own; one that can't be read; the refusals; who sees the buttons; the demo, where it
-// shows and nothing is sent; offline; Ghairi; and nothing of it kept once the sheet is gone.
+// shows and nothing is sent; offline; Ghairi; and nothing of it kept once the sheet is gone. And Ondoa picha: its reason,
+// the photo it names, which is the one that was on the screen, and what it says when that one changed meanwhile.
 //
 // The tests' browser (jsdom) opens no camera or gallery, and can read no photo: a test hands the file box a file, as
 // the phone would, and the shrinking is a stand-in (shrink-photo.test.ts tests it; e2e/workers.spec.ts, in real
@@ -35,6 +36,7 @@ const ASHA = worker({ full_name: "Asha Mfano", display_name: "Asha" });
 /** The photo she has in some tests. */
 const SHOWN = "019a8400-0000-7000-8000-000000000001";
 const PHOTO_ROUTE = `${STAFF}${ASHA.id}/photo/`;
+const REMOVE_ROUTE = `${STAFF}${ASHA.id}/remove-photo/`;
 
 /** What the phone's camera or gallery hands over, some megabytes of it, and the small JPEG it becomes. */
 const FROM_THE_PHONE = new File(["a phone's own photo"], "IMG_0001.jpg", {
@@ -92,8 +94,13 @@ function sentence(code: string): string {
   return found;
 }
 
+/** Lets anything on its way to the server get there: a send starts a moment after its tap, so "nothing was sent", asked at
+ * once, would be true of a page that sends too. */
+const aMoment = () => new Promise((done) => setTimeout(done, 50));
+
 /** The photos sent: their own ids, as the address carries them, their type and their bytes. */
 async function photosSent() {
+  await aMoment();
   return Promise.all(
     sent
       .filter((request) => request.method === "PUT")
@@ -103,6 +110,31 @@ async function photosSent() {
         bytes: new Uint8Array(await request.arrayBuffer()),
       })),
   );
+}
+
+/** What Ondoa picha sent, as the server would read it. */
+async function removalsSent(): Promise<unknown[]> {
+  await aMoment();
+  return Promise.all(
+    sent
+      .filter((request) => request.url.endsWith("/remove-photo/"))
+      .map((request) => request.json()),
+  );
+}
+
+/** The error beside a box: the one its aria-describedby names (field.tsx). */
+function errorOf(box: HTMLElement): string {
+  const ids = box.getAttribute("aria-describedby")?.split(" ") ?? [];
+  const error = ids.find((id) => id.endsWith("-error"));
+  return error ? (document.getElementById(error)?.textContent ?? "") : "";
+}
+
+const reasonBox = () => screen.getByLabelText("Sababu") as HTMLInputElement;
+
+/** Asha's page, with her photo, and Ondoa picha's sheet open over it. */
+async function removing() {
+  fireEvent.click(await screen.findByRole("button", { name: "Ondoa picha" }));
+  return screen.getByRole("dialog", { name: "Ondoa picha ya Asha" });
 }
 
 const button = (name: string) =>
@@ -529,5 +561,215 @@ describe("Piga picha and Chagua picha", () => {
     await onTheCard("Picha ya Asha imehifadhiwa.");
 
     await waitFor(() => expect(store.getMutationCache().getAll()).toEqual([]));
+  });
+});
+
+describe("Ondoa picha", () => {
+  const WITH_PHOTO = { ...ASHA, photo: SHOWN };
+  const NEWER = "019a8400-0000-7000-8000-000000000002";
+
+  it("is offered only where there is a photo, to whoever may set one", async () => {
+    theServerHas(ASHA);
+    const none = render(<WorkerScreen id={ASHA.id} />);
+    await screen.findByRole("button", { name: "Piga picha" });
+    expect(screen.queryByRole("button", { name: "Ondoa picha" })).toBeNull();
+    none.unmount();
+
+    theServerHas(WITH_PHOTO);
+    const shown = render(<WorkerScreen id={ASHA.id} />);
+    // Red: it takes something away for good, as Ameondoka.
+    expect(
+      (
+        await screen.findByRole("button", { name: "Ondoa picha" })
+      ).classList.contains("text-destructive"),
+    ).toBe(true);
+    expect(button("Piga picha").classList.contains("text-destructive")).toBe(
+      false,
+    );
+    shown.unmount();
+
+    for (const worker of [
+      { ...WITH_PHOTO, status: "left" as const, left_on: "2026-11-10" },
+      { ...WITH_PHOTO, id: MANAGER.staff.id },
+    ]) {
+      theServerHas(worker);
+      const page = render(<WorkerScreen id={worker.id} />);
+      await screen.findByRole("img", { name: "Picha ya Asha" });
+      expect(screen.queryByRole("button", { name: "Ondoa picha" })).toBeNull();
+      page.unmount();
+    }
+  });
+
+  it("takes the photo off with a reason, and the card says Hakuna picha (Done when #3)", async () => {
+    const server = theServerHas(WITH_PHOTO);
+    answer("POST", REMOVE_ROUTE, () => {
+      server.now(ASHA);
+      return Response.json(ASHA);
+    });
+    render(<WorkerScreen id={ASHA.id} />);
+
+    await removing();
+    // The person just asked for this sheet: the keyboard is in its one box.
+    await waitFor(() => expect(document.activeElement).toBe(reasonBox()));
+    fireEvent.change(reasonBox(), { target: { value: "  Hataki picha " } });
+    fireEvent.click(sheetButton("Ondoa picha"));
+
+    const done = await onTheCard("Picha ya Asha imeondolewa.");
+    expect(await removalsSent()).toEqual([
+      { photo: SHOWN, reason: "Hataki picha" },
+    ]);
+    expect(within(card()).getByText("Hakuna picha")).toBeTruthy();
+    expect(within(card()).queryByRole("img")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Ondoa picha" })).toBeNull();
+    // The button is gone, so the keyboard goes to the line.
+    await waitFor(() =>
+      expect(done.closest("[tabindex='-1']")).toBe(document.activeElement),
+    );
+  });
+
+  it("asks for a reason before anything is sent, spaces being none", async () => {
+    theServerHas(WITH_PHOTO);
+    render(<WorkerScreen id={ASHA.id} />);
+
+    await removing();
+    for (const typed of ["", "   "]) {
+      fireEvent.change(reasonBox(), { target: { value: typed } });
+      fireEvent.click(sheetButton("Ondoa picha"));
+      expect(errorOf(reasonBox())).toBe(sentence("staff.reason_required"));
+    }
+    expect(await removalsSent()).toEqual([]);
+  });
+
+  it("shows the server's own ask for a reason beside Sababu", async () => {
+    theServerHas(WITH_PHOTO);
+    answer("POST", REMOVE_ROUTE, refusal(400, "staff.reason_required"));
+    render(<WorkerScreen id={ASHA.id} />);
+
+    await removing();
+    fireEvent.change(reasonBox(), { target: { value: "Hataki picha" } });
+    fireEvent.click(sheetButton("Ondoa picha"));
+
+    await waitFor(() =>
+      expect(errorOf(reasonBox())).toBe(sentence("staff.reason_required")),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("names the photo that was on the screen as it was tapped, whatever the page read meanwhile", async () => {
+    // The page reads the worker again under the open sheet, and Mzee has set a newer photo: the tap is still about the
+    // one Meneja saw, which the server then refuses, never the newer one.
+    const store = makeQueryClient();
+    const server = theServerHas(WITH_PHOTO);
+    answer("POST", REMOVE_ROUTE, refusal(409, "version_conflict"));
+    render(
+      <QueryClientProvider client={store}>
+        <WorkerScreen id={ASHA.id} />
+      </QueryClientProvider>,
+    );
+    await removing();
+    server.now({ ...ASHA, photo: NEWER });
+    await store.invalidateQueries();
+    // Drawn under the sheet, which hides the page from a screen reader, so from the tests' queries too.
+    await waitFor(() =>
+      expect(document.querySelector("img")?.src).toContain(NEWER),
+    );
+    fireEvent.change(reasonBox(), { target: { value: "Hataki picha" } });
+    fireEvent.click(sheetButton("Ondoa picha"));
+
+    // The sheet closes, the card says why, and shows the photo now.
+    await onTheCard(
+      "Picha ya Asha imebadilika tangu ulipoifungua. Hii ndiyo picha yake sasa.",
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(await removalsSent()).toEqual([
+      { photo: SHOWN, reason: "Hataki picha" },
+    ]);
+    await waitFor(() =>
+      expect(new URL(face("Picha ya Asha").src).pathname).toContain(NEWER),
+    );
+  });
+
+  it("reads the worker again after a change by someone else, so the card shows the photo now", async () => {
+    const server = theServerHas(WITH_PHOTO);
+    answer("POST", REMOVE_ROUTE, () => {
+      server.now({ ...ASHA, photo: NEWER });
+      return Response.json(refusal(409, "version_conflict").body, {
+        status: 409,
+      });
+    });
+    render(<WorkerScreen id={ASHA.id} />);
+
+    await removing();
+    fireEvent.change(reasonBox(), { target: { value: "Hataki picha" } });
+    fireEvent.click(sheetButton("Ondoa picha"));
+
+    await waitFor(() =>
+      expect(new URL(face("Picha ya Asha").src).pathname).toContain(NEWER),
+    );
+  });
+
+  it("closes and says so when the worker left meanwhile", async () => {
+    const server = theServerHas(WITH_PHOTO);
+    answer("POST", REMOVE_ROUTE, () => {
+      server.now({ ...WITH_PHOTO, status: "left", left_on: "2026-11-20" });
+      return Response.json(refusal(400, "staff.left").body, { status: 400 });
+    });
+    render(<WorkerScreen id={ASHA.id} />);
+
+    await removing();
+    fireEvent.change(reasonBox(), { target: { value: "Hataki picha" } });
+    fireEvent.click(sheetButton("Ondoa picha"));
+
+    await onTheCard(sentence("staff.left"));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Ondoa picha" })).toBeNull(),
+    );
+  });
+
+  it.each([
+    "staff.own",
+    "staff.superuser_only",
+    "staff.more_keys",
+    "demo.people_fixed",
+  ])("shows who-may's %s above the buttons, the reason kept", async (code) => {
+    theServerHas(WITH_PHOTO);
+    answer("POST", REMOVE_ROUTE, refusal(400, code));
+    render(<WorkerScreen id={ASHA.id} />);
+
+    await removing();
+    fireEvent.change(reasonBox(), { target: { value: "Hataki picha" } });
+    fireEvent.click(sheetButton("Ondoa picha"));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      sentence(code),
+    );
+    expect(reasonBox().value).toBe("Hataki picha");
+  });
+
+  it("is switched off while there is no network", async () => {
+    theServerHas(WITH_PHOTO);
+    render(<WorkerScreen id={ASHA.id} />);
+    await screen.findByRole("button", { name: "Ondoa picha" });
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    await removing();
+
+    expect(sheetButton("Ondoa picha").disabled).toBe(true);
+  });
+
+  it("Ghairi gives the keyboard back to Ondoa picha, and forgets the reason", async () => {
+    theServerHas(WITH_PHOTO);
+    render(<WorkerScreen id={ASHA.id} />);
+
+    await removing();
+    fireEvent.change(reasonBox(), { target: { value: "Hataki" } });
+    fireEvent.click(sheetButton("Ghairi"));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(button("Ondoa picha")),
+    );
+    expect(face("Picha ya Asha")).toBeTruthy();
+
+    await removing();
+    expect(reasonBox().value).toBe("");
+    expect(await removalsSent()).toEqual([]);
   });
 });

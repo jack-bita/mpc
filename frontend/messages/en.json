@@ -490,7 +490,11 @@
       "newAlt": "{name}'s new photo, not saved yet",
       "unreadable": "This photo can't be read here. Choose another, or take a new one.",
       "save": "Save",
-      "done": "{name}'s photo is saved."
+      "done": "{name}'s photo is saved.",
+      "remove": "Remove photo",
+      "removeTitle": "Remove {name}'s photo",
+      "removed": "{name}'s photo is removed.",
+      "changedMeanwhile": "{name}'s photo has changed since you opened it. This is their photo now."
     },
     "logins": {
       "title": "Logging in",
