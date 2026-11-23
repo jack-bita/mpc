@@ -1,5 +1,5 @@
 """apps/people/tests/test_who_changes_a_worker.py — who may suspend a person, bring them back, mark them left, fix
-their details, or take a role or a key away from them (PPL-4, PPL-10, PPL-7; 02 §5).
+their details, take a role or a key away from them, or set or take off their photo (PPL-4, PPL-10, PPL-7, PPL-9; 02 §5).
 
 A suspension stops a person working at once, and a leaving is final; a fix may change a person's phone, which is a
 login name, so whoever sets it could then set a temporary password and log in as them. So the rule is the one for
@@ -25,13 +25,17 @@ one audit line.
 Taking a role or a key away follows the same rule (Jack, PPL-7: A), with one more: a worker who left keeps theirs, even
 from the superuser, as history.
 
+Setting a photo and taking one off follow the same rule too (Jack, PPL-9), for a person at the shop: a photo is added by
+someone, so the superuser, who is nobody's staff, has no way to yet (04 §20, item 31).
+
 On the demo, where every visitor logs in as Meneja, the people the seed made stay as made (demo.people_fixed); a worker
-a visitor added can be changed (Jack, PPL-4: A).
+a visitor added can be changed (Jack, PPL-4: A), but no photo is kept there at all (test_worker_photo.py).
 
 Fake data only: the repo is public (03 §10).
 """
 
 import re
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
@@ -55,6 +59,8 @@ from apps.people.services import (
     end_role,
     grant_permission,
     mark_left,
+    remove_worker_photo,
+    set_worker_photo,
     suspend,
     unsuspend,
 )
@@ -546,3 +552,172 @@ def test_demo_people_keep_their_roles_and_keys(
     row = take_away.give(juma)
     end(take_away, row, by=meneja)
     assert is_ended(row)
+
+
+# A worker's photo (PPL-9): set, or taken off. Neither changes a status or writes an audit line: what proves each is
+# which photo the job shows after it.
+
+# The first bytes every JPEG starts with, and some of our own (CTRL-3).
+FACE = b"\xff\xd8\xff" + b"a made-up photo"
+
+
+def _set_photo(staff: StaffMember, by: StaffMember) -> object:
+    return set_worker_photo(staff, photo_id=uuid.uuid7(), content=FACE, by=by)
+
+
+def _take_photo_off(staff: StaffMember, by: StaffMember) -> object:
+    return remove_worker_photo(staff, reason="Hataki picha", by=by)
+
+
+PhotoAct = Callable[[StaffMember, StaffMember], object]
+EACH_PHOTO_ACT = pytest.mark.parametrize(
+    "act", [pytest.param(_set_photo, id="set"), pytest.param(_take_photo_off, id="take off")]
+)
+
+
+@pytest.fixture
+def mama(shop_a: Shop, give_role: GiveRole) -> StaffMember:
+    # A second owner.
+    staff = job(shop_a, "Mama")
+    give_role(staff, RoleTemplate.OWNER, None)
+    return staff
+
+
+def shown(staff: StaffMember) -> uuid.UUID | None:
+    with shop_context(staff.shop_id):
+        return StaffMember.objects.get(pk=staff.pk).photo_id
+
+
+def with_a_photo(staff: StaffMember, *, by: StaffMember) -> StaffMember:
+    # The person as they are once a photo is there, so a refused removal has one to leave alone.
+    with shop_context(staff.shop_id):
+        return set_worker_photo(staff, photo_id=uuid.uuid7(), content=FACE, by=by)
+
+
+def photo_act(act: PhotoAct, staff: StaffMember, *, by: StaffMember) -> None:
+    with shop_context(staff.shop_id):
+        act(staff, by)
+
+
+def code_of_photo_act(act: PhotoAct, staff: StaffMember, *, by: StaffMember) -> str:
+    # The refusal's code, and the photo as it was: a refused act changes nothing.
+    before = shown(staff)
+    with pytest.raises(ValidationError) as refused:
+        photo_act(act, staff, by=by)
+    assert shown(staff) == before
+    return str(refused.value.code)
+
+
+@EACH_PHOTO_ACT
+def test_manager_or_owner_with_the_key_changes_a_photo(
+    act: PhotoAct, meneja: StaffMember, baba: StaffMember, asha: StaffMember
+) -> None:
+    for acting in (meneja, baba):
+        before = with_a_photo(asha, by=baba).photo_id
+        photo_act(act, asha, by=acting)
+        assert shown(asha) != before
+        assert (shown(asha) is None) == (act is _take_photo_off)
+
+
+@EACH_PHOTO_ACT
+def test_changing_a_photo_needs_the_key_on_the_whole_shop(
+    act: PhotoAct, shop_a: Shop, side_a: Side, give_role: GiveRole, baba: StaffMember, asha: StaffMember
+) -> None:
+    # A plain manager, handed no staff.manage; and one handed it for Dawa alone.
+    plain = job(shop_a, "Plain")
+    give_role(plain, RoleTemplate.MANAGER, None)
+    dawa_only = job(shop_a, "Dawa")
+    with shop_context(shop_a):
+        grant_permission(dawa_only, Permission.STAFF_MANAGE, side=side_a, by=None)
+    before = with_a_photo(asha, by=baba).photo_id
+
+    for acting in (plain, dawa_only):
+        with pytest.raises(PermissionDenied):
+            photo_act(act, asha, by=acting)
+    assert shown(asha) == before
+
+
+@EACH_PHOTO_ACT
+def test_nobody_changes_their_own_photo(act: PhotoAct, meneja: StaffMember, baba: StaffMember) -> None:
+    with_a_photo(meneja, by=baba)
+
+    for person in (meneja, baba):
+        assert code_of_photo_act(act, person, by=person) == "staff.own"
+
+
+@EACH_PHOTO_ACT
+def test_nobody_at_the_shop_changes_the_owners_photo(
+    act: PhotoAct, baba: StaffMember, mama: StaffMember, meneja: StaffMember
+) -> None:
+    for acting in (meneja, mama):
+        assert code_of_photo_act(act, baba, by=acting) == "staff.superuser_only"
+
+
+@EACH_PHOTO_ACT
+def test_nobody_at_the_shop_changes_an_admin_persons_photo(act: PhotoAct, meneja: StaffMember, shop_a: Shop) -> None:
+    person = job(shop_a, "Admin")
+    User.objects.filter(pk=person.user_id).update(is_staff=True)
+
+    assert code_of_photo_act(act, person, by=meneja) == "staff.superuser_only"
+
+
+@EACH_PHOTO_ACT
+def test_manager_cannot_change_a_stronger_persons_photo(
+    act: PhotoAct, meneja: StaffMember, baba: StaffMember, shop_a: Shop
+) -> None:
+    neema = job(shop_a, "Neema")
+    with shop_context(shop_a):
+        grant_permission(neema, Permission.PAY_APPROVE, side=None, by=None)
+    with_a_photo(neema, by=baba)
+
+    assert code_of_photo_act(act, neema, by=meneja) == "staff.more_keys"
+
+
+@EACH_PHOTO_ACT
+def test_a_worker_who_left_keeps_their_photo_as_it_was(
+    act: PhotoAct, meneja: StaffMember, baba: StaffMember, asha: StaffMember
+) -> None:
+    with_a_photo(asha, by=baba)
+    do(LEAVE, asha, by=None)
+
+    assert code_of_photo_act(act, asha, by=meneja) == "staff.left"
+
+
+@EACH_PHOTO_ACT
+def test_a_suspended_workers_photo_may_change(
+    act: PhotoAct, meneja: StaffMember, baba: StaffMember, asha: StaffMember
+) -> None:
+    before = with_a_photo(asha, by=baba).photo_id
+    do(SUSPEND, asha, by=None)
+
+    photo_act(act, asha, by=meneja)
+
+    assert shown(asha) != before
+
+
+@EACH_PHOTO_ACT
+def test_a_photo_act_locks_both_jobs_first(
+    act: PhotoAct, meneja: StaffMember, baba: StaffMember, asha: StaffMember
+) -> None:
+    # As every change of a person: both jobs first, lightly and in id order, and only then the photos' rows, so two
+    # managers setting one worker's photo at once take turns, and the second finds the first's photo to replace.
+    with_a_photo(asha, by=baba)
+
+    with CaptureQueriesContext(connection) as queries:
+        photo_act(act, asha, by=meneja)
+
+    locks = [query["sql"] for query in queries.captured_queries if re.search(r"FOR (NO KEY )?UPDATE", query["sql"])]
+    assert 'FROM "people_staffmember"' in locks[0]
+    assert 'ORDER BY "people_staffmember"."id" ASC' in locks[0] and "FOR NO KEY UPDATE" in locks[0]
+    assert all('FROM "control_attachment"' in lock for lock in locks[1:])
+
+
+def test_the_seeds_people_keep_their_photo_on_the_demo(
+    meneja: StaffMember, baba: StaffMember, asha: StaffMember, settings: Settings
+) -> None:
+    # Taking one off is refused there as any change of the seed's people is; setting one is refused for everyone
+    # (demo.photos_fixed, test_worker_photo.py).
+    with_a_photo(asha, by=baba)
+    settings.DEMO_SEED = True
+
+    assert code_of_photo_act(_take_photo_off, asha, by=meneja) == "demo.people_fixed"

@@ -33,7 +33,7 @@ from apps.control.models import (
     AttachmentType,
     attachment_file_name,
 )
-from apps.control.services import expect_attachment
+from apps.control.services import add_attachment, expect_attachment
 from apps.core.links import LINK_TYPES
 from apps.core.models import ShopScoped
 from apps.core.tenancy import Actor, ShopMismatch, shop_context
@@ -221,3 +221,49 @@ def test_file_named_by_its_shop_and_its_own_id(shop_a: Model, staff_a: Any) -> N
         row = expect(staff_a, staff_a)
 
     assert attachment_file_name(row, "IMG_0001 Asha.jpg") == f"{shop_a.pk}/{row.pk}"
+
+
+def test_add_attachment_keeps_the_row_and_its_file(shop_a: Model, staff_a: Any) -> None:
+    # A photo that reaches the server whole, as an office screen sends it (PPL-9): one call, and its label is the
+    # server's own, worked out from the bytes.
+    photo_id = uuid.uuid7()
+    with shop_context(shop_a):
+        add_attachment(id=photo_id, kind=AttachmentKind.STAFF_PHOTO, subject=staff_a, content=PHOTO, by=staff_a)
+        stored = Attachment.objects.get(pk=photo_id)
+        assert stored.file.read() == PHOTO
+
+    assert stored.file_state == "kept"
+    assert (stored.content_type, stored.size, stored.sha256) == (AttachmentType.JPEG, len(PHOTO), PHOTO_SHA256)
+    assert (stored.subject_type, stored.subject_id) == ("staff", staff_a.pk)
+    assert (stored.created_by_id, stored.device_id) == (staff_a.pk, None)
+
+
+def test_add_attachment_knows_a_webp(shop_a: Model, staff_a: Any) -> None:
+    webp = b"RIFF\x10\x00\x00\x00WEBP" + b"a made-up photo"
+    with shop_context(shop_a):
+        stored = add_attachment(
+            id=uuid.uuid7(), kind=AttachmentKind.STAFF_PHOTO, subject=staff_a, content=webp, by=staff_a
+        )
+
+    assert stored.content_type == AttachmentType.WEBP
+
+
+@pytest.mark.parametrize(
+    ("content", "code"),
+    [
+        (PHOTO + b"x" * LARGEST_FILE, "attachment.too_big"),
+        (b"%PDF-1.7 not a photo", "attachment.not_an_image"),
+        (b"", "attachment.not_an_image"),
+    ],
+    ids=["too-big", "not-an-image", "empty"],
+)
+def test_add_attachment_refuses_the_file_before_its_row(shop_a: Model, staff_a: Any, content: bytes, code: str) -> None:
+    # About the whole file, as the laptop's upload refuses it, never filed under a label's field the caller never sent.
+    with shop_context(shop_a):
+        with pytest.raises(ValidationError) as refused:
+            add_attachment(
+                id=uuid.uuid7(), kind=AttachmentKind.STAFF_PHOTO, subject=staff_a, content=content, by=staff_a
+            )
+
+        assert refused.value.code == code
+        assert not Attachment.objects.exists()
