@@ -108,7 +108,7 @@ export function useCamera(on: boolean): Camera {
         show();
         // A camera that goes while live (its cable pulled out): the next tap has no photo, as failed, and
         // takes none of the frozen frame left in the <video>, whether the screen still shows it or not: the
-        // hook keeps that promise itself, for every screen that uses it (PPL-9, STK-4; ATT-3's review).
+        // hook keeps that promise itself, for every screen that uses it (STK-4 next; ATT-3's review).
         for (const track of given.getTracks())
           track.addEventListener("ended", () => {
             if (gone) return;

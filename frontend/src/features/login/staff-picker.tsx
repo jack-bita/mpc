@@ -24,7 +24,7 @@
 // review). On a real shop it stays, before the first sync and on a shop with nobody yet too, as the
 // owner's way in to add them.
 //
-// A tile shows the full name in large letters with the nickname under it, until photos come (PPL-9; 02 §5).
+// A tile shows the full name in large letters with the nickname under it, until photos come (PPL-14; 02 §5).
 // On the demo, a seller's tile shows their PIN too, as Jaribu demo handed it over (OPS-3, demo-pins.ts):
 // a visitor can't guess it, and this is where they need it; the manager's shows *Ingia kwa nenosiri*,
 // where his PIN would be. Never on a real shop's laptop, which keeps no demo PINs or logins, and never one

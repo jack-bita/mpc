@@ -68,7 +68,7 @@ class StaffRecord(serializers.ModelSerializer[StaffMember]):
     # A person at work, as a shared laptop needs them offline: the names for their tile on the PIN screen, whether they
     # are suspended (X2), when their PIN last changed, so the laptop drops its own check of the old one (SYNC-10), their
     # own language and font (UI-9), and their keys, so the counter checks them offline (03 §5.8). A photo joins with
-    # PPL-9. Never the PIN's hash, a password, a phone or an email: whoever uses the laptop next could read them.
+    # PPL-14. Never the PIN's hash, a password, a phone or an email: whoever uses the laptop next could read them.
     # `pin_changed_at` is empty for someone with no PIN, which tells only that nobody can log in as them here.
     full_name = serializers.CharField(source="user.full_name", read_only=True)
     language = serializers.ChoiceField(source="user.language", choices=Language.choices, read_only=True)

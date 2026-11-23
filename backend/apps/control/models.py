@@ -399,7 +399,7 @@ class AttachmentKind(models.TextChoices):
     # delivery, a receipt on an expense) comes with that record's card (STK-4, CASH-2).
     # Asha's photo as she taps Ingia (ATT-3).
     CLOCK_PHOTO = "clock_photo", "Clock-in photo"
-    # A worker's face on the PIN tiles (PPL-9).
+    # A worker's face, on their own page in the office (PPL-9), and next on the PIN tiles (PPL-14).
     STAFF_PHOTO = "staff_photo", "Staff photo"
 
 
@@ -423,16 +423,16 @@ class KindRule:
     # The type code of the table its record is in (apps/core/links.py): "attendance_event" for a clock-in photo.
     subject_type: str
     # The key that opens it, held on the whole shop (CTRL-3's office route); None when anyone working at the shop
-    # may, as for a face already on every laptop's PIN tiles.
+    # may, as for a face, which every laptop's PIN tiles will show (PPL-14).
     opened_with: Permission | None
 
 
-# Kind → its rule *(defaults, CTRL-3's card: ATT-3 and PPL-9 may change them before they first use them)*.
+# Kind → its rule (CTRL-3's defaults, kept by the cards that first used them, ATT-3 and PPL-9).
 ATTACHMENT_KINDS: dict[AttachmentKind, KindRule] = {
     # A clock-in photo proves who tapped Ingia: it is for whoever fixes attendance (the owner, a manager he gives the
     # key), not for the other workers. On the whole shop: a worker's attendance is the shop's, not a side's.
     AttachmentKind.CLOCK_PHOTO: KindRule("attendance_event", Permission.ATTENDANCE_MANAGE),
-    # A worker's face shows on the PIN tiles of every laptop of the shop already, so anyone working there may see it.
+    # A worker's face is for the PIN tiles of every laptop of the shop (PPL-14), so anyone working there may see it.
     AttachmentKind.STAFF_PHOTO: KindRule("staff", None),
 }
 
