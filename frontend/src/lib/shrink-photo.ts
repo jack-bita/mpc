@@ -96,11 +96,12 @@ export async function shrinkFrame(
  * as some don't an iPhone's HEIC. The caller says so, and sends nothing.
  */
 export async function shrinkFile(file: Blob): Promise<Blob> {
-  // "from-image": a phone held upright saves its photo lying down, with a note of which way is up (Exif), which the
-  // drawn copy won't carry. So it is turned as the note says while it is read, or every face would lie on its side.
-  const picture = await createImageBitmap(file, {
-    imageOrientation: "from-image",
-  });
+  // A phone held upright saves its photo lying down, with a note of which way is up (Exif), which the drawn copy won't
+  // carry: turned as the note says while it is read, or every face would lie on its side. A browser does that by itself
+  // (in Chromium, proven by e2e/workers.spec.ts), so no option asks for it: one that doesn't know the option's value by
+  // name would throw at `imageOrientation: "from-image"`, and every photo on that phone would be one it can't read
+  // (PPL-9's review).
+  const picture = await createImageBitmap(file);
   try {
     return await shrinkFrame(picture, picture.width, picture.height);
   } finally {

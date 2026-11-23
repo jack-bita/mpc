@@ -105,7 +105,7 @@ describe("shrinkFile", () => {
     type: "image/jpeg",
   });
 
-  it("stands the photo upright as it reads it, and lets go of its pixels even when it can't be drawn", async () => {
+  it("reads the photo with no option of its own, and lets go of its pixels even when it can't be drawn", async () => {
     // The tests' browser can read no photo: this one has no picture in it, which shrinkFrame refuses. The reading and
     // the drawing themselves are proven in real Chromium (e2e/workers.spec.ts).
     const close = vi.fn();
@@ -114,9 +114,8 @@ describe("shrinkFile", () => {
 
     await expect(shrinkFile(PHOTO)).rejects.toThrow("no picture");
 
-    expect(read).toHaveBeenCalledWith(PHOTO, {
-      imageOrientation: "from-image",
-    });
+    // No option: a browser that doesn't know one by name throws at it, and no photo could be read there.
+    expect(read).toHaveBeenCalledWith(PHOTO);
     expect(close).toHaveBeenCalledOnce();
   });
 
