@@ -58,7 +58,7 @@ from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
 from apps.control.models import Attachment, AttachmentKind, AuditAction, AuditEvent
-from apps.control.services import add_attachment, audit, receive_attachment_file, remove_attachment_file
+from apps.control.services import adding_attachment, audit, receive_attachment_file, remove_attachment_file
 from apps.core.acting import acting_as
 from apps.core.changes import record_change, recording_changes
 from apps.core.editing import VersionConflict, editing
@@ -689,12 +689,17 @@ def set_worker_photo(
         if staff.photo_id != instead_of:
             raise VersionConflict()
         old = staff.photo
-        photo = add_attachment(id=photo_id, kind=AttachmentKind.STAFF_PHOTO, subject=staff, content=content, by=by)
-        _save_photo(staff, photo, by=by)
-        if old is not None:
-            # Personal data is kept only as long as it is needed (03 §10): the old face isn't, once a newer one shows.
-            # Its file is deleted after the commit, so a rollback never leaves the old row naming a file that is gone.
-            remove_attachment_file(old, reason=PHOTO_REPLACED, by=by)
+        # The photo's row, then the job that names it, then the old photo's end, and the new photo's file last, as the
+        # block ends: a failure before it leaves no file that no row names.
+        with adding_attachment(
+            id=photo_id, kind=AttachmentKind.STAFF_PHOTO, subject=staff, content=content, by=by
+        ) as photo:
+            _save_photo(staff, photo, by=by)
+            if old is not None:
+                # Personal data is kept only as long as it is needed (03 §10): the old face isn't, once a newer one
+                # shows. Its file is deleted after the commit, so a rollback never leaves the old row naming a file that
+                # is gone.
+                remove_attachment_file(old, reason=PHOTO_REPLACED, by=by)
     return staff
 
 

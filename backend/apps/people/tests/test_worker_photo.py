@@ -285,6 +285,32 @@ def test_an_id_of_another_record_is_taken(asha: StaffMember, baba: StaffMember, 
     assert row_of(staff_a2, theirs).subject_id == staff_a2.pk
 
 
+def test_a_photo_is_kept_whole_or_not_at_all(
+    asha: StaffMember,
+    baba: StaffMember,
+    monkeypatch: pytest.MonkeyPatch,
+    django_capture_on_commit_callbacks: CommitSteps,
+) -> None:
+    # The last step fails, the old photo's removal: the new photo's row is undone with the rest, and its file was never
+    # written, as a file no row names is a face that nothing would ever find to delete (PPL-9's review). The old photo
+    # still shows, its file too.
+    shown = set_photo(asha, by=baba)
+    new = uuid.uuid7()
+
+    def fails(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("the old photo could not be removed")
+
+    monkeypatch.setattr("apps.people.services.remove_attachment_file", fails)
+    with django_capture_on_commit_callbacks(execute=True), pytest.raises(RuntimeError):
+        set_photo(asha, by=baba, content=BETTER_FACE, photo_id=new)
+
+    assert photo_of(asha) == shown
+    assert stored_bytes(row_of(asha, shown)) == FACE
+    with shop_context(asha.shop_id):
+        assert not Attachment.objects.filter(pk=new).exists()
+        assert not default_storage.exists(f"{asha.shop_id}/{new}")
+
+
 @pytest.mark.parametrize(
     ("content", "code"),
     [
