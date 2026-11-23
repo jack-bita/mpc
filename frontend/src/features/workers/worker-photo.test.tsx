@@ -521,6 +521,36 @@ describe("Piga picha and Chagua picha", () => {
     expect(new URL(face("Picha ya Asha").src).pathname).toContain(NEWER);
   });
 
+  it.each([
+    {
+      now: "Mzee's newer photo",
+      photo: "019a8400-0000-7000-8000-000000000004",
+    },
+    { now: "none, taken off meanwhile", photo: null },
+  ])(
+    "never says saved when the card shows $now instead (PPL-9's review)",
+    async ({ photo }) => {
+      // The first send was kept, and its answer lost; then someone else changed the photo. Hifadhi again: the server
+      // answers with the worker as they are now, and Meneja's photo isn't the one they show.
+      theServerHas(ASHA);
+      answer("PUT", PHOTO_ROUTE, () =>
+        Promise.reject(new TypeError("no network")),
+      );
+      render(<WorkerScreen id={ASHA.id} />);
+      await ashaPicked();
+      fireEvent.click(sheetButton("Hifadhi"));
+      await screen.findByRole("alert");
+      theServerHas({ ...ASHA, photo });
+      answer("PUT", PHOTO_ROUTE, { status: 200, body: { ...ASHA, photo } });
+      fireEvent.click(sheetButton("Hifadhi"));
+
+      await onTheCard(
+        "Picha ya Asha imebadilishwa na mtu mwingine tangu ulipoifungua. Angalia ilivyo sasa.",
+      );
+      expect(screen.queryByText("Picha ya Asha imehifadhiwa.")).toBeNull();
+    },
+  );
+
   it("reads the worker again after a change by someone else, so the card shows the photo now", async () => {
     const NEWER = "019a8400-0000-7000-8000-000000000003";
     const server = theServerHas(ASHA);

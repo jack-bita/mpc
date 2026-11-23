@@ -7,8 +7,9 @@
 // around them, through PUT …/staff/{id}/photo/ (the server's check is by the bytes, apps/control/services.py).
 //
 // The photo's id is made here as the sheet opens, once (ADR-0007): Hifadhi tapped again, after an answer the network
-// lost, sends the same photo under the same id, and the server answers with the one it kept. A photo picked again is
-// another sheet, so another photo.
+// lost, sends the same photo under the same id, and the server answers with the worker as they are now: saved, when
+// they show this photo; else someone changed it since, and the card says that instead. A photo picked again is another
+// sheet, so another photo.
 //
 // A photo this browser can't read, as some can't an iPhone's HEIC, is said at once, and Hifadhi stays off.
 //
@@ -130,7 +131,14 @@ export function PhotoSheet({
       // The worker as they are now, on their page and in the list at once, then both asked again (workers.ts).
       keepWorker(store, changed);
       void store.invalidateQueries({ queryKey: WORKERS });
-      onDone(changed);
+      // The server answers a photo sent again with the worker as they are now, whatever they show by now: kept the first
+      // time, its answer lost, and changed or taken off by someone else since. "Saved" would then stand beside another
+      // face, or beside Hakuna picha (PPL-9's review).
+      if (changed.photo === id) onDone(changed);
+      else
+        onChangedMeanwhile(
+          t("changedMeanwhile", { name: changed.display_name }),
+        );
     },
     onError: (error) => {
       if (
