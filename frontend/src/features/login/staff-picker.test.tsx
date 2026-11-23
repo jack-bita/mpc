@@ -78,7 +78,7 @@ describe("the staff picker", () => {
     // Named as a screen reader says it: the full name, a space, the nickname. Without the space it says
     // "Asha MfanoAsha", one word.
     const asha = screen.getByRole("button", { name: "Asha Mfano Asha" });
-    // The full name in large letters, the nickname under it, until photos come (PPL-9; 02 §5).
+    // The full name in large letters, the nickname under it, until photos come (PPL-14; 02 §5).
     expect(within(asha).getByText("Asha Mfano").className).toContain(
       "text-2xl",
     );

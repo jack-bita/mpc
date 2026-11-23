@@ -21,6 +21,7 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
 from django.db import IntegrityError, transaction
 from django.db.models import Model
 from django.utils import timezone
@@ -33,7 +34,7 @@ from apps.control.models import (
     AttachmentType,
     attachment_file_name,
 )
-from apps.control.services import expect_attachment
+from apps.control.services import adding_attachment, expect_attachment
 from apps.core.links import LINK_TYPES
 from apps.core.models import ShopScoped
 from apps.core.tenancy import Actor, ShopMismatch, shop_context
@@ -221,3 +222,72 @@ def test_file_named_by_its_shop_and_its_own_id(shop_a: Model, staff_a: Any) -> N
         row = expect(staff_a, staff_a)
 
     assert attachment_file_name(row, "IMG_0001 Asha.jpg") == f"{shop_a.pk}/{row.pk}"
+
+
+def add(staff: Any, content: bytes, *, id: uuid.UUID | None = None) -> None:
+    # A worker's photo added whole, as an office screen's is (PPL-9), with nothing done in the block.
+    with adding_attachment(
+        id=id or uuid.uuid7(), kind=AttachmentKind.STAFF_PHOTO, subject=staff, content=content, by=staff
+    ):
+        pass
+
+
+def test_adding_attachment_keeps_the_row_and_its_file(shop_a: Model, staff_a: Any) -> None:
+    # A photo that reaches the server whole: its label is the server's own, worked out from the bytes.
+    photo_id = uuid.uuid7()
+    with shop_context(shop_a):
+        add(staff_a, PHOTO, id=photo_id)
+        stored = Attachment.objects.get(pk=photo_id)
+        assert stored.file.read() == PHOTO
+
+    assert stored.file_state == "kept"
+    assert (stored.content_type, stored.size, stored.sha256) == (AttachmentType.JPEG, len(PHOTO), PHOTO_SHA256)
+    assert (stored.subject_type, stored.subject_id) == ("staff", staff_a.pk)
+    assert (stored.created_by_id, stored.device_id) == (staff_a.pk, None)
+
+
+def test_adding_attachment_knows_a_webp(shop_a: Model, staff_a: Any) -> None:
+    with shop_context(shop_a):
+        add(staff_a, b"RIFF\x10\x00\x00\x00WEBP" + b"a made-up photo")
+        [stored] = Attachment.objects.all()
+
+    assert stored.content_type == AttachmentType.WEBP
+
+
+def test_adding_attachment_keeps_nothing_when_its_block_fails(shop_a: Model, staff_a: Any) -> None:
+    # The record that was to name the photo can't be saved: the row goes with it, and the file was not written yet.
+    photo_id = uuid.uuid7()
+    with shop_context(shop_a):
+        with (
+            pytest.raises(RuntimeError),
+            adding_attachment(
+                id=photo_id, kind=AttachmentKind.STAFF_PHOTO, subject=staff_a, content=PHOTO, by=staff_a
+            ) as photo,
+        ):
+            # The block has the row, waiting for its file.
+            assert (photo.pk, photo.file_state) == (photo_id, "waiting")
+            raise RuntimeError("the record can't be saved")
+
+        assert not Attachment.objects.exists()
+        assert not default_storage.exists(f"{shop_a.pk}/{photo_id}")
+
+
+@pytest.mark.parametrize(
+    ("content", "code"),
+    [
+        (PHOTO + b"x" * LARGEST_FILE, "attachment.too_big"),
+        (b"%PDF-1.7 not a photo", "attachment.not_an_image"),
+        (b"", "attachment.not_an_image"),
+    ],
+    ids=["too-big", "not-an-image", "empty"],
+)
+def test_adding_attachment_refuses_the_file_before_its_row(
+    shop_a: Model, staff_a: Any, content: bytes, code: str
+) -> None:
+    # About the whole file, as the laptop's upload refuses it, never filed under a label's field the caller never sent.
+    with shop_context(shop_a):
+        with pytest.raises(ValidationError) as refused:
+            add(staff_a, content)
+
+        assert refused.value.code == code
+        assert not Attachment.objects.exists()

@@ -1433,6 +1433,88 @@
                 }
             }
         },
+        "/api/v1/people/staff/{id}/photo/": {
+            "put": {
+                "operationId": "people_staff_photo_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this staff member.",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "instead_of",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "The photo the page showed, left out for none: another one shows by now, 409 version_conflict."
+                    },
+                    {
+                        "in": "query",
+                        "name": "photo",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "The photo's id, a UUIDv7 made on the phone: sent again, it is one photo.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "image/jpeg": {
+                            "schema": {
+                                "type": "string",
+                                "format": "binary"
+                            }
+                        },
+                        "image/webp": {
+                            "schema": {
+                                "type": "string",
+                                "format": "binary"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Staff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/people/staff/{id}/pin/": {
             "post": {
                 "operationId": "people_staff_pin_create",
@@ -1456,6 +1538,63 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/SetPinRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Staff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/staff/{id}/remove-photo/": {
+            "post": {
+                "operationId": "people_staff_remove_photo_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this staff member.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RemovePhotoRequest"
                             }
                         }
                     },
@@ -4602,6 +4741,23 @@
                 "type": "string",
                 "description": "* `outside_job` - Outside the job's days\n* `closed_day` - The shop was closed\n* `not_working` - Suspended or gone\n* `clock_disagrees` - A later tap disagrees\n* `time_unknown` - Time not trusted\n* `no_in` - No Ingia\n* `came_late` - Came late\n* `no_out` - No Toka\n* `left_early` - Left early"
             },
+            "RemovePhotoRequest": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 500
+                    },
+                    "photo": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "photo",
+                    "reason"
+                ]
+            },
             "Role": {
                 "type": "object",
                 "properties": {
@@ -5237,6 +5393,12 @@
                         "type": "boolean",
                         "readOnly": true
                     },
+                    "photo": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true
+                    },
                     "roles": {
                         "type": "array",
                         "items": {
@@ -5272,6 +5434,7 @@
                     "keys",
                     "left_on",
                     "phone",
+                    "photo",
                     "roles",
                     "started_on",
                     "status",

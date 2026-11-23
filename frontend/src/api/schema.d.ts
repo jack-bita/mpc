@@ -436,6 +436,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/people/staff/{id}/photo/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["people_staff_photo_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/staff/{id}/pin/": {
         parameters: {
             query?: never;
@@ -446,6 +462,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["people_staff_pin_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/people/staff/{id}/remove-photo/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["people_staff_remove_photo_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1544,6 +1576,11 @@ export interface components {
          * @enum {string}
          */
         ReasonEnum: "outside_job" | "closed_day" | "not_working" | "clock_disagrees" | "time_unknown" | "no_in" | "came_late" | "no_out" | "left_early";
+        RemovePhotoRequest: {
+            reason: string;
+            /** Format: uuid */
+            photo: string;
+        };
         Role: {
             /** Format: uuid */
             readonly id: string;
@@ -1746,6 +1783,8 @@ export interface components {
             readonly left_on: string | null;
             readonly switched_off: boolean;
             readonly has_pin: boolean;
+            /** Format: uuid */
+            readonly photo: string | null;
             readonly roles: components["schemas"]["GivenRole"][];
             readonly keys: components["schemas"]["GivenKey"][];
             readonly version: number;
@@ -2873,6 +2912,46 @@ export interface operations {
             };
         };
     };
+    people_staff_photo_update: {
+        parameters: {
+            query: {
+                /** @description The photo the page showed, left out for none: another one shows by now, 409 version_conflict. */
+                instead_of?: string;
+                /** @description The photo's id, a UUIDv7 made on the phone: sent again, it is one photo. */
+                photo: string;
+            };
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "image/jpeg": string;
+                "image/webp": string;
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     people_staff_pin_create: {
         parameters: {
             query?: never;
@@ -2886,6 +2965,40 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SetPinRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    people_staff_remove_photo_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff member. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemovePhotoRequest"];
             };
         };
         responses: {

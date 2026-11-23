@@ -86,8 +86,8 @@ describe("a worker's own page", () => {
     expect(screen.queryByText("Siku ya mwisho")).toBeNull();
   });
 
-  it("cuts the page into four headed cards, each button on its heading's row (UI-10)", async () => {
-    // Baba sees Juma's pay too (maySeePay), so all four cards show: Juma works, with a rate in force.
+  it("cuts the page into five headed cards, each button on its heading's row (UI-10)", async () => {
+    // Baba sees Juma's pay too (maySeePay), so all five cards show: Juma works, with a rate in force.
     const juma = worker({ started_on: "2026-11-10" });
     const rate = payRate({ staff: juma.id });
     answer("GET", ME, { status: 200, body: BABA });
@@ -105,7 +105,7 @@ describe("a worker's own page", () => {
       screen
         .getAllByRole("heading", { level: 2 })
         .map((heading) => heading.textContent),
-    ).toEqual(["Taarifa zake", "Kuingia", "Cheo", "Malipo kwa siku"]);
+    ).toEqual(["Picha", "Taarifa zake", "Kuingia", "Cheo", "Malipo kwa siku"]);
     expect(
       screen.getByRole("heading", { level: 3, name: "Ruhusa za ziada" }),
     ).toBeDefined();
@@ -131,6 +131,9 @@ describe("a worker's own page", () => {
     const logins = screen.getByRole("region", { name: "Kuingia" });
     for (const name of ["Weka PIN", "Nenosiri la muda"])
       expect(within(logins).getByRole("button", { name })).toBeDefined();
+    const photo = screen.getByRole("region", { name: "Picha" });
+    for (const name of ["Piga picha", "Chagua picha"])
+      expect(within(photo).getByRole("button", { name })).toBeDefined();
   });
 
   it("shows a last day for one who left, and says when there is no title, role or key", async () => {

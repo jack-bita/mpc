@@ -4,13 +4,14 @@
 // The tests' browser (jsdom) has no canvas, so these test the two decisions, the size and the quality,
 // with a pretend encoder. The drawing itself is proven in real Chromium, by the browser test of the
 // clock-in photo (e2e/clock-in-photo.spec.ts).
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AIM,
   fitWithin,
   LONGEST_SIDE,
   QUALITIES,
+  shrinkFile,
   shrinkFrame,
   smallEnough,
 } from "./shrink-photo";
@@ -92,5 +93,37 @@ describe("shrinkFrame", () => {
     // A camera that has started but sent no frame reports a size of 0 × 0: nothing to draw, so the
     // clock-in goes on without a photo rather than with an empty one.
     await expect(shrinkFrame(new Image(), 0, 0)).rejects.toThrow();
+  });
+});
+
+describe("shrinkFile", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const PHOTO = new Blob([new Uint8Array([0xff, 0xd8, 0xff])], {
+    type: "image/jpeg",
+  });
+
+  it("reads the photo with no option of its own, and lets go of its pixels even when it can't be drawn", async () => {
+    // The tests' browser can read no photo: this one has no picture in it, which shrinkFrame refuses. The reading and
+    // the drawing themselves are proven in real Chromium (e2e/workers.spec.ts).
+    const close = vi.fn();
+    const read = vi.fn(() => Promise.resolve({ width: 0, height: 0, close }));
+    vi.stubGlobal("createImageBitmap", read);
+
+    await expect(shrinkFile(PHOTO)).rejects.toThrow("no picture");
+
+    // No option: a browser that doesn't know one by name throws at it, and no photo could be read there.
+    expect(read).toHaveBeenCalledWith(PHOTO);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("throws what the browser says of a file it can't read", async () => {
+    vi.stubGlobal("createImageBitmap", () =>
+      Promise.reject(new DOMException("not a picture", "InvalidStateError")),
+    );
+
+    await expect(shrinkFile(PHOTO)).rejects.toThrow("not a picture");
   });
 });

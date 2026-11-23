@@ -1,10 +1,10 @@
 """apps/people/services.py — every write to the people tables, one function per action (ADR-0015).
 
 A staff member's working life at one shop (02 §5): they are added, have their details fixed (change_worker, PPL-10),
-are suspended, brought back and marked as left, hired again with a new job once they left (hire_again, PPL-11), and
-given a PIN (set_pin; apps/people/pins.py hashes it) or a temporary password, face to face (set_temporary_password,
-AUTH-6). A PIN login finds the person and checks their PIN, with its count of wrong tries (pin_login, check_pin,
-AUTH-4). And what they may do there: a shop gets
+have a photo set or taken off (set_worker_photo, remove_worker_photo, PPL-9), are suspended, brought back and marked as
+left, hired again with a new job once they left (hire_again, PPL-11), and given a PIN (set_pin; apps/people/pins.py
+hashes it) or a temporary password, face to face (set_temporary_password, AUTH-6). A PIN login finds the person and
+checks their PIN, with its count of wrong tries (pin_login, check_pin, AUTH-4). And what they may do there: a shop gets
 its own copy of the role templates (copy_role_templates; set_up_shop makes a whole new shop with them),
 and a person is given a role, or one extra permission, on one side or on all of them (assign_role,
 grant_permission), by someone who may give it. And the shop's devices (AUTH-1, 03 §5.9): a new device asks to join
@@ -23,6 +23,7 @@ and refuses a broken rule with a ValidationError that carries a code (ADR-0032);
 will turn it into the API's error shape. A status change also writes its line in the audit trail, with
 who and why, in the same transaction (apps/control/services.py, audit): the change and its line are kept
 together or not at all (T3).
+A photo writes none: the edit history keeps each change of it, with who, and the photo's own row keeps the why (PPL-9).
 
 A shared laptop keeps a copy of the shop's people at work (apps/sync/registry.py): names, status, PIN time and keys,
 all on their staff row. So each action that changes one of those saves inside `recording_changes(shop)`
@@ -56,8 +57,8 @@ from django.db.transaction import TransactionManagementError
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
-from apps.control.models import AuditAction, AuditEvent
-from apps.control.services import audit
+from apps.control.models import Attachment, AttachmentKind, AuditAction, AuditEvent
+from apps.control.services import adding_attachment, audit, receive_attachment_file, remove_attachment_file
 from apps.core.acting import acting_as
 from apps.core.changes import record_change, recording_changes
 from apps.core.editing import VersionConflict, editing
@@ -350,15 +351,15 @@ def _locked(staff: StaffMember) -> StaffMember:
 
 
 def _locked_for_a_change(staff: StaffMember, by: StaffMember | None) -> tuple[StaffMember, StaffMember | None]:
-    # A person's job changed by someone at the shop, its status or their details (PPL-10): both jobs locked, then who
-    # may asked (PPL-4, AUTH-8). The order is the point. Asked before the lock, the answer could be out of date by the
-    # time the change is written: Neema and Hamisi suspend each other in the same second, each check sees the other
-    # still active, and both go through. Asked after, on the rows as they are now, the second waits until the first is
-    # done and then finds the one it acts as suspended, holding nothing: refused (PermissionDenied), so the first wins.
-    # _locked_pair takes both rows in id order, so two such changes never wait for each other in a circle. `by` None:
-    # the system, or the superuser, who may change anyone, the owner included; only the person's own row is locked, as
-    # before. Returns both rows as read under the locks, so the change writes the person as they are now, and names the
-    # one acting as they are.
+    # A person's job changed by someone at the shop, its status, their details (PPL-10) or their photo (PPL-9): both
+    # jobs locked, then who may asked (PPL-4, AUTH-8). The order is the point. Asked before the lock, the answer could
+    # be out of date by the time the change is written: Neema and Hamisi suspend each other in the same second, each
+    # check sees the other still active, and both go through. Asked after, on the rows as they are now, the second waits
+    # until the first is done and then finds the one it acts as suspended, holding nothing: refused (PermissionDenied),
+    # so the first wins. _locked_pair takes both rows in id order, so two such changes never wait for each other in a
+    # circle. `by` None: the system, or the superuser, who may change anyone, the owner included; only the person's own
+    # row is locked, as before. Returns both rows as read under the locks, so the change writes the person as they are
+    # now, and names the one acting as they are.
     if by is None:
         return _locked(staff), None
     _check_people_fixed_on_demo(staff)
@@ -646,6 +647,107 @@ def _check_phones_fixed_on_demo() -> None:
         raise ValidationError("On the demo, workers get no phone.", code="demo.phones_fixed")
 
 
+# Why a photo's file went, when a newer photo took its place: a code, not words, as the system has no language of its
+# own (ADR-0040, as SYSTEM_NOTES in apps/control/services.py); a screen that shows it one day says it in the reader's.
+PHOTO_REPLACED = "staff.photo_replaced"
+
+
+def set_worker_photo(
+    staff: StaffMember, *, photo_id: uuid.UUID, instead_of: uuid.UUID | None, content: bytes, by: StaffMember
+) -> StaffMember:
+    """Set the photo a worker's job shows (02 §5, PPL-9): a first one, or a new one in the old one's place, whose file
+    then goes, while its row stays, saying who added it and who replaced it. `photo_id`: the photo's id, made on the
+    phone (ADR-0007), so a photo sent twice is one photo. `instead_of`: the photo the one acting saw, None for none.
+    Another one shows by now, or none does: refused (VersionConflict, 409 version_conflict), as nobody replaces a face
+    they never saw (Jack, PPL-9's review: A). `content`: the file itself, a JPEG or a WebP of 1 MB at most.
+    `by`: who sets it, a person at the shop, under the PIN's rule (_locked_for_a_change); the superuser, who is nobody's
+    staff, has no way to yet, as a photo is always added by someone (expect_attachment). Refused on the demo. Returns
+    the job as saved."""
+    _check_shop(staff.shop_id, by)
+    _check_photos_fixed_on_demo()
+    # One transaction for the photo's row, its file and the job that names it: all, or none. acting_as(by): the edit
+    # history names the same person on the photo's lines as on the job's, even outside an office visit (02 v1.7).
+    with transaction.atomic(), acting_as(by):
+        staff, by = _locked_for_a_photo(staff, by)
+        # Sent before? Read with both jobs locked: of two copies of one photo sent at the same moment, the second waits
+        # for the first, then finds its row here. Through the guarded manager, so another shop's row is not seen: its id
+        # clashes at the insert, and the route answers id.taken, as for this shop's own below (StaffViewSet).
+        sent_before = Attachment.objects.filter(pk=photo_id).first()
+        if sent_before is not None:
+            if sent_before.kind != AttachmentKind.STAFF_PHOTO or sent_before.subject_id != staff.pk:
+                # A row of this shop that is no photo of this worker. Never shown as theirs: Asha's tile would wear a
+                # coworker's face. The answer says nothing about that row (as _given_before).
+                raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")})
+            # The same photo again, after an answer that was lost: nothing changes, and that it is the same file is
+            # checked (attachment.file_differs). Whether it still shows isn't asked: a copy stuck on a slow network may
+            # arrive after a newer photo took its place, or after it was taken off, and must never bring it back.
+            receive_attachment_file(photo_id, content=content)
+            return staff
+        # After the repeat's answer above: a photo sent again still names the one its page showed, which it replaced
+        # itself the first time. Asked with both jobs locked, as for a removal: the replaced photo's file would be gone
+        # for good, so a copy held up by a slow network must never reach a newer photo.
+        if staff.photo_id != instead_of:
+            raise VersionConflict()
+        old = staff.photo
+        # The photo's row, then the job that names it, then the old photo's end, and the new photo's file last, as the
+        # block ends: a failure before it leaves no file that no row names.
+        with adding_attachment(
+            id=photo_id, kind=AttachmentKind.STAFF_PHOTO, subject=staff, content=content, by=by
+        ) as photo:
+            _save_photo(staff, photo, by=by)
+            if old is not None:
+                # Personal data is kept only as long as it is needed (03 §10): the old face isn't, once a newer one
+                # shows. Its file is deleted after the commit, so a rollback never leaves the old row naming a file that
+                # is gone.
+                remove_attachment_file(old, reason=PHOTO_REPLACED, by=by)
+    return staff
+
+
+def remove_worker_photo(staff: StaffMember, *, photo_id: uuid.UUID, reason: str, by: StaffMember) -> StaffMember:
+    """Take off the photo a worker's job shows (PPL-9): its file goes for good, and its row keeps who, when and why
+    (rule 7). `photo_id`: the photo the one acting saw. Another one shows by now: refused (VersionConflict, 409
+    version_conflict), as nobody takes off a face they never saw. A worker with no photo stays as they are: of two
+    managers taking it off at once, the second finds what he wanted done. `by`: as for set_worker_photo. Returns the job
+    as saved."""
+    _check_shop(staff.shop_id, by)
+    _check_reason(reason)
+    with transaction.atomic(), acting_as(by):
+        staff, by = _locked_for_a_photo(staff, by)
+        photo = staff.photo
+        if photo is None:
+            return staff
+        # Asked with both jobs locked, so a photo set at this same moment comes first and is seen here, or waits. Its
+        # file would be gone for good, so a tap held up by a slow network must never reach a newer photo (PPL-9).
+        if photo.pk != photo_id:
+            raise VersionConflict()
+        _save_photo(staff, None, by=by)
+        remove_attachment_file(photo, reason=reason, by=by)
+    return staff
+
+
+def _locked_for_a_photo(staff: StaffMember, by: StaffMember) -> tuple[StaffMember, StaffMember]:
+    # The lock and the who-may of every change of a person, never a copy of them. cast: with a person acting, the one
+    # acting always comes back.
+    staff, locked_by = _locked_for_a_change(staff, by)
+    return staff, cast(StaffMember, locked_by)
+
+
+def _save_photo(staff: StaffMember, photo: Attachment | None, *, by: StaffMember) -> None:
+    # Only the photo's column: the version stays, as for a suspension or a PIN, so a fix of the worker's details
+    # half-typed on another screen still saves (PPL-10).
+    staff.photo = photo
+    staff.full_clean()
+    _save(staff, by=by, fields=["photo"])
+
+
+def _check_photos_fixed_on_demo() -> None:
+    # On the demo every visitor logs in as Meneja (OPS-3), so a photo one saved would show to every visitor after, until
+    # the next morning's seed, and it could be a real person's face. So none is kept there (Jack, PPL-9), as no clock-in
+    # photo is (ATT-3). The page shows the photo to the visitor who took it, and sends nothing.
+    if settings.DEMO_SEED:
+        raise ValidationError("On the demo, no photo of a worker is kept.", code="demo.photos_fixed")
+
+
 def check_logins_may_change() -> None:
     """Refuse any change to a password or a PIN on the demo (Jack, 8 Nov 2026). Its logins are public, so every visitor
     shares them: a visitor who changed the manager's password would lock out everyone after them, and without the
@@ -863,8 +965,9 @@ def _check_may_act_as(staff: StaffMember, user: User, *, by: StaffMember, what: 
     # left decides whether they work at all; whoever fixes their phone sets their login name (PPL-10). So this is the
     # giver rule (02 §5), for a whole person: Baba may hand a manager staff.manage to deal with a forgotten password, or
     # a worker who stopped coming, and that manager still can't become, or stop, anyone stronger than himself (Jack,
-    # 4 Nov 2026; PPL-4). `what` names the refusal's codes: "password", "pin", or "staff" for a change of status or of
-    # their details. Refused as a ValidationError with its code, as flag.own_flag is, so the screen can say what to do.
+    # 4 Nov 2026; PPL-4). `what` names the refusal's codes: "password", "pin", or "staff" for a change of status, of
+    # their details or of their photo (PPL-9). Refused as a ValidationError with its code, as flag.own_flag is, so the
+    # screen can say what to do.
     # The English words are for the logs: neutral, as they serve all three; the screens translate the code (ADR-0032).
     # The key, on the whole shop, read afresh: a giver suspended a moment ago holds nothing (PermissionDenied, 403).
     require(by, Permission.STAFF_MANAGE, None)

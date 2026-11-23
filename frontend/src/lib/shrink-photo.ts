@@ -1,9 +1,9 @@
-// shrink-photo.ts — a photo made small on the laptop before it is kept (ATT-3, 03 §5.13): its longest
+// shrink-photo.ts — a photo made small on the device before it is kept (ATT-3, 03 §5.13): its longest
 // side at most 1,600 px, its shape kept, saved as a JPEG of about 150 KB. It owns those three numbers and
-// how a frame is drawn and saved. Shared: the clock-in's camera first, then a worker's photo (PPL-9) and a
-// supplier's paper (STK-4).
+// how a frame is drawn and saved. Shared: the clock-in's live camera (shrinkFrame), a worker's photo, taken
+// or chosen on the manager's phone (shrinkFile, PPL-9), and next a supplier's paper (STK-4).
 //
-// Why on the laptop, before the photo is kept: the server keeps no file over 1 MB (CTRL-3), about twenty
+// Why on the device, before the photo is kept: the server keeps no file over 1 MB (CTRL-3), about twenty
 // clock-ins a day go up on the shop's internet bundle (some 3 MB at 150 KB each), and every photo stays on
 // the server's disk and in its backups for 90 days. A full-HD camera frame at the best quality is some
 // 500 KB; a phone's own photo, 3 to 5 MB.
@@ -51,8 +51,8 @@ export type Encode = (quality: number) => Promise<Blob>;
 
 /**
  * The first JPEG, best quality first, that comes to about 150 KB; when none does, the smallest. Never over
- * the aim by choice: a photo still over 1 MB is refused by labelPhoto (src/offline/attachments.ts), as the
- * server would refuse it.
+ * the aim by choice: a photo still over 1 MB is refused by whoever keeps it, on a laptop by labelPhoto
+ * (src/offline/attachments.ts), as the server would refuse it, and from the office by the server.
  */
 export async function smallEnough(encode: Encode): Promise<Blob> {
   const [best, ...lower] = QUALITIES;
@@ -70,7 +70,7 @@ export async function smallEnough(encode: Encode): Promise<Blob> {
  * Draws one frame (a live video, an image) onto a fresh canvas at its shrunk size, and saves it as a JPEG of
  * about 150 KB. `width` and `height` are the frame's own size: a video's `videoWidth` and `videoHeight`.
  * Throws when there is nothing to draw (a camera that sent no frame yet) or the browser can't draw: the
- * caller goes on without a photo.
+ * clock-in then goes on without a photo, and a worker's page says it can't read this one.
  */
 export async function shrinkFrame(
   source: CanvasImageSource,
@@ -88,6 +88,26 @@ export async function shrinkFrame(
   // The whole frame, scaled into the whole sheet: nothing cut off.
   context.drawImage(source, 0, 0, size.width, size.height);
   return smallEnough((quality) => asJpeg(canvas, quality));
+}
+
+/**
+ * A photo already taken, as a phone's camera app or its gallery hands it over (PPL-9): read, stood upright, and
+ * shrunk as a live frame is. Throws when this browser can't read it: no picture at all, or a kind it doesn't know,
+ * as some don't an iPhone's HEIC. The caller says so, and sends nothing.
+ */
+export async function shrinkFile(file: Blob): Promise<Blob> {
+  // A phone held upright saves its photo lying down, with a note of which way is up (Exif), which the drawn copy won't
+  // carry: turned as the note says while it is read, or every face would lie on its side. A browser does that by itself
+  // (in Chromium, proven by e2e/workers.spec.ts), so no option asks for it: one that doesn't know the option's value by
+  // name would throw at `imageOrientation: "from-image"`, and every photo on that phone would be one it can't read
+  // (PPL-9's review).
+  const picture = await createImageBitmap(file);
+  try {
+    return await shrinkFrame(picture, picture.width, picture.height);
+  } finally {
+    // Its pixels, some 50 MB for a phone's 12-megapixel photo, are let go of now, not when the browser gets to it.
+    picture.close();
+  }
 }
 
 // The canvas's own saving, which answers by a callback: as a promise, and an empty answer as a failure.

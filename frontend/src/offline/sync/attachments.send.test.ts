@@ -328,6 +328,11 @@ describe("sending the photos", () => {
       status: 411,
       code: "attachment.length_required",
     },
+    {
+      when: "the photo was cut short on the way",
+      status: 400,
+      code: "attachment.cut_short",
+    },
     { when: "the server has no such route", status: 404, code: "not_found" },
   ])(
     "stops the round when $when, and keeps every photo",

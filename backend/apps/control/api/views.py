@@ -1,10 +1,10 @@
 """apps/control/api/views.py — the control routes an office screen calls, under /api/v1/control/ (03 §5.10, CTRL-3).
 
 Today one: a photo's file, handed out to someone allowed to see it (03 §5.13). The owner opens Asha's clock-in photo
-beside her 07:55 on the attendance page (ATT-12); the PIN screen's faces come with PPL-9. Served only here, through
-Django, after the shop's guard and the kind's key: never from an address of its own, which anyone holding the link
-could open (apps/core/storage.py refuses to make one). Thin, as every route is (ADR-0015): the rule of who may open
-which kind lives with the kinds (ATTACHMENT_KINDS, apps/control/models.py).
+beside her 07:55 on the attendance page (ATT-12), and her face on her own page (PPL-9); the PIN screen's faces come with
+PPL-14. Served only here, through Django, after the shop's guard and the kind's key: never from an address of its own,
+which anyone holding the link could open (apps/core/storage.py refuses to make one). Thin, as every route is (ADR-0015):
+the rule of who may open which kind lives with the kinds (ATTACHMENT_KINDS, apps/control/models.py).
 """
 
 from typing import Any, ClassVar
@@ -23,7 +23,7 @@ from apps.core.permissions import Permission
 
 class AttachmentViewSet(ShopViewSet[Attachment]):
     # The shop's attachments, one at a time, by id. No list and no detail of its own yet: the screen that shows a
-    # record's photos (ATT-12, PPL-9) asks its own route for the record, which will carry the photo's id.
+    # record's photos (ATT-12, PPL-9) asks its own route for the record, which carries the photo's id.
     model = Attachment
     # A photo belongs to the whole shop, not to a side: a worker's attendance is the shop's (ATTACHMENT_KINDS).
     side_field = None

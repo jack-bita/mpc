@@ -14,12 +14,16 @@ calls (PPL-4; 03 §5.10). What may and may not be done is the services'; these t
     POST  /api/v1/people/staff/{id}/end-role/    take a role of theirs away, with a reason
     POST  /api/v1/people/staff/{id}/end-key/     take an extra key of theirs away, with a reason
     POST  /api/v1/people/staff/{id}/pin/         give them a PIN, typed by the worker on the owner's phone (PPL-12)
+    PUT   /api/v1/people/staff/{id}/photo/?photo=…&instead_of=…   set their photo, in the one's place the page showed:
+                                                 the body is the file, its id the phone's (PPL-9)
+    POST  /api/v1/people/staff/{id}/remove-photo/    take it off, with a reason
     GET   /api/v1/people/roles/                  the shop's roles, to choose from
 
 Each worker comes with their full name, phone, nickname, job title, first day, status and leaving day, each role and
-extra key they were given, with its side (none: every side), whether they have a PIN (PPL-12), the version a fix sends
-back, and, for a job that ended, the job the person came back as, once they are hired again (PPL-11). Only for whoever
-holds staff.manage on the whole shop (PPL-4's card): the page shows roles, and later pay (WAGE-2).
+extra key they were given, with its side (none: every side), whether they have a PIN (PPL-12), the photo they show
+(PPL-9), the version a fix sends back, and, for a job that ended, the job the person came back as, once they are hired
+again (PPL-11). Only for whoever holds staff.manage on the whole shop (PPL-4's card): the page shows roles, and later
+pay (WAGE-2).
 
     shop     side          who          what they were given
     MFANO    Dawa (D)      Baba         Owner, every side
@@ -29,11 +33,13 @@ holds staff.manage on the whole shop (PPL-4's card): the page shows roles, and l
 Fake data only: the repo is public (03 §10).
 """
 
+import io
 import uuid
 from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
 from unittest import mock
+from urllib.parse import urlencode
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -44,7 +50,7 @@ from django.views.debug import ExceptionReporter
 from pytest_django import Settings
 from rest_framework.test import APIClient
 
-from apps.control.models import AuditAction, AuditEvent, EditEvent
+from apps.control.models import LARGEST_FILE, Attachment, AuditAction, AuditEvent, EditEvent
 from apps.core.permissions import Permission, RoleTemplate
 from apps.core.tenancy import shop_context
 from apps.people.api.views import RoleViewSet, StaffViewSet
@@ -65,6 +71,7 @@ from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
+from tests.unread import NeverRead
 
 pytestmark = pytest.mark.django_db
 
@@ -143,6 +150,8 @@ def test_staff_routes_name_their_permissions() -> None:
         "end_key": Permission.STAFF_MANAGE,
         "temporary_password": Permission.STAFF_MANAGE,
         "pin": Permission.STAFF_MANAGE,
+        "photo": Permission.STAFF_MANAGE,
+        "remove_photo": Permission.STAFF_MANAGE,
     }
     assert RoleViewSet.action_permissions == {"list": Permission.STAFF_MANAGE}
 
@@ -173,6 +182,8 @@ def test_the_owner_lists_every_worker_the_shop_has_had(
         "switched_off": False,
         # No PIN yet, so no tile on the shop's laptops: the owner sees who still needs one (PPL-12).
         "has_pin": False,
+        # No photo yet: her tile shows her full name (PPL-9).
+        "photo": None,
         # The job's version, which a fix sends back: nobody has fixed her yet.
         "version": 1,
         # Only a job that ended can have been come back from.
@@ -1295,3 +1306,274 @@ def test_the_pin_stays_out_of_error_reports(baba: StaffMember, asha: StaffMember
     # And it looked in the right place: the crash passed through the route, which hid its copy.
     [sent] = [value for function, name, value in shown if (function, name) == ("pin", "sent")]
     assert set(sent) == {"*"}
+
+
+# A worker's photo (PPL-9): set by the file itself, taken off with a reason.
+
+# The first bytes every JPEG and every WebP starts with, and some of our own: the server knows a photo by them (CTRL-3).
+FACE = b"\xff\xd8\xff" + b"a made-up photo of Asha"
+BETTER_FACE = b"RIFF\x10\x00\x00\x00WEBP" + b"a better made-up photo of Asha"
+PHOTO_FILE = "/api/v1/control/attachments/{}/file/"
+
+
+def send_photo(
+    by: StaffMember,
+    staff: StaffMember,
+    content: bytes = FACE,
+    *,
+    photo: object = None,
+    instead_of: object = "now",
+    **headers: Any,
+) -> Any:
+    # As the page sends it: the file's bytes as the whole body, and in the address the id the phone made, and the photo
+    # the page showed, if any: the one that shows now, as on a page just read, unless a test says otherwise. `photo` "":
+    # no id at all.
+    seen = photo_of(staff) if instead_of == "now" else instead_of
+    asked = {"photo": photo or uuid.uuid7()} if photo != "" else {}
+    if seen is not None:
+        asked["instead_of"] = seen
+    address = f"{act(staff, 'photo')}?{urlencode(asked)}"
+    return client_for(by).put(address, data=content, content_type="image/jpeg", **headers)
+
+
+def take_photo_off(by: StaffMember, staff: StaffMember, **sent: object) -> Any:
+    # As the page sends it: the photo it shows, and why.
+    body = {"photo": str(photo_of(staff) or uuid.uuid7()), "reason": "Hataki picha", **sent}
+    return client_for(by).post(act(staff, "remove-photo"), body, format="json")
+
+
+def photo_of(staff: StaffMember) -> uuid.UUID | None:
+    with shop_context(staff.shop_id):
+        return StaffMember.objects.get(pk=staff.pk).photo_id
+
+
+def test_baba_sets_ashas_photo_and_opens_it(baba: StaffMember, asha: StaffMember) -> None:
+    photo_id = uuid.uuid7()
+
+    answer = send_photo(baba, asha, photo=photo_id)
+
+    # The worker as they are now, the photo's id included, so the page needs no second read.
+    assert answer.status_code == 200
+    assert (answer.json()["id"], answer.json()["photo"]) == (str(asha.pk), str(photo_id))
+    assert photo_of(asha) == photo_id
+    # Opened from the photos' own door (CTRL-3), by anyone working here: Asha herself, with no key to manage anyone.
+    opened: Any = client_for(asha).get(PHOTO_FILE.format(photo_id))
+    assert (opened.status_code, opened["Content-Type"]) == (200, "image/jpeg")
+    assert b"".join(opened.streaming_content) == FACE
+
+
+def test_a_webp_is_known_by_its_bytes(baba: StaffMember, asha: StaffMember) -> None:
+    # Whatever type the request says: what a file is, its first bytes say (CTRL-3).
+    photo_id = uuid.uuid7()
+    assert send_photo(baba, asha, BETTER_FACE, photo=photo_id).status_code == 200
+
+    assert client_for(baba).get(PHOTO_FILE.format(photo_id))["Content-Type"] == "image/webp"
+
+
+def test_a_new_photo_is_answered_and_the_old_one_is_gone(baba: StaffMember, asha: StaffMember) -> None:
+    old, new = uuid.uuid7(), uuid.uuid7()
+    send_photo(baba, asha, photo=old)
+
+    assert send_photo(baba, asha, BETTER_FACE, photo=new).json()["photo"] == str(new)
+
+    gone = client_for(baba).get(PHOTO_FILE.format(old))
+    assert (gone.status_code, gone.json()["code"]) == (404, "attachment.file_removed")
+
+
+def test_a_photo_sent_twice_is_one_photo(baba: StaffMember, asha: StaffMember) -> None:
+    photo_id = uuid.uuid7()
+
+    first, again = (send_photo(baba, asha, photo=photo_id, instead_of=None) for _ in range(2))
+
+    assert first.status_code == again.status_code == 200
+    assert first.json() == again.json()
+    with shop_context(asha.shop_id):
+        assert Attachment.objects.count() == 1
+
+
+def test_a_photo_taken_off_is_answered(baba: StaffMember, asha: StaffMember) -> None:
+    send_photo(baba, asha)
+
+    answer = take_photo_off(baba, asha)
+
+    assert (answer.status_code, answer.json()["photo"]) == (200, None)
+    assert photo_of(asha) is None
+    # Sent again, or pressed by two managers at once: what was asked is done already.
+    assert take_photo_off(baba, asha).status_code == 200
+
+
+def test_taking_a_photo_off_needs_a_reason(baba: StaffMember, asha: StaffMember) -> None:
+    send_photo(baba, asha)
+
+    blank = take_photo_off(baba, asha, reason="  ")
+    missing = client_for(baba).post(act(asha, "remove-photo"), {"photo": str(photo_of(asha))}, format="json")
+    long = take_photo_off(baba, asha, reason="x" * 501)
+
+    assert (blank.status_code, blank.json()["code"]) == (400, "staff.reason_required")
+    assert (missing.status_code, missing.json()["fields"]) == (400, {"reason": ["required"]})
+    assert (long.status_code, long.json()["fields"]) == (400, {"reason": ["max_length"]})
+    assert photo_of(asha) is not None
+
+
+def test_a_removal_names_the_photo_it_takes_off(baba: StaffMember, asha: StaffMember) -> None:
+    # A newer photo than the one the page showed stays, and the page is told it looked at an old copy.
+    seen, newer = uuid.uuid7(), uuid.uuid7()
+    send_photo(baba, asha, photo=seen)
+    send_photo(baba, asha, BETTER_FACE, photo=newer)
+
+    late = take_photo_off(baba, asha, photo=str(seen))
+    nameless = client_for(baba).post(act(asha, "remove-photo"), {"reason": "Hataki picha"}, format="json")
+
+    assert (late.status_code, late.json()["code"]) == (409, "version_conflict")
+    assert (nameless.status_code, nameless.json()["fields"]) == (400, {"photo": ["required"]})
+    assert photo_of(asha) == newer
+
+
+@pytest.mark.parametrize(
+    ("content", "code"),
+    [
+        pytest.param(FACE + b"x" * LARGEST_FILE, "attachment.too_big", id="too big"),
+        pytest.param(b"%PDF-1.7 not a photo", "attachment.not_an_image", id="not a photo"),
+        pytest.param(b"", "attachment.not_an_image", id="empty"),
+    ],
+)
+def test_a_file_that_is_no_photo_is_refused(baba: StaffMember, asha: StaffMember, content: bytes, code: str) -> None:
+    # Its length said, as a browser says it, an empty file's too: the test client leaves an empty body's out.
+    refused = send_photo(baba, asha, content, CONTENT_LENGTH=str(len(content)))
+
+    assert (refused.status_code, refused.json()["code"]) == (400, code)
+    assert photo_of(asha) is None
+
+
+@pytest.mark.parametrize(
+    ("length", "status", "code"),
+    [
+        pytest.param(str(LARGEST_FILE + 1), 400, "attachment.too_big", id="too big"),
+        pytest.param("", 411, "attachment.length_required", id="no length"),
+    ],
+)
+def test_a_photo_too_big_or_with_no_length_is_refused_unread(
+    baba: StaffMember, asha: StaffMember, length: str, status: int, code: str
+) -> None:
+    # The same check as the laptops' upload (apps/control/api/uploads.py): from the request's head, before a byte of the
+    # file is read, so a 50 MB upload never fills the server's memory.
+    refused = send_photo(baba, asha, FACE, **{"CONTENT_LENGTH": length, "wsgi.input": NeverRead()})
+
+    assert (refused.status_code, refused.json()["code"]) == (status, code)
+
+
+def test_a_photo_cut_short_on_the_way_changes_nothing(baba: StaffMember, asha: StaffMember) -> None:
+    # Baba's phone lost the line halfway: half a JPEG starts as a whole one does, and the office brings no fingerprint
+    # ahead of it, so only the length says that bytes are missing. Kept, it would be Asha's face, her good photo's file
+    # deleted for good, and the whole photo, sent again under the same id, refused each time as another file (PPL-9's
+    # review).
+    good, better = uuid.uuid7(), uuid.uuid7()
+    send_photo(baba, asha, photo=good)
+    half = io.BytesIO(BETTER_FACE[: len(BETTER_FACE) // 2])
+
+    cut = send_photo(
+        baba, asha, BETTER_FACE, photo=better, **{"wsgi.input": half, "CONTENT_LENGTH": str(len(BETTER_FACE))}
+    )
+
+    assert (cut.status_code, cut.json()["code"]) == (400, "attachment.cut_short")
+    assert photo_of(asha) == good
+    opened: Any = client_for(baba).get(PHOTO_FILE.format(good))
+    assert b"".join(opened.streaming_content) == FACE
+    assert send_photo(baba, asha, BETTER_FACE, photo=better).json()["photo"] == str(better)
+
+
+@pytest.mark.parametrize(
+    ("photo", "code"),
+    [("", "required"), ("picha", "invalid"), (uuid.uuid4(), "id.not_uuid7")],
+    ids=["none", "no id", "v4"],
+)
+def test_a_photo_needs_an_id_of_its_own(baba: StaffMember, asha: StaffMember, photo: object, code: str) -> None:
+    # Made on the phone, as every new row's id is (ADR-0007): with none, a photo sent again would be a second photo.
+    refused = send_photo(baba, asha, photo=photo)
+
+    assert (refused.status_code, refused.json()["fields"]) == (400, {"photo": [code]})
+    assert photo_of(asha) is None
+
+
+def test_a_photo_names_the_one_it_replaces(baba: StaffMember, asha: StaffMember) -> None:
+    # Another photo than the one the page showed shows by now: it stays, and the page is told it looked at an old copy
+    # (Jack, PPL-9's review: A). A page that says nothing of a photo says it showed none.
+    shown = uuid.uuid7()
+    send_photo(baba, asha, photo=shown)
+
+    for old_copy in (None, uuid.uuid7()):
+        late = send_photo(baba, asha, BETTER_FACE, instead_of=old_copy)
+        assert (late.status_code, late.json()["code"]) == (409, "version_conflict")
+    wrong = send_photo(baba, asha, BETTER_FACE, instead_of="picha")
+    assert (wrong.status_code, wrong.json()["fields"]) == (400, {"instead_of": ["invalid"]})
+    assert photo_of(asha) == shown
+    assert send_photo(baba, asha, BETTER_FACE, instead_of=shown).status_code == 200
+
+
+def test_a_photos_id_that_is_taken_says_nothing_more(
+    baba: StaffMember, asha: StaffMember, juma: StaffMember, staff_b: StaffMember, give_role: GiveRole
+) -> None:
+    # A coworker's photo here, and a photo of another shop, which the guard hides: one answer for both, so nothing tells
+    # shop A that shop B has a photo by this id (03 §5.4).
+    coworker = job(asha.shop, "Neema Mfano", "Neema")
+    theirs_here, theirs_elsewhere = uuid.uuid7(), uuid.uuid7()
+    send_photo(baba, coworker, photo=theirs_here)
+    other_shops_worker = job(staff_b.shop, "Zawadi Jirani", "Zawadi")
+    give_role(staff_b, RoleTemplate.OWNER, None)
+    assert send_photo(staff_b, other_shops_worker, photo=theirs_elsewhere).status_code == 200
+
+    here, elsewhere = (send_photo(baba, asha, photo=taken) for taken in (theirs_here, theirs_elsewhere))
+
+    assert here.status_code == elsewhere.status_code == 400
+    assert here.json() == elsewhere.json()
+    assert here.json()["fields"] == {"id": ["id.taken"]}
+    assert photo_of(asha) is None
+    assert photo_of(other_shops_worker) == theirs_elsewhere
+
+
+def test_changing_a_photo_needs_staff_manage_on_the_whole_shop(
+    shop_a: Shop, sides: dict[str, Side], baba: StaffMember, asha: StaffMember, give_role: GiveRole
+) -> None:
+    shown = uuid.uuid7()
+    send_photo(baba, asha, photo=shown)
+    plain = job(shop_a, "Meneja Mfano", "Meneja")
+    give_role(plain, RoleTemplate.MANAGER, None)
+    dawa_only = job(shop_a, "Neema Mfano", "Neema")
+    give_role(dawa_only, RoleTemplate.SELLER, sides["D"])
+    with shop_context(shop_a):
+        grant_permission(dawa_only, Permission.STAFF_MANAGE, side=sides["D"], by=None)
+
+    for person in (plain, dawa_only):
+        for refused in (send_photo(person, asha), take_photo_off(person, asha)):
+            assert (refused.status_code, refused.json()["code"]) == (403, "permission_denied"), person.display_name
+    assert photo_of(asha) == shown
+
+
+def test_who_may_change_a_photo_reaches_the_route(shop_a: Shop, baba: StaffMember, asha: StaffMember) -> None:
+    # The rule itself is the service's (test_who_changes_a_worker.py); its codes reach the page whole.
+    for refused in (send_photo(baba, baba), take_photo_off(baba, baba)):
+        assert (refused.status_code, refused.json()["code"]) == (400, "staff.own")
+    with shop_context(shop_a):
+        mark_left(asha, left_on=date(2026, 9, 30), by=None, reason="Amehamia Moshi")
+    for refused in (send_photo(baba, asha), take_photo_off(baba, asha)):
+        assert (refused.status_code, refused.json()["code"]) == (400, "staff.left")
+
+
+def test_another_shops_worker_is_not_found_for_a_photo(baba: StaffMember, staff_b: StaffMember) -> None:
+    # Before anything sent is read: no id in the address, no length, no reason, and the answer is still "not found".
+    nothing_sent = client_for(baba).put(act(staff_b, "photo"), data=b"", content_type="image/jpeg", CONTENT_LENGTH="")
+    for refused in (send_photo(baba, staff_b), nothing_sent, take_photo_off(baba, staff_b, reason="")):
+        assert (refused.status_code, refused.json()["code"]) == (404, "not_found")
+    assert photo_of(staff_b) is None
+
+
+def test_no_photo_on_the_demo(baba: StaffMember, shop_a: Shop, settings: Settings) -> None:
+    # The page saves nothing there; the server refuses all the same, for a worker a visitor added too.
+    settings.DEMO_SEED = True
+    with shop_context(shop_a):
+        zawadi = add_worker(shop=shop_a, full_name="Zawadi Mfano", display_name="Zawadi", by=baba)
+
+    refused = send_photo(baba, zawadi)
+
+    assert (refused.status_code, refused.json()["code"]) == (400, "demo.photos_fixed")
+    assert photo_of(zawadi) is None

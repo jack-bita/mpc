@@ -18,9 +18,10 @@ import type { paths } from "./schema";
 export const CSRF_COOKIE = "csrftoken";
 export const CSRF_HEADER = "X-CSRFToken";
 
-// The methods that change something: Django checks the token only on these. One route takes a PUT, a photo's
-// file sent from a laptop (CTRL-3, CTRL-6, src/offline/sync/attachments.ts), and none a DELETE (03 §5.10); DELETE
-// is listed so a route that ever takes one is covered too.
+// The methods that change something: Django checks the token only on these. Two routes take a PUT, each a photo's
+// file: a laptop's clock-in (CTRL-3, CTRL-6, src/offline/sync/attachments.ts) and a worker's, set in the office
+// (PPL-9, features/workers/photo-sheet.tsx). None takes a DELETE (03 §5.10); it is listed so a route that ever does
+// is covered too.
 const CHANGES = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
 /** Where a client finds the CSRF header for a change. A page reads it from document.cookie (csrfHeader);

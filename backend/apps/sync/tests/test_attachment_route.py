@@ -9,6 +9,7 @@ Asha clocked in at 07:55 with no internet. Her clock-in reached the server with 
     another file, or one cut short             400 attachment.file_differs; nothing kept
     over 1 MB                                  400 attachment.too_big, refused before a byte of it is read
     no length (sent in pieces)                 411 attachment.length_required: the laptop sends it again
+    fewer bytes than its length said           400 attachment.cut_short: nothing kept, and the laptop sends it again
     not a JPEG or a WebP                       400 attachment.not_an_image
     an id this shop doesn't hold               404 attachment.not_found, as for an id no shop has
 
@@ -19,6 +20,7 @@ WebP does, never a real photo. Fake data only: the repo is public (03 §10).
 """
 
 import hashlib
+import io
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -37,6 +39,7 @@ from apps.people.models import Device, StaffMember
 from apps.people.services import block, confirm_pairing, start_pairing
 from apps.shops.models import Shop, Side
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
+from tests.unread import NeverRead
 
 pytestmark = pytest.mark.django_db
 
@@ -204,19 +207,13 @@ def test_file_not_an_image_refused(staff_a: StaffMember, laptop: tuple[Device, s
     assert stored(photo).file_state == "waiting"
 
 
-def test_file_too_big_refused_unread(
-    monkeypatch: pytest.MonkeyPatch, staff_a: StaffMember, laptop: tuple[Device, str]
-) -> None:
-    # A file over 1 MB is refused from the request's head, its length, before the file is read or the service asked: a
-    # 50 MB upload never fills the server's memory.
+def test_file_too_big_refused_unread(staff_a: StaffMember, laptop: tuple[Device, str]) -> None:
+    # A file over 1 MB is refused from the request's head, its length, before a byte of it is read: a 50 MB upload never
+    # fills the server's memory.
     photo = waiting(staff_a)
+    unread = {"CONTENT_LENGTH": str(LARGEST_FILE + 1), "wsgi.input": NeverRead()}
 
-    def never(*args: Any, **kwargs: Any) -> None:
-        raise AssertionError("The file was read.")
-
-    monkeypatch.setattr("apps.sync.api.views.receive_attachment_file", never)
-
-    answer = put(a_browser(laptop[1]), photo.pk, JPEG + b"x" * LARGEST_FILE)
+    answer = put(a_browser(laptop[1]), photo.pk, JPEG, **unread)
 
     assert code_of(answer) == (400, "attachment.too_big")
 
@@ -234,7 +231,7 @@ def test_file_of_exactly_1_mb_kept(staff_a: StaffMember, laptop: tuple[Device, s
 
 
 def test_file_too_big_refused_by_the_service_too(staff_a: StaffMember) -> None:
-    # A caller that hands the service the file itself, as PPL-9's office upload will, gets the size checked again.
+    # A caller that hands the service the file itself, as the office's upload does (PPL-9), gets the size checked again.
     photo = waiting(staff_a)
     with shop_context(staff_a.shop_id), pytest.raises(ValidationError) as refused:
         receive_attachment_file(photo.pk, content=JPEG + b"x" * LARGEST_FILE)
@@ -249,9 +246,22 @@ def test_upload_with_no_length_is_asked_again(staff_a: StaffMember, laptop: tupl
     # laptop is told to send it again (411), the body is never read, and nothing is kept.
     photo = waiting(staff_a)
 
-    answer = put(a_browser(laptop[1]), photo.pk, JPEG, CONTENT_LENGTH=length)
+    answer = put(a_browser(laptop[1]), photo.pk, JPEG, **{"CONTENT_LENGTH": length, "wsgi.input": NeverRead()})
 
     assert code_of(answer) == (411, "attachment.length_required")
+    assert stored(photo).file_state == "waiting"
+
+
+def test_file_cut_short_is_not_kept(staff_a: StaffMember, laptop: tuple[Device, str]) -> None:
+    # The line dropped halfway: the request said its length, and fewer bytes came, which the server hands over as if
+    # they were all (gunicorn stops at the end of the stream, and Django compares nothing). Nothing is kept, and the
+    # laptop isn't told the photo is a bad one (file_differs), which would set it aside for good: it sends it again.
+    photo = waiting(staff_a)
+    half = io.BytesIO(JPEG[: len(JPEG) // 2])
+
+    answer = put(a_browser(laptop[1]), photo.pk, JPEG, **{"wsgi.input": half, "CONTENT_LENGTH": str(len(JPEG))})
+
+    assert code_of(answer) == (400, "attachment.cut_short")
     assert stored(photo).file_state == "waiting"
 
 

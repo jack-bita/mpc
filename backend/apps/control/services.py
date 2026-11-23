@@ -24,6 +24,9 @@ her photo's label (what it is, how many bytes, its fingerprint), and the row say
 saving code calls it, in the record's transaction, so the row arrives with the record that names it (ATT-3).
 receive_attachment_file then takes the file itself, when the laptop can send it, checks it against the label, and keeps
 it; the same file sent again, or a file already removed, changes nothing, so a laptop may always send again.
+adding_attachment does both, for a photo that reaches the server whole, as a worker's photo from an office screen does
+(PPL-9): no record travels ahead of the file, so the server works the label out from the file itself, and keeps the file
+last, once the record that shows the photo names it.
 remove_attachment_file is the hook for retention rules: it takes the file away and keeps the row, with who, when and
 why (rule 7). ATT-7's nightly job calls it for clock-in photos 90 days after their pay run is approved (03 §5.13).
 
@@ -42,8 +45,8 @@ checks read through the guarded `objects` (CORE-2).
 
 import hashlib
 import uuid
-from collections.abc import Mapping, Sequence
-from contextlib import nullcontext
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager, nullcontext
 from decimal import Decimal
 from typing import Any
 
@@ -332,6 +335,35 @@ def receive_attachment_file(attachment_id: uuid.UUID, *, content: bytes) -> Atta
     return attachment
 
 
+@contextmanager
+def adding_attachment(
+    *, id: uuid.UUID, kind: str, subject: ShopScoped, content: bytes, by: Actor
+) -> Iterator[Attachment]:
+    """Add a photo that comes whole, its file in hand, as a worker's photo does from an office screen (PPL-9). The
+    `with` block gets the photo's row, for the record that shows it to name; the file is kept as the block ends, so a
+    block that fails leaves no row and no file. `id`, `kind`, `subject` and `by` as for expect_attachment; its label
+    (type, size, SHA-256) is worked out here, from `content`. A file over 1 MB, or one that is no photo, is refused
+    before anything is written."""
+    # Before the row: asked after it, the label's own rules would answer first, and file a too-big photo under `size`, a
+    # field no office screen ever sent. The same codes as the laptop's upload, about the whole file.
+    content_type = _checked_type(content)
+    with transaction.atomic():
+        yield expect_attachment(
+            id=id,
+            kind=kind,
+            subject=subject,
+            content_type=content_type,
+            size=len(content),
+            sha256=hashlib.sha256(content).hexdigest(),
+            by=by,
+        )
+        # The file last. A row is undone by a rollback; a file in the storage folder is not, and one that no row names
+        # would be a face nothing ever finds to delete, as a removal goes by its row (PPL-9's review). So whatever may
+        # fail, the block's work included, has been done by now. What is left is the commit itself, as when the server
+        # stops in that very moment: the file then stays until the same photo is sent again, and is written over.
+        receive_attachment_file(id, content=content)
+
+
 # The fields a file's removal changes: the file, and who removed it, when and why.
 _REMOVAL_FIELDS = ("file", "file_removed_at", "file_removed_by", "file_removed_reason")
 
@@ -391,14 +423,8 @@ def _delete_stored(storage: Any, name: str, shop_id: uuid.UUID) -> None:
 
 
 def _check_file(attachment: Attachment, content: bytes) -> None:
-    # The file against its label (CTRL-3). Each refusal names no field: it is about the whole file. The laptop's route
-    # reads a file's length before the file itself, so a file over the limit never gets here from it; checked again for
-    # any other caller that hands the file itself, as PPL-9's office upload will.
-    if len(content) > LARGEST_FILE:
-        raise ValidationError("A file is kept up to 1 MB.", code="attachment.too_big")
-    sniffed = _image_type_of(content)
-    if sniffed is None:
-        raise ValidationError("Only a JPEG or a WebP photo is kept.", code="attachment.not_an_image")
+    # The file against its label (CTRL-3). Each refusal names no field: it is about the whole file.
+    sniffed = _checked_type(content)
     # Another file than the one the record named: a photo damaged on the way, cut short, or another photo sent under
     # this id. Its fingerprint tells, whatever its size. A file of the right bytes but of another type than its label
     # says can only be a label the laptop wrote wrong; it is refused too, as kept it would be served as the wrong type.
@@ -408,6 +434,18 @@ def _check_file(attachment: Attachment, content: bytes) -> None:
         or sniffed != attachment.content_type
     ):
         raise ValidationError("This file is not the one its record names.", code="attachment.file_differs")
+
+
+def _checked_type(content: bytes) -> AttachmentType:
+    # What photo a file is, once it is small enough and a photo at all. The upload routes read a file's length before
+    # the file itself, so a file over the limit never gets here from them; checked again for any other caller that hands
+    # the file itself.
+    if len(content) > LARGEST_FILE:
+        raise ValidationError("A file is kept up to 1 MB.", code="attachment.too_big")
+    sniffed = _image_type_of(content)
+    if sniffed is None:
+        raise ValidationError("Only a JPEG or a WebP photo is kept.", code="attachment.not_an_image")
+    return sniffed
 
 
 def _image_type_of(content: bytes) -> AttachmentType | None:
