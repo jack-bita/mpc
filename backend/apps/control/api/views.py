@@ -1,10 +1,11 @@
 """apps/control/api/views.py — the control routes an office screen calls, under /api/v1/control/ (03 §5.10, CTRL-3).
 
 Today one: a photo's file, handed out to someone allowed to see it (03 §5.13). The owner opens Asha's clock-in photo
-beside her 07:55 on the attendance page (ATT-12), and her face on her own page (PPL-9); the PIN screen's faces come with
-PPL-14. Served only here, through Django, after the shop's guard and the kind's key: never from an address of its own,
-which anyone holding the link could open (apps/core/storage.py refuses to make one). Thin, as every route is (ADR-0015):
-the rule of who may open which kind lives with the kinds (ATTACHMENT_KINDS, apps/control/models.py).
+beside her 07:55 on the attendance page (ATT-12), and her face on her own page (PPL-9). Served only through Django,
+here after the shop's guard and the kind's key, and to a laptop, for its PIN screen, by a route of its own (PPL-14,
+apps/sync/api/views.py): never from an address of its own, which anyone holding the link could open
+(apps/core/storage.py refuses to make one). Thin, as every route is (ADR-0015): the rule of who may open which kind
+lives with the kinds (ATTACHMENT_KINDS, apps/control/models.py).
 """
 
 from typing import Any, ClassVar

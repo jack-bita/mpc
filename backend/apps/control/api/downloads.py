@@ -1,9 +1,10 @@
 """apps/control/api/downloads.py — handing out a photo's file (03 §5.13).
 
-Who may open a photo is each route's to ask: the office's asks the photo's kind's key (apps/control/api/views.py). What
-is handed out, and how, is photo_answer()'s alone, for every route that does, so two of them can't drift apart: a photo
-one of them never lets a cache keep is never kept through another. Here, in `control`, as it owns the attachments
-(apps/control/models.py) and every app may import it (ADR-0043), beside the way a photo comes in (uploads.py).
+Who may open a photo is each route's to ask: the office's asks the photo's kind's key (apps/control/api/views.py), and
+the laptops' whether a person on their list shows it (PPL-14, apps/sync/api/views.py). What is handed out, and how, is
+photo_answer()'s alone, for both, so they can't drift apart: a photo one of them never lets a cache keep is never kept
+through the other. Here, in `control`, as it owns the attachments (apps/control/models.py) and every app may import it
+(ADR-0043), beside the way a photo comes in (uploads.py).
 """
 
 from django.http import FileResponse

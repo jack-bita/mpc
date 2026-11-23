@@ -229,8 +229,9 @@ class StaffMember(Editable):
     # photos, one after another, and which one shows now is a fact only this column holds.
     # Named, not imported: attachments name jobs too (who added one, who removed it), and a name is not an import.
     # PROTECT: nothing is deleted (rule 7); an old photo's file goes, its row stays. db_index=False: indexes lead with
-    # `shop`, and nothing looks a job up by its photo. editable=False: only the photo services write it, as they alone
-    # check that it is this job's own (T1), which no foreign key can.
+    # `shop`, and a laptop's ask for a photo looks among its shop's few people (staff_photo, apps/sync/selectors.py).
+    # editable=False: only the photo services write it, as they alone check that it is this job's own (T1), which no
+    # foreign key can.
     photo = models.ForeignKey(
         "control.Attachment",
         on_delete=models.PROTECT,

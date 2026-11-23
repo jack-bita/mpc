@@ -120,7 +120,9 @@ def sweep_attachments(sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staf
     # Each shop's worker has a photo, its row written as its record would bring it (expect_attachment) and its file
     # sent after it (receive_attachment_file), as the laptop does (CTRL-3). The sweep asks the photo routes about shop
     # A's as shop B: the laptop's upload and the office's file, which A's own staff opens first. Each photo is bytes
-    # only that shop's has, starting as a JPEG does, so its fingerprint is shop A's mark too.
+    # only that shop's has, starting as a JPEG does, so its fingerprint is shop A's mark too. And each worker's job
+    # shows it, as one set in the office does (PPL-9), so A's own laptop reads it first from the workers' photos
+    # (PPL-14).
     for shop, staff in ((sweep_sides[0], staff_a), (sweep_sides[1], staff_b)):
         photo = b"\xff\xd8\xff" + f"made-up photo of {staff.display_name}".encode()
         photo_id = uuid.uuid7()
@@ -134,7 +136,8 @@ def sweep_attachments(sweep_sides: tuple[Shop, Shop], staff_a: StaffMember, staf
                 sha256=hashlib.sha256(photo).hexdigest(),
                 by=staff,
             )
-            receive_attachment_file(photo_id, content=photo)
+            staff.photo = receive_attachment_file(photo_id, content=photo)
+            staff.save(update_fields=["photo"])
     return sweep_sides
 
 
