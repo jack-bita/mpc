@@ -20,7 +20,10 @@ only: the repo is public (03 §10).
 """
 
 import json
+import uuid
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
+from functools import partial
 from typing import Any
 from unittest.mock import patch
 
@@ -43,6 +46,8 @@ from apps.people.services import (
     copy_role_templates,
     end_role,
     mark_left,
+    remove_worker_photo,
+    set_worker_photo,
     suspend,
 )
 from apps.shops.models import Setting, Shop, Side, StockLocation
@@ -54,6 +59,12 @@ from tests.change_log import last_line
 from tests.concurrency import in_another_transaction
 
 pytestmark = pytest.mark.django_db
+
+GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
+
+# The first bytes every JPEG starts with, and some of our own: the server knows a photo by its first bytes (CTRL-3).
+FACE = b"\xff\xd8\xff" + b"a made-up photo of Asha"
+BETTER_FACE = b"\xff\xd8\xff" + b"a better made-up photo of Asha"
 
 
 def pulled(shop: Shop, cursor: int) -> dict[str, Any]:
@@ -246,6 +257,32 @@ def test_a_role_taken_away_leaves_the_laptop_at_its_next_pull(shop_a: Shop, dawa
     page = pulled(shop_a, start)
     assert each_change(page) == [(start + 1, "staff", str(asha.pk), "upsert")]
     assert page["changes"][0]["data"]["permissions"] == {"every_side": [], "sides": []}
+
+
+def test_a_photo_reaches_the_laptop_at_its_next_pull(
+    shop_a: Shop, dawa: Side, staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # Meneja sets Asha's photo, then a better one, then takes it off (PPL-14). Each writes her line, and the pull after
+    # it hands every laptop her row, naming the photo she shows now, or none.
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    asha = hire(shop_a, "Asha Mfano", "Asha")
+    first, better = uuid.uuid7(), uuid.uuid7()
+
+    def photo_at_the_next_pull(change: Callable[[], object]) -> str | None:
+        start = last_line(shop_a)
+        with shop_context(shop_a):
+            change()
+        page = pulled(shop_a, start)
+        assert each_change(page) == [(start + 1, "staff", str(asha.pk), "upsert")]
+        photo: str | None = page["changes"][0]["data"]["photo"]
+        return photo
+
+    set_first = partial(set_worker_photo, asha, photo_id=first, instead_of=None, content=FACE, by=staff_a)
+    set_better = partial(set_worker_photo, asha, photo_id=better, instead_of=first, content=BETTER_FACE, by=staff_a)
+    take_off = partial(remove_worker_photo, asha, photo_id=better, reason="Hataki picha", by=staff_a)
+    assert photo_at_the_next_pull(set_first) == str(first)
+    assert photo_at_the_next_pull(set_better) == str(better)
+    assert photo_at_the_next_pull(take_off) is None
 
 
 def test_a_person_switched_off_goes_as_archive(shop_a: Shop, dawa: Side) -> None:

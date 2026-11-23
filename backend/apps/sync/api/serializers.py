@@ -65,11 +65,13 @@ class StaffKeysRecord(serializers.Serializer[Any]):
 
 
 class StaffRecord(serializers.ModelSerializer[StaffMember]):
-    # A person at work, as a shared laptop needs them offline: the names for their tile on the PIN screen, whether they
-    # are suspended (X2), when their PIN last changed, so the laptop drops its own check of the old one (SYNC-10), their
-    # own language and font (UI-9), and their keys, so the counter checks them offline (03 §5.8). A photo joins with
-    # PPL-14. Never the PIN's hash, a password, a phone or an email: whoever uses the laptop next could read them.
-    # `pin_changed_at` is empty for someone with no PIN, which tells only that nobody can log in as them here.
+    # A person at work, as a shared laptop needs them offline: the names and the photo for their tile on the PIN screen,
+    # whether they are suspended (X2), when their PIN last changed, so the laptop drops its own check of the old one
+    # (SYNC-10), their own language and font (UI-9), and their keys, so the counter checks them offline (03 §5.8). Never
+    # the PIN's hash, a password, a phone or an email: whoever uses the laptop next could read them. `pin_changed_at` is
+    # empty for someone with no PIN, which tells only that nobody can log in as them here. `photo`: only which photo the
+    # tile shows, its id, or none; the laptop asks for the picture itself by that id, once, at an address of its own
+    # (PPL-14), so the people's list stays small at every pull.
     full_name = serializers.CharField(source="user.full_name", read_only=True)
     language = serializers.ChoiceField(source="user.language", choices=Language.choices, read_only=True)
     font = serializers.ChoiceField(source="user.font", choices=Font.choices, read_only=True)
@@ -77,7 +79,17 @@ class StaffRecord(serializers.ModelSerializer[StaffMember]):
 
     class Meta:
         model = StaffMember
-        fields = ["id", "full_name", "display_name", "status", "pin_changed_at", "language", "font", "permissions"]
+        fields = [
+            "id",
+            "full_name",
+            "display_name",
+            "photo",
+            "status",
+            "pin_changed_at",
+            "language",
+            "font",
+            "permissions",
+        ]
         read_only_fields = fields
 
     @extend_schema_field(StaffKeysRecord)

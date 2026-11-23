@@ -21,6 +21,7 @@ const ASHA: components["schemas"]["StaffRecord"] = {
   id: "0192f000-0000-7000-8000-0000000000a1",
   full_name: "Asha Mollel",
   display_name: "Asha",
+  photo: null,
   status: "active",
   pin_changed_at: null,
   language: "sw",

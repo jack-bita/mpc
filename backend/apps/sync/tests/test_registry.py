@@ -15,11 +15,14 @@ Fake data only: the repo is public (03 §10).
 """
 
 import json
+import uuid
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import Any
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework.renderers import JSONRenderer
 
 from apps.core.changes import record_change, recording_changes
@@ -35,6 +38,7 @@ from apps.people.services import (
     grant_permission,
     mark_left,
     set_pin,
+    set_worker_photo,
     suspend,
 )
 from apps.shops.models import (
@@ -56,6 +60,9 @@ from tests.change_log import last_line
 pytestmark = pytest.mark.django_db
 
 GiveRole = Callable[[StaffMember, RoleTemplate, Side | None], None]
+
+# The first bytes every JPEG starts with, and some of our own: the server knows a photo by its first bytes (CTRL-3).
+FACE = b"\xff\xd8\xff" + b"a made-up photo of Asha"
 
 
 def sent(code: str, shop: Shop) -> list[dict[str, Any]]:
@@ -234,9 +241,9 @@ def test_people_at_work_are_sent_and_people_gone_are_not(
 
 
 def test_a_persons_row_holds_what_the_counter_needs(shop_a: Shop) -> None:
-    # The names for the PIN screen's tile; when the PIN last changed, so the laptop drops its own check of the old one
-    # (SYNC-10); and the person's language and font, so an offline login shows their own screens (UI-9). A photo joins
-    # with PPL-14. Exactly these fields: what must never travel is test_bootstrap_secrets.py's.
+    # The names and the photo for the PIN screen's tile (PPL-14), here none; when the PIN last changed, so the laptop
+    # drops its own check of the old one (SYNC-10); and the person's language and font, so an offline login shows their
+    # own screens (UI-9). Exactly these fields: what must never travel is test_bootstrap_secrets.py's.
     asha = hire(shop_a, "Asha Mfano", "Asha")
     with shop_context(shop_a):
         set_pin(asha, "2580", by=None)
@@ -249,11 +256,41 @@ def test_a_persons_row_holds_what_the_counter_needs(shop_a: Shop) -> None:
         "id": str(asha.pk),
         "full_name": "Asha Mfano",
         "display_name": "Asha",
+        "photo": None,
         "status": "active",
         "language": "en",
         "font": "second",
         "permissions": {"every_side": [], "sides": []},
     }
+
+
+def test_a_persons_row_names_their_photo(shop_a: Shop, staff_a: StaffMember, give_role: GiveRole) -> None:
+    # Only which photo the tile shows: its id. The picture is no part of a row: a laptop asks for it by that id, at an
+    # address of its own, so a pull of the whole shop's people stays small (PPL-14).
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    asha, baraka = hire(shop_a, "Asha Mfano", "Asha"), hire(shop_a, "Baraka Mfano", "Baraka")
+    photo_id = uuid.uuid7()
+    with shop_context(shop_a):
+        set_worker_photo(asha, photo_id=photo_id, instead_of=None, content=FACE, by=staff_a)
+    assert row_of(asha)["photo"] == str(photo_id)
+    assert row_of(baraka)["photo"] is None
+
+
+def test_reading_the_photos_ids_costs_no_query_a_person(
+    shop_a: Shop, staff_a: StaffMember, give_role: GiveRole
+) -> None:
+    # The id is on the job's own row: naming it never reads the photo's. Five people with a photo cost a laptop's copy
+    # as many queries as five with none.
+    give_role(staff_a, RoleTemplate.OWNER, None)
+    people = [hire(shop_a, f"Mfanyakazi {number}", f"Mfanyakazi {number}") for number in range(5)]
+    with CaptureQueriesContext(connection) as without:
+        sent("staff", shop_a)
+    with shop_context(shop_a):
+        for person in people:
+            set_worker_photo(person, photo_id=uuid.uuid7(), instead_of=None, content=FACE, by=staff_a)
+    with CaptureQueriesContext(connection) as with_photos:
+        sent("staff", shop_a)
+    assert len(with_photos) == len(without)
 
 
 def test_each_persons_keys_are_sent_side_by_side(shop_a: Shop, dawa: Side, vyakula: Side, give_role: GiveRole) -> None:

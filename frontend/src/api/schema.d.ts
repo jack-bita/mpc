@@ -1843,6 +1843,8 @@ export interface components {
             readonly id: string;
             readonly full_name: string;
             readonly display_name: string;
+            /** Format: uuid */
+            readonly photo: string | null;
             readonly status: components["schemas"]["StaffStatusEnum"];
             /** Format: date-time */
             readonly pin_changed_at: string | null;
