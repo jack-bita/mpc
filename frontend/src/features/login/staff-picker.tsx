@@ -24,7 +24,9 @@
 // review). On a real shop it stays, before the first sync and on a shop with nobody yet too, as the
 // owner's way in to add them.
 //
-// A tile shows the full name in large letters with the nickname under it, until photos come (PPL-14; 02 §5).
+// A tile shows the worker's face, then the full name in large letters with the nickname under it (Jack, PPL-14; 02
+// §5). The face comes from the laptop's own copy too (tile-face.tsx), so it shows with no network; a worker with no
+// photo, or whose photo a sync hasn't brought yet, has the two names alone, on a tile of the same height.
 // On the demo, a seller's tile shows their PIN too, as Jaribu demo handed it over (OPS-3, demo-pins.ts):
 // a visitor can't guess it, and this is where they need it; the manager's shows *Ingia kwa nenosiri*,
 // where his PIN would be. Never on a real shop's laptop, which keeps no demo PINs or logins, and never one
@@ -47,32 +49,54 @@ import {
 import { readCursor } from "@/offline/sync/meta";
 import { useShopDatabase } from "@/offline/this-shop";
 
+import { TileFace } from "./tile-face";
+
 /** One person, as the laptop keeps them: their staff row (SYNC-2). */
 export type StaffRow = components["schemas"]["StaffRecord"];
+
+/** A tile: the person, and the photo it shows, by its id: the one their row names, once it is on this laptop; else
+ * null, and the names alone. */
+interface Tile {
+  person: StaffRow;
+  photo: string | null;
+}
 
 /**
  * Who gets a tile: the active people with a PIN, or with a demo login kept here (OPS-13), A to Z.
  * Undefined while the first read runs, so nothing flashes; null while this laptop has had no first sync,
- * whose copy the tiles wait for. Live: a sync that adds, renames or suspends someone redraws the tiles by
- * itself.
+ * whose copy the tiles wait for. Live: a sync that adds, renames or suspends someone, or brings their photo,
+ * redraws the tiles by itself.
  */
-function useTiles(): StaffRow[] | null | undefined {
+function useTiles(): Tile[] | null | undefined {
   const db = useShopDatabase();
   return useLiveQuery(async () => {
     if (db === null) return null;
-    // One read, so the cursor and the rows are seen as they stood together.
-    return db.transaction("r", [db.meta, db.staff], async () => {
-      // No cursor: no copy yet. An empty list then would say the shop has nobody, which isn't so.
-      if ((await readCursor(db)) === null) return null;
-      const people = await db.staff.toArray();
-      return people
-        .filter(
-          (person) =>
-            person.status === "active" &&
-            (person.pin_changed_at !== null || opensThePassword(person)),
-        )
-        .sort(byName);
-    });
+    // One read, so the cursor, the rows and the photos are seen as they stood together.
+    return db.transaction(
+      "r",
+      [db.meta, db.staff, db.staff_photos],
+      async () => {
+        // No cursor: no copy yet. An empty list then would say the shop has nobody, which isn't so.
+        if ((await readCursor(db)) === null) return null;
+        const people = await db.staff.toArray();
+        // Which photos are here, by their ids alone: each face reads its own bytes, once (tile-face.tsx).
+        const here = new Set(
+          await db.staff_photos.toCollection().primaryKeys(),
+        );
+        return people
+          .filter(
+            (person) =>
+              person.status === "active" &&
+              (person.pin_changed_at !== null || opensThePassword(person)),
+          )
+          .sort(byName)
+          .map((person) => ({
+            person,
+            // Asked as it is, not `!== null`: a row saved before rows named photos holds none at all.
+            photo: person.photo && here.has(person.photo) ? person.photo : null,
+          }));
+      },
+    );
   }, [db]);
 }
 
@@ -86,12 +110,10 @@ function opensThePassword(person: StaffRow): boolean {
 /** Whether the password button shows under the tiles: never while the first read runs, as it may be the
  * demo's, which has none; before the first sync only on a laptop that keeps no demo login, as the first sync
  * brings the demo manager's tile (OPS-13's review); after it, unless a tile already opens the password. */
-function showsThePasswordButton(
-  people: StaffRow[] | null | undefined,
-): boolean {
-  if (people === undefined) return false;
-  if (people === null) return !keepsDemoLogins();
-  return !people.some(opensThePassword);
+function showsThePasswordButton(tiles: Tile[] | null | undefined): boolean {
+  if (tiles === undefined) return false;
+  if (tiles === null) return !keepsDemoLogins();
+  return !tiles.some(({ person }) => opensThePassword(person));
 }
 
 // A to Z by full name, then nickname, then id: the order the server sends the rows in (staff_rows,
@@ -113,7 +135,7 @@ export function StaffPicker({
   const t = useTranslations("login.picker");
   // The login's book, for the password button's words, which the manager's tile says the same way.
   const words = useTranslations("login");
-  const people = useTiles();
+  const tiles = useTiles();
   // The tiles' step has come, and whatever had focus (a tapped tile, the PIN pad's arrow, Toka) left with the last one:
   // focus moves to the question, so a screen reader says it, and Tab goes on from here (as UI-3's forms
   // do).
@@ -132,14 +154,14 @@ export function StaffPicker({
         {t("title")}
       </h1>
       {/* A laptop just registered, before its first sync: what it waits for, not an empty shop. */}
-      {people === null && <p>{t("firstSync")}</p>}
+      {tiles === null && <p>{t("firstSync")}</p>}
       {/* A new shop, before the owner adds its people: the reason, not an empty screen. */}
-      {people?.length === 0 && <p>{t("empty")}</p>}
-      {people && people.length > 0 && (
+      {tiles?.length === 0 && <p>{t("empty")}</p>}
+      {tiles && tiles.length > 0 && (
         // A list, so a screen reader says how many people there are. role="list" written out: Safari with
         // VoiceOver stops calling a <ul> a list once Tailwind styles its bullets away.
         <ul role="list" className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          {people.map((person) => (
+          {tiles.map(({ person, photo }) => (
             <li key={person.id}>
               {opensThePassword(person) ? (
                 // The demo's manager: a real link, to the password login with his id, as the button's
@@ -149,6 +171,7 @@ export function StaffPicker({
                   kind="second"
                   className={TILE}
                 >
+                  <Face photo={photo} />
                   <Names person={person} />{" "}
                   <span className="text-base font-normal">
                     {words("withPassword")}
@@ -162,6 +185,7 @@ export function StaffPicker({
                   className={TILE}
                   onClick={() => onPick(person)}
                 >
+                  <Face photo={photo} />
                   <Names person={person} />
                   <DemoPin staffId={person.id} />
                 </Button>
@@ -170,7 +194,7 @@ export function StaffPicker({
           ))}
         </ul>
       )}
-      {showsThePasswordButton(people) && (
+      {showsThePasswordButton(tiles) && (
         // The second kind, under the tiles, which are what the counter is for (Jack, 8 Nov 2026, at
         // UI-5's review). A seller who taps it still needs a password.
         <div>
@@ -183,10 +207,16 @@ export function StaffPicker({
   );
 }
 
-// A tile's size: two lines don't fit a button's 52 px, so it grows (h-auto), and never shrinks below a
-// finger's size (min-h, from the same token).
+// A tile's size: a face and two lines don't fit a button's 52 px, so it grows, and never shrinks below a finger's size
+// (min-h, from the same token). As tall as its row (h-full), so one with the names alone stands level with the faces
+// beside it (Jack's drawing, PPL-14).
 const TILE =
-  "h-auto min-h-(--control-big) w-full flex-col gap-1 py-4 whitespace-normal";
+  "h-full min-h-(--control-big) w-full flex-col gap-1 py-4 whitespace-normal";
+
+/** A tile's face, or nothing for a person with no photo here. Named by its photo, so a new one is a new face. */
+function Face({ photo }: { photo: string | null }) {
+  return photo === null ? null : <TileFace key={photo} id={photo} />;
+}
 
 /** A tile's two names: the full name large, the nickname under it. */
 function Names({ person }: { person: StaffRow }) {

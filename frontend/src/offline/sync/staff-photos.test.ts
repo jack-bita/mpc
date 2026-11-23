@@ -138,9 +138,9 @@ describe("the workers' photos", () => {
 
   it("asks for nothing where no row names a photo, nor one saved before rows named any", async () => {
     // A row a laptop saved before PPL-14 holds no `photo` at all: read as none.
-    const before: Partial<typeof BARAKA> = { ...BARAKA };
-    delete before.photo;
-    await db.staff.bulkPut([ASHA, before as typeof BARAKA]);
+    const before = { ...BARAKA };
+    Reflect.deleteProperty(before, "photo");
+    await db.staff.bulkPut([ASHA, before]);
 
     await fetchStaffPhotos(db, pagePlace);
 
