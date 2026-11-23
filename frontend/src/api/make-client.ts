@@ -66,7 +66,8 @@ export type ApiClient = ReturnType<typeof createApiClient>;
 // The whole answer is read here too, not only its start: fetch hands back the answer once its first
 // bytes arrive, and openapi-fetch reads the rest later, outside this check. A long list on 3G whose
 // signal drops halfway would then throw a plain TypeError, and read as a bug. The answer is read on a
-// copy (clone()), so openapi-fetch still reads it as usual; our answers are small JSON, kept whole anyway.
+// copy (clone()), so openapi-fetch still reads it as usual; our answers are small JSON, kept whole anyway, or
+// a worker's photo, 1 MB at most (PPL-14).
 //
 // A read the store cancelled, as its screen closed, throws too: that stays a cancel, as TanStack Query
 // expects. A call that ran out of time (AbortSignal.timeout(), as the sync's calls have, SYNC-9) is no
