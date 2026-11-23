@@ -479,6 +479,19 @@
       "back": "{name} is back at work.",
       "backLink": "Open their page now"
     },
+    "photo": {
+      "title": "Photo",
+      "none": "No photo",
+      "take": "Take a photo",
+      "choose": "Choose a photo",
+      "alt": "{name}'s photo",
+      "failed": "The photo didn't open. Try again later.",
+      "sheetTitle": "{name}'s photo",
+      "newAlt": "{name}'s new photo, not saved yet",
+      "unreadable": "This photo can't be read here. Choose another, or take a new one.",
+      "save": "Save",
+      "done": "{name}'s photo is saved."
+    },
     "logins": {
       "title": "Logging in",
       "pin": "PIN",

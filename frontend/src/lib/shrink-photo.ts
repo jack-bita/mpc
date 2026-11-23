@@ -1,7 +1,7 @@
-// shrink-photo.ts — a photo made small on the laptop before it is kept (ATT-3, 03 §5.13): its longest
+// shrink-photo.ts — a photo made small on the device before it is kept (ATT-3, 03 §5.13): its longest
 // side at most 1,600 px, its shape kept, saved as a JPEG of about 150 KB. It owns those three numbers and
-// how a frame is drawn and saved. Shared: the clock-in's camera first, then a worker's photo (PPL-9) and a
-// supplier's paper (STK-4).
+// how a frame is drawn and saved. Shared: the clock-in's live camera (shrinkFrame), a worker's photo, taken
+// or chosen on the manager's phone (shrinkFile, PPL-9), and next a supplier's paper (STK-4).
 //
 // Why on the laptop, before the photo is kept: the server keeps no file over 1 MB (CTRL-3), about twenty
 // clock-ins a day go up on the shop's internet bundle (some 3 MB at 150 KB each), and every photo stays on
@@ -88,6 +88,25 @@ export async function shrinkFrame(
   // The whole frame, scaled into the whole sheet: nothing cut off.
   context.drawImage(source, 0, 0, size.width, size.height);
   return smallEnough((quality) => asJpeg(canvas, quality));
+}
+
+/**
+ * A photo already taken, as a phone's camera app or its gallery hands it over (PPL-9): read, stood upright, and
+ * shrunk as a live frame is. Throws when this browser can't read it: no picture at all, or a kind it doesn't know,
+ * as some don't an iPhone's HEIC. The caller says so, and sends nothing.
+ */
+export async function shrinkFile(file: Blob): Promise<Blob> {
+  // "from-image": a phone held upright saves its photo lying down, with a note of which way is up (Exif), which the
+  // drawn copy won't carry. So it is turned as the note says while it is read, or every face would lie on its side.
+  const picture = await createImageBitmap(file, {
+    imageOrientation: "from-image",
+  });
+  try {
+    return await shrinkFrame(picture, picture.width, picture.height);
+  } finally {
+    // Its pixels, some 50 MB for a phone's 12-megapixel photo, are let go of now, not when the browser gets to it.
+    picture.close();
+  }
 }
 
 // The canvas's own saving, which answers by a callback: as a promise, and an empty answer as a failure.

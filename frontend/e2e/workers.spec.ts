@@ -9,7 +9,10 @@
 // away again with Ondoa and a reason, through PPL-7's routes: the giver rule, the give's own id, the end's reason. And
 // on Zawadi's page, Kuingia (PPL-12): on the demo, Weka PIN and Nenosiri la muda are both off, with the one line saying
 // why, as every visitor shares the seed's logins (Jack, PPL-12: A); a PIN or a password itself is checked by hand on
-// the laptop's own stack, as the demo can show neither.
+// the laptop's own stack, as the demo can show neither. And Picha (PPL-9): a photo like a phone's own, big and lying on
+// its side, comes out small and upright in the sheet, holding none of the phone's hidden data, which only a real browser
+// can show (photo-sheet.tsx, shrink-photo.ts); Hifadhi is off, as the demo keeps no photo (Jack, PPL-9), so a photo saved
+// is checked by hand too.
 //
 // Juma and Zawadi are the visitor's own workers, so the demo lets them change (demo.people_fixed guards only the seed's
 // people, their roles included, PPL-7). The tests share one database (the-shop.ts), made fresh for each run, and no
@@ -68,6 +71,63 @@ function sheet(phone: Page, title: string) {
 /** One of a worker's roles or keys card's two parts, by its heading: Cheo or Ruhusa za ziada. */
 function cardPart(phone: Page, heading: string) {
   return phone.getByRole("region", { name: heading, exact: true });
+}
+
+/** A photo as a phone makes one: a JPEG of 3000 × 2000 pixels, some 2.7 MB of it, with the phone's note (Exif,
+ * orientation 6) that it was held upright, so the picture must be turned a quarter to stand: 2000 × 3000. Made in the
+ * browser, which can write a JPEG, then given the note a canvas never writes. */
+async function aPhonesOwnPhoto(phone: Page): Promise<Buffer> {
+  const drawn = await phone.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 3000;
+    canvas.height = 2000;
+    const context = canvas.getContext("2d") as CanvasRenderingContext2D;
+    // A wall, and someone's head before it.
+    const wall = context.createLinearGradient(0, 0, 3000, 2000);
+    wall.addColorStop(0, "#c9b79c");
+    wall.addColorStop(1, "#5d6b57");
+    context.fillStyle = wall;
+    context.fillRect(0, 0, 3000, 2000);
+    context.fillStyle = "#6b4630";
+    context.beginPath();
+    context.ellipse(1500, 1000, 520, 700, 0, 0, 2 * Math.PI);
+    context.fill();
+    // A camera's grain on every pixel, as it is what makes a photo big, and what shrinking smooths away: flat colours
+    // would be small already. From a fixed start, so each run draws the same picture.
+    const picture = context.getImageData(0, 0, 3000, 2000);
+    let grain = 1;
+    for (let at = 0; at < picture.data.length; at += 4) {
+      grain = (grain * 16807) % 2147483647;
+      for (let colour = at; colour < at + 3; colour += 1)
+        picture.data[colour] = (picture.data[colour] ?? 0) + (grain % 33) - 16;
+    }
+    context.putImageData(picture, 0, 0);
+    const photo = await new Promise<Blob | null>((done) =>
+      canvas.toBlob(done, "image/jpeg", 0.95),
+    );
+    // As text, which the test and the browser pass each other far faster than millions of numbers.
+    return new Promise<string>((done) => {
+      const reader = new FileReader();
+      reader.onload = () => done(String(reader.result).split(",")[1] ?? "");
+      reader.readAsDataURL(photo as Blob);
+    });
+  });
+  const jpeg = Buffer.from(drawn, "base64");
+  const note = [
+    // The segment: its mark, its length (34), and the word that says what it holds.
+    ...[0xff, 0xe1, 0x00, 0x22, ...Buffer.from("Exif"), 0x00, 0x00],
+    // Big numbers first, and where the one list of facts starts.
+    ...[0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08],
+    // One fact: orientation (0x0112), one short number, 6: turn a quarter to the right. Then no more lists.
+    ...[0x00, 0x01, 0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01],
+    ...[0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+  ];
+  // Right after the JPEG's first two bytes, where a camera writes it.
+  return Buffer.concat([
+    jpeg.subarray(0, 2),
+    Buffer.from(note),
+    jpeg.subarray(2),
+  ]);
 }
 
 test("the demo's manager adds a worker and suspends him", async ({
@@ -272,6 +332,67 @@ test("the demo's manager gives a role and takes it away", async ({
       }),
     ).toBeDisabled();
     await expect(phone.getByText(sw.errors.demo.logins_fixed)).toBeVisible();
+  });
+
+  await test.step("Picha: a phone's photo comes out small and upright, and on the demo it isn't saved", async () => {
+    await expect(cardPart(phone, WORKERS.photo.title)).toContainText(
+      WORKERS.photo.none,
+    );
+    const photo = await aPhonesOwnPhoto(phone);
+    // One the server would refuse as it is: it keeps none over 1 MB.
+    expect(photo.length).toBeGreaterThan(1024 * 1024);
+    const gallery = phone.waitForEvent("filechooser");
+    await phone
+      .getByRole("button", { name: WORKERS.photo.choose, exact: true })
+      .click();
+    await (
+      await gallery
+    ).setFiles({
+      name: "IMG_0001.jpg",
+      mimeType: "image/jpeg",
+      buffer: photo,
+    });
+
+    const showing = sheet(
+      phone,
+      words(WORKERS.photo.sheetTitle, { name: "Zawadi" }),
+    );
+    const picture = showing.getByRole("img", {
+      name: words(WORKERS.photo.newAlt, { name: "Zawadi" }),
+    });
+    await expect(picture).toBeVisible();
+    // The copy that would go: standing, at most 1,600 px, a JPEG of about 150 KB (the card's box), and no Exif in it.
+    const copy = await picture.evaluate(async (image) => {
+      const shown = image as HTMLImageElement;
+      await shown.decode();
+      const file = await (await fetch(shown.src)).blob();
+      const words = new TextDecoder("latin1").decode(await file.arrayBuffer());
+      return {
+        size: [shown.naturalWidth, shown.naturalHeight],
+        type: file.type,
+        bytes: file.size,
+        hidden: words.includes("Exif"),
+      };
+    });
+    expect(copy).toMatchObject({
+      size: [1067, 1600],
+      type: "image/jpeg",
+      hidden: false,
+    });
+    expect(copy.bytes).toBeLessThanOrEqual(150 * 1024);
+
+    // On the demo, shown and kept nowhere, with the one line saying why (Jack, PPL-9).
+    await expect(showing.getByText(sw.errors.demo.photos_fixed)).toBeVisible();
+    await expect(
+      showing.getByRole("button", { name: WORKERS.photo.save, exact: true }),
+    ).toBeDisabled();
+    await showing
+      .getByRole("button", { name: sw.sheet.cancel, exact: true })
+      .click();
+    await expect(showing).toBeHidden();
+    await expect(cardPart(phone, WORKERS.photo.title)).toContainText(
+      WORKERS.photo.none,
+    );
   });
 
   await test.step("Ongeza kazi opens its own page: the Seller role on Dawa, and back on her page", async () => {

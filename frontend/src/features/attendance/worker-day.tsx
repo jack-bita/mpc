@@ -68,6 +68,7 @@ import {
   formatMoney,
   weekdayOf,
 } from "@/lib/format";
+import { photoAddress } from "@/lib/photo-address";
 
 import type { Weekday } from "./attendance-month";
 import { AddTap } from "./add-tap";
@@ -78,11 +79,6 @@ import type {
   WorkerAttendance,
   WorkerDay,
 } from "./worker-month";
-
-/** The address of a photo's file, behind the photo route's key (CTRL-3). */
-export function photoAddress(id: string): string {
-  return `/api/v1/control/attachments/${id}/file/`;
-}
 
 export function TheDay({
   day,

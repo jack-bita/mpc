@@ -479,6 +479,19 @@
       "back": "{name} amerudi kazini.",
       "backLink": "Fungua ukurasa wake wa sasa"
     },
+    "photo": {
+      "title": "Picha",
+      "none": "Hakuna picha",
+      "take": "Piga picha",
+      "choose": "Chagua picha",
+      "alt": "Picha ya {name}",
+      "failed": "Picha haikufunguka. Jaribu tena baadaye.",
+      "sheetTitle": "Picha ya {name}",
+      "newAlt": "Picha mpya ya {name}, bado haijahifadhiwa",
+      "unreadable": "Picha hii haisomeki hapa. Chagua nyingine, au piga mpya.",
+      "save": "Hifadhi",
+      "done": "Picha ya {name} imehifadhiwa."
+    },
     "logins": {
       "title": "Kuingia",
       "pin": "PIN",

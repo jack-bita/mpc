@@ -1,8 +1,9 @@
 // worker-page.tsx — one worker's own page, opened by tapping their name on Wafanyakazi (PPL-6): everything of theirs,
-// in four headed cards, each with the buttons that change what it shows (UI-10).
+// in five headed cards, each with the buttons that change what it shows (UI-10).
 //
 // As Jack pictured it at PPL-4 (17 Nov 2026): tap a name and see the whole worker. Since UI-10 (20 Nov 2026, his
-// "professional"), four cards, each under its heading, so a manager's phone finds each thing by its name:
+// "professional"), cards, each under its heading, so a manager's phone finds each thing by its name:
+//   - Picha: their face, or that there is none, with Piga picha and Chagua picha (PPL-9, worker-photo.tsx);
 //   - Taarifa zake: their full name, nickname, job title, first day and phone; their status, and their last day once
 //     they left; and whether the superuser switched them off. Badilisha on the heading's row opens the details' form on
 //     a page of its own (PPL-10, UI-11, edit-worker-screen.tsx); under them, the status's buttons (worker-actions.tsx);
@@ -11,7 +12,7 @@
 //     which opens its form on a page of its own (PPL-8, UI-11, worker-roles.tsx, give-screen.tsx);
 //   - Malipo kwa siku: their daily pay rate and its history, for whoever holds settings.manage and staff.manage
 //     (WAGE-1, worker-pay.tsx).
-// Later cards add here: the photo (PPL-9), and the pay so far (WAGE-2), so the owner pays one who leaves at once.
+// Later cards add here: the pay so far (WAGE-2), so the owner pays one who leaves at once.
 //
 // At /workers/view/?id=…, as the app has no [id] pages (ADR-0016): the page around it reads the id from the address
 // (app/(office)/workers/view/page.tsx). It asks GET /api/v1/people/staff/{id}/, and shows the list's copy at once when
@@ -39,6 +40,7 @@ import { maySeePay, usePayRates } from "./pay-rates";
 import { WorkerActions } from "./worker-actions";
 import { WorkerLogins } from "./worker-logins";
 import { WorkerPay } from "./worker-pay";
+import { WorkerPhoto } from "./worker-photo";
 import { WorkerRoles } from "./worker-roles";
 import { LIST_PAGE, useWorker, type Worker } from "./workers";
 
@@ -64,23 +66,25 @@ export function WorkerScreen({ id }: { id: string | null }) {
     arrival.news?.card === card && arrival.news.worker === worker.id
       ? arrival.news.sentence
       : null;
-  // Whether the page offers Weka PIN and Nenosiri la muda (PPL-12): a worker working or suspended, never one's own
-  // page, as the Kuingia card decides too (worker-logins.tsx).
-  const loginsOffered =
+  // Whether the page offers Weka PIN and Nenosiri la muda (PPL-12), and Piga picha and Chagua picha (PPL-9): a worker
+  // working or suspended, never one's own page, as the Kuingia and Picha cards decide too (worker-logins.tsx,
+  // worker-photo.tsx).
+  const changesOffered =
     who.data !== undefined &&
     worker.data !== undefined &&
     worker.data.status !== "left" &&
     worker.data.id !== who.data.staff.id;
-  // Whether this is the demo, where nobody's PIN or password changes (Jack, PPL-12: A). Asked here, the part always on
-  // the page, and handed down (PPL-6's list, #272), only once the Kuingia card shows its buttons, which are off on the
-  // demo before anyone taps (Jack, PPL-12: A); and once a visit: it changes only on a deploy, as for Jaribu demo
-  // (try-the-demo.tsx). Unknown, or not answered, the buttons are on: the server refuses on the demo all the same
-  // (demo.logins_fixed). Badilisha's page asks it for its phone box itself (edit-worker-screen.tsx).
+  // Whether this is the demo, where nobody's PIN or password changes (Jack, PPL-12: A), and no worker's photo is kept
+  // (Jack, PPL-9). Asked here, the part always on the page, and handed down (PPL-6's list, #272), only once the two
+  // cards show their buttons: Kuingia's are off on the demo before anyone taps (Jack, PPL-12: A), Picha's Hifadhi, in
+  // its sheet; and once a visit: it changes only on a deploy, as for Jaribu demo (try-the-demo.tsx). Unknown, or not
+  // answered, they are on: the server refuses on the demo all the same (demo.logins_fixed, demo.photos_fixed).
+  // Badilisha's page asks it for its phone box itself (edit-worker-screen.tsx).
   const demo = useQuery({
     queryKey: DEMO_OPEN,
     queryFn: askDemoOpen,
     staleTime: Infinity,
-    enabled: loginsOffered,
+    enabled: changesOffered,
   });
   // The worker's pay rates (WAGE-1), for whoever may see them: asked here, the part always on the page, and handed down
   // by their values (RolesRead, workers.ts); asked for nobody else, as the server would refuse them. The shop's roles
@@ -115,6 +119,14 @@ export function WorkerScreen({ id }: { id: string | null }) {
       {who.data && !waiting ? <ApiErrorAlert error={worker.error} /> : null}
       {who.data && worker.data && !waiting ? (
         <>
+          {/* First, as Jack drew it (PPL-9): the face says whose page this is. A worker of its own, as each card: a
+              photo picked for Asha never goes on to Baraka's page. */}
+          <WorkerPhoto
+            key={`${worker.data.id}-photo`}
+            worker={worker.data}
+            me={who.data}
+            demo={demo.data === true}
+          />
           {/* Taarifa zake: the details, and Badilisha, Simamisha, Rudisha and Ameondoka, as the worker's status allows
               (worker-actions.tsx). */}
           <WorkerActions
