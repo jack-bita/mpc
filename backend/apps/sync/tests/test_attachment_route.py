@@ -9,6 +9,7 @@ Asha clocked in at 07:55 with no internet. Her clock-in reached the server with 
     another file, or one cut short             400 attachment.file_differs; nothing kept
     over 1 MB                                  400 attachment.too_big, refused before a byte of it is read
     no length (sent in pieces)                 411 attachment.length_required: the laptop sends it again
+    fewer bytes than its length said           400 attachment.cut_short: nothing kept, and the laptop sends it again
     not a JPEG or a WebP                       400 attachment.not_an_image
     an id this shop doesn't hold               404 attachment.not_found, as for an id no shop has
 
@@ -19,6 +20,7 @@ WebP does, never a real photo. Fake data only: the repo is public (03 §10).
 """
 
 import hashlib
+import io
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -252,6 +254,19 @@ def test_upload_with_no_length_is_asked_again(staff_a: StaffMember, laptop: tupl
     answer = put(a_browser(laptop[1]), photo.pk, JPEG, CONTENT_LENGTH=length)
 
     assert code_of(answer) == (411, "attachment.length_required")
+    assert stored(photo).file_state == "waiting"
+
+
+def test_file_cut_short_is_not_kept(staff_a: StaffMember, laptop: tuple[Device, str]) -> None:
+    # The line dropped halfway: the request said its length, and fewer bytes came, which the server hands over as if
+    # they were all (gunicorn stops at the end of the stream, and Django compares nothing). Nothing is kept, and the
+    # laptop isn't told the photo is a bad one (file_differs), which would set it aside for good: it sends it again.
+    photo = waiting(staff_a)
+    half = io.BytesIO(JPEG[: len(JPEG) // 2])
+
+    answer = put(a_browser(laptop[1]), photo.pk, JPEG, **{"wsgi.input": half, "CONTENT_LENGTH": str(len(JPEG))})
+
+    assert code_of(answer) == (400, "attachment.cut_short")
     assert stored(photo).file_state == "waiting"
 
 

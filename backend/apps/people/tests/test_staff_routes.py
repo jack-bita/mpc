@@ -32,6 +32,7 @@ pay (WAGE-2).
 Fake data only: the repo is public (03 §10).
 """
 
+import io
 import uuid
 from collections.abc import Callable
 from datetime import date, timedelta
@@ -1445,6 +1446,26 @@ def test_a_photo_too_big_or_with_no_length_is_refused_unread(
 
     assert (too_big.status_code, too_big.json()["code"]) == (400, "attachment.too_big")
     assert (no_length.status_code, no_length.json()["code"]) == (411, "attachment.length_required")
+
+
+def test_a_photo_cut_short_on_the_way_changes_nothing(baba: StaffMember, asha: StaffMember) -> None:
+    # Baba's phone lost the line halfway: half a JPEG starts as a whole one does, and the office brings no fingerprint
+    # ahead of it, so only the length says that bytes are missing. Kept, it would be Asha's face, her good photo's file
+    # deleted for good, and the whole photo, sent again under the same id, refused each time as another file (PPL-9's
+    # review).
+    good, better = uuid.uuid7(), uuid.uuid7()
+    send_photo(baba, asha, photo=good)
+    half = io.BytesIO(BETTER_FACE[: len(BETTER_FACE) // 2])
+
+    cut = send_photo(
+        baba, asha, BETTER_FACE, photo=better, **{"wsgi.input": half, "CONTENT_LENGTH": str(len(BETTER_FACE))}
+    )
+
+    assert (cut.status_code, cut.json()["code"]) == (400, "attachment.cut_short")
+    assert photo_of(asha) == good
+    opened: Any = client_for(baba).get(PHOTO_FILE.format(good))
+    assert b"".join(opened.streaming_content) == FACE
+    assert send_photo(baba, asha, BETTER_FACE, photo=better).json()["photo"] == str(better)
 
 
 @pytest.mark.parametrize(

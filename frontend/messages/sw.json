@@ -1259,6 +1259,7 @@
       "file_waiting": "Picha hii bado haijafika kwenye seva. Itafika kompyuta ikipata mtandao.",
       "file_removed": "Picha hii imeshaondolewa.",
       "length_required": "Picha ilitumwa bila kuonyesha ukubwa wake. Itatumwa tena.",
+      "cut_short": "Picha haikufika yote. Jaribu tena.",
       "empty": "Picha hii haina kitu.",
       "sha256_invalid": "Alama ya picha hii imeharibika."
     },

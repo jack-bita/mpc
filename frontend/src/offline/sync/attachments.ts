@@ -13,7 +13,8 @@
 //                                two days of tries, it is set aside with that code (MOST_TRIES_NOT_FOUND)
 //   400 too_big, not_an_image, file_differs → about the file itself, so the same file would get the same answer:
 //                                set aside with its code, as the outbox sets a record aside, and the others go on
-//   no answer, 411, a server error, any other refusal → the round stops, and every photo waits for the next sync
+//   no answer, 411, one cut short on the way (400 cut_short), a server error, any other refusal → the round stops, and
+//                                every photo waits for the next sync
 //
 // Each failed send makes that photo wait before its next one: 1 minute, then twice as long each time, at most an hour.
 // The sync runs every 30 s, and a photo is some 150 KB: one the server keeps refusing would otherwise go 2,880 times

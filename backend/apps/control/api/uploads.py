@@ -3,8 +3,9 @@
 A laptop sends a clock-in's photo (CTRL-3, apps/sync/api/views.py) and the office sends a worker's (PPL-9,
 apps/people/api/views.py) the same way: the body is the file's own bytes, with no form around it. Both routes read it
 through photo_sent(), so one check guards both, and can't drift into two: the request's length is asked before a byte
-of the file is read. Here, in `control`, as it owns the attachments (apps/control/models.py) and every app may import it
-(ADR-0043). What the file is, and whether it is the right one, stays the services' (apps/control/services.py).
+of the file is read, and the bytes that came are counted against it. Here, in `control`, as it owns the attachments
+(apps/control/models.py) and every app may import it (ADR-0043). What the file is, and whether it is the right one,
+stays the services' (apps/control/services.py).
 """
 
 from django.core.exceptions import ValidationError
@@ -28,7 +29,8 @@ class LengthRequired(exceptions.APIException):
 
 def photo_sent(request: Request) -> bytes:
     """The photo a request's body is, read only once the request's head says it is small enough: a 50 MB upload is
-    refused unread, and the server's memory never holds it."""
+    refused unread, and the server's memory never holds it. And only whole: fewer bytes than the head said is a photo
+    cut short on the way, refused, so nothing of it is kept."""
     length = _length_of(request)
     if length is None:
         # No length, or one that is no number: Django would read the body as empty, and the photo would be refused as
@@ -39,7 +41,15 @@ def photo_sent(request: Request) -> bytes:
     if length > LARGEST_FILE:
         raise ValidationError("A file is kept up to 1 MB.", code="attachment.too_big")
     # request.body, never request.data: the body is the file's own bytes, which no parser of DRF's should read.
-    return request.body
+    content = request.body
+    if len(content) != length:
+        # The line dropped halfway, or the browser was closed: gunicorn stops at the end of the stream and hands over
+        # what came, and Django compares nothing. Half a JPEG starts as a whole one does, so a photo sent whole from the
+        # office, with no fingerprint ahead of it, would be kept, and the good one it replaced deleted for good (PPL-9's
+        # review). A laptop's would be called another file, a bad photo set aside for good, when it only has to be sent
+        # again.
+        raise ValidationError("Fewer bytes came than the request said.", code="attachment.cut_short")
+    return content
 
 
 def _length_of(request: Request) -> int | None:
