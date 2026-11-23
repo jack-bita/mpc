@@ -3,7 +3,7 @@
 // how a frame is drawn and saved. Shared: the clock-in's live camera (shrinkFrame), a worker's photo, taken
 // or chosen on the manager's phone (shrinkFile, PPL-9), and next a supplier's paper (STK-4).
 //
-// Why on the laptop, before the photo is kept: the server keeps no file over 1 MB (CTRL-3), about twenty
+// Why on the device, before the photo is kept: the server keeps no file over 1 MB (CTRL-3), about twenty
 // clock-ins a day go up on the shop's internet bundle (some 3 MB at 150 KB each), and every photo stays on
 // the server's disk and in its backups for 90 days. A full-HD camera frame at the best quality is some
 // 500 KB; a phone's own photo, 3 to 5 MB.
@@ -51,8 +51,8 @@ export type Encode = (quality: number) => Promise<Blob>;
 
 /**
  * The first JPEG, best quality first, that comes to about 150 KB; when none does, the smallest. Never over
- * the aim by choice: a photo still over 1 MB is refused by labelPhoto (src/offline/attachments.ts), as the
- * server would refuse it.
+ * the aim by choice: a photo still over 1 MB is refused by whoever keeps it, on a laptop by labelPhoto
+ * (src/offline/attachments.ts), as the server would refuse it, and from the office by the server.
  */
 export async function smallEnough(encode: Encode): Promise<Blob> {
   const [best, ...lower] = QUALITIES;
@@ -70,7 +70,7 @@ export async function smallEnough(encode: Encode): Promise<Blob> {
  * Draws one frame (a live video, an image) onto a fresh canvas at its shrunk size, and saves it as a JPEG of
  * about 150 KB. `width` and `height` are the frame's own size: a video's `videoWidth` and `videoHeight`.
  * Throws when there is nothing to draw (a camera that sent no frame yet) or the browser can't draw: the
- * caller goes on without a photo.
+ * clock-in then goes on without a photo, and a worker's page says it can't read this one.
  */
 export async function shrinkFrame(
   source: CanvasImageSource,

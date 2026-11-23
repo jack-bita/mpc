@@ -1258,7 +1258,7 @@
       "file_differs": "This photo isn't the one its record names. It may have been damaged on the way.",
       "file_waiting": "This photo hasn't reached the server yet. It comes once the laptop is online.",
       "file_removed": "This photo has been removed.",
-      "length_required": "The photo was sent without its size. It will be sent again.",
+      "length_required": "The photo was sent without its size. It has to be sent again.",
       "cut_short": "The whole photo didn't arrive. Try again.",
       "empty": "This photo is empty.",
       "sha256_invalid": "This photo's label is broken."

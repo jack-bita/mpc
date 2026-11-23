@@ -26,7 +26,8 @@ def uuid7_only(value: uuid.UUID) -> None:
 
 def id_taken(error: IntegrityError, model: type[models.Model]) -> bool:
     """True when the refused insert broke `model`'s primary key: its id was already taken. Used by every route that
-    makes a row with the client's id: CreateOnceMixin's creates, and the workers' gives (StaffViewSet, PPL-7)."""
+    makes a row with the client's id: CreateOnceMixin's creates, and the workers' gives (PPL-7) and photos (PPL-9,
+    StaffViewSet)."""
     # PostgreSQL names the broken rule, and it names a table's primary key "<table>_pkey".
     cause = error.__cause__
     return (
