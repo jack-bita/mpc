@@ -71,6 +71,7 @@ from apps.shops.models import Shop, Side
 from apps.shops.selectors import shop_today
 from apps.shops.services import add_side
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
+from tests.unread import NeverRead
 
 pytestmark = pytest.mark.django_db
 
@@ -1444,21 +1445,21 @@ def test_a_file_that_is_no_photo_is_refused(baba: StaffMember, asha: StaffMember
     assert photo_of(asha) is None
 
 
+@pytest.mark.parametrize(
+    ("length", "status", "code"),
+    [
+        pytest.param(str(LARGEST_FILE + 1), 400, "attachment.too_big", id="too big"),
+        pytest.param("", 411, "attachment.length_required", id="no length"),
+    ],
+)
 def test_a_photo_too_big_or_with_no_length_is_refused_unread(
-    baba: StaffMember, asha: StaffMember, monkeypatch: pytest.MonkeyPatch
+    baba: StaffMember, asha: StaffMember, length: str, status: int, code: str
 ) -> None:
     # The same check as the laptops' upload (apps/control/api/uploads.py): from the request's head, before a byte of the
-    # file is read or the service asked, so a 50 MB upload never fills the server's memory.
-    def never(*args: Any, **kwargs: Any) -> None:
-        raise AssertionError("The file was read.")
+    # file is read, so a 50 MB upload never fills the server's memory.
+    refused = send_photo(baba, asha, FACE, **{"CONTENT_LENGTH": length, "wsgi.input": NeverRead()})
 
-    monkeypatch.setattr("apps.people.api.views.set_worker_photo", never)
-
-    too_big = send_photo(baba, asha, FACE, CONTENT_LENGTH=str(LARGEST_FILE + 1))
-    no_length = send_photo(baba, asha, FACE, CONTENT_LENGTH="")
-
-    assert (too_big.status_code, too_big.json()["code"]) == (400, "attachment.too_big")
-    assert (no_length.status_code, no_length.json()["code"]) == (411, "attachment.length_required")
+    assert (refused.status_code, refused.json()["code"]) == (status, code)
 
 
 def test_a_photo_cut_short_on_the_way_changes_nothing(baba: StaffMember, asha: StaffMember) -> None:

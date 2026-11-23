@@ -39,6 +39,7 @@ from apps.people.models import Device, StaffMember
 from apps.people.services import block, confirm_pairing, start_pairing
 from apps.shops.models import Shop, Side
 from tests.concurrency import in_another_transaction, wait_until_someone_waits_for_me
+from tests.unread import NeverRead
 
 pytestmark = pytest.mark.django_db
 
@@ -206,19 +207,13 @@ def test_file_not_an_image_refused(staff_a: StaffMember, laptop: tuple[Device, s
     assert stored(photo).file_state == "waiting"
 
 
-def test_file_too_big_refused_unread(
-    monkeypatch: pytest.MonkeyPatch, staff_a: StaffMember, laptop: tuple[Device, str]
-) -> None:
-    # A file over 1 MB is refused from the request's head, its length, before the file is read or the service asked: a
-    # 50 MB upload never fills the server's memory.
+def test_file_too_big_refused_unread(staff_a: StaffMember, laptop: tuple[Device, str]) -> None:
+    # A file over 1 MB is refused from the request's head, its length, before a byte of it is read: a 50 MB upload never
+    # fills the server's memory.
     photo = waiting(staff_a)
+    unread = {"CONTENT_LENGTH": str(LARGEST_FILE + 1), "wsgi.input": NeverRead()}
 
-    def never(*args: Any, **kwargs: Any) -> None:
-        raise AssertionError("The file was read.")
-
-    monkeypatch.setattr("apps.sync.api.views.receive_attachment_file", never)
-
-    answer = put(a_browser(laptop[1]), photo.pk, JPEG + b"x" * LARGEST_FILE)
+    answer = put(a_browser(laptop[1]), photo.pk, JPEG, **unread)
 
     assert code_of(answer) == (400, "attachment.too_big")
 
@@ -251,7 +246,7 @@ def test_upload_with_no_length_is_asked_again(staff_a: StaffMember, laptop: tupl
     # laptop is told to send it again (411), the body is never read, and nothing is kept.
     photo = waiting(staff_a)
 
-    answer = put(a_browser(laptop[1]), photo.pk, JPEG, CONTENT_LENGTH=length)
+    answer = put(a_browser(laptop[1]), photo.pk, JPEG, **{"CONTENT_LENGTH": length, "wsgi.input": NeverRead()})
 
     assert code_of(answer) == (411, "attachment.length_required")
     assert stored(photo).file_state == "waiting"

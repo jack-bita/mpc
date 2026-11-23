@@ -74,6 +74,13 @@ def baba(staff_a: StaffMember, give_role: GiveRole) -> StaffMember:
     return staff_a
 
 
+@pytest.fixture
+def mama(staff_a2: StaffMember, give_role: GiveRole) -> StaffMember:
+    # A second owner, for a photo one of them adds and the other changes.
+    give_role(staff_a2, RoleTemplate.OWNER, None)
+    return staff_a2
+
+
 def a_photo_of(staff: StaffMember, *, by: StaffMember, kind: AttachmentKind = AttachmentKind.STAFF_PHOTO) -> Attachment:
     # A photo's row alone, its file still to come, as a record would bring it: never through the service under test.
     with shop_context(staff.shop_id):
@@ -170,19 +177,24 @@ def test_the_first_photo_shows_on_the_job(asha: StaffMember, baba: StaffMember) 
 
 
 def test_a_new_photo_takes_the_old_ones_place(
-    asha: StaffMember, baba: StaffMember, django_capture_on_commit_callbacks: CommitSteps
+    asha: StaffMember, baba: StaffMember, mama: StaffMember, django_capture_on_commit_callbacks: CommitSteps
 ) -> None:
-    first = set_photo(asha, by=baba)
+    # Two people, so that a row that named one of them for both would show.
+    first = set_photo(asha, by=mama)
     with django_capture_on_commit_callbacks(execute=True):
         second = set_photo(asha, by=baba, content=BETTER_FACE)
 
     assert photo_of(asha) == second
-    assert stored_bytes(row_of(asha, second)) == BETTER_FACE
+    new = row_of(asha, second)
+    assert stored_bytes(new) == BETTER_FACE
+    assert (new.created_by_id, new.file_removed_by_id) == (baba.pk, None)
     # The old one's file is gone, as personal data is kept only as long as it is needed (03 §10); its row stays (rule
     # 7), with who and when, and why as a code: the system has no words of its own (ADR-0040).
     old = row_of(asha, first)
     assert old.file_state == "removed"
-    assert (old.file_removed_by_id, old.file_removed_reason) == (baba.pk, "staff.photo_replaced")
+    assert (old.created_by_id, old.file_removed_by_id) == (mama.pk, baba.pk)
+    assert old.file_removed_reason == "staff.photo_replaced"
+    assert old.file_removed_at is not None
     assert stored_bytes(old) is None
 
 
@@ -219,13 +231,12 @@ def test_an_old_photo_sent_again_never_comes_back(
 
 @pytest.mark.parametrize("seen", ["none", "the first"])
 def test_a_photo_nobody_saw_is_never_replaced(
-    asha: StaffMember, baba: StaffMember, staff_a2: StaffMember, give_role: GiveRole, seen: str
+    asha: StaffMember, baba: StaffMember, mama: StaffMember, seen: str
 ) -> None:
     # Meneja's page shows no photo, or the first one. Meanwhile Mzee sets a better one, which Meneja never saw. Then
     # Meneja's comes, late or not: refused, as a replaced photo's file is gone for good (Jack, PPL-9's review: A).
-    give_role(staff_a2, RoleTemplate.OWNER, None)
     shown = set_photo(asha, by=baba) if seen == "the first" else None
-    better = set_photo(asha, by=staff_a2, content=BETTER_FACE)
+    better = set_photo(asha, by=mama, content=BETTER_FACE)
     menejas = uuid.uuid7()
 
     with pytest.raises(VersionConflict):
@@ -341,9 +352,9 @@ def test_a_photo_of_exactly_1_mb_is_kept(asha: StaffMember, baba: StaffMember) -
 
 
 def test_a_photo_taken_off_keeps_its_row(
-    asha: StaffMember, baba: StaffMember, django_capture_on_commit_callbacks: CommitSteps
+    asha: StaffMember, baba: StaffMember, mama: StaffMember, django_capture_on_commit_callbacks: CommitSteps
 ) -> None:
-    photo_id = set_photo(asha, by=baba)
+    photo_id = set_photo(asha, by=mama)
     with shop_context(asha.shop_id), django_capture_on_commit_callbacks(execute=True):
         answer = remove_worker_photo(asha, photo_id=photo_id, reason="  Hataki picha  ", by=baba)
 
@@ -352,7 +363,7 @@ def test_a_photo_taken_off_keeps_its_row(
     row = row_of(asha, photo_id)
     assert row.file_state == "removed"
     # Who added it, who took it off, and why, in their own words (rule 7).
-    assert (row.created_by_id, row.file_removed_by_id, row.file_removed_reason) == (baba.pk, baba.pk, "Hataki picha")
+    assert (row.created_by_id, row.file_removed_by_id, row.file_removed_reason) == (mama.pk, baba.pk, "Hataki picha")
     assert stored_bytes(row) is None
 
 
