@@ -5,7 +5,7 @@
 // and writes through it: the pull fills the server's drawers (SYNC-7), saveDocument() writes a document
 // and its outbox row (SYNC-8), the offline PIN check keeps its values here (SYNC-10), the laptop its
 // offline periods until a push takes them (SYNC-14), and its photos until each goes up after its record
-// (CTRL-6).
+// (CTRL-6); and the workers' photos come down to it, for their tiles (PPL-14).
 //
 // One database per shop, named after the shop's id, so the practice shop or the demo never mixes with
 // the live shop on one laptop. Which shop this device belongs to lives outside, in mpc.device
@@ -190,6 +190,19 @@ export interface AttachmentBytesRow {
   bytes: ArrayBuffer;
 }
 
+/** A worker's photo, for their tile on the PIN screen, offline too (PPL-14, 03 §5.13): the one their staff row names,
+ * by that id. Fetched once from the server at the end of a sync, and dropped once no row names it any more: a photo
+ * replaced, one taken off, a worker who left. Its rules live in sync/staff-photos.ts. */
+export interface StaffPhotoRow {
+  /** The photo's id, as the staff row names it. A changed photo is a new id, never the same one again, so a photo
+   * kept here never needs asking for twice. */
+  id: string;
+  /** By the photo's first bytes, read as it came: what the tile tells the browser it is. */
+  content_type: PhotoType;
+  /** The photo itself, as its bytes, for the reason AttachmentBytesRow's are. */
+  bytes: ArrayBuffer;
+}
+
 /** One step in the database's life: its number, its drawers, and an upgrade if old rows must change.
  * A drawer set to null is removed in that step. */
 export interface Version {
@@ -254,6 +267,17 @@ export const VERSIONS: readonly Version[] = [
       attachment_bytes: "id",
     },
   },
+  {
+    // PPL-14: the workers' photos, for the tiles. A new drawer, empty on every laptop, so no upgrade. And the cursor
+    // stays, so no new bootstrap: a new list from the server needs one (SYNC-13), but this is no list. A photo is
+    // asked for once a staff row names it, and the rows go on coming as they did; until the first one does, a row
+    // saved before this version names none. Losing the cursor would cost far more: a laptop with none shows no tiles
+    // until its next sync, so one that updates and then loses the internet would let nobody in.
+    version: 4,
+    stores: {
+      staff_photos: "id",
+    },
+  },
 ];
 
 /** Every drawer, typed: TypeScript knows the staff drawer holds staff rows, keyed by id. */
@@ -272,6 +296,7 @@ export type ShopDatabase = Dexie & {
   outages: EntityTable<OutageRow, "id">;
   attachment_files: EntityTable<AttachmentFileRow, "id">;
   attachment_bytes: EntityTable<AttachmentBytesRow, "id">;
+  staff_photos: EntityTable<StaffPhotoRow, "id">;
 };
 
 /** The database's name in the browser: one per shop, by the shop's id, which never changes. */

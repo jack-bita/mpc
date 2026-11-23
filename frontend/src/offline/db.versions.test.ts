@@ -11,6 +11,8 @@ import {
   type Version,
 } from "./db";
 
+import { CURSOR, readCursor } from "./sync/meta";
+
 import type { components } from "@/api/schema";
 
 const MPC = "0192f000-0000-7000-8000-000000000001";
@@ -101,6 +103,11 @@ describe("the device database's versions", () => {
     });
   });
 
+  it("keeps version 4 exactly as it is: the workers' photos' drawer", () => {
+    // The same rule again, once laptops have moved up to it (PPL-14).
+    expect(VERSIONS[3]).toEqual({ version: 4, stores: { staff_photos: "id" } });
+  });
+
   it("moves a laptop at version 1 up to version 2 with every row kept", async () => {
     // The Dawa laptop, before SYNC-14, with a clock-in still waiting: the new drawer comes, empty, and
     // nothing it held is lost.
@@ -156,6 +163,29 @@ describe("the device database's versions", () => {
     expect(await after.outages.count()).toBe(1);
     expect(await after.attachment_files.count()).toBe(0);
     expect(await after.attachment_bytes.count()).toBe(0);
+  });
+
+  it("moves a laptop at version 3 up to version 4 with every row kept, and its cursor", async () => {
+    // The Dawa laptop before PPL-14, updated in the morning with no internet: the faces' drawer comes, empty, and
+    // everything it held is there. Its cursor above all: the tiles wait for a first sync on a laptop with none
+    // (staff-picker.tsx), so one that lost its cursor here would let nobody in until the internet came back.
+    const before = open(VERSIONS.slice(0, 3));
+    await before.staff.put(ASHA);
+    await before.meta.put({ key: CURSOR, value: 120 });
+    await before.attachment_bytes.add({
+      id: "0192f000-0000-7000-8000-0000000000f1",
+      bytes: new ArrayBuffer(8),
+    });
+    before.close();
+
+    const after = open(VERSIONS.slice(0, 4));
+    await after.open();
+
+    expect(after.verno).toBe(4);
+    expect(await after.staff.get(ASHA.id)).toEqual(ASHA);
+    expect(await readCursor(after)).toBe(120);
+    expect(await after.attachment_bytes.count()).toBe(1);
+    expect(await after.staff_photos.count()).toBe(0);
   });
 
   it("runs a later version's upgrade on a laptop at the version before, and keeps its rows", async () => {
