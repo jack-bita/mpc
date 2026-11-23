@@ -562,7 +562,7 @@ FACE = b"\xff\xd8\xff" + b"a made-up photo"
 
 
 def _set_photo(staff: StaffMember, by: StaffMember) -> object:
-    return set_worker_photo(staff, photo_id=uuid.uuid7(), content=FACE, by=by)
+    return set_worker_photo(staff, photo_id=uuid.uuid7(), instead_of=shown(staff), content=FACE, by=by)
 
 
 def _take_photo_off(staff: StaffMember, by: StaffMember) -> object:
@@ -592,7 +592,7 @@ def shown(staff: StaffMember) -> uuid.UUID | None:
 def with_a_photo(staff: StaffMember, *, by: StaffMember) -> StaffMember:
     # The person as they are once a photo is there, so a refused removal has one to leave alone.
     with shop_context(staff.shop_id):
-        return set_worker_photo(staff, photo_id=uuid.uuid7(), content=FACE, by=by)
+        return set_worker_photo(staff, photo_id=uuid.uuid7(), instead_of=shown(staff), content=FACE, by=by)
 
 
 def photo_act(act: PhotoAct, staff: StaffMember, *, by: StaffMember) -> None:

@@ -334,8 +334,16 @@ class RemovePhotoSerializer(StaffReasonSerializer):
 class PhotoQuery(serializers.Serializer[Any]):
     # What a photo's address carries beside the worker's id (PPL-9): the photo's own, made on the phone as the photo is
     # chosen (ADR-0007), a UUIDv7. Required: without one, a photo sent again after a lost answer would be a second one.
+    # And the photo it replaces, the one the page showed (set_worker_photo).
     photo = serializers.UUIDField(
         validators=[uuid7_only], help_text="The photo's id, a UUIDv7 made on the phone: sent again, it is one photo."
+    )
+    # Left out for none, as a page that showed no photo sends. One left out by a mistake is refused all the same where
+    # there is a photo, so no photo is lost to it.
+    instead_of = serializers.UUIDField(
+        required=False,
+        default=None,
+        help_text="The photo the page showed, left out for none: another one shows by now, 409 version_conflict.",
     )
 
 

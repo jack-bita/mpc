@@ -16,8 +16,10 @@
 // there is Meneja, so one kept would show to every visitor after, maybe a real person's face. The server refuses one
 // too, for a page that doesn't know yet that it is the demo's.
 //
-// staff.left closes the sheet, says it, and reads the worker again, as Simamisha's does: someone else marked them left
-// meanwhile. Every other refusal shows above the sheet's buttons, the photo still there to try again: who may
+// It names the photo it replaces, the one that was on the screen as it was picked, or none: another one shows by now,
+// which nobody here saw, and the server refuses (409 version_conflict), as a replaced photo's file is gone for good
+// (Jack, PPL-9's review: A). Then, and at staff.left, as someone else marked them left meanwhile, the sheet closes, the
+// card says it, and the worker is read again, so the card shows the photo there now. Every other refusal shows above the sheet's buttons, the photo still there to try again: who may
 // (staff.own, staff.superuser_only, staff.more_keys), the demo's, the file's own (attachment.*), the id's.
 //
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
@@ -40,6 +42,9 @@ import { useOnline } from "@/offline/network";
 
 import { aboutTheChange, keepWorker, type Worker, WORKERS } from "./workers";
 
+/** The codes that say someone else changed the worker first: the sheet closes, and the card says it. */
+const CHANGED_MEANWHILE = new Set(["version_conflict", "staff.left"]);
+
 /** The photo as the sheet has it: still being read; the small copy, with the address an <img> shows it at; or none, as
  * this browser can't read it. */
 type Shot = "reading" | { photo: Blob; address: string } | "unreadable";
@@ -47,6 +52,7 @@ type Shot = "reading" | { photo: Blob; address: string } | "unreadable";
 export function PhotoSheet({
   worker,
   file,
+  insteadOf,
   demo,
   onDone,
   onChangedMeanwhile,
@@ -56,6 +62,8 @@ export function PhotoSheet({
   worker: Worker;
   /** What the phone's camera or gallery handed over. */
   file: File;
+  /** The photo that was on the screen as this one was picked, by its id; none, null. */
+  insteadOf: string | null;
   /** This is the demo, where no worker's photo is kept. */
   demo: boolean;
   /** Saved: the worker as the server answered. */
@@ -103,7 +111,11 @@ export function PhotoSheet({
     mutationFn: async (photo: Blob) =>
       answerOf(
         api.PUT("/api/v1/people/staff/{id}/photo/", {
-          params: { path: { id: worker.id }, query: { photo: id } },
+          params: {
+            path: { id: worker.id },
+            // None is said by leaving it out.
+            query: { photo: id, instead_of: insteadOf ?? undefined },
+          },
           // The photo's bytes alone, past the client's JSON, as the laptop's photos go (offline/sync/attachments.ts):
           // the server's description names the body a string, as OpenAPI writes any file. fetch gives an ArrayBuffer
           // its length, so the route never has to answer 411 for want of one.
@@ -121,19 +133,28 @@ export function PhotoSheet({
       onDone(changed);
     },
     onError: (error) => {
-      if (error instanceof ApiRefusal && error.body.code === "staff.left") {
-        void store.invalidateQueries({ queryKey: WORKERS });
-        onChangedMeanwhile(codeMessage(codes, error.body.code));
-      }
+      if (
+        !(error instanceof ApiRefusal) ||
+        !CHANGED_MEANWHILE.has(error.body.code)
+      )
+        return;
+      void store.invalidateQueries({ queryKey: WORKERS });
+      onChangedMeanwhile(
+        error.body.code === "version_conflict"
+          ? // Said of the photo, as the code's own sentence says only that something changed.
+            t("changedMeanwhile", { name: worker.display_name })
+          : codeMessage(codes, error.body.code),
+      );
     },
   });
 
   const ready = typeof shot === "object";
   const code =
     save.error instanceof ApiRefusal ? save.error.body.code : undefined;
-  // The refusal that closes the sheet shows nothing here. A field's, as id.taken comes on `id`, has no box to sit
-  // beside, so it shows above too, never nowhere (aboutTheChange).
-  const above = code === "staff.left" ? null : aboutTheChange(save.error);
+  // A refusal that closes the sheet shows nothing here. A field's, as id.taken comes on `id`, has no box to sit beside,
+  // so it shows above too, never nowhere (aboutTheChange).
+  const closes = code !== undefined && CHANGED_MEANWHILE.has(code);
+  const above = closes ? null : aboutTheChange(save.error);
 
   /** Hifadhi, or Enter: the sheet calls it only while Hifadhi is on (sheet.tsx). */
   function send() {

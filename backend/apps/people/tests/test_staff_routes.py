@@ -14,7 +14,8 @@ calls (PPL-4; 03 §5.10). What may and may not be done is the services'; these t
     POST  /api/v1/people/staff/{id}/end-role/    take a role of theirs away, with a reason
     POST  /api/v1/people/staff/{id}/end-key/     take an extra key of theirs away, with a reason
     POST  /api/v1/people/staff/{id}/pin/         give them a PIN, typed by the worker on the owner's phone (PPL-12)
-    PUT   /api/v1/people/staff/{id}/photo/?photo=…   set their photo: the body is the file, its id the phone's (PPL-9)
+    PUT   /api/v1/people/staff/{id}/photo/?photo=…&instead_of=…   set their photo, in the one's place the page showed:
+                                                 the body is the file, its id the phone's (PPL-9)
     POST  /api/v1/people/staff/{id}/remove-photo/    take it off, with a reason
     GET   /api/v1/people/roles/                  the shop's roles, to choose from
 
@@ -38,6 +39,7 @@ from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
 from unittest import mock
+from urllib.parse import urlencode
 
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -1314,11 +1316,22 @@ PHOTO_FILE = "/api/v1/control/attachments/{}/file/"
 
 
 def send_photo(
-    by: StaffMember, staff: StaffMember, content: bytes = FACE, *, photo: object = None, **headers: Any
+    by: StaffMember,
+    staff: StaffMember,
+    content: bytes = FACE,
+    *,
+    photo: object = None,
+    instead_of: object = "now",
+    **headers: Any,
 ) -> Any:
-    # As the page sends it: the file's bytes as the whole body, and the id the phone made in the address. `photo` "": no
-    # id at all.
-    address = act(staff, "photo") + ("" if photo == "" else f"?photo={photo or uuid.uuid7()}")
+    # As the page sends it: the file's bytes as the whole body, and in the address the id the phone made, and the photo
+    # the page showed, if any: the one that shows now, as on a page just read, unless a test says otherwise. `photo` "":
+    # no id at all.
+    seen = photo_of(staff) if instead_of == "now" else instead_of
+    asked = {"photo": photo or uuid.uuid7()} if photo != "" else {}
+    if seen is not None:
+        asked["instead_of"] = seen
+    address = f"{act(staff, 'photo')}?{urlencode(asked)}"
     return client_for(by).put(address, data=content, content_type="image/jpeg", **headers)
 
 
@@ -1369,7 +1382,7 @@ def test_a_new_photo_is_answered_and_the_old_one_is_gone(baba: StaffMember, asha
 def test_a_photo_sent_twice_is_one_photo(baba: StaffMember, asha: StaffMember) -> None:
     photo_id = uuid.uuid7()
 
-    first, again = (send_photo(baba, asha, photo=photo_id) for _ in range(2))
+    first, again = (send_photo(baba, asha, photo=photo_id, instead_of=None) for _ in range(2))
 
     assert first.status_code == again.status_code == 200
     assert first.json() == again.json()
@@ -1479,6 +1492,21 @@ def test_a_photo_needs_an_id_of_its_own(baba: StaffMember, asha: StaffMember, ph
 
     assert (refused.status_code, refused.json()["fields"]) == (400, {"photo": [code]})
     assert photo_of(asha) is None
+
+
+def test_a_photo_names_the_one_it_replaces(baba: StaffMember, asha: StaffMember) -> None:
+    # Another photo than the one the page showed shows by now: it stays, and the page is told it looked at an old copy
+    # (Jack, PPL-9's review: A). A page that says nothing of a photo says it showed none.
+    shown = uuid.uuid7()
+    send_photo(baba, asha, photo=shown)
+
+    for old_copy in (None, uuid.uuid7()):
+        late = send_photo(baba, asha, BETTER_FACE, instead_of=old_copy)
+        assert (late.status_code, late.json()["code"]) == (409, "version_conflict")
+    wrong = send_photo(baba, asha, BETTER_FACE, instead_of="picha")
+    assert (wrong.status_code, wrong.json()["fields"]) == (400, {"instead_of": ["invalid"]})
+    assert photo_of(asha) == shown
+    assert send_photo(baba, asha, BETTER_FACE, instead_of=shown).status_code == 200
 
 
 def test_a_photos_id_that_is_taken_says_nothing_more(

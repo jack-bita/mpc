@@ -494,7 +494,7 @@
       "remove": "Remove photo",
       "removeTitle": "Remove {name}'s photo",
       "removed": "{name}'s photo is removed.",
-      "changedMeanwhile": "{name}'s photo has changed since you opened it. This is their photo now."
+      "changedMeanwhile": "Someone else has changed {name}'s photo since you opened it. See how it is now."
     },
     "logins": {
       "title": "Logging in",

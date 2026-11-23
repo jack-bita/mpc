@@ -1449,6 +1449,15 @@
                     },
                     {
                         "in": "query",
+                        "name": "instead_of",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "The photo the page showed, left out for none: another one shows by now, 409 version_conflict."
+                    },
+                    {
+                        "in": "query",
                         "name": "photo",
                         "schema": {
                             "type": "string",

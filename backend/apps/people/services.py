@@ -652,10 +652,14 @@ def _check_phones_fixed_on_demo() -> None:
 PHOTO_REPLACED = "staff.photo_replaced"
 
 
-def set_worker_photo(staff: StaffMember, *, photo_id: uuid.UUID, content: bytes, by: StaffMember) -> StaffMember:
+def set_worker_photo(
+    staff: StaffMember, *, photo_id: uuid.UUID, instead_of: uuid.UUID | None, content: bytes, by: StaffMember
+) -> StaffMember:
     """Set the photo a worker's job shows (02 §5, PPL-9): a first one, or a new one in the old one's place, whose file
     then goes, while its row stays, saying who added it and who replaced it. `photo_id`: the photo's id, made on the
-    phone (ADR-0007), so a photo sent twice is one photo. `content`: the file itself, a JPEG or a WebP of 1 MB at most.
+    phone (ADR-0007), so a photo sent twice is one photo. `instead_of`: the photo the one acting saw, None for none.
+    Another one shows by now, or none does: refused (VersionConflict, 409 version_conflict), as nobody replaces a face
+    they never saw (Jack, PPL-9's review: A). `content`: the file itself, a JPEG or a WebP of 1 MB at most.
     `by`: who sets it, a person at the shop, under the PIN's rule (_locked_for_a_change); the superuser, who is nobody's
     staff, has no way to yet, as a photo is always added by someone (expect_attachment). Refused on the demo. Returns
     the job as saved."""
@@ -679,6 +683,11 @@ def set_worker_photo(staff: StaffMember, *, photo_id: uuid.UUID, content: bytes,
             # arrive after a newer photo took its place, or after it was taken off, and must never bring it back.
             receive_attachment_file(photo_id, content=content)
             return staff
+        # After the repeat's answer above: a photo sent again still names the one its page showed, which it replaced
+        # itself the first time. Asked with both jobs locked, as for a removal: the replaced photo's file would be gone
+        # for good, so a copy held up by a slow network must never reach a newer photo.
+        if staff.photo_id != instead_of:
+            raise VersionConflict()
         old = staff.photo
         photo = add_attachment(id=photo_id, kind=AttachmentKind.STAFF_PHOTO, subject=staff, content=content, by=by)
         _save_photo(staff, photo, by=by)

@@ -43,9 +43,11 @@ import { type Worker, WORKERS } from "./workers";
 const WAYS = ["take", "choose"] as const;
 type Way = (typeof WAYS)[number];
 
-/** The sheet open: a photo the phone handed over, by the way it came; or the removal of one, the photo that was on the
- * screen as Ondoa picha was tapped, whatever the page reads while the sheet is open. */
-type Opened = { by: Way; file: File } | { by: "remove"; photo: string };
+/** The sheet open: a photo the phone handed over, by the way it came; or the removal of one. Each with the photo that was
+ * on the screen as it opened, the one it replaces or takes off, whatever the page reads while the sheet is open. */
+type Opened =
+  | { by: Way; file: File; insteadOf: string | null }
+  | { by: "remove"; photo: string };
 
 export function WorkerPhoto({
   worker,
@@ -61,7 +63,7 @@ export function WorkerPhoto({
   const store = useQueryClient();
   const titleId = useId();
   const [opened, setOpened] = useState<Opened | null>(null);
-  // The line that says what the last change did, or that the worker left meanwhile.
+  // The line that says what the last change did, or that someone else changed the worker first.
   const [news, setNews] = useState<string | null>(null);
   // The photo the browser failed to open, by its id: a request of its own, which the route can refuse though the worker
   // was read (no network now, a login ended). By its id, so the next photo shows.
@@ -77,7 +79,7 @@ export function WorkerPhoto({
   // Who may see the buttons (see the top); they stay under an open sheet, so Ghairi gives the keyboard back to the very
   // button that was tapped.
   const showButtons = worker.status !== "left" && worker.id !== me.staff.id;
-  // The photo shown, which Ondoa picha names.
+  // The photo shown, which a new one, or Ondoa picha, names.
   const { photo } = worker;
 
   function said(sentence: string) {
@@ -118,7 +120,7 @@ export function WorkerPhoto({
     // Emptied at once: a browser says nothing when the file chosen is the one already in the box, so the same photo,
     // picked again after Ghairi, would open nothing.
     box.value = "";
-    if (file !== undefined) open({ by: way, file });
+    if (file !== undefined) open({ by: way, file, insteadOf: photo });
   }
 
   return (
@@ -217,6 +219,7 @@ export function WorkerPhoto({
             <PhotoSheet
               worker={worker}
               file={opened.file}
+              insteadOf={opened.insteadOf}
               demo={demo}
               onDone={(changed) =>
                 said(t("done", { name: changed.display_name }))

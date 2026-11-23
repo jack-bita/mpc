@@ -22,7 +22,7 @@ import uuid
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -89,12 +89,19 @@ def a_photo_of(staff: StaffMember, *, by: StaffMember, kind: AttachmentKind = At
 
 
 def set_photo(
-    staff: StaffMember, *, by: StaffMember, content: bytes = FACE, photo_id: uuid.UUID | None = None
+    staff: StaffMember,
+    *,
+    by: StaffMember,
+    content: bytes = FACE,
+    photo_id: uuid.UUID | None = None,
+    instead_of: uuid.UUID | None | Literal["now"] = "now",
 ) -> uuid.UUID:
-    # The photo set as the office's route sets it, with the id the phone made.
+    # The photo set as the office's route sets it, with the id the phone made, and the photo its page showed: the one
+    # that shows now, as on a page just read, unless a test says otherwise.
     photo_id = photo_id or uuid.uuid7()
+    seen = photo_of(staff) if instead_of == "now" else instead_of
     with shop_context(staff.shop_id):
-        set_worker_photo(staff, photo_id=photo_id, content=content, by=by)
+        set_worker_photo(staff, photo_id=photo_id, instead_of=seen, content=content, by=by)
     return photo_id
 
 
@@ -185,7 +192,7 @@ def test_the_same_photo_sent_twice_is_one_photo(
     # Meneja's phone lost the answer on the way, and sends the same photo again with the same id (ADR-0007).
     photo_id = set_photo(asha, by=baba)
     with django_capture_on_commit_callbacks(execute=True):
-        set_photo(asha, by=baba, photo_id=photo_id)
+        set_photo(asha, by=baba, photo_id=photo_id, instead_of=None)
 
     assert photo_of(asha) == photo_id
     with shop_context(asha.shop_id):
@@ -202,12 +209,44 @@ def test_an_old_photo_sent_again_never_comes_back(
     first = set_photo(asha, by=baba)
     with django_capture_on_commit_callbacks(execute=True):
         second = set_photo(asha, by=baba, content=BETTER_FACE)
-        set_photo(asha, by=baba, photo_id=first)
+        set_photo(asha, by=baba, photo_id=first, instead_of=None)
 
     assert photo_of(asha) == second
     assert row_of(asha, first).file_state == "removed"
     assert stored_bytes(row_of(asha, first)) is None
     assert stored_bytes(row_of(asha, second)) == BETTER_FACE
+
+
+@pytest.mark.parametrize("seen", ["none", "the first"])
+def test_a_photo_nobody_saw_is_never_replaced(
+    asha: StaffMember, baba: StaffMember, staff_a2: StaffMember, give_role: GiveRole, seen: str
+) -> None:
+    # Meneja's page shows no photo, or the first one. Meanwhile Mzee sets a better one, which Meneja never saw. Then
+    # Meneja's comes, late or not: refused, as a replaced photo's file is gone for good (Jack, PPL-9's review: A).
+    give_role(staff_a2, RoleTemplate.OWNER, None)
+    shown = set_photo(asha, by=baba) if seen == "the first" else None
+    better = set_photo(asha, by=staff_a2, content=BETTER_FACE)
+    menejas = uuid.uuid7()
+
+    with pytest.raises(VersionConflict):
+        set_photo(asha, by=baba, photo_id=menejas, instead_of=shown)
+
+    assert photo_of(asha) == better
+    assert stored_bytes(row_of(asha, better)) == BETTER_FACE
+    with shop_context(asha.shop_id):
+        assert not Attachment.objects.filter(pk=menejas).exists()
+
+
+def test_a_photo_taken_off_meanwhile_is_not_quietly_replaced(asha: StaffMember, baba: StaffMember) -> None:
+    # Meneja's page still shows a photo someone else took off, with a reason he hasn't read: he is told, and decides.
+    seen = set_photo(asha, by=baba)
+    with shop_context(asha.shop_id):
+        remove_worker_photo(asha, photo_id=seen, reason="Hataki picha", by=baba)
+
+    with pytest.raises(VersionConflict):
+        set_photo(asha, by=baba, content=BETTER_FACE, instead_of=seen)
+
+    assert photo_of(asha) is None
 
 
 def test_a_photo_taken_off_never_comes_back_by_itself(
@@ -216,7 +255,7 @@ def test_a_photo_taken_off_never_comes_back_by_itself(
     photo_id = set_photo(asha, by=baba)
     with shop_context(asha.shop_id), django_capture_on_commit_callbacks(execute=True):
         remove_worker_photo(asha, photo_id=photo_id, reason="Hataki picha", by=baba)
-        set_worker_photo(asha, photo_id=photo_id, content=FACE, by=baba)
+        set_worker_photo(asha, photo_id=photo_id, instead_of=None, content=FACE, by=baba)
 
     assert photo_of(asha) is None
     assert stored_bytes(row_of(asha, photo_id)) is None
@@ -375,7 +414,7 @@ def test_a_photo_stays_in_its_shop(asha: StaffMember, baba: StaffMember, shop_b:
     for opened, acting in ((shop_b, staff_b), (shop_b, baba), (asha.shop, staff_b)):
         with shop_context(opened):
             with pytest.raises(ValidationError) as refused:
-                set_worker_photo(asha, photo_id=uuid.uuid7(), content=FACE, by=acting)
+                set_worker_photo(asha, photo_id=uuid.uuid7(), instead_of=None, content=FACE, by=acting)
             assert code_of(refused) == "staff.other_shop"
             with pytest.raises(ValidationError) as refused:
                 remove_worker_photo(asha, photo_id=uuid.uuid7(), reason="Hataki picha", by=acting)

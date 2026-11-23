@@ -98,7 +98,7 @@ function sentence(code: string): string {
  * once, would be true of a page that sends too. */
 const aMoment = () => new Promise((done) => setTimeout(done, 50));
 
-/** The photos sent: their own ids, as the address carries them, their type and their bytes. */
+/** The photos sent: their own ids and the photo each replaces, as the address carries them, their type and bytes. */
 async function photosSent() {
   await aMoment();
   return Promise.all(
@@ -106,8 +106,10 @@ async function photosSent() {
       .filter((request) => request.method === "PUT")
       .map(async (request) => ({
         id: new URL(request.url).searchParams.get("photo"),
+        insteadOf: new URL(request.url).searchParams.get("instead_of"),
         type: request.headers.get("Content-Type"),
-        bytes: new Uint8Array(await request.arrayBuffer()),
+        // A copy, as a request's body can be read once, and a test may ask again.
+        bytes: new Uint8Array(await request.clone().arrayBuffer()),
       })),
   );
 }
@@ -474,6 +476,70 @@ describe("Piga picha and Chagua picha", () => {
     );
   });
 
+  it("names the photo it replaces: none, or the one that was on the screen as it was picked", async () => {
+    theServerKeepsPhotos();
+    render(<WorkerScreen id={ASHA.id} />);
+
+    await ashaPicked();
+    fireEvent.click(sheetButton("Hifadhi"));
+    await onTheCard("Picha ya Asha imehifadhiwa.");
+    await ashaPicked("Chagua picha");
+    fireEvent.click(sheetButton("Hifadhi"));
+    await waitFor(async () => expect(await photosSent()).toHaveLength(2));
+
+    const [first, second] = await photosSent();
+    expect(first?.insteadOf).toBeNull();
+    expect(second?.insteadOf).toBe(first?.id);
+  });
+
+  it("is refused, never the newer photo lost, when someone else changed it first (Jack: A)", async () => {
+    // Meneja opened the page with no photo on it. While he looks at his own in the sheet, Mzee sets a better one, and
+    // the page reads it under the sheet: Meneja's still names what he saw, so the server refuses it, and Mzee's stays.
+    const store = makeQueryClient();
+    const NEWER = "019a8400-0000-7000-8000-000000000003";
+    const server = theServerHas(ASHA);
+    answer("PUT", PHOTO_ROUTE, refusal(409, "version_conflict"));
+    render(
+      <QueryClientProvider client={store}>
+        <WorkerScreen id={ASHA.id} />
+      </QueryClientProvider>,
+    );
+    await ashaPicked();
+    server.now({ ...ASHA, photo: NEWER });
+    await store.invalidateQueries();
+    await waitFor(() =>
+      expect(document.querySelector("img")?.src).toContain(NEWER),
+    );
+    fireEvent.click(sheetButton("Hifadhi"));
+
+    await onTheCard(
+      "Picha ya Asha imebadilishwa na mtu mwingine tangu ulipoifungua. Angalia ilivyo sasa.",
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    const [photo] = await photosSent();
+    expect(photo?.insteadOf).toBeNull();
+    expect(new URL(face("Picha ya Asha").src).pathname).toContain(NEWER);
+  });
+
+  it("reads the worker again after a change by someone else, so the card shows the photo now", async () => {
+    const NEWER = "019a8400-0000-7000-8000-000000000003";
+    const server = theServerHas(ASHA);
+    answer("PUT", PHOTO_ROUTE, () => {
+      server.now({ ...ASHA, photo: NEWER });
+      return Response.json(refusal(409, "version_conflict").body, {
+        status: 409,
+      });
+    });
+    render(<WorkerScreen id={ASHA.id} />);
+
+    await ashaPicked();
+    fireEvent.click(sheetButton("Hifadhi"));
+
+    await waitFor(() =>
+      expect(new URL(face("Picha ya Asha").src).pathname).toContain(NEWER),
+    );
+  });
+
   it("on the demo, shows the photo and saves nothing, with one line saying why (Done when #6)", async () => {
     theServerHas(ASHA);
     answer("GET", DEMO_OPEN, { status: 200, body: { open: true } });
@@ -678,7 +744,7 @@ describe("Ondoa picha", () => {
 
     // The sheet closes, the card says why, and shows the photo now.
     await onTheCard(
-      "Picha ya Asha imebadilika tangu ulipoifungua. Hii ndiyo picha yake sasa.",
+      "Picha ya Asha imebadilishwa na mtu mwingine tangu ulipoifungua. Angalia ilivyo sasa.",
     );
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(await removalsSent()).toEqual([

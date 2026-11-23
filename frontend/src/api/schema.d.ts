@@ -2915,6 +2915,8 @@ export interface operations {
     people_staff_photo_update: {
         parameters: {
             query: {
+                /** @description The photo the page showed, left out for none: another one shows by now, 409 version_conflict. */
+                instead_of?: string;
                 /** @description The photo's id, a UUIDv7 made on the phone: sent again, it is one photo. */
                 photo: string;
             };

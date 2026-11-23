@@ -28,7 +28,8 @@ a worker's temporary password (AUTH-6) and PIN (PPL-12), and their photo (PPL-9)
     POST  /api/v1/people/staff/{id}/end-key/              take an extra key of theirs away, with a reason
     POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
     POST  /api/v1/people/staff/{id}/pin/                  the worker types their own PIN on the owner's phone (PPL-12)
-    PUT   /api/v1/people/staff/{id}/photo/?photo=…        set their photo: the body is the file, its id the phone's
+    PUT   /api/v1/people/staff/{id}/photo/?photo=…&instead_of=…   set their photo, in the place of the one the page
+                                                            showed: the body is the file, its id the phone's
     POST  /api/v1/people/staff/{id}/remove-photo/         take their photo off, with a reason (PPL-9)
     GET   /api/v1/people/roles/                           the shop's roles, to choose from when giving one
 
@@ -452,8 +453,9 @@ class StaffViewSet(
     # Piga picha and Chagua picha (PPL-9): the body is the photo itself, as the phone shrank it, with no form around it,
     # as the laptop's upload is (apps/sync/api/views.py). PUT, as a photo sent twice is one photo: its id, made on the
     # phone, is in the address beside the worker's, but after the ?, as the tenancy sweep calls a route whose path names
-    # one row, and no more. Who may, the demo, and the old photo's end are set_worker_photo's. Answers with the worker
-    # as they are now, photo included.
+    # one row, and no more; beside it, the photo it replaces, the one the page showed: a newer one is 409
+    # version_conflict, and stays. Who may, the demo, and the old photo's end are set_worker_photo's. Answers with the
+    # worker as they are now, photo included.
     @extend_schema(parameters=[PhotoQuery], request=PHOTO_BODY, responses=StaffSerializer)
     @action(detail=True, methods=["put"])
     def photo(self, request: Request, pk: str | None = None) -> Response:
@@ -465,7 +467,11 @@ class StaffViewSet(
         content = photo_sent(request)
         with self._refusing_a_taken_id(Attachment):
             changed = set_worker_photo(
-                worker, photo_id=asked.validated_data["photo"], content=content, by=self._acting()
+                worker,
+                photo_id=asked.validated_data["photo"],
+                instead_of=asked.validated_data["instead_of"],
+                content=content,
+                by=self._acting(),
             )
         return self._answer(changed)
 
