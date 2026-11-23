@@ -91,6 +91,8 @@ const CODES_THE_API_SENDS = [
   "demo.people_fixed",
   // And no worker gets a phone there, so no stranger's real number is shown to every visitor (PPL-10).
   "demo.phones_fixed",
+  // Nor is any worker's photo kept there, so no stranger's real face is shown to every visitor (PPL-9).
+  "demo.photos_fixed",
   // On the demo, a visitor's rule starts tomorrow or later, after the night's seed, and keeps no note, which every
   // reader would see under the rule (SHOP-5's second review).
   "demo.rules_from_tomorrow",

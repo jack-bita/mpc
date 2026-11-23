@@ -208,6 +208,9 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
     # Whether the worker has a PIN, yes or no (PPL-12): the page says Imewekwa or Haijawekwa, so the owner sees who has
     # no tile on the shop's laptops yet. Only this one bit: never the hash, nor when it was set (03 §5.9).
     has_pin = serializers.SerializerMethodField()
+    # The photo the worker shows now, by its id, or null (PPL-9): the page opens the file by it, from the photos' own
+    # door (/api/v1/control/attachments/{id}/file/, CTRL-3). The id alone, so a list of workers reads no photo's row.
+    photo = serializers.UUIDField(source="photo_id", read_only=True, allow_null=True)
 
     class Meta:
         model = StaffMember
@@ -222,6 +225,7 @@ class StaffSerializer(serializers.ModelSerializer[StaffMember]):
             "left_on",
             "switched_off",
             "has_pin",
+            "photo",
             "roles",
             "keys",
             "version",
@@ -313,11 +317,20 @@ class StaffAddSerializer(serializers.Serializer[Any]):
 
 
 class StaffReasonSerializer(serializers.Serializer[Any]):
-    # What a suspension, a bringing back or an end of a role or a key sends: why, kept with who and when (rule 7), in
-    # the action's audit line, or in the ended row's own end_reason (PPL-7). A blank reason is let through, so the
-    # service refuses it with its own code, staff.reason_required, which the screen translates; one left out is the
-    # form's own `required`. 500 characters at most, as the audit line keeps (control.AuditEvent).
+    # What a suspension, a bringing back, an end of a role or a key, or a photo taken off sends: why, kept with who and
+    # when (rule 7), in the action's audit line, in the ended row's own end_reason (PPL-7), or on the photo's own row
+    # (PPL-9). A blank reason is let through, so the service refuses it with its own code, staff.reason_required, which
+    # the screen translates; one left out is the form's own `required`. 500 characters at most, as the audit line keeps
+    # (control.AuditEvent), and the photo's row too.
     reason = serializers.CharField(max_length=500, allow_blank=True)
+
+
+class PhotoQuery(serializers.Serializer[Any]):
+    # What a photo's address carries beside the worker's id (PPL-9): the photo's own, made on the phone as the photo is
+    # chosen (ADR-0007), a UUIDv7. Required: without one, a photo sent again after a lost answer would be a second one.
+    photo = serializers.UUIDField(
+        validators=[uuid7_only], help_text="The photo's id, a UUIDv7 made on the phone: sent again, it is one photo."
+    )
 
 
 # What a fix may send: the person's details and the job's (change_worker, PPL-10).

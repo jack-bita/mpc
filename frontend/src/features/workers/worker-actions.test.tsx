@@ -417,7 +417,7 @@ describe("the buttons on a worker's page", () => {
 
     expect(
       await screen.findByText(
-        "Huwezi kubadilisha hali yako ya kazi, taarifa zako, malipo yako, wala vyeo na ruhusa zako mwenyewe.",
+        "Huwezi kubadilisha hali yako ya kazi, taarifa zako, picha yako, malipo yako, wala vyeo na ruhusa zako mwenyewe.",
       ),
     ).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Badilisha" })).toBeNull();

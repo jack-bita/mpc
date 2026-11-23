@@ -12,7 +12,7 @@ under /api/v1/people/ (apps/people/api/urls.py). Today a shop's devices (AUTH-5)
     POST  /api/v1/people/devices/{id}/unblock/   a manager lets it work again, with a reason
 
 And a shop's workers, for whoever holds staff.manage on the whole shop (PPL-4), with their roles and extra keys (PPL-7),
-and a worker's temporary password (AUTH-6) and PIN (PPL-12):
+a worker's temporary password (AUTH-6) and PIN (PPL-12), and their photo (PPL-9):
 
     GET   /api/v1/people/staff/                             every worker the shop has had, with what each was given
     GET   /api/v1/people/staff/{id}/                        one worker
@@ -28,6 +28,8 @@ and a worker's temporary password (AUTH-6) and PIN (PPL-12):
     POST  /api/v1/people/staff/{id}/end-key/              take an extra key of theirs away, with a reason
     POST  /api/v1/people/staff/{id}/temporary-password/   someone with staff.manage sets one, face to face, and says why
     POST  /api/v1/people/staff/{id}/pin/                  the worker types their own PIN on the owner's phone (PPL-12)
+    PUT   /api/v1/people/staff/{id}/photo/?photo=…        set their photo: the body is the file, its id the phone's
+    POST  /api/v1/people/staff/{id}/remove-photo/         take their photo off, with a reason (PPL-9)
     GET   /api/v1/people/roles/                           the shop's roles, to choose from when giving one
 
 And the routes a device calls with its key, built on DeviceView (apps/people/api/base.py), under /api/devices/v1/
@@ -47,7 +49,8 @@ Thin: each one calls its service (apps/people/services.py), or reads its rows, a
 (ADR-0015).
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Any, cast
 
 from django.contrib.auth import logout
@@ -69,6 +72,8 @@ from rest_framework.serializers import Serializer
 from rest_framework.throttling import BaseThrottle
 from rest_framework.views import APIView
 
+from apps.control.api.uploads import PHOTO_BODY, photo_sent
+from apps.control.models import Attachment
 from apps.core.api.base import SEES_THE_SIDE, CreateOnceMixin, EditMixin, ShopViewSet
 from apps.core.api.ids import id_taken
 from apps.core.permissions import Permission
@@ -90,6 +95,7 @@ from apps.people.api.serializers import (
     OwnSettingsAnswerSerializer,
     OwnSettingsSerializer,
     PairingStartSerializer,
+    PhotoQuery,
     PinLoginSerializer,
     RoleSerializer,
     SetPinSerializer,
@@ -118,9 +124,11 @@ from apps.people.services import (
     hire_again,
     mark_left,
     pin_login,
+    remove_worker_photo,
     rename_device,
     set_pin,
     set_temporary_password,
+    set_worker_photo,
     start_pairing,
     suspend,
     unsuspend,
@@ -230,7 +238,8 @@ class StaffViewSet(
     # sends him, or a new job for one who left, hired again (PPL-11); a worker's details fixed, from the copy the page
     # read, with a reason (PATCH, PPL-10); a worker suspended, brought back or marked left, each with a reason; and a
     # first or forgotten password, set face to face (ADR-0038); a role or an extra key given, or taken away with a
-    # reason (PPL-7); and a PIN, typed by the worker on the owner's phone (PPL-12).
+    # reason (PPL-7); a PIN, typed by the worker on the owner's phone (PPL-12); and their photo, set by its file or
+    # taken off with a reason (PPL-9).
     model = StaffMember
     # A person's job belongs to the whole shop, whichever side they work on: a password opens them on every side, and a
     # suspension stops them on every side. So each key is asked on the whole shop, where a key for Dawa alone opens
@@ -253,6 +262,8 @@ class StaffViewSet(
         "end_key": Permission.STAFF_MANAGE,
         "temporary_password": Permission.STAFF_MANAGE,
         "pin": Permission.STAFF_MANAGE,
+        "photo": Permission.STAFF_MANAGE,
+        "remove_photo": Permission.STAFF_MANAGE,
     }
     serializer_class = StaffSerializer
     create_serializer_class = StaffAddSerializer
@@ -365,16 +376,22 @@ class StaffViewSet(
 
     def _given(self, model: type[Model], give: Callable[[], object], worker: StaffMember) -> Response:
         # The give, with the app's id. Sent before, the service answers with what the first send made (_given_before).
-        # An id another shop's row holds is found only by the insert, which PostgreSQL refuses on the table's primary
-        # key: answered as the id taken, and nothing more about that row (03 §5.4), as CreateOnceMixin does. The
-        # service's block rolled back with the refusal, so nothing was given.
-        try:
+        with self._refusing_a_taken_id(model):
             give()
+        return self._answer(worker)
+
+    @contextmanager
+    def _refusing_a_taken_id(self, model: type[Model]) -> Iterator[None]:
+        # A write that makes a row with the app's id: a role or a key given, a photo set. An id another shop's row holds
+        # is found only by the insert, which PostgreSQL refuses on the table's primary key: answered as the id taken,
+        # and nothing more about that row (03 §5.4), as CreateOnceMixin does. The service's block rolled back with the
+        # refusal, so nothing was written.
+        try:
+            yield
         except IntegrityError as refusal:
             if id_taken(refusal, model):
                 raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")}) from None
             raise
-        return self._answer(worker)
 
     def _sent(self, request: Request, form: type[Serializer[Any]]) -> dict[str, Any]:
         # What was sent, checked. Read after initial() has found the worker, so another shop's is "not found" first.
@@ -430,6 +447,34 @@ class StaffViewSet(
         sent = self._sent(request, SetPinSerializer)
         # `by` is the person logged in, never one the page names: the edit history keeps who set it, and when.
         return self._answer(set_pin(worker, sent["pin"], by=self._acting()))
+
+    # Piga picha and Chagua picha (PPL-9): the body is the photo itself, as the phone shrank it, with no form around it,
+    # as the laptop's upload is (apps/sync/api/views.py). PUT, as a photo sent twice is one photo: its id, made on the
+    # phone, is in the address beside the worker's, but after the ?, as the tenancy sweep calls a route whose path names
+    # one row, and no more. Who may, the demo, and the old photo's end are set_worker_photo's. Answers with the worker
+    # as they are now, photo included.
+    @extend_schema(parameters=[PhotoQuery], request=PHOTO_BODY, responses=StaffSerializer)
+    @action(detail=True, methods=["put"])
+    def photo(self, request: Request, pk: str | None = None) -> Response:
+        # The worker first, so another shop's is "not found" before anything sent is read; then the id; the body last,
+        # its length before a byte of it (photo_sent).
+        worker = self._worker()
+        asked = PhotoQuery(data=request.query_params)
+        asked.is_valid(raise_exception=True)
+        content = photo_sent(request)
+        with self._refusing_a_taken_id(Attachment):
+            changed = set_worker_photo(
+                worker, photo_id=asked.validated_data["photo"], content=content, by=self._acting()
+            )
+        return self._answer(changed)
+
+    # Ondoa picha (PPL-9).
+    @extend_schema(request=StaffReasonSerializer, responses=StaffSerializer)
+    @action(detail=True, methods=["post"], url_path="remove-photo")
+    def remove_photo(self, request: Request, pk: str | None = None) -> Response:
+        worker = self._worker()
+        sent = self._sent(request, StaffReasonSerializer)
+        return self._answer(remove_worker_photo(worker, reason=sent["reason"], by=self._acting()))
 
 
 class RoleViewSet(mixins.ListModelMixin, ShopViewSet[Role]):

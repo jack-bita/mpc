@@ -581,6 +581,10 @@ def test_suspended_member_gets_nothing_from_routes(
         assert client.post(f"{WORKERS}{juma.pk}/{change}/", sent, format="json").status_code == 404, change
     fix = {"version": 1, "reason": "Hapana", "job_title": "Fundi"}
     assert client.patch(f"{WORKERS}{juma.pk}/", fix, format="json").status_code == 404
+    # Nor is a worker's photo set or taken off (PPL-9).
+    photo = f"{WORKERS}{juma.pk}/photo/?photo={uuid.uuid7()}"
+    assert client.put(photo, data=face, content_type="image/jpeg").status_code == 404
+    assert client.post(f"{WORKERS}{juma.pk}/remove-photo/", {"reason": "Hapana"}, format="json").status_code == 404
     # Nor the month's attendance (ATT-5), nor a worker's month (ATT-12), Juma's or their own: refused, as the key is
     # asked first, before any month is worked out.
     assert client.get(ATTENDANCE_MONTH, {"month": "2026-10"}).status_code == 403

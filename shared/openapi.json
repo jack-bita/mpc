@@ -1433,6 +1433,79 @@
                 }
             }
         },
+        "/api/v1/people/staff/{id}/photo/": {
+            "put": {
+                "operationId": "people_staff_photo_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this staff member.",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "photo",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "The photo's id, a UUIDv7 made on the phone: sent again, it is one photo.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "image/jpeg": {
+                            "schema": {
+                                "type": "string",
+                                "format": "binary"
+                            }
+                        },
+                        "image/webp": {
+                            "schema": {
+                                "type": "string",
+                                "format": "binary"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Staff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/people/staff/{id}/pin/": {
             "post": {
                 "operationId": "people_staff_pin_create",
@@ -1456,6 +1529,63 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/SetPinRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Staff"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/people/staff/{id}/remove-photo/": {
+            "post": {
+                "operationId": "people_staff_remove_photo_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "A UUID string identifying this staff member.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StaffReasonRequest"
                             }
                         }
                     },
@@ -5237,6 +5367,12 @@
                         "type": "boolean",
                         "readOnly": true
                     },
+                    "photo": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true
+                    },
                     "roles": {
                         "type": "array",
                         "items": {
@@ -5272,6 +5408,7 @@
                     "keys",
                     "left_on",
                     "phone",
+                    "photo",
                     "roles",
                     "started_on",
                     "status",
