@@ -701,7 +701,9 @@ def test_a_photo_act_locks_both_jobs_first(
     act: PhotoAct, meneja: StaffMember, baba: StaffMember, asha: StaffMember
 ) -> None:
     # As every change of a person: both jobs first, lightly and in id order, and only then the photos' rows, so two
-    # managers setting one worker's photo at once take turns, and the second finds the first's photo to replace.
+    # managers setting one worker's photo at once take turns, and the second finds the first's photo to replace. Last,
+    # the shop's counter, for the laptops' line (PPL-14): held only from there to the commit, so the photo's file, read
+    # and written before it, never keeps the shop's other saves waiting (SYNC-1).
     with_a_photo(asha, by=baba)
 
     with CaptureQueriesContext(connection) as queries:
@@ -710,7 +712,8 @@ def test_a_photo_act_locks_both_jobs_first(
     locks = [query["sql"] for query in queries.captured_queries if re.search(r"FOR (NO KEY )?UPDATE", query["sql"])]
     assert 'FROM "people_staffmember"' in locks[0]
     assert 'ORDER BY "people_staffmember"."id" ASC' in locks[0] and "FOR NO KEY UPDATE" in locks[0]
-    assert all('FROM "control_attachment"' in lock for lock in locks[1:])
+    assert all('FROM "control_attachment"' in lock for lock in locks[1:-1])
+    assert 'FROM "core_shopsequence"' in locks[-1]
 
 
 def test_the_seeds_people_keep_their_photo_on_the_demo(

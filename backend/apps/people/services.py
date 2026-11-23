@@ -25,8 +25,8 @@ who and why, in the same transaction (apps/control/services.py, audit): the chan
 together or not at all (T3).
 A photo writes none: the edit history keeps each change of it, with who, and the photo's own row keeps the why (PPL-9).
 
-A shared laptop keeps a copy of the shop's people at work (apps/sync/registry.py): names, status, PIN time and keys,
-all on their staff row. So each action that changes one of those saves inside `recording_changes(shop)`
+A shared laptop keeps a copy of the shop's people at work (apps/sync/registry.py): names, photo, status, PIN time and
+keys, all on their staff row. So each action that changes one of those saves inside `recording_changes(shop)`
 (apps/core/changes.py), in place of a plain transaction, and names the person's job with record_change, last, after
 every other write of the save: `archive` when they leave, as a laptop then drops them (SYNC-15). A role or an extra key
 travels on the person's row, so giving one names the person. The refusals that need no transaction come first, so a
@@ -665,9 +665,10 @@ def set_worker_photo(
     the job as saved."""
     _check_shop(staff.shop_id, by)
     _check_photos_fixed_on_demo()
-    # One transaction for the photo's row, its file and the job that names it: all, or none. acting_as(by): the edit
-    # history names the same person on the photo's lines as on the job's, even outside an office visit (02 v1.7).
-    with transaction.atomic(), acting_as(by):
+    # One transaction for the photo's row, its file, the job that names it and the laptops' line: all, or none.
+    # acting_as(by): the edit history names the same person on the photo's lines as on the job's, even outside an office
+    # visit (02 v1.7).
+    with recording_changes(staff.shop_id), acting_as(by):
         staff, by = _locked_for_a_photo(staff, by)
         # Sent before? Read with both jobs locked: of two copies of one photo sent at the same moment, the second waits
         # for the first, then finds its row here. Through the guarded manager, so another shop's row is not seen: its id
@@ -700,6 +701,10 @@ def set_worker_photo(
                 # shows. Its file is deleted after the commit, so a rollback never leaves the old row naming a file that
                 # is gone.
                 remove_attachment_file(old, reason=PHOTO_REPLACED, by=by)
+        # The laptops' tiles show the new face (PPL-14): each hears of it at its next pull, once this is committed, its
+        # file with it. After the block above, never inside it: record_change refuses it there (SYNC-1). The job's line,
+        # in this shop alone, as the photo is the job's, not the person's: her other shop's tiles show that shop's own.
+        record_change(staff)
     return staff
 
 
@@ -711,7 +716,7 @@ def remove_worker_photo(staff: StaffMember, *, photo_id: uuid.UUID, reason: str,
     as saved."""
     _check_shop(staff.shop_id, by)
     _check_reason(reason)
-    with transaction.atomic(), acting_as(by):
+    with recording_changes(staff.shop_id), acting_as(by):
         staff, by = _locked_for_a_photo(staff, by)
         photo = staff.photo
         if photo is None:
@@ -722,6 +727,8 @@ def remove_worker_photo(staff: StaffMember, *, photo_id: uuid.UUID, reason: str,
             raise VersionConflict()
         _save_photo(staff, None, by=by)
         remove_attachment_file(photo, reason=reason, by=by)
+        # A face taken off leaves the laptops too: each drops its copy once it hears (PPL-14).
+        record_change(staff)
     return staff
 
 
