@@ -2,7 +2,7 @@
 
 **Product:** shop system for agro-vet and farm-supply shops (name to be decided)
 **First shop:** MPC — Mabatini Pumba Center, Usa River, Arusha, Tanzania
-**Version:** 1.58 · 23 Nov 2026 · Portion 2 of the planning pack
+**Version:** 1.59 · 23 Nov 2026 · Portion 2 of the planning pack
 **Built from:** `01-product-spec.md` v1.0; updated by `03-architecture.md` v1.0 (v1.1) and `04-build-plan.md` v1.0 (v1.2)
 **Status:** living document. Everything here is decided unless marked *(default)*, which means our best guess and is safe to change while building. The key decisions are in §2 and are recorded as ADRs in `docs/adr/`; small open items are in the parking lot (§20) and are settled while building.
 
@@ -77,6 +77,8 @@
 **Changes in v1.37** (18 Nov 2026, PPL-10's review): §5, a phone that is a person's only way in, as they have a password and no email, can't be taken off, only changed (Jack: A, 04 v1.113). Marked **(v1.37)**.
 
 **Changes in v1.38** (18 Nov 2026, PPL-11): §5, a person hired again: the same person, with a new job, found from the page of a job that ended or by their phone on *Ongeza*; who may is the add's *(default)*; never while they work at another shop, until AUTH-7; one the superuser switched off stays off (Jack: A); a phone of anyone else is refused as in use and joins nobody (04 v1.115, v1.117). Marked **(v1.38)**.
+
+**Changes in v1.59** (23 Nov 2026, PPL-9's review): §5, setting a worker's photo names the one it replaces, as taking one off does: a newer one stays (Jack: A). Marked **(v1.59)** below.
 
 **Changes in v1.58** (23 Nov 2026, PPL-9 built): §5, taking a worker's photo off names the photo: a newer one stays. Marked **(v1.58)** below.
 
@@ -318,7 +320,7 @@ A full diagram for GitHub is in Appendix A.
 
 **Who may fix a worker's details** **(v1.36)**: their full name, nickname, job title, first day and phone, typed wrong. A phone is a login name, so whoever sets it could then set a temporary password and log in as the person: the PIN's rule applies *(default)* (PPL-10). Someone with `staff.manage` on the whole shop, who holds every key the person was given. Never their own. An owner's, or a person's who can open the admin, only by the superuser. Not a person who has left; a suspended one, yes. Every change asks why, and writes an audit line with each field before and after (Jack, 18 Nov 2026: A): the full name and the phone are the person's, across shops, and no shop's edit history can keep them. A phone another person has is refused, saying only that it is in use. A phone that is a person's only way in, as they have a password and no email, may change, as they then log in with the new number and the same password, but is never taken off: they could never log in again (Jack, 18 Nov 2026: A) **(v1.37)**.
 
-**Who may set a worker's photo** **(v1.57)**: whoever may fix their details, the PIN's rule (Jack, PPL-9): someone with `staff.manage` on the whole shop, who holds every key the person was given. Never their own. An owner's, or a person's who can open the admin, only by the superuser. Not a person who has left. A new photo takes the old one's place: the old one's file is removed, and its row stays, saying who added it and who removed it. Taking a photo off asks why, and names the photo that was seen: one set since stays, and whoever asked is told it changed **(v1.58)**. On the demo no photo is kept, as every visitor there sees what one saves (Jack).
+**Who may set a worker's photo** **(v1.57)**: whoever may fix their details, the PIN's rule (Jack, PPL-9): someone with `staff.manage` on the whole shop, who holds every key the person was given. Never their own. An owner's, or a person's who can open the admin, only by the superuser. Not a person who has left. A new photo takes the old one's place: the old one's file is removed, and its row stays, saying who added it and who removed it. A new photo names the one its page showed: one set or taken off since is not replaced, and whoever asked is told it changed (Jack: A) **(v1.59)**. Taking a photo off asks why, and names the photo that was seen: one set since stays, and whoever asked is told it changed **(v1.58)**. On the demo no photo is kept, as every visitor there sees what one saves (Jack).
 
 **A person hired again** **(v1.38)**: one whose job at a shop ended, and who is hired there again, comes back as the same person, with a new job (PPL-11): their history and their login stay one, and the old job keeps what it said. Who may is the add's, `staff.manage` on the whole shop *(default)*, as they come back with no role, key or PIN, so whoever hires them gains nothing over them. Not while they work at another shop, until AUTH-7. The first day is never before the old job's last day; the same day may be, so a leaving marked by mistake is mended at once *(default)*. A person the superuser switched off may be hired again, and stays off: only the superuser switches a person on (Jack, 18 Nov 2026: A). A phone typed for a new worker that is such a person's finds them; any other phone a person has is refused as in use, saying nothing of whose, and never joins them to the shop, as whoever joins a person could then set their PIN or a temporary password and log in as them.
 
