@@ -222,6 +222,24 @@ class StaffMember(Editable):
     pin_hash = models.CharField(max_length=128, blank=True, default="", editable=False)
     # Devices compare this with their own copy and drop an old offline PIN check (03 §5.9).
     pin_changed_at = models.DateTimeField(null=True, blank=True, editable=False)
+    # The photo this job shows now (PPL-9, 02 §5), or none: the PIN tiles then show the full name. An attachment of kind
+    # `staff_photo`, pinned to this very job (apps/control/models.py). The job's, not the person's (User): a file
+    # belongs to one shop, named by it, so a person who works at two shops has a photo at each.
+    # A link of its own, unlike a clock-in's photo, which is found by what it is pinned to: a job may have had several
+    # photos, one after another, and which one shows now is a fact only this column holds.
+    # Named, not imported: attachments name jobs too (who added one, who removed it), and a name is not an import.
+    # PROTECT: nothing is deleted (rule 7); an old photo's file goes, its row stays. db_index=False: indexes lead with
+    # `shop`, and nothing looks a job up by its photo. editable=False: only the photo services write it, as they alone
+    # check that it is this job's own (T1), which no foreign key can.
+    photo = models.ForeignKey(
+        "control.Attachment",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        editable=False,
+        db_index=False,
+    )
 
     class Meta(Editable.Meta):
         # Builds on Editable.Meta, itself built on ShopScoped.Meta, so `objects`, with the guard, stays the default
