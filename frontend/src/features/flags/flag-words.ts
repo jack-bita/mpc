@@ -9,7 +9,7 @@
 
 import { useTranslations } from "use-intl";
 
-import { codeMessage, useCodeWords } from "@/i18n/codes";
+import { useRefusedRecordWords } from "@/i18n/refused-record";
 import { Decimal } from "@/lib/decimal";
 
 import type { Flag, FlagNote } from "./flags";
@@ -31,14 +31,13 @@ export function useWhatHappened(): (flag: Flag) => {
 } {
   const t = useTranslations("flags.what");
   const tapKind = useTranslations("flags.tapKind");
-  const codes = useCodeWords();
+  const refusedFor = useRefusedRecordWords();
   return (flag) => {
     // Whom it is about: the tap's own worker first (ATT-1), the one who loaded a file, the record's maker.
     const name = flag.people[0] ?? t("someone");
     // About loading a rescue file, not about the record in it: it names whoever loaded it (SYNC-12).
     const loaded = flag.loaded_by !== null && flag.people[0] === flag.loaded_by;
-    const why =
-      flag.refused_for === "" ? null : codeMessage(codes, flag.refused_for);
+    const why = flag.refused_for === "" ? null : refusedFor(flag.refused_for);
     const said = (sentence: string) => ({ sentence, why });
     switch (flag.kind) {
       case "unverified_time":

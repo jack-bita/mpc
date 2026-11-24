@@ -168,21 +168,25 @@ describe("one flag's page", () => {
     expect(await screen.findByText(sentence)).toBeTruthy();
   });
 
-  it("says why the server refused a record, in the shop's words", async () => {
-    show(
-      flag({
-        kind: "invalid_document",
-        tap: null,
-        refused_for: "document.type_unknown",
-      }),
-    );
+  it.each([
+    ["document.type_unknown", "Seva haipokei aina hii ya kumbukumbu."],
+    // Its shape was wrong, the push's own code for it: no box to look at, as a form's words would say.
+    ["invalid", "Baadhi ya taarifa za kumbukumbu hii si sahihi."],
+    // Nothing to try again: the record is refused for good.
+    [
+      "id.taken",
+      "Seva ina kumbukumbu nyingine yenye namba hii ya utambulisho.",
+    ],
+    // A code newer than the app: named, so the manager can still look it up.
+    ["sale.some_new_rule", "Seva imeikataa. Msimbo: sale.some_new_rule"],
+  ])(
+    "says why the server refused a record for %s, in a record's words, never a form's",
+    async (code, words) => {
+      show(flag({ kind: "invalid_document", tap: null, refused_for: code }));
 
-    expect(
-      await screen.findByText(
-        "Kwa nini: Seva haipokei aina hii ya kumbukumbu. Sasisha programu.",
-      ),
-    ).toBeTruthy();
-  });
+      expect(await screen.findByText(`Kwa nini: ${words}`)).toBeTruthy();
+    },
+  );
 
   it("says where a rescued record was made, and who loaded its file", async () => {
     show(flag({ brought_from: "Laptop Vyakula", loaded_by: "Asha" }));

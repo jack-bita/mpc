@@ -96,7 +96,7 @@ test("Meneja closes a flag on the demo, and finds it among the closed ones", asy
     ).toBeVisible();
     await expect(
       phone.getByText(
-        words(FLAGS.page.why, { why: sw.errors.document.type_unknown }),
+        words(FLAGS.page.why, { why: sw.needsAttention.reasons.typeUnknown }),
         { exact: true },
       ),
     ).toBeVisible();
