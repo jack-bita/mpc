@@ -569,9 +569,12 @@ def test_each_action_writes_its_note_and_moves_the_flag(
 ) -> None:
     sent = note("Alikuja kuchukua vitu vyake tu")
 
-    answer = step(baba, waiting, name, sent)
+    with CaptureQueriesContext(connection) as asked:
+        answer = step(baba, waiting, name, sent)
 
     assert answer.status_code == 200, answer.json()
+    # Its side comes with the flag, as it never changes: the answer asks for it no second time.
+    assert not [query for query in asked if 'FROM "shops_side"' in query["sql"]]
     page = answer.json()
     assert page["status"] == status
     # The note by the id the phone made, with who wrote it: the page shows it at once, with no second ask.

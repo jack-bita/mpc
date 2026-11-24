@@ -112,6 +112,9 @@ class FlagViewSet(ShopViewSet[Flag]):
             if id_taken(refusal, FlagNote):
                 raise ValidationError({"id": ValidationError("This id is already in use.", code="id.taken")}) from None
             raise
+        # The service reads the flag again, alone, under its lock. Its side came with it here and never changes (the
+        # flag's own trigger), so it is handed on, not asked for again.
+        moved.side = flag.side
         return Response(FlagSerializer(flag_detail(moved, viewer=self.actor)).data)
 
 
