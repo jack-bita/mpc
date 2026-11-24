@@ -919,7 +919,8 @@
     },
     "none": {
       "waiting": "No flag is waiting.",
-      "closed": "No flag has been closed yet."
+      "closed": "No flag has been closed yet.",
+      "filtered": "No flag fits this filter."
     },
     "more": "Show more",
     "wholeShop": "Whole shop",

@@ -150,7 +150,9 @@ export function FlagsScreen() {
             label: label[state],
             content: (
               <FlagList
-                state={state}
+                none={t(
+                  filterWords === null ? `none.${state}` : "none.filtered",
+                )}
                 timezone={who.data.shop.timezone}
                 flags={lists[state].data?.pages.flatMap((page) => page.results)}
                 error={
@@ -173,7 +175,7 @@ export function FlagsScreen() {
 
 /** One tab's flags: a line each, and Onyesha zaidi while there are more. */
 function FlagList({
-  state,
+  none,
   timezone,
   flags,
   error,
@@ -182,7 +184,8 @@ function FlagList({
   loadingMore,
   showMore,
 }: {
-  state: FlagState;
+  /** What an empty list says: of everything, or, under a filter, only of what was asked for. */
+  none: string;
   timezone: string;
   flags: FlagLine[] | undefined;
   error: Error | null;
@@ -216,7 +219,7 @@ function FlagList({
           reason above them, as on Wafanyakazi. A first read refused shows the reason alone. */}
       <ApiErrorAlert error={error} />
       {flags === undefined ? null : flags.length === 0 ? (
-        <p>{t(`none.${state}`)}</p>
+        <p>{none}</p>
       ) : (
         <Card className="py-0">
           {/* A list, so a screen reader says how many lines there are. role="list" written out: Safari with VoiceOver

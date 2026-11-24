@@ -200,6 +200,29 @@ describe("Chuja", () => {
       expect(sides.getByRole("radio", { name })).toBeTruthy();
   });
 
+  it.each(["waiting", "closed"])(
+    "never says that nothing at all is %s, when it is only the filter",
+    async (tab) => {
+      window.history.replaceState(
+        null,
+        "",
+        `/flags/?kind=device_gap&tab=${tab}`,
+      );
+      theShopHas(REVIEWER, flagsPage([]));
+
+      render(<FlagsScreen />);
+
+      // In the open tab: the other, hidden, may say the same of its own list.
+      expect(
+        await within(await screen.findByRole("tabpanel")).findByText(
+          "Hakuna tofauti kwa ulichochuja.",
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText("Hakuna tofauti inayosubiri.")).toBeNull();
+      expect(screen.queryByText("Bado hakuna tofauti iliyofungwa.")).toBeNull();
+    },
+  );
+
   it("counts what waits under the filter, as its tab lists them", async () => {
     window.history.replaceState(null, "", `/flags/?side=${DAWA.id}`);
     theShopHas(REVIEWER, flagsPage([flagLine()], { waiting: 7 }));

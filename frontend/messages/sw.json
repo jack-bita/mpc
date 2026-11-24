@@ -919,7 +919,8 @@
     },
     "none": {
       "waiting": "Hakuna tofauti inayosubiri.",
-      "closed": "Bado hakuna tofauti iliyofungwa."
+      "closed": "Bado hakuna tofauti iliyofungwa.",
+      "filtered": "Hakuna tofauti kwa ulichochuja."
     },
     "more": "Onyesha zaidi",
     "wholeShop": "Duka zima",
