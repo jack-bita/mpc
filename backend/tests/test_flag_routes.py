@@ -372,6 +372,9 @@ def test_a_device_gap_says_its_numbers_and_the_systems_note(
     page = page_of(baba, flag)
     assert (page["expected"], page["actual"], page["difference"]) == ("2.000", "4.000", "2.000")
     assert (page["people"], page["notes"], page["status"]) == ([], [], "open")
+    # Its line is record 4's, a tap of Asha's that came after the gap: the flag is about the missing records, names
+    # nobody, and opens nobody's day.
+    assert page["tap"] is None
 
     send(device_a, clock(2, staff_a, first + 2 * minute), sent_at=first + 5 * minute)
     send(device_a, clock(3, staff_a, first + 3 * minute), sent_at=first + 6 * minute)
@@ -407,7 +410,8 @@ def test_a_carried_record_says_where_it_was_made_and_who_loaded_it(
         "Staff A",
     )
     assert (page["people"], page["side"]) == (["Staff A"], "Vyakula")
-    assert page["tap"]["staff"] == str(baba.pk)
+    # It names Asha, who loaded the file: the tap in it is Baba's, whose day says nothing of her.
+    assert page["tap"] is None
 
 
 def test_every_note_shows_with_who_and_when(

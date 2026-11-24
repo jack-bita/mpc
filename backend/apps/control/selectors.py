@@ -15,7 +15,7 @@ gives every one of them: a counter record's laptop and time (CounterRecord).
 import uuid
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
@@ -89,13 +89,13 @@ def flag_lines(flags: Sequence[Flag]) -> list[FlagLine]:
     return [_line(flag, named[flag.pk], records.get(flag.subject_id)) for flag in flags]
 
 
-def _line(flag: Flag, people: list[str], record: CounterRecord | None) -> FlagLine:
+def _line(flag: Flag, people: dict[uuid.UUID, str], record: CounterRecord | None) -> FlagLine:
     return FlagLine(
         id=flag.pk,
         kind=flag.kind,
         status=flag.status,
         side=None if flag.side is None else flag.side.name,
-        people=people,
+        people=list(people.values()),
         # A tap entered in the office has no laptop and no laptop's time (ATT-13).
         device=None if record is None or record.device_id is None else record.device.name,
         made_at=None if record is None else record.client_time,
@@ -132,17 +132,24 @@ class FlagDetail(FlagLine):
 def flag_detail(flag: Flag, *, viewer: Actor) -> FlagDetail:
     """`flag`, loaded with its side, whole, for its page, as `viewer` sees it: the person looking."""
     record = _records([flag]).get(flag.subject_id)
+    named = people_named([flag])[flag.pk]
+    # A record of a table that says nothing of itself, or none at all: the flag's own facts alone.
+    facts = record.flag_facts() if isinstance(record, SaysItsFacts) else FlagFacts()
+    if facts.tap is not None and facts.tap.staff not in named:
+        # The record is a tap of someone the flag doesn't name, so the flag is not about it: missing numbers, whose line
+        # is whatever record came after them (SYNC-5), or a rescue file's loading, which names whoever loaded it
+        # (SYNC-12). Its day would say nothing of the flag, and nothing of that worker is anyone's to open from here.
+        facts = replace(facts, tap=None)
     # Oldest first, as they were written: an explanation before the close that followed it. Who wrote each is read in
     # the same query.
     notes = FlagNote.objects.filter(flag=flag).select_related("created_by").order_by("created_at", "id")
     return FlagDetail(
         # Its line's own fields, so the page and the list can't say them differently.
-        **vars(_line(flag, people_named([flag])[flag.pk], record)),
+        **vars(_line(flag, named, record)),
         expected=flag.expected,
         actual=flag.actual,
         difference=flag.difference,
-        # A record of a table that says nothing of itself, or none at all: the flag's own facts alone.
-        facts=record.flag_facts() if isinstance(record, SaysItsFacts) else FlagFacts(),
+        facts=facts,
         notes=[
             NoteLine(
                 id=note.pk,
@@ -158,14 +165,14 @@ def flag_detail(flag: Flag, *, viewer: Actor) -> FlagDetail:
     )
 
 
-def people_named(flags: Sequence[Flag]) -> dict[uuid.UUID, list[str]]:
-    """The nicknames of those each flag names, in the order it names them, by the flag's id: the tap's worker first,
-    then whoever made the record before it (ATT-1)."""
-    names: dict[uuid.UUID, list[str]] = defaultdict(list)
+def people_named(flags: Sequence[Flag]) -> dict[uuid.UUID, dict[uuid.UUID, str]]:
+    """Those each flag names, each job's id with its nickname, in the order it names them, by the flag's id: the tap's
+    worker first, then whoever made the record before it (ATT-1)."""
+    names: dict[uuid.UUID, dict[uuid.UUID, str]] = defaultdict(dict)
     # Through the link rows' own guard, which leads with the shop, as their index does, not through Flag.people, whose
     # query would name no shop. Their ids are UUIDv7s, so in the order raise_flag wrote them.
     for person in FlagPerson.objects.filter(flag__in=flags).select_related("staff").order_by("id"):
-        names[person.flag_id].append(person.staff.display_name)
+        names[person.flag_id][person.staff_id] = person.staff.display_name
     return names
 
 

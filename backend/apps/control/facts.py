@@ -23,7 +23,8 @@ class FlaggedTap:
 
 @dataclass(frozen=True)
 class FlagFacts:
-    # The tap the record is, if it is one.
+    # The tap the record is, if it is one: shown only when the flag names its worker (flag_detail), as a flag can be
+    # about something else of the same record, its laptop's missing numbers or the file that brought it.
     tap: FlaggedTap | None = None
     # Why the server refused the record: an error's code, which the page says in words. Empty when it kept it.
     refused_for: str = ""
