@@ -211,12 +211,14 @@ async function readyToGo(
   );
 }
 
-// How long a photo waits after its nth failed send: 1 minute, doubled each time, at most an hour.
-function waitAfter(tries: number): number {
+/** How long a photo waits after its nth failed try: 1 minute, doubled each time, at most an hour. A worker's photo that
+ * didn't come down waits alike (PPL-14, staff-photos.ts). */
+export function waitAfter(tries: number): number {
   return Math.min(FIRST_WAIT_MS * 2 ** (tries - 1), LONGEST_WAIT_MS);
 }
 
-function waitIsOver(until: number | null): boolean {
+/** Whether a photo's wait is over: none, its time come, or a wait no laptop's clock gave. */
+export function waitIsOver(until: number | null): boolean {
   if (until === null) return true;
   const left = until - Date.now();
   // No real wait is longer than the longest: more left means the laptop's clock was put back (03 §6.6), and the

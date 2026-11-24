@@ -1,22 +1,23 @@
 """apps/control/api/views.py — the control routes an office screen calls, under /api/v1/control/ (03 §5.10, CTRL-3).
 
 Today one: a photo's file, handed out to someone allowed to see it (03 §5.13). The owner opens Asha's clock-in photo
-beside her 07:55 on the attendance page (ATT-12), and her face on her own page (PPL-9); the PIN screen's faces come with
-PPL-14. Served only here, through Django, after the shop's guard and the kind's key: never from an address of its own,
-which anyone holding the link could open (apps/core/storage.py refuses to make one). Thin, as every route is (ADR-0015):
-the rule of who may open which kind lives with the kinds (ATTACHMENT_KINDS, apps/control/models.py).
+beside her 07:55 on the attendance page (ATT-12), and her face on her own page (PPL-9). Served only through Django,
+here after the shop's guard and the kind's key, and to a laptop, for its PIN screen, by a route of its own (PPL-14,
+apps/sync/api/views.py): never from an address of its own, which anyone holding the link could open
+(apps/core/storage.py refuses to make one). Thin, as every route is (ADR-0015): the rule of who may open which kind
+lives with the kinds (ATTACHMENT_KINDS, apps/control/models.py).
 """
 
 from typing import Any, ClassVar
 
 from django.http import FileResponse
-from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.request import Request
 
-from apps.control.models import ATTACHMENT_KINDS, Attachment, AttachmentKind, AttachmentType
+from apps.control.api.downloads import PHOTO_ANSWER, photo_answer
+from apps.control.models import ATTACHMENT_KINDS, Attachment, AttachmentKind
 from apps.core.api.base import SEES_THE_SIDE, ShopViewSet, Sight
 from apps.core.permissions import Permission
 
@@ -32,12 +33,7 @@ class AttachmentViewSet(ShopViewSet[Attachment]):
     # each photo's kind, and a show action may not name a key of its own here (PPL-5's rule, apps/core/api/base.py).
     action_permissions: ClassVar[dict[str, Permission | Sight]] = {"file": SEES_THE_SIDE}
 
-    @extend_schema(
-        responses={
-            (200, AttachmentType.JPEG.value): OpenApiTypes.BINARY,
-            (200, AttachmentType.WEBP.value): OpenApiTypes.BINARY,
-        },
-    )
+    @extend_schema(responses=PHOTO_ANSWER)
     @action(detail=True, methods=["get"])
     def file(self, request: Request, *args: Any, **kwargs: Any) -> FileResponse:
         # The row through the guard and the person's sides (get_object): another shop's photo, or an id no shop has, is
@@ -52,23 +48,4 @@ class AttachmentViewSet(ShopViewSet[Attachment]):
             # so it names nothing of the photo, not even its kind: someone without the key learns only that they may
             # not open it.
             raise PermissionDenied("This person may not open this photo.")
-        if attachment.file_removed_at is not None:
-            raise NotFound("This photo was removed.", code="attachment.file_removed")
-        if not attachment.file:
-            # Its record came; the laptop hasn't sent the file yet (CTRL-6).
-            raise NotFound("This photo hasn't arrived yet.", code="attachment.file_waiting")
-        # Opened now, inside the visit, while its shop is open (the storage checks the name's shop); sent after. The
-        # type is the label's, which the upload checked against the file's first bytes, never guessed from its name.
-        try:
-            opened = attachment.file.open("rb")
-        except FileNotFoundError:
-            # The row said "kept" as it was read, but the file was gone by the time it was opened: a removal committed
-            # in between, and its delete ran after its commit (remove_attachment_file). Said as the removal it is, not a
-            # crash.
-            raise NotFound("This photo was removed.", code="attachment.file_removed") from None
-        answer = FileResponse(opened, content_type=attachment.content_type)
-        # Never kept by the browser or a cache on the way: a photo of a person, behind a key that can be taken away
-        # tomorrow (03 §10). nosniff: the browser takes the type as sent, and never runs the file as something else.
-        answer["Cache-Control"] = "private, no-store"
-        answer["X-Content-Type-Options"] = "nosniff"
-        return answer
+        return photo_answer(attachment)

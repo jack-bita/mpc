@@ -11,6 +11,8 @@ Asha's row, as her photo is set, changed, and taken off:
 
 Only which photo is shown lives on the job: the file, its label, who added it and who removed it are the attachment's
 own (apps/control/models.py), so each fact lives once. Who may is test_who_changes_a_worker.py's; here the owner acts.
+Each change also names the job in the shop's change log, so the laptops, whose PIN tiles show the face, hear of it
+(PPL-14).
 
 A file is deleted once its row's change is committed, so the tests run the after-commit step themselves
 (django_capture_on_commit_callbacks), as a test's transaction never commits. Fake data only: the repo is public (03
@@ -46,6 +48,7 @@ from apps.core.tenancy import shop_context
 from apps.people.models import StaffMember, User
 from apps.people.services import add_staff, add_worker, remove_worker_photo, set_worker_photo
 from apps.shops.models import Shop, Side
+from tests.change_log import lines_written
 
 pytestmark = pytest.mark.django_db
 
@@ -296,23 +299,36 @@ def test_an_id_of_another_record_is_taken(asha: StaffMember, baba: StaffMember, 
     assert row_of(staff_a2, theirs).subject_id == staff_a2.pk
 
 
+@pytest.mark.parametrize(
+    "step",
+    [
+        pytest.param("apps.people.services.remove_attachment_file", id="the old photo's removal"),
+        pytest.param("apps.core.changes.next_numbers", id="the laptops' line"),
+    ],
+)
 def test_a_photo_is_kept_whole_or_not_at_all(
     asha: StaffMember,
     baba: StaffMember,
     monkeypatch: pytest.MonkeyPatch,
     django_capture_on_commit_callbacks: CommitSteps,
+    step: str,
 ) -> None:
-    # The last step fails, the old photo's removal: the new photo's row is undone with the rest, and its file was never
-    # written, as a file no row names is a face that nothing would ever find to delete (PPL-9's review). The old photo
-    # still shows, its file too.
+    # A late step fails, the old photo's removal, or the number of the line that tells the laptops (PPL-14), as when the
+    # wait for the shop's counter runs out: the new photo's row is undone with the rest, and its file was never written,
+    # as a file no row names is a face that nothing would ever find to delete (PPL-9's review). The old photo still
+    # shows, its file too.
     shown = set_photo(asha, by=baba)
     new = uuid.uuid7()
 
     def fails(*args: Any, **kwargs: Any) -> None:
-        raise RuntimeError("the old photo could not be removed")
+        raise RuntimeError("a late step failed")
 
-    monkeypatch.setattr("apps.people.services.remove_attachment_file", fails)
-    with django_capture_on_commit_callbacks(execute=True), pytest.raises(RuntimeError):
+    monkeypatch.setattr(step, fails)
+    with (
+        lines_written(asha.shop_id) as lines,
+        django_capture_on_commit_callbacks(execute=True),
+        pytest.raises(RuntimeError, match="a late step failed"),
+    ):
         set_photo(asha, by=baba, content=BETTER_FACE, photo_id=new)
 
     assert photo_of(asha) == shown
@@ -320,6 +336,7 @@ def test_a_photo_is_kept_whole_or_not_at_all(
     with shop_context(asha.shop_id):
         assert not Attachment.objects.filter(pk=new).exists()
         assert not default_storage.exists(f"{asha.shop_id}/{new}")
+    assert lines == []
 
 
 @pytest.mark.parametrize(
@@ -435,6 +452,50 @@ def test_each_photo_change_names_who_made_it(
     assert {edit.created_by_id for edit in [*of_job, *of_photos]} == {baba.pk}
     # No audit line: the history already says who, when, from which and to which (PPL-9's card).
     assert lines == 0
+
+
+def test_each_photo_change_tells_the_laptops(asha: StaffMember, baba: StaffMember) -> None:
+    # A laptop learns what changed from the shop's change log alone (SYNC-15): with no line, a new face would never
+    # reach a tile, and one taken off would stay on it. One line each, naming her job, as her nickname's fix does.
+    with lines_written(asha.shop_id) as added:
+        set_photo(asha, by=baba)
+    with lines_written(asha.shop_id) as replaced:
+        second = set_photo(asha, by=baba, content=BETTER_FACE)
+    with lines_written(asha.shop_id) as taken_off, shop_context(asha.shop_id):
+        remove_worker_photo(asha, photo_id=second, reason="Hataki picha", by=baba)
+
+    hers = [("staff", asha.pk, "upsert")]
+    assert (added, replaced, taken_off) == (hers, hers, hers)
+
+
+def test_a_photo_change_that_changes_nothing_tells_no_laptop(asha: StaffMember, baba: StaffMember) -> None:
+    # The same photo sent again after a lost answer, one refused, and a removal with nothing left to remove: every
+    # laptop's copy is right as it is, so none is told to read her row again.
+    shown = set_photo(asha, by=baba)
+    with lines_written(asha.shop_id) as sent_again:
+        set_photo(asha, by=baba, photo_id=shown, instead_of=None)
+    with lines_written(asha.shop_id) as no_photo, pytest.raises(ValidationError):
+        set_photo(asha, by=baba, content=PNG)
+    with lines_written(asha.shop_id) as late, pytest.raises(VersionConflict):
+        set_photo(asha, by=baba, content=BETTER_FACE, instead_of=None)
+    with shop_context(asha.shop_id):
+        remove_worker_photo(asha, photo_id=shown, reason="Hataki picha", by=baba)
+        with lines_written(asha.shop_id) as removed_again:
+            remove_worker_photo(asha, photo_id=shown, reason="Tena", by=baba)
+
+    assert (sent_again, no_photo, late, removed_again) == ([], [], [], [])
+
+
+def test_a_photo_reaches_the_laptops_of_its_own_shop_alone(asha: StaffMember, baba: StaffMember, shop_b: Shop) -> None:
+    # Asha works at two shops. The photo is her job's at shop A, not hers (02 §5), so shop B's laptops, whose tiles show
+    # shop B's photo of her, hear nothing: unlike her name, which is the person's and reaches both.
+    with shop_context(shop_b):
+        add_staff(shop=shop_b, user=User.objects.get(pk=asha.user_id), display_name="Asha", started_on=START, by=None)
+
+    with lines_written(asha.shop_id) as at_a, lines_written(shop_b) as at_b:
+        set_photo(asha, by=baba)
+
+    assert (at_a, at_b) == ([("staff", asha.pk, "upsert")], [])
 
 
 def test_a_photo_leaves_the_version_alone(asha: StaffMember, baba: StaffMember) -> None:

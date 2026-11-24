@@ -86,9 +86,10 @@ export function checkPhotosNamed(
     if (!names(payload, photo.label.id)) throw new BrokenPhoto("not_named");
 }
 
-// What a file is, by its first bytes, as the server tells (CTRL-3): every JPEG starts with FF D8 FF, and every WebP
-// with "RIFF", its length in four bytes, then "WEBP". An empty file is neither.
-function imageTypeOf(bytes: Uint8Array): PhotoType | null {
+/** What a file is, by its first bytes, as the server tells (CTRL-3): every JPEG starts with FF D8 FF, and every WebP
+ * with "RIFF", its length in four bytes, then "WEBP". An empty file is neither. A worker's photo that comes down is
+ * read the same way (PPL-14, sync/staff-photos.ts). */
+export function imageTypeOf(bytes: Uint8Array): PhotoType | null {
   if (startsWith(bytes, 0, [0xff, 0xd8, 0xff])) return "image/jpeg";
   if (
     startsWith(bytes, 0, ascii("RIFF")) &&

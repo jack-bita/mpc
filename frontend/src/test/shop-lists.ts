@@ -28,6 +28,7 @@ export const ASHA: Schemas["StaffRecord"] = {
   id: "019a5e00-0000-7000-8000-0000000000c2",
   full_name: "Asha Mfano",
   display_name: "Asha",
+  photo: null,
   status: "active",
   pin_changed_at: null,
   language: "sw",

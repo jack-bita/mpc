@@ -4,9 +4,10 @@ copy is valid at (SYNC-2; 03 §6.1, §6.4).
 One function per table the registry sends (apps/sync/registry.py), each answering "which of this shop's rows does a
 device hold?": every side; the payment accounts in use; the people at work there; each rule's row in force today and
 every later one. The bootstrap sends all of them (SYNC-2); the pull finds a changed record among them, or learns that
-it left the lists (SYNC-3). What each row may show is the registry's fields, not this file's. And the change log's two
-reads: last_change_number, the cursor a copy is valid at, and changes_after, the lines a pull sends. And where a
-laptop's own count stands, last_device_number, which the bootstrap sends so a laptop filled again counts on (SYNC-8).
+it left the lists (SYNC-3). What each row may show is the registry's fields, not this file's. And the one photo a
+person's row may name, staff_photo, which a laptop asks for by its id (PPL-14). And the change log's two reads:
+last_change_number, the cursor a copy is valid at, and changes_after, the lines a pull sends. And where a laptop's own
+count stands, last_device_number, which the bootstrap sends so a laptop filled again counts on (SYNC-8).
 
 Each reads inside the shop it is given, which must be the one open (T1), and names it in its query too: under
 system_context() the guard shows every shop's rows (03 §5.11).
@@ -15,8 +16,9 @@ system_context() the guard shows every shop's rows (03 §5.11).
 import uuid
 from datetime import date
 
-from django.db.models import Max, Prefetch, QuerySet
+from django.db.models import F, Max, Prefetch, QuerySet
 
+from apps.control.models import Attachment, AttachmentKind
 from apps.core import settings_registry
 from apps.core.models import Change
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
@@ -92,6 +94,35 @@ def staff_rows(shop: Shop) -> QuerySet[StaffMember]:
         .select_related("user")
         .order_by("user__full_name", "display_name", "pk")
     )
+
+
+def staff_photo(shop: Shop, photo_id: uuid.UUID) -> Attachment | None:
+    """The photo `photo_id`, if the row of a person on a device's list names it now (StaffRecord's `photo`); else None,
+    whatever it is: a photo a newer one replaced, a leaver's, that of someone with no PIN, a clock-in's, another shop's,
+    or none at all (PPL-14)."""
+    # Asked of the very rows the device holds, and, as StaffRecord does, of the people with a PIN alone, who have a tile
+    # for their face to show on: so the photos it may read and the ones its rows name can't disagree, and a person who
+    # leaves the list takes their face along. The job says which photo it shows, never the photo what it is
+    # pinned to: a photo no job shows is nobody's face now. No index by photo is needed: the rows are one shop's few
+    # people.
+    #
+    # And the photo is asked what it is, as no foreign key can hold the column to a worker's own photo (T1), and the
+    # link is followed by the database, past the guard: a worker's photo, never a clock-in's, which must not be handed
+    # to whoever stands at the laptop; of this shop; and of this very job. A job made to name another's, by a bug, shows
+    # no face rather than a leaver's or another shop's (PPL-14's review).
+    person = (
+        staff_rows(shop)
+        .filter(
+            pin_changed_at__isnull=False,
+            photo=photo_id,
+            photo__kind=AttachmentKind.STAFF_PHOTO,
+            photo__shop=shop,
+            photo__subject_id=F("pk"),
+        )
+        .select_related("photo")
+        .first()
+    )
+    return person.photo if person is not None else None
 
 
 def setting_rows(shop: Shop) -> QuerySet[Setting]:

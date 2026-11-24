@@ -6,7 +6,7 @@
 // It runs at the moments triggers.tsx keeps: as the app opens, when the network comes back, 2 s after a
 // save, every 30 s while online, and from Tuma sasa (03 §6.5). How it ended tells the laptop's offline
 // periods whether the server was there (outages.ts, SYNC-14). Last, the photos whose records are in go up
-// (attachments.ts, CTRL-6).
+// (attachments.ts, CTRL-6), and the workers' photos come down for their tiles (staff-photos.ts, PPL-14).
 import { hasCsrfToken } from "@/api/client";
 import { ApiRefusal, NoConnection } from "@/api/refusal";
 import { savedBlocked } from "@/features/devices/this-device";
@@ -22,6 +22,7 @@ import { noteBack, noteCutOff } from "./outages";
 import { heardInTheBackground, pagePlace } from "./page-place";
 import { AppTooOld, pull } from "./pull";
 import { pushKeepingTheWait } from "./push";
+import { fetchStaffPhotos } from "./staff-photos";
 
 /** What a sync is asked for. */
 export interface SyncAsk {
@@ -128,7 +129,17 @@ async function syncOnce(shopId: string, sendNow: boolean): Promise<void> {
   // The photos last (CTRL-6), once the laptop is noted back: ten photos on a slow line may take minutes,
   // and the office's report of the cut must end when the pull got its answer, not when the photos are
   // done (SYNC-14). Only after a push the server answered (attachments.ts says why).
-  if (talked.pushed) await sendPhotosSafely(db);
+  if (talked.pushed)
+    await onTheirOwn(
+      sendAttachments(db, pagePlace),
+      "the photos were not sent",
+    );
+  // And the faces the pull's rows name come down (PPL-14). Whatever the push did: the pull got its answer,
+  // so the line is there, and a photo is only read.
+  await onTheirOwn(
+    fetchStaffPhotos(db, pagePlace),
+    "the workers' photos were not fetched",
+  );
   // Thrown after the pull, so the failure is still reported (triggers.tsx). A pull that fails
   // too, as with no network, throws its own instead, which says the same.
   if (talked.pushFailure !== null) throw talked.pushFailure.error;
@@ -143,17 +154,17 @@ interface Talked {
 }
 
 /**
- * Sends the photos whose records are in (attachments.ts). A block or a "not registered" is thrown on, as
- * from the push: the sync must ask nothing more. Any other trouble, a database that refused a write, say,
- * is the photos' own: the records went up and the office's changes came down, so the sync worked, and
- * failed it would say so at every moment while the photos waited. Logged, and the next sync tries again.
+ * A step of the photos, going up or coming down. A block or a "not registered" is thrown on, as from the
+ * push: the sync must ask nothing more. Any other trouble, a database that refused a write, say, is the
+ * photos' own: the records went up and the office's changes came down, so the sync worked, and failed it
+ * would say so at every moment while the photos waited. Logged, and the next sync tries again.
  */
-async function sendPhotosSafely(db: ShopDatabase): Promise<void> {
+async function onTheirOwn(step: Promise<void>, failed: string): Promise<void> {
   try {
-    await sendAttachments(db, pagePlace);
+    await step;
   } catch (error) {
     if (isAboutTheDevice(error)) throw error;
-    console.error("the photos were not sent", error);
+    console.error(failed, error);
   }
 }
 

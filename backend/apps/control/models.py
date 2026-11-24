@@ -399,7 +399,7 @@ class AttachmentKind(models.TextChoices):
     # delivery, a receipt on an expense) comes with that record's card (STK-4, CASH-2).
     # Asha's photo as she taps Ingia (ATT-3).
     CLOCK_PHOTO = "clock_photo", "Clock-in photo"
-    # A worker's face, on their own page in the office (PPL-9), and next on the PIN tiles (PPL-14).
+    # A worker's face, on their own page in the office (PPL-9) and on their tile on every laptop (PPL-14).
     STAFF_PHOTO = "staff_photo", "Staff photo"
 
 
@@ -423,7 +423,7 @@ class KindRule:
     # The type code of the table its record is in (apps/core/links.py): "attendance_event" for a clock-in photo.
     subject_type: str
     # The key that opens it, held on the whole shop (CTRL-3's office route); None when anyone working at the shop
-    # may, as for a face, which every laptop's PIN tiles will show (PPL-14).
+    # may, as for a face, which every laptop's PIN tiles show (PPL-14).
     opened_with: Permission | None
 
 
