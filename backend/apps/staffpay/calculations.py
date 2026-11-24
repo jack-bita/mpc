@@ -24,14 +24,19 @@ first Ingia gives, by the rules that day used (T4):
     in 07:20  → Amechelewa: not offered        Nusu siku: no fine
     in 12:20  → Amechelewa: the second fine    Nusu siku: no fine, the afternoon's half
     a time in doubt → Amechelewa: not offered  Nusu siku: no fine (Jack, ATT-6's review)
+
+A day's meal money (WAGE-7, 02 §15, 14): who shares it, and how much each pays:
+
+    8,000 and 8 who came → 1,000 each     8,000 and 7 → 1,143 each     8,000 and nobody → 0.00, the shop bears it
 """
 
 import datetime as dt
 import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
+from apps.core.numbers import round_money
 from apps.staffpay.models import ClockKind, DayChoice, DayStatus, ReviewReason, TimeCheck
 
 # A clock-in the laptop sent within 2 minutes of the tap, both by its own clock, was made online: the push runs 2
@@ -301,3 +306,55 @@ def day_choices(first_in: dt.time | None, rules: DayRules, *, time_in_doubt: boo
     # The three absences take no fine: nobody arrived late who never arrived.
     choices |= {DayChoice.OFFICE_DUTY: NO_FINE, DayChoice.PERMISSION: NO_FINE, DayChoice.NO_SHOW: NO_FINE}
     return choices
+
+
+class MealPart(enum.Enum):
+    # What one worker's day is to its date's meal money (WAGE-7, 02 §15, 14): they share it; nobody knows yet, as their
+    # day waits for a decision; or it is no business of theirs.
+    SHARES = "shares"
+    WAITS = "waits"
+    NONE = "none"
+
+
+# The days a worker came, whichever way they came: a half day pays a whole share, as they ate (spec §8.1).
+CAME = (DayStatus.ON_TIME, DayStatus.LATE, DayStatus.HALF)
+
+
+def meal_part(status: str, decided_status: str, *, shares_meals: bool | None) -> MealPart:
+    """What one worker's day is to its date's meal money: by the decision where there is one, else by the book (A2).
+    `status`: what the book worked out. `decided_status`: what a person decided, "" for none (ATT-6). `shares_meals`: as
+    the pay rate in force that day says it, or None with no rate that day."""
+    # The cook, whose rate says they share no meals (WAGE-1), and whoever has no rate that day: the owner, who is never
+    # paid by the day, or a worker whose rate was typed from a later one. First, so neither ever waits: deciding their
+    # day would move nobody's share.
+    if not shares_meals:
+        return MealPart.NONE
+    # Office duty is kept as an absence with its kind (DECISION_OF, ATT-6), so it shares nothing here by itself: paid as
+    # a full day, but they ate away (Jack: A, 24 Nov 2026). Permission and a no-show the same.
+    counted = decided_status or status
+    if counted in CAME:
+        return MealPart.SHARES
+    # A day still to decide has no share until a person says whether they came (02 §12): split without them now, and
+    # among one more if they did.
+    return MealPart.WAITS if counted == DayStatus.NEEDS_REVIEW else MealPart.NONE
+
+
+# A day with no share of the meals: absent, waiting, the cook, or a day with no money typed. Two places, as NO_FINE.
+NO_MEAL_SHARE = Decimal("0.00")
+
+
+def meal_share(money: Decimal, sharers: int, step: Decimal) -> Decimal:
+    """What each of `sharers` workers pays of a date's meal money (02 §15, 14): the same for all, rounded half-up to a
+    multiple of `step`, the shop's rounding step that date. Nobody to share: nobody pays, and the shop bears it. The
+    rounded shares may add up to a few shillings off the money."""
+    if sharers < 0:
+        # A count of heads from the book: below 0 is a bug in our code, and would pay workers for eating.
+        raise ValueError(f"{sharers} workers can't share meal money: a count below 0.")
+    if sharers == 0:
+        return NO_MEAL_SHARE
+    # Divided with more digits than any column holds, whatever other code set for this thread, as the shared numbers do
+    # (apps/core/numbers.py): 8,000 ÷ 7 keeps every digit the half-up rounding looks at. Rounded by the one shared
+    # function, once (ADR-0024).
+    with localcontext(prec=40):
+        each = money / sharers
+    return round_money(each, step)
