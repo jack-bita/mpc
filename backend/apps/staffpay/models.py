@@ -21,10 +21,10 @@ per day, which keeps each answer with the rules it used:
     Asha   Sun 22 Nov  off           0.00    —      —
     Juma   Mon 16 Nov  needs_review  0.00    07:20  —
 
-The events are the truth and the days only answers worked out from them: a day is worked out again, from its taps and
-its date's rules, as often as it is asked, until its pay run is approved (WAGE-3). Beside the answer, a day keeps a
-manager's or the owner's decision (ATT-6), which the book never writes, and why an absent worker was away
-(AbsenceType):
+and, with each, the worker's share of that date's meal money (`meal_share`, WAGE-7). The events are the truth and the
+days only answers worked out from them: a day is worked out again, from its taps and its date's rules, as often as it
+is asked, until its pay run is approved (WAGE-3). Beside the answer, a day keeps a manager's or the owner's decision
+(ATT-6), which the book never writes, and why an absent worker was away (AbsenceType):
 
     who    date        book says     decided   absence      fine  by    why
     Juma   Mon 16 Nov  needs_review  on_time   —            0.00  Baba  Alisahau kubonyeza Toka
@@ -46,6 +46,7 @@ they pay for out of their pay, crossed out with a reason when typed wrong, and t
     23 Nov   3,000.00  Nyama             Asha
 """
 
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from django.db import models
@@ -355,8 +356,7 @@ class AttendanceDay(ShopScoped):
     # Not on the laptops: no laptop works out a day (03 §6.6), and a worker's pay never sits on a shared device
     # (03 §6.1), so the book writes no line in the change log.
     #
-    # Later cards add their columns, each with its migration: `meal_share` (WAGE-7), and the lock of an approved pay run
-    # (WAGE-3).
+    # A later card adds the lock of an approved pay run, with its migration (WAGE-3).
 
     # Whose day it is: a job, not a person, as an event's `staff` is. A person who left and is hired again the same day
     # has two jobs, so two days on that date, each read from its own taps (PPL-11). PROTECT: nothing is deleted.
@@ -383,6 +383,12 @@ class AttendanceDay(ShopScoped):
     # day. Empty too on a day to decide kept before ATT-5, as the column came empty on every row already there, until
     # the book works that day out again and writes its reason (a reason is one of the day's answers, WORKED_OUT).
     review_reason = models.CharField(max_length=15, choices=ReviewReason, blank=True)
+
+    # The worker's part of the date's meal money (WAGE-7, 02 §15, 14): worked out with the day, so a worker's meals up
+    # to any day are a sum of days already worked out, and one who leaves on the 15th is paid at once. One of the book's
+    # answers (WORKED_OUT): it moves when money is typed or crossed out, and when any worker's day of the date is
+    # decided, as the date is then split again. 0 on every day with nothing to share. Money, so numeric(14,2) (rule 3).
+    meal_share = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
 
     # A manager's or the owner's decision on the day (ATT-6, 02 §12's `override`): what the day was, whatever the book
     # worked out. Empty until someone decides; whole once they do (a rule below). Deciding again writes over it, and the
@@ -450,6 +456,14 @@ class AttendanceDay(ShopScoped):
                     | (~models.Q(status=DayStatus.OFF) & ~models.Q(rules_used={}))
                 ),
                 name="staffpay_attendanceday_rules_kept_unless_off",
+            ),
+            # A share is never below 0, which would pay a worker for eating, and never on an off day, which is nobody's
+            # (WAGE-7). No more than that: who shares reads the decision where there is one (meal_part,
+            # apps/staffpay/calculations.py), and a decision is written a moment before the book's next working out
+            # moves the share (decide_day), so a rule tying the two would refuse a manager's decision.
+            models.CheckConstraint(
+                condition=models.Q(meal_share=0) | (models.Q(meal_share__gt=0) & ~models.Q(status=DayStatus.OFF)),
+                name="staffpay_attendanceday_meal_share",
             ),
             # A reason only on a day to decide, and only one of the reasons there are (ATT-5): a reason on an on-time
             # day would put it on the month page's list for nothing. Not the other way: a day to decide kept before

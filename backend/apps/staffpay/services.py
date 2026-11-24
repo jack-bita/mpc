@@ -8,6 +8,9 @@ manager's fixes to the taps (ATT-13), and each worker's daily pay rate (WAGE-1).
     Juma   Tue 17 Nov  needs_review  0.00    07:20  18:45      not_working: suspended on Monday (ATT-11)
     Asha   Sun 22 Nov  off           0.00    —      —          the shop is shut on Sundays and closed days
 
+Each day keeps the worker's share of that date's meal money too (WAGE-7): 8,000 among the 8 who came and share it, 1,000
+each, worked out again whenever the day is.
+
 The day's rule (work_out_day, apps/staffpay/calculations.py) says what one day was; the book finds each day's taps and
 rules, hands them in, and keeps the answer, one row per job and date (AttendanceDay). Three kinds of day the rule can't
 see go to review: a closed day with a tap (ATT-10); and a day with a tap in doubt, or outside a job's days with a tap
@@ -65,7 +68,7 @@ from apps.core.changes import record_change, recording_changes
 from apps.core.editing import VersionConflict
 from apps.core.links import table_of
 from apps.core.permissions import Permission
-from apps.core.settings_registry import ATTENDANCE_ON
+from apps.core.settings_registry import ATTENDANCE_ON, ROUNDING_STEP
 from apps.core.tenancy import ALL_SHOPS, ShopMismatch, current_shop
 from apps.people.models import StaffMember, StaffStatus
 from apps.people.permissions import require
@@ -76,8 +79,11 @@ from apps.staffpay.calculations import (
     NO_FINE,
     TIME_IN_DOUBT,
     DayResult,
+    MealPart,
     Tap,
     day_choices,
+    meal_part,
+    meal_share,
     shop_minute,
     tap_day,
     work_out_day,
@@ -95,7 +101,13 @@ from apps.staffpay.models import (
     ReviewReason,
     TimeCheck,
 )
-from apps.staffpay.selectors import day_rules_between, rates_between, rules_as_text, rules_from_text
+from apps.staffpay.selectors import (
+    day_rules_between,
+    meal_money_by_date,
+    rates_between,
+    rules_as_text,
+    rules_from_text,
+)
 
 # Sunday, as Python numbers the days of the week (Monday is 0). Always off, and not paid: Sunday work is a deal between
 # the owner and the worker, outside the system (01 §8.1), so a shop has no setting for it.
@@ -112,8 +124,9 @@ class _TheBook:
 
 # What the book works out on a day, and so what it writes again when a day comes out otherwise. Not the job, the date
 # or the shop, which say which day it is; nor `created_at`, which says when the day was first kept. The reason too
-# (ATT-5): a day to decide kept before it had none, and gets its reason the next time it is worked out.
-WORKED_OUT = ["status", "fine", "first_in", "first_out", "rules_used", "review_reason"]
+# (ATT-5): a day to decide kept before it had none, and gets its reason the next time it is worked out. And its share of
+# the date's meal money (WAGE-7), which money typed later, or another worker's day decided, moves.
+WORKED_OUT = ["status", "fine", "first_in", "first_out", "rules_used", "review_reason", "meal_share"]
 
 # A person's decision on a day (ATT-6), which only decide_day writes, and the book never: what the book works out above
 # and what a manager decided are two lists with no column in common, so neither ever writes over the other (A2).
@@ -170,16 +183,17 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
             for row in AttendanceDay.objects.filter(shop=shop, date__range=(first, last)).select_related("staff")
         }
         # The days the whole shop is closed (ATT-8): a public holiday, a family funeral. The attendance switch on each
-        # day, and the day's rules on each day (A1). One read each for the whole span, never one per day.
+        # day, with the step a share of the meals is rounded to (WAGE-7), and the day's rules on each day (A1). One read
+        # each for the whole span, never one per day.
         closed = closed_days(shop, first, last)
-        switched_on = shop_settings_between([ATTENDANCE_ON], shop, first, last)
+        settings_by_day = shop_settings_between([ATTENDANCE_ON, ROUNDING_STEP], shop, first, last)
         rules_by_day = day_rules_between(shop, first, last)
         answered: list[AttendanceDay] = []
         for day in dates:
             # Attendance counts only from the day the owner switched it on (ADR-0033), a dated rule, so read on each
             # date: before it, nobody clocked in, and every day kept would be an absence that never was. No day at all,
             # not even an off one.
-            if not switched_on[day][ATTENDANCE_ON.key]:
+            if not settings_by_day[day][ATTENDANCE_ON.key]:
                 continue
             # Sunday is off for every job that ran on it, whatever its taps, in doubt or not: the shop is shut, and
             # Sunday work is paid outside the system (01 §8.1). No rule is read for it. A job outside its days keeps
@@ -231,6 +245,9 @@ def work_out_days(shop: Shop, first: dt.date, last: dt.date) -> list[AttendanceD
                 if why is not None:
                     result = replace(result, status=DayStatus.NEEDS_REVIEW, fine=NO_FINE, reason=why)
                 answered.append(_worked_out(shop, job, day, result, rules_used))
+        # Who pays for each date's meals, once every job's day of it is worked out (WAGE-7).
+        steps = {day: values[ROUNDING_STEP.key] for day, values in settings_by_day.items()}
+        _share_meals(shop, first, last, answered, kept, steps)
         # Kept as the book, never as the person whose visit asked for the month. The edit history's trigger names
         # whoever the visit's note says acts (apps/core/acting.py): Meneja opens November (ATT-5), and Asha's Monday,
         # changed by the Toka that came late, would read "Meneja changed it", though nobody did. So the book tells
@@ -279,6 +296,46 @@ def _worked_out(
         # Why it needs a decision, on a day that does (ATT-5); empty on any other, as the table keeps "no reason".
         review_reason=result.reason or "",
     )
+
+
+def _share_meals(
+    shop: Shop,
+    first: dt.date,
+    last: dt.date,
+    answered: list[AttendanceDay],
+    kept: dict[tuple[uuid.UUID, dt.date], AttendanceDay],
+    steps: dict[dt.date, Decimal],
+) -> None:
+    # Each worked-out day's share of its date's meal money (WAGE-7, 02 §15, 14), written on the days the book is about
+    # to keep. Every job's day of a date is here, so the count of those who share it is whole. Read inside the book's
+    # lock, as the taps are: the last run to take it reads the newest money, and never keeps an older split over a newer
+    # one.
+    money = meal_money_by_date(shop, first, last)
+    if not money:
+        # Nobody typed any in the span, as in every month before WAGE-7: each day's share stays the 0 it is made with.
+        return
+    # Who shares the meals, on each day: by the rate in force that day (WAGE-1), which names the cook.
+    rates = rates_between(shop, first, last)
+    sharing: dict[dt.date, list[AttendanceDay]] = defaultdict(list)
+    for day in answered:
+        if day.date not in money:
+            continue
+        # The day as a person decided it, where one did: the decision is on the row kept before, which this run read and
+        # whose decision nothing changes meanwhile, as deciding waits for the jobs' lock too (decide_day).
+        old = kept.get((day.staff_id, day.date))
+        rate = rates.get((day.staff_id, day.date))
+        part = meal_part(
+            day.status,
+            old.decided_status if old is not None else "",
+            shares_meals=rate.shares_meals if rate is not None else None,
+        )
+        if part is MealPart.SHARES:
+            sharing[day.date].append(day)
+    for date, days in sharing.items():
+        # The same for everyone who came, a half day too, rounded by the date's own step (A1).
+        share = meal_share(money[date], len(days), steps[date])
+        for day in days:
+            day.meal_share = share
 
 
 def _answer_log() -> Any:
