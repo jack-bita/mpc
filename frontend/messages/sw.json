@@ -786,7 +786,17 @@
     "split": "{count, plural, one {Mtu 1 · {share}} other {Watu # · {share} kila mmoja}}",
     "nobodyShares": "Hakuna wa kuchangia",
     "waiting": "{count, plural, one {1 anasubiri uamuzi} other {# wanasubiri uamuzi}}",
-    "none": "Hakuna siku ya kuonyesha katika mwezi huu."
+    "none": "Hakuna siku ya kuonyesha katika mwezi huu.",
+    "noneChosen": "Hakuna siku ya kuonyesha katika siku hizi.",
+    "daysChosenLabel": "Siku ulizochagua",
+    "span": "{first} hadi {last}",
+    "wholeMonth": "Mwezi mzima",
+    "choose": {
+      "title": "Chagua siku",
+      "first": "Kuanzia",
+      "last": "Hadi",
+      "show": "Onyesha"
+    }
   },
   "attendanceWorker": {
     "title": "Mahudhurio ya mfanyakazi",

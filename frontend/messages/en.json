@@ -786,7 +786,17 @@
     "split": "{count, plural, one {1 person · {share}} other {# people · {share} each}}",
     "nobodyShares": "Nobody to share it",
     "waiting": "{count, plural, one {1 waits for a decision} other {# wait for a decision}}",
-    "none": "No day to show in this month."
+    "none": "No day to show in this month.",
+    "noneChosen": "No day to show in these days.",
+    "daysChosenLabel": "The days you chose",
+    "span": "{first} to {last}",
+    "wholeMonth": "Whole month",
+    "choose": {
+      "title": "Choose days",
+      "first": "From",
+      "last": "To",
+      "show": "Show"
+    }
   },
   "attendanceWorker": {
     "title": "A worker's attendance",

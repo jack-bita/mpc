@@ -2,6 +2,7 @@
 // (WAGE-7, 03 §5.10), as Jack pictured it (24 Nov 2026):
 //
 //   ←  Hela ya chakula
+//   [           Chagua siku            ]
 //    ‹          Novemba 2026          ›
 //   Jumla hadi leo, 24/11     TSh 24,000
 //
@@ -15,7 +16,13 @@
 //     1 anasubiri uamuzi
 //
 // The month: this one, on the shop's clock, unless the address names an earlier one (?month=2026-10), as on Mahudhurio
-// ya mwezi, whose switch it wears. Which days are listed, their sums and each one's share are the server's
+// ya mwezi, whose switch it wears. Or the days chosen in Chagua siku (choose-days.tsx), kept in the address too
+// (?first=…&last=…), in place of the month, until Mwezi mzima:
+//
+//   20/11/2026 hadi 23/11/2026  [ Mwezi mzima ]
+//   Jumla                           TSh 15,000
+//
+// Which days are listed, their sums and each one's share are the server's
 // (meal_money_days); the page adds nothing up. Haijaandikwa: a day someone came and nobody typed its money, so a
 // forgotten day is easy to see.
 //
@@ -26,9 +33,11 @@
 // "use client": it asks use-intl for words (use-client.test.ts), and calls the server.
 "use client";
 
+import { useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { ApiErrorAlert } from "@/components/api-error-alert";
+import { Button } from "@/components/design/button";
 import { Card } from "@/components/design/card";
 import { PageHeader } from "@/components/design/page-header";
 import { useWordInAddress } from "@/components/tab-in-address";
@@ -41,14 +50,24 @@ import {
 import { MonthSwitch, usePagesClock } from "@/features/attendance/month-switch";
 import { useWhoIsHere } from "@/features/people/who-is-here";
 import { Decimal } from "@/lib/decimal";
-import { formatDayMonth, formatMoney, weekdayOf } from "@/lib/format";
+import {
+  formatDay,
+  formatDayMonth,
+  formatMoney,
+  weekdayOf,
+} from "@/lib/format";
 import { shopToday } from "@/offline/rules";
 
+import { ChooseDaysSheet } from "./choose-days";
 import {
+  FIRST_PARAM,
+  LAST_PARAM,
   mayRecordMeals,
   type MealDay,
   type MealMoneyDays,
   monthSpan,
+  type Span,
+  spanFrom,
   useMealMoney,
 } from "./meal-money";
 
@@ -74,10 +93,24 @@ export function MealMoneyScreen() {
       : asked !== null && isMonth(asked) && asked <= thisMonth
         ? asked
         : openedOn;
-  const answer = useMealMoney(month === null ? null : monthSpan(month));
+  // The days chosen, if the address names any; in their place, the month's. Both wait for who is here, as nothing is
+  // asked for nobody.
+  const [firstAsked, chooseFirst] = useWordInAddress(FIRST_PARAM);
+  const [lastAsked, chooseLast] = useWordInAddress(LAST_PARAM);
+  const chosen = who.data ? spanFrom(firstAsked, lastAsked) : null;
+  const span = chosen ?? (month === null ? null : monthSpan(month));
+  const keepTo = (next: Span | null) => {
+    chooseFirst(next?.first ?? null);
+    chooseLast(next?.last ?? null);
+  };
+  const [choosing, setChoosing] = useState(false);
+  // Chagua siku's button: Mwezi mzima goes with the days it clears, so the keyboard goes back to where choosing starts.
+  const chooseButton = useRef<HTMLButtonElement>(null);
+  const may = who.data !== undefined && mayRecordMeals(who.data);
+  const answer = useMealMoney(span);
   // "Subiri kidogo…", through the store's own tries too, and only once there is something to wait for, as on the month
   // page.
-  const waiting = who.isPending || (month !== null && answer.isPending);
+  const waiting = who.isPending || (span !== null && answer.isPending);
 
   return (
     <div className="grid max-w-2xl gap-6">
@@ -88,22 +121,52 @@ export function MealMoneyScreen() {
       {/* Not logged in ("Ingia kwanza"), no network, or the server's own problem. */}
       <ApiErrorAlert error={who.error} />
       {/* Only for someone who may see it, so no ‹ › only asks to be refused again (the month page's review). */}
-      {month !== null &&
-      thisMonth !== null &&
-      who.data &&
-      mayRecordMeals(who.data) ? (
+      {may ? (
+        <Button
+          ref={chooseButton}
+          kind="second"
+          size="normal"
+          onClick={() => setChoosing(true)}
+        >
+          {t("choose.title")}
+        </Button>
+      ) : null}
+      {may && chosen === null && month !== null && thisMonth !== null ? (
         <MonthSwitch month={month} thisMonth={thisMonth} onChoose={choose} />
+      ) : null}
+      {may && chosen !== null ? (
+        <DaysChosen
+          // The days the server counted, never past today, once it has answered.
+          span={answer.data ?? chosen}
+          onWholeMonth={() => {
+            keepTo(null);
+            chooseButton.current?.focus();
+          }}
+        />
+      ) : null}
+      {who.data && may && choosing && span !== null ? (
+        <ChooseDaysSheet
+          span={span}
+          today={shopToday(who.data.shop.timezone, now)}
+          onShow={(next) => {
+            keepTo(next);
+            setChoosing(false);
+          }}
+          onClose={() => setChoosing(false)}
+          finalFocus={() => chooseButton.current}
+        />
       ) : null}
       {/* Asked here alone and handed down, never by the part that shows it (frontend rules). A failed read shows its
           reason; a refresh that fails keeps the days last read, with the reason above them. */}
       <ApiErrorAlert error={answer.error} />
-      {month !== null && answer.data && !answer.isPending ? (
+      {answer.data && !answer.isPending ? (
         <TheDays
           answer={answer.data}
-          // This month's total is counted up to today; a month gone by, to its end. Whether it is this month is the
-          // server's to say, from its own today: a phone's date can be wrong.
+          chosen={chosen !== null}
+          // This month's total is counted up to today; a month gone by, to its end, and the days chosen, as their
+          // heading says. Whether it is this month is the server's to say, from its own today: a phone's can be wrong.
           totalLabel={
-            monthOf(answer.data.today) === month
+            chosen === null && monthOf(answer.data.today) === month
               ? t("totalToToday", { day: formatDayMonth(answer.data.today) })
               : t("total")
           }
@@ -113,16 +176,47 @@ export function MealMoneyScreen() {
   );
 }
 
+/** "20/11/2026 hadi 23/11/2026", or the one day, and the way back to the month. */
+function DaysChosen({
+  span,
+  onWholeMonth,
+}: {
+  span: Span;
+  onWholeMonth: () => void;
+}) {
+  const t = useTranslations("mealMoney");
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* A heading, said as the days change, in the month's place (month-switch.tsx). */}
+      <h2 aria-live="polite" className="text-xl font-semibold">
+        {span.first === span.last
+          ? formatDay(span.first)
+          : t("span", {
+              first: formatDay(span.first),
+              last: formatDay(span.last),
+            })}
+      </h2>
+      <Button kind="second" size="normal" onClick={onWholeMonth}>
+        {t("wholeMonth")}
+      </Button>
+    </div>
+  );
+}
+
 /** The whole of the days' money, then a line per day. */
 function TheDays({
   answer,
+  chosen,
   totalLabel,
 }: {
   answer: MealMoneyDays;
+  /** Whether the days were chosen, or are a month's. */
+  chosen: boolean;
   totalLabel: string;
 }) {
   const t = useTranslations("mealMoney");
-  if (answer.days.length === 0) return <p>{t("none")}</p>;
+  if (answer.days.length === 0)
+    return <p>{t(chosen ? "noneChosen" : "none")}</p>;
   return (
     <>
       <p className="flex flex-wrap justify-between gap-x-4 text-lg font-semibold">
@@ -136,7 +230,7 @@ function TheDays({
             calling a <ul> a list once its bullets are styled away (workers-screen.tsx). */}
         <ul
           role="list"
-          aria-label={t("daysLabel")}
+          aria-label={t(chosen ? "daysChosenLabel" : "daysLabel")}
           className="divide-y divide-border"
         >
           {answer.days.map((day) => (

@@ -44,6 +44,45 @@ export function monthSpan(month: string): Span {
   return { first: `${month}-01`, last };
 }
 
+/** The address's names for the days chosen in Chagua siku: /meal-money/?first=2026-11-20&last=2026-11-23. */
+export const FIRST_PARAM = "first";
+export const LAST_PARAM = "last";
+
+/** Whether `text` is a day as a date box and the address write one, "2026-11-20", a day that exists, and one the server
+ * takes, from 2000 on: 31 November, read and written back, comes out as 1 December, so it is none. */
+function isDay(text: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || text < "2000-01-01") return false;
+  const read = new Date(`${text}T00:00:00Z`);
+  return (
+    !Number.isNaN(read.getTime()) && read.toISOString().slice(0, 10) === text
+  );
+}
+
+/** A leap year's whole, both ends counted: the most days one answer covers (MOST_DAYS,
+ * apps/staffpay/api/serializers.py). */
+const MOST_DAYS = 366;
+const A_DAY = 24 * 60 * 60 * 1000;
+
+/** Whether the days from one to another are more than the server answers at once. */
+export function isTooLong({ first, last }: Span): boolean {
+  return (
+    Date.parse(`${last}T00:00:00Z`) - Date.parse(`${first}T00:00:00Z`) >=
+    MOST_DAYS * A_DAY
+  );
+}
+
+/** The days the address names, or null for none, or for any it can't mean: a typo shows the month, never the server's
+ * refusal. Days as text sort as days do. */
+export function spanFrom(
+  first: string | null,
+  last: string | null,
+): Span | null {
+  if (first === null || last === null || !isDay(first) || !isDay(last))
+    return null;
+  const span = { first, last };
+  return last < first || isTooLong(span) ? null : span;
+}
+
 /** A span's days, from the store of server answers; nothing is asked until the page knows which (`null`). */
 export function useMealMoney(span: Span | null) {
   return useQuery({
